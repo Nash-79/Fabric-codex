@@ -1,0 +1,102 @@
+{
+  "url": "https://learn.microsoft.com/en-us/fabric/data-engineering/lakehouse-sql-analytics-endpoint",
+  "title": "What is the SQL analytics endpoint for a lakehouse?",
+  "tier": 1,
+  "tags": ["MicrosoftFabric", "Lakehouse", "SQLAnalyticsEndpoint", "TSQL", "DeltaLake"],
+  "claims": [
+    {
+      "capability_id": "lakehouse",
+      "text": "Every lakehouse automatically provisions a SQL analytics endpoint at creation time with no setup, exposing the lakehouse's Delta tables through a read-only T-SQL query surface.",
+      "depth": 1,
+      "type": "fact",
+      "tags": ["SQLAnalyticsEndpoint", "TSQL"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "The SQL analytics endpoint runs on the same engine as Fabric Data Warehouse, so it inherits the warehouse engine's performance characteristics, T-SQL data types, and limitations.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["SQLAnalyticsEndpoint", "Warehouse", "Polaris"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "The endpoint is strictly read-only for data: INSERT, UPDATE, and DELETE are not possible through it, and data modification must happen via Spark in the lakehouse — yet T-SQL views, inline functions, and stored procedures can still be created and persisted on the endpoint.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["SQLAnalyticsEndpoint", "TSQL", "ReadOnly"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "SQL granular permissions (object-, column-, and row-level security) defined on the SQL analytics endpoint are enforced only for access through that endpoint; the same data reached through Spark or other paths bypasses those rules, so workspace roles must secure the alternate paths.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["SQLAnalyticsEndpoint", "Security", "RowLevelSecurity"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Treating endpoint-level GRANT/DENY as the sole security boundary for lakehouse data is unsafe, because users with Spark or OneLake access read the underlying Delta files without the SQL rules applying.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["SQLAnalyticsEndpoint", "Security", "OneLake"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "When a Delta table is created or changed in the lakehouse, the endpoint detects it and refreshes its own SQL metadata (table definitions, column types, statistics) automatically, with manual refresh options also available — there is no import step.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["SQLAnalyticsEndpoint", "MetadataSync", "DeltaLake"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Only Delta tables whose data lives under the lakehouse /tables area are discoverable by the endpoint; tables that reference data in /files, and external Delta tables created with Spark code, are invisible to it — the documented workaround is a shortcut placed in the Tables section.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["SQLAnalyticsEndpoint", "MetadataSync", "Shortcuts"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Delta column mapping by name is supported by the endpoint (in preview), but column mapping by ID is not, which can make some Spark-visible columns or tables unavailable through SQL.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["SQLAnalyticsEndpoint", "DeltaLake", "ColumnMapping"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Adding a foreign key constraint between endpoint tables freezes further schema changes for those tables, so later Delta schema evolution (such as new columns) stops syncing until the constraint is addressed.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["SQLAnalyticsEndpoint", "Constraints", "MetadataSync"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "String data in lakehouse SQL analytics endpoint tables is subject to 8 KB truncation; varchar(max) is documented as supported only for endpoints of mirrored items and Fabric SQL databases, and mixing varchar(max) and truncated varchar(8000) columns in joins can yield inconsistent results unless explicitly cast.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["SQLAnalyticsEndpoint", "DataTypes", "Limitations"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Microsoft documents a workspace ceiling of 150 combined warehouse and SQL analytics endpoint items; creating more requires deleting an existing item first.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["SQLAnalyticsEndpoint", "Limits", "Workspace"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Cross-workspace analysis is possible by creating OneLake shortcuts to Delta tables in other lakehouses or warehouses and joining them in one T-SQL query, while Power BI semantic models connect to the endpoint over its Tabular Data Stream (TDS) interface.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SQLAnalyticsEndpoint", "Shortcuts", "PowerBI", "TDS"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/data-engineering/media/lakehouse-sql-analytics-endpoint/lakehouse-sql-analytics-endpoint.png",
+      "caption": "Microsoft's screenshot of the lakehouse SQL analytics endpoint query editor with the table list",
+      "attribution": "Microsoft Learn (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "lakehouse"
+    }
+  ]
+}

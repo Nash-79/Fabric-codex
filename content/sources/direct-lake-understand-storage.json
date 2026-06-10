@@ -1,0 +1,110 @@
+{
+  "url": "https://learn.microsoft.com/en-us/fabric/fundamentals/direct-lake-understand-storage",
+  "title": "Understand Direct Lake query performance",
+  "tier": 1,
+  "tags": ["MicrosoftFabric", "DirectLake", "DeltaLake", "VertiPaq", "Performance", "Parquet"],
+  "claims": [
+    {
+      "capability_id": "direct-lake",
+      "text": "A Direct Lake model occupies one of four memory-residency states — cold, semiwarm, warm, or hot — with query latency improving at each step; hot adds populated VertiScan caches on top of fully resident column data.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["DirectLake", "VertiPaq", "Performance"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "On a cold-state query, Direct Lake must merge the per-row-group local Parquet dictionaries of each needed column into a single global VertiPaq dictionary, so a Delta table with more row groups takes longer to transcode.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DirectLake", "Parquet", "VertiPaq", "Transcoding"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "Transcoding is usually a direct remap of Parquet data IDs to VertiPaq IDs when both sides use RLE/Bit-Packing hybrid encoding; if a Parquet file used plain or delta encoding instead, Direct Lake must re-encode the values, which slows column loading.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DirectLake", "Parquet", "Encoding", "Transcoding"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "V-Order speeds Direct Lake twice over: it raises RLE compression quality so columns stream into memory faster during transcoding, and it lets VertiScan compute results directly on compressed data without a decompression step.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DirectLake", "VOrder", "VertiScan", "Performance"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "The total row-group count across a Delta table's Parquet files maps one-to-one to the number of VertiPaq segments per model column, so many tiny row groups produce many tiny column segments and degrade query performance.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DirectLake", "Parquet", "DeltaLake", "VertiPaq"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "For large tables Direct Lake prefers column segments of roughly 1 to 16 million rows; Fabric may write even larger row groups for compressible data, which is tolerable, but row groups well under 1 million rows hurt performance.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["DirectLake", "RowGroups", "Performance"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "During incremental framing, Direct Lake reads each table's Delta log and evicts only the column segments tied to removed row groups, while dictionaries are kept and merely extended with new values to avoid re-transcoding.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["DirectLake", "Framing", "DeltaLake"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "Answering a cold multi-table DAX query also requires Direct Lake to build join indexes from the relationship key columns (loading their dictionaries plus the one-side key segments) and to load any Delta deletion vectors so deleted rows are excluded.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DirectLake", "JoinIndexes", "DeletionVectors", "DAX"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "Loading a Delta table with the Overwrite option wipes the table's commit history, defeating incremental framing and forcing a full cold-state reload of all segments, dictionaries, and join indexes on the next query.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["DirectLake", "DeltaLake", "DataLoading"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "Partition Delta tables only on low-cardinality columns (Microsoft suggests staying under about 100-200 distinct values); over-partitioning multiplies small Parquet files and row groups, inflating segment counts in the model.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DirectLake", "DeltaLake", "Partitioning"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "A framed Direct Lake model is pinned to a specific Delta commit version, so vacuuming must not remove the Parquet files of that version before the next reframe, or user queries fail when the referenced files are gone.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["DirectLake", "Vacuum", "DeltaLake", "Maintenance"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "Direct Lake does not use Delta or Parquet statistics for row-group or file skipping when loading column data, so pruning optimizations that help other engines do not reduce its transcoding work.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["DirectLake", "Parquet", "Limitations"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/fundamentals/media/direct-lake-query-performance/delta-table-model-table.png",
+      "caption": "Mapping between Delta table row groups and Direct Lake column segments (one row group becomes one segment per column).",
+      "attribution": "Microsoft Learn (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "direct-lake"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/fundamentals/media/direct-lake-query-performance/table-dictionary-transcoding.png",
+      "caption": "Merging local Parquet dictionaries into a global VertiPaq dictionary per column during transcoding.",
+      "attribution": "Microsoft Learn (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "direct-lake"
+    }
+  ]
+}

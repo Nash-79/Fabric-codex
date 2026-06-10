@@ -1,0 +1,93 @@
+{
+  "url": "https://www.vldb.org/pvldb/vol13/p3204-saborit.pdf",
+  "title": "POLARIS: The Distributed SQL Engine in Azure Synapse (PVLDB 13(12), 2020)",
+  "tier": 3,
+  "tags": ["MicrosoftFabric", "Polaris", "AzureSynapse", "DistributedSQL", "QueryProcessing", "DataWarehouse", "CloudNative"],
+  "claims": [
+    {
+      "capability_id": "polaris",
+      "text": "Polaris is Microsoft's cloud-native distributed SQL query engine, originally built for Azure Synapse, with two design goals: converge data-warehouse and big-data workloads on one engine, and fully separate compute from state so execution is stateless and elastically scalable.",
+      "depth": 1,
+      "type": "fact",
+      "tags": ["Polaris", "AzureSynapse", "Architecture"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "Polaris abstracts every dataset as a grid of data cells indexed on two dimensions: a user-defined partition function used for aggressive partition pruning under range or equality predicates, and a system-chosen hash-distribution function that maps rows to many buckets so cells (and therefore computation) can be spread across arbitrarily many compute nodes.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DataCells", "Partitioning", "HashDistribution"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "The cell abstraction makes the distributed query processor storage-agnostic: the DQP operates only at cell granularity while single-node extraction of data inside a cell is delegated to the local execution engine, letting the same scale-out framework query analytical stores (ADLS, Parquet, Delta) and transactional stores alike.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DataCells", "StorageAbstraction", "DeltaLake"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "Polaris compute is stateless because all durable state — data, metadata, and transaction logs — is externalized to remote storage and centralized highly-available services; only caches live on compute nodes, and since caches can be rebuilt lazily from persisted data their loss never fails in-flight work, enabling partial query restarts and online topology changes.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["StatelessCompute", "SeparationOfState", "FaultTolerance"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "Query compilation in Polaris is two-phase: the SQL Server Cascades optimizer first generates the logical search space (MEMO), then a distributed cost-based phase enumerates physical distributed plans, using distribution properties both as correctness filters (e.g., an inner join requires hash-aligned inputs or a broadcast side) and as System-R-style interesting properties, and picks the plan that minimizes data movement.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["QueryOptimizer", "Cascades", "MEMO", "CostBasedOptimization"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "Polaris injects 'data move enforcer' operators — hash re-distribution and broadcast — to change a dataset's distribution properties; enforcers are blocking, must persist all output cells before consumers start, and the operator subtree rooted at an enforcer defines the input/output boundary of a task.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DataMovement", "Shuffle", "Broadcast", "TaskBoundaries"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "A Polaris task is the physical execution of an operator expression over one hash-distribution of its inputs and has three components: input cell collections, a task template (the code for the expression), and an output cell collection; a query plan therefore becomes a DAG of task templates whose edges encode dataflow and precedence constraints.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["Tasks", "TaskDAG", "ExecutionModel"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "Polaris deliberately makes tasks maximal units of work (e.g., fusing multiple hash-aligned joins into one task) and re-encodes each task template back into T-SQL that runs natively in a SQL Server instance on the compute node, so the engine combines big-data style scale-out with SQL Server's mature scale-up columnar execution, and the blocking task boundaries let SQL Server re-optimize with fresh statistics on intermediate results.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["SQLServer", "ScaleUp", "TaskTemplates", "TSQL"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "Polaris orchestrates execution as a hierarchical composition of finite state machines over entities (query DAG, task templates, tasks) with simple states like Ready/Failed/Success and composite states like Run/Blocked; transient failures are retried at task granularity and escalate to the parent state machine only if not retriable, and all transitions are logged for reproducibility and resumable execution.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["StateMachines", "Orchestration", "FaultTolerance"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "Polaris schedules across queries using a global 'workload graph' that unions the task DAGs of all active queries; each task carries a multi-dimensional resource demand vector (CPU and memory are stretchable, local temp disk is rigid), compute nodes are modeled as multi-dimensional resource bins, and supported policies include FIFO, sorting by resource demand, and sorting by proximity to the DAG root to free shared resources sooner.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["WorkloadManagement", "Scheduling", "ResourceGovernance", "WorkloadGraph"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "Task placement in Polaris is affinitized to compute by consistently assigning the same data cells to the same nodes, preserving SQL Server buffer-pool and local SSD caches across topology changes: shrinking the topology loses only the caches of removed nodes, and growing it preserves all existing caches while only new nodes warm up.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Caching", "DataAffinity", "SSDCache", "Performance"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "The Polaris paper demonstrates scale with two reported experiments: all 22 TPC-H queries executed at 1 PB on a pool of 420 execution nodes (the heaviest joins, Q9 and Q21, finishing in under two hours), and 5,000 concurrent TPC-DS sessions on just 10 compute nodes completing roughly 550,000 instantiated tasks with up to about 9,000 tasks packed concurrently.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Performance", "TPCH", "TPCDS", "Concurrency", "Scalability"]
+    }
+  ],
+  "assets": []
+}

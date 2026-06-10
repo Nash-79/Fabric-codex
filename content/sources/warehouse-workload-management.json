@@ -1,0 +1,126 @@
+{
+  "url": "https://learn.microsoft.com/en-us/fabric/data-warehouse/workload-management",
+  "title": "Workload Management in Fabric Data Warehouse (Microsoft Learn)",
+  "tier": 1,
+  "tags": ["MicrosoftFabric", "Polaris", "DataWarehouse", "WorkloadManagement", "QueryProcessing", "Scalability"],
+  "claims": [
+    {
+      "capability_id": "polaris",
+      "text": "The Fabric Warehouse and the SQL analytics endpoint share one underlying distributed processing architecture, and the backend is serverless: compute capacity scales up and down autonomously to match workload demand rather than being provisioned by the user.",
+      "depth": 1,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "DataWarehouse", "Serverless"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "When a query arrives, the SQL frontend optimizes it and hands the plan to the Distributed Query Processing (DQP) engine, which splits it into smaller queries called tasks — the units of distributed execution — that run on backend compute nodes; results flow back through the frontend to the caller.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DQP", "SQLFrontend", "Tasks", "QueryProcessing"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "A Fabric warehouse task reads files from OneLake, joins, groups, or orders data produced by other tasks, and for ingestion jobs writes results to the destination tables — so both query and ingest paths run through the same task-based distributed engine.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Tasks", "OneLake", "Ingestion"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "The DQP scheduler operates at task level and represents each query as a directed acyclic graph (DAG) of tasks, so tasks without mutual dependencies can execute simultaneously or out of order, giving both intra-query parallelism and cross-query concurrency.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["TaskDAG", "Scheduling", "Parallelism"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "Incoming tasks are scheduled on first-in-first-out principles, but when idle capacity exists the scheduler can switch to a best-fit placement approach to improve concurrency.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Scheduling", "FIFO", "Concurrency"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "When the scheduler detects resource pressure it autonomously triggers a scale-out of the backend topology; because acquiring new nodes typically takes a few seconds (with no SLA on assignment), the engine is not optimized for consistently sub-second latency on queries that need distributed processing.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Autoscaling", "Provisioning", "Latency"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "Scaling of the warehouse backend is an online operation — in-flight query processing continues uninterrupted while nodes are added — and when pressure subsides the topology scales back down and returns compute to the region.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Autoscaling", "Elasticity"]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "The engine is fault tolerant at the task level: if a backend node becomes unhealthy, the operations running on it are redistributed to healthy nodes for completion rather than failing the query.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["FaultTolerance", "Resiliency"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "By default, the compute available to a Fabric Warehouse is split evenly (50/50) into two isolated resource pools — a SELECT pool for all SELECT queries and a non-SELECT pool for ETL/ingestion operations; each pool scales independently but never exceeds 50% of total compute, so ingestion cannot starve read queries; workspace admins can replace this default with custom SQL pools.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["WorkloadIsolation", "ComputePools", "ETL"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The Warehouse and SQL analytics endpoint enforce a limit of 2048 user sessions per workspace, returning an explicit error when the limit is reached; DMVs show both user sessions and the many system sessions Fabric runs as a SaaS platform.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["Sessions", "Limits", "DMV"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "A Fabric workspace is a natural isolation boundary of the distributed SQL compute system: a recommended pattern is to use OneLake shortcuts to expose read-only replicas of tables in other workspaces, spreading load across multiple SQL engines and effectively raising the ceiling on concurrent read-only sessions.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["WorkspaceIsolation", "OneLakeShortcuts", "ScaleOut"]
+    },
+    {
+      "capability_id": "capacity",
+      "text": "Warehouse workloads benefit from burstable capacity, which lets jobs temporarily consume extra resources for better performance, and from smoothing, which spreads the evaluation of compute consumption over time so spiky peak-time usage is offset against idle periods.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["BurstableCapacity", "Smoothing", "CapacityManagement"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/data-warehouse/media/workload-management/sql-engine-diagram.svg",
+      "caption": "Fabric SQL engine architecture: SQL frontend, Distributed Query Processing engine, and backend compute nodes executing tasks over OneLake.",
+      "attribution": "Microsoft Learn (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "polaris"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/data-warehouse/media/workload-management/scaling-diagram.svg",
+      "caption": "Fast provisioning of backend compute: new nodes acquired in seconds while query processing continues online.",
+      "attribution": "Microsoft Learn (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "polaris"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/data-warehouse/media/workload-management/etl-isolation.svg",
+      "caption": "Compute pool isolation: warehouse compute split into a SELECT pool and a non-SELECT (ETL/ingestion) pool.",
+      "attribution": "Microsoft Learn (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "warehouse"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/data-warehouse/media/workload-management/workspace-isolation.svg",
+      "caption": "Workspace isolation pattern: separate workspaces (e.g., Finance and Marketing) as isolation boundaries for distributed SQL compute, linked via OneLake shortcuts.",
+      "attribution": "Microsoft Learn (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "warehouse"
+    }
+  ]
+}
