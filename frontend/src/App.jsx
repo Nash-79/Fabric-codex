@@ -434,7 +434,7 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const verify = (id) => withActioning(id, () => api(`/claims/${id}/verify`, { method: "POST" }));
   const reject = (id) => withActioning(id, () => api(`/claims/${id}/reject`, { method: "POST" }));
   const promote = (id) => withActioning(id, () => api(`/claims/${id}/promote`, { method: "POST" }));
-  const dismissDup = (id) => withActioning(id, () => api(`/claims/${id}/reject`, { method: "POST" }));
+  const dismissDup = (id) => withActioning(id, () => api(`/claims/${id}/dismiss`, { method: "POST" }));
 
   const pendingShown = claims.filter((cl) => cl.status === "pending");
   const verifyAllShown = async () => {

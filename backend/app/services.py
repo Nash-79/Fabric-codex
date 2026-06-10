@@ -11,14 +11,19 @@ Sections: helpers · ingestion · versioning · assets · generation · validati
 from __future__ import annotations
 import hashlib
 import json
+import logging
 import re
 from difflib import SequenceMatcher
+
 from typing import Optional
 from sqlmodel import Session, select
 from app import llm
 from app.db import LLM_MODE
+
 from app.models import (Source, Claim, Design, ValidationRun, Issue, Asset,
                         dump_tags, load_tags)
+
+log = logging.getLogger(__name__)
 
 SAME = 0.85
 CHANGED = 0.55
@@ -185,15 +190,36 @@ def verify_claims_bulk(session: Session, source_id: Optional[str] = None,
 
 
 def reject_claim(session: Session, claim_id: str) -> Optional[Claim]:
-    """Human dismissal: mark a pending active claim as rejected and deactivate it."""
+    """Human dismissal: mark a pending active claim as rejected and deactivate it.
+    Only active claims with status='pending' may be rejected via this path;
+    use dismiss_duplicate_claim() for inactive duplicate claims."""
     c = session.get(Claim, claim_id)
     if not c:
         return None
-    if not c.active:
-        raise ValueError(f"Claim {claim_id} is {c.status} (inactive); "
-                         "only active claims can be rejected.")
+    if not c.active or c.status != "pending":
+        raise ValueError(f"Claim {claim_id} has status='{c.status}', active={c.active}; "
+                         "only active pending claims can be rejected. "
+                         "For duplicate claims use the /dismiss endpoint.")
     c.status = "rejected"
     c.active = False
+    session.add(c)
+    session.commit()
+    session.refresh(c)
+    return c
+
+
+def dismiss_duplicate_claim(session: Session, claim_id: str) -> Optional[Claim]:
+    """Confirm an inactive duplicate claim as permanently dismissed (rejected).
+    Duplicate claims are stored inactive=False; dismiss sets status='rejected'
+    to make the human decision explicit and queryable."""
+    c = session.get(Claim, claim_id)
+    if not c:
+        return None
+    if c.status != "duplicate":
+        raise ValueError(f"Claim {claim_id} has status='{c.status}'; "
+                         "only duplicate claims can be dismissed via this endpoint.")
+    c.status = "rejected"
+    c.active = False   # already False, but be explicit
     session.add(c)
     session.commit()
     session.refresh(c)
@@ -295,6 +321,9 @@ def add_assets(session: Session, assets: Optional[list[dict]], source_id: Option
                         Asset.design_id == eff_design_id,
                     )).first()
                 if existing:
+                    log.warning("add_assets: skipping duplicate generated asset path=%s "
+                                "(source_id=%s, design_id=%s, existing id=%s)",
+                                path_val, eff_source_id, eff_design_id, existing.id)
                     saved.append(existing)
                     continue
         else:
@@ -308,6 +337,9 @@ def add_assets(session: Session, assets: Optional[list[dict]], source_id: Option
                         Asset.design_id == eff_design_id,
                     )).first()
                 if existing:
+                    log.warning("add_assets: skipping duplicate referenced asset url=%s "
+                                "(source_id=%s, design_id=%s, existing id=%s)",
+                                url_val, eff_source_id, eff_design_id, existing.id)
                     saved.append(existing)
                     continue
 

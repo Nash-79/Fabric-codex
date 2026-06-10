@@ -188,6 +188,20 @@ def promote(claim_id: str, session: Session = Depends(get_session)):
     return services._claim_dict(c)
 
 
+@router.post("/claims/{claim_id}/dismiss")
+def dismiss(claim_id: str, session: Session = Depends(get_session)):
+    """Permanently dismiss an inactive duplicate claim (mark as rejected).
+    This is the human confirmation that the claim truly duplicates an existing one
+    and should not enter the verify queue even if promoted."""
+    try:
+        c = services.dismiss_duplicate_claim(session, claim_id)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    if not c:
+        raise HTTPException(404, "Claim not found.")
+    return services._claim_dict(c)
+
+
 @router.get("/tags")
 def list_tags(session: Session = Depends(get_session)):
     counts: dict[str, int] = {}
