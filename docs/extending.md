@@ -128,8 +128,12 @@ DB writes — the backend owns versioning and validation invariants.
 
 Always **original** artwork (the diagram-author agent, or by hand): Mermaid or SVG into
 `content/diagrams/`, registered as a `generated` asset (`POST /assets` or the `assets`
-array of a source file). Never copy or re-host source images — reference them with
-attribution instead. The platform overview on the Overview tab is
+array of a source file). Diagrams shown in the web UI must be **SVG** (it renders them via
+`<img>`). Standalone capability diagrams (no source/design parent) also belong in the
+git-tracked manifest `content/diagrams/assets.json` — `import_content.py` replays it
+idempotently so a fresh server gets the diagrams back. The Registry tab shows a
+capability's generated diagrams above its claims. Never copy or re-host source images —
+reference them with attribution instead. The platform overview on the Overview tab is
 `content/diagrams/fabric-platform-overview.svg`; it renders from the asset registered on
 the `fabric-platform` capability, falling back to that static path.
 

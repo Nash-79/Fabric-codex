@@ -1,0 +1,72 @@
+{
+  "url": "https://milescole.dev/data-engineering/2025/02/26/The-Art-and-Science-of-Table-Compaction.html",
+  "title": "Mastering Spark: The Art and Science of Table Compaction",
+  "tier": 4,
+  "tags": ["MicrosoftFabric", "DataEngineering", "Spark", "DeltaLake", "Performance", "TableCompaction", "AutoCompaction", "OptimizedWrite"],
+  "claims": [
+    {
+      "capability_id": "lakehouse",
+      "text": "Auto Compaction in Delta Lake triggers automatically after write operations when the number of small files in a table partition exceeds a configurable threshold, merging undersized files into larger ones without requiring a scheduled job.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["AutoCompaction", "DeltaLake", "SmallFileProblem"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Auto Compaction is controlled by three tunable properties: maxFileSize (default 128 MB, the target for compacted files), minFileSize (default unset, calculated as half of maxFileSize at runtime — files below this are candidates), and minNumFiles (default 50, the count of undersized files that must exist before compaction fires).",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["AutoCompaction", "Configuration", "DeltaLake", "FileSize"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Auto Compaction operations are distinguishable from manual OPTIMIZE runs in the Delta transaction log: the operationParameters field includes an 'auto' flag set to true for system-triggered compactions, which is useful for auditing compaction history in Fabric.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["AutoCompaction", "DeltaLog", "TransactionLog", "Auditing"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "In the author's benchmark using 200 iterations of 1K-row batch writes, combining Auto Compaction with Optimized Write achieved the best outcome across all five tested configurations: lowest total runtime (12.77 minutes), lowest file-count variance (standard deviation of 14), and consistent query durations.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["AutoCompaction", "OptimizedWrite", "Performance", "Benchmark", "SmallFileProblem"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "In the same benchmark, running no compaction at all produced the worst result by a wide margin: 33.27 minutes total runtime and a file-count standard deviation of 864, demonstrating that unmanaged small file accumulation severely degrades pipeline performance over time.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["AutoCompaction", "SmallFileProblem", "Performance", "Benchmark"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Optimized Write alone (without post-write compaction) reduced per-iteration file output from roughly 16 files to 1 file in the 1K-batch scenario with negligible overhead, but scheduled compaction or Auto Compaction is still needed over time to consolidate files into the 500 MB to 1 GB range for long-term read performance.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["OptimizedWrite", "AutoCompaction", "FileSize", "LongTermMaintenance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A bug in earlier versions of Fabric Spark Runtime caused Auto Compaction to trigger excessively on tables exceeding 1 GB because the implementation counted already-compacted files toward the minNumFiles threshold rather than only undersized files; the author recommended falling back to scheduled OPTIMIZE for tables larger than 1 GB until the fix shipped. Microsoft subsequently resolved the issue in the Fabric Spark Runtime.",
+      "depth": 5,
+      "type": "fact",
+      "tags": ["AutoCompaction", "FabricRuntime", "Bug", "LargeTable"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "For tables smaller than 1 GB, Auto Compaction alone is sufficient for file management; for larger tables, the recommended long-term strategy is to combine Auto Compaction with periodic ad-hoc OPTIMIZE runs targeting 500 MB to 1 GB file sizes to handle files that auto-compaction leaves undersized.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["AutoCompaction", "OPTIMIZE", "FileSize", "Maintenance"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "The author recommends enabling Auto Compaction as a default practice because the configuration overhead is minimal and it consistently produces stable file counts and query latencies across varied batch sizes without requiring scheduling logic.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["AutoCompaction", "BestPractice", "DeltaLake"]
+    }
+  ],
+  "assets": []
+}

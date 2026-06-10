@@ -1,0 +1,93 @@
+{
+  "url": "https://bradcoles-dev.github.io/blog/fabric-mirroring.html",
+  "title": "Microsoft Fabric Mirroring: Before You Commit",
+  "tier": 4,
+  "tags": ["MicrosoftFabric", "Mirroring", "DataEngineering", "Architecture", "Performance", "AntiPattern"],
+  "claims": [
+    {
+      "capability_id": "mirroring",
+      "text": "Mirroring delivers a continuously updated current-state replica of the source, not a change event stream or an immutable append-only store. Stopping and restarting mirroring causes a full reseed from the present source state, erasing any ability to replay prior changes.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Mirroring", "DataEngineering", "Replication"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "Row-level security, column-level security, and dynamic data masking defined at the source database are not carried forward into the mirrored copy. Teams must rebuild all security policies from scratch at the Fabric layer before exposing mirrored data to end users.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["MicrosoftFabric", "Mirroring", "Security", "DataGovernance"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "A mirrored database is permanently associated with the Fabric identity of the user who created it, and ownership cannot be transferred. If that individual leaves the organisation the item must be deleted and recreated; using service principals or shared service accounts from the outset prevents this operational risk.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["MicrosoftFabric", "Mirroring", "Governance", "Operations"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "The SQL analytics endpoint introduces an additional synchronisation delay of roughly 30–60 seconds on top of the underlying Delta replication latency. Reading directly from the Delta layer via Spark avoids this extra lag and is preferable when the freshest data is required.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["MicrosoftFabric", "Mirroring", "Performance", "Spark", "Latency"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "PostgreSQL mirroring silently drops columns whose types are not supported — including geometric types, network address types, range types, JSON, JSONB, XML, and INTERVAL — rather than blocking the table. Downstream consumers may receive incomplete rows without any error indication.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["MicrosoftFabric", "Mirroring", "PostgreSQL", "DataTypes", "DataQuality"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "An Oracle NUMBER column defined without explicit precision and scale will block the entire table from replicating with an InvalidDecimalPrecision error. The remedy is to upgrade the Oracle Client for Microsoft Tools (ODP driver) on the On-Premises Data Gateway, not to alter the source schema.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["MicrosoftFabric", "Mirroring", "Oracle", "DataTypes", "OnPremisesDataGateway"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "When Block Public Internet Access is enabled at the Fabric tenant level, the majority of native database mirroring connectors enter a paused state and stop replicating. Only Open Mirroring, Cosmos DB, Azure SQL Managed Instance, and SQL Server 2025 continue to function under that network restriction.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Mirroring", "PrivateLinks", "Networking", "Security"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "Mirroring does not constitute a disaster-recovery backup. Mass deletion or corruption at the source will eventually be replicated into the mirror; the mirrored database cannot serve as a recovery point if the source is lost.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["MicrosoftFabric", "Mirroring", "DisasterRecovery", "Architecture"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "Deletion vectors used by Fabric mirroring to represent deleted rows cause failures in some Python Delta readers: Polars via the delta-rs library raises a DeltaProtocolError, while Apache Spark and DuckDB 1.2 and later handle them correctly.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["MicrosoftFabric", "Mirroring", "DeltaLake", "Python", "Polars", "Spark", "DuckDB"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "After a Fabric deployment pipeline deploys a mirrored database item to a target workspace, replication does not start automatically. The target workspace receives a configured but empty item, and an operator must manually trigger replication, which then performs a complete initial load from the current source state.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Mirroring", "CICD", "DeploymentPipelines", "Operations"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "Workspace Monitoring can be enabled to capture structured replication logs in an Eventhouse KQL database. The MirroredDatabaseTableExecution table records row and byte counts, batch latency, operation timestamps, and error messages per table — but this capability is not on by default and carries standard Eventhouse billing.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["MicrosoftFabric", "Mirroring", "Monitoring", "Observability", "EventhouseKQL"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "For workloads that require both current-state query access and an immutable historical record, the recommended approach combines mirroring for the live replica with a separate lightweight append-only ingestion pipeline. Mirroring alone cannot satisfy both requirements simultaneously.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MicrosoftFabric", "Mirroring", "Architecture", "DataEngineering", "LakeHouse"]
+    }
+  ],
+  "assets": []
+}

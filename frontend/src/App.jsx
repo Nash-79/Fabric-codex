@@ -396,9 +396,14 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const [cap, setCap] = useState(initialCap);
   const [tagFilter, setTagFilter] = useState("");
   const [history, setHistory] = useState(null);
+  const [capAssets, setCapAssets] = useState([]);
   const [err, setErr] = useState("");
 
   useEffect(() => { if (initialCap) onConsumedInitial(); }, [initialCap, onConsumedInitial]);
+  useEffect(() => {
+    if (!cap) { setCapAssets([]); return; }
+    api("/assets?capability=" + cap).then(setCapAssets).catch(() => setCapAssets([]));
+  }, [cap]);
 
   const refresh = useCallback(() => {
     api("/coverage").then(setCoverage).catch((e) => setErr(e.message));
@@ -489,6 +494,17 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
               <button onClick={() => { setCap(null); setTagFilter(""); }} style={{ background: "transparent", border: "none", color: c.muted, cursor: "pointer", fontSize: 18 }}>×</button>
             </div>
           </div>
+          {capAssets.filter((a) => a.kind === "generated" && a.path).map((a) => (
+            <div key={a.id} style={{ padding: "12px 14px", borderBottom: "1px solid " + c.lineSoft }}>
+              <img src={"/" + a.path.replace(/^\//, "")} alt={a.caption}
+                style={{ width: "100%", borderRadius: 6, background: c.diagramBg, border: "1px solid " + c.lineSoft }}
+                onError={(e) => { e.target.closest("div").style.display = "none"; }} />
+              <div style={{ display: "flex", gap: 8, alignItems: "baseline", marginTop: 6 }}>
+                <Chip color={c.green}>original diagram</Chip>
+                <span style={{ fontSize: 12, color: c.muted }}>{a.caption}</span>
+              </div>
+            </div>
+          ))}
           <div style={{ maxHeight: 420, overflowY: "auto" }}>
             {claims.length === 0 && <div style={{ padding: 16, color: c.muted, fontSize: 13 }}>No claims match.</div>}
             {claims.map((cl) => (

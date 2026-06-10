@@ -1,0 +1,79 @@
+{
+  "url": "https://milescole.dev/data-engineering/2024/08/16/A-Deep-Dive-into-Optimized-Write-in-Microsoft-Fabric.html",
+  "title": "A Deep Dive into Optimized Write in Microsoft Fabric",
+  "tier": 4,
+  "tags": ["MicrosoftFabric", "DataEngineering", "Spark", "DeltaLake", "Performance", "OptimizedWrite", "SmallFileProblem", "DirectLake"],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "Optimized Write addresses the small file problem by shuffling data across executors before writing, so each partition is handled by a single executor and produces fewer, larger files rather than many small ones scattered across the cluster.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["OptimizedWrite", "SmallFileProblem", "DeltaLake", "Spark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The target file size for Optimized Write is governed by the BinSize configuration key; in Fabric the default is 1 GB, integer values are interpreted as megabytes, and the recommended tuning values are 256 MB for general workloads or 128 MB for small workloads to avoid over-consolidation.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["OptimizedWrite", "BinSize", "Configuration", "Spark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The Optimized Write configuration key changed between Fabric Spark runtimes: Runtime 1.2 used spark.microsoft.delta.optimizeWrite.enabled, while Runtime 1.3 and later uses spark.databricks.delta.optimizeWrite.enabled.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["OptimizedWrite", "FabricRuntime", "Configuration", "Migration"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "In the author's benchmark on a highly partitioned table (1,823 date-sold partitions), enabling Optimized Write reduced write time from roughly 6 minutes 43 seconds to 53 seconds and cut file count from 175,008 to 1,823, yielding a 19x improvement in downstream query duration — results attributed to the author's controlled test environment.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["OptimizedWrite", "Performance", "Partitioning", "Benchmark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "On a non-partitioned table in the author's benchmark, disabling Optimized Write produced 35% faster writes and 2x faster queries because 96 output files offered better read parallelism across the available executor cores than the 15 files produced when the feature was enabled — showing the feature can hurt non-partitioned workloads.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["OptimizedWrite", "Performance", "NonPartitioned", "Benchmark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Optimized Write is functionally incompatible with Liquid Clustering and should be disabled for tables using that feature.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["OptimizedWrite", "LiquidClustering", "DeltaLake"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "For streaming jobs that produce micro-batches, Optimized Write is recommended because each micro-batch naturally generates many small files; enabling the feature consolidates those files at write time rather than requiring a separate compaction step.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["OptimizedWrite", "Streaming", "SmallFileProblem"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "A 1 GB BinSize target is recommended when writing Delta tables that back Power BI Direct Lake semantic models, because larger files align with the Direct Lake loading pattern and reduce the number of segment loads needed.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["OptimizedWrite", "DirectLake", "PowerBI", "BinSize"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "When UPDATE or MERGE operations are combined with deletion vectors enabled on a Delta table, the probability of generating small files remains high even with Optimized Write active, because those operations touch many existing files and create new ones for changed records.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["OptimizedWrite", "DeletionVectors", "MERGE", "SmallFileProblem"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Fragmented writes caused by the small file problem measurably degrade Parquet compression efficiency; in the author's partitioned benchmark, the feature-disabled variant produced roughly 33% more data on disk than the Optimized Write variant.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["OptimizedWrite", "Compression", "Parquet", "StorageEfficiency"]
+    }
+  ],
+  "assets": []
+}

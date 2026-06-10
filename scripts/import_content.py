@@ -22,6 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ROOT / "content" / "sources"
+ASSET_MANIFEST = ROOT / "content" / "diagrams" / "assets.json"
 
 VALID_TYPES = {"fact", "pattern", "antipattern", "internal"}
 
@@ -55,6 +56,33 @@ def lint(payload: dict, registry: list[str]) -> list[str]:
         if a.get("kind") == "referenced" and not a.get("attribution"):
             problems.append(f"asset[{i}] referenced image lacks attribution")
     return problems
+
+
+def get(base: str, path: str):
+    with urllib.request.urlopen(base.rstrip("/") + path, timeout=30) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def replay_asset_manifest(base: str, dry_run: bool) -> tuple[int, int]:
+    """Replay standalone generated assets (capability diagrams) from the git-tracked
+    manifest. Source-attached assets replay via their source files; these don't,
+    so the manifest keeps them rebuildable. Idempotent: registered paths are skipped."""
+    if not ASSET_MANIFEST.exists():
+        return 0, 0
+    entries = json.loads(ASSET_MANIFEST.read_text(encoding="utf-8"))
+    try:
+        existing = {a.get("path") for a in get(base, "/assets") if a.get("path")}
+    except Exception:  # noqa: BLE001 — dry runs may have no server
+        existing = set()
+    added = skipped = 0
+    for a in entries:
+        if a.get("path") in existing:
+            skipped += 1
+            continue
+        if not dry_run:
+            post(base, "/assets", a)
+        added += 1
+    return added, skipped
 
 
 def post(base: str, path: str, payload: dict) -> dict:
@@ -109,6 +137,10 @@ def main() -> int:
                   f"{res.get('assets_added',0)} assets")
         total_claims += res.get("claims_added", claims)
         total_assets += res.get("assets_added", assets)
+
+    dia_added, dia_skipped = replay_asset_manifest(args.base, args.dry_run)
+    if dia_added or dia_skipped:
+        print(f"  Diagram manifest: {dia_added} registered, {dia_skipped} already present.")
 
     print(f"\nPublished {len(files)} source file(s): ~{total_claims} claims, ~{total_assets} assets"
           f"{' (dry run)' if args.dry_run else ''}."

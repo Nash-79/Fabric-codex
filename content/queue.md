@@ -6,4 +6,9 @@ processed lines are moved to the Done section below with the resulting content f
 
 ## Queued
 
+# blog INDEX pages — curator picks the most substantive recent Fabric posts and
+# ingests each post as its own source
+https://bradcoles-dev.github.io/index.html#blog tier=4
+https://milescole.dev/categories/ tier=4
+
 ## Done
