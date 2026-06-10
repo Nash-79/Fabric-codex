@@ -31,6 +31,8 @@ def _run_migrations(raw_conn) -> None:
     migrations = [
         # v0.3: ready_to_share persisted on Design after full validation pass
         ("design", "ready_to_share", "INTEGER NOT NULL DEFAULT 0"),
+        # v0.4 (Task #2): new_status column on ClaimEvent audit trail
+        ("claimevent", "new_status", "TEXT NOT NULL DEFAULT ''"),
     ]
     for table, column, col_def in migrations:
         # PRAGMA table_info returns rows where the second element is the column name
