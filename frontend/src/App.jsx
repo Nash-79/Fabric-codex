@@ -447,6 +447,8 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const [rejectConfirm, setRejectConfirm] = useState(new Set()); // claim IDs pending reject confirm
   const [recentActions, setRecentActions] = useState([]);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionFilter, setActionFilter] = useState(null); // null | "verified" | "rejected" | "dismissed" | "promoted"
+  const [capFilter, setCapFilter] = useState("");
 
   useEffect(() => { if (initialCap) onConsumedInitial(); }, [initialCap, onConsumedInitial]);
   useEffect(() => {
@@ -518,6 +520,14 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const total = Object.values(coverage).reduce((a, g) => a + Object.values(g).reduce((x, y) => x + y, 0), 0);
   const areas = [...new Set(CAPABILITIES.map((x) => x.area))];
 
+  const filteredActions = recentActions.filter((ev) => {
+    if (actionFilter && ev.action !== actionFilter) return false;
+    if (capFilter && ev.capability_id !== capFilter) return false;
+    return true;
+  });
+  const actionCapIds = [...new Set(recentActions.map((ev) => ev.capability_id))];
+  const ACTION_TYPES = ["verified", "rejected", "dismissed", "promoted"];
+
   return (
     <div>
       {err && <div style={{ color: c.red, fontSize: 13, marginBottom: 10 }}>{err}</div>}
@@ -575,33 +585,81 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
             style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", cursor: "pointer", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
           >
             <span style={{ fontFamily: mono, fontSize: 11, color: c.muted, textTransform: "uppercase", letterSpacing: 0.6 }}>
-              Recent actions <span style={{ color: c.faint }}>({recentActions.length})</span>
+              Recent actions{" "}
+              <span style={{ color: c.faint }}>
+                {filteredActions.length < recentActions.length
+                  ? `(${filteredActions.length} of ${recentActions.length})`
+                  : `(${recentActions.length})`}
+              </span>
             </span>
             <span style={{ fontFamily: mono, fontSize: 11, color: c.faint }}>{actionsOpen ? "▲ hide" : "▼ show"}</span>
           </button>
           {actionsOpen && (
             <div style={{ borderTop: "1px solid " + c.lineSoft }}>
-              {recentActions.map((ev) => {
-                const capName = CAPABILITIES.find((x) => x.id === ev.capability_id)?.name || ev.capability_id;
-                const actionColor = ev.action === "verified" ? c.green : ev.action === "rejected" || ev.action === "dismissed" ? c.red : c.amber;
-                const ts = new Date(ev.actioned_at);
-                const timeLabel = ts.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " + ts.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-                return (
-                  <div key={ev.id} style={{ padding: "9px 14px", borderBottom: "1px solid " + c.lineSoft, display: "flex", gap: 10, alignItems: "flex-start" }}>
-                    <span style={{ fontFamily: mono, fontSize: 11, color: actionColor, minWidth: 68, paddingTop: 1 }}>{ev.action}</span>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 12, color: c.text, lineHeight: 1.45, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.text_snippet}{ev.text_snippet.length >= 120 ? "…" : ""}</div>
-                      <div style={{ display: "flex", gap: 6, marginTop: 3, alignItems: "center" }}>
-                        <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>{capName}</span>
-                        <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>·</span>
-                        <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>{ev.prev_status} →</span>
-                        <span style={{ fontFamily: mono, fontSize: 10, color: actionColor }}>{ev.new_status}</span>
+              {/* ── filter bar ── */}
+              <div style={{ padding: "8px 14px", borderBottom: "1px solid " + c.lineSoft, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {/* capability dropdown */}
+                <select
+                  value={capFilter}
+                  onChange={(e) => setCapFilter(e.target.value)}
+                  style={{ fontFamily: mono, fontSize: 11, color: capFilter ? c.accentText : c.muted, background: capFilter ? c.accentSoft : c.bg, border: "1px solid " + (capFilter ? c.accent : c.line), borderRadius: 6, padding: "3px 7px", cursor: "pointer" }}
+                >
+                  <option value="">All capabilities</option>
+                  {actionCapIds.map((id) => (
+                    <option key={id} value={id}>{CAPABILITIES.find((x) => x.id === id)?.name || id}</option>
+                  ))}
+                </select>
+                {/* action-type chips */}
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {ACTION_TYPES.filter((a) => recentActions.some((ev) => ev.action === a)).map((a) => {
+                    const active = actionFilter === a;
+                    const chipColor = a === "verified" ? c.green : a === "rejected" || a === "dismissed" ? c.red : c.amber;
+                    return (
+                      <button
+                        key={a}
+                        onClick={() => setActionFilter(active ? null : a)}
+                        style={{ fontFamily: mono, fontSize: 11, cursor: "pointer", borderRadius: 12, padding: "2px 9px", border: "1px solid " + (active ? chipColor : c.line), background: active ? chipColor + "22" : "transparent", color: active ? chipColor : c.muted }}
+                      >
+                        {a}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* clear filters */}
+                {(actionFilter || capFilter) && (
+                  <button
+                    onClick={() => { setActionFilter(null); setCapFilter(""); }}
+                    style={{ fontFamily: mono, fontSize: 11, cursor: "pointer", color: c.faint, background: "transparent", border: "none", padding: "2px 4px", textDecoration: "underline" }}
+                  >
+                    clear
+                  </button>
+                )}
+              </div>
+              {filteredActions.length === 0 ? (
+                <div style={{ padding: "18px 14px", fontFamily: mono, fontSize: 12, color: c.faint, textAlign: "center" }}>No actions match the current filters.</div>
+              ) : (
+                filteredActions.map((ev) => {
+                  const capName = CAPABILITIES.find((x) => x.id === ev.capability_id)?.name || ev.capability_id;
+                  const actionColor = ev.action === "verified" ? c.green : ev.action === "rejected" || ev.action === "dismissed" ? c.red : c.amber;
+                  const ts = new Date(ev.actioned_at);
+                  const timeLabel = ts.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " + ts.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+                  return (
+                    <div key={ev.id} style={{ padding: "9px 14px", borderBottom: "1px solid " + c.lineSoft, display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <span style={{ fontFamily: mono, fontSize: 11, color: actionColor, minWidth: 68, paddingTop: 1 }}>{ev.action}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, color: c.text, lineHeight: 1.45, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.text_snippet}{ev.text_snippet.length >= 120 ? "…" : ""}</div>
+                        <div style={{ display: "flex", gap: 6, marginTop: 3, alignItems: "center" }}>
+                          <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>{capName}</span>
+                          <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>·</span>
+                          <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>{ev.prev_status} →</span>
+                          <span style={{ fontFamily: mono, fontSize: 10, color: actionColor }}>{ev.new_status}</span>
+                        </div>
                       </div>
+                      <span style={{ fontFamily: mono, fontSize: 10, color: c.faint, whiteSpace: "nowrap", paddingTop: 2 }}>{timeLabel}</span>
                     </div>
-                    <span style={{ fontFamily: mono, fontSize: 10, color: c.faint, whiteSpace: "nowrap", paddingTop: 2 }}>{timeLabel}</span>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
           )}
         </div>
