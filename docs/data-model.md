@@ -32,10 +32,14 @@ State transitions:
 | Event                               | What happens                                                        |
 |-------------------------------------|---------------------------------------------------------------------|
 | New claim ingested                  | v1, `status=pending`, `active=true`                                 |
-| Human approves in Registry          | `status=verified` (`POST /claims/{id}/verify`)                      |
+| New claim near-duplicates an active claim from **another** source | stored `status=duplicate`, `active=false` — flagged for human merge/dismiss, excluded from retrieval and coverage |
+| Human approves in Registry          | `status=verified` (`POST /claims/{id}/verify`; batch: `POST /claims/verify-bulk` with `source_id` or `claim_ids` — only active+pending claims flip, the rest are reported as skipped) |
 | Source revised, claim text changed  | new version, `supersedes_id`→old, old `superseded`+`active=false`   |
 | Source revised, claim gone          | old `deprecated` + `active=false`                                   |
 | Source revised, claim same          | unchanged; repointed to the new `Source` revision for freshness     |
+
+Only **active** claims can be verified — verifying a superseded/deprecated row is rejected
+(HTTP 409). Duplicates are queried with `GET /claims?include_inactive=true&status=duplicate`.
 
 `GET /claims/{claim_key}/history` returns the full chain, ordered by version — that is your
 audit trail and rollback surface.
@@ -43,7 +47,12 @@ audit trail and rollback surface.
 ## Drift detection (services.detect_drift)
 
 1. New content arrives for an existing `source_key`.
-2. If the content hash is unchanged, no-op.
+2. If the fingerprint is unchanged, no-op. For structured payloads the fingerprint hashes
+   the **sorted claim texts** (`_source_fingerprint`), so reordering claims in a content
+   file or editing tags/depth does not register as drift — only text changes do.
+   The payload is validated **before** any write; a drift call with no claims fails
+   cleanly without rolling the source forward. New `tags`/`assets` in the payload are
+   carried onto the new source revision.
 3. Otherwise roll the source family forward to a new active `version`.
 4. Re-extract claims; for each, find the best match among current active claims **of the same
    capability** by text similarity:
@@ -73,6 +82,16 @@ LLM validators run when `ANTHROPIC_API_KEY` is set:
 `confidence = 1 − Σ severity_weight` (critical 0.4, warning 0.15, info 0.0), floored at 0. A
 critical issue sets the design to `needs_review` and `ready_to_share=false`.
 
+Design status reflects how much was actually checked: a run with only the deterministic
+validators (no agent issues, no API) sets `checked`; a run that included a
+grounding/coverage/antipattern review — agent-supplied issues (an explicit empty list
+counts) or the API reviewers — sets `validated`. `ready_to_share` is true only for a full
+pass with no critical issues.
+
+`POST /designs` requires `cited_source_ids` — the agent that authored the design owns the
+`[Sn]` → source mapping; the server never re-derives it (a re-derived mapping built from a
+different claim ordering silently mis-attributes citations). Unknown source ids are rejected.
+
 ## Tags and assets (v0.2)
 
 **Tags** are free-form topical hashtags stored as JSON on `Source`, `Claim`, and `Design`
@@ -96,6 +115,16 @@ In `LLM_MODE=local` (default) the agents supply pre-extracted `claims`, finished
 `output_md`, drift `claims`, and validation `issues`; the server stores them and runs only
 deterministic validators. In `LLM_MODE=api` the server calls `llm.py` to do that work itself.
 Either way the version chain, citation, and freshness logic below are unchanged.
+
+## Local retrieval index (DuckDB)
+
+`scripts/build_index.py --rebuild` builds a derived DuckDB index (`var/atlas_index.duckdb`,
+gitignored) from the running backend: one denormalised claims+source table, a BM25 full-text
+index over claim text + tags, and a coverage view. Use `--search "<query>" [--capability id]`
+for ranked retrieval — agents should prefer this over dumping `/claims` once the KB grows.
+SQLite stays the system of record; the index is throwaway. If snapshot time-travel over the
+claim store becomes useful, the same table can be managed as a DuckLake catalog
+(`ATTACH 'ducklake:...'`) — revisit when the KB is large enough to care.
 
 ## Scaling to Postgres + pgvector
 

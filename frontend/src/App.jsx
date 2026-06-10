@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { c, BRAND, sans, mono, applyTheme, initialTheme } from "./theme.js";
 
 /* ------------------------------------------------------------------ *
@@ -59,43 +61,62 @@ async function api(path, opts = {}) {
 }
 
 /* ----------------------------- markdown ---------------------------- */
+/* Full GFM rendering (tables, code, links, nested lists) via react-markdown,
+   themed with the same tokens as the rest of the UI. [Sn] citations anywhere
+   in text are rendered as chips. */
+const CiteChip = ({ tag }) => (
+  <span style={{ fontFamily: mono, fontSize: 11, color: c.accentText, background: c.accentSoft, border: "1px solid " + c.accentDim, borderRadius: 4, padding: "0 4px", margin: "0 1px" }}>{tag}</span>
+);
+
+function cite(children) {
+  return React.Children.map(children, (child) =>
+    typeof child === "string"
+      ? child.split(/(\[S\d+\])/g).map((p, i) =>
+          /^\[S\d+\]$/.test(p) ? <CiteChip key={i} tag={p.slice(1, -1)} /> : p)
+      : child
+  );
+}
+
+const heading = (size, upper = false) => ({ children }) => (
+  <div style={{ color: c.accentText, fontFamily: sans, fontWeight: 600, fontSize: size, letterSpacing: upper ? 0.3 : 0, textTransform: upper ? "uppercase" : "none", margin: "18px 0 6px" }}>{cite(children)}</div>
+);
+
+const mdComponents = {
+  h1: heading(16), h2: heading(13, true), h3: heading(13, true),
+  h4: heading(12.5, true), h5: heading(12.5, true), h6: heading(12.5, true),
+  p: ({ children }) => <p style={{ color: c.text, lineHeight: 1.6, margin: "6px 0" }}>{cite(children)}</p>,
+  ul: ({ children }) => <ul style={{ margin: "4px 0", paddingLeft: 20 }}>{children}</ul>,
+  ol: ({ children }) => <ol style={{ margin: "4px 0", paddingLeft: 20 }}>{children}</ol>,
+  li: ({ children }) => <li style={{ color: c.text, lineHeight: 1.55, marginBottom: 4 }}>{cite(children)}</li>,
+  a: ({ href, children }) => (
+    <a href={href} target="_blank" rel="noreferrer" style={{ color: c.accentText, textDecorationColor: c.accentDim }}>{children}</a>
+  ),
+  code: ({ children }) => (
+    <code style={{ fontFamily: mono, fontSize: 12, color: c.accentText, background: c.accentSoft, borderRadius: 4, padding: "1px 5px" }}>{children}</code>
+  ),
+  pre: ({ children }) => (
+    <pre style={{ fontFamily: mono, fontSize: 12, color: c.text, background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: "10px 12px", overflowX: "auto", lineHeight: 1.5 }}>{children}</pre>
+  ),
+  blockquote: ({ children }) => (
+    <blockquote style={{ margin: "8px 0", padding: "2px 14px", borderLeft: "3px solid " + c.accentDim, color: c.muted }}>{children}</blockquote>
+  ),
+  table: ({ children }) => (
+    <div style={{ overflowX: "auto", margin: "10px 0" }}>
+      <table style={{ borderCollapse: "collapse", fontSize: 12.5, width: "100%" }}>{children}</table>
+    </div>
+  ),
+  th: ({ children }) => <th style={{ textAlign: "left", padding: "6px 10px", borderBottom: "2px solid " + c.line, color: c.accentText, fontWeight: 600 }}>{cite(children)}</th>,
+  td: ({ children }) => <td style={{ padding: "6px 10px", borderBottom: "1px solid " + c.lineSoft, verticalAlign: "top", color: c.text }}>{cite(children)}</td>,
+  hr: () => <hr style={{ border: "none", borderTop: "1px solid " + c.line, margin: "14px 0" }} />,
+};
+
 function Md({ text }) {
   if (!text) return null;
-  return text.split(/\n{2,}/).map((blk, i) => {
-    const t = blk.trim();
-    if (/^#{1,6}\s/.test(t)) {
-      return (
-        <div key={i} style={{ color: c.accentText, fontFamily: sans, fontWeight: 600, fontSize: 13, letterSpacing: 0.3, textTransform: "uppercase", margin: "18px 0 6px" }}>
-          <Inline s={t.replace(/^#+\s/, "")} />
-        </div>
-      );
-    }
-    if (t.split("\n").every((l) => /^\s*[-*]\s/.test(l))) {
-      return (
-        <ul key={i} style={{ margin: "4px 0", padding: 0, listStyle: "none" }}>
-          {t.split("\n").map((l, j) => (
-            <li key={j} style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-              <span style={{ color: c.accent }}>▸</span>
-              <span style={{ color: c.text, lineHeight: 1.55 }}><Inline s={l.replace(/^\s*[-*]\s/, "")} /></span>
-            </li>
-          ))}
-        </ul>
-      );
-    }
-    return <p key={i} style={{ color: c.text, lineHeight: 1.6, margin: "6px 0" }}><Inline s={t} /></p>;
-  });
-}
-function Inline({ s }) {
-  return s.split(/(\*\*[^*]+\*\*|\[S\d+\])/g).map((p, i) => {
-    if (/^\*\*[^*]+\*\*$/.test(p)) return <strong key={i}>{p.slice(2, -2)}</strong>;
-    if (/^\[S\d+\]$/.test(p))
-      return (
-        <span key={i} style={{ fontFamily: mono, fontSize: 11, color: c.accentText, background: c.accentSoft, border: "1px solid " + c.accentDim, borderRadius: 4, padding: "0 4px", margin: "0 1px" }}>
-          {p.slice(1, -1)}
-        </span>
-      );
-    return <span key={i}>{p}</span>;
-  });
+  return (
+    <div style={{ fontSize: 13 }}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={mdComponents}>{text}</ReactMarkdown>
+    </div>
+  );
 }
 
 /* ---------------------------- small ui ----------------------------- */
@@ -389,7 +410,17 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   }, [cap, tagFilter]);
   useEffect(() => { refresh(); }, [refresh]);
 
-  const verify = async (id) => { await api(`/claims/${id}/verify`, { method: "POST" }); refresh(); };
+  const verify = async (id) => {
+    try { await api(`/claims/${id}/verify`, { method: "POST" }); } catch (e) { setErr(e.message); }
+    refresh();
+  };
+  const pendingShown = claims.filter((cl) => cl.status === "pending");
+  const verifyAllShown = async () => {
+    try {
+      await api("/claims/verify-bulk", { method: "POST", body: JSON.stringify({ claim_ids: pendingShown.map((cl) => cl.id) }) });
+    } catch (e) { setErr(e.message); }
+    refresh();
+  };
   const total = Object.values(coverage).reduce((a, g) => a + Object.values(g).reduce((x, y) => x + y, 0), 0);
   const areas = [...new Set(CAPABILITIES.map((x) => x.area))];
 
@@ -451,7 +482,12 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
               {tagFilter && <span style={{ color: c.accentText }}> · #{tagFilter}</span>}
               <span style={{ color: c.muted, fontWeight: 400, fontSize: 13 }}> · {claims.length} claims</span>
             </span>
-            <button onClick={() => { setCap(null); setTagFilter(""); }} style={{ background: "transparent", border: "none", color: c.muted, cursor: "pointer", fontSize: 18 }}>×</button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {pendingShown.length > 1 && (
+                <Btn small primary onClick={verifyAllShown}>Verify all pending ({pendingShown.length})</Btn>
+              )}
+              <button onClick={() => { setCap(null); setTagFilter(""); }} style={{ background: "transparent", border: "none", color: c.muted, cursor: "pointer", fontSize: 18 }}>×</button>
+            </div>
           </div>
           <div style={{ maxHeight: 420, overflowY: "auto" }}>
             {claims.length === 0 && <div style={{ padding: 16, color: c.muted, fontSize: 13 }}>No claims match.</div>}
@@ -502,17 +538,31 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
 function Sources() {
   const [sources, setSources] = useState([]);
   const [assets, setAssets] = useState([]);
+  const [pendingBySource, setPendingBySource] = useState({});
   const [err, setErr] = useState("");
-  useEffect(() => {
+  const refresh = useCallback(() => {
     api("/sources").then(setSources).catch((e) => setErr(e.message));
     api("/assets").then(setAssets).catch(() => {});
+    api("/claims?status=pending").then((rows) => {
+      const by = {};
+      rows.forEach((cl) => { by[cl.source_id] = (by[cl.source_id] || 0) + 1; });
+      setPendingBySource(by);
+    }).catch(() => {});
   }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+  const verifySource = async (id) => {
+    try {
+      await api("/claims/verify-bulk", { method: "POST", body: JSON.stringify({ source_id: id }) });
+    } catch (e) { setErr(e.message); }
+    refresh();
+  };
   if (err) return <div style={{ color: c.red, fontSize: 13 }}>{err}</div>;
   if (!sources.length) return <Empty>No sources yet. Run <Code>/ingest &lt;url&gt;</Code> in Claude Code, then publish.</Empty>;
   return (
     <div style={{ display: "grid", gap: 12 }}>
       {sources.map((s) => {
         const sa = assets.filter((a) => a.source_id === s.id);
+        const pending = pendingBySource[s.id] || 0;
         return (
           <div key={s.id} style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 14, boxShadow: c.shadow }}>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -521,6 +571,11 @@ function Sources() {
               {!s.active && <Chip color={c.faint}>superseded</Chip>}
               <span style={{ fontWeight: 600, fontSize: 14 }}>{s.title}</span>
               {(s.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
+              {pending > 0 && (
+                <span style={{ marginLeft: "auto" }}>
+                  <Btn small primary onClick={() => verifySource(s.id)}>Verify {pending} pending</Btn>
+                </span>
+              )}
             </div>
             {s.url && <a href={s.url} target="_blank" rel="noreferrer" style={{ fontFamily: mono, fontSize: 11, color: c.faint, display: "block", marginTop: 6, textDecoration: "none" }}>{s.url}</a>}
             {sa.length > 0 && (

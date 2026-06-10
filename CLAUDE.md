@@ -111,6 +111,7 @@ pgvector for semantic retrieval — see docs/data-model.md.
 - **learning-author** — writes tiered lessons grounded only in approved claims.
 - **coverage-auditor** — finds capabilities/depths the knowledge base is missing.
 - **diagram-author** — creates original Mermaid/SVG diagrams (never copies source images).
+- **fabric-advisor** — expert Q&A grounded only in KB claims, cited; refuses where the KB is silent.
 
 Prefer explicit invocation, e.g. `Use the knowledge-curator subagent on docs/sources/direct-lake.md`.
 

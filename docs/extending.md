@@ -20,8 +20,14 @@ serves. The flow:
 ```
 /ingest <url-or-file> tier=<1-6>     # knowledge-curator writes content/sources/<slug>.json
 python scripts/import_content.py     # publish: replays files into the running backend
-Registry tab → Verify                # human approval, claim by claim
+Registry tab → Verify                # human approval — per claim, or "Verify all pending"
 ```
+
+For many sources at once, add them to `content/queue.md` (one `<url> tier=<n>` per line)
+and run `/ingest-batch` — the curator processes the queue sequentially and moves done lines
+to the Done section. The Sources tab gets a "Verify N pending" button per source
+(`POST /claims/verify-bulk`). Claims that near-duplicate an active claim from another source
+are stored as `status=duplicate` (inactive) for human merge — see docs/data-model.md.
 
 Or author the file by hand — the shape is one JSON file **per source**
 (see `content/sources/example-direct-lake.json`):
@@ -144,7 +150,16 @@ Content files in git are the source of truth; any server can be rebuilt from the
 scale, point `DATABASE_URL` at Postgres (see `docs/data-model.md`). Keep `LLM_MODE=local`
 on servers — they should never need an API key.
 
-## 10. Keeping content fresh
+## 10. Ask the adviser
+
+`/advise <question>` runs the **fabric-advisor** agent: an expert Q&A view over the same
+knowledge base. It retrieves claims scoped to the capabilities the question touches, answers
+with `[Sn]` citations and a source legend, labels its own reasoning *(inference)*, and — when
+the KB has no coverage — says so and recommends what to `/ingest` instead of guessing.
+For fast ranked retrieval over a large KB, build the local index first:
+`python scripts/build_index.py --rebuild`, then `--search "<query>" --capability <id>`.
+
+## 11. Keeping content fresh
 
 `/drift <source-key>` re-extracts a source, diffs claims, supersedes changed ones, and
 flags every design citing that source as `needs_review`. Run it when Microsoft updates a

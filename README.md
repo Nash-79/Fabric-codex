@@ -12,13 +12,15 @@ Approved sources become **versioned, source-graded claims**, each tagged to a Fa
 ```
 CLAUDE.md            Project memory for Claude Code (domain rules, scope discipline)
 AGENTS.md            The same, for Codex / other agents (committed, repo-shared)
-.claude/agents/      Seven focused subagents (curator, architect, validator, drift, learning,
-                     coverage, diagram-author)
-.claude/commands/    Slash commands: /ingest /design /validate /drift /lesson /diagram
+.claude/agents/      Eight focused subagents (curator, architect, validator, drift, learning,
+                     coverage, diagram-author, fabric-advisor)
+.claude/commands/    Slash commands: /ingest /ingest-batch /design /validate /drift /lesson
+                     /diagram /advise
 .codex/prompts/      The same intents as Codex prompts (+ .codex/README.md install note)
 backend/             FastAPI + SQLModel — claim versioning + the validation pass
 content/             Git-tracked authored knowledge: sources/ diagrams/ designs/ lessons/
 scripts/             import_content.py — publish authored content to a running server
+                     build_index.py — local DuckDB BM25 retrieval index over the claims
 docs/workflow.md     Author-locally / publish-to-server model + VS Code extension setup
 docs/data-model.md   How versioning, supersede, drift, tags, assets, and validation work
 docs/extending.md    Every extension point: content, capabilities, theme, views, agents

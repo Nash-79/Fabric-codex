@@ -30,6 +30,15 @@ def content_hash(text: str) -> str:
     return hashlib.sha256((text or "").strip().encode("utf-8")).hexdigest()[:16]
 
 
+def _source_fingerprint(content: str, claims: Optional[list[dict]]) -> str:
+    """Drift hash. For structured payloads, hash the sorted claim texts so reordering
+    claims in a content file or editing tags/depth does not register as drift."""
+    if content:
+        return content_hash(content)
+    texts = sorted((c.get("text") or "").strip() for c in (claims or []))
+    return content_hash(json.dumps(texts))
+
+
 def slugify(value: str) -> str:
     value = re.sub(r"^https?://", "", (value or "").lower())
     value = re.sub(r"[^a-z0-9]+", "-", value).strip("-")
@@ -56,18 +65,46 @@ def _norm_extracted(items: list[dict]) -> list[dict]:
 
 
 # --------------------------------------------------------------- ingestion
+def _find_duplicate(session: Session, text: str, capability_id: str,
+                    exclude_source_ids: set[str]) -> Optional[Claim]:
+    """Cross-source dedup: an active claim in the same capability, from a different
+    source family, whose text is near-identical (>= SAME)."""
+    candidates = session.exec(
+        select(Claim).where(Claim.active == True,  # noqa: E712
+                            Claim.capability_id == capability_id)).all()
+    for c in candidates:
+        if c.source_id not in exclude_source_ids and _sim(c.text, text) >= SAME:
+            return c
+    return None
+
+
+def _family_source_ids(session: Session, source_key: str) -> set[str]:
+    return {s.id for s in session.exec(
+        select(Source).where(Source.source_key == source_key)).all()}
+
+
 def _insert_claims(session: Session, source: Source, extracted: list[dict]) -> list[Claim]:
-    created = []
+    """Insert extracted claims. Claims that near-duplicate an active claim from another
+    source are stored as status='duplicate', active=False — flagged for human merge,
+    kept out of retrieval and coverage."""
+    family = _family_source_ids(session, source.source_key)
+    created, duplicates = [], []
     for e in extracted:
+        dup = _find_duplicate(session, e["text"], e["capability_id"], family)
         c = Claim(capability_id=e["capability_id"], text=e["text"], depth=e["depth"],
-                  type=e["type"], status="pending", source_id=source.id,
-                  tags_json=dump_tags(e.get("tags")), active=True)
+                  type=e["type"],
+                  status="duplicate" if dup else "pending",
+                  source_id=source.id,
+                  tags_json=dump_tags(e.get("tags")), active=not dup)
         session.add(c)
         created.append(c)
+        if dup:
+            duplicates.append((c, dup))
     session.commit()
     for c in created:
         session.refresh(c)
-    return created
+    return created, [{"claim_id": c.id, "text": c.text, "duplicate_of": d.id,
+                      "duplicate_of_text": d.text} for c, d in duplicates]
 
 
 def _resolve_claims(content: str, provided: Optional[list[dict]]) -> list[dict]:
@@ -89,19 +126,21 @@ def ingest_source(session: Session, url: str, title: str, tier: int, content: st
         select(Source).where(Source.source_key == key, Source.active == True)).first()  # noqa: E712
     if existing:
         return detect_drift(session, key, content=content, claims=claims,
-                            url=url, title=title, tier=tier)
+                            url=url, title=title, tier=tier, tags=tags, assets=assets)
 
+    extracted = _resolve_claims(content, claims)   # may raise — do it before any writes
     src = Source(source_key=key, version=1, url=url, title=title or url or key, tier=tier,
-                 content_hash=content_hash(content or json.dumps(claims or [])),
+                 content_hash=_source_fingerprint(content, claims),
                  tags_json=dump_tags(tags), active=True)
     session.add(src)
     session.commit()
     session.refresh(src)
 
-    inserted = _insert_claims(session, src, _resolve_claims(content, claims))
+    inserted, duplicates = _insert_claims(session, src, extracted)
     saved_assets = add_assets(session, assets, source_id=src.id)
     return {"source_id": src.id, "source_key": key, "version": 1, "drift": False,
-            "claims_added": len(inserted), "assets_added": len(saved_assets),
+            "claims_added": len(inserted) - len(duplicates), "duplicates": duplicates,
+            "assets_added": len(saved_assets),
             "claims": [_claim_dict(c) for c in inserted]}
 
 
@@ -110,12 +149,39 @@ def verify_claim(session: Session, claim_id: str) -> Optional[Claim]:
     c = session.get(Claim, claim_id)
     if not c:
         return None
+    if not c.active:
+        raise ValueError(f"Claim {claim_id} is {c.status} (inactive); "
+                         "only active claims can be verified.")
     c.status = "verified"
     c.confidence = max(c.confidence, 0.85)
     session.add(c)
     session.commit()
     session.refresh(c)
     return c
+
+
+def verify_claims_bulk(session: Session, source_id: Optional[str] = None,
+                       claim_ids: Optional[list[str]] = None) -> dict:
+    """Verify all active pending claims for a source, or an explicit id list.
+    Inactive / non-pending claims are skipped and reported, never flipped."""
+    if source_id:
+        rows = session.exec(
+            select(Claim).where(Claim.source_id == source_id)).all()
+    elif claim_ids:
+        rows = [c for cid in claim_ids if (c := session.get(Claim, cid))]
+    else:
+        raise ValueError("Provide source_id or claim_ids.")
+    verified, skipped = [], []
+    for c in rows:
+        if c.active and c.status == "pending":
+            c.status = "verified"
+            c.confidence = max(c.confidence, 0.85)
+            session.add(c)
+            verified.append(c.id)
+        else:
+            skipped.append({"claim_id": c.id, "status": c.status, "active": c.active})
+    session.commit()
+    return {"verified": len(verified), "verified_ids": verified, "skipped": skipped}
 
 
 def supersede_claim(session: Session, old: Claim, new_text: str, source: Source,
@@ -179,10 +245,14 @@ def add_assets(session: Session, assets: Optional[list[dict]], source_id: Option
 
 # --------------------------------------------------------------- generation
 def _grounding_context(session: Session, limit: int = 70):
+    # Deterministic order: verified before pending, then oldest first — so the [Sn]
+    # legend is stable across calls (citation parsing depends on this).
     verified = session.exec(
-        select(Claim).where(Claim.active == True, Claim.status == "verified")).all()  # noqa: E712
+        select(Claim).where(Claim.active == True, Claim.status == "verified")  # noqa: E712
+        .order_by(Claim.created_at, Claim.id)).all()
     pending = session.exec(
-        select(Claim).where(Claim.active == True, Claim.status == "pending")).all()  # noqa: E712
+        select(Claim).where(Claim.active == True, Claim.status == "pending")  # noqa: E712
+        .order_by(Claim.created_at, Claim.id)).all()
     claims = (verified + pending)[:limit]
     src_order, tag_of = [], {}
     for c in claims:
@@ -206,10 +276,18 @@ def create_design(session: Session, scenario: str, output_md: str,
                   constraints: Optional[dict] = None, tags: Optional[list[str]] = None,
                   cited_source_ids: Optional[list[str]] = None,
                   assets: Optional[list[dict]] = None, title: str = "") -> dict:
-    """Local-authoring path: the architect agent already produced the design; persist it."""
+    """Local-authoring path: the architect agent already produced the design; persist it.
+
+    `cited_source_ids` must come from whoever built the [Sn] legend the design text uses.
+    Re-deriving the mapping here from a fresh grounding context silently mis-attributes
+    citations when the author used a different claim set/order, so it is rejected."""
     if cited_source_ids is None:
-        _, _, tag_to_source, _ = _grounding_context(session)
-        cited_source_ids = _parse_cited(output_md, tag_to_source)
+        raise ValueError(
+            "cited_source_ids is required: pass the source ids behind the [Sn] tags used "
+            "in output_md (the agent that authored the design owns that mapping).")
+    unknown = [sid for sid in cited_source_ids if session.get(Source, sid) is None]
+    if unknown:
+        raise ValueError(f"cited_source_ids contains unknown source id(s): {unknown}")
     design = Design(title=title or scenario[:60], scenario=scenario,
                     constraints_json=json.dumps(constraints or {}),
                     output_md=output_md, tags_json=dump_tags(tags),
@@ -263,7 +341,8 @@ def validate_design(session: Session, design_id: str,
 
     # grounding / coverage / antipattern
     valid_v, valid_s = {"grounding", "coverage", "antipattern"}, {"critical", "warning", "info"}
-    if agent_issues:  # local mode: validation-reviewer agent supplies these
+    full_pass = True   # False = only deterministic validators ran -> status "checked"
+    if agent_issues is not None:  # local mode: validation-reviewer agent supplies these
         issues.extend({"validator": i.get("validator", "grounding"),
                        "severity": i.get("severity", "warning"),
                        "message": i.get("message", ""), "ref": i.get("ref", "")}
@@ -274,9 +353,11 @@ def validate_design(session: Session, design_id: str,
             ctx, _, _, _ = _grounding_context(session)
             issues.extend(llm.review_design(md, design.scenario, ctx))
         except llm.LLMUnavailable:
+            full_pass = False
             issues.append({"validator": "grounding", "severity": "info",
                            "message": "LLM validators skipped (no key).", "ref": ""})
     else:
+        full_pass = False
         issues.append({"validator": "grounding", "severity": "info",
                        "message": "No agent issues supplied; ran deterministic validators only. "
                                   "Run the validation-reviewer agent for grounding/coverage/antipattern.", "ref": ""})
@@ -292,44 +373,53 @@ def validate_design(session: Session, design_id: str,
                           message=i["message"], ref=i.get("ref", "")))
     has_critical = any(i["severity"] == "critical" for i in issues)
     design.confidence = confidence
-    design.status = "needs_review" if has_critical else "validated"
+    # "checked" = only deterministic citation/freshness validators ran; "validated" means a
+    # grounding/coverage/antipattern review (agent or API) was part of this run.
+    design.status = ("needs_review" if has_critical
+                     else "validated" if full_pass else "checked")
     session.add(design)
     session.commit()
     return {"design_id": design_id, "run_id": run.id, "confidence": confidence,
-            "ready_to_share": not has_critical, "issues": issues}
+            "full_pass": full_pass,
+            "ready_to_share": full_pass and not has_critical, "issues": issues}
 
 
 # --------------------------------------------------------------- drift
 def detect_drift(session: Session, source_key: str, content: str = "",
                  claims: Optional[list[dict]] = None, url: str = "", title: str = "",
-                 tier: Optional[int] = None) -> dict:
+                 tier: Optional[int] = None, tags: Optional[list[str]] = None,
+                 assets: Optional[list[dict]] = None) -> dict:
     current_src = session.exec(
         select(Source).where(Source.source_key == source_key, Source.active == True)).first()  # noqa: E712
     if current_src is None:
         return ingest_source(session, url or source_key, title, tier or 6,
-                             content=content, claims=claims)
+                             content=content, claims=claims, tags=tags, assets=assets)
 
-    new_hash = content_hash(content or json.dumps(claims or []))
+    new_hash = _source_fingerprint(content, claims)
     if new_hash == current_src.content_hash:
         return {"source_key": source_key, "drift": False, "reason": "content unchanged",
                 "added": 0, "changed": 0, "removed": 0, "unchanged": 0, "affected_designs": []}
+
+    extracted = _resolve_claims(content, claims)   # may raise — do it before any writes
 
     current_src.active = False
     session.add(current_src)
     new_src = Source(source_key=source_key, version=current_src.version + 1,
                      url=url or current_src.url, title=title or current_src.title,
                      tier=tier if tier is not None else current_src.tier,
-                     content_hash=new_hash, tags_json=current_src.tags_json, active=True)
+                     content_hash=new_hash,
+                     tags_json=dump_tags(tags) if tags else current_src.tags_json,
+                     active=True)
     session.add(new_src)
     session.commit()
     session.refresh(new_src)
+    add_assets(session, assets, source_id=new_src.id)
 
     family_ids = [s.id for s in session.exec(
         select(Source).where(Source.source_key == source_key)).all()]
     old_claims = session.exec(
         select(Claim).where(Claim.active == True, Claim.source_id.in_(family_ids))).all()  # noqa: E712
 
-    extracted = _resolve_claims(content, claims)
     matched, added, changed, unchanged = set(), [], [], []
     for e in extracted:
         cands = [c for c in old_claims if c.capability_id == e["capability_id"]]
@@ -348,10 +438,14 @@ def detect_drift(session: Session, source_key: str, content: str = "",
             nc = supersede_claim(session, best, e["text"], new_src, e["depth"], e["type"], e.get("tags"))
             changed.append({"old_id": best.id, "new_id": nc.id, "text": e["text"]})
         else:
+            dup = _find_duplicate(session, e["text"], e["capability_id"], set(family_ids))
             session.add(Claim(capability_id=e["capability_id"], text=e["text"], depth=e["depth"],
-                              type=e["type"], status="pending", source_id=new_src.id,
-                              tags_json=dump_tags(e.get("tags")), active=True))
-            added.append({"text": e["text"], "capability": e["capability_id"]})
+                              type=e["type"],
+                              status="duplicate" if dup else "pending",
+                              source_id=new_src.id,
+                              tags_json=dump_tags(e.get("tags")), active=not dup))
+            added.append({"text": e["text"], "capability": e["capability_id"],
+                          **({"duplicate_of": dup.id} if dup else {})})
     session.commit()
 
     removed = []

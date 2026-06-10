@@ -55,6 +55,8 @@ class Claim(SQLModel, table=True):
     text: str
     depth: int = 1
     type: str = "fact"
+    # pending | verified | superseded | deprecated | duplicate (near-match of an active
+    # claim from another source at ingest; stored inactive, awaiting human merge/dismiss)
     status: str = Field(default="pending", index=True)
     source_id: str = Field(index=True)
     supersedes_id: Optional[str] = None
@@ -89,7 +91,8 @@ class Design(SQLModel, table=True):
     output_md: str = ""
     cited_source_ids_json: str = "[]"
     tags_json: str = "[]"
-    status: str = Field(default="draft", index=True)   # draft | validated | needs_review
+    # draft | checked (deterministic validators only) | validated (full pass) | needs_review
+    status: str = Field(default="draft", index=True)
     confidence: Optional[float] = None
     created_at: datetime = Field(default_factory=_now)
 

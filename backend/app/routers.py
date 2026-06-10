@@ -127,10 +127,29 @@ def history(claim_key: str, session: Session = Depends(get_session)):
 
 @router.post("/claims/{claim_id}/verify")
 def verify(claim_id: str, session: Session = Depends(get_session)):
-    c = services.verify_claim(session, claim_id)
+    try:
+        c = services.verify_claim(session, claim_id)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
     if not c:
         raise HTTPException(404, "Claim not found.")
     return services._claim_dict(c)
+
+
+class VerifyBulkIn(BaseModel):
+    source_id: Optional[str] = None
+    claim_ids: Optional[list[str]] = None
+
+
+@router.post("/claims/verify-bulk")
+def verify_bulk(body: VerifyBulkIn, session: Session = Depends(get_session)):
+    """Verify every active pending claim of a source (or an explicit id list).
+    The human approval step, batched — inactive/non-pending claims are skipped."""
+    try:
+        return services.verify_claims_bulk(session, source_id=body.source_id,
+                                           claim_ids=body.claim_ids)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.get("/tags")
@@ -174,10 +193,13 @@ def list_assets(source: Optional[str] = None, design: Optional[str] = None,
 # ------------------------------------------------------------------ designs
 @router.post("/designs")
 def design_create(body: DesignCreateIn, session: Session = Depends(get_session)):
-    return services.create_design(session, body.scenario, body.output_md,
-                                  constraints=body.constraints, tags=body.tags,
-                                  cited_source_ids=body.cited_source_ids,
-                                  assets=body.assets, title=body.title)
+    try:
+        return services.create_design(session, body.scenario, body.output_md,
+                                      constraints=body.constraints, tags=body.tags,
+                                      cited_source_ids=body.cited_source_ids,
+                                      assets=body.assets, title=body.title)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 @router.post("/designs/generate")
