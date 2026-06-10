@@ -202,6 +202,13 @@ def dismiss(claim_id: str, session: Session = Depends(get_session)):
     return services._claim_dict(c)
 
 
+@router.get("/claims/recent-actions")
+def recent_actions(limit: int = 30, session: Session = Depends(get_session)):
+    """Return the last N claim curation events (verified/rejected/promoted/dismissed),
+    newest first. Used to power the Registry audit log panel."""
+    return services.recent_claim_events(session, limit=min(limit, 200))
+
+
 @router.get("/tags")
 def list_tags(session: Session = Depends(get_session)):
     counts: dict[str, int] = {}

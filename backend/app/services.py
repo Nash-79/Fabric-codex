@@ -20,7 +20,7 @@ from sqlmodel import Session, select
 from app import llm
 from app.db import LLM_MODE
 
-from app.models import (Source, Claim, Design, ValidationRun, Issue, Asset,
+from app.models import (Source, Claim, ClaimEvent, Design, ValidationRun, Issue, Asset,
                         dump_tags, load_tags)
 
 log = logging.getLogger(__name__)
@@ -150,6 +150,22 @@ def ingest_source(session: Session, url: str, title: str, tier: int, content: st
 
 
 # --------------------------------------------------------------- versioning
+def _record_event(session: Session, claim: Claim, action: str, prev_status: str) -> None:
+    """Append one ClaimEvent row for every human curation action.
+    Called after the claim status has already been updated so claim.status
+    reflects the new state."""
+    ev = ClaimEvent(
+        claim_id=claim.id,
+        claim_key=claim.claim_key,
+        capability_id=claim.capability_id,
+        action=action,
+        prev_status=prev_status,
+        new_status=claim.status,
+        text_snippet=claim.text[:120],
+    )
+    session.add(ev)
+
+
 def verify_claim(session: Session, claim_id: str) -> Optional[Claim]:
     c = session.get(Claim, claim_id)
     if not c:
@@ -157,8 +173,10 @@ def verify_claim(session: Session, claim_id: str) -> Optional[Claim]:
     if not c.active:
         raise ValueError(f"Claim {claim_id} is {c.status} (inactive); "
                          "only active claims can be verified.")
+    prev = c.status
     c.status = "verified"
     c.confidence = max(c.confidence, 0.85)
+    _record_event(session, c, "verified", prev)
     session.add(c)
     session.commit()
     session.refresh(c)
@@ -179,8 +197,10 @@ def verify_claims_bulk(session: Session, source_id: Optional[str] = None,
     verified, skipped = [], []
     for c in rows:
         if c.active and c.status == "pending":
+            prev = c.status
             c.status = "verified"
             c.confidence = max(c.confidence, 0.85)
+            _record_event(session, c, "verified", prev)
             session.add(c)
             verified.append(c.id)
         else:
@@ -200,8 +220,10 @@ def reject_claim(session: Session, claim_id: str) -> Optional[Claim]:
         raise ValueError(f"Claim {claim_id} has status='{c.status}', active={c.active}; "
                          "only active pending claims can be rejected. "
                          "For duplicate claims use the /dismiss endpoint.")
+    prev = c.status
     c.status = "rejected"
     c.active = False
+    _record_event(session, c, "rejected", prev)
     session.add(c)
     session.commit()
     session.refresh(c)
@@ -218,8 +240,10 @@ def dismiss_duplicate_claim(session: Session, claim_id: str) -> Optional[Claim]:
     if c.status != "duplicate":
         raise ValueError(f"Claim {claim_id} has status='{c.status}'; "
                          "only duplicate claims can be dismissed via this endpoint.")
+    prev = c.status
     c.status = "rejected"
     c.active = False   # already False, but be explicit
+    _record_event(session, c, "dismissed", prev)
     session.add(c)
     session.commit()
     session.refresh(c)
@@ -240,8 +264,10 @@ def reject_claims_bulk(session: Session, source_id: Optional[str] = None,
     rejected, skipped = [], []
     for c in rows:
         if c.active and c.status == "pending":
+            prev = c.status
             c.status = "rejected"
             c.active = False
+            _record_event(session, c, "rejected", prev)
             session.add(c)
             rejected.append(c.id)
         else:
@@ -259,12 +285,36 @@ def promote_claim(session: Session, claim_id: str) -> Optional[Claim]:
     if c.status != "duplicate":
         raise ValueError(f"Claim {claim_id} has status '{c.status}'; "
                          "only duplicate claims can be promoted.")
+    prev = c.status
     c.status = "pending"
     c.active = True
+    _record_event(session, c, "promoted", prev)
     session.add(c)
     session.commit()
     session.refresh(c)
     return c
+
+
+def recent_claim_events(session: Session, limit: int = 30) -> list[dict]:
+    """Return the most recent curation events across all claims, newest first."""
+    from app.models import ClaimEvent
+    rows = session.exec(
+        select(ClaimEvent).order_by(ClaimEvent.actioned_at.desc()).limit(limit)
+    ).all()
+    return [
+        {
+            "id": ev.id,
+            "claim_id": ev.claim_id,
+            "claim_key": ev.claim_key,
+            "capability_id": ev.capability_id,
+            "action": ev.action,
+            "prev_status": ev.prev_status,
+            "new_status": ev.new_status,
+            "text_snippet": ev.text_snippet,
+            "actioned_at": ev.actioned_at.isoformat(),
+        }
+        for ev in rows
+    ]
 
 
 def supersede_claim(session: Session, old: Claim, new_text: str, source: Source,

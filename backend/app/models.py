@@ -106,6 +106,20 @@ class Design(SQLModel, table=True):
     created_at: datetime = Field(default_factory=_now)
 
 
+class ClaimEvent(SQLModel, table=True):
+    """Lightweight audit trail for human curation actions on claims.
+    One row per action: verified / rejected / promoted / dismissed."""
+    id: str = Field(default_factory=_uid, primary_key=True)
+    claim_id: str = Field(index=True)
+    claim_key: str = Field(index=True, default="")
+    capability_id: str = ""
+    action: str = ""            # verified | rejected | promoted | dismissed
+    prev_status: str = ""       # status before the action
+    new_status: str = ""        # status after the action
+    text_snippet: str = ""      # first 120 chars of the claim text
+    actioned_at: datetime = Field(default_factory=_now)
+
+
 class ValidationRun(SQLModel, table=True):
     id: str = Field(default_factory=_uid, primary_key=True)
     design_id: str = Field(index=True)

@@ -424,6 +424,8 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const [err, setErr] = useState("");
   const [bulkConfirm, setBulkConfirm] = useState(null); // null | "verify" | "reject"
   const [rejectConfirm, setRejectConfirm] = useState(new Set()); // claim IDs pending reject confirm
+  const [recentActions, setRecentActions] = useState([]);
+  const [actionsOpen, setActionsOpen] = useState(false);
 
   useEffect(() => { if (initialCap) onConsumedInitial(); }, [initialCap, onConsumedInitial]);
   useEffect(() => {
@@ -436,6 +438,7 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const refresh = useCallback(() => {
     api("/coverage").then(setCoverage).catch((e) => setErr(e.message));
     api("/tags").then(setTags).catch(() => {});
+    api("/claims/recent-actions").then(setRecentActions).catch(() => {});
     const q = new URLSearchParams();
     if (cap) q.set("capability", cap);
     if (tagFilter) q.set("tag", tagFilter);
@@ -543,6 +546,45 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
           </div>
         </div>
       ))}
+
+      {recentActions.length > 0 && (
+        <div style={{ marginTop: 18, border: "1px solid " + c.line, borderRadius: 8, background: c.panel, boxShadow: c.shadow }}>
+          <button
+            onClick={() => setActionsOpen((v) => !v)}
+            style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", cursor: "pointer", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+          >
+            <span style={{ fontFamily: mono, fontSize: 11, color: c.muted, textTransform: "uppercase", letterSpacing: 0.6 }}>
+              Recent actions <span style={{ color: c.faint }}>({recentActions.length})</span>
+            </span>
+            <span style={{ fontFamily: mono, fontSize: 11, color: c.faint }}>{actionsOpen ? "▲ hide" : "▼ show"}</span>
+          </button>
+          {actionsOpen && (
+            <div style={{ borderTop: "1px solid " + c.lineSoft }}>
+              {recentActions.map((ev) => {
+                const capName = CAPABILITIES.find((x) => x.id === ev.capability_id)?.name || ev.capability_id;
+                const actionColor = ev.action === "verified" ? c.green : ev.action === "rejected" || ev.action === "dismissed" ? c.red : c.amber;
+                const ts = new Date(ev.actioned_at);
+                const timeLabel = ts.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " + ts.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+                return (
+                  <div key={ev.id} style={{ padding: "9px 14px", borderBottom: "1px solid " + c.lineSoft, display: "flex", gap: 10, alignItems: "flex-start" }}>
+                    <span style={{ fontFamily: mono, fontSize: 11, color: actionColor, minWidth: 68, paddingTop: 1 }}>{ev.action}</span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, color: c.text, lineHeight: 1.45, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.text_snippet}{ev.text_snippet.length >= 120 ? "…" : ""}</div>
+                      <div style={{ display: "flex", gap: 6, marginTop: 3, alignItems: "center" }}>
+                        <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>{capName}</span>
+                        <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>·</span>
+                        <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>{ev.prev_status} →</span>
+                        <span style={{ fontFamily: mono, fontSize: 10, color: actionColor }}>{ev.new_status}</span>
+                      </div>
+                    </div>
+                    <span style={{ fontFamily: mono, fontSize: 10, color: c.faint, whiteSpace: "nowrap", paddingTop: 2 }}>{timeLabel}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {(cap || tagFilter) && (
         <div style={{ marginTop: 18, border: "1px solid " + c.accentDim, borderRadius: 8, background: c.panel, boxShadow: c.shadow }}>
