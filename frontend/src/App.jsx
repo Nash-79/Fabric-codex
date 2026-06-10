@@ -397,12 +397,17 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const [tagFilter, setTagFilter] = useState("");
   const [history, setHistory] = useState(null);
   const [capAssets, setCapAssets] = useState([]);
+  const [duplicates, setDuplicates] = useState([]);
+  const [dupOpen, setDupOpen] = useState(false);
+  const [actioning, setActioning] = useState(new Set()); // claim IDs with in-flight requests
   const [err, setErr] = useState("");
 
   useEffect(() => { if (initialCap) onConsumedInitial(); }, [initialCap, onConsumedInitial]);
   useEffect(() => {
-    if (!cap) { setCapAssets([]); return; }
+    if (!cap) { setCapAssets([]); setDuplicates([]); return; }
     api("/assets?capability=" + cap).then(setCapAssets).catch(() => setCapAssets([]));
+    api(`/claims?capability=${cap}&status=duplicate&include_inactive=true`)
+      .then(setDuplicates).catch(() => setDuplicates([]));
   }, [cap]);
 
   const refresh = useCallback(() => {
@@ -412,17 +417,35 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
     if (cap) q.set("capability", cap);
     if (tagFilter) q.set("tag", tagFilter);
     api("/claims?" + q.toString()).then(setClaims).catch((e) => setErr(e.message));
+    if (cap) {
+      api(`/claims?capability=${cap}&status=duplicate&include_inactive=true`)
+        .then(setDuplicates).catch(() => setDuplicates([]));
+    }
   }, [cap, tagFilter]);
   useEffect(() => { refresh(); }, [refresh]);
 
-  const verify = async (id) => {
-    try { await api(`/claims/${id}/verify`, { method: "POST" }); } catch (e) { setErr(e.message); }
+  const withActioning = async (id, fn) => {
+    setActioning((prev) => new Set([...prev, id]));
+    try { await fn(); } catch (e) { setErr(e.message); }
+    finally { setActioning((prev) => { const s = new Set(prev); s.delete(id); return s; }); }
     refresh();
   };
+
+  const verify = (id) => withActioning(id, () => api(`/claims/${id}/verify`, { method: "POST" }));
+  const reject = (id) => withActioning(id, () => api(`/claims/${id}/reject`, { method: "POST" }));
+  const promote = (id) => withActioning(id, () => api(`/claims/${id}/promote`, { method: "POST" }));
+  const dismissDup = (id) => withActioning(id, () => api(`/claims/${id}/reject`, { method: "POST" }));
+
   const pendingShown = claims.filter((cl) => cl.status === "pending");
   const verifyAllShown = async () => {
     try {
       await api("/claims/verify-bulk", { method: "POST", body: JSON.stringify({ claim_ids: pendingShown.map((cl) => cl.id) }) });
+    } catch (e) { setErr(e.message); }
+    refresh();
+  };
+  const rejectAllShown = async () => {
+    try {
+      await api("/claims/reject-bulk", { method: "POST", body: JSON.stringify({ claim_ids: pendingShown.map((cl) => cl.id) }) });
     } catch (e) { setErr(e.message); }
     refresh();
   };
@@ -487,9 +510,17 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
               {tagFilter && <span style={{ color: c.accentText }}> · #{tagFilter}</span>}
               <span style={{ color: c.muted, fontWeight: 400, fontSize: 13 }}> · {claims.length} claims</span>
             </span>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {pendingShown.length > 1 && (
-                <Btn small primary onClick={verifyAllShown}>Verify all pending ({pendingShown.length})</Btn>
+                <>
+                  <Btn small primary onClick={verifyAllShown}>Verify all ({pendingShown.length})</Btn>
+                  <Btn small onClick={rejectAllShown}>Reject all ({pendingShown.length})</Btn>
+                </>
+              )}
+              {duplicates.length > 0 && (
+                <button onClick={() => setDupOpen((v) => !v)} style={{ cursor: "pointer", fontFamily: mono, fontSize: 11, color: c.amber, background: "transparent", border: "1px solid " + c.amber, borderRadius: 4, padding: "3px 8px" }}>
+                  {dupOpen ? "Hide" : "Show"} {duplicates.length} duplicate{duplicates.length !== 1 ? "s" : ""}
+                </button>
               )}
               <button onClick={() => { setCap(null); setTagFilter(""); }} style={{ background: "transparent", border: "none", color: c.muted, cursor: "pointer", fontSize: 18 }}>×</button>
             </div>
@@ -505,27 +536,71 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
               </div>
             </div>
           ))}
-          <div style={{ maxHeight: 420, overflowY: "auto" }}>
+          <div>
             {claims.length === 0 && <div style={{ padding: 16, color: c.muted, fontSize: 13 }}>No claims match.</div>}
-            {claims.map((cl) => (
-              <div key={cl.id} style={{ padding: "11px 14px", borderBottom: "1px solid " + c.lineSoft }}>
-                <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-                  <Chip color={c.accentText}>L{cl.depth}</Chip>
-                  <Chip>{cl.type}</Chip>
-                  <Chip color={c.faint}>v{cl.version}</Chip>
-                  {cl.status === "verified" ? <Chip color={c.green}>✓ verified</Chip>
-                    : cl.status === "pending" ? <Chip color={c.amber}>pending</Chip>
-                    : <Chip color={c.faint}>{cl.status}</Chip>}
-                  {(cl.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
+            {claims.map((cl) => {
+              const busy = actioning.has(cl.id);
+              return (
+                <div key={cl.id} style={{ padding: "11px 14px", borderBottom: "1px solid " + c.lineSoft, opacity: busy ? 0.5 : 1, transition: "opacity 0.15s" }}>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+                    <Chip color={c.accentText}>L{cl.depth}</Chip>
+                    <Chip>{cl.type}</Chip>
+                    <Chip color={c.faint}>v{cl.version}</Chip>
+                    {cl.status === "verified" ? <Chip color={c.green}>✓ verified</Chip>
+                      : cl.status === "pending" ? <Chip color={c.amber}>pending</Chip>
+                      : <Chip color={c.faint}>{cl.status}</Chip>}
+                    {(cl.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
+                  </div>
+                  <div style={{ fontSize: 13, lineHeight: 1.55 }}>{cl.text}</div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 7, justifyContent: "flex-end" }}>
+                    {busy ? (
+                      <span style={{ fontFamily: mono, fontSize: 12, color: c.muted }}>…</span>
+                    ) : cl.status === "pending" ? (
+                      <>
+                        <Btn small primary onClick={() => verify(cl.id)}>Verify</Btn>
+                        <Btn small onClick={() => reject(cl.id)}>Reject</Btn>
+                      </>
+                    ) : null}
+                    <Btn small disabled={busy} onClick={async () => !busy && setHistory(await api(`/claims/${cl.claim_key}/history`))}>History</Btn>
+                  </div>
                 </div>
-                <div style={{ fontSize: 13, lineHeight: 1.55 }}>{cl.text}</div>
-                <div style={{ display: "flex", gap: 6, marginTop: 7, justifyContent: "flex-end" }}>
-                  {cl.status === "pending" && <Btn small primary onClick={() => verify(cl.id)}>Verify</Btn>}
-                  <Btn small onClick={async () => setHistory(await api(`/claims/${cl.claim_key}/history`))}>History</Btn>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
+          {dupOpen && duplicates.length > 0 && (
+            <div style={{ borderTop: "2px solid " + c.amber }}>
+              <div style={{ padding: "10px 14px", background: c.panel2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontFamily: mono, fontSize: 11, color: c.amber, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                  Duplicate claims — {duplicates.length} awaiting review
+                </span>
+                <span style={{ fontFamily: mono, fontSize: 11, color: c.faint }}>Promote to re-enter verify queue · Dismiss to confirm as duplicate</span>
+              </div>
+              {duplicates.map((cl) => {
+                const busy = actioning.has(cl.id);
+                return (
+                  <div key={cl.id} style={{ padding: "11px 14px", borderBottom: "1px solid " + c.lineSoft, background: c.panel2, opacity: busy ? 0.5 : 1, transition: "opacity 0.15s" }}>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+                      <Chip color={c.accentText}>L{cl.depth}</Chip>
+                      <Chip>{cl.type}</Chip>
+                      <Chip color={c.amber}>duplicate</Chip>
+                    </div>
+                    <div style={{ fontSize: 13, lineHeight: 1.55 }}>{cl.text}</div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 7, justifyContent: "flex-end" }}>
+                      {busy ? (
+                        <span style={{ fontFamily: mono, fontSize: 12, color: c.muted }}>…</span>
+                      ) : (
+                        <>
+                          <Btn small primary onClick={() => promote(cl.id)}>Promote</Btn>
+                          <Btn small onClick={() => dismissDup(cl.id)}>Dismiss</Btn>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -650,6 +725,7 @@ function Designs() {
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               <Chip color={d.status === "validated" ? c.green : d.status === "needs_review" ? c.red : c.amber}>{d.status}</Chip>
               {d.confidence != null && <Chip color={c.accentText}>{Math.round(d.confidence * 100)}%</Chip>}
+              {d.ready_to_share && <Chip color={c.green}>✓ ready</Chip>}
               {(d.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
             </div>
           </button>

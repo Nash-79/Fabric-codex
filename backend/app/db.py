@@ -21,10 +21,37 @@ _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite"
 engine = create_engine(DATABASE_URL, echo=False, connect_args=_connect_args)
 
 
+def _run_migrations(raw_conn) -> None:
+    """Idempotent column additions for schema upgrades not handled by create_all.
+
+    SQLite's ALTER TABLE only supports ADD COLUMN, so each migration is a
+    conditional ADD — safe to run on every startup.
+    """
+    cursor = raw_conn.cursor()
+    migrations = [
+        # v0.3: ready_to_share persisted on Design after full validation pass
+        ("design", "ready_to_share", "INTEGER NOT NULL DEFAULT 0"),
+    ]
+    for table, column, col_def in migrations:
+        # PRAGMA table_info returns rows where the second element is the column name
+        cursor.execute(f"PRAGMA table_info({table})")
+        cols = {row[1] for row in cursor.fetchall()}
+        if column not in cols:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+    raw_conn.commit()
+
+
 def init_db() -> None:
     # Import models so SQLModel registers the tables before create_all.
     from app import models  # noqa: F401
     SQLModel.metadata.create_all(engine)
+
+    # Run additive schema migrations for columns added after initial create_all.
+    # For SQLite we use the raw connection; for Postgres the same PRAGMA-safe guard
+    # can be swapped for an information_schema check.
+    if DATABASE_URL.startswith("sqlite"):
+        with engine.connect() as conn:
+            _run_migrations(conn.connection)
 
 
 def get_session():

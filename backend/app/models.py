@@ -6,6 +6,9 @@ v0.2 adds:
   - an `Asset` table for images/diagrams, distinguishing:
       kind="referenced"  external source image — URL + caption + attribution only, never re-hosted
       kind="generated"   an original SVG/Mermaid diagram authored by an agent, stored in the repo
+v0.3 adds:
+  - `ready_to_share` on Design (persisted result of full validation pass with no critical issues)
+  - Claim status now also includes "rejected" (human-dismissed pending claim)
 """
 from __future__ import annotations
 import json
@@ -55,8 +58,12 @@ class Claim(SQLModel, table=True):
     text: str
     depth: int = 1
     type: str = "fact"
-    # pending | verified | superseded | deprecated | duplicate (near-match of an active
-    # claim from another source at ingest; stored inactive, awaiting human merge/dismiss)
+    # pending   — newly extracted, awaiting human approval
+    # verified  — human-approved
+    # rejected  — human-dismissed (incorrect or irrelevant); stored inactive
+    # superseded — text changed in a source update; old version kept for history
+    # deprecated — claim no longer present in its source
+    # duplicate  — near-match of an active claim from another source; awaiting human merge/dismiss
     status: str = Field(default="pending", index=True)
     source_id: str = Field(index=True)
     supersedes_id: Optional[str] = None
@@ -94,6 +101,8 @@ class Design(SQLModel, table=True):
     # draft | checked (deterministic validators only) | validated (full pass) | needs_review
     status: str = Field(default="draft", index=True)
     confidence: Optional[float] = None
+    # True when a full validation pass (grounding/coverage/antipattern) ran with no critical issues
+    ready_to_share: bool = Field(default=False)
     created_at: datetime = Field(default_factory=_now)
 
 

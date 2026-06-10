@@ -184,6 +184,63 @@ def verify_claims_bulk(session: Session, source_id: Optional[str] = None,
     return {"verified": len(verified), "verified_ids": verified, "skipped": skipped}
 
 
+def reject_claim(session: Session, claim_id: str) -> Optional[Claim]:
+    """Human dismissal: mark a pending active claim as rejected and deactivate it."""
+    c = session.get(Claim, claim_id)
+    if not c:
+        return None
+    if not c.active:
+        raise ValueError(f"Claim {claim_id} is {c.status} (inactive); "
+                         "only active claims can be rejected.")
+    c.status = "rejected"
+    c.active = False
+    session.add(c)
+    session.commit()
+    session.refresh(c)
+    return c
+
+
+def reject_claims_bulk(session: Session, source_id: Optional[str] = None,
+                       claim_ids: Optional[list[str]] = None) -> dict:
+    """Reject all active pending claims for a source, or an explicit id list.
+    Inactive / non-pending claims are skipped."""
+    if source_id:
+        rows = session.exec(
+            select(Claim).where(Claim.source_id == source_id)).all()
+    elif claim_ids:
+        rows = [c for cid in claim_ids if (c := session.get(Claim, cid))]
+    else:
+        raise ValueError("Provide source_id or claim_ids.")
+    rejected, skipped = [], []
+    for c in rows:
+        if c.active and c.status == "pending":
+            c.status = "rejected"
+            c.active = False
+            session.add(c)
+            rejected.append(c.id)
+        else:
+            skipped.append({"claim_id": c.id, "status": c.status, "active": c.active})
+    session.commit()
+    return {"rejected": len(rejected), "rejected_ids": rejected, "skipped": skipped}
+
+
+def promote_claim(session: Session, claim_id: str) -> Optional[Claim]:
+    """Promote a duplicate claim back to pending/active for human review.
+    Only claims with status='duplicate' and active=False may be promoted."""
+    c = session.get(Claim, claim_id)
+    if not c:
+        return None
+    if c.status != "duplicate":
+        raise ValueError(f"Claim {claim_id} has status '{c.status}'; "
+                         "only duplicate claims can be promoted.")
+    c.status = "pending"
+    c.active = True
+    session.add(c)
+    session.commit()
+    session.refresh(c)
+    return c
+
+
 def supersede_claim(session: Session, old: Claim, new_text: str, source: Source,
                     depth: Optional[int] = None, ctype: Optional[str] = None,
                     tags: Optional[list[str]] = None) -> Claim:
@@ -218,9 +275,42 @@ def claim_history(session: Session, claim_key: str) -> list[Claim]:
 # ------------------------------------------------------------------ assets
 def add_assets(session: Session, assets: Optional[list[dict]], source_id: Optional[str] = None,
                design_id: Optional[str] = None) -> list[Asset]:
+    """Insert assets, deduplicating by path (generated) or url (referenced) within the same
+    source/design scope. Returns a list of Asset objects (existing or newly created)."""
     saved = []
     for a in assets or []:
         kind = a.get("kind", "generated")
+        eff_source_id = a.get("source_id", source_id)
+        eff_design_id = a.get("design_id", design_id)
+
+        # Dedup: skip if an identical asset already exists in the same scope.
+        if kind == "generated":
+            path_val = a.get("path", "")
+            if path_val:
+                existing = session.exec(
+                    select(Asset).where(
+                        Asset.kind == "generated",
+                        Asset.path == path_val,
+                        Asset.source_id == eff_source_id,
+                        Asset.design_id == eff_design_id,
+                    )).first()
+                if existing:
+                    saved.append(existing)
+                    continue
+        else:
+            url_val = a.get("url", "")
+            if url_val:
+                existing = session.exec(
+                    select(Asset).where(
+                        Asset.kind == "referenced",
+                        Asset.url == url_val,
+                        Asset.source_id == eff_source_id,
+                        Asset.design_id == eff_design_id,
+                    )).first()
+                if existing:
+                    saved.append(existing)
+                    continue
+
         # referenced (external) images must carry attribution — never re-hosted, link only.
         attribution = a.get("attribution", "")
         if kind == "referenced" and not attribution:
@@ -232,8 +322,8 @@ def add_assets(session: Session, assets: Optional[list[dict]], source_id: Option
             license_note=a.get("license_note", "" if kind == "generated"
                                else "External image; referenced with attribution, not re-hosted."),
             capability_id=a.get("capability_id", ""),
-            source_id=a.get("source_id", source_id), claim_id=a.get("claim_id"),
-            design_id=a.get("design_id", design_id))
+            source_id=eff_source_id, claim_id=a.get("claim_id"),
+            design_id=eff_design_id)
         session.add(asset)
         saved.append(asset)
     if saved:
@@ -372,7 +462,9 @@ def validate_design(session: Session, design_id: str,
         session.add(Issue(run_id=run.id, validator=i["validator"], severity=i["severity"],
                           message=i["message"], ref=i.get("ref", "")))
     has_critical = any(i["severity"] == "critical" for i in issues)
+    rts = full_pass and not has_critical
     design.confidence = confidence
+    design.ready_to_share = rts
     # "checked" = only deterministic citation/freshness validators ran; "validated" means a
     # grounding/coverage/antipattern review (agent or API) was part of this run.
     design.status = ("needs_review" if has_critical
@@ -381,7 +473,7 @@ def validate_design(session: Session, design_id: str,
     session.commit()
     return {"design_id": design_id, "run_id": run.id, "confidence": confidence,
             "full_pass": full_pass,
-            "ready_to_share": full_pass and not has_critical, "issues": issues}
+            "ready_to_share": rts, "issues": issues}
 
 
 # --------------------------------------------------------------- drift

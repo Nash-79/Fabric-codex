@@ -2,6 +2,7 @@
 
 v0.2: ingest/design/validate/drift accept pre-built structured payloads from the local agents
 (default), plus tags and image/diagram assets. The server makes no LLM calls in local mode.
+v0.3: adds reject/reject-bulk/promote claim endpoints; Design exposes ready_to_share.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -72,6 +73,11 @@ class LessonIn(BaseModel):
     level: str = "Beginner"
 
 
+class BulkClaimIn(BaseModel):
+    source_id: Optional[str] = None
+    claim_ids: Optional[list[str]] = None
+
+
 # ------------------------------------------------------------------ sources
 @router.post("/sources/ingest")
 def ingest(body: IngestIn, session: Session = Depends(get_session)):
@@ -136,13 +142,8 @@ def verify(claim_id: str, session: Session = Depends(get_session)):
     return services._claim_dict(c)
 
 
-class VerifyBulkIn(BaseModel):
-    source_id: Optional[str] = None
-    claim_ids: Optional[list[str]] = None
-
-
 @router.post("/claims/verify-bulk")
-def verify_bulk(body: VerifyBulkIn, session: Session = Depends(get_session)):
+def verify_bulk(body: BulkClaimIn, session: Session = Depends(get_session)):
     """Verify every active pending claim of a source (or an explicit id list).
     The human approval step, batched — inactive/non-pending claims are skipped."""
     try:
@@ -150,6 +151,41 @@ def verify_bulk(body: VerifyBulkIn, session: Session = Depends(get_session)):
                                            claim_ids=body.claim_ids)
     except ValueError as e:
         raise HTTPException(400, str(e))
+
+
+@router.post("/claims/{claim_id}/reject")
+def reject(claim_id: str, session: Session = Depends(get_session)):
+    """Human dismissal: mark a pending active claim as rejected and deactivate it."""
+    try:
+        c = services.reject_claim(session, claim_id)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    if not c:
+        raise HTTPException(404, "Claim not found.")
+    return services._claim_dict(c)
+
+
+@router.post("/claims/reject-bulk")
+def reject_bulk(body: BulkClaimIn, session: Session = Depends(get_session)):
+    """Reject every active pending claim of a source (or an explicit id list).
+    Inactive / non-pending claims are skipped."""
+    try:
+        return services.reject_claims_bulk(session, source_id=body.source_id,
+                                           claim_ids=body.claim_ids)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.post("/claims/{claim_id}/promote")
+def promote(claim_id: str, session: Session = Depends(get_session)):
+    """Promote a duplicate claim back to pending/active for human review."""
+    try:
+        c = services.promote_claim(session, claim_id)
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    if not c:
+        raise HTTPException(404, "Claim not found.")
+    return services._claim_dict(c)
 
 
 @router.get("/tags")
