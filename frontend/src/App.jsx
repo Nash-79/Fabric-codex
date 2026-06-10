@@ -4,15 +4,15 @@ import remarkGfm from "remark-gfm";
 import { c, BRAND, sans, mono, applyTheme, initialTheme } from "./theme.js";
 
 /* ------------------- responsive breakpoint hook -------------------- */
-const MOBILE = 640; // px — single source of truth for the breakpoint
-function useIsMobile() {
+const MOBILE = 640;  // px — single source of truth for the mobile breakpoint
+function useWindowWidth() {
   const [w, setW] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 1200));
   useEffect(() => {
     const handler = () => setW(window.innerWidth);
     window.addEventListener("resize", handler, { passive: true });
     return () => window.removeEventListener("resize", handler);
   }, []);
-  return w < MOBILE;
+  return w;
 }
 
 /* ------------------------------------------------------------------ *
@@ -136,7 +136,7 @@ const Chip = ({ children, color = c.muted, bg = "transparent" }) => (
   <span style={{ fontFamily: mono, fontSize: 11, color, background: bg, border: "1px solid " + (bg === "transparent" ? c.line : "transparent"), borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>{children}</span>
 );
 const Btn = ({ children, onClick, primary, small, disabled }) => (
-  <button onClick={onClick} disabled={disabled} style={{ fontFamily: sans, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, color: primary ? c.onAccent : c.text, background: primary ? c.accent : c.panel, border: "1px solid " + (primary ? c.accent : c.line), borderRadius: 4, padding: small ? "5px 12px" : "8px 16px", minHeight: 36, boxShadow: c.shadow }}>{children}</button>
+  <button onClick={onClick} disabled={disabled} style={{ fontFamily: sans, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, color: primary ? c.onAccent : c.text, background: primary ? c.accent : c.panel, border: "1px solid " + (primary ? c.accent : c.line), borderRadius: 4, padding: small ? "5px 12px" : "8px 16px", boxShadow: c.shadow }}>{children}</button>
 );
 const Empty = ({ children }) => (
   <div style={{ border: "1px dashed " + c.line, borderRadius: 8, padding: 24, textAlign: "center", color: c.muted, fontSize: 13, lineHeight: 1.6, background: c.panel }}>{children}</div>
@@ -175,7 +175,8 @@ export default function App() {
   const [health, setHealth] = useState("checking");
   const [theme, setTheme] = useState(initialTheme);
   const [registryCap, setRegistryCap] = useState(null); // deep-link from Overview
-  const isMobile = useIsMobile();
+  const w = useWindowWidth();
+  const isMobile = w < MOBILE;
 
   useEffect(() => { applyTheme(theme); }, [theme]);
   useEffect(() => {
@@ -206,7 +207,7 @@ export default function App() {
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <Chip color={health === "ok" ? c.green : health === "down" ? c.red : c.muted}>
-              backend {health === "ok" ? "● connected" : health === "down" ? "● down" : "…"}
+              backend {health === "ok" ? "● connected" : health === "down" ? (isMobile ? "● down" : "● unreachable — run uvicorn") : "…"}
             </Chip>
             <button
               onClick={() => setTheme(theme === "light" ? "dark" : "light")}
@@ -283,7 +284,8 @@ const FABRIC_STORY = [
 ];
 
 function Overview({ onOpenCapability, offline = false }) {
-  const isMobile = useIsMobile();
+  const w = useWindowWidth();
+  const isMobile = w < MOBILE;
   const [coverage, setCoverage] = useState({});
   const [sources, setSources] = useState([]);
   const [claims, setClaims] = useState([]);
@@ -406,7 +408,9 @@ function Overview({ onOpenCapability, offline = false }) {
 
 /* ============================== registry ============================ */
 function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
-  const isMobile = useIsMobile();
+  const w = useWindowWidth();
+  const isMobile = w < MOBILE;
+  const isNarrow = w < 400;
   const [coverage, setCoverage] = useState({});
   const [claims, setClaims] = useState([]);
   const [tags, setTags] = useState({});
@@ -512,7 +516,7 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
       {areas.map((area) => (
         <div key={area} style={{ marginBottom: 16 }}>
           <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>{area}</div>
-          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(auto-fill, minmax(160px, 1fr))" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
             {CAPABILITIES.filter((x) => x.area === area).map((x) => {
               const g = coverage[x.id] || {};
               const n = Object.values(g).reduce((a, b) => a + b, 0);
@@ -741,7 +745,8 @@ function Sources() {
 
 /* ============================== designs ============================= */
 function Designs() {
-  const isMobile = useIsMobile();
+  const w = useWindowWidth();
+  const isMobile = w < MOBILE;
   const [designs, setDesigns] = useState([]);
   const [open, setOpen] = useState(null);     // full design detail
   const [runs, setRuns] = useState([]);
@@ -830,7 +835,8 @@ function Designs() {
    (grounded in verified claims only) and served statically by the backend.
    This tab lists and renders them. */
 function Learn() {
-  const isMobile = useIsMobile();
+  const w = useWindowWidth();
+  const isMobile = w < MOBILE;
   const [files, setFiles] = useState(null);   // null = loading
   const [open, setOpen] = useState(null);     // { name, md }
   useEffect(() => {
