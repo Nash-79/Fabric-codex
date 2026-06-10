@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 from sqlmodel import SQLModel, create_engine, Session
 
-load_dotenv()
+load_dotenv(override=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./fabric_atlas.db")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
