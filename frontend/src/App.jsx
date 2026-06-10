@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { c, BRAND, sans, mono, applyTheme, initialTheme } from "./theme.js";
@@ -449,6 +449,8 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const [actionsOpen, setActionsOpen] = useState(false);
   const [actionFilter, setActionFilter] = useState(null); // null | "verified" | "rejected" | "dismissed" | "promoted"
   const [capFilter, setCapFilter] = useState("");
+  const [undoToast, setUndoToast] = useState(null); // null | { label, claimIds }
+  const undoTimerRef = useRef(null);
 
   useEffect(() => { if (initialCap) onConsumedInitial(); }, [initialCap, onConsumedInitial]);
   useEffect(() => {
@@ -473,15 +475,45 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   }, [cap, tagFilter]);
   useEffect(() => { refresh(); }, [refresh]);
 
+  const showUndoToast = useCallback((label, claimIds) => {
+    if (!claimIds || claimIds.length === 0) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast({ label, claimIds });
+    undoTimerRef.current = setTimeout(() => setUndoToast(null), 5000);
+  }, []);
+
+  const dismissUndoToast = useCallback(() => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
+  }, []);
+
+  const handleUndo = useCallback(async () => {
+    if (!undoToast) return;
+    const ids = undoToast.claimIds;
+    dismissUndoToast();
+    try {
+      await api("/claims/revert", { method: "POST", body: JSON.stringify({ claim_ids: ids }) });
+    } catch (e) { setErr(e.message); }
+    refresh();
+  }, [undoToast, dismissUndoToast, refresh]);
+
   const withActioning = async (id, fn) => {
     setActioning((prev) => new Set([...prev, id]));
-    try { await fn(); } catch (e) { setErr(e.message); }
+    let result;
+    try { result = await fn(); } catch (e) { setErr(e.message); }
     finally { setActioning((prev) => { const s = new Set(prev); s.delete(id); return s; }); }
     refresh();
+    return result;
   };
 
-  const verify = (id) => withActioning(id, () => api(`/claims/${id}/verify`, { method: "POST" }));
-  const reject = (id) => withActioning(id, () => api(`/claims/${id}/reject`, { method: "POST" }));
+  const verify = async (id) => {
+    await withActioning(id, () => api(`/claims/${id}/verify`, { method: "POST" }));
+    showUndoToast("Verified claim", [id]);
+  };
+  const reject = async (id) => {
+    await withActioning(id, () => api(`/claims/${id}/reject`, { method: "POST" }));
+    showUndoToast("Rejected claim", [id]);
+  };
   const promote = (id) => withActioning(id, () => api(`/claims/${id}/promote`, { method: "POST" }));
   const dismissDup = (id) => withActioning(id, () => api(`/claims/${id}/dismiss`, { method: "POST" }));
 
@@ -495,7 +527,9 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
     if (bulkConfirm !== "verify") { armBulk("verify"); return; }
     setBulkConfirm(null);
     try {
-      await api("/claims/verify-bulk", { method: "POST", body: JSON.stringify({ claim_ids: pendingShown.map((cl) => cl.id) }) });
+      const ids = pendingShown.map((cl) => cl.id);
+      const res = await api("/claims/verify-bulk", { method: "POST", body: JSON.stringify({ claim_ids: ids }) });
+      showUndoToast(`Verified ${res.verified} claim${res.verified !== 1 ? "s" : ""}`, res.verified_ids);
     } catch (e) { setErr(e.message); }
     refresh();
   };
@@ -503,7 +537,9 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
     if (bulkConfirm !== "reject") { armBulk("reject"); return; }
     setBulkConfirm(null);
     try {
-      await api("/claims/reject-bulk", { method: "POST", body: JSON.stringify({ claim_ids: pendingShown.map((cl) => cl.id) }) });
+      const ids = pendingShown.map((cl) => cl.id);
+      const res = await api("/claims/reject-bulk", { method: "POST", body: JSON.stringify({ claim_ids: ids }) });
+      showUndoToast(`Rejected ${res.rejected} claim${res.rejected !== 1 ? "s" : ""}`, res.rejected_ids);
     } catch (e) { setErr(e.message); }
     refresh();
   };
@@ -788,6 +824,30 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
               <div style={{ fontSize: 13 }}>{h.text}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {undoToast && (
+        <div key={undoToast.label + undoToast.claimIds[0]} style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: c.panel, border: "1px solid " + c.line, borderRadius: 8, boxShadow: "0 4px 18px rgba(0,0,0,0.22)", minWidth: 260, maxWidth: 400, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px" }}>
+            <span style={{ flex: 1, fontSize: 13, color: c.text }}>{undoToast.label}</span>
+            <button
+              onClick={handleUndo}
+              style={{ fontFamily: sans, fontSize: 12, fontWeight: 600, cursor: "pointer", color: c.accentText, background: c.accentSoft, border: "1px solid " + c.accentDim, borderRadius: 4, padding: "4px 12px", whiteSpace: "nowrap" }}
+            >
+              Undo
+            </button>
+            <button
+              onClick={dismissUndoToast}
+              style={{ background: "transparent", border: "none", color: c.faint, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px" }}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ height: 3, background: c.lineSoft }}>
+            <div key={undoToast.claimIds.join(",")} style={{ height: "100%", background: c.accent, animation: "cd-shrink 5s linear forwards", transformOrigin: "left" }} />
+          </div>
         </div>
       )}
     </div>

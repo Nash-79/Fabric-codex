@@ -202,6 +202,19 @@ def dismiss(claim_id: str, session: Session = Depends(get_session)):
     return services._claim_dict(c)
 
 
+class RevertIn(BaseModel):
+    claim_ids: list[str]
+
+
+@router.post("/claims/revert")
+def revert(body: RevertIn, session: Session = Depends(get_session)):
+    """Revert a list of recently actioned claims back to pending.
+    Accepts verified or rejected claims. Used by the undo toast in the UI."""
+    if not body.claim_ids:
+        raise HTTPException(400, "claim_ids must not be empty.")
+    return services.revert_claims(session, body.claim_ids)
+
+
 @router.get("/claims/recent-actions")
 def recent_actions(limit: int = 30, session: Session = Depends(get_session)):
     """Return the last N claim curation events (verified/rejected/promoted/dismissed),

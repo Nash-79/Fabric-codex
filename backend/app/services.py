@@ -276,6 +276,29 @@ def reject_claims_bulk(session: Session, source_id: Optional[str] = None,
     return {"rejected": len(rejected), "rejected_ids": rejected, "skipped": skipped}
 
 
+def revert_claims(session: Session, claim_ids: list[str]) -> dict:
+    """Revert a list of recently actioned claims back to pending/active.
+    Accepts claims that are currently verified (active=True) or rejected
+    (active=False). Used by the undo toast in the UI."""
+    reverted, skipped = [], []
+    for cid in claim_ids:
+        c = session.get(Claim, cid)
+        if not c:
+            skipped.append({"claim_id": cid, "reason": "not found"})
+            continue
+        if c.status not in ("verified", "rejected"):
+            skipped.append({"claim_id": cid, "reason": f"status={c.status!r} cannot be reverted"})
+            continue
+        prev = c.status
+        c.status = "pending"
+        c.active = True
+        _record_event(session, c, "reverted", prev)
+        session.add(c)
+        reverted.append(cid)
+    session.commit()
+    return {"reverted": len(reverted), "reverted_ids": reverted, "skipped": skipped}
+
+
 def promote_claim(session: Session, claim_id: str) -> Optional[Claim]:
     """Promote a duplicate claim back to pending/active for human review.
     Only claims with status='duplicate' and active=False may be promoted."""
