@@ -401,6 +401,8 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const [dupOpen, setDupOpen] = useState(false);
   const [actioning, setActioning] = useState(new Set()); // claim IDs with in-flight requests
   const [err, setErr] = useState("");
+  const [bulkConfirm, setBulkConfirm] = useState(null); // null | "verify" | "reject"
+  const [rejectConfirm, setRejectConfirm] = useState(new Set()); // claim IDs pending reject confirm
 
   useEffect(() => { if (initialCap) onConsumedInitial(); }, [initialCap, onConsumedInitial]);
   useEffect(() => {
@@ -437,17 +439,36 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const dismissDup = (id) => withActioning(id, () => api(`/claims/${id}/dismiss`, { method: "POST" }));
 
   const pendingShown = claims.filter((cl) => cl.status === "pending");
+
+  const armBulk = (which) => {
+    setBulkConfirm(which);
+    setTimeout(() => setBulkConfirm((cur) => cur === which ? null : cur), 3000);
+  };
   const verifyAllShown = async () => {
+    if (bulkConfirm !== "verify") { armBulk("verify"); return; }
+    setBulkConfirm(null);
     try {
       await api("/claims/verify-bulk", { method: "POST", body: JSON.stringify({ claim_ids: pendingShown.map((cl) => cl.id) }) });
     } catch (e) { setErr(e.message); }
     refresh();
   };
   const rejectAllShown = async () => {
+    if (bulkConfirm !== "reject") { armBulk("reject"); return; }
+    setBulkConfirm(null);
     try {
       await api("/claims/reject-bulk", { method: "POST", body: JSON.stringify({ claim_ids: pendingShown.map((cl) => cl.id) }) });
     } catch (e) { setErr(e.message); }
     refresh();
+  };
+
+  const armReject = (id) => {
+    setRejectConfirm((prev) => new Set([...prev, id]));
+    setTimeout(() => setRejectConfirm((prev) => { const s = new Set(prev); s.delete(id); return s; }), 3000);
+  };
+  const rejectWithConfirm = (id) => {
+    if (!rejectConfirm.has(id)) { armReject(id); return; }
+    setRejectConfirm((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    reject(id);
   };
   const total = Object.values(coverage).reduce((a, g) => a + Object.values(g).reduce((x, y) => x + y, 0), 0);
   const areas = [...new Set(CAPABILITIES.map((x) => x.area))];
@@ -513,8 +534,12 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {pendingShown.length > 1 && (
                 <>
-                  <Btn small primary onClick={verifyAllShown}>Verify all ({pendingShown.length})</Btn>
-                  <Btn small onClick={rejectAllShown}>Reject all ({pendingShown.length})</Btn>
+                  <Btn small primary onClick={verifyAllShown}>
+                    {bulkConfirm === "verify" ? `Confirm verify all? (${pendingShown.length})` : `Verify all (${pendingShown.length})`}
+                  </Btn>
+                  <Btn small onClick={rejectAllShown}>
+                    {bulkConfirm === "reject" ? `Confirm reject all? (${pendingShown.length})` : `Reject all (${pendingShown.length})`}
+                  </Btn>
                 </>
               )}
               {duplicates.length > 0 && (
@@ -558,7 +583,9 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
                     ) : cl.status === "pending" ? (
                       <>
                         <Btn small primary onClick={() => verify(cl.id)}>Verify</Btn>
-                        <Btn small onClick={() => reject(cl.id)}>Reject</Btn>
+                        <Btn small onClick={() => rejectWithConfirm(cl.id)}>
+                          {rejectConfirm.has(cl.id) ? "Confirm reject?" : "Reject"}
+                        </Btn>
                       </>
                     ) : null}
                     <Btn small disabled={busy} onClick={async () => !busy && setHistory(await api(`/claims/${cl.claim_key}/history`))}>History</Btn>
