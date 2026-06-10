@@ -192,10 +192,16 @@ const AtlasMark = ({ size = 28 }) => (
 
 /* ================================ app =============================== */
 export default function App() {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has("cap") ? "registry" : "overview";
+  });
   const [health, setHealth] = useState("checking");
   const [theme, setTheme] = useState(initialTheme);
-  const [registryCap, setRegistryCap] = useState(null); // deep-link from Overview
+  const [registryCap, setRegistryCap] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("cap") || null;
+  });
   const w = useWindowWidth();
   const isMobile = w < MOBILE;
 
@@ -205,6 +211,18 @@ export default function App() {
   }, []);
 
   const openCapability = (id) => { setRegistryCap(id); setTab("registry"); };
+
+  const handleTabChange = (id) => {
+    setTab(id);
+    if (id !== "registry") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("cap")) {
+        params.delete("cap");
+        const newSearch = params.toString();
+        window.history.replaceState(null, "", newSearch ? "?" + newSearch : window.location.pathname);
+      }
+    }
+  };
 
   const tabs = [
     ["overview", "Overview"], ["registry", "Registry"], ["sources", "Sources"],
@@ -241,7 +259,7 @@ export default function App() {
         {/* Tab bar — horizontally scrollable, touch-friendly on mobile */}
         <div style={{ display: "flex", borderBottom: "1px solid " + c.line, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           {tabs.map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} style={{ fontFamily: sans, fontSize: 13, fontWeight: tab === id ? 600 : 500, cursor: "pointer", background: "transparent", border: "none", color: tab === id ? c.text : c.muted, borderBottom: "2.5px solid " + (tab === id ? c.accent : "transparent"), padding: isMobile ? "12px 12px" : "12px 14px", marginBottom: -1, whiteSpace: "nowrap", minHeight: 44 }}>{label}</button>
+            <button key={id} onClick={() => handleTabChange(id)} style={{ fontFamily: sans, fontSize: 13, fontWeight: tab === id ? 600 : 500, cursor: "pointer", background: "transparent", border: "none", color: tab === id ? c.text : c.muted, borderBottom: "2.5px solid " + (tab === id ? c.accent : "transparent"), padding: isMobile ? "12px 12px" : "12px 14px", marginBottom: -1, whiteSpace: "nowrap", minHeight: 44 }}>{label}</button>
           ))}
         </div>
         <div style={{ padding: isMobile ? "16px 0 40px" : "20px 0 60px" }}>
@@ -453,6 +471,18 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const undoTimerRef = useRef(null);
 
   useEffect(() => { if (initialCap) onConsumedInitial(); }, [initialCap, onConsumedInitial]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (cap) {
+      params.set("cap", cap);
+    } else {
+      params.delete("cap");
+    }
+    const newSearch = params.toString();
+    window.history.replaceState(null, "", newSearch ? "?" + newSearch : window.location.pathname);
+  }, [cap]);
+
   useEffect(() => {
     if (!cap) { setCapAssets([]); setDuplicates([]); return; }
     api("/assets?capability=" + cap).then(setCapAssets).catch(() => setCapAssets([]));
