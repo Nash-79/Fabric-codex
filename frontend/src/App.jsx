@@ -3,6 +3,18 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { c, BRAND, sans, mono, applyTheme, initialTheme } from "./theme.js";
 
+/* ------------------- responsive breakpoint hook -------------------- */
+const MOBILE = 640; // px — single source of truth for the breakpoint
+function useIsMobile() {
+  const [w, setW] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 1200));
+  useEffect(() => {
+    const handler = () => setW(window.innerWidth);
+    window.addEventListener("resize", handler, { passive: true });
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return w < MOBILE;
+}
+
 /* ------------------------------------------------------------------ *
  * Fabric Atlas — frontend for the local backend (http://localhost:8000,
  * proxied by Vite). Read/verify/inspect UI for the knowledge base.
@@ -124,7 +136,7 @@ const Chip = ({ children, color = c.muted, bg = "transparent" }) => (
   <span style={{ fontFamily: mono, fontSize: 11, color, background: bg, border: "1px solid " + (bg === "transparent" ? c.line : "transparent"), borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>{children}</span>
 );
 const Btn = ({ children, onClick, primary, small, disabled }) => (
-  <button onClick={onClick} disabled={disabled} style={{ fontFamily: sans, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, color: primary ? c.onAccent : c.text, background: primary ? c.accent : c.panel, border: "1px solid " + (primary ? c.accent : c.line), borderRadius: 4, padding: small ? "5px 12px" : "8px 16px", boxShadow: c.shadow }}>{children}</button>
+  <button onClick={onClick} disabled={disabled} style={{ fontFamily: sans, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, color: primary ? c.onAccent : c.text, background: primary ? c.accent : c.panel, border: "1px solid " + (primary ? c.accent : c.line), borderRadius: 4, padding: small ? "5px 12px" : "8px 16px", minHeight: 36, boxShadow: c.shadow }}>{children}</button>
 );
 const Empty = ({ children }) => (
   <div style={{ border: "1px dashed " + c.line, borderRadius: 8, padding: 24, textAlign: "center", color: c.muted, fontSize: 13, lineHeight: 1.6, background: c.panel }}>{children}</div>
@@ -163,6 +175,7 @@ export default function App() {
   const [health, setHealth] = useState("checking");
   const [theme, setTheme] = useState(initialTheme);
   const [registryCap, setRegistryCap] = useState(null); // deep-link from Overview
+  const isMobile = useIsMobile();
 
   useEffect(() => { applyTheme(theme); }, [theme]);
   useEffect(() => {
@@ -178,36 +191,38 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: sans, background: c.bg, color: c.text, minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 20px" }}>
-        <div style={{ padding: "16px 0 12px", borderBottom: "1px solid " + c.line, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "0 12px" : "0 20px" }}>
+        {/* Header — stacks vertically on mobile */}
+        <div style={{ padding: isMobile ? "12px 0 10px" : "16px 0 12px", borderBottom: "1px solid " + c.line, display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", gap: isMobile ? 8 : 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
             <AtlasMark />
             <div>
-              <div style={{ fontSize: 17, fontWeight: 600 }}>
+              <div style={{ fontSize: isMobile ? 15 : 17, fontWeight: 600 }}>
                 Fabric Atlas
                 <span style={{ fontWeight: 400, color: c.muted, fontSize: 13, marginLeft: 8 }}>for Microsoft Fabric</span>
               </div>
-              <div style={{ color: c.muted, fontSize: 12 }}>Governed knowledge → grounded architecture</div>
+              {!isMobile && <div style={{ color: c.muted, fontSize: 12 }}>Governed knowledge → grounded architecture</div>}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <Chip color={health === "ok" ? c.green : health === "down" ? c.red : c.muted}>
-              backend {health === "ok" ? "● connected" : health === "down" ? "● unreachable — run uvicorn" : "…"}
+              backend {health === "ok" ? "● connected" : health === "down" ? "● down" : "…"}
             </Chip>
             <button
               onClick={() => setTheme(theme === "light" ? "dark" : "light")}
               title={"Switch to " + (theme === "light" ? "dark" : "light") + " theme"}
-              style={{ cursor: "pointer", background: c.panel, color: c.muted, border: "1px solid " + c.line, borderRadius: 4, padding: "4px 10px", fontFamily: sans, fontSize: 12 }}>
+              style={{ cursor: "pointer", background: c.panel, color: c.muted, border: "1px solid " + c.line, borderRadius: 4, padding: "4px 10px", fontFamily: sans, fontSize: 12, minHeight: 30 }}>
               {theme === "light" ? "◑ Dark" : "◐ Light"}
             </button>
           </div>
         </div>
-        <div style={{ display: "flex", borderBottom: "1px solid " + c.line, overflowX: "auto" }}>
+        {/* Tab bar — horizontally scrollable, touch-friendly on mobile */}
+        <div style={{ display: "flex", borderBottom: "1px solid " + c.line, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           {tabs.map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} style={{ fontFamily: sans, fontSize: 13, fontWeight: tab === id ? 600 : 500, cursor: "pointer", background: "transparent", border: "none", color: tab === id ? c.text : c.muted, borderBottom: "2.5px solid " + (tab === id ? c.accent : "transparent"), padding: "12px 14px", marginBottom: -1, whiteSpace: "nowrap" }}>{label}</button>
+            <button key={id} onClick={() => setTab(id)} style={{ fontFamily: sans, fontSize: 13, fontWeight: tab === id ? 600 : 500, cursor: "pointer", background: "transparent", border: "none", color: tab === id ? c.text : c.muted, borderBottom: "2.5px solid " + (tab === id ? c.accent : "transparent"), padding: isMobile ? "12px 12px" : "12px 14px", marginBottom: -1, whiteSpace: "nowrap", minHeight: 44 }}>{label}</button>
           ))}
         </div>
-        <div style={{ padding: "20px 0 60px" }}>
+        <div style={{ padding: isMobile ? "16px 0 40px" : "20px 0 60px" }}>
           {health === "down" ? (
             <>
               {tab === "overview" && <Overview offline onOpenCapability={openCapability} />}
@@ -268,6 +283,7 @@ const FABRIC_STORY = [
 ];
 
 function Overview({ onOpenCapability, offline = false }) {
+  const isMobile = useIsMobile();
   const [coverage, setCoverage] = useState({});
   const [sources, setSources] = useState([]);
   const [claims, setClaims] = useState([]);
@@ -330,7 +346,7 @@ function Overview({ onOpenCapability, offline = false }) {
       <div style={{ color: c.faint, fontSize: 12, marginBottom: 10 }}>
         Orientation text, written for this atlas — specifics live in the cited claims per capability.
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))", gap: 12, marginBottom: 22 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(330px, 1fr))", gap: 12, marginBottom: 22 }}>
         {FABRIC_STORY.map((s) => (
           <div key={s.title} style={{ border: "1px solid " + c.line, borderRadius: 10, background: c.panel, padding: "14px 16px", boxShadow: c.shadow }}>
             <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6, color: c.accentText }}>{s.title}</div>
@@ -390,6 +406,7 @@ function Overview({ onOpenCapability, offline = false }) {
 
 /* ============================== registry ============================ */
 function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
+  const isMobile = useIsMobile();
   const [coverage, setCoverage] = useState({});
   const [claims, setClaims] = useState([]);
   const [tags, setTags] = useState({});
@@ -495,7 +512,7 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
       {areas.map((area) => (
         <div key={area} style={{ marginBottom: 16 }}>
           <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>{area}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(auto-fill, minmax(160px, 1fr))" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
             {CAPABILITIES.filter((x) => x.area === area).map((x) => {
               const g = coverage[x.id] || {};
               const n = Object.values(g).reduce((a, b) => a + b, 0);
@@ -724,6 +741,7 @@ function Sources() {
 
 /* ============================== designs ============================= */
 function Designs() {
+  const isMobile = useIsMobile();
   const [designs, setDesigns] = useState([]);
   const [open, setOpen] = useState(null);     // full design detail
   const [runs, setRuns] = useState([]);
@@ -740,31 +758,41 @@ function Designs() {
     try { await api(`/designs/${open.id}/validate`, { method: "POST", body: JSON.stringify({}) }); await view(open.id); refresh(); }
     finally { setBusy(false); }
   };
+  const closeDetail = () => setOpen(null);
 
   if (!designs.length) return <Empty>No designs yet. Run <Code>/design &lt;scenario&gt;</Code> in Claude Code.</Empty>;
 
+  // On mobile: show list OR detail (never both simultaneously)
+  const showList = !isMobile || !open;
+  const showDetail = !!open;
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: open ? "minmax(260px, 320px) 1fr" : "1fr", gap: 16 }}>
-      <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
-        {designs.map((d) => (
-          <button key={d.id} onClick={() => view(d.id)} style={{ textAlign: "left", cursor: "pointer", background: open?.id === d.id ? c.accentSoft : c.panel, border: "1px solid " + (open?.id === d.id ? c.accent : c.line), borderRadius: 8, padding: 12, boxShadow: c.shadow }}>
-            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: c.text }}>{d.title || d.scenario.slice(0, 50)}</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <Chip color={d.status === "validated" ? c.green : d.status === "needs_review" ? c.red : c.amber}>{d.status}</Chip>
-              {d.confidence != null && <Chip color={c.accentText}>{Math.round(d.confidence * 100)}%</Chip>}
-              {d.ready_to_share && <Chip color={c.green}>✓ ready</Chip>}
-              {(d.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
-            </div>
-          </button>
-        ))}
-      </div>
-      {open && (
-        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 18, boxShadow: c.shadow }}>
+    <div style={isMobile ? {} : { display: "grid", gridTemplateColumns: open ? "minmax(260px, 320px) 1fr" : "1fr", gap: 16 }}>
+      {showList && (
+        <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
+          {designs.map((d) => (
+            <button key={d.id} onClick={() => view(d.id)} style={{ textAlign: "left", cursor: "pointer", background: open?.id === d.id ? c.accentSoft : c.panel, border: "1px solid " + (open?.id === d.id ? c.accent : c.line), borderRadius: 8, padding: 12, boxShadow: c.shadow }}>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: c.text }}>{d.title || d.scenario.slice(0, 50)}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <Chip color={d.status === "validated" ? c.green : d.status === "needs_review" ? c.red : c.amber}>{d.status}</Chip>
+                {d.confidence != null && <Chip color={c.accentText}>{Math.round(d.confidence * 100)}%</Chip>}
+                {d.ready_to_share && <Chip color={c.green}>✓ ready</Chip>}
+                {(d.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {showDetail && (
+        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: isMobile ? 14 : 18, boxShadow: c.shadow }}>
+          {isMobile && (
+            <button onClick={closeDetail} style={{ background: "transparent", border: "none", color: c.accentText, cursor: "pointer", fontFamily: sans, fontSize: 13, fontWeight: 600, padding: "0 0 12px", display: "block" }}>← Back to designs</button>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
             <span style={{ fontWeight: 600 }}>{open.title}</span>
             <div style={{ display: "flex", gap: 8 }}>
               <Btn small primary onClick={validate} disabled={busy}>{busy ? "Validating…" : "Run validation"}</Btn>
-              <Btn small onClick={() => setOpen(null)}>Close</Btn>
+              {!isMobile && <Btn small onClick={closeDetail}>Close</Btn>}
             </div>
           </div>
           <div style={{ fontSize: 12, color: c.muted, marginBottom: 10 }}>{open.scenario}</div>
@@ -780,7 +808,7 @@ function Designs() {
                   <Chip color={c.accentText}>confidence {Math.round(r.confidence * 100)}%</Chip>
                   <div style={{ marginTop: 6, display: "grid", gap: 5 }}>
                     {r.issues.map((i) => (
-                      <div key={i.id} style={{ fontSize: 12, display: "flex", gap: 8 }}>
+                      <div key={i.id} style={{ fontSize: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <Chip color={SEV_COLORS[i.severity]}>{i.severity}</Chip>
                         <Chip>{i.validator}</Chip>
                         <span style={{ color: c.text }}>{i.message}</span>
@@ -802,6 +830,7 @@ function Designs() {
    (grounded in verified claims only) and served statically by the backend.
    This tab lists and renders them. */
 function Learn() {
+  const isMobile = useIsMobile();
   const [files, setFiles] = useState(null);   // null = loading
   const [open, setOpen] = useState(null);     // { name, md }
   useEffect(() => {
@@ -812,6 +841,7 @@ function Learn() {
     const res = await fetch("/" + f.path.replace(/^\//, ""));
     setOpen({ name: f.name, md: res.ok ? await res.text() : "Could not load lesson." });
   };
+  const closeLesson = () => setOpen(null);
 
   if (files === null) return null;
   if (!files.length) {
@@ -823,21 +853,31 @@ function Learn() {
       </Empty>
     );
   }
+
+  // On mobile: show list OR lesson (never both simultaneously)
+  const showList = !isMobile || !open;
+  const showDetail = !!open;
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: open ? "minmax(240px, 300px) 1fr" : "1fr", gap: 16 }}>
-      <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
-        {files.map((f) => (
-          <button key={f.name} onClick={() => view(f)} style={{ textAlign: "left", cursor: "pointer", background: open?.name === f.name ? c.accentSoft : c.panel, border: "1px solid " + (open?.name === f.name ? c.accent : c.line), borderRadius: 8, padding: 12, boxShadow: c.shadow }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: c.text }}>{f.name.replace(/\.md$/, "").replace(/-/g, " ")}</div>
-            <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginTop: 4 }}>{f.path}</div>
-          </button>
-        ))}
-      </div>
-      {open && (
-        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 18, boxShadow: c.shadow }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+    <div style={isMobile ? {} : { display: "grid", gridTemplateColumns: open ? "minmax(240px, 300px) 1fr" : "1fr", gap: 16 }}>
+      {showList && (
+        <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
+          {files.map((f) => (
+            <button key={f.name} onClick={() => view(f)} style={{ textAlign: "left", cursor: "pointer", background: open?.name === f.name ? c.accentSoft : c.panel, border: "1px solid " + (open?.name === f.name ? c.accent : c.line), borderRadius: 8, padding: 12, boxShadow: c.shadow }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: c.text }}>{f.name.replace(/\.md$/, "").replace(/-/g, " ")}</div>
+              <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginTop: 4 }}>{f.path}</div>
+            </button>
+          ))}
+        </div>
+      )}
+      {showDetail && (
+        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: isMobile ? 14 : 18, boxShadow: c.shadow }}>
+          {isMobile && (
+            <button onClick={closeLesson} style={{ background: "transparent", border: "none", color: c.accentText, cursor: "pointer", fontFamily: sans, fontSize: 13, fontWeight: 600, padding: "0 0 12px", display: "block" }}>← Back to lessons</button>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
             <span style={{ fontWeight: 600 }}>{open.name}</span>
-            <Btn small onClick={() => setOpen(null)}>Close</Btn>
+            {!isMobile && <Btn small onClick={closeLesson}>Close</Btn>}
           </div>
           <Md text={open.md} />
         </div>
