@@ -138,6 +138,27 @@ const Chip = ({ children, color = c.muted, bg = "transparent" }) => (
 const Btn = ({ children, onClick, primary, small, disabled }) => (
   <button onClick={onClick} disabled={disabled} style={{ fontFamily: sans, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, color: primary ? c.onAccent : c.text, background: primary ? c.accent : c.panel, border: "1px solid " + (primary ? c.accent : c.line), borderRadius: 4, padding: small ? "5px 12px" : "8px 16px", boxShadow: c.shadow }}>{children}</button>
 );
+
+let _cdStyleDone = false;
+const ensureCountdownStyle = () => {
+  if (_cdStyleDone || typeof document === "undefined") return;
+  _cdStyleDone = true;
+  const el = document.createElement("style");
+  el.textContent = "@keyframes cd-shrink{from{width:100%}to{width:0%}}";
+  document.head.appendChild(el);
+};
+
+const CountdownBtn = ({ children, onClick, primary, small, disabled, countdown }) => {
+  ensureCountdownStyle();
+  return (
+    <div style={{ position: "relative", display: "inline-block" }}>
+      <button onClick={onClick} disabled={disabled} style={{ fontFamily: sans, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, color: primary ? c.onAccent : c.text, background: primary ? c.accent : c.panel, border: "1px solid " + (primary ? c.accent : c.line), borderRadius: 4, padding: small ? "5px 12px" : "8px 16px", boxShadow: c.shadow, display: "block" }}>{children}</button>
+      {countdown && (
+        <div key={String(countdown)} style={{ position: "absolute", bottom: 0, left: 0, height: 3, borderRadius: "0 0 4px 4px", background: primary ? "rgba(255,255,255,0.65)" : c.accent, animation: "cd-shrink 3s linear forwards", pointerEvents: "none" }} />
+      )}
+    </div>
+  );
+};
 const Empty = ({ children }) => (
   <div style={{ border: "1px dashed " + c.line, borderRadius: 8, padding: 24, textAlign: "center", color: c.muted, fontSize: 13, lineHeight: 1.6, background: c.panel }}>{children}</div>
 );
@@ -597,12 +618,12 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {pendingShown.length > 1 && (
                 <>
-                  <Btn small primary onClick={verifyAllShown}>
+                  <CountdownBtn small primary onClick={verifyAllShown} countdown={bulkConfirm === "verify"}>
                     {bulkConfirm === "verify" ? `Confirm verify all? (${pendingShown.length})` : `Verify all (${pendingShown.length})`}
-                  </Btn>
-                  <Btn small onClick={rejectAllShown}>
+                  </CountdownBtn>
+                  <CountdownBtn small onClick={rejectAllShown} countdown={bulkConfirm === "reject"}>
                     {bulkConfirm === "reject" ? `Confirm reject all? (${pendingShown.length})` : `Reject all (${pendingShown.length})`}
-                  </Btn>
+                  </CountdownBtn>
                 </>
               )}
               {duplicates.length > 0 && (
@@ -646,9 +667,9 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
                     ) : cl.status === "pending" ? (
                       <>
                         <Btn small primary onClick={() => verify(cl.id)}>Verify</Btn>
-                        <Btn small onClick={() => rejectWithConfirm(cl.id)}>
+                        <CountdownBtn small onClick={() => rejectWithConfirm(cl.id)} countdown={rejectConfirm.has(cl.id)}>
                           {rejectConfirm.has(cl.id) ? "Confirm reject?" : "Reject"}
-                        </Btn>
+                        </CountdownBtn>
                       </>
                     ) : null}
                     <Btn small disabled={busy} onClick={async () => !busy && setHistory(await api(`/claims/${cl.claim_key}/history`))}>History</Btn>
