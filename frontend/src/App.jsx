@@ -1,7 +1,19 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { c, BRAND, sans, mono, applyTheme, initialTheme } from "./theme.js";
+
+/* ------------------- responsive breakpoint hook -------------------- */
+const MOBILE = 640;  // px — single source of truth for the mobile breakpoint
+function useWindowWidth() {
+  const [w, setW] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 1200));
+  useEffect(() => {
+    const handler = () => setW(window.innerWidth);
+    window.addEventListener("resize", handler, { passive: true });
+    return () => window.removeEventListener("resize", handler);
+  }, []);
+  return w;
+}
 
 /* ------------------------------------------------------------------ *
  * Fabric Atlas — frontend for the local backend (http://localhost:8000,
@@ -126,109 +138,33 @@ const Chip = ({ children, color = c.muted, bg = "transparent" }) => (
 const Btn = ({ children, onClick, primary, small, disabled }) => (
   <button onClick={onClick} disabled={disabled} style={{ fontFamily: sans, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, color: primary ? c.onAccent : c.text, background: primary ? c.accent : c.panel, border: "1px solid " + (primary ? c.accent : c.line), borderRadius: 4, padding: small ? "5px 12px" : "8px 16px", boxShadow: c.shadow }}>{children}</button>
 );
+
+let _cdStyleDone = false;
+const ensureCountdownStyle = () => {
+  if (_cdStyleDone || typeof document === "undefined") return;
+  _cdStyleDone = true;
+  const el = document.createElement("style");
+  el.textContent = "@keyframes cd-shrink{from{width:100%}to{width:0%}}";
+  document.head.appendChild(el);
+};
+
+const CountdownBtn = ({ children, onClick, primary, small, disabled, countdown }) => {
+  ensureCountdownStyle();
+  return (
+    <div style={{ position: "relative", display: "inline-block" }}>
+      <button onClick={onClick} disabled={disabled} style={{ fontFamily: sans, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, color: primary ? c.onAccent : c.text, background: primary ? c.accent : c.panel, border: "1px solid " + (primary ? c.accent : c.line), borderRadius: 4, padding: small ? "5px 12px" : "8px 16px", boxShadow: c.shadow, display: "block" }}>{children}</button>
+      {countdown && (
+        <div key={String(countdown)} style={{ position: "absolute", bottom: 0, left: 0, height: 3, borderRadius: "0 0 4px 4px", background: primary ? "rgba(255,255,255,0.65)" : c.accent, animation: "cd-shrink 3s linear forwards", pointerEvents: "none" }} />
+      )}
+    </div>
+  );
+};
 const Empty = ({ children }) => (
   <div style={{ border: "1px dashed " + c.line, borderRadius: 8, padding: 24, textAlign: "center", color: c.muted, fontSize: 13, lineHeight: 1.6, background: c.panel }}>{children}</div>
 );
 const Code = ({ children }) => (
   <code style={{ fontFamily: mono, fontSize: 12, color: c.accentText, background: c.accentSoft, borderRadius: 4, padding: "1px 5px" }}>{children}</code>
 );
-
-const capName = (id) => CAPABILITIES.find((x) => x.id === id)?.name || id;
-const isCommunitySource = (s) => s?.tier === 4 || /bradcoles|milescole|blog/i.test(s?.url || "");
-const sourceUrl = (assetPath) => "/" + (assetPath || "").replace(/^\//, "");
-
-const claimStatusChip = (cl) => (
-  cl.status === "verified" ? <Chip color={c.green}>verified</Chip>
-    : cl.status === "pending" ? <Chip color={c.amber}>pending</Chip>
-    : <Chip color={c.faint}>{cl.status}</Chip>
-);
-
-function ClaimRows({ claims, compact = false }) {
-  if (!claims.length) return <div style={{ color: c.muted, fontSize: 13 }}>No claims.</div>;
-  return (
-    <div style={{ display: "grid", gap: compact ? 6 : 8 }}>
-      {claims.map((cl) => (
-        <div key={cl.id} style={{ border: "1px solid " + c.lineSoft, borderRadius: 6, background: c.panel2, padding: compact ? 8 : 10 }}>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 5 }}>
-            <Chip color={c.accentText}>{capName(cl.capability_id)}</Chip>
-            <Chip color={c.accentText}>L{cl.depth}</Chip>
-            <Chip>{cl.type}</Chip>
-            {claimStatusChip(cl)}
-          </div>
-          <div style={{ fontSize: compact ? 12.5 : 13, lineHeight: 1.55 }}>{cl.text}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function claimsForAsset(asset, claims, sourceClaims = []) {
-  const activeClaims = claims.filter((cl) => cl.active !== false);
-  const activeSourceClaims = sourceClaims.filter((cl) => cl.active !== false);
-  if (asset.claim_id) return activeClaims.filter((cl) => cl.id === asset.claim_id);
-  if (asset.source_id) return activeSourceClaims.length ? activeSourceClaims : activeClaims.filter((cl) => cl.source_id === asset.source_id);
-  if (asset.capability_id) return activeClaims.filter((cl) => cl.capability_id === asset.capability_id);
-  return [];
-}
-
-function DiagramPanel({ asset, claims, sources, sourceClaims = [], onClose, onOpenSource, onOpenCapability }) {
-  if (!asset) return null;
-  const relatedClaims = claimsForAsset(asset, claims, sourceClaims);
-  const sourceIds = [...new Set(relatedClaims.map((cl) => cl.source_id).concat(asset.source_id ? [asset.source_id] : []))].filter(Boolean);
-  const relatedSources = sourceIds.map((id) => sources.find((s) => s.id === id)).filter(Boolean);
-  return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.22)", zIndex: 20, display: "flex", justifyContent: "flex-end" }} onClick={onClose}>
-      <div style={{ width: "min(560px, 94vw)", height: "100%", background: c.panel, borderLeft: "1px solid " + c.line, boxShadow: c.shadow, padding: 18, overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}>
-          <div>
-            <div style={{ fontWeight: 650, fontSize: 15 }}>Diagram drill-through</div>
-            {asset.capability_id && <div style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>{capName(asset.capability_id)}</div>}
-          </div>
-          <Btn small onClick={onClose}>Close</Btn>
-        </div>
-        {asset.path && (
-          <img src={sourceUrl(asset.path)} alt={asset.caption}
-            style={{ width: "100%", borderRadius: 6, background: c.diagramBg, border: "1px solid " + c.lineSoft, marginBottom: 10 }} />
-        )}
-        <div style={{ fontSize: 13, lineHeight: 1.55, marginBottom: 10 }}>{asset.caption || "Original generated diagram."}</div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-          <Chip color={c.green}>original diagram</Chip>
-          {asset.capability_id && (
-            <Btn small onClick={() => onOpenCapability?.(asset.capability_id)}>Open capability</Btn>
-          )}
-        </div>
-        {relatedSources.length > 0 && (
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>RELATED SOURCES</div>
-            <div style={{ display: "grid", gap: 6 }}>
-              {relatedSources.map((s) => (
-                <button key={s.id} onClick={() => onOpenSource?.(s.id)} style={{ textAlign: "left", cursor: "pointer", background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 9 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: c.text }}>{s.title}</span>
-                  <span style={{ marginLeft: 8 }}><Chip color={TIER_COLORS[s.tier]}>T{s.tier}</Chip></span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>RELATED CLAIMS</div>
-        <ClaimRows claims={relatedClaims.slice(0, 12)} compact />
-      </div>
-    </div>
-  );
-}
-
-function DiagramThumb({ asset, onClick }) {
-  if (asset.kind !== "generated" || !asset.path) return null;
-  return (
-    <button onClick={onClick} style={{ textAlign: "left", cursor: "pointer", border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 8, background: c.panel2, maxWidth: 360 }}>
-      <img src={sourceUrl(asset.path)} alt={asset.caption} style={{ width: "100%", borderRadius: 4, background: c.diagramBg, display: "block" }} />
-      <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginTop: 6, flexWrap: "wrap" }}>
-        <Chip color={c.green}>diagram</Chip>
-        <span style={{ fontSize: 12, color: c.text }}>{asset.caption}</span>
-      </div>
-    </button>
-  );
-}
 
 /* Original Fabric Atlas mark — woven layers in the Fabric brand ramp.
    Deliberately NOT Microsoft's Fabric icon: Microsoft's icon terms do not
@@ -256,10 +192,18 @@ const AtlasMark = ({ size = 28 }) => (
 
 /* ================================ app =============================== */
 export default function App() {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has("cap") ? "registry" : "overview";
+  });
   const [health, setHealth] = useState("checking");
   const [theme, setTheme] = useState(initialTheme);
-  const [registryCap, setRegistryCap] = useState(null); // deep-link from Overview
+  const [registryCap, setRegistryCap] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("cap") || null;
+  });
+  const w = useWindowWidth();
+  const isMobile = w < MOBILE;
 
   useEffect(() => { applyTheme(theme); }, [theme]);
   useEffect(() => {
@@ -268,6 +212,18 @@ export default function App() {
 
   const openCapability = (id) => { setRegistryCap(id); setTab("registry"); };
 
+  const handleTabChange = (id) => {
+    setTab(id);
+    if (id !== "registry") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("cap")) {
+        params.delete("cap");
+        const newSearch = params.toString();
+        window.history.replaceState(null, "", newSearch ? "?" + newSearch : window.location.pathname);
+      }
+    }
+  };
+
   const tabs = [
     ["overview", "Overview"], ["registry", "Registry"], ["sources", "Sources"],
     ["designs", "Designs"], ["learn", "Learn"], ["author", "Author"],
@@ -275,36 +231,38 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: sans, background: c.bg, color: c.text, minHeight: "100vh" }}>
-      <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 20px" }}>
-        <div style={{ padding: "16px 0 12px", borderBottom: "1px solid " + c.line, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+      <div style={{ maxWidth: 1180, margin: "0 auto", padding: isMobile ? "0 12px" : "0 20px" }}>
+        {/* Header — stacks vertically on mobile */}
+        <div style={{ padding: isMobile ? "12px 0 10px" : "16px 0 12px", borderBottom: "1px solid " + c.line, display: "flex", flexDirection: isMobile ? "column" : "row", alignItems: isMobile ? "flex-start" : "center", justifyContent: "space-between", gap: isMobile ? 8 : 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
             <AtlasMark />
             <div>
-              <div style={{ fontSize: 17, fontWeight: 600 }}>
+              <div style={{ fontSize: isMobile ? 15 : 17, fontWeight: 600 }}>
                 Fabric Atlas
                 <span style={{ fontWeight: 400, color: c.muted, fontSize: 13, marginLeft: 8 }}>for Microsoft Fabric</span>
               </div>
-              <div style={{ color: c.muted, fontSize: 12 }}>Governed knowledge → grounded architecture</div>
+              {!isMobile && <div style={{ color: c.muted, fontSize: 12 }}>Governed knowledge → grounded architecture</div>}
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             <Chip color={health === "ok" ? c.green : health === "down" ? c.red : c.muted}>
-              backend {health === "ok" ? "● connected" : health === "down" ? "● unreachable — run uvicorn" : "…"}
+              backend {health === "ok" ? "● connected" : health === "down" ? (isMobile ? "● down" : "● unreachable — run uvicorn") : "…"}
             </Chip>
             <button
               onClick={() => setTheme(theme === "light" ? "dark" : "light")}
               title={"Switch to " + (theme === "light" ? "dark" : "light") + " theme"}
-              style={{ cursor: "pointer", background: c.panel, color: c.muted, border: "1px solid " + c.line, borderRadius: 4, padding: "4px 10px", fontFamily: sans, fontSize: 12 }}>
+              style={{ cursor: "pointer", background: c.panel, color: c.muted, border: "1px solid " + c.line, borderRadius: 4, padding: "4px 10px", fontFamily: sans, fontSize: 12, minHeight: 30 }}>
               {theme === "light" ? "◑ Dark" : "◐ Light"}
             </button>
           </div>
         </div>
-        <div style={{ display: "flex", borderBottom: "1px solid " + c.line, overflowX: "auto" }}>
+        {/* Tab bar — horizontally scrollable, touch-friendly on mobile */}
+        <div style={{ display: "flex", borderBottom: "1px solid " + c.line, overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
           {tabs.map(([id, label]) => (
-            <button key={id} onClick={() => setTab(id)} style={{ fontFamily: sans, fontSize: 13, fontWeight: tab === id ? 600 : 500, cursor: "pointer", background: "transparent", border: "none", color: tab === id ? c.text : c.muted, borderBottom: "2.5px solid " + (tab === id ? c.accent : "transparent"), padding: "12px 14px", marginBottom: -1, whiteSpace: "nowrap" }}>{label}</button>
+            <button key={id} onClick={() => handleTabChange(id)} style={{ fontFamily: sans, fontSize: 13, fontWeight: tab === id ? 600 : 500, cursor: "pointer", background: "transparent", border: "none", color: tab === id ? c.text : c.muted, borderBottom: "2.5px solid " + (tab === id ? c.accent : "transparent"), padding: isMobile ? "12px 12px" : "12px 14px", marginBottom: -1, whiteSpace: "nowrap", minHeight: 44 }}>{label}</button>
           ))}
         </div>
-        <div style={{ padding: "20px 0 60px" }}>
+        <div style={{ padding: isMobile ? "16px 0 40px" : "20px 0 60px" }}>
           {health === "down" ? (
             <>
               {tab === "overview" && <Overview offline onOpenCapability={openCapability} />}
@@ -315,9 +273,9 @@ export default function App() {
             </>
           ) : tab === "overview" ? <Overview onOpenCapability={openCapability} />
             : tab === "registry" ? <Registry initialCap={registryCap} onConsumedInitial={() => setRegistryCap(null)} />
-            : tab === "sources" ? <Sources onOpenCapability={openCapability} />
+            : tab === "sources" ? <Sources />
             : tab === "designs" ? <Designs />
-            : tab === "learn" ? <Learn onOpenCapability={openCapability} />
+            : tab === "learn" ? <Learn />
             : <Author />}
         </div>
       </div>
@@ -365,6 +323,8 @@ const FABRIC_STORY = [
 ];
 
 function Overview({ onOpenCapability, offline = false }) {
+  const w = useWindowWidth();
+  const isMobile = w < MOBILE;
   const [coverage, setCoverage] = useState({});
   const [sources, setSources] = useState([]);
   const [claims, setClaims] = useState([]);
@@ -427,7 +387,7 @@ function Overview({ onOpenCapability, offline = false }) {
       <div style={{ color: c.faint, fontSize: 12, marginBottom: 10 }}>
         Orientation text, written for this atlas — specifics live in the cited claims per capability.
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(330px, 1fr))", gap: 12, marginBottom: 22 }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(330px, 1fr))", gap: 12, marginBottom: 22 }}>
         {FABRIC_STORY.map((s) => (
           <div key={s.title} style={{ border: "1px solid " + c.line, borderRadius: 10, background: c.panel, padding: "14px 16px", boxShadow: c.shadow }}>
             <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6, color: c.accentText }}>{s.title}</div>
@@ -487,6 +447,9 @@ function Overview({ onOpenCapability, offline = false }) {
 
 /* ============================== registry ============================ */
 function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
+  const w = useWindowWidth();
+  const isMobile = w < MOBILE;
+  const isNarrow = w < 400;
   const [coverage, setCoverage] = useState({});
   const [claims, setClaims] = useState([]);
   const [tags, setTags] = useState({});
@@ -494,37 +457,142 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
   const [tagFilter, setTagFilter] = useState("");
   const [history, setHistory] = useState(null);
   const [capAssets, setCapAssets] = useState([]);
+  const [duplicates, setDuplicates] = useState([]);
+  const [dupOpen, setDupOpen] = useState(false);
+  const [actioning, setActioning] = useState(new Set()); // claim IDs with in-flight requests
   const [err, setErr] = useState("");
+  const [bulkConfirm, setBulkConfirm] = useState(null); // null | "verify" | "reject"
+  const [rejectConfirm, setRejectConfirm] = useState(new Set()); // claim IDs pending reject confirm
+  const [recentActions, setRecentActions] = useState([]);
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [actionFilter, setActionFilter] = useState(null); // null | "verified" | "rejected" | "dismissed" | "promoted"
+  const [capFilter, setCapFilter] = useState("");
+  const [undoToast, setUndoToast] = useState(null); // null | { label, claimIds }
+  const undoTimerRef = useRef(null);
 
   useEffect(() => { if (initialCap) onConsumedInitial(); }, [initialCap, onConsumedInitial]);
+
   useEffect(() => {
-    if (!cap) { setCapAssets([]); return; }
+    const params = new URLSearchParams(window.location.search);
+    if (cap) {
+      params.set("cap", cap);
+    } else {
+      params.delete("cap");
+    }
+    const newSearch = params.toString();
+    window.history.replaceState(null, "", newSearch ? "?" + newSearch : window.location.pathname);
+  }, [cap]);
+
+  useEffect(() => {
+    if (!cap) { setCapAssets([]); setDuplicates([]); return; }
     api("/assets?capability=" + cap).then(setCapAssets).catch(() => setCapAssets([]));
+    api(`/claims?capability=${cap}&status=duplicate&include_inactive=true`)
+      .then(setDuplicates).catch(() => setDuplicates([]));
   }, [cap]);
 
   const refresh = useCallback(() => {
     api("/coverage").then(setCoverage).catch((e) => setErr(e.message));
     api("/tags").then(setTags).catch(() => {});
+    api("/claims/recent-actions").then(setRecentActions).catch(() => {});
     const q = new URLSearchParams();
     if (cap) q.set("capability", cap);
     if (tagFilter) q.set("tag", tagFilter);
     api("/claims?" + q.toString()).then(setClaims).catch((e) => setErr(e.message));
+    if (cap) {
+      api(`/claims?capability=${cap}&status=duplicate&include_inactive=true`)
+        .then(setDuplicates).catch(() => setDuplicates([]));
+    }
   }, [cap, tagFilter]);
   useEffect(() => { refresh(); }, [refresh]);
 
-  const verify = async (id) => {
-    try { await api(`/claims/${id}/verify`, { method: "POST" }); } catch (e) { setErr(e.message); }
-    refresh();
-  };
-  const pendingShown = claims.filter((cl) => cl.status === "pending");
-  const verifyAllShown = async () => {
+  const showUndoToast = useCallback((label, claimIds) => {
+    if (!claimIds || claimIds.length === 0) return;
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast({ label, claimIds });
+    undoTimerRef.current = setTimeout(() => setUndoToast(null), 5000);
+  }, []);
+
+  const dismissUndoToast = useCallback(() => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoToast(null);
+  }, []);
+
+  const handleUndo = useCallback(async () => {
+    if (!undoToast) return;
+    const ids = undoToast.claimIds;
+    dismissUndoToast();
     try {
-      await api("/claims/verify-bulk", { method: "POST", body: JSON.stringify({ claim_ids: pendingShown.map((cl) => cl.id) }) });
+      await api("/claims/revert", { method: "POST", body: JSON.stringify({ claim_ids: ids }) });
+    } catch (e) { setErr(e.message); }
+    refresh();
+  }, [undoToast, dismissUndoToast, refresh]);
+
+  const withActioning = async (id, fn) => {
+    setActioning((prev) => new Set([...prev, id]));
+    let result;
+    try { result = await fn(); } catch (e) { setErr(e.message); }
+    finally { setActioning((prev) => { const s = new Set(prev); s.delete(id); return s; }); }
+    refresh();
+    return result;
+  };
+
+  const verify = async (id) => {
+    await withActioning(id, () => api(`/claims/${id}/verify`, { method: "POST" }));
+    showUndoToast("Verified claim", [id]);
+  };
+  const reject = async (id) => {
+    await withActioning(id, () => api(`/claims/${id}/reject`, { method: "POST" }));
+    showUndoToast("Rejected claim", [id]);
+  };
+  const promote = (id) => withActioning(id, () => api(`/claims/${id}/promote`, { method: "POST" }));
+  const dismissDup = (id) => withActioning(id, () => api(`/claims/${id}/dismiss`, { method: "POST" }));
+
+  const pendingShown = claims.filter((cl) => cl.status === "pending");
+
+  const armBulk = (which) => {
+    setBulkConfirm(which);
+    setTimeout(() => setBulkConfirm((cur) => cur === which ? null : cur), 3000);
+  };
+  const verifyAllShown = async () => {
+    if (bulkConfirm !== "verify") { armBulk("verify"); return; }
+    setBulkConfirm(null);
+    try {
+      const ids = pendingShown.map((cl) => cl.id);
+      const res = await api("/claims/verify-bulk", { method: "POST", body: JSON.stringify({ claim_ids: ids }) });
+      showUndoToast(`Verified ${res.verified} claim${res.verified !== 1 ? "s" : ""}`, res.verified_ids);
     } catch (e) { setErr(e.message); }
     refresh();
   };
+  const rejectAllShown = async () => {
+    if (bulkConfirm !== "reject") { armBulk("reject"); return; }
+    setBulkConfirm(null);
+    try {
+      const ids = pendingShown.map((cl) => cl.id);
+      const res = await api("/claims/reject-bulk", { method: "POST", body: JSON.stringify({ claim_ids: ids }) });
+      showUndoToast(`Rejected ${res.rejected} claim${res.rejected !== 1 ? "s" : ""}`, res.rejected_ids);
+    } catch (e) { setErr(e.message); }
+    refresh();
+  };
+
+  const armReject = (id) => {
+    setRejectConfirm((prev) => new Set([...prev, id]));
+    setTimeout(() => setRejectConfirm((prev) => { const s = new Set(prev); s.delete(id); return s; }), 3000);
+  };
+  const rejectWithConfirm = (id) => {
+    if (!rejectConfirm.has(id)) { armReject(id); return; }
+    setRejectConfirm((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    reject(id);
+  };
   const total = Object.values(coverage).reduce((a, g) => a + Object.values(g).reduce((x, y) => x + y, 0), 0);
   const areas = [...new Set(CAPABILITIES.map((x) => x.area))];
+
+  const filteredActions = recentActions.filter((ev) => {
+    if (actionFilter && ev.action !== actionFilter) return false;
+    if (capFilter && ev.capability_id !== capFilter) return false;
+    return true;
+  });
+  const actionCapIds = [...new Set(recentActions.map((ev) => ev.capability_id))];
+  const ACTION_TYPES = ["verified", "rejected", "dismissed", "promoted"];
 
   return (
     <div>
@@ -548,7 +616,7 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
       {areas.map((area) => (
         <div key={area} style={{ marginBottom: 16 }}>
           <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>{area}</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isNarrow ? "1fr" : isMobile ? "repeat(2, 1fr)" : "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
             {CAPABILITIES.filter((x) => x.area === area).map((x) => {
               const g = coverage[x.id] || {};
               const n = Object.values(g).reduce((a, b) => a + b, 0);
@@ -576,6 +644,93 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
         </div>
       ))}
 
+      {recentActions.length > 0 && (
+        <div style={{ marginTop: 18, border: "1px solid " + c.line, borderRadius: 8, background: c.panel, boxShadow: c.shadow }}>
+          <button
+            onClick={() => setActionsOpen((v) => !v)}
+            style={{ width: "100%", textAlign: "left", background: "transparent", border: "none", cursor: "pointer", padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+          >
+            <span style={{ fontFamily: mono, fontSize: 11, color: c.muted, textTransform: "uppercase", letterSpacing: 0.6 }}>
+              Recent actions{" "}
+              <span style={{ color: c.faint }}>
+                {filteredActions.length < recentActions.length
+                  ? `(${filteredActions.length} of ${recentActions.length})`
+                  : `(${recentActions.length})`}
+              </span>
+            </span>
+            <span style={{ fontFamily: mono, fontSize: 11, color: c.faint }}>{actionsOpen ? "▲ hide" : "▼ show"}</span>
+          </button>
+          {actionsOpen && (
+            <div style={{ borderTop: "1px solid " + c.lineSoft }}>
+              {/* ── filter bar ── */}
+              <div style={{ padding: "8px 14px", borderBottom: "1px solid " + c.lineSoft, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                {/* capability dropdown */}
+                <select
+                  value={capFilter}
+                  onChange={(e) => setCapFilter(e.target.value)}
+                  style={{ fontFamily: mono, fontSize: 11, color: capFilter ? c.accentText : c.muted, background: capFilter ? c.accentSoft : c.bg, border: "1px solid " + (capFilter ? c.accent : c.line), borderRadius: 6, padding: "3px 7px", cursor: "pointer" }}
+                >
+                  <option value="">All capabilities</option>
+                  {actionCapIds.map((id) => (
+                    <option key={id} value={id}>{CAPABILITIES.find((x) => x.id === id)?.name || id}</option>
+                  ))}
+                </select>
+                {/* action-type chips */}
+                <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                  {ACTION_TYPES.filter((a) => recentActions.some((ev) => ev.action === a)).map((a) => {
+                    const active = actionFilter === a;
+                    const chipColor = a === "verified" ? c.green : a === "rejected" || a === "dismissed" ? c.red : c.amber;
+                    return (
+                      <button
+                        key={a}
+                        onClick={() => setActionFilter(active ? null : a)}
+                        style={{ fontFamily: mono, fontSize: 11, cursor: "pointer", borderRadius: 12, padding: "2px 9px", border: "1px solid " + (active ? chipColor : c.line), background: active ? chipColor + "22" : "transparent", color: active ? chipColor : c.muted }}
+                      >
+                        {a}
+                      </button>
+                    );
+                  })}
+                </div>
+                {/* clear filters */}
+                {(actionFilter || capFilter) && (
+                  <button
+                    onClick={() => { setActionFilter(null); setCapFilter(""); }}
+                    style={{ fontFamily: mono, fontSize: 11, cursor: "pointer", color: c.faint, background: "transparent", border: "none", padding: "2px 4px", textDecoration: "underline" }}
+                  >
+                    clear
+                  </button>
+                )}
+              </div>
+              {filteredActions.length === 0 ? (
+                <div style={{ padding: "18px 14px", fontFamily: mono, fontSize: 12, color: c.faint, textAlign: "center" }}>No actions match the current filters.</div>
+              ) : (
+                filteredActions.map((ev) => {
+                  const capName = CAPABILITIES.find((x) => x.id === ev.capability_id)?.name || ev.capability_id;
+                  const actionColor = ev.action === "verified" ? c.green : ev.action === "rejected" || ev.action === "dismissed" ? c.red : c.amber;
+                  const ts = new Date(ev.actioned_at);
+                  const timeLabel = ts.toLocaleDateString(undefined, { month: "short", day: "numeric" }) + " " + ts.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+                  return (
+                    <div key={ev.id} style={{ padding: "9px 14px", borderBottom: "1px solid " + c.lineSoft, display: "flex", gap: 10, alignItems: "flex-start" }}>
+                      <span style={{ fontFamily: mono, fontSize: 11, color: actionColor, minWidth: 68, paddingTop: 1 }}>{ev.action}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, color: c.text, lineHeight: 1.45, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ev.text_snippet}{ev.text_snippet.length >= 120 ? "…" : ""}</div>
+                        <div style={{ display: "flex", gap: 6, marginTop: 3, alignItems: "center" }}>
+                          <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>{capName}</span>
+                          <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>·</span>
+                          <span style={{ fontFamily: mono, fontSize: 10, color: c.faint }}>{ev.prev_status} →</span>
+                          <span style={{ fontFamily: mono, fontSize: 10, color: actionColor }}>{ev.new_status}</span>
+                        </div>
+                      </div>
+                      <span style={{ fontFamily: mono, fontSize: 10, color: c.faint, whiteSpace: "nowrap", paddingTop: 2 }}>{timeLabel}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {(cap || tagFilter) && (
         <div style={{ marginTop: 18, border: "1px solid " + c.accentDim, borderRadius: 8, background: c.panel, boxShadow: c.shadow }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 14px", borderBottom: "1px solid " + c.line }}>
@@ -584,9 +739,21 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
               {tagFilter && <span style={{ color: c.accentText }}> · #{tagFilter}</span>}
               <span style={{ color: c.muted, fontWeight: 400, fontSize: 13 }}> · {claims.length} claims</span>
             </span>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               {pendingShown.length > 1 && (
-                <Btn small primary onClick={verifyAllShown}>Verify all pending ({pendingShown.length})</Btn>
+                <>
+                  <CountdownBtn small primary onClick={verifyAllShown} countdown={bulkConfirm === "verify"}>
+                    {bulkConfirm === "verify" ? `Confirm verify all? (${pendingShown.length})` : `Verify all (${pendingShown.length})`}
+                  </CountdownBtn>
+                  <CountdownBtn small onClick={rejectAllShown} countdown={bulkConfirm === "reject"}>
+                    {bulkConfirm === "reject" ? `Confirm reject all? (${pendingShown.length})` : `Reject all (${pendingShown.length})`}
+                  </CountdownBtn>
+                </>
+              )}
+              {duplicates.length > 0 && (
+                <button onClick={() => setDupOpen((v) => !v)} style={{ cursor: "pointer", fontFamily: mono, fontSize: 11, color: c.amber, background: "transparent", border: "1px solid " + c.amber, borderRadius: 4, padding: "3px 8px" }}>
+                  {dupOpen ? "Hide" : "Show"} {duplicates.length} duplicate{duplicates.length !== 1 ? "s" : ""}
+                </button>
               )}
               <button onClick={() => { setCap(null); setTagFilter(""); }} style={{ background: "transparent", border: "none", color: c.muted, cursor: "pointer", fontSize: 18 }}>×</button>
             </div>
@@ -602,27 +769,73 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
               </div>
             </div>
           ))}
-          <div style={{ maxHeight: 420, overflowY: "auto" }}>
+          <div>
             {claims.length === 0 && <div style={{ padding: 16, color: c.muted, fontSize: 13 }}>No claims match.</div>}
-            {claims.map((cl) => (
-              <div key={cl.id} style={{ padding: "11px 14px", borderBottom: "1px solid " + c.lineSoft }}>
-                <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
-                  <Chip color={c.accentText}>L{cl.depth}</Chip>
-                  <Chip>{cl.type}</Chip>
-                  <Chip color={c.faint}>v{cl.version}</Chip>
-                  {cl.status === "verified" ? <Chip color={c.green}>✓ verified</Chip>
-                    : cl.status === "pending" ? <Chip color={c.amber}>pending</Chip>
-                    : <Chip color={c.faint}>{cl.status}</Chip>}
-                  {(cl.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
+            {claims.map((cl) => {
+              const busy = actioning.has(cl.id);
+              return (
+                <div key={cl.id} style={{ padding: "11px 14px", borderBottom: "1px solid " + c.lineSoft, opacity: busy ? 0.5 : 1, transition: "opacity 0.15s" }}>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+                    <Chip color={c.accentText}>L{cl.depth}</Chip>
+                    <Chip>{cl.type}</Chip>
+                    <Chip color={c.faint}>v{cl.version}</Chip>
+                    {cl.status === "verified" ? <Chip color={c.green}>✓ verified</Chip>
+                      : cl.status === "pending" ? <Chip color={c.amber}>pending</Chip>
+                      : <Chip color={c.faint}>{cl.status}</Chip>}
+                    {(cl.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
+                  </div>
+                  <div style={{ fontSize: 13, lineHeight: 1.55 }}>{cl.text}</div>
+                  <div style={{ display: "flex", gap: 6, marginTop: 7, justifyContent: "flex-end" }}>
+                    {busy ? (
+                      <span style={{ fontFamily: mono, fontSize: 12, color: c.muted }}>…</span>
+                    ) : cl.status === "pending" ? (
+                      <>
+                        <Btn small primary onClick={() => verify(cl.id)}>Verify</Btn>
+                        <CountdownBtn small onClick={() => rejectWithConfirm(cl.id)} countdown={rejectConfirm.has(cl.id)}>
+                          {rejectConfirm.has(cl.id) ? "Confirm reject?" : "Reject"}
+                        </CountdownBtn>
+                      </>
+                    ) : null}
+                    <Btn small disabled={busy} onClick={async () => !busy && setHistory(await api(`/claims/${cl.claim_key}/history`))}>History</Btn>
+                  </div>
                 </div>
-                <div style={{ fontSize: 13, lineHeight: 1.55 }}>{cl.text}</div>
-                <div style={{ display: "flex", gap: 6, marginTop: 7, justifyContent: "flex-end" }}>
-                  {cl.status === "pending" && <Btn small primary onClick={() => verify(cl.id)}>Verify</Btn>}
-                  <Btn small onClick={async () => setHistory(await api(`/claims/${cl.claim_key}/history`))}>History</Btn>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
+
+          {dupOpen && duplicates.length > 0 && (
+            <div style={{ borderTop: "2px solid " + c.amber }}>
+              <div style={{ padding: "10px 14px", background: c.panel2, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontFamily: mono, fontSize: 11, color: c.amber, textTransform: "uppercase", letterSpacing: 0.6 }}>
+                  Duplicate claims — {duplicates.length} awaiting review
+                </span>
+                <span style={{ fontFamily: mono, fontSize: 11, color: c.faint }}>Promote to re-enter verify queue · Dismiss to confirm as duplicate</span>
+              </div>
+              {duplicates.map((cl) => {
+                const busy = actioning.has(cl.id);
+                return (
+                  <div key={cl.id} style={{ padding: "11px 14px", borderBottom: "1px solid " + c.lineSoft, background: c.panel2, opacity: busy ? 0.5 : 1, transition: "opacity 0.15s" }}>
+                    <div style={{ display: "flex", gap: 6, marginBottom: 6, flexWrap: "wrap" }}>
+                      <Chip color={c.accentText}>L{cl.depth}</Chip>
+                      <Chip>{cl.type}</Chip>
+                      <Chip color={c.amber}>duplicate</Chip>
+                    </div>
+                    <div style={{ fontSize: 13, lineHeight: 1.55 }}>{cl.text}</div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 7, justifyContent: "flex-end" }}>
+                      {busy ? (
+                        <span style={{ fontFamily: mono, fontSize: 12, color: c.muted }}>…</span>
+                      ) : (
+                        <>
+                          <Btn small primary onClick={() => promote(cl.id)}>Promote</Btn>
+                          <Btn small onClick={() => dismissDup(cl.id)}>Dismiss</Btn>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -643,33 +856,43 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
           ))}
         </div>
       )}
+
+      {undoToast && (
+        <div key={undoToast.label + undoToast.claimIds[0]} style={{ position: "fixed", bottom: 24, left: "50%", transform: "translateX(-50%)", zIndex: 9999, background: c.panel, border: "1px solid " + c.line, borderRadius: 8, boxShadow: "0 4px 18px rgba(0,0,0,0.22)", minWidth: 260, maxWidth: 400, overflow: "hidden" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px" }}>
+            <span style={{ flex: 1, fontSize: 13, color: c.text }}>{undoToast.label}</span>
+            <button
+              onClick={handleUndo}
+              style={{ fontFamily: sans, fontSize: 12, fontWeight: 600, cursor: "pointer", color: c.accentText, background: c.accentSoft, border: "1px solid " + c.accentDim, borderRadius: 4, padding: "4px 12px", whiteSpace: "nowrap" }}
+            >
+              Undo
+            </button>
+            <button
+              onClick={dismissUndoToast}
+              style={{ background: "transparent", border: "none", color: c.faint, cursor: "pointer", fontSize: 16, lineHeight: 1, padding: "0 2px" }}
+              aria-label="Dismiss"
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ height: 3, background: c.lineSoft }}>
+            <div key={undoToast.claimIds.join(",")} style={{ height: "100%", background: c.accent, animation: "cd-shrink 5s linear forwards", transformOrigin: "left" }} />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 /* ============================== sources ============================= */
-function Sources({ onOpenCapability }) {
+function Sources() {
   const [sources, setSources] = useState([]);
   const [assets, setAssets] = useState([]);
-  const [allClaims, setAllClaims] = useState([]);
-  const [claimsBySource, setClaimsBySource] = useState({});
   const [pendingBySource, setPendingBySource] = useState({});
-  const [openSourceId, setOpenSourceId] = useState(null);
-  const [openDiagram, setOpenDiagram] = useState(null);
-  const [query, setQuery] = useState("");
-  const [tierFilter, setTierFilter] = useState("all");
-  const [communityOnly, setCommunityOnly] = useState(false);
-  const [activeOnly, setActiveOnly] = useState(true);
   const [err, setErr] = useState("");
   const refresh = useCallback(() => {
     api("/sources").then(setSources).catch((e) => setErr(e.message));
     api("/assets").then(setAssets).catch(() => {});
-    api("/claims?include_inactive=true").then((rows) => {
-      const by = {};
-      rows.forEach((cl) => { (by[cl.source_id] ||= []).push(cl); });
-      setAllClaims(rows);
-      setClaimsBySource(by);
-    }).catch(() => {});
     api("/claims?status=pending").then((rows) => {
       const by = {};
       rows.forEach((cl) => { by[cl.source_id] = (by[cl.source_id] || 0) + 1; });
@@ -685,223 +908,56 @@ function Sources({ onOpenCapability }) {
   };
   if (err) return <div style={{ color: c.red, fontSize: 13 }}>{err}</div>;
   if (!sources.length) return <Empty>No sources yet. Run <Code>/ingest &lt;url&gt;</Code> in Claude Code, then publish.</Empty>;
-
-  const q = query.trim().toLowerCase();
-  const claimMatches = (cl) =>
-    !q || cl.text.toLowerCase().includes(q) ||
-    (cl.tags || []).some((t) => t.toLowerCase().includes(q)) ||
-    cl.capability_id.toLowerCase().includes(q);
-  const sourceMatches = (s) => {
-    const sc = claimsBySource[s.id] || [];
-    return !q ||
-      (s.title || "").toLowerCase().includes(q) ||
-      (s.url || "").toLowerCase().includes(q) ||
-      (s.tags || []).some((t) => t.toLowerCase().includes(q)) ||
-      sc.some(claimMatches);
-  };
-  const filtered = sources.filter((s) =>
-    (!activeOnly || s.active) &&
-    (tierFilter === "all" || String(s.tier) === tierFilter) &&
-    (!communityOnly || isCommunitySource(s)) &&
-    sourceMatches(s)
-  );
-  const activeCount = sources.filter((s) => s.active).length;
-  const communityCount = sources.filter((s) => s.active && isCommunitySource(s)).length;
-  const visibleClaimCount = filtered.reduce((n, s) => n + (claimsBySource[s.id] || []).length, 0);
-  const openSource = sources.find((s) => s.id === openSourceId) || filtered[0];
-
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 12, boxShadow: c.shadow }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
-          <Chip color={c.accentText}>{activeCount} active sources</Chip>
-          <Chip color={c.accentText}>{communityCount} community blogs</Chip>
-          <Chip>{visibleClaimCount} visible claims</Chip>
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search sources and claims"
-            style={{ flex: "1 1 260px", fontFamily: sans, fontSize: 13, color: c.text, background: c.panel2, border: "1px solid " + c.line, borderRadius: 4, padding: "8px 10px", minWidth: 0 }}
-          />
-          <select
-            value={tierFilter}
-            onChange={(e) => setTierFilter(e.target.value)}
-            style={{ flex: "0 1 190px", fontFamily: sans, fontSize: 13, color: c.text, background: c.panel2, border: "1px solid " + c.line, borderRadius: 4, padding: "8px 10px", minWidth: 150 }}>
-            <option value="all">All tiers</option>
-            {[1, 2, 3, 4, 5, 6].map((t) => <option key={t} value={String(t)}>T{t} · {TIER_LABELS[t]}</option>)}
-          </select>
-          <label style={{ display: "flex", gap: 6, alignItems: "center", color: c.muted, fontSize: 12, whiteSpace: "nowrap" }}>
-            <input type="checkbox" checked={communityOnly} onChange={(e) => setCommunityOnly(e.target.checked)} />
-            Community blogs
-          </label>
-          <label style={{ display: "flex", gap: 6, alignItems: "center", color: c.muted, fontSize: 12, whiteSpace: "nowrap" }}>
-            <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} />
-            Active only
-          </label>
-        </div>
-      </div>
-
-      {!filtered.length && <Empty>No sources match the current filters.</Empty>}
-
-      {filtered.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 14, alignItems: "start" }}>
-          <div style={{ display: "grid", gap: 8, maxHeight: 760, overflowY: "auto" }}>
-            {filtered.map((s) => {
-              const sc = claimsBySource[s.id] || [];
-              const pending = pendingBySource[s.id] || 0;
-              const verified = sc.filter((cl) => cl.status === "verified").length;
-              return (
-                <button key={s.id} onClick={() => setOpenSourceId(s.id)}
-                  style={{ textAlign: "left", cursor: "pointer", border: "1px solid " + (openSource?.id === s.id ? c.accent : c.line), borderRadius: 8, background: openSource?.id === s.id ? c.accentSoft : c.panel, padding: 12, boxShadow: c.shadow }}>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 7 }}>
-                    <Chip color={TIER_COLORS[s.tier]}>T{s.tier}</Chip>
-                    {isCommunitySource(s) && <Chip color={c.accentText}>community blog</Chip>}
-                    {!s.active && <Chip color={c.faint}>superseded</Chip>}
+      {sources.map((s) => {
+        const sa = assets.filter((a) => a.source_id === s.id);
+        const pending = pendingBySource[s.id] || 0;
+        return (
+          <div key={s.id} style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 14, boxShadow: c.shadow }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <Chip color={TIER_COLORS[s.tier]}>{`T${s.tier} · ${TIER_LABELS[s.tier] || ""}`}</Chip>
+              <Chip color={c.faint}>v{s.version}</Chip>
+              {!s.active && <Chip color={c.faint}>superseded</Chip>}
+              <span style={{ fontWeight: 600, fontSize: 14 }}>{s.title}</span>
+              {(s.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
+              {pending > 0 && (
+                <span style={{ marginLeft: "auto" }}>
+                  <Btn small primary onClick={() => verifySource(s.id)}>Verify {pending} pending</Btn>
+                </span>
+              )}
+            </div>
+            {s.url && <a href={s.url} target="_blank" rel="noreferrer" style={{ fontFamily: mono, fontSize: 11, color: c.faint, display: "block", marginTop: 6, textDecoration: "none" }}>{s.url}</a>}
+            {sa.length > 0 && (
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
+                {sa.map((a) => (
+                  <div key={a.id} style={{ border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 10, maxWidth: 280, background: c.panel2 }}>
+                    {a.kind === "generated" && a.path
+                      ? <img src={"/" + a.path.replace(/^\//, "")} alt={a.caption} style={{ maxWidth: "100%", borderRadius: 4, background: c.diagramBg }} onError={(e) => { e.target.style.display = "none"; }} />
+                      : null}
+                    <div style={{ fontSize: 12, color: c.text, marginTop: 6 }}>{a.caption}</div>
+                    {a.kind === "referenced" ? (
+                      <div style={{ fontSize: 11, color: c.faint, marginTop: 4 }}>
+                        <a href={a.url} target="_blank" rel="noreferrer" style={{ color: c.accentText }}>View original ↗</a> · {a.attribution}
+                      </div>
+                    ) : (
+                      <Chip color={c.green}>original diagram</Chip>
+                    )}
                   </div>
-                  <div style={{ fontWeight: 600, fontSize: 13, color: c.text, lineHeight: 1.35 }}>{s.title}</div>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
-                    <Chip color={sc.length ? c.accentText : c.faint}>{sc.length} claims</Chip>
-                    <Chip color={verified ? c.green : c.faint}>{verified} verified</Chip>
-                    {pending > 0 && <Chip color={c.amber}>{pending} pending</Chip>}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <SourceReader
-            source={openSource}
-            claims={claimsBySource[openSource?.id] || []}
-            allClaims={allClaims}
-            sources={sources}
-            assets={assets}
-            onVerifySource={verifySource}
-            onOpenDiagram={setOpenDiagram}
-            onOpenCapability={onOpenCapability}
-          />
-        </div>
-      )}
-      <DiagramPanel
-        asset={openDiagram}
-        claims={allClaims}
-        sources={sources}
-        sourceClaims={claimsBySource[openDiagram?.source_id] || []}
-        onClose={() => setOpenDiagram(null)}
-        onOpenSource={setOpenSourceId}
-        onOpenCapability={onOpenCapability}
-      />
-    </div>
-  );
-}
-
-function SourceReader({ source, claims, allClaims, sources, assets, onVerifySource, onOpenDiagram, onOpenCapability }) {
-  if (!source) return null;
-  const pending = claims.filter((cl) => cl.status === "pending");
-  const verified = claims.filter((cl) => cl.status === "verified");
-  const capabilityIds = [...new Set(claims.map((cl) => cl.capability_id))];
-  const sourceAssets = assets.filter((a) => a.source_id === source.id);
-  const capabilityDiagrams = assets.filter((a) => a.kind === "generated" && a.path && !a.source_id && !a.design_id && capabilityIds.includes(a.capability_id));
-  const diagrams = [...sourceAssets.filter((a) => a.kind === "generated" && a.path), ...capabilityDiagrams]
-    .filter((a, i, arr) => arr.findIndex((x) => x.id === a.id) === i);
-  const referenced = sourceAssets.filter((a) => a.kind === "referenced");
-  const grouped = capabilityIds.map((id) => [id, claims.filter((cl) => cl.capability_id === id)]);
-  return (
-    <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, boxShadow: c.shadow, overflow: "hidden" }}>
-      <div style={{ padding: 16, borderBottom: "1px solid " + c.line }}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
-          <Chip color={TIER_COLORS[source.tier]}>{`T${source.tier} · ${TIER_LABELS[source.tier] || ""}`}</Chip>
-          {isCommunitySource(source) && <Chip color={c.accentText}>community blog</Chip>}
-          <Chip color={source.active ? c.green : c.faint}>{source.active ? "active" : "superseded"}</Chip>
-          <Chip color={c.faint}>v{source.version}</Chip>
-        </div>
-        <div style={{ fontSize: 19, fontWeight: 650, lineHeight: 1.25 }}>{source.title}</div>
-        {source.url && <a href={source.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, fontFamily: mono, fontSize: 11, color: c.accentText, textDecorationColor: c.accentDim }}>Open original source</a>}
-      </div>
-      <div style={{ padding: 16, display: "grid", gap: 16 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
-          <div style={{ background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 10 }}><Chip color={c.accentText}>{claims.length} extracted claims</Chip></div>
-          <div style={{ background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 10 }}><Chip color={c.green}>{verified.length} verified</Chip></div>
-          <div style={{ background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 10 }}><Chip color={pending.length ? c.amber : c.faint}>{pending.length} pending</Chip></div>
-        </div>
-        {pending.length > 0 && <Btn small primary onClick={() => onVerifySource(source.id)}>Verify {pending.length} pending claims</Btn>}
-
-        <section>
-          <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>READER SUMMARY</div>
-          <div style={{ fontSize: 13.5, lineHeight: 1.65 }}>{source.summary || "This source has not yet been summarized. Re-run ingestion with reader metadata to populate the summary, audience, why-it-matters note, and key takeaways."}</div>
-        </section>
-        {(source.audience || source.why_it_matters) && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
-            {source.audience && (
-              <section style={{ background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 12 }}>
-                <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>AUDIENCE</div>
-                <div style={{ fontSize: 13, lineHeight: 1.55 }}>{source.audience}</div>
-              </section>
-            )}
-            {source.why_it_matters && (
-              <section style={{ background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 12 }}>
-                <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>WHY IT MATTERS</div>
-                <div style={{ fontSize: 13, lineHeight: 1.55 }}>{source.why_it_matters}</div>
-              </section>
-            )}
-          </div>
-        )}
-        {(source.takeaways || []).length > 0 && (
-          <section>
-            <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>KEY TAKEAWAYS</div>
-            <div style={{ display: "grid", gap: 7 }}>
-              {source.takeaways.map((t, i) => (
-                <div key={i} style={{ border: "1px solid " + c.lineSoft, borderRadius: 6, padding: "8px 10px", background: c.panel2, fontSize: 13, lineHeight: 1.45 }}>{t}</div>
-              ))}
-            </div>
-          </section>
-        )}
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {(source.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
-          {capabilityIds.map((id) => <button key={id} onClick={() => onOpenCapability?.(id)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}><Chip color={c.accentText}>{capName(id)}</Chip></button>)}
-        </div>
-        {diagrams.length > 0 && (
-          <section>
-            <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>RELATED GENERATED DIAGRAMS</div>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-              {diagrams.map((a) => <DiagramThumb key={a.id} asset={a} onClick={() => onOpenDiagram(a)} />)}
-            </div>
-          </section>
-        )}
-        {referenced.length > 0 && (
-          <section>
-            <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>REFERENCED SOURCE ASSETS</div>
-            <div style={{ display: "grid", gap: 8 }}>
-              {referenced.map((a) => (
-                <div key={a.id} style={{ border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 10, background: c.panel2 }}>
-                  <div style={{ fontSize: 13, lineHeight: 1.45 }}>{a.caption}</div>
-                  <div style={{ fontSize: 11, color: c.faint, marginTop: 4 }}><a href={a.url} target="_blank" rel="noreferrer" style={{ color: c.accentText }}>View original</a> · {a.attribution}</div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-        <section>
-          <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>CLAIMS BY CAPABILITY</div>
-          <div style={{ display: "grid", gap: 12 }}>
-            {grouped.map(([id, rows]) => (
-              <div key={id}>
-                <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 7 }}>
-                  <button onClick={() => onOpenCapability?.(id)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}><Chip color={c.accentText}>{capName(id)}</Chip></button>
-                  <Chip>{rows.length} claims</Chip>
-                </div>
-                <ClaimRows claims={rows} />
+                ))}
               </div>
-            ))}
+            )}
           </div>
-        </section>
-      </div>
+        );
+      })}
     </div>
   );
 }
 
 /* ============================== designs ============================= */
 function Designs() {
+  const w = useWindowWidth();
+  const isMobile = w < MOBILE;
   const [designs, setDesigns] = useState([]);
   const [open, setOpen] = useState(null);     // full design detail
   const [runs, setRuns] = useState([]);
@@ -918,30 +974,41 @@ function Designs() {
     try { await api(`/designs/${open.id}/validate`, { method: "POST", body: JSON.stringify({}) }); await view(open.id); refresh(); }
     finally { setBusy(false); }
   };
+  const closeDetail = () => setOpen(null);
 
   if (!designs.length) return <Empty>No designs yet. Run <Code>/design &lt;scenario&gt;</Code> in Claude Code.</Empty>;
 
+  // On mobile: show list OR detail (never both simultaneously)
+  const showList = !isMobile || !open;
+  const showDetail = !!open;
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: open ? "minmax(260px, 320px) 1fr" : "1fr", gap: 16 }}>
-      <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
-        {designs.map((d) => (
-          <button key={d.id} onClick={() => view(d.id)} style={{ textAlign: "left", cursor: "pointer", background: open?.id === d.id ? c.accentSoft : c.panel, border: "1px solid " + (open?.id === d.id ? c.accent : c.line), borderRadius: 8, padding: 12, boxShadow: c.shadow }}>
-            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: c.text }}>{d.title || d.scenario.slice(0, 50)}</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              <Chip color={d.status === "validated" ? c.green : d.status === "needs_review" ? c.red : c.amber}>{d.status}</Chip>
-              {d.confidence != null && <Chip color={c.accentText}>{Math.round(d.confidence * 100)}%</Chip>}
-              {(d.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
-            </div>
-          </button>
-        ))}
-      </div>
-      {open && (
-        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 18, boxShadow: c.shadow }}>
+    <div style={isMobile ? {} : { display: "grid", gridTemplateColumns: open ? "minmax(260px, 320px) 1fr" : "1fr", gap: 16 }}>
+      {showList && (
+        <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
+          {designs.map((d) => (
+            <button key={d.id} onClick={() => view(d.id)} style={{ textAlign: "left", cursor: "pointer", background: open?.id === d.id ? c.accentSoft : c.panel, border: "1px solid " + (open?.id === d.id ? c.accent : c.line), borderRadius: 8, padding: 12, boxShadow: c.shadow }}>
+              <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, color: c.text }}>{d.title || d.scenario.slice(0, 50)}</div>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                <Chip color={d.status === "validated" ? c.green : d.status === "needs_review" ? c.red : c.amber}>{d.status}</Chip>
+                {d.confidence != null && <Chip color={c.accentText}>{Math.round(d.confidence * 100)}%</Chip>}
+                {d.ready_to_share && <Chip color={c.green}>✓ ready</Chip>}
+                {(d.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {showDetail && (
+        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: isMobile ? 14 : 18, boxShadow: c.shadow }}>
+          {isMobile && (
+            <button onClick={closeDetail} style={{ background: "transparent", border: "none", color: c.accentText, cursor: "pointer", fontFamily: sans, fontSize: 13, fontWeight: 600, padding: "0 0 12px", display: "block" }}>← Back to designs</button>
+          )}
           <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
             <span style={{ fontWeight: 600 }}>{open.title}</span>
             <div style={{ display: "flex", gap: 8 }}>
               <Btn small primary onClick={validate} disabled={busy}>{busy ? "Validating…" : "Run validation"}</Btn>
-              <Btn small onClick={() => setOpen(null)}>Close</Btn>
+              {!isMobile && <Btn small onClick={closeDetail}>Close</Btn>}
             </div>
           </div>
           <div style={{ fontSize: 12, color: c.muted, marginBottom: 10 }}>{open.scenario}</div>
@@ -957,7 +1024,7 @@ function Designs() {
                   <Chip color={c.accentText}>confidence {Math.round(r.confidence * 100)}%</Chip>
                   <div style={{ marginTop: 6, display: "grid", gap: 5 }}>
                     {r.issues.map((i) => (
-                      <div key={i.id} style={{ fontSize: 12, display: "flex", gap: 8 }}>
+                      <div key={i.id} style={{ fontSize: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <Chip color={SEV_COLORS[i.severity]}>{i.severity}</Chip>
                         <Chip>{i.validator}</Chip>
                         <span style={{ color: c.text }}>{i.message}</span>
@@ -978,159 +1045,60 @@ function Designs() {
 /* Lessons are authored by the learning-author agent into content/lessons/
    (grounded in verified claims only) and served statically by the backend.
    This tab lists and renders them. */
-function Learn({ onOpenCapability }) {
+function Learn() {
+  const w = useWindowWidth();
+  const isMobile = w < MOBILE;
   const [files, setFiles] = useState(null);   // null = loading
   const [open, setOpen] = useState(null);     // { name, md }
-  const [cap, setCap] = useState("lakehouse");
-  const [claims, setClaims] = useState([]);
-  const [sources, setSources] = useState([]);
-  const [assets, setAssets] = useState([]);
-  const [openDiagram, setOpenDiagram] = useState(null);
   useEffect(() => {
     api("/lessons/files").then(setFiles).catch(() => setFiles([]));
-    api("/claims?include_inactive=true").then(setClaims).catch(() => setClaims([]));
-    api("/sources").then(setSources).catch(() => setSources([]));
-    api("/assets").then(setAssets).catch(() => setAssets([]));
   }, []);
 
   const view = async (f) => {
     const res = await fetch("/" + f.path.replace(/^\//, ""));
     setOpen({ name: f.name, md: res.ok ? await res.text() : "Could not load lesson." });
   };
+  const closeLesson = () => setOpen(null);
 
   if (files === null) return null;
-  const capClaims = claims.filter((cl) => cl.capability_id === cap && cl.active !== false);
-  const verified = capClaims.filter((cl) => cl.status === "verified");
-  const pendingCommunity = capClaims.filter((cl) => cl.status === "pending" && isCommunitySource(sources.find((s) => s.id === cl.source_id)));
-  const capSourceIds = [...new Set(capClaims.map((cl) => cl.source_id))];
-  const capSources = capSourceIds.map((id) => sources.find((s) => s.id === id)).filter(Boolean);
-  const capDiagrams = assets.filter((a) => a.kind === "generated" && a.path && a.capability_id === cap);
-  const capFiles = (files || []).filter((f) => f.name.toLowerCase().startsWith(cap.toLowerCase() + "-"));
-  const beginner = verified.filter((cl) => cl.depth <= 2).length;
-  const intermediate = verified.filter((cl) => cl.depth === 3).length;
-  const expert = verified.filter((cl) => cl.depth >= 4).length;
+  if (!files.length) {
+    return (
+      <Empty>
+        No lessons yet. Verify claims in the Registry, then in Claude Code run{" "}
+        <Code>/lesson &lt;capability&gt; &lt;Beginner|Intermediate|Expert&gt;</Code> —
+        lessons are grounded only in approved claims (Beginner=L1–L2, Intermediate=L3, Expert=L4–L5).
+      </Empty>
+    );
+  }
+
+  // On mobile: show list OR lesson (never both simultaneously)
+  const showList = !isMobile || !open;
+  const showDetail = !!open;
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: open ? "repeat(auto-fit, minmax(min(100%, 320px), 1fr))" : "1fr", gap: 16 }}>
-      <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
-        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 14, boxShadow: c.shadow }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
-            <div>
-              <div style={{ fontWeight: 650, fontSize: 15 }}>{capName(cap)}</div>
-              <div style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>Learning view over verified claims, source summaries, and diagrams.</div>
-            </div>
-            <select value={cap} onChange={(e) => { setCap(e.target.value); setOpen(null); }} style={{ fontFamily: sans, fontSize: 13, color: c.text, background: c.panel2, border: "1px solid " + c.line, borderRadius: 4, padding: "8px 10px", maxWidth: 260 }}>
-              {CAPABILITIES.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
-            </select>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <Chip color={c.green}>{verified.length} verified claims</Chip>
-            <Chip color={pendingCommunity.length ? c.amber : c.faint}>{pendingCommunity.length} pending community insights</Chip>
-            <Chip color={capDiagrams.length ? c.accentText : c.faint}>{capDiagrams.length} diagrams</Chip>
-            <Btn small onClick={() => onOpenCapability?.(cap)}>Open Registry</Btn>
-          </div>
-        </div>
-
-        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 14, boxShadow: c.shadow }}>
-          <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>LESSON READINESS</div>
-          <div style={{ display: "grid", gap: 7 }}>
-            {[
-              ["Beginner", beginner, "L1-L2"],
-              ["Intermediate", intermediate, "L3"],
-              ["Expert", expert, "L4-L5"],
-            ].map(([level, count, depths]) => (
-              <div key={level} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", border: "1px solid " + c.lineSoft, borderRadius: 6, padding: "8px 10px", background: c.panel2 }}>
-                <span style={{ fontSize: 13 }}>{level} <span style={{ color: c.faint }}>({depths})</span></span>
-                <Chip color={count ? c.green : c.amber}>{count} verified</Chip>
-              </div>
-            ))}
-          </div>
-          {verified.length === 0 && (
-            <div style={{ color: c.muted, fontSize: 13, lineHeight: 1.55, marginTop: 10 }}>
-              This capability has no verified claims yet. Verify relevant claims first, then run <Code>/lesson {cap} &lt;level&gt;</Code>.
-            </div>
-          )}
-        </div>
-
-        {capFiles.length > 0 ? (
-          <div style={{ display: "grid", gap: 8 }}>
-            {capFiles.map((f) => (
-              <button key={f.name} onClick={() => view(f)} style={{ textAlign: "left", cursor: "pointer", background: open?.name === f.name ? c.accentSoft : c.panel, border: "1px solid " + (open?.name === f.name ? c.accent : c.line), borderRadius: 8, padding: 12, boxShadow: c.shadow }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: c.text }}>{f.name.replace(/\.md$/, "").replace(/-/g, " ")}</div>
-                <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginTop: 4 }}>{f.path}</div>
-              </button>
-            ))}
-          </div>
-        ) : (
-          <Empty>No generated lessons for this capability yet.</Empty>
-        )}
-      </div>
-
-      <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 16, boxShadow: c.shadow }}>
-        {open ? (
-          <>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={{ fontWeight: 600 }}>{open.name}</span>
-              <Btn small onClick={() => setOpen(null)}>Close</Btn>
-            </div>
-            <Md text={open.md} />
-          </>
-        ) : (
-          <div style={{ display: "grid", gap: 16 }}>
-            {capDiagrams.length > 0 && (
-              <section>
-                <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>RELATED DIAGRAMS</div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  {capDiagrams.map((a) => <DiagramThumb key={a.id} asset={a} onClick={() => setOpenDiagram(a)} />)}
-                </div>
-              </section>
-            )}
-            <section>
-              <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>SOURCE SUMMARIES</div>
-              {capSources.length === 0 ? <div style={{ color: c.muted, fontSize: 13 }}>No sources for this capability yet.</div> : (
-                <div style={{ display: "grid", gap: 8 }}>
-                  {capSources.slice(0, 8).map((s) => (
-                    <div key={s.id} style={{ border: "1px solid " + c.lineSoft, borderRadius: 6, background: c.panel2, padding: 10 }}>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 5 }}>
-                        <Chip color={TIER_COLORS[s.tier]}>T{s.tier}</Chip>
-                        {isCommunitySource(s) && <Chip color={c.accentText}>community blog</Chip>}
-                      </div>
-                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{s.title}</div>
-                      <div style={{ fontSize: 12.5, color: c.text, lineHeight: 1.5 }}>{s.summary || "Not yet summarized."}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
-            <section>
-              <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>VERIFIED LEARNING CLAIMS</div>
-              <ClaimRows claims={verified.slice(0, 12)} compact />
-            </section>
-            {pendingCommunity.length > 0 && (
-              <section>
-                <div style={{ fontFamily: mono, fontSize: 11, color: c.amber, marginBottom: 8 }}>PENDING COMMUNITY INSIGHTS</div>
-                <ClaimRows claims={pendingCommunity.slice(0, 8)} compact />
-              </section>
-            )}
-          </div>
-        )}
-      </div>
-
-      {!files.length && (
-        <div style={{ gridColumn: "1 / -1" }}>
-          <Empty>
-            No lesson files yet. Verify claims in the Registry, then in Claude Code run{" "}
-            <Code>/lesson &lt;capability&gt; &lt;Beginner|Intermediate|Expert&gt;</Code>.
-          </Empty>
+    <div style={isMobile ? {} : { display: "grid", gridTemplateColumns: open ? "minmax(240px, 300px) 1fr" : "1fr", gap: 16 }}>
+      {showList && (
+        <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
+          {files.map((f) => (
+            <button key={f.name} onClick={() => view(f)} style={{ textAlign: "left", cursor: "pointer", background: open?.name === f.name ? c.accentSoft : c.panel, border: "1px solid " + (open?.name === f.name ? c.accent : c.line), borderRadius: 8, padding: 12, boxShadow: c.shadow }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: c.text }}>{f.name.replace(/\.md$/, "").replace(/-/g, " ")}</div>
+              <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginTop: 4 }}>{f.path}</div>
+            </button>
+          ))}
         </div>
       )}
-      <DiagramPanel
-        asset={openDiagram}
-        claims={claims}
-        sources={sources}
-        onClose={() => setOpenDiagram(null)}
-        onOpenCapability={onOpenCapability}
-      />
+      {showDetail && (
+        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: isMobile ? 14 : 18, boxShadow: c.shadow }}>
+          {isMobile && (
+            <button onClick={closeLesson} style={{ background: "transparent", border: "none", color: c.accentText, cursor: "pointer", fontFamily: sans, fontSize: 13, fontWeight: 600, padding: "0 0 12px", display: "block" }}>← Back to lessons</button>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
+            <span style={{ fontWeight: 600 }}>{open.name}</span>
+            {!isMobile && <Btn small onClick={closeLesson}>Close</Btn>}
+          </div>
+          <Md text={open.md} />
+        </div>
+      )}
     </div>
   );
 }

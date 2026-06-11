@@ -234,6 +234,99 @@ def test_validation_statuses(client):
     assert client.get(f"/designs/{did}").json()["status"] == "needs_review"
 
 
+# ------------------------------------------------------------------- reject
+def test_reject_happy_path(client):
+    res = client.post("/sources/ingest", json=_payload()).json()
+    cid = res["claims"][0]["id"]
+    r = client.post(f"/claims/{cid}/reject")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "rejected"
+    assert body["active"] is False
+
+
+def test_reject_inactive_claim_returns_409(client):
+    res = client.post("/sources/ingest", json=_payload()).json()
+    cid = res["claims"][0]["id"]
+    with Session(client.engine) as s:
+        c = s.get(Claim, cid)
+        c.active, c.status = False, "deprecated"
+        s.add(c)
+        s.commit()
+    assert client.post(f"/claims/{cid}/reject").status_code == 409
+
+
+def test_reject_verified_claim_returns_409(client):
+    res = client.post("/sources/ingest", json=_payload()).json()
+    cid = res["claims"][0]["id"]
+    client.post(f"/claims/{cid}/verify")
+    assert client.post(f"/claims/{cid}/reject").status_code == 409
+
+
+def test_reject_not_found_returns_404(client):
+    assert client.post("/claims/nonexistent-id/reject").status_code == 404
+
+
+# ---------------------------------------------------------------- reject-bulk
+def test_reject_bulk_by_source_id(client):
+    res = client.post("/sources/ingest", json=_payload(texts=["A.", "B.", "C."])).json()
+    sid = res["source_id"]
+    r = client.post("/claims/reject-bulk", json={"source_id": sid}).json()
+    assert r["rejected"] == 3
+    assert len(r["skipped"]) == 0
+    active = client.get("/claims").json()
+    assert active == []
+
+
+def test_reject_bulk_by_claim_ids(client):
+    res = client.post("/sources/ingest", json=_payload(texts=["X.", "Y.", "Z."])).json()
+    all_ids = [c["id"] for c in res["claims"]]
+    ids_to_reject = all_ids[:2]
+    r = client.post("/claims/reject-bulk", json={"claim_ids": ids_to_reject}).json()
+    assert r["rejected"] == 2
+    assert len(r["rejected_ids"]) == 2
+    remaining = client.get("/claims").json()
+    assert len(remaining) == 1
+
+
+def test_reject_bulk_skips_non_pending(client):
+    res = client.post("/sources/ingest", json=_payload(texts=["P.", "Q."])).json()
+    sid = res["source_id"]
+    cids = [c["id"] for c in res["claims"]]
+    client.post(f"/claims/{cids[0]}/verify")
+    r = client.post("/claims/reject-bulk", json={"source_id": sid}).json()
+    assert r["rejected"] == 1
+    assert len(r["skipped"]) == 1
+
+
+# ------------------------------------------------------------------- promote
+def test_promote_duplicate_to_pending(client):
+    text = "Direct Lake loads column data straight from Delta tables in OneLake."
+    client.post("/sources/ingest", json=_payload(capability="direct-lake", texts=[text]))
+    res = client.post("/sources/ingest", json=_payload(
+        url="https://blog.fabric.microsoft.com/direct-lake-deep-dive",
+        title="Direct Lake deep dive", tier=2, capability="direct-lake",
+        texts=["Direct Lake loads column data straight from Delta tables in "
+               "OneLake storage."])).json()
+    assert len(res["duplicates"]) == 1
+    dup_id = res["duplicates"][0]["claim_id"]
+    r = client.post(f"/claims/{dup_id}/promote")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "pending"
+    assert body["active"] is True
+
+
+def test_promote_non_duplicate_returns_409(client):
+    res = client.post("/sources/ingest", json=_payload()).json()
+    cid = res["claims"][0]["id"]
+    assert client.post(f"/claims/{cid}/promote").status_code == 409
+
+
+def test_promote_not_found_returns_404(client):
+    assert client.post("/claims/nonexistent-id/promote").status_code == 404
+
+
 def test_validation_flags_missing_and_superseded_sources(client):
     res = client.post("/sources/ingest", json=_payload(texts=["Fact one."])).json()
     did = client.post("/designs", json={

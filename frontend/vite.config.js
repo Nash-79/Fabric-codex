@@ -8,7 +8,9 @@ const paths = ["/sources", "/claims", "/designs", "/assets", "/tags", "/coverage
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: Number(process.env.PORT) || 5173,
+    host: "0.0.0.0",
+    port: 5000,
+    allowedHosts: true,
     proxy: Object.fromEntries(paths.map((p) => [p, { target: backend, changeOrigin: true }])),
   },
 });

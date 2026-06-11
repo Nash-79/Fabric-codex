@@ -1,0 +1,1 @@
+- [Production deployment setup](deployment-setup.md) — autoscale single-process: FastAPI serves built React SPA; build command installs all deps.

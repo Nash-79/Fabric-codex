@@ -11,14 +11,19 @@ Sections: helpers · ingestion · versioning · assets · generation · validati
 from __future__ import annotations
 import hashlib
 import json
+import logging
 import re
 from difflib import SequenceMatcher
+
 from typing import Optional
 from sqlmodel import Session, select
 from app import llm
 from app.db import LLM_MODE
-from app.models import (Source, Claim, Design, ValidationRun, Issue, Asset,
-                        dump_list, dump_tags, load_list, load_tags)
+
+from app.models import (Source, Claim, ClaimEvent, Design, ValidationRun, Issue, Asset,
+                        dump_tags, load_tags)
+
+log = logging.getLogger(__name__)
 
 SAME = 0.85
 CHANGED = 0.55
@@ -118,46 +123,19 @@ def _resolve_claims(content: str, provided: Optional[list[dict]]) -> list[dict]:
         "`claims`. (Set LLM_MODE=api to extract server-side from `content`.)")
 
 
-def _set_source_metadata(source: Source, summary: str = "", audience: str = "",
-                         why_it_matters: str = "",
-                         takeaways: Optional[list[str]] = None,
-                         tags: Optional[list[str]] = None) -> bool:
-    changed = False
-    updates = {
-        "summary": summary or "",
-        "audience": audience or "",
-        "why_it_matters": why_it_matters or "",
-        "takeaways_json": dump_list(takeaways),
-    }
-    if tags is not None:
-        updates["tags_json"] = dump_tags(tags)
-    for attr, value in updates.items():
-        if getattr(source, attr) != value:
-            setattr(source, attr, value)
-            changed = True
-    return changed
-
-
 def ingest_source(session: Session, url: str, title: str, tier: int, content: str = "",
                   claims: Optional[list[dict]] = None, tags: Optional[list[str]] = None,
-                  assets: Optional[list[dict]] = None, summary: str = "",
-                  audience: str = "", why_it_matters: str = "",
-                  takeaways: Optional[list[str]] = None) -> dict:
+                  assets: Optional[list[dict]] = None) -> dict:
     key = slugify(url or title)
     existing = session.exec(
         select(Source).where(Source.source_key == key, Source.active == True)).first()  # noqa: E712
     if existing:
         return detect_drift(session, key, content=content, claims=claims,
-                            url=url, title=title, tier=tier, tags=tags, assets=assets,
-                            summary=summary, audience=audience,
-                            why_it_matters=why_it_matters, takeaways=takeaways)
+                            url=url, title=title, tier=tier, tags=tags, assets=assets)
 
     extracted = _resolve_claims(content, claims)   # may raise — do it before any writes
     src = Source(source_key=key, version=1, url=url, title=title or url or key, tier=tier,
                  content_hash=_source_fingerprint(content, claims),
-                 summary=summary or "", audience=audience or "",
-                 why_it_matters=why_it_matters or "",
-                 takeaways_json=dump_list(takeaways),
                  tags_json=dump_tags(tags), active=True)
     session.add(src)
     session.commit()
@@ -172,6 +150,22 @@ def ingest_source(session: Session, url: str, title: str, tier: int, content: st
 
 
 # --------------------------------------------------------------- versioning
+def _record_event(session: Session, claim: Claim, action: str, prev_status: str) -> None:
+    """Append one ClaimEvent row for every human curation action.
+    Called after the claim status has already been updated so claim.status
+    reflects the new state."""
+    ev = ClaimEvent(
+        claim_id=claim.id,
+        claim_key=claim.claim_key,
+        capability_id=claim.capability_id,
+        action=action,
+        prev_status=prev_status,
+        new_status=claim.status,
+        text_snippet=claim.text[:120],
+    )
+    session.add(ev)
+
+
 def verify_claim(session: Session, claim_id: str) -> Optional[Claim]:
     c = session.get(Claim, claim_id)
     if not c:
@@ -179,8 +173,10 @@ def verify_claim(session: Session, claim_id: str) -> Optional[Claim]:
     if not c.active:
         raise ValueError(f"Claim {claim_id} is {c.status} (inactive); "
                          "only active claims can be verified.")
+    prev = c.status
     c.status = "verified"
     c.confidence = max(c.confidence, 0.85)
+    _record_event(session, c, "verified", prev)
     session.add(c)
     session.commit()
     session.refresh(c)
@@ -201,14 +197,147 @@ def verify_claims_bulk(session: Session, source_id: Optional[str] = None,
     verified, skipped = [], []
     for c in rows:
         if c.active and c.status == "pending":
+            prev = c.status
             c.status = "verified"
             c.confidence = max(c.confidence, 0.85)
+            _record_event(session, c, "verified", prev)
             session.add(c)
             verified.append(c.id)
         else:
             skipped.append({"claim_id": c.id, "status": c.status, "active": c.active})
     session.commit()
     return {"verified": len(verified), "verified_ids": verified, "skipped": skipped}
+
+
+def reject_claim(session: Session, claim_id: str) -> Optional[Claim]:
+    """Human dismissal: mark a pending active claim as rejected and deactivate it.
+    Only active claims with status='pending' may be rejected via this path;
+    use dismiss_duplicate_claim() for inactive duplicate claims."""
+    c = session.get(Claim, claim_id)
+    if not c:
+        return None
+    if not c.active or c.status != "pending":
+        raise ValueError(f"Claim {claim_id} has status='{c.status}', active={c.active}; "
+                         "only active pending claims can be rejected. "
+                         "For duplicate claims use the /dismiss endpoint.")
+    prev = c.status
+    c.status = "rejected"
+    c.active = False
+    _record_event(session, c, "rejected", prev)
+    session.add(c)
+    session.commit()
+    session.refresh(c)
+    return c
+
+
+def dismiss_duplicate_claim(session: Session, claim_id: str) -> Optional[Claim]:
+    """Confirm an inactive duplicate claim as permanently dismissed (rejected).
+    Duplicate claims are stored inactive=False; dismiss sets status='rejected'
+    to make the human decision explicit and queryable."""
+    c = session.get(Claim, claim_id)
+    if not c:
+        return None
+    if c.status != "duplicate":
+        raise ValueError(f"Claim {claim_id} has status='{c.status}'; "
+                         "only duplicate claims can be dismissed via this endpoint.")
+    prev = c.status
+    c.status = "rejected"
+    c.active = False   # already False, but be explicit
+    _record_event(session, c, "dismissed", prev)
+    session.add(c)
+    session.commit()
+    session.refresh(c)
+    return c
+
+
+def reject_claims_bulk(session: Session, source_id: Optional[str] = None,
+                       claim_ids: Optional[list[str]] = None) -> dict:
+    """Reject all active pending claims for a source, or an explicit id list.
+    Inactive / non-pending claims are skipped."""
+    if source_id:
+        rows = session.exec(
+            select(Claim).where(Claim.source_id == source_id)).all()
+    elif claim_ids:
+        rows = [c for cid in claim_ids if (c := session.get(Claim, cid))]
+    else:
+        raise ValueError("Provide source_id or claim_ids.")
+    rejected, skipped = [], []
+    for c in rows:
+        if c.active and c.status == "pending":
+            prev = c.status
+            c.status = "rejected"
+            c.active = False
+            _record_event(session, c, "rejected", prev)
+            session.add(c)
+            rejected.append(c.id)
+        else:
+            skipped.append({"claim_id": c.id, "status": c.status, "active": c.active})
+    session.commit()
+    return {"rejected": len(rejected), "rejected_ids": rejected, "skipped": skipped}
+
+
+def revert_claims(session: Session, claim_ids: list[str]) -> dict:
+    """Revert a list of recently actioned claims back to pending/active.
+    Accepts claims that are currently verified (active=True) or rejected
+    (active=False). Used by the undo toast in the UI."""
+    reverted, skipped = [], []
+    for cid in claim_ids:
+        c = session.get(Claim, cid)
+        if not c:
+            skipped.append({"claim_id": cid, "reason": "not found"})
+            continue
+        if c.status not in ("verified", "rejected"):
+            skipped.append({"claim_id": cid, "reason": f"status={c.status!r} cannot be reverted"})
+            continue
+        prev = c.status
+        c.status = "pending"
+        c.active = True
+        _record_event(session, c, "reverted", prev)
+        session.add(c)
+        reverted.append(cid)
+    session.commit()
+    return {"reverted": len(reverted), "reverted_ids": reverted, "skipped": skipped}
+
+
+def promote_claim(session: Session, claim_id: str) -> Optional[Claim]:
+    """Promote a duplicate claim back to pending/active for human review.
+    Only claims with status='duplicate' and active=False may be promoted."""
+    c = session.get(Claim, claim_id)
+    if not c:
+        return None
+    if c.status != "duplicate":
+        raise ValueError(f"Claim {claim_id} has status '{c.status}'; "
+                         "only duplicate claims can be promoted.")
+    prev = c.status
+    c.status = "pending"
+    c.active = True
+    _record_event(session, c, "promoted", prev)
+    session.add(c)
+    session.commit()
+    session.refresh(c)
+    return c
+
+
+def recent_claim_events(session: Session, limit: int = 30) -> list[dict]:
+    """Return the most recent curation events across all claims, newest first."""
+    from app.models import ClaimEvent
+    rows = session.exec(
+        select(ClaimEvent).order_by(ClaimEvent.actioned_at.desc()).limit(limit)
+    ).all()
+    return [
+        {
+            "id": ev.id,
+            "claim_id": ev.claim_id,
+            "claim_key": ev.claim_key,
+            "capability_id": ev.capability_id,
+            "action": ev.action,
+            "prev_status": ev.prev_status,
+            "new_status": ev.new_status,
+            "text_snippet": ev.text_snippet,
+            "actioned_at": ev.actioned_at.isoformat(),
+        }
+        for ev in rows
+    ]
 
 
 def supersede_claim(session: Session, old: Claim, new_text: str, source: Source,
@@ -245,9 +374,48 @@ def claim_history(session: Session, claim_key: str) -> list[Claim]:
 # ------------------------------------------------------------------ assets
 def add_assets(session: Session, assets: Optional[list[dict]], source_id: Optional[str] = None,
                design_id: Optional[str] = None) -> list[Asset]:
+    """Insert assets, deduplicating by path (generated) or url (referenced) within the same
+    source/design scope. Returns a list of Asset objects (existing or newly created)."""
     saved = []
     for a in assets or []:
         kind = a.get("kind", "generated")
+        eff_source_id = a.get("source_id", source_id)
+        eff_design_id = a.get("design_id", design_id)
+
+        # Dedup: skip if an identical asset already exists in the same scope.
+        if kind == "generated":
+            path_val = a.get("path", "")
+            if path_val:
+                existing = session.exec(
+                    select(Asset).where(
+                        Asset.kind == "generated",
+                        Asset.path == path_val,
+                        Asset.source_id == eff_source_id,
+                        Asset.design_id == eff_design_id,
+                    )).first()
+                if existing:
+                    log.warning("add_assets: skipping duplicate generated asset path=%s "
+                                "(source_id=%s, design_id=%s, existing id=%s)",
+                                path_val, eff_source_id, eff_design_id, existing.id)
+                    saved.append(existing)
+                    continue
+        else:
+            url_val = a.get("url", "")
+            if url_val:
+                existing = session.exec(
+                    select(Asset).where(
+                        Asset.kind == "referenced",
+                        Asset.url == url_val,
+                        Asset.source_id == eff_source_id,
+                        Asset.design_id == eff_design_id,
+                    )).first()
+                if existing:
+                    log.warning("add_assets: skipping duplicate referenced asset url=%s "
+                                "(source_id=%s, design_id=%s, existing id=%s)",
+                                url_val, eff_source_id, eff_design_id, existing.id)
+                    saved.append(existing)
+                    continue
+
         # referenced (external) images must carry attribution — never re-hosted, link only.
         attribution = a.get("attribution", "")
         if kind == "referenced" and not attribution:
@@ -259,8 +427,8 @@ def add_assets(session: Session, assets: Optional[list[dict]], source_id: Option
             license_note=a.get("license_note", "" if kind == "generated"
                                else "External image; referenced with attribution, not re-hosted."),
             capability_id=a.get("capability_id", ""),
-            source_id=a.get("source_id", source_id), claim_id=a.get("claim_id"),
-            design_id=a.get("design_id", design_id))
+            source_id=eff_source_id, claim_id=a.get("claim_id"),
+            design_id=eff_design_id)
         session.add(asset)
         saved.append(asset)
     if saved:
@@ -399,7 +567,9 @@ def validate_design(session: Session, design_id: str,
         session.add(Issue(run_id=run.id, validator=i["validator"], severity=i["severity"],
                           message=i["message"], ref=i.get("ref", "")))
     has_critical = any(i["severity"] == "critical" for i in issues)
+    rts = full_pass and not has_critical
     design.confidence = confidence
+    design.ready_to_share = rts
     # "checked" = only deterministic citation/freshness validators ran; "validated" means a
     # grounding/coverage/antipattern review (agent or API) was part of this run.
     design.status = ("needs_review" if has_critical
@@ -408,38 +578,24 @@ def validate_design(session: Session, design_id: str,
     session.commit()
     return {"design_id": design_id, "run_id": run.id, "confidence": confidence,
             "full_pass": full_pass,
-            "ready_to_share": full_pass and not has_critical, "issues": issues}
+            "ready_to_share": rts, "issues": issues}
 
 
 # --------------------------------------------------------------- drift
 def detect_drift(session: Session, source_key: str, content: str = "",
                  claims: Optional[list[dict]] = None, url: str = "", title: str = "",
                  tier: Optional[int] = None, tags: Optional[list[str]] = None,
-                 assets: Optional[list[dict]] = None, summary: str = "",
-                 audience: str = "", why_it_matters: str = "",
-                 takeaways: Optional[list[str]] = None) -> dict:
+                 assets: Optional[list[dict]] = None) -> dict:
     current_src = session.exec(
         select(Source).where(Source.source_key == source_key, Source.active == True)).first()  # noqa: E712
     if current_src is None:
         return ingest_source(session, url or source_key, title, tier or 6,
-                             content=content, claims=claims, tags=tags, assets=assets,
-                             summary=summary, audience=audience,
-                             why_it_matters=why_it_matters, takeaways=takeaways)
+                             content=content, claims=claims, tags=tags, assets=assets)
 
     new_hash = _source_fingerprint(content, claims)
     if new_hash == current_src.content_hash:
-        metadata_changed = _set_source_metadata(
-            current_src, summary=summary or current_src.summary,
-            audience=audience or current_src.audience,
-            why_it_matters=why_it_matters or current_src.why_it_matters,
-            takeaways=takeaways if takeaways is not None else load_list(current_src.takeaways_json),
-            tags=tags)
-        if metadata_changed:
-            session.add(current_src)
-            session.commit()
         return {"source_key": source_key, "drift": False, "reason": "content unchanged",
-                "metadata_updated": metadata_changed, "added": 0, "changed": 0,
-                "removed": 0, "unchanged": 0, "affected_designs": []}
+                "added": 0, "changed": 0, "removed": 0, "unchanged": 0, "affected_designs": []}
 
     extracted = _resolve_claims(content, claims)   # may raise — do it before any writes
 
@@ -449,11 +605,6 @@ def detect_drift(session: Session, source_key: str, content: str = "",
                      url=url or current_src.url, title=title or current_src.title,
                      tier=tier if tier is not None else current_src.tier,
                      content_hash=new_hash,
-                     summary=summary or current_src.summary,
-                     audience=audience or current_src.audience,
-                     why_it_matters=why_it_matters or current_src.why_it_matters,
-                     takeaways_json=(dump_list(takeaways) if takeaways is not None
-                                     else current_src.takeaways_json),
                      tags_json=dump_tags(tags) if tags else current_src.tags_json,
                      active=True)
     session.add(new_src)
@@ -529,8 +680,3 @@ def _asset_dict(a: Asset) -> dict:
             "caption": a.caption, "attribution": a.attribution, "license_note": a.license_note,
             "capability_id": a.capability_id, "source_id": a.source_id,
             "claim_id": a.claim_id, "design_id": a.design_id}
-
-
-def _source_dict(s: Source) -> dict:
-    return {**s.model_dump(), "tags": load_tags(s.tags_json),
-            "takeaways": load_list(s.takeaways_json)}
