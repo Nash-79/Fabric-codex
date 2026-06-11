@@ -75,6 +75,7 @@ class AssetIn(BaseModel):
     source_id: Optional[str] = None
     claim_id: Optional[str] = None
     design_id: Optional[str] = None
+    blog_id: Optional[str] = None
 
 
 class LessonIn(BaseModel):
@@ -85,6 +86,54 @@ class LessonIn(BaseModel):
 class BulkClaimIn(BaseModel):
     source_id: Optional[str] = None
     claim_ids: Optional[list[str]] = None
+
+
+class QueueSubmitIn(BaseModel):
+    url: str
+    title: str = ""
+    tier: int = 6
+    notes: str = ""
+    tags: list[str] = []
+    submitted_by: str = ""
+
+
+class QueueCompleteIn(BaseModel):
+    source_id: str
+
+
+class QueueFailIn(BaseModel):
+    error: str = ""
+
+
+class TopicIn(BaseModel):
+    slug: str = ""
+    name: str
+    parent_id: Optional[str] = None
+    description: str = ""
+    capability_ids: list[str]
+    order: int = 0
+    tags: list[str] = []
+
+
+class TopicPatchIn(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    parent_id: Optional[str] = None
+    capability_ids: Optional[list[str]] = None
+    order: Optional[int] = None
+    active: Optional[bool] = None
+
+
+class BlogCreateIn(BaseModel):
+    topic_id: str
+    slug: str = ""
+    title: str
+    summary: str = ""
+    body_md: str
+    cited_source_ids: list[str]
+    tags: list[str] = []
+    depth_levels: list[int] = []
+    assets: list[dict] = []
 
 
 # ------------------------------------------------------------------ sources
@@ -268,12 +317,15 @@ def create_asset(body: AssetIn, session: Session = Depends(get_session)):
 
 @router.get("/assets")
 def list_assets(source: Optional[str] = None, design: Optional[str] = None,
-                capability: Optional[str] = None, session: Session = Depends(get_session)):
+                blog: Optional[str] = None, capability: Optional[str] = None,
+                session: Session = Depends(get_session)):
     stmt = select(Asset)
     if source:
         stmt = stmt.where(Asset.source_id == source)
     if design:
         stmt = stmt.where(Asset.design_id == design)
+    if blog:
+        stmt = stmt.where(Asset.blog_id == blog)
     if capability:
         stmt = stmt.where(Asset.capability_id == capability)
     return [services._asset_dict(a) for a in session.exec(stmt).all()]
@@ -350,6 +402,177 @@ def lesson_files():
         return []
     return [{"name": f.name, "path": f"content/lessons/{f.name}"}
             for f in sorted(lessons_dir.glob("*.md"))]
+
+
+# ------------------------------------------------------------------ ingestion queue
+@router.post("/queue", status_code=201)
+def queue_submit(body: QueueSubmitIn, session: Session = Depends(get_session)):
+    """Submit a URL (from the frontend) for local agent ingestion. The knowledge-curator
+    agent pulls queued items via /ingest-batch; the server never fetches the URL itself."""
+    try:
+        return services.submit_queue_item(session, body.url, title=body.title,
+                                          tier=body.tier, notes=body.notes,
+                                          tags=body.tags, submitted_by=body.submitted_by)
+    except services.DuplicateSubmission as e:
+        raise HTTPException(409, detail={"message": str(e), "source_key": e.source_key,
+                                         "queue_id": e.queue_id})
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/queue")
+def queue_list(status: Optional[str] = None, session: Session = Depends(get_session)):
+    return services.list_queue(session, status=status)
+
+
+def _queue_action(fn, *args):
+    try:
+        return fn(*args)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@router.post("/queue/{item_id}/claim")
+def queue_claim(item_id: str, session: Session = Depends(get_session)):
+    return _queue_action(services.claim_queue_item, session, item_id)
+
+
+@router.post("/queue/{item_id}/complete")
+def queue_complete(item_id: str, body: QueueCompleteIn,
+                   session: Session = Depends(get_session)):
+    return _queue_action(services.complete_queue_item, session, item_id, body.source_id)
+
+
+@router.post("/queue/{item_id}/fail")
+def queue_fail(item_id: str, body: QueueFailIn = QueueFailIn(),
+               session: Session = Depends(get_session)):
+    return _queue_action(services.fail_queue_item, session, item_id, body.error)
+
+
+@router.post("/queue/{item_id}/requeue")
+def queue_requeue(item_id: str, session: Session = Depends(get_session)):
+    return _queue_action(services.requeue_queue_item, session, item_id)
+
+
+@router.post("/queue/{item_id}/dismiss")
+def queue_dismiss(item_id: str, session: Session = Depends(get_session)):
+    return _queue_action(services.dismiss_queue_item, session, item_id)
+
+
+# ------------------------------------------------------------------ topics
+@router.post("/topics", status_code=201)
+def topic_create(body: TopicIn, session: Session = Depends(get_session)):
+    try:
+        return services.create_topic(session, body.slug, body.name, body.capability_ids,
+                                     parent_id=body.parent_id, description=body.description,
+                                     order=body.order, tags=body.tags)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/topics")
+def topic_list(include_counts: bool = False, session: Session = Depends(get_session)):
+    """Flat list of active topics — the frontend assembles the tree from parent_id."""
+    return services.list_topics(session, include_counts=include_counts)
+
+
+@router.get("/topics/{slug}")
+def topic_get(slug: str, session: Session = Depends(get_session)):
+    try:
+        return services.get_topic(session, slug)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.patch("/topics/{topic_id}")
+def topic_patch(topic_id: str, body: TopicPatchIn, session: Session = Depends(get_session)):
+    try:
+        return services.update_topic(session, topic_id, **body.model_dump(exclude_unset=True))
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+# ------------------------------------------------------------------ blogs
+@router.post("/blogs", status_code=201)
+def blog_create(body: BlogCreateIn, session: Session = Depends(get_session)):
+    """Persist a locally-authored blog article (blog-author agent). Re-posting the
+    same slug supersedes the prior version — append-only, like claims."""
+    try:
+        return services.create_blog(session, body.topic_id, body.slug, body.title,
+                                    body.body_md, summary=body.summary,
+                                    cited_source_ids=body.cited_source_ids,
+                                    tags=body.tags, depth_levels=body.depth_levels,
+                                    assets=body.assets)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@router.get("/blogs")
+def blog_list(topic: Optional[str] = None, status: Optional[str] = None,
+              tag: Optional[str] = None, session: Session = Depends(get_session)):
+    return services.list_blogs(session, topic_id=topic, status=status, tag=tag)
+
+
+@router.get("/blogs/{slug}")
+def blog_get(slug: str, session: Session = Depends(get_session)):
+    try:
+        return services.get_blog(session, slug)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/blogs/{slug}/history")
+def blog_get_history(slug: str, session: Session = Depends(get_session)):
+    try:
+        return services.blog_history(session, slug)
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.post("/blogs/{blog_id}/validate")
+def blog_validate(blog_id: str, body: ValidateIn = ValidateIn(),
+                  session: Session = Depends(get_session)):
+    try:
+        return services.validate_blog(session, blog_id, agent_issues=body.issues)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/blogs/{blog_id}/validations")
+def blog_validations(blog_id: str, session: Session = Depends(get_session)):
+    runs = session.exec(
+        select(ValidationRun).where(ValidationRun.target_kind == "blog",
+                                    ValidationRun.target_id == blog_id)
+        .order_by(ValidationRun.created_at.desc())).all()
+    out = []
+    for r in runs:
+        issues = session.exec(select(Issue).where(Issue.run_id == r.id)).all()
+        out.append({**r.model_dump(), "issues": [i.model_dump() for i in issues]})
+    return out
+
+
+# ------------------------------------------------------------------ help
+@router.get("/help")
+def help_files():
+    """Deterministic listing of agent-authored help pages (content/help/*.md), served
+    statically at /content/help/<name>. Title = first markdown heading; order = the
+    optional numeric filename prefix (01-, 02-, ...)."""
+    help_dir = Path(__file__).resolve().parents[2] / "content" / "help"
+    if not help_dir.is_dir():
+        return []
+    out = []
+    for f in sorted(help_dir.glob("*.md")):
+        title = f.stem
+        for line in f.read_text(encoding="utf-8").splitlines():
+            if line.startswith("#"):
+                title = line.lstrip("#").strip()
+                break
+        out.append({"name": f.name, "title": title, "path": f"content/help/{f.name}"})
+    return out
 
 
 @router.post("/lessons/generate")
