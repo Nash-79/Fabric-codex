@@ -18,7 +18,7 @@ from sqlmodel import Session, select
 from app import llm
 from app.db import LLM_MODE
 from app.models import (Source, Claim, Design, ValidationRun, Issue, Asset,
-                        dump_tags, load_tags)
+                        dump_list, dump_tags, load_list, load_tags)
 
 SAME = 0.85
 CHANGED = 0.55
@@ -118,19 +118,46 @@ def _resolve_claims(content: str, provided: Optional[list[dict]]) -> list[dict]:
         "`claims`. (Set LLM_MODE=api to extract server-side from `content`.)")
 
 
+def _set_source_metadata(source: Source, summary: str = "", audience: str = "",
+                         why_it_matters: str = "",
+                         takeaways: Optional[list[str]] = None,
+                         tags: Optional[list[str]] = None) -> bool:
+    changed = False
+    updates = {
+        "summary": summary or "",
+        "audience": audience or "",
+        "why_it_matters": why_it_matters or "",
+        "takeaways_json": dump_list(takeaways),
+    }
+    if tags is not None:
+        updates["tags_json"] = dump_tags(tags)
+    for attr, value in updates.items():
+        if getattr(source, attr) != value:
+            setattr(source, attr, value)
+            changed = True
+    return changed
+
+
 def ingest_source(session: Session, url: str, title: str, tier: int, content: str = "",
                   claims: Optional[list[dict]] = None, tags: Optional[list[str]] = None,
-                  assets: Optional[list[dict]] = None) -> dict:
+                  assets: Optional[list[dict]] = None, summary: str = "",
+                  audience: str = "", why_it_matters: str = "",
+                  takeaways: Optional[list[str]] = None) -> dict:
     key = slugify(url or title)
     existing = session.exec(
         select(Source).where(Source.source_key == key, Source.active == True)).first()  # noqa: E712
     if existing:
         return detect_drift(session, key, content=content, claims=claims,
-                            url=url, title=title, tier=tier, tags=tags, assets=assets)
+                            url=url, title=title, tier=tier, tags=tags, assets=assets,
+                            summary=summary, audience=audience,
+                            why_it_matters=why_it_matters, takeaways=takeaways)
 
     extracted = _resolve_claims(content, claims)   # may raise — do it before any writes
     src = Source(source_key=key, version=1, url=url, title=title or url or key, tier=tier,
                  content_hash=_source_fingerprint(content, claims),
+                 summary=summary or "", audience=audience or "",
+                 why_it_matters=why_it_matters or "",
+                 takeaways_json=dump_list(takeaways),
                  tags_json=dump_tags(tags), active=True)
     session.add(src)
     session.commit()
@@ -388,17 +415,31 @@ def validate_design(session: Session, design_id: str,
 def detect_drift(session: Session, source_key: str, content: str = "",
                  claims: Optional[list[dict]] = None, url: str = "", title: str = "",
                  tier: Optional[int] = None, tags: Optional[list[str]] = None,
-                 assets: Optional[list[dict]] = None) -> dict:
+                 assets: Optional[list[dict]] = None, summary: str = "",
+                 audience: str = "", why_it_matters: str = "",
+                 takeaways: Optional[list[str]] = None) -> dict:
     current_src = session.exec(
         select(Source).where(Source.source_key == source_key, Source.active == True)).first()  # noqa: E712
     if current_src is None:
         return ingest_source(session, url or source_key, title, tier or 6,
-                             content=content, claims=claims, tags=tags, assets=assets)
+                             content=content, claims=claims, tags=tags, assets=assets,
+                             summary=summary, audience=audience,
+                             why_it_matters=why_it_matters, takeaways=takeaways)
 
     new_hash = _source_fingerprint(content, claims)
     if new_hash == current_src.content_hash:
+        metadata_changed = _set_source_metadata(
+            current_src, summary=summary or current_src.summary,
+            audience=audience or current_src.audience,
+            why_it_matters=why_it_matters or current_src.why_it_matters,
+            takeaways=takeaways if takeaways is not None else load_list(current_src.takeaways_json),
+            tags=tags)
+        if metadata_changed:
+            session.add(current_src)
+            session.commit()
         return {"source_key": source_key, "drift": False, "reason": "content unchanged",
-                "added": 0, "changed": 0, "removed": 0, "unchanged": 0, "affected_designs": []}
+                "metadata_updated": metadata_changed, "added": 0, "changed": 0,
+                "removed": 0, "unchanged": 0, "affected_designs": []}
 
     extracted = _resolve_claims(content, claims)   # may raise — do it before any writes
 
@@ -408,6 +449,11 @@ def detect_drift(session: Session, source_key: str, content: str = "",
                      url=url or current_src.url, title=title or current_src.title,
                      tier=tier if tier is not None else current_src.tier,
                      content_hash=new_hash,
+                     summary=summary or current_src.summary,
+                     audience=audience or current_src.audience,
+                     why_it_matters=why_it_matters or current_src.why_it_matters,
+                     takeaways_json=(dump_list(takeaways) if takeaways is not None
+                                     else current_src.takeaways_json),
                      tags_json=dump_tags(tags) if tags else current_src.tags_json,
                      active=True)
     session.add(new_src)
@@ -483,3 +529,8 @@ def _asset_dict(a: Asset) -> dict:
             "caption": a.caption, "attribution": a.attribution, "license_note": a.license_note,
             "capability_id": a.capability_id, "source_id": a.source_id,
             "claim_id": a.claim_id, "design_id": a.design_id}
+
+
+def _source_dict(s: Source) -> dict:
+    return {**s.model_dump(), "tags": load_tags(s.tags_json),
+            "takeaways": load_list(s.takeaways_json)}

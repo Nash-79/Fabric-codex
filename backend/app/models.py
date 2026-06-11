@@ -3,6 +3,7 @@
 Version chain (the load-bearing concept) is unchanged from v0.1 — see docs/data-model.md.
 v0.2 adds:
   - free-form `tags` on Source, Claim, Design (e.g. MicrosoftFabric, DataEngineering, PySpark)
+  - reader-facing source metadata (`summary`, `audience`, `why_it_matters`, `takeaways_json`)
   - an `Asset` table for images/diagrams, distinguishing:
       kind="referenced"  external source image — URL + caption + attribution only, never re-hosted
       kind="generated"   an original SVG/Mermaid diagram authored by an agent, stored in the repo
@@ -27,11 +28,23 @@ def dump_tags(tags) -> str:
     return json.dumps([t.lstrip("#") for t in (tags or [])])
 
 
+def dump_list(items) -> str:
+    return json.dumps([str(x).strip() for x in (items or []) if str(x).strip()])
+
+
 def load_tags(s: str) -> list[str]:
     try:
         return json.loads(s or "[]")
     except json.JSONDecodeError:
         return []
+
+
+def load_list(s: str) -> list[str]:
+    try:
+        data = json.loads(s or "[]")
+    except json.JSONDecodeError:
+        return []
+    return [str(x) for x in data if str(x).strip()]
 
 
 class Source(SQLModel, table=True):
@@ -41,6 +54,10 @@ class Source(SQLModel, table=True):
     url: str = ""
     title: str = ""
     tier: int = 6
+    summary: str = ""
+    audience: str = ""
+    why_it_matters: str = ""
+    takeaways_json: str = "[]"
     content_hash: str = ""
     tags_json: str = "[]"
     active: bool = True

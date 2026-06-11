@@ -100,7 +100,8 @@ pgvector for semantic retrieval — see docs/data-model.md.
 - Paraphrase sources fully in your own words. Any unavoidable quote stays **under 15 words**,
   one short quote per source max, attributed.
 - Never reproduce article paragraphs, tables, or structure verbatim. Store links, metadata,
-  extracted claims, and original summaries — not copied text.
+  extracted claims, original summaries, audience notes, why-it-matters notes, and takeaways —
+  not copied text.
 
 ## Agent roster (in .claude/agents/)
 

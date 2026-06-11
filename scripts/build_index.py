@@ -48,6 +48,8 @@ def rebuild(base: str) -> int:
         "source_id": c["source_id"],
         "source_title": sources.get(c["source_id"], {}).get("title", ""),
         "source_url": sources.get(c["source_id"], {}).get("url", ""),
+        "source_summary": sources.get(c["source_id"], {}).get("summary", ""),
+        "source_takeaways": " ".join(sources.get(c["source_id"], {}).get("takeaways", []) or []),
         "tier": sources.get(c["source_id"], {}).get("tier", 6),
     } for c in claims]
 
@@ -59,20 +61,23 @@ def rebuild(base: str) -> int:
         CREATE TABLE claims (
             id VARCHAR, claim_key VARCHAR, version INTEGER, capability_id VARCHAR,
             depth INTEGER, type VARCHAR, status VARCHAR, text VARCHAR, tags VARCHAR,
-            source_id VARCHAR, source_title VARCHAR, source_url VARCHAR, tier INTEGER)
+            source_id VARCHAR, source_title VARCHAR, source_url VARCHAR,
+            source_summary VARCHAR, source_takeaways VARCHAR, tier INTEGER)
     """)
     con.executemany(
-        "INSERT INTO claims VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO claims VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         [[r[k] for k in ("id", "claim_key", "version", "capability_id", "depth", "type",
                          "status", "text", "tags", "source_id", "source_title",
-                         "source_url", "tier")] for r in rows])
+                         "source_url", "source_summary", "source_takeaways", "tier")]
+         for r in rows])
     con.execute("""
         CREATE VIEW coverage AS
         SELECT capability_id, depth, count(*) AS n
         FROM claims GROUP BY capability_id, depth ORDER BY capability_id, depth
     """)
     con.execute("INSTALL fts; LOAD fts;")
-    con.execute("PRAGMA create_fts_index('claims', 'id', 'text', 'tags')")
+    con.execute("PRAGMA create_fts_index('claims', 'id', 'text', 'tags', "
+                "'source_summary', 'source_takeaways')")
     con.close()
     print(f"Indexed {len(rows)} claims from {len(sources)} sources -> {INDEX}")
     return 0

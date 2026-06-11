@@ -8,5 +8,6 @@ copy, no third-party logos. Fetch grounding claims (curl -s "http://localhost:80
 or the design. Author Mermaid (content/diagrams/<slug>.mmd) for flows/trees or self-contained SVG
 (content/diagrams/<slug>.svg) for infographics. Register it:
   curl -s -X POST http://localhost:8000/assets -H "Content-Type: application/json" \
-    -d '{"kind":"generated","path":"content/diagrams/<slug>.svg","caption":"...","capability_id":"$SUBJECT"}'
-Output the file path, asset id, and which claims it visualises.
+    -d '{"kind":"generated","path":"content/diagrams/<slug>.svg","caption":"...","capability_id":"$SUBJECT","source_id":"<optional>","claim_id":"<optional>"}'
+Prefer claim_id for a single-claim diagram, source_id for one source, and capability_id for broad
+capability diagrams. Output the file path, asset id, and which claims or source it visualises.

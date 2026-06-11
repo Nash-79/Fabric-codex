@@ -49,6 +49,33 @@ def test_ingest_creates_pending_claims(client):
     assert len(claims) == 1 and claims[0]["status"] == "pending"
 
 
+def test_ingest_accepts_reader_metadata(client):
+    body = _payload()
+    body.update({
+        "summary": "Original summary for readers.",
+        "audience": "Fabric architects",
+        "why_it_matters": "It orients readers before they inspect the claims.",
+        "takeaways": ["OneLake is tenant-wide.", "Claims remain source-grounded."],
+    })
+    res = client.post("/sources/ingest", json=body).json()
+    assert res["claims_added"] == 1
+    source = client.get("/sources").json()[0]
+    assert source["summary"] == "Original summary for readers."
+    assert source["audience"] == "Fabric architects"
+    assert source["why_it_matters"] == "It orients readers before they inspect the claims."
+    assert source["takeaways"] == ["OneLake is tenant-wide.", "Claims remain source-grounded."]
+
+
+def test_legacy_ingest_without_reader_metadata_still_works(client):
+    body = _payload()
+    body.pop("tags")
+    res = client.post("/sources/ingest", json=body).json()
+    assert res["claims_added"] == 1
+    source = client.get("/sources").json()[0]
+    assert source["summary"] == ""
+    assert source["takeaways"] == []
+
+
 def test_ingest_without_claims_is_rejected_and_writes_nothing(client):
     body = _payload()
     body["claims"] = None
@@ -94,15 +121,31 @@ def test_reingest_same_claims_is_noop_even_reordered(client):
     assert len(client.get("/sources").json()) == 1
 
 
+def test_reingest_same_claims_can_backfill_reader_metadata(client):
+    client.post("/sources/ingest", json=_payload(texts=["First fact.", "Second fact."]))
+    body = _payload(texts=["Second fact.", "First fact."])
+    body.update({"summary": "Backfilled summary.", "takeaways": ["A", "B"]})
+    res = client.post("/sources/ingest", json=body).json()
+    assert res["drift"] is False and res["metadata_updated"] is True
+    source = client.get("/sources").json()[0]
+    assert source["summary"] == "Backfilled summary."
+    assert source["takeaways"] == ["A", "B"]
+
+
 def test_drift_supersedes_changed_and_deprecates_removed(client):
     client.post("/sources/ingest", json=_payload(
         texts=["Shortcuts virtualize external data without copying it into OneLake.",
                "This claim disappears in the next revision of the page."]))
-    res = client.post("/sources/ingest", json=_payload(
+    body = _payload(
         texts=["Shortcuts virtualize external data without duplicating it, "
                "mapping remote storage into OneLake."]   # ~0.79 similar = changed band
-    )).json()
+    )
+    body.update({"summary": "New source revision summary.", "takeaways": ["Changed claim."]})
+    res = client.post("/sources/ingest", json=body).json()
     assert res["drift"] is True and res["changed"] == 1 and res["removed"] == 1
+    active_source = [s for s in client.get("/sources").json() if s["active"]][0]
+    assert active_source["summary"] == "New source revision summary."
+    assert active_source["takeaways"] == ["Changed claim."]
     history_key = client.get("/claims").json()[0]["claim_key"]
     chain = client.get(f"/claims/{history_key}/history").json()
     assert [c["version"] for c in chain] == [1, 2]

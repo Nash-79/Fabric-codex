@@ -29,6 +29,9 @@ before/after).
      "kind":"generated","path":"content/diagrams/<slug>.svg","caption":"<what it shows>",
      "capability_id":"<id>","design_id":"<optional>","source_id":"<optional>"}'
    ```
+   Prefer attaching `claim_id` when the diagram illustrates one claim, `source_id` when it
+   explains one source, and `capability_id` for broad capability diagrams. Include a grounding
+   note in the output listing the claim ids or source id used.
 
 ## Rules
 - Original work only. No traced or copied source images, no third-party logos/IP.

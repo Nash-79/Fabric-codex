@@ -22,6 +22,10 @@ class IngestIn(BaseModel):
     title: str = ""
     tier: int = 6
     tags: list[str] = []
+    summary: str = ""
+    audience: str = ""
+    why_it_matters: str = ""
+    takeaways: list[str] = []
     content: str = ""                 # used only in LLM_MODE=api
     claims: Optional[list[dict]] = None   # local mode: agent-extracted claims
     assets: list[dict] = []
@@ -33,6 +37,11 @@ class DriftIn(BaseModel):
     url: str = ""
     title: str = ""
     tier: Optional[int] = None
+    tags: Optional[list[str]] = None
+    summary: str = ""
+    audience: str = ""
+    why_it_matters: str = ""
+    takeaways: Optional[list[str]] = None
 
 
 class DesignCreateIn(BaseModel):              # local mode: agent-authored design
@@ -75,10 +84,16 @@ class LessonIn(BaseModel):
 # ------------------------------------------------------------------ sources
 @router.post("/sources/ingest")
 def ingest(body: IngestIn, session: Session = Depends(get_session)):
+    fields = body.model_fields_set
     try:
         return services.ingest_source(session, body.url, body.title, body.tier,
                                       content=body.content, claims=body.claims,
-                                      tags=body.tags, assets=body.assets)
+                                      tags=body.tags if "tags" in fields else None,
+                                      assets=body.assets,
+                                      summary=body.summary, audience=body.audience,
+                                      why_it_matters=body.why_it_matters,
+                                      takeaways=(body.takeaways if "takeaways" in fields
+                                                 else None))
     except llm.LLMUnavailable as e:
         raise HTTPException(503, str(e))
     except ValueError as e:
@@ -88,7 +103,7 @@ def ingest(body: IngestIn, session: Session = Depends(get_session)):
 @router.get("/sources")
 def list_sources(session: Session = Depends(get_session)):
     rows = session.exec(select(Source).order_by(Source.created_at.desc())).all()
-    return [{**r.model_dump(), "tags": load_tags(r.tags_json)} for r in rows]
+    return [services._source_dict(r) for r in rows]
 
 
 @router.post("/sources/{source_key}/drift")
@@ -96,7 +111,11 @@ def drift(source_key: str, body: DriftIn, session: Session = Depends(get_session
     try:
         return services.detect_drift(session, source_key, content=body.content,
                                      claims=body.claims, url=body.url,
-                                     title=body.title, tier=body.tier)
+                                     title=body.title, tier=body.tier,
+                                     tags=body.tags, summary=body.summary,
+                                     audience=body.audience,
+                                     why_it_matters=body.why_it_matters,
+                                     takeaways=body.takeaways)
     except (llm.LLMUnavailable, ValueError) as e:
         raise HTTPException(400, str(e))
 

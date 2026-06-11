@@ -4,8 +4,9 @@ argument-hint: <url-or-file-path> [tier=<1-6>]
 ---
 Use the **knowledge-curator** subagent to ingest: $ARGUMENTS
 
-You extract the claims yourself locally (no server-side API). Read the source, produce 6–12 atomic
-paraphrased claims tagged with capability_id, depth (1–5), type, and topical hashtags
+You extract the claims yourself locally (no server-side API). Read the source, produce original
+reader metadata (`summary`, `audience`, `why_it_matters`, 3-5 `takeaways`), then produce 6–12
+atomic paraphrased claims tagged with capability_id, depth (1–5), type, and topical hashtags
 (e.g. MicrosoftFabric, DataEngineering, PySpark, Python). Record any source diagrams as
 `referenced` assets (URL + caption + attribution — never re-host); prefer commissioning an
 original diagram from diagram-author instead. Write content/sources/<slug>.json, then

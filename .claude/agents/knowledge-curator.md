@@ -22,18 +22,21 @@ Depth: 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 inter
 
 ## Method
 1. Read the source (Read for files, WebFetch for a URL; if you cannot fetch, ask for pasted text).
-2. Extract 6–12 atomic claims. Each is ONE fact/pattern/antipattern/internal. **Paraphrase fully**
+2. Write reader metadata for the source: `summary`, `audience`, `why_it_matters`, and 3-5
+   `takeaways`. This is original orientation text only — do not copy the article's prose,
+   headings, bullets, or table structure.
+3. Extract 6–12 atomic claims. Each is ONE fact/pattern/antipattern/internal. **Paraphrase fully**
    — never copy sentences; any quote < 15 words; never reproduce tables or structure.
-3. Tag each claim with `capability_id`, `depth`, `type`, and topical **tags** (hashtags) such as
+4. Tag each claim with `capability_id`, `depth`, `type`, and topical **tags** (hashtags) such as
    `MicrosoftFabric`, `DataEngineering`, `PySpark`, `Python`, `DirectLake`, `PowerBI`. Tags are
    free-form discovery labels and are independent of the capability taxonomy.
-4. **Images.** Record any meaningful diagrams from the source as `referenced` assets — store the
+5. **Images.** Record any meaningful diagrams from the source as `referenced` assets — store the
    image URL, a caption, and attribution. **Never download or re-host** copyrighted source images;
    they are linked with credit only. Where a diagram would help the knowledge base, instead request
    an **original** one from the diagram-author agent (a `generated` asset) rather than copying.
-5. Write the content file (git-tracked source of truth): `content/sources/<slug>.json` shaped like
+6. Write the content file (git-tracked source of truth): `content/sources/<slug>.json` shaped like
    `content/sources/example-direct-lake.json`.
-6. Post to the backend (local mode — sends structured claims, not raw text):
+7. Post to the backend (local mode — sends structured claims, not raw text):
    ```bash
    curl -s -X POST http://localhost:8000/sources/ingest \
      -H "Content-Type: application/json" --data @content/sources/<slug>.json
@@ -41,6 +44,8 @@ Depth: 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 inter
 
 ## Hard rules
 - No source, no claim. Never invent product limits, quotas, pricing, or roadmap items.
+- Reader metadata must be original paraphrase. It may explain why the source matters, but it must
+  not introduce product facts that are absent from the extracted claims.
 - Referenced images must carry attribution. Prefer generated originals over referenced copies.
 - Do not mark claims verified — that is the human review step in the Registry.
 

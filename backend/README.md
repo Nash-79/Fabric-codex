@@ -27,8 +27,8 @@ uvicorn app.main:app --reload
 
 | Method | Path                              | Purpose                                          |
 |--------|-----------------------------------|--------------------------------------------------|
-| POST   | /sources/ingest                   | Ingest a source (local: pre-built `claims`+`assets`+`tags`) |
-| GET    | /sources                          | List source revisions                            |
+| POST   | /sources/ingest                   | Ingest a source (local: pre-built `claims`+`assets`+`tags`+reader metadata) |
+| GET    | /sources                          | List source revisions with tags and reader metadata |
 | POST   | /sources/{source_key}/drift       | Re-ingest (pre-built `claims`), diff, supersede  |
 | GET    | /claims?capability=&status=&tag=  | List active claims (filterable, incl. by tag)    |
 | GET    | /claims/{claim_key}/history       | Full version chain for a claim                   |

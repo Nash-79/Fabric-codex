@@ -10,6 +10,9 @@ Source ──< Claim >── (cited_by) ── Design ──< ValidationRun ─�
 
 - **Source** — one revision of an approved source. A source *family* shares a `source_key`
   (slug of the URL/title); each revision bumps `version` and only the newest is `active`.
+  Sources also carry reader metadata: an original `summary`, intended `audience`,
+  `why_it_matters`, and a short `takeaways` list. These fields make source cards readable;
+  they are not copied article text.
 - **Claim** — one atomic, paraphrased, cited fact/pattern/anti-pattern/internal, tagged to a
   capability and depth, pointing at the exact `Source` revision it came from.
 - **Design** — a generated architecture, storing the cited source ids so drift can find it.
@@ -49,10 +52,12 @@ audit trail and rollback surface.
 1. New content arrives for an existing `source_key`.
 2. If the fingerprint is unchanged, no-op. For structured payloads the fingerprint hashes
    the **sorted claim texts** (`_source_fingerprint`), so reordering claims in a content
-   file or editing tags/depth does not register as drift — only text changes do.
+   file or editing tags/depth does not register as drift — only text changes do. Replaying a
+   source with unchanged claims but new reader metadata updates the active source metadata in
+   place; it does not create a claim version.
    The payload is validated **before** any write; a drift call with no claims fails
-   cleanly without rolling the source forward. New `tags`/`assets` in the payload are
-   carried onto the new source revision.
+   cleanly without rolling the source forward. New `tags`, reader metadata, and `assets` in
+   the payload are carried onto the new source revision.
 3. Otherwise roll the source family forward to a new active `version`.
 4. Re-extract claims; for each, find the best match among current active claims **of the same
    capability** by text similarity:
@@ -94,6 +99,18 @@ different claim ordering silently mis-attributes citations). Unknown source ids 
 
 ## Tags and assets (v0.2)
 
+**Source reader metadata** is stored on `Source`:
+
+| field | purpose |
+|------|---------|
+| `summary` | Original short explanation of what the source contributes. |
+| `audience` | Who should read the source. |
+| `why_it_matters` | Original note on why the source matters architecturally or operationally. |
+| `takeaways_json` | JSON list of 3-5 original takeaways. |
+
+These fields exist to make blogs/docs easier to inspect. They must remain paraphrased and
+must not store copied article paragraphs, tables, or structure.
+
 **Tags** are free-form topical hashtags stored as JSON on `Source`, `Claim`, and `Design`
 (`tags_json`). They are discovery labels (e.g. `MicrosoftFabric`, `DataEngineering`, `PySpark`,
 `Python`) and are orthogonal to the capability taxonomy. The leading `#` is normalised off on
@@ -120,7 +137,8 @@ Either way the version chain, citation, and freshness logic below are unchanged.
 
 `scripts/build_index.py --rebuild` builds a derived DuckDB index (`var/atlas_index.duckdb`,
 gitignored) from the running backend: one denormalised claims+source table, a BM25 full-text
-index over claim text + tags, and a coverage view. Use `--search "<query>" [--capability id]`
+index over claim text, tags, source summaries, and takeaways, plus a coverage view. Use
+`--search "<query>" [--capability id]`
 for ranked retrieval — agents should prefer this over dumping `/claims` once the KB grows.
 SQLite stays the system of record; the index is throwaway. If snapshot time-travel over the
 claim store becomes useful, the same table can be managed as a DuckLake catalog

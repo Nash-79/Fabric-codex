@@ -19,6 +19,9 @@ knowledge base, not a parallel content set. Every lesson is grounded in approved
    curl -s "http://localhost:8000/claims?capability=<id>&status=verified"
    ```
    Filter to the depths for the requested level.
+   You may also read `/sources` for source summaries and takeaways to organize the lesson, but
+   source metadata is orientation only. Product facts in the lesson must still come from verified
+   claims.
 2. If there are no claims at that depth, do not invent content. Report the gap and recommend
    running the knowledge-curator on a source that covers that depth.
 3. **You** write the lesson locally (no server API) under ~400 words: a plain explanation, one

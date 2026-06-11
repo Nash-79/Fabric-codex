@@ -133,6 +133,103 @@ const Code = ({ children }) => (
   <code style={{ fontFamily: mono, fontSize: 12, color: c.accentText, background: c.accentSoft, borderRadius: 4, padding: "1px 5px" }}>{children}</code>
 );
 
+const capName = (id) => CAPABILITIES.find((x) => x.id === id)?.name || id;
+const isCommunitySource = (s) => s?.tier === 4 || /bradcoles|milescole|blog/i.test(s?.url || "");
+const sourceUrl = (assetPath) => "/" + (assetPath || "").replace(/^\//, "");
+
+const claimStatusChip = (cl) => (
+  cl.status === "verified" ? <Chip color={c.green}>verified</Chip>
+    : cl.status === "pending" ? <Chip color={c.amber}>pending</Chip>
+    : <Chip color={c.faint}>{cl.status}</Chip>
+);
+
+function ClaimRows({ claims, compact = false }) {
+  if (!claims.length) return <div style={{ color: c.muted, fontSize: 13 }}>No claims.</div>;
+  return (
+    <div style={{ display: "grid", gap: compact ? 6 : 8 }}>
+      {claims.map((cl) => (
+        <div key={cl.id} style={{ border: "1px solid " + c.lineSoft, borderRadius: 6, background: c.panel2, padding: compact ? 8 : 10 }}>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 5 }}>
+            <Chip color={c.accentText}>{capName(cl.capability_id)}</Chip>
+            <Chip color={c.accentText}>L{cl.depth}</Chip>
+            <Chip>{cl.type}</Chip>
+            {claimStatusChip(cl)}
+          </div>
+          <div style={{ fontSize: compact ? 12.5 : 13, lineHeight: 1.55 }}>{cl.text}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function claimsForAsset(asset, claims, sourceClaims = []) {
+  const activeClaims = claims.filter((cl) => cl.active !== false);
+  const activeSourceClaims = sourceClaims.filter((cl) => cl.active !== false);
+  if (asset.claim_id) return activeClaims.filter((cl) => cl.id === asset.claim_id);
+  if (asset.source_id) return activeSourceClaims.length ? activeSourceClaims : activeClaims.filter((cl) => cl.source_id === asset.source_id);
+  if (asset.capability_id) return activeClaims.filter((cl) => cl.capability_id === asset.capability_id);
+  return [];
+}
+
+function DiagramPanel({ asset, claims, sources, sourceClaims = [], onClose, onOpenSource, onOpenCapability }) {
+  if (!asset) return null;
+  const relatedClaims = claimsForAsset(asset, claims, sourceClaims);
+  const sourceIds = [...new Set(relatedClaims.map((cl) => cl.source_id).concat(asset.source_id ? [asset.source_id] : []))].filter(Boolean);
+  const relatedSources = sourceIds.map((id) => sources.find((s) => s.id === id)).filter(Boolean);
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.22)", zIndex: 20, display: "flex", justifyContent: "flex-end" }} onClick={onClose}>
+      <div style={{ width: "min(560px, 94vw)", height: "100%", background: c.panel, borderLeft: "1px solid " + c.line, boxShadow: c.shadow, padding: 18, overflowY: "auto" }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 10 }}>
+          <div>
+            <div style={{ fontWeight: 650, fontSize: 15 }}>Diagram drill-through</div>
+            {asset.capability_id && <div style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>{capName(asset.capability_id)}</div>}
+          </div>
+          <Btn small onClick={onClose}>Close</Btn>
+        </div>
+        {asset.path && (
+          <img src={sourceUrl(asset.path)} alt={asset.caption}
+            style={{ width: "100%", borderRadius: 6, background: c.diagramBg, border: "1px solid " + c.lineSoft, marginBottom: 10 }} />
+        )}
+        <div style={{ fontSize: 13, lineHeight: 1.55, marginBottom: 10 }}>{asset.caption || "Original generated diagram."}</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+          <Chip color={c.green}>original diagram</Chip>
+          {asset.capability_id && (
+            <Btn small onClick={() => onOpenCapability?.(asset.capability_id)}>Open capability</Btn>
+          )}
+        </div>
+        {relatedSources.length > 0 && (
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>RELATED SOURCES</div>
+            <div style={{ display: "grid", gap: 6 }}>
+              {relatedSources.map((s) => (
+                <button key={s.id} onClick={() => onOpenSource?.(s.id)} style={{ textAlign: "left", cursor: "pointer", background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 9 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: c.text }}>{s.title}</span>
+                  <span style={{ marginLeft: 8 }}><Chip color={TIER_COLORS[s.tier]}>T{s.tier}</Chip></span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>RELATED CLAIMS</div>
+        <ClaimRows claims={relatedClaims.slice(0, 12)} compact />
+      </div>
+    </div>
+  );
+}
+
+function DiagramThumb({ asset, onClick }) {
+  if (asset.kind !== "generated" || !asset.path) return null;
+  return (
+    <button onClick={onClick} style={{ textAlign: "left", cursor: "pointer", border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 8, background: c.panel2, maxWidth: 360 }}>
+      <img src={sourceUrl(asset.path)} alt={asset.caption} style={{ width: "100%", borderRadius: 4, background: c.diagramBg, display: "block" }} />
+      <div style={{ display: "flex", gap: 6, alignItems: "baseline", marginTop: 6, flexWrap: "wrap" }}>
+        <Chip color={c.green}>diagram</Chip>
+        <span style={{ fontSize: 12, color: c.text }}>{asset.caption}</span>
+      </div>
+    </button>
+  );
+}
+
 /* Original Fabric Atlas mark — woven layers in the Fabric brand ramp.
    Deliberately NOT Microsoft's Fabric icon: Microsoft's icon terms do not
    allow product icons to represent third-party apps, so this is our own
@@ -218,9 +315,9 @@ export default function App() {
             </>
           ) : tab === "overview" ? <Overview onOpenCapability={openCapability} />
             : tab === "registry" ? <Registry initialCap={registryCap} onConsumedInitial={() => setRegistryCap(null)} />
-            : tab === "sources" ? <Sources />
+            : tab === "sources" ? <Sources onOpenCapability={openCapability} />
             : tab === "designs" ? <Designs />
-            : tab === "learn" ? <Learn />
+            : tab === "learn" ? <Learn onOpenCapability={openCapability} />
             : <Author />}
         </div>
       </div>
@@ -551,14 +648,28 @@ function Registry({ initialCap = null, onConsumedInitial = () => {} }) {
 }
 
 /* ============================== sources ============================= */
-function Sources() {
+function Sources({ onOpenCapability }) {
   const [sources, setSources] = useState([]);
   const [assets, setAssets] = useState([]);
+  const [allClaims, setAllClaims] = useState([]);
+  const [claimsBySource, setClaimsBySource] = useState({});
   const [pendingBySource, setPendingBySource] = useState({});
+  const [openSourceId, setOpenSourceId] = useState(null);
+  const [openDiagram, setOpenDiagram] = useState(null);
+  const [query, setQuery] = useState("");
+  const [tierFilter, setTierFilter] = useState("all");
+  const [communityOnly, setCommunityOnly] = useState(false);
+  const [activeOnly, setActiveOnly] = useState(true);
   const [err, setErr] = useState("");
   const refresh = useCallback(() => {
     api("/sources").then(setSources).catch((e) => setErr(e.message));
     api("/assets").then(setAssets).catch(() => {});
+    api("/claims?include_inactive=true").then((rows) => {
+      const by = {};
+      rows.forEach((cl) => { (by[cl.source_id] ||= []).push(cl); });
+      setAllClaims(rows);
+      setClaimsBySource(by);
+    }).catch(() => {});
     api("/claims?status=pending").then((rows) => {
       const by = {};
       rows.forEach((cl) => { by[cl.source_id] = (by[cl.source_id] || 0) + 1; });
@@ -574,48 +685,217 @@ function Sources() {
   };
   if (err) return <div style={{ color: c.red, fontSize: 13 }}>{err}</div>;
   if (!sources.length) return <Empty>No sources yet. Run <Code>/ingest &lt;url&gt;</Code> in Claude Code, then publish.</Empty>;
+
+  const q = query.trim().toLowerCase();
+  const claimMatches = (cl) =>
+    !q || cl.text.toLowerCase().includes(q) ||
+    (cl.tags || []).some((t) => t.toLowerCase().includes(q)) ||
+    cl.capability_id.toLowerCase().includes(q);
+  const sourceMatches = (s) => {
+    const sc = claimsBySource[s.id] || [];
+    return !q ||
+      (s.title || "").toLowerCase().includes(q) ||
+      (s.url || "").toLowerCase().includes(q) ||
+      (s.tags || []).some((t) => t.toLowerCase().includes(q)) ||
+      sc.some(claimMatches);
+  };
+  const filtered = sources.filter((s) =>
+    (!activeOnly || s.active) &&
+    (tierFilter === "all" || String(s.tier) === tierFilter) &&
+    (!communityOnly || isCommunitySource(s)) &&
+    sourceMatches(s)
+  );
+  const activeCount = sources.filter((s) => s.active).length;
+  const communityCount = sources.filter((s) => s.active && isCommunitySource(s)).length;
+  const visibleClaimCount = filtered.reduce((n, s) => n + (claimsBySource[s.id] || []).length, 0);
+  const openSource = sources.find((s) => s.id === openSourceId) || filtered[0];
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
-      {sources.map((s) => {
-        const sa = assets.filter((a) => a.source_id === s.id);
-        const pending = pendingBySource[s.id] || 0;
-        return (
-          <div key={s.id} style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 14, boxShadow: c.shadow }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <Chip color={TIER_COLORS[s.tier]}>{`T${s.tier} · ${TIER_LABELS[s.tier] || ""}`}</Chip>
-              <Chip color={c.faint}>v{s.version}</Chip>
-              {!s.active && <Chip color={c.faint}>superseded</Chip>}
-              <span style={{ fontWeight: 600, fontSize: 14 }}>{s.title}</span>
-              {(s.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
-              {pending > 0 && (
-                <span style={{ marginLeft: "auto" }}>
-                  <Btn small primary onClick={() => verifySource(s.id)}>Verify {pending} pending</Btn>
-                </span>
-              )}
-            </div>
-            {s.url && <a href={s.url} target="_blank" rel="noreferrer" style={{ fontFamily: mono, fontSize: 11, color: c.faint, display: "block", marginTop: 6, textDecoration: "none" }}>{s.url}</a>}
-            {sa.length > 0 && (
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 10 }}>
-                {sa.map((a) => (
-                  <div key={a.id} style={{ border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 10, maxWidth: 280, background: c.panel2 }}>
-                    {a.kind === "generated" && a.path
-                      ? <img src={"/" + a.path.replace(/^\//, "")} alt={a.caption} style={{ maxWidth: "100%", borderRadius: 4, background: c.diagramBg }} onError={(e) => { e.target.style.display = "none"; }} />
-                      : null}
-                    <div style={{ fontSize: 12, color: c.text, marginTop: 6 }}>{a.caption}</div>
-                    {a.kind === "referenced" ? (
-                      <div style={{ fontSize: 11, color: c.faint, marginTop: 4 }}>
-                        <a href={a.url} target="_blank" rel="noreferrer" style={{ color: c.accentText }}>View original ↗</a> · {a.attribution}
-                      </div>
-                    ) : (
-                      <Chip color={c.green}>original diagram</Chip>
-                    )}
+      <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 12, boxShadow: c.shadow }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 10 }}>
+          <Chip color={c.accentText}>{activeCount} active sources</Chip>
+          <Chip color={c.accentText}>{communityCount} community blogs</Chip>
+          <Chip>{visibleClaimCount} visible claims</Chip>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search sources and claims"
+            style={{ flex: "1 1 260px", fontFamily: sans, fontSize: 13, color: c.text, background: c.panel2, border: "1px solid " + c.line, borderRadius: 4, padding: "8px 10px", minWidth: 0 }}
+          />
+          <select
+            value={tierFilter}
+            onChange={(e) => setTierFilter(e.target.value)}
+            style={{ flex: "0 1 190px", fontFamily: sans, fontSize: 13, color: c.text, background: c.panel2, border: "1px solid " + c.line, borderRadius: 4, padding: "8px 10px", minWidth: 150 }}>
+            <option value="all">All tiers</option>
+            {[1, 2, 3, 4, 5, 6].map((t) => <option key={t} value={String(t)}>T{t} · {TIER_LABELS[t]}</option>)}
+          </select>
+          <label style={{ display: "flex", gap: 6, alignItems: "center", color: c.muted, fontSize: 12, whiteSpace: "nowrap" }}>
+            <input type="checkbox" checked={communityOnly} onChange={(e) => setCommunityOnly(e.target.checked)} />
+            Community blogs
+          </label>
+          <label style={{ display: "flex", gap: 6, alignItems: "center", color: c.muted, fontSize: 12, whiteSpace: "nowrap" }}>
+            <input type="checkbox" checked={activeOnly} onChange={(e) => setActiveOnly(e.target.checked)} />
+            Active only
+          </label>
+        </div>
+      </div>
+
+      {!filtered.length && <Empty>No sources match the current filters.</Empty>}
+
+      {filtered.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 320px), 1fr))", gap: 14, alignItems: "start" }}>
+          <div style={{ display: "grid", gap: 8, maxHeight: 760, overflowY: "auto" }}>
+            {filtered.map((s) => {
+              const sc = claimsBySource[s.id] || [];
+              const pending = pendingBySource[s.id] || 0;
+              const verified = sc.filter((cl) => cl.status === "verified").length;
+              return (
+                <button key={s.id} onClick={() => setOpenSourceId(s.id)}
+                  style={{ textAlign: "left", cursor: "pointer", border: "1px solid " + (openSource?.id === s.id ? c.accent : c.line), borderRadius: 8, background: openSource?.id === s.id ? c.accentSoft : c.panel, padding: 12, boxShadow: c.shadow }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 7 }}>
+                    <Chip color={TIER_COLORS[s.tier]}>T{s.tier}</Chip>
+                    {isCommunitySource(s) && <Chip color={c.accentText}>community blog</Chip>}
+                    {!s.active && <Chip color={c.faint}>superseded</Chip>}
                   </div>
-                ))}
-              </div>
+                  <div style={{ fontWeight: 600, fontSize: 13, color: c.text, lineHeight: 1.35 }}>{s.title}</div>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+                    <Chip color={sc.length ? c.accentText : c.faint}>{sc.length} claims</Chip>
+                    <Chip color={verified ? c.green : c.faint}>{verified} verified</Chip>
+                    {pending > 0 && <Chip color={c.amber}>{pending} pending</Chip>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          <SourceReader
+            source={openSource}
+            claims={claimsBySource[openSource?.id] || []}
+            allClaims={allClaims}
+            sources={sources}
+            assets={assets}
+            onVerifySource={verifySource}
+            onOpenDiagram={setOpenDiagram}
+            onOpenCapability={onOpenCapability}
+          />
+        </div>
+      )}
+      <DiagramPanel
+        asset={openDiagram}
+        claims={allClaims}
+        sources={sources}
+        sourceClaims={claimsBySource[openDiagram?.source_id] || []}
+        onClose={() => setOpenDiagram(null)}
+        onOpenSource={setOpenSourceId}
+        onOpenCapability={onOpenCapability}
+      />
+    </div>
+  );
+}
+
+function SourceReader({ source, claims, allClaims, sources, assets, onVerifySource, onOpenDiagram, onOpenCapability }) {
+  if (!source) return null;
+  const pending = claims.filter((cl) => cl.status === "pending");
+  const verified = claims.filter((cl) => cl.status === "verified");
+  const capabilityIds = [...new Set(claims.map((cl) => cl.capability_id))];
+  const sourceAssets = assets.filter((a) => a.source_id === source.id);
+  const capabilityDiagrams = assets.filter((a) => a.kind === "generated" && a.path && !a.source_id && !a.design_id && capabilityIds.includes(a.capability_id));
+  const diagrams = [...sourceAssets.filter((a) => a.kind === "generated" && a.path), ...capabilityDiagrams]
+    .filter((a, i, arr) => arr.findIndex((x) => x.id === a.id) === i);
+  const referenced = sourceAssets.filter((a) => a.kind === "referenced");
+  const grouped = capabilityIds.map((id) => [id, claims.filter((cl) => cl.capability_id === id)]);
+  return (
+    <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, boxShadow: c.shadow, overflow: "hidden" }}>
+      <div style={{ padding: 16, borderBottom: "1px solid " + c.line }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+          <Chip color={TIER_COLORS[source.tier]}>{`T${source.tier} · ${TIER_LABELS[source.tier] || ""}`}</Chip>
+          {isCommunitySource(source) && <Chip color={c.accentText}>community blog</Chip>}
+          <Chip color={source.active ? c.green : c.faint}>{source.active ? "active" : "superseded"}</Chip>
+          <Chip color={c.faint}>v{source.version}</Chip>
+        </div>
+        <div style={{ fontSize: 19, fontWeight: 650, lineHeight: 1.25 }}>{source.title}</div>
+        {source.url && <a href={source.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 7, fontFamily: mono, fontSize: 11, color: c.accentText, textDecorationColor: c.accentDim }}>Open original source</a>}
+      </div>
+      <div style={{ padding: 16, display: "grid", gap: 16 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8 }}>
+          <div style={{ background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 10 }}><Chip color={c.accentText}>{claims.length} extracted claims</Chip></div>
+          <div style={{ background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 10 }}><Chip color={c.green}>{verified.length} verified</Chip></div>
+          <div style={{ background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 10 }}><Chip color={pending.length ? c.amber : c.faint}>{pending.length} pending</Chip></div>
+        </div>
+        {pending.length > 0 && <Btn small primary onClick={() => onVerifySource(source.id)}>Verify {pending.length} pending claims</Btn>}
+
+        <section>
+          <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>READER SUMMARY</div>
+          <div style={{ fontSize: 13.5, lineHeight: 1.65 }}>{source.summary || "This source has not yet been summarized. Re-run ingestion with reader metadata to populate the summary, audience, why-it-matters note, and key takeaways."}</div>
+        </section>
+        {(source.audience || source.why_it_matters) && (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 10 }}>
+            {source.audience && (
+              <section style={{ background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 12 }}>
+                <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>AUDIENCE</div>
+                <div style={{ fontSize: 13, lineHeight: 1.55 }}>{source.audience}</div>
+              </section>
+            )}
+            {source.why_it_matters && (
+              <section style={{ background: c.panel2, border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 12 }}>
+                <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>WHY IT MATTERS</div>
+                <div style={{ fontSize: 13, lineHeight: 1.55 }}>{source.why_it_matters}</div>
+              </section>
             )}
           </div>
-        );
-      })}
+        )}
+        {(source.takeaways || []).length > 0 && (
+          <section>
+            <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 6 }}>KEY TAKEAWAYS</div>
+            <div style={{ display: "grid", gap: 7 }}>
+              {source.takeaways.map((t, i) => (
+                <div key={i} style={{ border: "1px solid " + c.lineSoft, borderRadius: 6, padding: "8px 10px", background: c.panel2, fontSize: 13, lineHeight: 1.45 }}>{t}</div>
+              ))}
+            </div>
+          </section>
+        )}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {(source.tags || []).map((t) => <Chip key={t} color={c.accentText}>#{t}</Chip>)}
+          {capabilityIds.map((id) => <button key={id} onClick={() => onOpenCapability?.(id)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}><Chip color={c.accentText}>{capName(id)}</Chip></button>)}
+        </div>
+        {diagrams.length > 0 && (
+          <section>
+            <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>RELATED GENERATED DIAGRAMS</div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              {diagrams.map((a) => <DiagramThumb key={a.id} asset={a} onClick={() => onOpenDiagram(a)} />)}
+            </div>
+          </section>
+        )}
+        {referenced.length > 0 && (
+          <section>
+            <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>REFERENCED SOURCE ASSETS</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {referenced.map((a) => (
+                <div key={a.id} style={{ border: "1px solid " + c.lineSoft, borderRadius: 6, padding: 10, background: c.panel2 }}>
+                  <div style={{ fontSize: 13, lineHeight: 1.45 }}>{a.caption}</div>
+                  <div style={{ fontSize: 11, color: c.faint, marginTop: 4 }}><a href={a.url} target="_blank" rel="noreferrer" style={{ color: c.accentText }}>View original</a> · {a.attribution}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+        <section>
+          <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>CLAIMS BY CAPABILITY</div>
+          <div style={{ display: "grid", gap: 12 }}>
+            {grouped.map(([id, rows]) => (
+              <div key={id}>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 7 }}>
+                  <button onClick={() => onOpenCapability?.(id)} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}><Chip color={c.accentText}>{capName(id)}</Chip></button>
+                  <Chip>{rows.length} claims</Chip>
+                </div>
+                <ClaimRows claims={rows} />
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
     </div>
   );
 }
@@ -698,11 +978,19 @@ function Designs() {
 /* Lessons are authored by the learning-author agent into content/lessons/
    (grounded in verified claims only) and served statically by the backend.
    This tab lists and renders them. */
-function Learn() {
+function Learn({ onOpenCapability }) {
   const [files, setFiles] = useState(null);   // null = loading
   const [open, setOpen] = useState(null);     // { name, md }
+  const [cap, setCap] = useState("lakehouse");
+  const [claims, setClaims] = useState([]);
+  const [sources, setSources] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [openDiagram, setOpenDiagram] = useState(null);
   useEffect(() => {
     api("/lessons/files").then(setFiles).catch(() => setFiles([]));
+    api("/claims?include_inactive=true").then(setClaims).catch(() => setClaims([]));
+    api("/sources").then(setSources).catch(() => setSources([]));
+    api("/assets").then(setAssets).catch(() => setAssets([]));
   }, []);
 
   const view = async (f) => {
@@ -711,34 +999,138 @@ function Learn() {
   };
 
   if (files === null) return null;
-  if (!files.length) {
-    return (
-      <Empty>
-        No lessons yet. Verify claims in the Registry, then in Claude Code run{" "}
-        <Code>/lesson &lt;capability&gt; &lt;Beginner|Intermediate|Expert&gt;</Code> —
-        lessons are grounded only in approved claims (Beginner=L1–L2, Intermediate=L3, Expert=L4–L5).
-      </Empty>
-    );
-  }
+  const capClaims = claims.filter((cl) => cl.capability_id === cap && cl.active !== false);
+  const verified = capClaims.filter((cl) => cl.status === "verified");
+  const pendingCommunity = capClaims.filter((cl) => cl.status === "pending" && isCommunitySource(sources.find((s) => s.id === cl.source_id)));
+  const capSourceIds = [...new Set(capClaims.map((cl) => cl.source_id))];
+  const capSources = capSourceIds.map((id) => sources.find((s) => s.id === id)).filter(Boolean);
+  const capDiagrams = assets.filter((a) => a.kind === "generated" && a.path && a.capability_id === cap);
+  const capFiles = (files || []).filter((f) => f.name.toLowerCase().startsWith(cap.toLowerCase() + "-"));
+  const beginner = verified.filter((cl) => cl.depth <= 2).length;
+  const intermediate = verified.filter((cl) => cl.depth === 3).length;
+  const expert = verified.filter((cl) => cl.depth >= 4).length;
+
   return (
-    <div style={{ display: "grid", gridTemplateColumns: open ? "minmax(240px, 300px) 1fr" : "1fr", gap: 16 }}>
-      <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
-        {files.map((f) => (
-          <button key={f.name} onClick={() => view(f)} style={{ textAlign: "left", cursor: "pointer", background: open?.name === f.name ? c.accentSoft : c.panel, border: "1px solid " + (open?.name === f.name ? c.accent : c.line), borderRadius: 8, padding: 12, boxShadow: c.shadow }}>
-            <div style={{ fontWeight: 600, fontSize: 13, color: c.text }}>{f.name.replace(/\.md$/, "").replace(/-/g, " ")}</div>
-            <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginTop: 4 }}>{f.path}</div>
-          </button>
-        ))}
-      </div>
-      {open && (
-        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 18, boxShadow: c.shadow }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
-            <span style={{ fontWeight: 600 }}>{open.name}</span>
-            <Btn small onClick={() => setOpen(null)}>Close</Btn>
+    <div style={{ display: "grid", gridTemplateColumns: open ? "repeat(auto-fit, minmax(min(100%, 320px), 1fr))" : "1fr", gap: 16 }}>
+      <div style={{ display: "grid", gap: 12, alignContent: "start" }}>
+        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 14, boxShadow: c.shadow }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}>
+            <div>
+              <div style={{ fontWeight: 650, fontSize: 15 }}>{capName(cap)}</div>
+              <div style={{ color: c.muted, fontSize: 12, marginTop: 3 }}>Learning view over verified claims, source summaries, and diagrams.</div>
+            </div>
+            <select value={cap} onChange={(e) => { setCap(e.target.value); setOpen(null); }} style={{ fontFamily: sans, fontSize: 13, color: c.text, background: c.panel2, border: "1px solid " + c.line, borderRadius: 4, padding: "8px 10px", maxWidth: 260 }}>
+              {CAPABILITIES.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+            </select>
           </div>
-          <Md text={open.md} />
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <Chip color={c.green}>{verified.length} verified claims</Chip>
+            <Chip color={pendingCommunity.length ? c.amber : c.faint}>{pendingCommunity.length} pending community insights</Chip>
+            <Chip color={capDiagrams.length ? c.accentText : c.faint}>{capDiagrams.length} diagrams</Chip>
+            <Btn small onClick={() => onOpenCapability?.(cap)}>Open Registry</Btn>
+          </div>
+        </div>
+
+        <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 14, boxShadow: c.shadow }}>
+          <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>LESSON READINESS</div>
+          <div style={{ display: "grid", gap: 7 }}>
+            {[
+              ["Beginner", beginner, "L1-L2"],
+              ["Intermediate", intermediate, "L3"],
+              ["Expert", expert, "L4-L5"],
+            ].map(([level, count, depths]) => (
+              <div key={level} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", border: "1px solid " + c.lineSoft, borderRadius: 6, padding: "8px 10px", background: c.panel2 }}>
+                <span style={{ fontSize: 13 }}>{level} <span style={{ color: c.faint }}>({depths})</span></span>
+                <Chip color={count ? c.green : c.amber}>{count} verified</Chip>
+              </div>
+            ))}
+          </div>
+          {verified.length === 0 && (
+            <div style={{ color: c.muted, fontSize: 13, lineHeight: 1.55, marginTop: 10 }}>
+              This capability has no verified claims yet. Verify relevant claims first, then run <Code>/lesson {cap} &lt;level&gt;</Code>.
+            </div>
+          )}
+        </div>
+
+        {capFiles.length > 0 ? (
+          <div style={{ display: "grid", gap: 8 }}>
+            {capFiles.map((f) => (
+              <button key={f.name} onClick={() => view(f)} style={{ textAlign: "left", cursor: "pointer", background: open?.name === f.name ? c.accentSoft : c.panel, border: "1px solid " + (open?.name === f.name ? c.accent : c.line), borderRadius: 8, padding: 12, boxShadow: c.shadow }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: c.text }}>{f.name.replace(/\.md$/, "").replace(/-/g, " ")}</div>
+                <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginTop: 4 }}>{f.path}</div>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <Empty>No generated lessons for this capability yet.</Empty>
+        )}
+      </div>
+
+      <div style={{ border: "1px solid " + c.line, borderRadius: 8, background: c.panel, padding: 16, boxShadow: c.shadow }}>
+        {open ? (
+          <>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontWeight: 600 }}>{open.name}</span>
+              <Btn small onClick={() => setOpen(null)}>Close</Btn>
+            </div>
+            <Md text={open.md} />
+          </>
+        ) : (
+          <div style={{ display: "grid", gap: 16 }}>
+            {capDiagrams.length > 0 && (
+              <section>
+                <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>RELATED DIAGRAMS</div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  {capDiagrams.map((a) => <DiagramThumb key={a.id} asset={a} onClick={() => setOpenDiagram(a)} />)}
+                </div>
+              </section>
+            )}
+            <section>
+              <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>SOURCE SUMMARIES</div>
+              {capSources.length === 0 ? <div style={{ color: c.muted, fontSize: 13 }}>No sources for this capability yet.</div> : (
+                <div style={{ display: "grid", gap: 8 }}>
+                  {capSources.slice(0, 8).map((s) => (
+                    <div key={s.id} style={{ border: "1px solid " + c.lineSoft, borderRadius: 6, background: c.panel2, padding: 10 }}>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 5 }}>
+                        <Chip color={TIER_COLORS[s.tier]}>T{s.tier}</Chip>
+                        {isCommunitySource(s) && <Chip color={c.accentText}>community blog</Chip>}
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{s.title}</div>
+                      <div style={{ fontSize: 12.5, color: c.text, lineHeight: 1.5 }}>{s.summary || "Not yet summarized."}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+            <section>
+              <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, marginBottom: 8 }}>VERIFIED LEARNING CLAIMS</div>
+              <ClaimRows claims={verified.slice(0, 12)} compact />
+            </section>
+            {pendingCommunity.length > 0 && (
+              <section>
+                <div style={{ fontFamily: mono, fontSize: 11, color: c.amber, marginBottom: 8 }}>PENDING COMMUNITY INSIGHTS</div>
+                <ClaimRows claims={pendingCommunity.slice(0, 8)} compact />
+              </section>
+            )}
+          </div>
+        )}
+      </div>
+
+      {!files.length && (
+        <div style={{ gridColumn: "1 / -1" }}>
+          <Empty>
+            No lesson files yet. Verify claims in the Registry, then in Claude Code run{" "}
+            <Code>/lesson &lt;capability&gt; &lt;Beginner|Intermediate|Expert&gt;</Code>.
+          </Empty>
         </div>
       )}
+      <DiagramPanel
+        asset={openDiagram}
+        claims={claims}
+        sources={sources}
+        onClose={() => setOpenDiagram(null)}
+        onOpenCapability={onOpenCapability}
+      />
     </div>
   );
 }

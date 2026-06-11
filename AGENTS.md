@@ -34,7 +34,8 @@ sources become versioned, source-graded **claims** (each tagged to a **capabilit
 ## Copyright
 
 Paraphrase fully. Any quote < 15 words, one per source, attributed. Never reproduce source
-paragraphs, tables, or structure. Store links + claims + original summaries, never copied text.
+paragraphs, tables, or structure. Store links, claims, original summaries, audience notes,
+why-it-matters notes, and takeaways; never store copied text.
 
 ## Operating model — you are the LLM engine
 

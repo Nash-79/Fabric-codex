@@ -37,6 +37,10 @@ Or author the file by hand — the shape is one JSON file **per source**
   "url": "https://learn.microsoft.com/fabric/...",
   "title": "Page title",
   "tier": 1,
+  "summary": "Original short summary for readers.",
+  "audience": "Who should read this source.",
+  "why_it_matters": "Why this source matters to Fabric architecture or operations.",
+  "takeaways": ["A concise original takeaway."],
   "tags": ["MicrosoftFabric", "OneLake"],
   "claims": [
     { "capability_id": "onelake", "text": "One atomic fact in your own words.",
@@ -59,10 +63,14 @@ Field rules (enforced or silently dropped by the backend — `import_content.py`
 | `depth` | 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 internals |
 | `type` | `fact` \| `pattern` \| `antipattern` \| `internal` |
 | `tier` | 1 MS Learn · 2 Fabric blog · 3 MS GitHub/papers · 4 MVP/community · 5 vendor · 6 unknown |
+| `summary` / `audience` / `why_it_matters` | original reader metadata only; do not copy article prose |
+| `takeaways` | 3-5 original, concise takeaways; no copied bullets from the source |
 | `assets[].kind` | `referenced` (external image: url + attribution, never re-hosted) or `generated` (original SVG/Mermaid in `content/diagrams/`) |
 
 Re-running the import on an existing source is safe — the backend treats it as a drift
-check (versions changed claims, deprecates removed ones, flags citing designs).
+check (versions changed claims, deprecates removed ones, flags citing designs). If claim
+texts are unchanged but reader metadata changed, the active source metadata is updated
+without creating new claim versions.
 
 ## 2. Add a capability
 
