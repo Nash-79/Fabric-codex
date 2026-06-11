@@ -10,6 +10,16 @@ v0.2 adds:
 v0.3 adds:
   - `ready_to_share` on Design (persisted result of full validation pass with no critical issues)
   - Claim status now also includes "rejected" (human-dismissed pending claim)
+v0.4 adds (the portal layer — see docs/data-model.md):
+  - `Topic`: n-nested topic tree (adjacency list via parent_id), mapped to >=1 capability.
+    Topics organise the reading portal; the flat capability registry stays the spine.
+  - `Blog`: a cited long-form article per topic, versioned like Claim/Source
+    (blog_key + version + supersedes_id + active) and validated like Design.
+  - `QueueItem`: DB-backed ingestion queue — URLs submitted via the frontend,
+    consumed by the local knowledge-curator agent (/ingest-batch).
+  - `ValidationRun` generalised with target_kind/target_id so blogs reuse the
+    design validation machinery; design_id kept for legacy rows.
+  - `Asset.blog_id` so generated diagrams can hang off blogs.
 """
 from __future__ import annotations
 import json
@@ -104,6 +114,7 @@ class Asset(SQLModel, table=True):
     source_id: Optional[str] = Field(default=None, index=True)
     claim_id: Optional[str] = None
     design_id: Optional[str] = Field(default=None, index=True)
+    blog_id: Optional[str] = Field(default=None, index=True)
     created_at: datetime = Field(default_factory=_now)
 
 
@@ -139,7 +150,11 @@ class ClaimEvent(SQLModel, table=True):
 
 class ValidationRun(SQLModel, table=True):
     id: str = Field(default_factory=_uid, primary_key=True)
-    design_id: str = Field(index=True)
+    # design_id kept populated for design runs (legacy readers); target_kind/target_id
+    # are the generalised pointer so blogs reuse the same validation machinery.
+    design_id: str = Field(index=True, default="")
+    target_kind: str = Field(default="design", index=True)   # design | blog
+    target_id: str = Field(default="", index=True)
     confidence: float = 1.0
     created_at: datetime = Field(default_factory=_now)
 
@@ -151,3 +166,60 @@ class Issue(SQLModel, table=True):
     severity: str
     message: str
     ref: str = ""
+
+
+class Topic(SQLModel, table=True):
+    """A node in the n-nested reading taxonomy. Topics organise the portal; each maps
+    to one or more capabilities so claims, coverage, and blogs flow from the spine."""
+    id: str = Field(default_factory=_uid, primary_key=True)
+    slug: str = Field(index=True, unique=True)
+    name: str = ""
+    parent_id: Optional[str] = Field(default=None, index=True)
+    description: str = ""
+    capability_ids_json: str = "[]"
+    order: int = 0
+    tags_json: str = "[]"
+    active: bool = True
+    created_at: datetime = Field(default_factory=_now)
+
+
+class Blog(SQLModel, table=True):
+    """A cited long-form article for a topic. Versioned like Claim/Source — republishing
+    a topic supersedes the prior version; nothing is edited in place. Validated like a
+    Design (citation + freshness deterministic checks, agent grounding review)."""
+    id: str = Field(default_factory=_uid, primary_key=True)
+    blog_key: str = Field(index=True, default_factory=_uid)
+    version: int = 1
+    topic_id: str = Field(index=True)
+    slug: str = Field(index=True)
+    title: str = ""
+    summary: str = ""
+    body_md: str = ""
+    cited_source_ids_json: str = "[]"
+    tags_json: str = "[]"
+    depth_levels_json: str = "[]"        # which L-levels the article covers, e.g. [1,2,3]
+    # draft | checked (deterministic validators only) | validated (full pass) | needs_review
+    status: str = Field(default="draft", index=True)
+    confidence: Optional[float] = None
+    ready_to_share: bool = Field(default=False)
+    supersedes_id: Optional[str] = None
+    active: bool = Field(default=True, index=True)
+    created_at: datetime = Field(default_factory=_now)
+
+
+class QueueItem(SQLModel, table=True):
+    """A URL submitted (usually via the frontend) for local agent ingestion.
+    The DB queue is user intent, not knowledge — it is not git-tracked; the
+    source JSON the curator writes is what gets committed."""
+    id: str = Field(default_factory=_uid, primary_key=True)
+    url: str = ""
+    title: str = ""
+    tier: int = 6                        # submitter's suggested trust tier
+    notes: str = ""
+    tags_json: str = "[]"
+    status: str = Field(default="queued", index=True)  # queued|claimed|ingested|failed|dismissed
+    claimed_at: Optional[datetime] = None
+    result_source_id: Optional[str] = None
+    error: str = ""
+    submitted_by: str = ""
+    created_at: datetime = Field(default_factory=_now)

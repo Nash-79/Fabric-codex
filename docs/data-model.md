@@ -6,6 +6,8 @@ Read this before changing `backend/app/models.py`.
 
 ```
 Source ──< Claim >── (cited_by) ── Design ──< ValidationRun ──< Issue
+                └─── (cited_by) ── Blog ────< ValidationRun (target_kind="blog")
+Topic (n-nested tree) ──< Blog          QueueItem (frontend → agent ingestion)
 ```
 
 - **Source** — one revision of an approved source. A source *family* shares a `source_key`
@@ -16,7 +18,25 @@ Source ──< Claim >── (cited_by) ── Design ──< ValidationRun ─�
 - **Claim** — one atomic, paraphrased, cited fact/pattern/anti-pattern/internal, tagged to a
   capability and depth, pointing at the exact `Source` revision it came from.
 - **Design** — a generated architecture, storing the cited source ids so drift can find it.
-- **ValidationRun / Issue** — the result of one validation pass over a design.
+- **ValidationRun / Issue** — the result of one validation pass over a design **or a blog**.
+  `target_kind` (`design` | `blog`) + `target_id` are the generalised pointer; `design_id`
+  stays populated on design runs for older readers.
+- **Topic** (v0.4) — a node in the n-nested reading taxonomy (adjacency list via `parent_id`,
+  unique `slug`). Each topic maps to **one or more capabilities** (`capability_ids_json`) so
+  claims, coverage, and blogs all flow from the flat capability registry — the spine is
+  unchanged. Topics are curation surface, not knowledge: they can be renamed/reordered in
+  place and are not versioned.
+- **Blog** (v0.4) — a cited long-form article for a topic. Versioned exactly like a claim:
+  `blog_key` + `version` + `supersedes_id` + `active`; republishing a topic's article creates
+  a new version and deactivates the old one. Validated exactly like a design (same status
+  enum `draft|checked|validated|needs_review`, same confidence formula, same
+  `ready_to_share` gate). `cited_source_ids_json` lets drift find blogs the same way it finds
+  designs. Blogs are **stricter than designs**: every cited source must back at least one
+  verified active claim, because blogs are public-facing prose.
+- **QueueItem** (v0.4) — a URL submitted via the frontend awaiting local agent ingestion.
+  State machine: `queued → claimed → ingested | failed (→ queued via requeue)`, or
+  `queued → dismissed` by a human. The queue is user intent, not knowledge — it is not
+  git-tracked; the source JSON the curator writes is what gets committed.
 
 ## The claim version chain (the important part)
 
@@ -65,13 +85,18 @@ audit trail and rollback surface.
    - `0.55–0.85` → **changed** → supersede
    - no good match → **added** (new family, pending)
 5. Old active claims with no match → **removed** → deprecated.
-6. Any `Design` citing a source in this family → `status="needs_review"`.
+6. Any `Design` **or active `Blog`** citing a source in this family → `status="needs_review"`
+   (returned as `affected_designs` / `affected_blogs`). This is the guardrail that keeps
+   published articles from silently outliving the sources behind them.
 
 The similarity thresholds (`SAME`, `CHANGED` in `services.py`) are the tuning knobs. They use
 `difflib` for zero dependencies; for production matching, replace with embeddings + pgvector
 so semantically-equal-but-reworded claims match reliably.
 
-## The validation pass (services.validate_design)
+## The validation pass (services.validate_design / services.validate_blog)
+
+Both wrap the same `_validate_document` core; blogs add one extra deterministic check —
+every embedded `![](/content/diagrams/...)` image must exist on disk (warning if missing).
 
 Deterministic validators run with no API key:
 
@@ -122,6 +147,9 @@ ingest. Query with `GET /claims?tag=PySpark` and `GET /tags` (returns counts).
 |------|--------|------|
 | `referenced` | `url`, `caption`, `attribution`, `license_note` | An external (e.g. blog/Learn) image. Stored by **reference with attribution only — never re-hosted**. The backend forces an attribution placeholder if one is missing. |
 | `generated` | `path`, `caption`, `capability_id` | An **original** Mermaid/SVG diagram authored by the diagram-author agent and committed under `content/diagrams/`. |
+
+Assets can attach to a source, claim, design, or (v0.4) blog via `blog_id`. Blog bodies embed
+only `generated` originals — referenced screenshots stay on source cards with attribution.
 
 Prefer `generated` originals over `referenced` copies. The platform produces vector
 diagram-as-code (SVG/Mermaid), not raster art, and never embeds third-party logos/IP.

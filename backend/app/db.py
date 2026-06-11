@@ -34,6 +34,11 @@ def _run_migrations(raw_conn) -> None:
         ("design", "ready_to_share", "INTEGER NOT NULL DEFAULT 0"),
         # v0.4 (Task #2): new_status column on ClaimEvent audit trail
         ("claimevent", "new_status", "TEXT NOT NULL DEFAULT ''"),
+        # v0.4 portal layer: ValidationRun generalised to designs + blogs
+        ("validationrun", "target_kind", "TEXT NOT NULL DEFAULT 'design'"),
+        ("validationrun", "target_id", "TEXT NOT NULL DEFAULT ''"),
+        # v0.4 portal layer: diagrams can hang off blogs
+        ("asset", "blog_id", "TEXT"),
     ]
     for table, column, col_def in migrations:
         # PRAGMA table_info returns rows where the second element is the column name
