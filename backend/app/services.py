@@ -21,7 +21,7 @@ from app import llm
 from app.db import LLM_MODE
 
 from app.models import (Source, Claim, ClaimEvent, Design, ValidationRun, Issue, Asset,
-                        dump_tags, load_tags)
+                        dump_tags, load_tags, dump_list, load_list)
 
 log = logging.getLogger(__name__)
 
@@ -125,17 +125,23 @@ def _resolve_claims(content: str, provided: Optional[list[dict]]) -> list[dict]:
 
 def ingest_source(session: Session, url: str, title: str, tier: int, content: str = "",
                   claims: Optional[list[dict]] = None, tags: Optional[list[str]] = None,
-                  assets: Optional[list[dict]] = None) -> dict:
+                  assets: Optional[list[dict]] = None, summary: str = "",
+                  audience: str = "", why_it_matters: str = "",
+                  takeaways: Optional[list[str]] = None) -> dict:
     key = slugify(url or title)
     existing = session.exec(
         select(Source).where(Source.source_key == key, Source.active == True)).first()  # noqa: E712
     if existing:
         return detect_drift(session, key, content=content, claims=claims,
-                            url=url, title=title, tier=tier, tags=tags, assets=assets)
+                            url=url, title=title, tier=tier, tags=tags, assets=assets,
+                            summary=summary, audience=audience,
+                            why_it_matters=why_it_matters, takeaways=takeaways)
 
     extracted = _resolve_claims(content, claims)   # may raise — do it before any writes
     src = Source(source_key=key, version=1, url=url, title=title or url or key, tier=tier,
                  content_hash=_source_fingerprint(content, claims),
+                 summary=summary, audience=audience, why_it_matters=why_it_matters,
+                 takeaways_json=dump_list(takeaways),
                  tags_json=dump_tags(tags), active=True)
     session.add(src)
     session.commit()
@@ -585,16 +591,35 @@ def validate_design(session: Session, design_id: str,
 def detect_drift(session: Session, source_key: str, content: str = "",
                  claims: Optional[list[dict]] = None, url: str = "", title: str = "",
                  tier: Optional[int] = None, tags: Optional[list[str]] = None,
-                 assets: Optional[list[dict]] = None) -> dict:
+                 assets: Optional[list[dict]] = None, summary: str = "",
+                 audience: str = "", why_it_matters: str = "",
+                 takeaways: Optional[list[str]] = None) -> dict:
     current_src = session.exec(
         select(Source).where(Source.source_key == source_key, Source.active == True)).first()  # noqa: E712
     if current_src is None:
         return ingest_source(session, url or source_key, title, tier or 6,
-                             content=content, claims=claims, tags=tags, assets=assets)
+                             content=content, claims=claims, tags=tags, assets=assets,
+                             summary=summary, audience=audience,
+                             why_it_matters=why_it_matters, takeaways=takeaways)
 
     new_hash = _source_fingerprint(content, claims)
     if new_hash == current_src.content_hash:
+        # Reader metadata is discovery text, not knowledge — backfill in place on a no-op
+        # drift so re-running import_content.py can enrich older rows without versioning.
+        backfilled = False
+        for field, value in (("summary", summary), ("audience", audience),
+                             ("why_it_matters", why_it_matters)):
+            if value and getattr(current_src, field) != value:
+                setattr(current_src, field, value)
+                backfilled = True
+        if takeaways is not None and dump_list(takeaways) != current_src.takeaways_json:
+            current_src.takeaways_json = dump_list(takeaways)
+            backfilled = True
+        if backfilled:
+            session.add(current_src)
+            session.commit()
         return {"source_key": source_key, "drift": False, "reason": "content unchanged",
+                "metadata_updated": backfilled,
                 "added": 0, "changed": 0, "removed": 0, "unchanged": 0, "affected_designs": []}
 
     extracted = _resolve_claims(content, claims)   # may raise — do it before any writes
@@ -605,6 +630,11 @@ def detect_drift(session: Session, source_key: str, content: str = "",
                      url=url or current_src.url, title=title or current_src.title,
                      tier=tier if tier is not None else current_src.tier,
                      content_hash=new_hash,
+                     summary=summary or current_src.summary,
+                     audience=audience or current_src.audience,
+                     why_it_matters=why_it_matters or current_src.why_it_matters,
+                     takeaways_json=(dump_list(takeaways) if takeaways is not None
+                                     else current_src.takeaways_json),
                      tags_json=dump_tags(tags) if tags else current_src.tags_json,
                      active=True)
     session.add(new_src)
@@ -666,6 +696,16 @@ def detect_drift(session: Session, source_key: str, content: str = "",
 
 
 # --------------------------------------------------------------- serialisers
+def _source_dict(s: Source) -> dict:
+    return {"id": s.id, "source_key": s.source_key, "version": s.version,
+            "url": s.url, "title": s.title, "tier": s.tier,
+            "summary": s.summary, "audience": s.audience,
+            "why_it_matters": s.why_it_matters,
+            "takeaways": load_list(s.takeaways_json),
+            "tags": load_tags(s.tags_json), "active": s.active,
+            "created_at": s.created_at.isoformat()}
+
+
 def _claim_dict(c: Claim) -> dict:
     return {"id": c.id, "claim_key": c.claim_key, "version": c.version,
             "capability_id": c.capability_id, "text": c.text, "depth": c.depth,
