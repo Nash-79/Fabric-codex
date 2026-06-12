@@ -26,13 +26,20 @@ capability; coverage gaps are visible per capability and depth. Build around it.
 
 ```
 backend/            FastAPI + SQLModel. Claim versioning + validation pass live here.
-  app/models.py     Source, Claim (version chain), Design, ValidationRun, Issue
-  app/services.py   ingestion, versioning/supersede, generation, validation, drift
+  app/models.py     Source, Claim (version chain), Design, ValidationRun, Issue,
+                    Topic (n-nested tree), Blog (versioned article), QueueItem
+  app/services.py   ingestion, versioning/supersede, generation, validation, drift,
+                    queue, topics, blogs
   app/routers.py    REST API
+  app/search.py     SQLite FTS5 search over claims/sources/blogs/topics (LIKE fallback)
   app/llm.py        Anthropic wrapper + structured-output helpers (graceful w/o key)
-frontend/           React app (evolve the fabric-atlas.jsx prototype to call the API)
-.claude/agents/     Subagents (curator, architect, validator, drift, learning, coverage)
+frontend/           React + Vite SPA. src/views/ per page, src/components/, React Router.
+                    Portal routes: /topics (tree), /blog/<slug> (reader), /search, /help.
+.claude/agents/     Subagents (curator, architect, validator, drift, learning, coverage,
+                    diagram, advisor, blog-author, docs-author)
 .claude/commands/   Slash commands that drive the agents
+content/            Git-tracked authored content: sources/, diagrams/, designs/, lessons/,
+                    blogs/, help/, topics.json (seed tree), queue.md (offline queue)
 docs/data-model.md  How claim versioning and supersede work — read before touching models
 docs/extending.md   Extension points: content, capabilities, theme tokens, views, agents
 ```
@@ -113,8 +120,16 @@ pgvector for semantic retrieval — see docs/data-model.md.
 - **coverage-auditor** — finds capabilities/depths the knowledge base is missing.
 - **diagram-author** — creates original Mermaid/SVG diagrams (never copies source images).
 - **fabric-advisor** — expert Q&A grounded only in KB claims, cited; refuses where the KB is silent.
+- **blog-author** — composes the cited portal article for a topic from VERIFIED claims only;
+  refuses thin coverage, labels inference, commissions original diagrams.
+- **docs-author** — self-documentation: keeps content/help/*.md matching the actual code;
+  never documents features that don't exist.
 
 Prefer explicit invocation, e.g. `Use the knowledge-curator subagent on docs/sources/direct-lake.md`.
+`/publish-topic <slug>` chains agents for one topic: coverage check → human verify gate →
+diagram → article → validation → docs sync. URLs submitted via the frontend land in the
+server's ingestion queue (`POST /queue`); `/ingest-batch` consumes it, with content/queue.md
+as the offline fallback.
 
 ## Conventions
 
