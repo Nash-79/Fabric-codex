@@ -13,6 +13,7 @@ from sqlmodel import Session, select
 from app.db import get_session
 from app.models import Source, Claim, Design, ValidationRun, Issue, Asset, load_tags
 from app import services, llm
+from app import search as search_mod
 
 router = APIRouter()
 
@@ -553,6 +554,26 @@ def blog_validations(blog_id: str, session: Session = Depends(get_session)):
         issues = session.exec(select(Issue).where(Issue.run_id == r.id)).all()
         out.append({**r.model_dump(), "issues": [i.model_dump() for i in issues]})
     return out
+
+
+# ------------------------------------------------------------------ search
+@router.get("/search")
+def search_kb(q: str, kind: Optional[str] = None, tag: Optional[str] = None,
+              capability: Optional[str] = None, limit: int = 20,
+              session: Session = Depends(get_session)):
+    """Grouped full-text search over blogs, topics, claims, and sources (FTS5 on
+    SQLite; LIKE fallback elsewhere). Results reflect live status — inactive
+    versions never surface."""
+    if kind and kind not in ("blog", "topic", "claim", "source"):
+        raise HTTPException(400, "kind must be one of blog|topic|claim|source.")
+    return search_mod.search(session, q, kind=kind, tag=tag, capability=capability,
+                             limit=min(limit, 50))
+
+
+@router.post("/search/rebuild")
+def search_rebuild(session: Session = Depends(get_session)):
+    """Repopulate the search index from the live tables (recovery / upgrade path)."""
+    return search_mod.rebuild_search_index(session)
 
 
 # ------------------------------------------------------------------ help

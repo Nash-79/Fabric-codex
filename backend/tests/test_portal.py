@@ -222,6 +222,51 @@ def test_blog_flags_missing_diagram(client):
     assert any("does-not-exist.svg" in i["message"] for i in res["issues"])
 
 
+# ------------------------------------------------------------------ search
+def test_search_hits_all_kinds(client):
+    t = _topic(client, slug="onelake", name="OneLake")
+    sid = _verified_source(client, texts=["Shortcuts virtualize external data into OneLake."])
+    client.post("/blogs", json=_blog_payload(
+        t["id"], sid, body_md="OneLake shortcuts explained in depth [S1]."))
+
+    res = client.get("/search?q=shortcuts").json()
+    assert len(res["claims"]) == 1 and "<b>" in res["claims"][0]["snippet"]
+    assert len(res["blogs"]) == 1 and res["blogs"][0]["ref"] == "onelake-explained"
+
+    res = client.get("/search?q=onelake").json()
+    assert len(res["topics"]) == 1 and res["topics"][0]["ref"] == "onelake"
+    assert len(res["sources"]) == 1
+
+    # kind filter narrows to one group
+    res = client.get("/search?q=onelake&kind=topic").json()
+    assert res["topics"] and not res["claims"] and not res["sources"] and not res["blogs"]
+
+
+def test_search_excludes_superseded_versions(client):
+    t = _topic(client)
+    sid = _verified_source(client)
+    client.post("/blogs", json=_blog_payload(t["id"], sid, body_md="First draft body [S1]."))
+    client.post("/blogs", json=_blog_payload(t["id"], sid, body_md="Second revision body [S1]."))
+    res = client.get("/search?q=body").json()
+    assert len(res["blogs"]) == 1   # only the active version surfaces
+    assert client.get("/search?q=draft").json()["blogs"] == []   # v1 text is history
+
+
+def test_search_tag_filter_and_empty_query(client):
+    _verified_source(client)
+    assert client.get("/search?q=").json() == {"blogs": [], "topics": [], "claims": [], "sources": []}
+    res = client.get("/search?q=onelake&tag=MicrosoftFabric").json()
+    assert len(res["sources"]) == 1
+    assert client.get("/search?q=onelake&tag=NoSuchTag").json()["sources"] == []
+
+
+def test_search_rebuild(client):
+    _verified_source(client)
+    res = client.post("/search/rebuild").json()
+    assert res["rebuilt"] is True and res["indexed"]["claim"] == 1
+    assert client.get("/search?q=onelake").json()["sources"]
+
+
 def test_drift_flags_citing_blog_needs_review(client):
     t = _topic(client)
     url = "https://learn.microsoft.com/fabric/drifting"

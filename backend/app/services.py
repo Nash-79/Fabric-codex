@@ -17,7 +17,7 @@ from difflib import SequenceMatcher
 
 from typing import Optional
 from sqlmodel import Session, select
-from app import llm
+from app import llm, search
 from app.db import LLM_MODE
 
 from app.models import (Source, Claim, ClaimEvent, Design, ValidationRun, Issue, Asset,
@@ -109,6 +109,9 @@ def _insert_claims(session: Session, source: Source, extracted: list[dict]) -> l
     session.commit()
     for c in created:
         session.refresh(c)
+        if c.active:
+            search.index_claim(session, c)
+    session.commit()
     return created, [{"claim_id": c.id, "text": c.text, "duplicate_of": d.id,
                       "duplicate_of_text": d.text} for c, d in duplicates]
 
@@ -147,6 +150,8 @@ def ingest_source(session: Session, url: str, title: str, tier: int, content: st
     session.add(src)
     session.commit()
     session.refresh(src)
+    search.index_source(session, src)
+    session.commit()
 
     inserted, duplicates = _insert_claims(session, src, extracted)
     saved_assets = add_assets(session, assets, source_id=src.id)
@@ -361,6 +366,8 @@ def supersede_claim(session: Session, old: Claim, new_text: str, source: Source,
     session.add(new)
     session.commit()
     session.refresh(new)
+    search.index_claim(session, new)
+    session.commit()
     return new
 
 
@@ -690,6 +697,8 @@ def detect_drift(session: Session, source_key: str, content: str = "",
     session.add(new_src)
     session.commit()
     session.refresh(new_src)
+    search.index_source(session, new_src)
+    session.commit()
     add_assets(session, assets, source_id=new_src.id)
 
     family_ids = [s.id for s in session.exec(
@@ -716,11 +725,15 @@ def detect_drift(session: Session, source_key: str, content: str = "",
             changed.append({"old_id": best.id, "new_id": nc.id, "text": e["text"]})
         else:
             dup = _find_duplicate(session, e["text"], e["capability_id"], set(family_ids))
-            session.add(Claim(capability_id=e["capability_id"], text=e["text"], depth=e["depth"],
-                              type=e["type"],
-                              status="duplicate" if dup else "pending",
-                              source_id=new_src.id,
-                              tags_json=dump_tags(e.get("tags")), active=not dup))
+            nc = Claim(capability_id=e["capability_id"], text=e["text"], depth=e["depth"],
+                       type=e["type"],
+                       status="duplicate" if dup else "pending",
+                       source_id=new_src.id,
+                       tags_json=dump_tags(e.get("tags")), active=not dup)
+            session.add(nc)
+            if nc.active:
+                session.commit()
+                search.index_claim(session, nc)
             added.append({"text": e["text"], "capability": e["capability_id"],
                           **({"duplicate_of": dup.id} if dup else {})})
     session.commit()
@@ -857,6 +870,8 @@ def create_topic(session: Session, slug: str, name: str, capability_ids: list[st
     session.add(t)
     session.commit()
     session.refresh(t)
+    search.index_topic(session, t)
+    session.commit()
     return _topic_dict(t)
 
 
@@ -961,6 +976,8 @@ def create_blog(session: Session, topic_id: str, slug: str, title: str, body_md:
     session.add(blog)
     session.commit()
     session.refresh(blog)
+    search.index_blog(session, blog)
+    session.commit()
     add_assets(session, assets, blog_id=blog.id)
     return _blog_dict(blog)
 

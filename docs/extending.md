@@ -174,6 +174,26 @@ For fast ranked retrieval over a large KB, build the local index first:
 ## 11. Keeping content fresh
 
 `/drift <source-key>` re-extracts a source, diffs claims, supersedes changed ones, and
-flags every design citing that source as `needs_review`. Run it when Microsoft updates a
-doc, or on a schedule. The coverage-auditor agent (`what are we missing?`) reports
+flags every design **and blog** citing that source as `needs_review`. Run it when Microsoft
+updates a doc, or on a schedule. The coverage-auditor agent (`what are we missing?`) reports
 capability × depth gaps — thin L4/L5 coverage is the usual finding.
+
+## 12. Search
+
+`GET /search?q=&kind=&tag=&capability=` is served by `backend/app/search.py`: a unified
+SQLite **FTS5** index over claims, sources, blogs, and topics. Content rows are append-only,
+so the index only ever receives INSERTs at creation time; results are hydrated from the live
+tables at query time, which is why status flips (verify, supersede, needs_review) never need
+reindexing. `POST /search/rebuild` repopulates from scratch (also runs automatically at
+startup when the index is empty). On Postgres or a SQLite build without FTS5 the endpoint
+degrades to a LIKE scan.
+
+Upgrade paths, in order of effort:
+
+- **Postgres full-text**: replace the LIKE fallback with a `tsvector` column + GIN index.
+- **Semantic (local CLI)**: `python scripts/build_index.py --rebuild --embed` adds
+  sentence-transformers vectors (`all-MiniLM-L6-v2`) to the DuckDB index; query with
+  `--search "<q>" --semantic`. Agents use this; the server stays deterministic.
+- **Semantic (server)**: pgvector + embeddings computed at publish time, with query
+  embeddings either client-side (transformers.js, pin the same model) or via a dedicated
+  embedding sidecar — never the FastAPI process itself.

@@ -15,6 +15,13 @@ from app.routers import router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    # Populate the search index when it is empty but the KB is not — the upgrade
+    # path for databases created before the search feature existed.
+    from sqlmodel import Session
+    from app.db import engine
+    from app.search import ensure_index
+    with Session(engine) as session:
+        ensure_index(session)
     yield
 
 
