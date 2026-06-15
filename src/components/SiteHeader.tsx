@@ -3,14 +3,17 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FabricMark } from "./FabricMark";
 
-const NAV = [
+const NAV: { to: string; label: string; exact?: boolean }[] = [
+  { to: "/", label: "Overview", exact: true },
   { to: "/topics", label: "Topics" },
-  { to: "/atlas", label: "Atlas" },
-  { to: "/sources", label: "Sources" },
-  { to: "/advisor", label: "Advisor" },
   { to: "/search", label: "Search" },
+  { to: "/registry", label: "Registry" },
+  { to: "/sources", label: "Sources" },
+  { to: "/designs", label: "Designs" },
+  { to: "/learn", label: "Learn" },
   { to: "/help", label: "Help" },
-] as const;
+  { to: "/author", label: "Author" },
+];
 
 export function SiteHeader() {
   const [signedIn, setSignedIn] = useState(false);
@@ -22,27 +25,35 @@ export function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/5 bg-[#070b16]/85 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
-        <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight text-white">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-6">
+        <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight text-white shrink-0">
           <FabricMark className="h-6 w-6" />
           <span>Fabric Atlas</span>
+          <span className="hidden text-xs font-normal text-white/40 lg:inline">for Microsoft Fabric</span>
         </Link>
-        <nav className="hidden items-center gap-1 md:flex">
+        <nav className="hidden flex-1 items-center justify-center gap-0.5 md:flex">
           {NAV.map((n) => (
             <Link
               key={n.to}
-              to={n.to}
-              className="rounded-md px-3 py-1.5 text-sm text-white/65 transition hover:bg-white/5 hover:text-white"
+              to={n.to as any}
+              className="rounded-md px-2.5 py-1.5 text-sm text-white/65 transition hover:bg-white/5 hover:text-white"
               activeProps={{ className: "bg-white/10 text-white" }}
+              activeOptions={{ exact: n.exact ?? false }}
             >
               {n.label}
             </Link>
           ))}
         </nav>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            to="/advisor"
+            className="hidden rounded-md border border-teal-400/30 bg-teal-500/10 px-3 py-1.5 text-xs font-medium text-teal-200 hover:bg-teal-500/20 md:inline-block"
+          >
+            Advisor
+          </Link>
           {signedIn ? (
             <>
-              <Link to="/favorites" className="text-xs text-white/65 hover:text-white">Favorites</Link>
+              <Link to="/favorites" className="hidden text-xs text-white/65 hover:text-white md:inline">Favorites</Link>
               <button
                 onClick={() => supabase.auth.signOut()}
                 className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:bg-white/5"

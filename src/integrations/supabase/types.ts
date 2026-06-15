@@ -191,6 +191,39 @@ export type Database = {
           },
         ]
       }
+      designs: {
+        Row: {
+          body_md: string
+          created_at: string
+          id: string
+          slug: string
+          status: string
+          summary: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body_md?: string
+          created_at?: string
+          id?: string
+          slug: string
+          status?: string
+          summary?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body_md?: string
+          created_at?: string
+          id?: string
+          slug?: string
+          status?: string
+          summary?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       diagrams: {
         Row: {
           caption: string
@@ -271,6 +304,79 @@ export type Database = {
         }
         Relationships: []
       }
+      issues: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          severity: string
+          validation_run_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          severity?: string
+          validation_run_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          severity?: string
+          validation_run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issues_validation_run_id_fkey"
+            columns: ["validation_run_id"]
+            isOneToOne: false
+            referencedRelation: "validation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lessons: {
+        Row: {
+          body_md: string
+          capability_id: string | null
+          created_at: string
+          depth: string
+          id: string
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body_md?: string
+          capability_id?: string | null
+          created_at?: string
+          depth?: string
+          id?: string
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body_md?: string
+          capability_id?: string | null
+          created_at?: string
+          depth?: string
+          id?: string
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "capabilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -292,6 +398,36 @@ export type Database = {
           display_name?: string | null
           id?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      queue_items: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          status: string
+          submitted_by: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+          url?: string
         }
         Relationships: []
       }
@@ -413,6 +549,35 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      validation_runs: {
+        Row: {
+          design_id: string
+          id: string
+          ran_at: string
+          score: number | null
+        }
+        Insert: {
+          design_id: string
+          id?: string
+          ran_at?: string
+          score?: number | null
+        }
+        Update: {
+          design_id?: string
+          id?: string
+          ran_at?: string
+          score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "validation_runs_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

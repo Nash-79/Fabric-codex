@@ -1,12 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { ADVISOR_MODEL_IDS, DEFAULT_ADVISOR_MODEL } from "@/lib/advisor-models";
 
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const body = (await request.json()) as { messages?: UIMessage[] };
+        const body = (await request.json()) as { messages?: UIMessage[]; model?: string };
         const messages = body.messages ?? [];
         if (!Array.isArray(messages) || messages.length === 0) {
           return new Response("messages required", { status: 400 });
@@ -14,12 +15,13 @@ export const Route = createFileRoute("/api/chat")({
         const key = process.env.LOVABLE_API_KEY;
         if (!key) return new Response("LOVABLE_API_KEY not configured", { status: 500 });
 
-        // Pull the latest user query for retrieval.
+        const requestedModel = typeof body.model === "string" ? body.model : "";
+        const modelId = ADVISOR_MODEL_IDS.has(requestedModel) ? requestedModel : DEFAULT_ADVISOR_MODEL;
+
         const lastUser = [...messages].reverse().find((m) => m.role === "user");
         const userText =
           lastUser?.parts.map((p: any) => (p.type === "text" ? p.text : "")).join(" ").trim() ?? "";
 
-        // Retrieve top-N claims by simple ILIKE on words.
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const words = userText
           .toLowerCase()
@@ -60,7 +62,7 @@ CONTEXT (numbered claims from the approved knowledge base):
 ${contextBlock}`;
 
         const gateway = createLovableAiGatewayProvider(key);
-        const model = gateway("google/gemini-3-flash-preview");
+        const model = gateway(modelId);
 
         const result = streamText({
           model,
