@@ -14,73 +14,106 @@ export type Database = {
   }
   public: {
     Tables: {
-      assets: {
+      blog_sources: {
         Row: {
-          asset_type: string
-          body: string
-          created_at: string
-          domain_id: string
-          id: string
-          maturity: string
-          slug: string
-          summary: string
-          tags: string[]
-          title: string
+          blog_id: string
+          label: string
+          position: number
+          source_id: string
         }
         Insert: {
-          asset_type?: string
-          body: string
-          created_at?: string
-          domain_id: string
-          id?: string
-          maturity?: string
-          slug: string
-          summary: string
-          tags?: string[]
-          title: string
+          blog_id: string
+          label: string
+          position?: number
+          source_id: string
         }
         Update: {
-          asset_type?: string
-          body?: string
-          created_at?: string
-          domain_id?: string
-          id?: string
-          maturity?: string
-          slug?: string
-          summary?: string
-          tags?: string[]
-          title?: string
+          blog_id?: string
+          label?: string
+          position?: number
+          source_id?: string
         }
         Relationships: [
           {
-            foreignKeyName: "assets_domain_id_fkey"
-            columns: ["domain_id"]
+            foreignKeyName: "blog_sources_blog_id_fkey"
+            columns: ["blog_id"]
             isOneToOne: false
-            referencedRelation: "domains"
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "blog_sources_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
             referencedColumns: ["id"]
           },
         ]
       }
-      domains: {
+      blogs: {
+        Row: {
+          body_md: string
+          created_at: string
+          id: string
+          slug: string
+          status: string
+          summary: string
+          title: string
+          topic_slug: string | null
+          updated_at: string
+          validation_confidence: number | null
+          version: number
+        }
+        Insert: {
+          body_md?: string
+          created_at?: string
+          id?: string
+          slug: string
+          status?: string
+          summary?: string
+          title: string
+          topic_slug?: string | null
+          updated_at?: string
+          validation_confidence?: number | null
+          version?: number
+        }
+        Update: {
+          body_md?: string
+          created_at?: string
+          id?: string
+          slug?: string
+          status?: string
+          summary?: string
+          title?: string
+          topic_slug?: string | null
+          updated_at?: string
+          validation_confidence?: number | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blogs_topic_slug_fkey"
+            columns: ["topic_slug"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      capabilities: {
         Row: {
           accent: string
           created_at: string
           description: string
           id: string
           name: string
-          slug: string
-          sort_order: number
-          tagline: string
         }
         Insert: {
           accent?: string
           created_at?: string
-          description: string
-          id?: string
+          description?: string
+          id: string
           name: string
-          slug: string
-          sort_order?: number
-          tagline: string
         }
         Update: {
           accent?: string
@@ -88,34 +121,258 @@ export type Database = {
           description?: string
           id?: string
           name?: string
-          slug?: string
-          sort_order?: number
-          tagline?: string
         }
         Relationships: []
       }
-      favorites: {
+      claims: {
         Row: {
-          asset_id: string
+          active: boolean
+          capability_id: string
           created_at: string
-          user_id: string
+          depth: number
+          id: string
+          source_id: string
+          status: string
+          supersedes_id: string | null
+          tags: string[]
+          text: string
+          type: string
+          version: number
         }
         Insert: {
-          asset_id: string
+          active?: boolean
+          capability_id: string
           created_at?: string
-          user_id: string
+          depth: number
+          id?: string
+          source_id: string
+          status?: string
+          supersedes_id?: string | null
+          tags?: string[]
+          text: string
+          type?: string
+          version?: number
         }
         Update: {
-          asset_id?: string
+          active?: boolean
+          capability_id?: string
           created_at?: string
-          user_id?: string
+          depth?: number
+          id?: string
+          source_id?: string
+          status?: string
+          supersedes_id?: string | null
+          tags?: string[]
+          text?: string
+          type?: string
+          version?: number
         }
         Relationships: [
           {
-            foreignKeyName: "favorites_asset_id_fkey"
-            columns: ["asset_id"]
+            foreignKeyName: "claims_capability_id_fkey"
+            columns: ["capability_id"]
             isOneToOne: false
-            referencedRelation: "assets"
+            referencedRelation: "capabilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "claims_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "claims_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "claims"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      designs: {
+        Row: {
+          body_md: string
+          created_at: string
+          id: string
+          slug: string
+          status: string
+          summary: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body_md?: string
+          created_at?: string
+          id?: string
+          slug: string
+          status?: string
+          summary?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body_md?: string
+          created_at?: string
+          id?: string
+          slug?: string
+          status?: string
+          summary?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      diagrams: {
+        Row: {
+          caption: string
+          created_at: string
+          kind: string
+          path: string
+          slug: string
+          topic_slug: string | null
+        }
+        Insert: {
+          caption?: string
+          created_at?: string
+          kind?: string
+          path: string
+          slug: string
+          topic_slug?: string | null
+        }
+        Update: {
+          caption?: string
+          created_at?: string
+          kind?: string
+          path?: string
+          slug?: string
+          topic_slug?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diagrams_topic_slug_fkey"
+            columns: ["topic_slug"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      favorites: {
+        Row: {
+          created_at: string
+          item_key: string
+          item_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          item_key: string
+          item_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          item_key?: string
+          item_type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      help_docs: {
+        Row: {
+          body_md: string
+          created_at: string
+          slug: string
+          sort_order: number
+          title: string
+        }
+        Insert: {
+          body_md: string
+          created_at?: string
+          slug: string
+          sort_order?: number
+          title: string
+        }
+        Update: {
+          body_md?: string
+          created_at?: string
+          slug?: string
+          sort_order?: number
+          title?: string
+        }
+        Relationships: []
+      }
+      issues: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          severity: string
+          validation_run_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          severity?: string
+          validation_run_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          severity?: string
+          validation_run_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issues_validation_run_id_fkey"
+            columns: ["validation_run_id"]
+            isOneToOne: false
+            referencedRelation: "validation_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lessons: {
+        Row: {
+          body_md: string
+          capability_id: string | null
+          created_at: string
+          depth: string
+          id: string
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body_md?: string
+          capability_id?: string | null
+          created_at?: string
+          depth?: string
+          id?: string
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body_md?: string
+          capability_id?: string | null
+          created_at?: string
+          depth?: string
+          id?: string
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lessons_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "capabilities"
             referencedColumns: ["id"]
           },
         ]
@@ -144,15 +401,199 @@ export type Database = {
         }
         Relationships: []
       }
+      queue_items: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          status: string
+          submitted_by: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          status?: string
+          submitted_by?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      sources: {
+        Row: {
+          created_at: string
+          id: string
+          slug: string
+          summary: string
+          tags: string[]
+          tier: number
+          title: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          slug: string
+          summary?: string
+          tags?: string[]
+          tier: number
+          title: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          slug?: string
+          summary?: string
+          tags?: string[]
+          tier?: number
+          title?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      topic_capabilities: {
+        Row: {
+          capability_id: string
+          topic_slug: string
+        }
+        Insert: {
+          capability_id: string
+          topic_slug: string
+        }
+        Update: {
+          capability_id?: string
+          topic_slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topic_capabilities_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "capabilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "topic_capabilities_topic_slug_fkey"
+            columns: ["topic_slug"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      topics: {
+        Row: {
+          created_at: string
+          description: string
+          name: string
+          parent_slug: string | null
+          slug: string
+          sort_order: number
+        }
+        Insert: {
+          created_at?: string
+          description?: string
+          name: string
+          parent_slug?: string | null
+          slug: string
+          sort_order?: number
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          name?: string
+          parent_slug?: string | null
+          slug?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "topics_parent_slug_fkey"
+            columns: ["parent_slug"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
+      validation_runs: {
+        Row: {
+          design_id: string
+          id: string
+          ran_at: string
+          score: number | null
+        }
+        Insert: {
+          design_id: string
+          id?: string
+          ran_at?: string
+          score?: number | null
+        }
+        Update: {
+          design_id?: string
+          id?: string
+          ran_at?: string
+          score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "validation_runs_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "editor" | "user"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -279,6 +720,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "editor", "user"],
+    },
   },
 } as const

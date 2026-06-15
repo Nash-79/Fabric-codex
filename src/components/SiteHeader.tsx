@@ -1,56 +1,75 @@
-import { Link, useRouter } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FabricMark } from "./FabricMark";
-import { Button } from "@/components/ui/button";
+
+const NAV: { to: string; label: string; exact?: boolean }[] = [
+  { to: "/", label: "Overview", exact: true },
+  { to: "/topics", label: "Topics" },
+  { to: "/search", label: "Search" },
+  { to: "/registry", label: "Registry" },
+  { to: "/sources", label: "Sources" },
+  { to: "/designs", label: "Designs" },
+  { to: "/learn", label: "Learn" },
+  { to: "/help", label: "Help" },
+  { to: "/author", label: "Author" },
+];
 
 export function SiteHeader() {
-  const [email, setEmail] = useState<string | null>(null);
-  const router = useRouter();
-
+  const [signedIn, setSignedIn] = useState(false);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setEmail(s?.user.email ?? null));
+    supabase.auth.getSession().then(({ data }) => setSignedIn(!!data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSignedIn(!!s));
     return () => sub.subscription.unsubscribe();
   }, []);
 
-  async function signOut() {
-    await supabase.auth.signOut();
-    router.navigate({ to: "/" });
-  }
-
   return (
-    <header className="sticky top-0 z-30 border-b border-white/5 bg-[#0a0f1e]/80 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
-        <Link to="/" className="flex items-center gap-2 text-sm font-semibold tracking-tight text-white">
-          <FabricMark className="h-7 w-7" />
+    <header className="sticky top-0 z-30 border-b border-white/5 bg-[#070b16]/85 backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-6">
+        <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight text-white shrink-0">
+          <FabricMark className="h-6 w-6" />
           <span>Fabric Atlas</span>
-          <span className="ml-2 hidden rounded-full border border-white/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-white/60 sm:inline">
-            for Microsoft Fabric
-          </span>
+          <span className="hidden text-xs font-normal text-white/40 lg:inline">for Microsoft Fabric</span>
         </Link>
-        <nav className="flex items-center gap-1 text-sm">
-          <Link to="/atlas" className="rounded-md px-3 py-1.5 text-white/70 hover:bg-white/5 hover:text-white" activeProps={{ className: "rounded-md px-3 py-1.5 bg-white/5 text-white" }}>
-            Atlas
+        <nav className="hidden flex-1 items-center justify-center gap-0.5 md:flex">
+          {NAV.map((n) => (
+            <Link
+              key={n.to}
+              to={n.to as any}
+              className="rounded-md px-2.5 py-1.5 text-sm text-white/65 transition hover:bg-white/5 hover:text-white"
+              activeProps={{ className: "bg-white/10 text-white" }}
+              activeOptions={{ exact: n.exact ?? false }}
+            >
+              {n.label}
+            </Link>
+          ))}
+        </nav>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            to="/advisor"
+            className="hidden rounded-md border border-teal-400/30 bg-teal-500/10 px-3 py-1.5 text-xs font-medium text-teal-200 hover:bg-teal-500/20 md:inline-block"
+          >
+            Advisor
           </Link>
-          {email ? (
+          {signedIn ? (
             <>
-              <Link to="/favorites" className="rounded-md px-3 py-1.5 text-white/70 hover:bg-white/5 hover:text-white" activeProps={{ className: "rounded-md px-3 py-1.5 bg-white/5 text-white" }}>
-                Favorites
-              </Link>
-              <span className="ml-2 hidden text-xs text-white/40 md:inline">{email}</span>
-              <Button variant="ghost" size="sm" onClick={signOut} className="text-white/70 hover:bg-white/10 hover:text-white">
+              <Link to="/favorites" className="hidden text-xs text-white/65 hover:text-white md:inline">Favorites</Link>
+              <button
+                onClick={() => supabase.auth.signOut()}
+                className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:bg-white/5"
+              >
                 Sign out
-              </Button>
+              </button>
             </>
           ) : (
-            <Link to="/auth" className="ml-1">
-              <Button size="sm" className="bg-gradient-to-r from-teal-400 to-blue-500 text-slate-950 hover:opacity-90">
-                Sign in
-              </Button>
+            <Link
+              to="/auth"
+              className="rounded-md border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
+            >
+              Sign in
             </Link>
           )}
-        </nav>
+        </div>
       </div>
     </header>
   );
