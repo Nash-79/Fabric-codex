@@ -131,6 +131,15 @@ diagram → article → validation → docs sync. URLs submitted via the fronten
 server's ingestion queue (`POST /queue`); `/ingest-batch` consumes it, with content/queue.md
 as the offline fallback.
 
+**Diagram coverage is enforced, not optional** (mirror these in `AGENTS.md` for Codex):
+
+- `/publish-topic` commissions **≥2** original diagrams before the blog-author runs — an
+  architecture diagram and a decision/internals diagram.
+- The blog-author embeds **every** commissioned diagram, not just the first.
+- Every embedded `content/diagrams/*` path must exist on disk before `POST /blogs`. The
+  backend validation pass treats a missing embedded diagram as a **critical** issue, so the
+  blog cannot reach `ready_to_share` until it is fixed.
+
 ## Conventions
 
 - Python: type hints, `ruff`/`black` clean, no bare excepts. Tests in `backend/tests`.

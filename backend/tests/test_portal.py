@@ -219,7 +219,11 @@ def test_blog_flags_missing_diagram(client):
         t["id"], sid,
         body_md="OneLake [S1].\n\n![arch](/content/diagrams/does-not-exist.svg)")).json()
     res = client.post(f"/blogs/{blog['id']}/validate", json={"issues": []}).json()
-    assert any("does-not-exist.svg" in i["message"] for i in res["issues"])
+    miss = [i for i in res["issues"] if "does-not-exist.svg" in i["message"]]
+    # a broken embedded diagram is a critical, ready-blocking failure
+    assert miss and miss[0]["severity"] == "critical"
+    assert res["ready_to_share"] is False
+    assert client.get(f"/blogs/{blog['slug']}").json()["status"] == "needs_review"
 
 
 # ------------------------------------------------------------------ search

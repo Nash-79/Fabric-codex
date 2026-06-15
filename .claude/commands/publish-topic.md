@@ -15,10 +15,17 @@ existing agents; it adds no new machinery.
 2. **Human verify gate.** If the mapped capabilities have pending claims
    (`GET /claims?capability=<id>&status=pending`), stop and ask the user to verify them in
    the Registry first — blogs may only cite sources with verified claims.
-3. **Diagram.** Use the **diagram-author** subagent on the topic's primary capability so the
-   article has at least one original illustration.
-4. **Article.** Use the **blog-author** subagent on `$ARGUMENTS` (it embeds the diagram and
-   POSTs the blog).
+3. **Diagrams (commission at least two).** Use the **diagram-author** subagent twice so the
+   article is illustrated end to end:
+   a. an **architecture** diagram — the workload's components, data flow, and place in Fabric;
+   b. a **decision / internals** diagram — query path, engine internals, or a comparison
+      (e.g. Import vs DirectQuery vs Direct Lake for BI topics; hot vs cold path for RTI;
+      V-Order vs plain Parquet for engineering). Register both as generated assets.
+   Verify each `.svg`/`.mmd` exists on disk before moving on — a blog that embeds a missing
+   diagram fails validation as a **critical** issue and can never reach `ready_to_share`.
+4. **Article.** Use the **blog-author** subagent on `$ARGUMENTS`. It must embed **every**
+   commissioned diagram (architecture near the top, internals inside the relevant section),
+   not just the first, then POST the blog.
 5. **Validate.** Use the **validation-reviewer** subagent over the new blog; it POSTs issues
    to `/blogs/<id>/validate`. If critical issues surface, report them — do not rewrite the
    article yourself; rerun the blog-author with the findings instead.

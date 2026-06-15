@@ -52,6 +52,11 @@ files under `content/`. The server (`LLM_MODE=local`, the default) makes no LLM 
 - External source images are `referenced` assets: store URL + caption + **attribution**, never
   re-host (copyright). Prefer authoring an **original** Mermaid/SVG diagram (`generated` asset) via
   `/prompts:fa-diagram`. Diagrams are vector diagram-as-code, not raster art; no third-party logos.
+- **Diagram coverage is enforced** (kept in sync with `CLAUDE.md`): publishing a topic
+  commissions **≥2** original diagrams — one architecture, one decision/internals — and the
+  article embeds **every** one of them. Each embedded `content/diagrams/*` path must exist on
+  disk before `POST /blogs`; the validation pass flags a missing embedded diagram as a
+  **critical** issue, blocking `ready_to_share`.
 
 ## Scope discipline
 

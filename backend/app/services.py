@@ -32,6 +32,36 @@ SEVERITY_WEIGHT = {"critical": 0.4, "warning": 0.15, "info": 0.0}
 
 
 # --------------------------------------------------------------- helpers
+# Common Windows-1252-decoded-as-UTF-8 mojibake → the character it should have been.
+# Order matters: the 3-byte sequences (em/en dash, bullet) must be tried before the
+# 2-byte ones so a longer match wins. Applied to *incoming* text only, never to stored
+# rows — versioned claims/blogs are append-only and must not be rewritten in place.
+_MOJIBAKE = [
+    ("â€™", "'"),   # â€™  right single quote / apostrophe
+    ("â€œ", "\""),  # â€œ  left double quote
+    ("â€", "\""),  # â€\x9d right double quote
+    ("â€”", "—"),  # â€"  em dash
+    ("â€“", "–"),  # â€"  en dash
+    ("â€¢", "•"),  # â€¢  bullet
+    ("â€¦", "…"),  # â€¦  ellipsis
+    ("â€", "\""),         # bare â€ leftover → straight quote
+    ("Â ", " "),          # Â + nbsp → space
+]
+
+
+def normalize_text(s: str) -> str:
+    """Repair common UTF-8 mojibake on text as it enters the knowledge base.
+
+    Runs at the ingestion boundary (before a new claim/source/blog version is
+    persisted) so future imports stay clean without ever mutating existing,
+    versioned rows. A no-op for already-clean text."""
+    if not s or "â€" not in s and "Â " not in s:
+        return s
+    for bad, good in _MOJIBAKE:
+        s = s.replace(bad, good)
+    return s
+
+
 def content_hash(text: str) -> str:
     return hashlib.sha256((text or "").strip().encode("utf-8")).hexdigest()[:16]
 
@@ -62,7 +92,7 @@ def _norm_extracted(items: list[dict]) -> list[dict]:
         if cid in llm.CAPABILITY_IDS and x.get("text"):
             out.append({
                 "capability_id": cid,
-                "text": x["text"].strip(),
+                "text": normalize_text(x["text"].strip()),
                 "depth": max(1, min(5, int(x.get("depth", 1)))),
                 "type": x.get("type", "fact"),
                 "tags": x.get("tags", []),
@@ -142,10 +172,12 @@ def ingest_source(session: Session, url: str, title: str, tier: int, content: st
                             why_it_matters=why_it_matters, takeaways=takeaways)
 
     extracted = _resolve_claims(content, claims)   # may raise — do it before any writes
-    src = Source(source_key=key, version=1, url=url, title=title or url or key, tier=tier,
+    src = Source(source_key=key, version=1, url=url,
+                 title=normalize_text(title) or url or key, tier=tier,
                  content_hash=_source_fingerprint(content, claims),
-                 summary=summary, audience=audience, why_it_matters=why_it_matters,
-                 takeaways_json=dump_list(takeaways),
+                 summary=normalize_text(summary), audience=normalize_text(audience),
+                 why_it_matters=normalize_text(why_it_matters),
+                 takeaways_json=dump_list([normalize_text(t) for t in (takeaways or [])]),
                  tags_json=dump_tags(tags), active=True)
     session.add(src)
     session.commit()
@@ -604,8 +636,10 @@ def _validate_document(session: Session, *, target_kind: str, target, md: str,
 
 
 def _check_blog_images(md: str) -> list[dict]:
-    """Blogs embed only generated diagrams under content/diagrams/; warn when an
-    embedded image path does not exist on disk (broken illustration)."""
+    """Blogs embed only generated diagrams under content/diagrams/. A referenced
+    diagram that is missing on disk is a content-integrity failure (the published
+    article would render a broken image), so it is a *critical* issue: the blog must
+    not reach ready_to_share until the diagram exists or the reference is removed."""
     from pathlib import Path
     repo_root = Path(__file__).resolve().parents[2]
     issues = []
@@ -614,7 +648,7 @@ def _check_blog_images(md: str) -> list[dict]:
             continue
         rel = path.lstrip("/")
         if not (repo_root / rel).exists():
-            issues.append({"validator": "citation", "severity": "warning",
+            issues.append({"validator": "citation", "severity": "critical",
                            "message": f"Embedded diagram not found on disk: {path}", "ref": path})
     return issues
 
@@ -960,6 +994,8 @@ def create_blog(session: Session, topic_id: str, slug: str, title: str, body_md:
                 "only cite sources whose claims a human has verified.")
 
     slug = slugify(slug or title)
+    title, summary, body_md = (normalize_text(title), normalize_text(summary),
+                               normalize_text(body_md))
     prior = session.exec(
         select(Blog).where(Blog.slug == slug, Blog.active == True)).first()  # noqa: E712
     blog = Blog(topic_id=topic_id, slug=slug, title=title, summary=summary,

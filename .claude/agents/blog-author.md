@@ -33,10 +33,13 @@ claims only, every factual sentence cited, nothing invented.**
    - **Worked example** — one concrete, end-to-end scenario. Code/pseudo-config is fine when
      the claims support the mechanics; label anything beyond the claims `*Inference:*`.
    - **Source legend** — a closing table mapping S1… to title + tier.
-4. Commission 1–2 original diagrams: invoke the **diagram-author** subagent for the topic's
-   main capability, then embed the generated file with
+4. Commission **at least two** original diagrams: invoke the **diagram-author** subagent for
+   the topic's main capability — one **architecture** diagram and one **decision/internals**
+   diagram. **Embed every diagram you commission**, not just the first: place the architecture
+   diagram near the top and the internals/decision diagram inside the section it explains, with
    `![caption](/content/diagrams/<file>.svg)`. Blog bodies embed generated originals only —
-   never referenced screenshots.
+   never referenced screenshots. Confirm each path exists on disk before you POST; a missing
+   embedded diagram is a **critical** validation failure and blocks `ready_to_share`.
 5. Save and publish:
    - Write `content/blogs/<topic-slug>.json` (git is the source of truth):
      ```json
