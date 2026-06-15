@@ -1,123 +1,88 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState, useEffect } from "react";
+import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { z } from "zod";
-import { listDomains, listAssets, listMyFavorites, toggleFavorite } from "@/lib/atlas.functions";
+import { useMemo } from "react";
+import { listCapabilities, listClaimsByCapability } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
-import { AssetCard } from "@/components/AssetCard";
 import { accent } from "@/lib/fabric-theme";
-import { supabase } from "@/integrations/supabase/client";
-import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { DepthBadge, TierBadge } from "@/components/Badges";
 
-const domainsQO = queryOptions({ queryKey: ["domains"], queryFn: () => listDomains() });
-const assetsQO = queryOptions({ queryKey: ["assets"], queryFn: () => listAssets() });
+const capsQO = queryOptions({ queryKey: ["capabilities"], queryFn: () => listCapabilities() });
+const claimsQO = (capabilityId?: string) =>
+  queryOptions({
+    queryKey: ["claims", capabilityId ?? "all"],
+    queryFn: () => listClaimsByCapability({ data: { capabilityId } }),
+  });
 
-const SearchSchema = z.object({
-  domain: z.string().optional(),
-  q: z.string().optional(),
-});
+const SearchSchema = z.object({ capability: z.string().optional() });
 
 export const Route = createFileRoute("/atlas")({
   validateSearch: SearchSchema,
   head: () => ({
     meta: [
       { title: "Atlas — Fabric Atlas" },
-      { name: "description", content: "Browse Microsoft Fabric architecture patterns, blueprints, and references." },
-      { property: "og:title", content: "Fabric Atlas" },
-      { property: "og:url", content: "/atlas" },
+      { name: "description", content: "The capability registry: cited claims tagged to Microsoft Fabric capabilities and depth levels." },
     ],
-    links: [{ rel: "canonical", href: "/atlas" }],
   }),
-  loader: async ({ context }) => {
+  loaderDeps: ({ search }) => ({ capability: search.capability }),
+  loader: async ({ context, deps }) => {
     await Promise.all([
-      context.queryClient.ensureQueryData(domainsQO),
-      context.queryClient.ensureQueryData(assetsQO),
+      context.queryClient.ensureQueryData(capsQO),
+      context.queryClient.ensureQueryData(claimsQO(deps.capability)),
     ]);
   },
+  errorComponent: ({ error, reset }) => (
+    <div className="min-h-screen bg-[#070b16] p-10 text-white">
+      <SiteHeader />
+      <p className="mt-6 text-rose-300">{error.message}</p>
+      <button className="mt-3 underline" onClick={reset}>Retry</button>
+    </div>
+  ),
+  notFoundComponent: () => <div className="p-10 text-white">Not found.</div>,
   component: AtlasPage,
 });
 
 function AtlasPage() {
-  const { domain, q } = Route.useSearch();
+  const { capability } = Route.useSearch();
   const nav = Route.useNavigate();
-  const { data: domains } = useSuspenseQuery(domainsQO);
-  const { data: assets } = useSuspenseQuery(assetsQO);
+  const { data: caps } = useSuspenseQuery(capsQO);
+  const { data: claims } = useSuspenseQuery(claimsQO(capability));
 
-  const [signedIn, setSignedIn] = useState(false);
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSignedIn(!!data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSignedIn(!!s));
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  const favsFn = useServerFn(listMyFavorites);
-  const toggleFn = useServerFn(toggleFavorite);
-  const qc = useQueryClient();
-  const favoritesQ = useQuery({
-    queryKey: ["favorites"],
-    queryFn: () => favsFn(),
-    enabled: signedIn,
-  });
-  const favoritedIds = useMemo(
-    () => new Set((favoritesQ.data ?? []).map((f) => f.asset_id)),
-    [favoritesQ.data],
-  );
-
-  const toggle = useMutation({
-    mutationFn: (assetId: string) => toggleFn({ data: { assetId } }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["favorites"] }),
-  });
-
-  const filtered = useMemo(() => {
-    const term = (q ?? "").toLowerCase().trim();
-    return assets.filter((a) => {
-      if (domain && a.domains?.slug !== domain) return false;
-      if (!term) return true;
-      return (
-        a.title.toLowerCase().includes(term) ||
-        a.summary.toLowerCase().includes(term) ||
-        a.tags.some((t) => t.toLowerCase().includes(term))
-      );
-    });
-  }, [assets, domain, q]);
+  const counts = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const c of claims) m.set(c.capability_id, (m.get(c.capability_id) ?? 0) + 1);
+    return m;
+  }, [claims]);
 
   return (
     <div className="min-h-screen bg-[#070b16] text-white">
       <SiteHeader />
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-          <div>
-            <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">The Atlas</div>
-            <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">Patterns, blueprints and references</h1>
-            <p className="mt-2 max-w-2xl text-sm text-white/55">Filter by Fabric domain or search across the catalog. Sign in to bookmark anything for later.</p>
-          </div>
-          <div className="relative w-full md:w-80">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
-            <Input
-              defaultValue={q ?? ""}
-              onChange={(e) => nav({ search: (prev: z.infer<typeof SearchSchema>) => ({ ...prev, q: e.target.value || undefined }) })}
-              placeholder="Search the atlas…"
-              className="border-white/10 bg-white/[0.04] pl-9 text-white placeholder:text-white/40"
-            />
-          </div>
-        </div>
+        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">Capability spine</div>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">The Atlas</h1>
+        <p className="mt-2 max-w-2xl text-sm text-white/55">
+          Every claim ties back to an approved source. Filter by capability and read across depth levels L1 → L5.
+        </p>
 
         <div className="mt-6 flex flex-wrap gap-2">
-          <Chip active={!domain} onClick={() => nav({ search: (p: z.infer<typeof SearchSchema>) => ({ ...p, domain: undefined }) })} label={`All (${assets.length})`} />
-          {domains.map((d) => {
-            const a = accent(d.accent);
-            const count = assets.filter((x) => x.domains?.slug === d.slug).length;
+          <Chip
+            active={!capability}
+            label={`All (${claims.length})`}
+            onClick={() => nav({ search: () => ({ capability: undefined }) })}
+          />
+          {caps.map((c) => {
+            const a = accent(c.accent);
             return (
               <Chip
-                key={d.id}
-                active={domain === d.slug}
-                onClick={() => nav({ search: (p: z.infer<typeof SearchSchema>) => ({ ...p, domain: d.slug }) })}
+                key={c.id}
+                active={capability === c.id}
+                onClick={() => nav({ search: () => ({ capability: c.id }) })}
                 label={
                   <span className="inline-flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full ${a.dot}`} /> {d.name}
-                    <span className="text-white/40">{count}</span>
+                    <span className={`h-1.5 w-1.5 rounded-full ${a.dot}`} /> {c.name}
+                    {capability !== c.id && counts.get(c.id) ? (
+                      <span className="text-white/40">{counts.get(c.id)}</span>
+                    ) : null}
                   </span>
                 }
               />
@@ -125,31 +90,41 @@ function AtlasPage() {
           })}
         </div>
 
-        <div className="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((a) => (
-            <AssetCard
-              key={a.id}
-              asset={a as any}
-              favorited={favoritedIds.has(a.id)}
-              pending={toggle.isPending}
-              onToggle={signedIn ? () => toggle.mutate(a.id) : undefined}
-            />
+        <ul className="mt-8 grid gap-3 md:grid-cols-2">
+          {claims.map((claim: any) => (
+            <li key={claim.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <div className="flex items-center gap-2">
+                <DepthBadge depth={claim.depth} />
+                {claim.sources?.tier && <TierBadge tier={claim.sources.tier} />}
+                <span className="ml-auto text-[10px] uppercase tracking-wider text-white/40">{claim.type}</span>
+              </div>
+              <p className="mt-2.5 text-sm leading-relaxed text-white/80">{claim.text}</p>
+              {claim.sources && (
+                <a
+                  href={claim.sources.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 block truncate text-xs text-teal-300 hover:underline"
+                >
+                  {claim.sources.title}
+                </a>
+              )}
+              {claim.tags?.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {claim.tags.slice(0, 6).map((t: string) => (
+                    <span key={t} className="rounded border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-white/55">{t}</span>
+                  ))}
+                </div>
+              )}
+            </li>
           ))}
-          {filtered.length === 0 && (
-            <div className="col-span-full rounded-xl border border-dashed border-white/15 p-12 text-center text-white/50">
-              No assets match your filters.
+          {claims.length === 0 && (
+            <div className="col-span-full rounded-xl border border-dashed border-white/15 p-12 text-center text-white/55">
+              No claims yet. An admin can seed the content from{" "}
+              <Link to="/admin" className="text-teal-300 underline-offset-4 hover:underline">/admin</Link>.
             </div>
           )}
-        </div>
-
-        {!signedIn && (
-          <div className="mt-10 rounded-xl border border-white/10 bg-gradient-to-r from-teal-500/10 to-violet-500/10 p-5 text-sm text-white/75">
-            <Link to="/auth" className="font-semibold text-white underline-offset-4 hover:underline">
-              Sign in
-            </Link>{" "}
-            to bookmark assets and curate your own working set.
-          </div>
-        )}
+        </ul>
       </div>
     </div>
   );
