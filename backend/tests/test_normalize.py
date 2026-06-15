@@ -4,6 +4,7 @@ These call services.normalize_text directly — no DB, no fixtures — because t
 function's whole job is to repair incoming text before it becomes a persisted,
 versioned row. Run from backend/: pytest
 """
+
 from app.services import normalize_text
 
 

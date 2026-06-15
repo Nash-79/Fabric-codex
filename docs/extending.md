@@ -168,8 +168,11 @@ on servers — they should never need an API key.
 knowledge base. It retrieves claims scoped to the capabilities the question touches, answers
 with `[Sn]` citations and a source legend, labels its own reasoning *(inference)*, and — when
 the KB has no coverage — says so and recommends what to `/ingest` instead of guessing.
-For fast ranked retrieval over a large KB, build the local index first:
-`python scripts/build_index.py --rebuild`, then `--search "<query>" --capability <id>`.
+
+The same grounded answer is available as an endpoint: `POST /advisor/chat` ({message,
+capabilities, history}) runs the identical retrieval server-side and returns a cited answer.
+It needs `LLM_MODE=api` + a key (the Lovable chat UI calls it); in local mode use the `/advise`
+skill, which runs the retrieval on the laptop without a server-side key.
 
 ## 11. Keeping content fresh
 
@@ -181,19 +184,17 @@ capability × depth gaps — thin L4/L5 coverage is the usual finding.
 ## 12. Search
 
 `GET /search?q=&kind=&tag=&capability=` is served by `backend/app/search.py`: a unified
-SQLite **FTS5** index over claims, sources, blogs, and topics. Content rows are append-only,
-so the index only ever receives INSERTs at creation time; results are hydrated from the live
-tables at query time, which is why status flips (verify, supersede, needs_review) never need
-reindexing. `POST /search/rebuild` repopulates from scratch (also runs automatically at
-startup when the index is empty). On Postgres or a SQLite build without FTS5 the endpoint
-degrades to a LIKE scan.
+Postgres **tsvector** index (`search_doc`) over claims, sources, blogs, and topics, queried
+with `websearch_to_tsquery` ranked by `ts_rank` and snippeted with `ts_headline`. Content rows
+are append-only, so the index only ever receives INSERTs at creation time; results are hydrated
+from the live tables at query time, which is why status flips (verify, supersede, needs_review)
+never need reindexing. `POST /search/rebuild` repopulates from scratch (also runs automatically
+at startup when the index is empty). The SQLite test DB has no `search_doc` and degrades to a
+live LIKE scan.
 
-Upgrade paths, in order of effort:
+Upgrade path:
 
-- **Postgres full-text**: replace the LIKE fallback with a `tsvector` column + GIN index.
-- **Semantic (local CLI)**: `python scripts/build_index.py --rebuild --embed` adds
-  sentence-transformers vectors (`all-MiniLM-L6-v2`) to the DuckDB index; query with
-  `--search "<q>" --semantic`. Agents use this; the server stays deterministic.
-- **Semantic (server)**: pgvector + embeddings computed at publish time, with query
-  embeddings either client-side (transformers.js, pin the same model) or via a dedicated
-  embedding sidecar — never the FastAPI process itself.
+- **Semantic (server)**: enable pgvector, add an `embedding vector(N)` column, compute
+  embeddings at publish time, and rank by vector distance. Query embeddings either client-side
+  (transformers.js, pin the model) or via a dedicated embedding sidecar — never the FastAPI
+  process itself.

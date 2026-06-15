@@ -22,7 +22,13 @@ Process the ingestion queue: $ARGUMENTS
    Leave failed lines in Queued with a trailing `# FAILED: <reason>` comment.
 4. Process everything sequentially so cross-source dedup sees earlier results; the backend flags
    near-duplicate claims from other sources as `status=duplicate` — report them, do not fight them.
-5. Finish with a summary table: source, tier, claims added, duplicates flagged, assets — and
+5. **Validate the result.** After all items are processed, rebuild the search index and run the
+   migration validator so the newly-ingested content is checked before it is trusted:
+   `curl -s -X POST http://localhost:8000/search/rebuild` then use the **migration-validator**
+   subagent (or run `python scripts/validate_migration.py`). Report any FAIL lines and do not
+   declare the batch clean if it fails. New sources land as `pending` claims, so the verified
+   count not rising is expected — a versioning or referential-integrity failure is not.
+6. Finish with a summary table: source, tier, claims added, duplicates flagged, assets — and
    remind that claims await human verification (Sources tab → "Verify N pending", or
    Registry → "Verify all pending"), and that new `content/sources/*.json` files should be
    committed to git (the DB queue itself is user intent, not knowledge — it is never committed).

@@ -21,6 +21,7 @@ v0.4 adds (the portal layer — see docs/data-model.md):
     design validation machinery; design_id kept for legacy rows.
   - `Asset.blog_id` so generated diagrams can hang off blogs.
 """
+
 from __future__ import annotations
 import json
 import uuid
@@ -102,13 +103,14 @@ class Claim(SQLModel, table=True):
 
 class Asset(SQLModel, table=True):
     """An image or diagram associated with a source, claim, or design."""
+
     id: str = Field(default_factory=_uid, primary_key=True)
-    kind: str = "generated"               # referenced | generated
-    url: str = ""                         # external image (referenced)
-    path: str = ""                        # repo path to generated svg/mermaid (generated)
+    kind: str = "generated"  # referenced | generated
+    url: str = ""  # external image (referenced)
+    path: str = ""  # repo path to generated svg/mermaid (generated)
     mime: str = "image/svg+xml"
     caption: str = ""
-    attribution: str = ""                 # required for referenced assets
+    attribution: str = ""  # required for referenced assets
     license_note: str = ""
     capability_id: str = ""
     source_id: Optional[str] = Field(default=None, index=True)
@@ -137,14 +139,15 @@ class Design(SQLModel, table=True):
 class ClaimEvent(SQLModel, table=True):
     """Lightweight audit trail for human curation actions on claims.
     One row per action: verified / rejected / promoted / dismissed."""
+
     id: str = Field(default_factory=_uid, primary_key=True)
     claim_id: str = Field(index=True)
     claim_key: str = Field(index=True, default="")
     capability_id: str = ""
-    action: str = ""            # verified | rejected | promoted | dismissed
-    prev_status: str = ""       # status before the action
-    new_status: str = ""        # status after the action
-    text_snippet: str = ""      # first 120 chars of the claim text
+    action: str = ""  # verified | rejected | promoted | dismissed
+    prev_status: str = ""  # status before the action
+    new_status: str = ""  # status after the action
+    text_snippet: str = ""  # first 120 chars of the claim text
     actioned_at: datetime = Field(default_factory=_now)
 
 
@@ -153,7 +156,7 @@ class ValidationRun(SQLModel, table=True):
     # design_id kept populated for design runs (legacy readers); target_kind/target_id
     # are the generalised pointer so blogs reuse the same validation machinery.
     design_id: str = Field(index=True, default="")
-    target_kind: str = Field(default="design", index=True)   # design | blog
+    target_kind: str = Field(default="design", index=True)  # design | blog
     target_id: str = Field(default="", index=True)
     confidence: float = 1.0
     created_at: datetime = Field(default_factory=_now)
@@ -171,6 +174,7 @@ class Issue(SQLModel, table=True):
 class Topic(SQLModel, table=True):
     """A node in the n-nested reading taxonomy. Topics organise the portal; each maps
     to one or more capabilities so claims, coverage, and blogs flow from the spine."""
+
     id: str = Field(default_factory=_uid, primary_key=True)
     slug: str = Field(index=True, unique=True)
     name: str = ""
@@ -187,6 +191,7 @@ class Blog(SQLModel, table=True):
     """A cited long-form article for a topic. Versioned like Claim/Source — republishing
     a topic supersedes the prior version; nothing is edited in place. Validated like a
     Design (citation + freshness deterministic checks, agent grounding review)."""
+
     id: str = Field(default_factory=_uid, primary_key=True)
     blog_key: str = Field(index=True, default_factory=_uid)
     version: int = 1
@@ -197,7 +202,7 @@ class Blog(SQLModel, table=True):
     body_md: str = ""
     cited_source_ids_json: str = "[]"
     tags_json: str = "[]"
-    depth_levels_json: str = "[]"        # which L-levels the article covers, e.g. [1,2,3]
+    depth_levels_json: str = "[]"  # which L-levels the article covers, e.g. [1,2,3]
     # draft | checked (deterministic validators only) | validated (full pass) | needs_review
     status: str = Field(default="draft", index=True)
     confidence: Optional[float] = None
@@ -211,13 +216,16 @@ class QueueItem(SQLModel, table=True):
     """A URL submitted (usually via the frontend) for local agent ingestion.
     The DB queue is user intent, not knowledge — it is not git-tracked; the
     source JSON the curator writes is what gets committed."""
+
     id: str = Field(default_factory=_uid, primary_key=True)
     url: str = ""
     title: str = ""
-    tier: int = 6                        # submitter's suggested trust tier
+    tier: int = 6  # submitter's suggested trust tier
     notes: str = ""
     tags_json: str = "[]"
-    status: str = Field(default="queued", index=True)  # queued|claimed|ingested|failed|dismissed
+    status: str = Field(
+        default="queued", index=True
+    )  # queued|claimed|ingested|failed|dismissed
     claimed_at: Optional[datetime] = None
     result_source_id: Optional[str] = None
     error: str = ""

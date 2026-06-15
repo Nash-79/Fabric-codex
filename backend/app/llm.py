@@ -4,6 +4,7 @@ Every LLM step is funnelled through here so prompts and guardrails live in one p
 If ANTHROPIC_API_KEY is unset, LLM steps raise LLMUnavailable — callers catch this and
 the deterministic parts of the system (versioning, citation/freshness validation) keep working.
 """
+
 from __future__ import annotations
 import json
 from typing import Optional
@@ -11,10 +12,25 @@ from app.db import ANTHROPIC_API_KEY, ANTHROPIC_MODEL
 
 CAPABILITY_IDS = [
     "fabric-platform",
-    "onelake", "lakehouse", "warehouse", "polaris", "direct-lake", "semantic-model",
-    "power-bi", "data-factory", "dataflow-gen2", "spark", "rti", "eventhouse-kql",
-    "sql-database", "mirroring", "fabric-data-agent", "fabric-iq", "graphql-api",
-    "purview", "capacity",
+    "onelake",
+    "lakehouse",
+    "warehouse",
+    "polaris",
+    "direct-lake",
+    "semantic-model",
+    "power-bi",
+    "data-factory",
+    "dataflow-gen2",
+    "spark",
+    "rti",
+    "eventhouse-kql",
+    "sql-database",
+    "mirroring",
+    "fabric-data-agent",
+    "fabric-iq",
+    "graphql-api",
+    "purview",
+    "capacity",
 ]
 
 
@@ -26,6 +42,7 @@ def _client():
     if not ANTHROPIC_API_KEY:
         raise LLMUnavailable("ANTHROPIC_API_KEY is not set; LLM steps are disabled.")
     import anthropic  # imported lazily so the app starts without the key
+
     return anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
 
@@ -46,7 +63,7 @@ def _parse_json(text: str):
         a, b = t.find(open_ch), t.rfind(close_ch)
         if a != -1 and b != -1 and b > a:
             try:
-                return json.loads(t[a:b + 1])
+                return json.loads(t[a : b + 1])
             except json.JSONDecodeError:
                 continue
     return json.loads(t)
@@ -65,18 +82,26 @@ _EXTRACT_SYS = (
 
 
 def extract_claims(content: str) -> list[dict]:
-    prompt = "Capabilities:\n" + "\n".join(CAPABILITY_IDS) + "\n\nSource text:\n\"\"\"" + content[:12000] + "\"\"\""
+    prompt = (
+        "Capabilities:\n"
+        + "\n".join(CAPABILITY_IDS)
+        + '\n\nSource text:\n"""'
+        + content[:12000]
+        + '"""'
+    )
     arr = _parse_json(_complete(_EXTRACT_SYS, prompt, max_tokens=2500))
     out = []
     for x in arr:
         cid = x.get("capabilityId") or x.get("capability_id")
         if cid in CAPABILITY_IDS and x.get("text"):
-            out.append({
-                "capability_id": cid,
-                "text": x["text"].strip(),
-                "depth": max(1, min(5, int(x.get("depth", 1)))),
-                "type": x.get("type", "fact"),
-            })
+            out.append(
+                {
+                    "capability_id": cid,
+                    "text": x["text"].strip(),
+                    "depth": max(1, min(5, int(x.get("depth", 1)))),
+                    "type": x.get("type", "fact"),
+                }
+            )
     return out
 
 
@@ -92,7 +117,9 @@ _DESIGN_SYS = (
 )
 
 
-def generate_architecture(scenario: str, constraints: dict, claim_context: str, legend: str) -> str:
+def generate_architecture(
+    scenario: str, constraints: dict, claim_context: str, legend: str
+) -> str:
     prompt = (
         f"Scenario:\n{scenario}\n\nConstraints:\n{json.dumps(constraints, indent=2)}\n\n"
         f"Verified knowledge base (cite with the bracket tags):\n{claim_context}\n\n"
@@ -120,8 +147,12 @@ def review_design(design_md: str, scenario: str, claim_context: str) -> list[dic
     valid = {"grounding", "coverage", "antipattern"}
     sev = {"critical", "warning", "info"}
     return [
-        {"validator": i.get("validator", "grounding"), "severity": i.get("severity", "warning"),
-         "message": i.get("message", ""), "ref": i.get("ref", "")}
+        {
+            "validator": i.get("validator", "grounding"),
+            "severity": i.get("severity", "warning"),
+            "message": i.get("message", ""),
+            "ref": i.get("ref", ""),
+        }
         for i in issues
         if i.get("validator") in valid and i.get("severity") in sev and i.get("message")
     ]
@@ -139,3 +170,38 @@ _LESSON_SYS = (
 def write_lesson(capability: str, level: str, claim_context: str) -> str:
     system = _LESSON_SYS.format(level=level, capability=capability)
     return _complete(system, f"Grounded claims:\n{claim_context}", max_tokens=2000)
+
+
+# ------------------------------------------------------------------ advisor
+_ADVISOR_SYS = (
+    "You are the Expert Adviser for Microsoft Fabric Atlas. Answer the user's question using "
+    "ONLY the provided knowledge-base claims as your factual source — you are the "
+    "conversational view over the same governed claims that power architectures and lessons, "
+    "never a separate opinion engine. "
+    "Cite every product fact inline as [S<n>] using the source legend provided. Label anything "
+    "that is your own reasoning as *(inference)*. Never invent limits, quotas, pricing, SKUs, "
+    "or roadmap. "
+    "If the provided claims do not cover the question, SAY SO plainly, name the capability/depth "
+    "gap, and suggest ingesting an authoritative source — do not answer from general knowledge. "
+    "A partial, honest, cited answer beats a complete ungrounded one. Keep it focused; for "
+    "'walk me through' give numbered steps each citing its claims, for 'X vs Y' give a "
+    "comparison and a recommendation with the constraint that would flip it."
+)
+
+
+def advisor_answer(
+    question: str, claim_context: str, legend: str, history: Optional[list[dict]] = None
+) -> str:
+    """Grounded advisor reply. claim_context is the scoped [Sn]-tagged claims; legend maps
+    [Sn] -> source. history is prior turns [{role, content}] for follow-ups."""
+    convo = ""
+    for turn in (history or [])[-6:]:
+        role = "User" if turn.get("role") == "user" else "Adviser"
+        convo += f"{role}: {turn.get('content', '')}\n"
+    prompt = (
+        (f"Conversation so far:\n{convo}\n" if convo else "")
+        + f"Question:\n{question}\n\n"
+        f"Knowledge base (cite with the bracket tags):\n{claim_context}\n\n"
+        f"Source legend:\n{legend}"
+    )
+    return _complete(_ADVISOR_SYS, prompt, max_tokens=2000)

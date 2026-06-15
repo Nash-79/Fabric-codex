@@ -2,6 +2,8 @@
 
 Run: uvicorn app.main:app --reload   (interactive docs at /docs)
 """
+
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 from fastapi import FastAPI
@@ -11,17 +13,27 @@ from fastapi.staticfiles import StaticFiles
 from app.db import init_db, CORS_ORIGINS
 from app.routers import router
 
+log = logging.getLogger(__name__)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    init_db()
-    # Populate the search index when it is empty but the KB is not — the upgrade
-    # path for databases created before the search feature existed.
-    from sqlmodel import Session
-    from app.db import engine
-    from app.search import ensure_index
-    with Session(engine) as session:
-        ensure_index(session)
+    # Best-effort startup: the canonical schema is the Supabase migration, and the search
+    # index can be rebuilt via POST /search/rebuild. If the DB is briefly unreachable at
+    # boot, log and keep serving rather than crashing the process.
+    try:
+        init_db()
+        from sqlmodel import Session
+        from app.db import engine
+        from app.search import ensure_index
+
+        with Session(engine) as session:
+            ensure_index(session)
+    except Exception:  # noqa: BLE001
+        log.exception(
+            "startup DB init/index step failed — continuing; "
+            "apply the Supabase migration and POST /search/rebuild"
+        )
     yield
 
 
@@ -55,15 +67,19 @@ def health():
 # and pass through to the API untouched.
 _dist_dir = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if _dist_dir.is_dir():
-    app.mount("/assets", StaticFiles(directory=str(_dist_dir / "assets")), name="spa-assets")
+    app.mount(
+        "/assets", StaticFiles(directory=str(_dist_dir / "assets")), name="spa-assets"
+    )
 
     _NON_SPA_PREFIXES = ("/docs", "/redoc", "/openapi.json", "/content", "/assets")
 
     @app.middleware("http")
     async def spa_navigation(request, call_next):
-        if (request.method == "GET"
-                and "text/html" in request.headers.get("accept", "")
-                and not request.url.path.startswith(_NON_SPA_PREFIXES)):
+        if (
+            request.method == "GET"
+            and "text/html" in request.headers.get("accept", "")
+            and not request.url.path.startswith(_NON_SPA_PREFIXES)
+        ):
             return FileResponse(str(_dist_dir / "index.html"))
         return await call_next(request)
 

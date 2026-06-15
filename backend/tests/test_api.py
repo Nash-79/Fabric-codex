@@ -3,20 +3,22 @@
 Each test runs against a fresh in-memory SQLite via FastAPI's dependency override —
 no fabric_atlas.db involved. Run from backend/: pytest
 """
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import SQLModel, Session, create_engine, select
+from sqlmodel import SQLModel, Session, create_engine
 from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.db import get_session
-from app.models import Source, Claim
+from app.models import Claim
 
 
 @pytest.fixture()
 def client():
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False},
-                           poolclass=StaticPool)
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
     SQLModel.metadata.create_all(engine)
 
     def override():
@@ -30,13 +32,27 @@ def client():
     app.dependency_overrides.clear()
 
 
-def _payload(url="https://learn.microsoft.com/fabric/onelake-overview", texts=None, **kw):
-    texts = texts or ["OneLake is a single logical data lake for the whole Fabric tenant."]
+def _payload(
+    url="https://learn.microsoft.com/fabric/onelake-overview", texts=None, **kw
+):
+    texts = texts or [
+        "OneLake is a single logical data lake for the whole Fabric tenant."
+    ]
     return {
-        "url": url, "title": kw.get("title", "OneLake overview"), "tier": kw.get("tier", 1),
+        "url": url,
+        "title": kw.get("title", "OneLake overview"),
+        "tier": kw.get("tier", 1),
         "tags": kw.get("tags", ["MicrosoftFabric", "OneLake"]),
-        "claims": [{"capability_id": kw.get("capability", "onelake"), "text": t,
-                    "depth": 1, "type": "fact", "tags": ["OneLake"]} for t in texts],
+        "claims": [
+            {
+                "capability_id": kw.get("capability", "onelake"),
+                "text": t,
+                "depth": 1,
+                "type": "fact",
+                "tags": ["OneLake"],
+            }
+            for t in texts
+        ],
         "assets": kw.get("assets", []),
     }
 
@@ -51,19 +67,26 @@ def test_ingest_creates_pending_claims(client):
 
 def test_ingest_accepts_reader_metadata(client):
     body = _payload()
-    body.update({
-        "summary": "Original summary for readers.",
-        "audience": "Fabric architects",
-        "why_it_matters": "It orients readers before they inspect the claims.",
-        "takeaways": ["OneLake is tenant-wide.", "Claims remain source-grounded."],
-    })
+    body.update(
+        {
+            "summary": "Original summary for readers.",
+            "audience": "Fabric architects",
+            "why_it_matters": "It orients readers before they inspect the claims.",
+            "takeaways": ["OneLake is tenant-wide.", "Claims remain source-grounded."],
+        }
+    )
     res = client.post("/sources/ingest", json=body).json()
     assert res["claims_added"] == 1
     source = client.get("/sources").json()[0]
     assert source["summary"] == "Original summary for readers."
     assert source["audience"] == "Fabric architects"
-    assert source["why_it_matters"] == "It orients readers before they inspect the claims."
-    assert source["takeaways"] == ["OneLake is tenant-wide.", "Claims remain source-grounded."]
+    assert (
+        source["why_it_matters"] == "It orients readers before they inspect the claims."
+    )
+    assert source["takeaways"] == [
+        "OneLake is tenant-wide.",
+        "Claims remain source-grounded.",
+    ]
 
 
 def test_legacy_ingest_without_reader_metadata_still_works(client):
@@ -98,7 +121,9 @@ def test_verify_and_bulk_verify(client):
     one = res["claims"][0]["id"]
     assert client.post(f"/claims/{one}/verify").json()["status"] == "verified"
     bulk = client.post("/claims/verify-bulk", json={"source_id": sid}).json()
-    assert bulk["verified"] == 2 and len(bulk["skipped"]) == 1  # already-verified is skipped
+    assert (
+        bulk["verified"] == 2 and len(bulk["skipped"]) == 1
+    )  # already-verified is skipped
 
 
 def test_verify_inactive_claim_is_rejected(client):
@@ -133,14 +158,24 @@ def test_reingest_same_claims_can_backfill_reader_metadata(client):
 
 
 def test_drift_supersedes_changed_and_deprecates_removed(client):
-    client.post("/sources/ingest", json=_payload(
-        texts=["Shortcuts virtualize external data without copying it into OneLake.",
-               "This claim disappears in the next revision of the page."]))
-    body = _payload(
-        texts=["Shortcuts virtualize external data without duplicating it, "
-               "mapping remote storage into OneLake."]   # ~0.79 similar = changed band
+    client.post(
+        "/sources/ingest",
+        json=_payload(
+            texts=[
+                "Shortcuts virtualize external data without copying it into OneLake.",
+                "This claim disappears in the next revision of the page.",
+            ]
+        ),
     )
-    body.update({"summary": "New source revision summary.", "takeaways": ["Changed claim."]})
+    body = _payload(
+        texts=[
+            "Shortcuts virtualize external data without duplicating it, "
+            "mapping remote storage into OneLake."
+        ]  # ~0.79 similar = changed band
+    )
+    body.update(
+        {"summary": "New source revision summary.", "takeaways": ["Changed claim."]}
+    )
     res = client.post("/sources/ingest", json=body).json()
     assert res["drift"] is True and res["changed"] == 1 and res["removed"] == 1
     active_source = [s for s in client.get("/sources").json() if s["active"]][0]
@@ -161,15 +196,27 @@ def test_drift_without_claims_does_not_corrupt_source(client):
     # hash of empty payload differs, so it reaches claim resolution — must fail cleanly
     assert r.status_code == 400
     sources = client.get("/sources").json()
-    assert len(sources) == 1 and sources[0]["active"] is True and sources[0]["version"] == 1
+    assert (
+        len(sources) == 1
+        and sources[0]["active"] is True
+        and sources[0]["version"] == 1
+    )
 
 
 def test_reingest_carries_new_tags_and_assets(client):
     client.post("/sources/ingest", json=_payload(texts=["Original claim text here."]))
-    body = _payload(texts=["Completely different replacement claim text."],
-                    tags=["MicrosoftFabric", "Shortcuts"],
-                    assets=[{"kind": "referenced", "url": "https://x/img.png",
-                             "caption": "diagram", "attribution": "Microsoft Learn"}])
+    body = _payload(
+        texts=["Completely different replacement claim text."],
+        tags=["MicrosoftFabric", "Shortcuts"],
+        assets=[
+            {
+                "kind": "referenced",
+                "url": "https://x/img.png",
+                "caption": "diagram",
+                "attribution": "Microsoft Learn",
+            }
+        ],
+    )
     res = client.post("/sources/ingest", json=body).json()
     assert res["drift"] is True
     active = [s for s in client.get("/sources").json() if s["active"]][0]
@@ -179,24 +226,43 @@ def test_reingest_carries_new_tags_and_assets(client):
 
 def test_drift_flags_citing_designs(client):
     res = client.post("/sources/ingest", json=_payload(texts=["Fact one."])).json()
-    client.post("/designs", json={"scenario": "s", "output_md": "Use OneLake [S1].",
-                                  "cited_source_ids": [res["source_id"]]})
-    client.post("/sources/ingest", json=_payload(texts=["A wholly new replacement fact."]))
+    client.post(
+        "/designs",
+        json={
+            "scenario": "s",
+            "output_md": "Use OneLake [S1].",
+            "cited_source_ids": [res["source_id"]],
+        },
+    )
+    client.post(
+        "/sources/ingest", json=_payload(texts=["A wholly new replacement fact."])
+    )
     assert client.get("/designs").json()[0]["status"] == "needs_review"
 
 
 # ------------------------------------------------------------------- dedup
 def test_cross_source_near_duplicate_is_flagged_inactive(client):
     text = "Direct Lake loads column data straight from Delta tables in OneLake."
-    client.post("/sources/ingest", json=_payload(capability="direct-lake", texts=[text]))
-    res = client.post("/sources/ingest", json=_payload(
-        url="https://blog.fabric.microsoft.com/direct-lake-deep-dive",
-        title="Direct Lake deep dive", tier=2, capability="direct-lake",
-        texts=["Direct Lake loads column data straight from Delta tables in "
-               "OneLake storage."])).json()   # ~0.94 similar = duplicate
+    client.post(
+        "/sources/ingest", json=_payload(capability="direct-lake", texts=[text])
+    )
+    res = client.post(
+        "/sources/ingest",
+        json=_payload(
+            url="https://blog.fabric.microsoft.com/direct-lake-deep-dive",
+            title="Direct Lake deep dive",
+            tier=2,
+            capability="direct-lake",
+            texts=[
+                "Direct Lake loads column data straight from Delta tables in "
+                "OneLake storage."
+            ],
+        ),
+    ).json()  # ~0.94 similar = duplicate
     assert len(res["duplicates"]) == 1 and res["claims_added"] == 0
-    dupes = client.get("/claims", params={"include_inactive": True,
-                                          "status": "duplicate"}).json()
+    dupes = client.get(
+        "/claims", params={"include_inactive": True, "status": "duplicate"}
+    ).json()
     assert len(dupes) == 1 and dupes[0]["active"] is False
     # active retrieval still sees exactly one claim
     assert len(client.get("/claims", params={"capability": "direct-lake"}).json()) == 1
@@ -206,16 +272,23 @@ def test_cross_source_near_duplicate_is_flagged_inactive(client):
 def test_design_requires_cited_source_ids(client):
     r = client.post("/designs", json={"scenario": "s", "output_md": "x [S1]"})
     assert r.status_code == 400
-    r = client.post("/designs", json={"scenario": "s", "output_md": "x [S1]",
-                                      "cited_source_ids": ["nope"]})
+    r = client.post(
+        "/designs",
+        json={"scenario": "s", "output_md": "x [S1]", "cited_source_ids": ["nope"]},
+    )
     assert r.status_code == 400 and "unknown source" in r.json()["detail"]
 
 
 def test_validation_statuses(client):
     res = client.post("/sources/ingest", json=_payload()).json()
-    did = client.post("/designs", json={
-        "scenario": "s", "output_md": "Use OneLake [S1].",
-        "cited_source_ids": [res["source_id"]]}).json()["design_id"]
+    did = client.post(
+        "/designs",
+        json={
+            "scenario": "s",
+            "output_md": "Use OneLake [S1].",
+            "cited_source_ids": [res["source_id"]],
+        },
+    ).json()["design_id"]
 
     # deterministic-only run -> "checked", not "validated"
     v = client.post(f"/designs/{did}/validate", json={}).json()
@@ -228,8 +301,18 @@ def test_validation_statuses(client):
     assert client.get(f"/designs/{did}").json()["status"] == "validated"
 
     # a critical grounding issue -> needs_review, confidence drops
-    v = client.post(f"/designs/{did}/validate", json={"issues": [
-        {"validator": "grounding", "severity": "critical", "message": "ungrounded"}]}).json()
+    v = client.post(
+        f"/designs/{did}/validate",
+        json={
+            "issues": [
+                {
+                    "validator": "grounding",
+                    "severity": "critical",
+                    "message": "ungrounded",
+                }
+            ]
+        },
+    ).json()
     assert v["ready_to_share"] is False and v["confidence"] == 0.6
     assert client.get(f"/designs/{did}").json()["status"] == "needs_review"
 
@@ -302,12 +385,22 @@ def test_reject_bulk_skips_non_pending(client):
 # ------------------------------------------------------------------- promote
 def test_promote_duplicate_to_pending(client):
     text = "Direct Lake loads column data straight from Delta tables in OneLake."
-    client.post("/sources/ingest", json=_payload(capability="direct-lake", texts=[text]))
-    res = client.post("/sources/ingest", json=_payload(
-        url="https://blog.fabric.microsoft.com/direct-lake-deep-dive",
-        title="Direct Lake deep dive", tier=2, capability="direct-lake",
-        texts=["Direct Lake loads column data straight from Delta tables in "
-               "OneLake storage."])).json()
+    client.post(
+        "/sources/ingest", json=_payload(capability="direct-lake", texts=[text])
+    )
+    res = client.post(
+        "/sources/ingest",
+        json=_payload(
+            url="https://blog.fabric.microsoft.com/direct-lake-deep-dive",
+            title="Direct Lake deep dive",
+            tier=2,
+            capability="direct-lake",
+            texts=[
+                "Direct Lake loads column data straight from Delta tables in "
+                "OneLake storage."
+            ],
+        ),
+    ).json()
     assert len(res["duplicates"]) == 1
     dup_id = res["duplicates"][0]["claim_id"]
     r = client.post(f"/claims/{dup_id}/promote")
@@ -329,20 +422,27 @@ def test_promote_not_found_returns_404(client):
 
 def test_validation_flags_missing_and_superseded_sources(client):
     res = client.post("/sources/ingest", json=_payload(texts=["Fact one."])).json()
-    did = client.post("/designs", json={
-        "scenario": "s", "output_md": "Cited [S1].",
-        "cited_source_ids": [res["source_id"]]}).json()["design_id"]
+    did = client.post(
+        "/designs",
+        json={
+            "scenario": "s",
+            "output_md": "Cited [S1].",
+            "cited_source_ids": [res["source_id"]],
+        },
+    ).json()["design_id"]
     client.post("/sources/ingest", json=_payload(texts=["Replacement fact entirely."]))
     # a ghost citation can no longer be created via the API; simulate legacy data directly
     import json as _json
     from app.models import Design
+
     with Session(client.engine) as s:
         d = s.get(Design, did)
         d.cited_source_ids_json = _json.dumps(
-            _json.loads(d.cited_source_ids_json) + ["ghost-id"])
+            _json.loads(d.cited_source_ids_json) + ["ghost-id"]
+        )
         s.add(d)
         s.commit()
     v = client.post(f"/designs/{did}/validate", json={}).json()
     validators = {(i["validator"], i["severity"]) for i in v["issues"]}
-    assert ("citation", "critical") in validators      # ghost id
-    assert ("freshness", "warning") in validators      # superseded source revision
+    assert ("citation", "critical") in validators  # ghost id
+    assert ("freshness", "warning") in validators  # superseded source revision

@@ -31,7 +31,7 @@ backend/            FastAPI + SQLModel. Claim versioning + validation pass live 
   app/services.py   ingestion, versioning/supersede, generation, validation, drift,
                     queue, topics, blogs
   app/routers.py    REST API
-  app/search.py     SQLite FTS5 search over claims/sources/blogs/topics (LIKE fallback)
+  app/search.py     Postgres tsvector search over claims/sources/blogs/topics (LIKE fallback on SQLite test DB)
   app/llm.py        Anthropic wrapper + structured-output helpers (graceful w/o key)
 frontend/           React + Vite SPA. src/views/ per page, src/components/, React Router.
                     Portal routes: /topics (tree), /blog/<slug> (reader), /search, /help.
@@ -82,13 +82,29 @@ server serves the knowledge base; deterministic citation/freshness/versioning ru
 cd backend
 python -m venv .venv && . .venv/Scripts/activate   # Windows; use bin/activate on *nix
 pip install -r requirements.txt
-cp .env.example .env        # LLM_MODE=local by default — no key needed
+cp .env.example .env        # set DATABASE_URL to your Supabase Postgres URL
 uvicorn app.main:app --reload
 # docs at http://localhost:8000/docs
 ```
 
-SQLite by default (`fabric_atlas.db`). For scale, set `DATABASE_URL` to Postgres and add
-pgvector for semantic retrieval — see docs/data-model.md.
+**Postgres (Supabase) is the store.** The canonical schema is the Supabase migration
+`supabase/migrations/*_fabric_atlas_kb.sql` (apply with `supabase db push` or run the SQL);
+set `DATABASE_URL` to the Supabase pooler URL with the `+psycopg` driver. The backend
+connects as the service role and owns all writes (versioning/validation); `anon`/`authenticated`
+get read-only SELECT on the public KB surface. SQLite is retired (the only remaining use is the
+in-memory test DB). Full-text search uses a Postgres `tsvector` index (`search_doc` table),
+not FTS5.
+
+**Migrate / re-import (re-runnable):**
+```bash
+python scripts/migrate_to_supabase.py --base http://localhost:8000   # replay content/ + rebuild search
+python scripts/replay_verified_status.py                            # ONCE: restore curation status from old SQLite
+python scripts/validate_migration.py                                # assert KB invariants (also runs at end of /ingest-batch)
+```
+
+**Advisor chat:** `POST /advisor/chat` answers Fabric questions grounded only in KB claims
+(cited `[Sn]`, refuses where silent). Needs `LLM_MODE=api` + a key; the Lovable UI renders it.
+In local mode use the `/advise` skill (fabric-advisor agent) which runs the same retrieval.
 
 ## Core domain rules (enforce these in code and in every agent)
 

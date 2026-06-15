@@ -20,7 +20,7 @@ AGENTS.md            The same, for Codex / other agents (committed, repo-shared)
 backend/             FastAPI + SQLModel — claim versioning + the validation pass
 content/             Git-tracked authored knowledge: sources/ diagrams/ designs/ lessons/
 scripts/             import_content.py — publish authored content to a running server
-                     build_index.py — local DuckDB BM25 retrieval index over the claims
+                     migrate_to_supabase.py / replay_verified_status.py / validate_migration.py
 docs/workflow.md     Author-locally / publish-to-server model + VS Code extension setup
 docs/data-model.md   How versioning, supersede, drift, tags, assets, and validation work
 docs/extending.md    Every extension point: content, capabilities, theme, views, agents

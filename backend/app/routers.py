@@ -4,6 +4,7 @@ v0.2: ingest/design/validate/drift accept pre-built structured payloads from the
 (default), plus tags and image/diagram assets. The server makes no LLM calls in local mode.
 v0.3: adds reject/reject-bulk/promote claim endpoints; Design exposes ready_to_share.
 """
+
 from __future__ import annotations
 from pathlib import Path
 from typing import Optional
@@ -28,8 +29,8 @@ class IngestIn(BaseModel):
     audience: str = ""
     why_it_matters: str = ""
     takeaways: list[str] = []
-    content: str = ""                 # used only in LLM_MODE=api
-    claims: Optional[list[dict]] = None   # local mode: agent-extracted claims
+    content: str = ""  # used only in LLM_MODE=api
+    claims: Optional[list[dict]] = None  # local mode: agent-extracted claims
     assets: list[dict] = []
 
 
@@ -46,7 +47,7 @@ class DriftIn(BaseModel):
     takeaways: Optional[list[str]] = None
 
 
-class DesignCreateIn(BaseModel):              # local mode: agent-authored design
+class DesignCreateIn(BaseModel):  # local mode: agent-authored design
     scenario: str
     output_md: str
     title: str = ""
@@ -56,13 +57,13 @@ class DesignCreateIn(BaseModel):              # local mode: agent-authored desig
     assets: list[dict] = []
 
 
-class DesignGenerateIn(BaseModel):            # api mode
+class DesignGenerateIn(BaseModel):  # api mode
     scenario: str
     constraints: dict = {}
 
 
 class ValidateIn(BaseModel):
-    issues: Optional[list[dict]] = None       # local mode: validation-reviewer's findings
+    issues: Optional[list[dict]] = None  # local mode: validation-reviewer's findings
 
 
 class AssetIn(BaseModel):
@@ -137,19 +138,31 @@ class BlogCreateIn(BaseModel):
     assets: list[dict] = []
 
 
+class AdvisorChatIn(BaseModel):
+    message: str
+    capabilities: list[str] = []  # optional scope; defaults to whole verified KB
+    history: list[dict] = []  # prior turns [{role, content}] for follow-ups
+
+
 # ------------------------------------------------------------------ sources
 @router.post("/sources/ingest")
 def ingest(body: IngestIn, session: Session = Depends(get_session)):
     fields = body.model_fields_set
     try:
-        return services.ingest_source(session, body.url, body.title, body.tier,
-                                      content=body.content, claims=body.claims,
-                                      tags=body.tags if "tags" in fields else None,
-                                      assets=body.assets,
-                                      summary=body.summary, audience=body.audience,
-                                      why_it_matters=body.why_it_matters,
-                                      takeaways=(body.takeaways if "takeaways" in fields
-                                                 else None))
+        return services.ingest_source(
+            session,
+            body.url,
+            body.title,
+            body.tier,
+            content=body.content,
+            claims=body.claims,
+            tags=body.tags if "tags" in fields else None,
+            assets=body.assets,
+            summary=body.summary,
+            audience=body.audience,
+            why_it_matters=body.why_it_matters,
+            takeaways=(body.takeaways if "takeaways" in fields else None),
+        )
     except llm.LLMUnavailable as e:
         raise HTTPException(503, str(e))
     except ValueError as e:
@@ -165,22 +178,33 @@ def list_sources(session: Session = Depends(get_session)):
 @router.post("/sources/{source_key}/drift")
 def drift(source_key: str, body: DriftIn, session: Session = Depends(get_session)):
     try:
-        return services.detect_drift(session, source_key, content=body.content,
-                                     claims=body.claims, url=body.url,
-                                     title=body.title, tier=body.tier,
-                                     tags=body.tags, summary=body.summary,
-                                     audience=body.audience,
-                                     why_it_matters=body.why_it_matters,
-                                     takeaways=body.takeaways)
+        return services.detect_drift(
+            session,
+            source_key,
+            content=body.content,
+            claims=body.claims,
+            url=body.url,
+            title=body.title,
+            tier=body.tier,
+            tags=body.tags,
+            summary=body.summary,
+            audience=body.audience,
+            why_it_matters=body.why_it_matters,
+            takeaways=body.takeaways,
+        )
     except (llm.LLMUnavailable, ValueError) as e:
         raise HTTPException(400, str(e))
 
 
 # ------------------------------------------------------------------- claims
 @router.get("/claims")
-def list_claims(capability: Optional[str] = None, status: Optional[str] = None,
-                tag: Optional[str] = None, include_inactive: bool = False,
-                session: Session = Depends(get_session)):
+def list_claims(
+    capability: Optional[str] = None,
+    status: Optional[str] = None,
+    tag: Optional[str] = None,
+    include_inactive: bool = False,
+    session: Session = Depends(get_session),
+):
     stmt = select(Claim)
     if not include_inactive:
         stmt = stmt.where(Claim.active == True)  # noqa: E712
@@ -216,8 +240,9 @@ def verify_bulk(body: BulkClaimIn, session: Session = Depends(get_session)):
     """Verify every active pending claim of a source (or an explicit id list).
     The human approval step, batched — inactive/non-pending claims are skipped."""
     try:
-        return services.verify_claims_bulk(session, source_id=body.source_id,
-                                           claim_ids=body.claim_ids)
+        return services.verify_claims_bulk(
+            session, source_id=body.source_id, claim_ids=body.claim_ids
+        )
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -239,8 +264,9 @@ def reject_bulk(body: BulkClaimIn, session: Session = Depends(get_session)):
     """Reject every active pending claim of a source (or an explicit id list).
     Inactive / non-pending claims are skipped."""
     try:
-        return services.reject_claims_bulk(session, source_id=body.source_id,
-                                           claim_ids=body.claim_ids)
+        return services.reject_claims_bulk(
+            session, source_id=body.source_id, claim_ids=body.claim_ids
+        )
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -294,7 +320,9 @@ def recent_actions(limit: int = 30, session: Session = Depends(get_session)):
 @router.get("/tags")
 def list_tags(session: Session = Depends(get_session)):
     counts: dict[str, int] = {}
-    for c in session.exec(select(Claim).where(Claim.active == True)).all():  # noqa: E712
+    for c in session.exec(
+        select(Claim).where(Claim.active == True)
+    ).all():  # noqa: E712
         for t in load_tags(c.tags_json):
             counts[t] = counts.get(t, 0) + 1
     return dict(sorted(counts.items(), key=lambda kv: -kv[1]))
@@ -303,7 +331,9 @@ def list_tags(session: Session = Depends(get_session)):
 @router.get("/coverage")
 def coverage(session: Session = Depends(get_session)):
     grid: dict[str, dict[int, int]] = {}
-    for c in session.exec(select(Claim).where(Claim.active == True)).all():  # noqa: E712
+    for c in session.exec(
+        select(Claim).where(Claim.active == True)
+    ).all():  # noqa: E712
         grid.setdefault(c.capability_id, {1: 0, 2: 0, 3: 0, 4: 0, 5: 0})
         grid[c.capability_id][c.depth] += 1
     return grid
@@ -317,9 +347,13 @@ def create_asset(body: AssetIn, session: Session = Depends(get_session)):
 
 
 @router.get("/assets")
-def list_assets(source: Optional[str] = None, design: Optional[str] = None,
-                blog: Optional[str] = None, capability: Optional[str] = None,
-                session: Session = Depends(get_session)):
+def list_assets(
+    source: Optional[str] = None,
+    design: Optional[str] = None,
+    blog: Optional[str] = None,
+    capability: Optional[str] = None,
+    session: Session = Depends(get_session),
+):
     stmt = select(Asset)
     if source:
         stmt = stmt.where(Asset.source_id == source)
@@ -336,10 +370,16 @@ def list_assets(source: Optional[str] = None, design: Optional[str] = None,
 @router.post("/designs")
 def design_create(body: DesignCreateIn, session: Session = Depends(get_session)):
     try:
-        return services.create_design(session, body.scenario, body.output_md,
-                                      constraints=body.constraints, tags=body.tags,
-                                      cited_source_ids=body.cited_source_ids,
-                                      assets=body.assets, title=body.title)
+        return services.create_design(
+            session,
+            body.scenario,
+            body.output_md,
+            constraints=body.constraints,
+            tags=body.tags,
+            cited_source_ids=body.cited_source_ids,
+            assets=body.assets,
+            title=body.title,
+        )
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -366,13 +406,19 @@ def get_design(design_id: str, session: Session = Depends(get_session)):
     if not d:
         raise HTTPException(404, "Design not found.")
     assets = session.exec(select(Asset).where(Asset.design_id == design_id)).all()
-    return {**d.model_dump(), "tags": load_tags(d.tags_json),
-            "assets": [services._asset_dict(a) for a in assets]}
+    return {
+        **d.model_dump(),
+        "tags": load_tags(d.tags_json),
+        "assets": [services._asset_dict(a) for a in assets],
+    }
 
 
 @router.post("/designs/{design_id}/validate")
-def design_validate(design_id: str, body: ValidateIn = ValidateIn(),
-                    session: Session = Depends(get_session)):
+def design_validate(
+    design_id: str,
+    body: ValidateIn = ValidateIn(),
+    session: Session = Depends(get_session),
+):
     try:
         return services.validate_design(session, design_id, agent_issues=body.issues)
     except ValueError as e:
@@ -381,8 +427,11 @@ def design_validate(design_id: str, body: ValidateIn = ValidateIn(),
 
 @router.get("/designs/{design_id}/validations")
 def list_validations(design_id: str, session: Session = Depends(get_session)):
-    runs = session.exec(select(ValidationRun).where(ValidationRun.design_id == design_id)
-                        .order_by(ValidationRun.created_at.desc())).all()
+    runs = session.exec(
+        select(ValidationRun)
+        .where(ValidationRun.design_id == design_id)
+        .order_by(ValidationRun.created_at.desc())
+    ).all()
     out = []
     for r in runs:
         issues = session.exec(select(Issue).where(Issue.run_id == r.id)).all()
@@ -401,22 +450,37 @@ def lesson_files():
     lessons_dir = Path(__file__).resolve().parents[2] / "content" / "lessons"
     if not lessons_dir.is_dir():
         return []
-    return [{"name": f.name, "path": f"content/lessons/{f.name}"}
-            for f in sorted(lessons_dir.glob("*.md"))]
+    return [
+        {"name": f.name, "path": f"content/lessons/{f.name}"}
+        for f in sorted(lessons_dir.glob("*.md"))
+    ]
 
 
 # ------------------------------------------------------------------ ingestion queue
 @router.post("/queue", status_code=201)
 def queue_submit(body: QueueSubmitIn, session: Session = Depends(get_session)):
     """Submit a URL (from the frontend) for local agent ingestion. The knowledge-curator
-    agent pulls queued items via /ingest-batch; the server never fetches the URL itself."""
+    agent pulls queued items via /ingest-batch; the server never fetches the URL itself.
+    """
     try:
-        return services.submit_queue_item(session, body.url, title=body.title,
-                                          tier=body.tier, notes=body.notes,
-                                          tags=body.tags, submitted_by=body.submitted_by)
+        return services.submit_queue_item(
+            session,
+            body.url,
+            title=body.title,
+            tier=body.tier,
+            notes=body.notes,
+            tags=body.tags,
+            submitted_by=body.submitted_by,
+        )
     except services.DuplicateSubmission as e:
-        raise HTTPException(409, detail={"message": str(e), "source_key": e.source_key,
-                                         "queue_id": e.queue_id})
+        raise HTTPException(
+            409,
+            detail={
+                "message": str(e),
+                "source_key": e.source_key,
+                "queue_id": e.queue_id,
+            },
+        )
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -441,14 +505,18 @@ def queue_claim(item_id: str, session: Session = Depends(get_session)):
 
 
 @router.post("/queue/{item_id}/complete")
-def queue_complete(item_id: str, body: QueueCompleteIn,
-                   session: Session = Depends(get_session)):
+def queue_complete(
+    item_id: str, body: QueueCompleteIn, session: Session = Depends(get_session)
+):
     return _queue_action(services.complete_queue_item, session, item_id, body.source_id)
 
 
 @router.post("/queue/{item_id}/fail")
-def queue_fail(item_id: str, body: QueueFailIn = QueueFailIn(),
-               session: Session = Depends(get_session)):
+def queue_fail(
+    item_id: str,
+    body: QueueFailIn = QueueFailIn(),
+    session: Session = Depends(get_session),
+):
     return _queue_action(services.fail_queue_item, session, item_id, body.error)
 
 
@@ -466,9 +534,16 @@ def queue_dismiss(item_id: str, session: Session = Depends(get_session)):
 @router.post("/topics", status_code=201)
 def topic_create(body: TopicIn, session: Session = Depends(get_session)):
     try:
-        return services.create_topic(session, body.slug, body.name, body.capability_ids,
-                                     parent_id=body.parent_id, description=body.description,
-                                     order=body.order, tags=body.tags)
+        return services.create_topic(
+            session,
+            body.slug,
+            body.name,
+            body.capability_ids,
+            parent_id=body.parent_id,
+            description=body.description,
+            order=body.order,
+            tags=body.tags,
+        )
     except ValueError as e:
         raise HTTPException(400, str(e))
 
@@ -488,9 +563,13 @@ def topic_get(slug: str, session: Session = Depends(get_session)):
 
 
 @router.patch("/topics/{topic_id}")
-def topic_patch(topic_id: str, body: TopicPatchIn, session: Session = Depends(get_session)):
+def topic_patch(
+    topic_id: str, body: TopicPatchIn, session: Session = Depends(get_session)
+):
     try:
-        return services.update_topic(session, topic_id, **body.model_dump(exclude_unset=True))
+        return services.update_topic(
+            session, topic_id, **body.model_dump(exclude_unset=True)
+        )
     except LookupError as e:
         raise HTTPException(404, str(e))
     except ValueError as e:
@@ -503,18 +582,29 @@ def blog_create(body: BlogCreateIn, session: Session = Depends(get_session)):
     """Persist a locally-authored blog article (blog-author agent). Re-posting the
     same slug supersedes the prior version — append-only, like claims."""
     try:
-        return services.create_blog(session, body.topic_id, body.slug, body.title,
-                                    body.body_md, summary=body.summary,
-                                    cited_source_ids=body.cited_source_ids,
-                                    tags=body.tags, depth_levels=body.depth_levels,
-                                    assets=body.assets)
+        return services.create_blog(
+            session,
+            body.topic_id,
+            body.slug,
+            body.title,
+            body.body_md,
+            summary=body.summary,
+            cited_source_ids=body.cited_source_ids,
+            tags=body.tags,
+            depth_levels=body.depth_levels,
+            assets=body.assets,
+        )
     except ValueError as e:
         raise HTTPException(400, str(e))
 
 
 @router.get("/blogs")
-def blog_list(topic: Optional[str] = None, status: Optional[str] = None,
-              tag: Optional[str] = None, session: Session = Depends(get_session)):
+def blog_list(
+    topic: Optional[str] = None,
+    status: Optional[str] = None,
+    tag: Optional[str] = None,
+    session: Session = Depends(get_session),
+):
     return services.list_blogs(session, topic_id=topic, status=status, tag=tag)
 
 
@@ -535,8 +625,11 @@ def blog_get_history(slug: str, session: Session = Depends(get_session)):
 
 
 @router.post("/blogs/{blog_id}/validate")
-def blog_validate(blog_id: str, body: ValidateIn = ValidateIn(),
-                  session: Session = Depends(get_session)):
+def blog_validate(
+    blog_id: str,
+    body: ValidateIn = ValidateIn(),
+    session: Session = Depends(get_session),
+):
     try:
         return services.validate_blog(session, blog_id, agent_issues=body.issues)
     except ValueError as e:
@@ -546,9 +639,10 @@ def blog_validate(blog_id: str, body: ValidateIn = ValidateIn(),
 @router.get("/blogs/{blog_id}/validations")
 def blog_validations(blog_id: str, session: Session = Depends(get_session)):
     runs = session.exec(
-        select(ValidationRun).where(ValidationRun.target_kind == "blog",
-                                    ValidationRun.target_id == blog_id)
-        .order_by(ValidationRun.created_at.desc())).all()
+        select(ValidationRun)
+        .where(ValidationRun.target_kind == "blog", ValidationRun.target_id == blog_id)
+        .order_by(ValidationRun.created_at.desc())
+    ).all()
     out = []
     for r in runs:
         issues = session.exec(select(Issue).where(Issue.run_id == r.id)).all()
@@ -558,22 +652,47 @@ def blog_validations(blog_id: str, session: Session = Depends(get_session)):
 
 # ------------------------------------------------------------------ search
 @router.get("/search")
-def search_kb(q: str, kind: Optional[str] = None, tag: Optional[str] = None,
-              capability: Optional[str] = None, limit: int = 20,
-              session: Session = Depends(get_session)):
-    """Grouped full-text search over blogs, topics, claims, and sources (FTS5 on
-    SQLite; LIKE fallback elsewhere). Results reflect live status — inactive
-    versions never surface."""
+def search_kb(
+    q: str,
+    kind: Optional[str] = None,
+    tag: Optional[str] = None,
+    capability: Optional[str] = None,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+):
+    """Grouped full-text search over blogs, topics, claims, and sources (Postgres
+    tsvector; LIKE fallback on the SQLite test DB). Results reflect live status —
+    inactive versions never surface."""
     if kind and kind not in ("blog", "topic", "claim", "source"):
         raise HTTPException(400, "kind must be one of blog|topic|claim|source.")
-    return search_mod.search(session, q, kind=kind, tag=tag, capability=capability,
-                             limit=min(limit, 50))
+    return search_mod.search(
+        session, q, kind=kind, tag=tag, capability=capability, limit=min(limit, 50)
+    )
 
 
 @router.post("/search/rebuild")
 def search_rebuild(session: Session = Depends(get_session)):
     """Repopulate the search index from the live tables (recovery / upgrade path)."""
     return search_mod.rebuild_search_index(session)
+
+
+# ------------------------------------------------------------------ advisor chat
+@router.post("/advisor/chat")
+def advisor_chat(body: AdvisorChatIn, session: Session = Depends(get_session)):
+    """Grounded Fabric Q&A over the knowledge base — answers only from KB claims, cited [Sn],
+    and refuses where the KB is silent. Retrieval is scoped to `capabilities` when given.
+    Requires LLM_MODE=api with a key (the Lovable chat UI calls this); in local mode use the
+    /advise skill (fabric-advisor agent) which runs the same retrieval on the laptop."""
+    if not (body.message or "").strip():
+        raise HTTPException(400, "message is required.")
+    try:
+        return services.advisor_chat(
+            session, body.message, capabilities=body.capabilities, history=body.history
+        )
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    except llm.LLMUnavailable as e:
+        raise HTTPException(503, str(e))
 
 
 # ------------------------------------------------------------------ help
@@ -603,9 +722,12 @@ def lesson(body: LessonIn, session: Session = Depends(get_session)):
     levels = {"Beginner": [1, 2], "Intermediate": [3], "Expert": [4, 5]}
     depths = levels.get(body.level, [1, 2])
     claims = session.exec(
-        select(Claim).where(Claim.active == True,  # noqa: E712
-                            Claim.capability_id == body.capability,
-                            Claim.depth.in_(depths))).all()
+        select(Claim).where(
+            Claim.active == True,  # noqa: E712
+            Claim.capability_id == body.capability,
+            Claim.depth.in_(depths),
+        )
+    ).all()
     if not claims:
         raise HTTPException(400, f"No {body.level}-level claims for {body.capability}.")
     tag_of, order = {}, []
@@ -618,5 +740,12 @@ def lesson(body: LessonIn, session: Session = Depends(get_session)):
         md = llm.write_lesson(body.capability, body.level, ctx)
     except llm.LLMUnavailable as e:
         raise HTTPException(503, str(e))
-    legend = "\n".join(f"{tag_of[sid]} = {session.get(Source, sid).title}" for sid in order)
-    return {"capability": body.capability, "level": body.level, "lesson_md": md, "legend": legend}
+    legend = "\n".join(
+        f"{tag_of[sid]} = {session.get(Source, sid).title}" for sid in order
+    )
+    return {
+        "capability": body.capability,
+        "level": body.level,
+        "lesson_md": md,
+        "legend": legend,
+    }

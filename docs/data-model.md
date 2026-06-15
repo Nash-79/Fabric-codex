@@ -161,20 +161,26 @@ In `LLM_MODE=local` (default) the agents supply pre-extracted `claims`, finished
 deterministic validators. In `LLM_MODE=api` the server calls `llm.py` to do that work itself.
 Either way the version chain, citation, and freshness logic below are unchanged.
 
-## Local retrieval index (DuckDB)
+## Storage: Supabase Postgres
 
-`scripts/build_index.py --rebuild` builds a derived DuckDB index (`var/atlas_index.duckdb`,
-gitignored) from the running backend: one denormalised claims+source table, a BM25 full-text
-index over claim text, tags, source summaries, and takeaways, plus a coverage view. Use
-`--search "<query>" [--capability id]`
-for ranked retrieval — agents should prefer this over dumping `/claims` once the KB grows.
-SQLite stays the system of record; the index is throwaway. If snapshot time-travel over the
-claim store becomes useful, the same table can be managed as a DuckLake catalog
-(`ATTACH 'ducklake:...'`) — revisit when the KB is large enough to care.
+Postgres (Supabase) is the system of record. The schema is the migration
+`supabase/migrations/*_fabric_atlas_kb.sql`, which mirrors `models.py` one-to-one (text PKs,
+`*_json` columns as TEXT) so SQLModel runs against it with no model changes. The backend
+connects as the service role and owns every write; RLS grants `anon`/`authenticated` read-only
+SELECT on the public KB surface (source, claim, asset, topic, blog, search_doc). Apply the
+migration with `supabase db push`, then replay git content with
+`scripts/migrate_to_supabase.py` and assert invariants with `scripts/validate_migration.py`.
 
-## Scaling to Postgres + pgvector
+## Full-text search (Postgres tsvector)
 
-Set `DATABASE_URL` to Postgres. Add an `embedding vector(N)` column to `Claim`, populate it on
+`search.py` maintains a unified `search_doc(kind, ref_id, title, body, tags, tsv)` table with a
+generated `tsvector` column and a GIN index. Queries use `websearch_to_tsquery` ranked by
+`ts_rank`, with `ts_headline` snippets; results are hydrated from the live tables so inactive
+versions never surface. `POST /search/rebuild` repopulates it from scratch. (The SQLite test DB
+has no `search_doc`; it falls back to a live LIKE scan.)
+
+## Future: pgvector semantic retrieval
+
+Enable the `pgvector` extension, add an `embedding vector(N)` column to `Claim`, populate it on
 ingest, and replace the `difflib` matching in `detect_drift` and the claim retrieval in
-`_grounding_context` with vector search. The rest of the model is unchanged — SQLModel handles
-both backends.
+`_grounding_context`/`_advisor_context` with vector search. The rest of the model is unchanged.
