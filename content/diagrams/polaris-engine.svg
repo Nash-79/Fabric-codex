@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Polaris Distributed SQL Query Engine — Fabric Warehouse / SQL Endpoint
+  Original diagram authored by Fabric Atlas diagram-author agent.
+  Grounded in verified claims for capability: polaris
+  Claim IDs visualised:
+    54c531e4ec30 (cloud-native, stateless, compute/state separation)
+    109a8a9e5865 (SQL frontend + DQP hand-off)
+    e485488fc734 (Fabric Warehouse + SQL endpoint share one engine, serverless)
+    313e684dbcf0 (two-phase Cascades optimizer)
+    c9e2b888ea27 (data-move enforcers: hash-redistribute, broadcast)
+    5113bff0555e (task = input cells + template + output cells; plan = task DAG)
+    fc6c17a8fc9f (tasks re-encoded as T-SQL on SQL Server nodes)
+    00d301079edf (cell abstraction: partition + hash dimensions)
+    ee898f6e9ea0 (DQP storage-agnostic at cell granularity)
+    51d0b69e025f (stateless compute — durable state in remote storage)
+    258c83b872bb (hierarchical FSM orchestration; task-level retry)
+    d3eba0fd689b (workload graph = union of all active query DAGs; multi-dim scheduling)
+    5911ea5a2fe9 (cache affinity — consistent cell-to-node mapping)
+    410d430f3a21 (auto scale-out on pressure; seconds to acquire nodes)
+    6ae4b2e790a5 (online scale-out — in-flight queries continue)
+    3510ad711fb4 (task-level fault tolerance; redistribute on node failure)
+    f9268175dfcd (same task engine for query and ingest)
+    a844b30888fa (task DAG: intra-query parallelism + cross-query concurrency)
+    fa12ef4e85f7 (FIFO + best-fit scheduling)
+    9358a9088f24 (scale: 1 PB / 420 nodes TPC-H; 5k sessions / 10 nodes TPC-DS)
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 740" width="960" height="740"
+     font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="12">
+
+  <!-- ── Palette ─────────────────────────────────────────────────────── -->
+  <!-- Fabric teal/jade: #0E7C5B (jade dark), #13A176 (jade mid), #19C37D (jade bright) -->
+  <!-- slate #1E2B38, steel #2E4057, mist #EAF6F1, accent amber #E8A020 -->
+
+  <defs>
+    <linearGradient id="hdrGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#0E7C5B"/>
+      <stop offset="100%" stop-color="#13A176"/>
+    </linearGradient>
+    <linearGradient id="feGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#19C37D" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#19C37D" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="dqpGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#0E7C5B" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#0E7C5B" stop-opacity="0.06"/>
+    </linearGradient>
+    <linearGradient id="beGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#2E4057" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#2E4057" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="storeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#13A176" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#13A176" stop-opacity="0.04"/>
+    </linearGradient>
+    <filter id="cardShadow" x="-4%" y="-4%" width="108%" height="118%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0E7C5B" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrowTeal" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#13A176"/>
+    </marker>
+    <marker id="arrowSlate" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#2E4057"/>
+    </marker>
+    <marker id="arrowAmber" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#E8A020"/>
+    </marker>
+  </defs>
+
+  <!-- ═══════════════════════════════════════════════════════════════════
+       Background
+  ══════════════════════════════════════════════════════════════════════ -->
+  <rect width="960" height="740" rx="12" fill="#F4FBF8"/>
+
+  <!-- ── Title bar ──────────────────────────────────────────────────── -->
+  <rect x="0" y="0" width="960" height="52" rx="12" fill="url(#hdrGrad)"/>
+  <rect x="0" y="40" width="960" height="12" fill="url(#hdrGrad)"/>
+  <text x="480" y="33" text-anchor="middle" fill="white" font-size="17" font-weight="700"
+        letter-spacing="0.5">Polaris — Distributed SQL Query Engine (Fabric Warehouse / SQL Analytics Endpoint)</text>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       LAYER 1 — FRONT-END  (y 70–190)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <rect x="30" y="66" width="900" height="130" rx="10" fill="url(#feGrad)"
+        stroke="#19C37D" stroke-width="1.4" filter="url(#cardShadow)"/>
+  <text x="44" y="86" fill="#0E7C5B" font-size="11" font-weight="700" letter-spacing="1">SQL FRONT-END</text>
+
+  <!-- Warehouse endpoint -->
+  <rect x="50" y="96" width="190" height="82" rx="8" fill="white" stroke="#13A176" stroke-width="1.2"/>
+  <text x="145" y="116" text-anchor="middle" fill="#0E7C5B" font-size="11" font-weight="700">Fabric Warehouse</text>
+  <text x="145" y="132" text-anchor="middle" fill="#1E2B38" font-size="10">SQL endpoint (TDS / REST)</text>
+  <text x="145" y="148" text-anchor="middle" fill="#555" font-size="9.5">User submits T-SQL query</text>
+  <text x="145" y="162" text-anchor="middle" fill="#555" font-size="9.5">or ingest job</text>
+
+  <!-- SQL Analytics Endpoint -->
+  <rect x="264" y="96" width="190" height="82" rx="8" fill="white" stroke="#13A176" stroke-width="1.2"/>
+  <text x="359" y="116" text-anchor="middle" fill="#0E7C5B" font-size="11" font-weight="700">SQL Analytics Endpoint</text>
+  <text x="359" y="132" text-anchor="middle" fill="#1E2B38" font-size="10">(Lakehouse read-only)</text>
+  <text x="359" y="148" text-anchor="middle" fill="#555" font-size="9.5">Shares same distributed</text>
+  <text x="359" y="162" text-anchor="middle" fill="#555" font-size="9.5">processing architecture</text>
+
+  <!-- Cascades Optimizer -->
+  <rect x="478" y="96" width="212" height="82" rx="8" fill="white" stroke="#13A176" stroke-width="1.2"/>
+  <text x="584" y="116" text-anchor="middle" fill="#0E7C5B" font-size="11" font-weight="700">Cascades Optimizer</text>
+  <text x="584" y="133" text-anchor="middle" fill="#1E2B38" font-size="10">Phase 1: MEMO logical search space</text>
+  <text x="584" y="149" text-anchor="middle" fill="#555" font-size="9.5">Phase 2: distributed cost-based plan</text>
+  <text x="584" y="164" text-anchor="middle" fill="#555" font-size="9.5">picks plan minimising data movement</text>
+
+  <!-- Data-Move Enforcers note -->
+  <rect x="714" y="96" width="196" height="82" rx="8" fill="white" stroke="#13A176" stroke-width="1.2"/>
+  <text x="812" y="116" text-anchor="middle" fill="#0E7C5B" font-size="11" font-weight="700">Data-Move Enforcers</text>
+  <text x="812" y="133" text-anchor="middle" fill="#1E2B38" font-size="10">Hash re-distribute</text>
+  <text x="812" y="149" text-anchor="middle" fill="#1E2B38" font-size="10">Broadcast side</text>
+  <text x="812" y="165" text-anchor="middle" fill="#555" font-size="9.5">blocking; define task boundaries</text>
+
+  <!-- arrows inside FE layer -->
+  <line x1="240" y1="137" x2="262" y2="137" stroke="#13A176" stroke-width="1.5" marker-end="url(#arrowTeal)"/>
+  <line x1="454" y1="137" x2="476" y2="137" stroke="#13A176" stroke-width="1.5" marker-end="url(#arrowTeal)"/>
+  <line x1="690" y1="137" x2="712" y2="137" stroke="#13A176" stroke-width="1.5" marker-end="url(#arrowTeal)"/>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       LAYER 2 — DQP  (y 216–370)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <rect x="30" y="212" width="900" height="168" rx="10" fill="url(#dqpGrad)"
+        stroke="#0E7C5B" stroke-width="1.4" filter="url(#cardShadow)"/>
+  <text x="44" y="232" fill="#0E7C5B" font-size="11" font-weight="700" letter-spacing="1">DISTRIBUTED QUERY PROCESSOR (DQP)</text>
+
+  <!-- Task DAG Scheduler -->
+  <rect x="50" y="242" width="208" height="124" rx="8" fill="white" stroke="#0E7C5B" stroke-width="1.2"/>
+  <text x="154" y="262" text-anchor="middle" fill="#0E7C5B" font-size="11" font-weight="700">Task DAG Scheduler</text>
+  <text x="154" y="279" text-anchor="middle" fill="#1E2B38" font-size="10">Query plan → DAG of task templates</text>
+  <text x="154" y="295" text-anchor="middle" fill="#555" font-size="9.5">Each task: input cells + template + output cells</text>
+  <text x="154" y="311" text-anchor="middle" fill="#555" font-size="9.5">FIFO + best-fit placement on idle capacity</text>
+  <text x="154" y="327" text-anchor="middle" fill="#555" font-size="9.5">Intra-query parallelism + cross-query concurrency</text>
+  <text x="154" y="344" text-anchor="middle" fill="#555" font-size="9.5">Tasks re-encoded as T-SQL for local SQL Server</text>
+
+  <!-- Workload Graph -->
+  <rect x="280" y="242" width="200" height="124" rx="8" fill="white" stroke="#0E7C5B" stroke-width="1.2"/>
+  <text x="380" y="262" text-anchor="middle" fill="#0E7C5B" font-size="11" font-weight="700">Workload Graph</text>
+  <text x="380" y="279" text-anchor="middle" fill="#1E2B38" font-size="10">Union of all active query DAGs</text>
+  <text x="380" y="295" text-anchor="middle" fill="#555" font-size="9.5">Multi-dim resource demand vectors</text>
+  <text x="380" y="311" text-anchor="middle" fill="#555" font-size="9.5">CPU / memory (stretchable)</text>
+  <text x="380" y="327" text-anchor="middle" fill="#555" font-size="9.5">Local temp disk (rigid)</text>
+  <text x="380" y="344" text-anchor="middle" fill="#555" font-size="9.5">Frees shared resources DAG-root-first</text>
+
+  <!-- FSM Orchestrator -->
+  <rect x="502" y="242" width="200" height="124" rx="8" fill="white" stroke="#0E7C5B" stroke-width="1.2"/>
+  <text x="602" y="262" text-anchor="middle" fill="#0E7C5B" font-size="11" font-weight="700">FSM Orchestrator</text>
+  <text x="602" y="279" text-anchor="middle" fill="#1E2B38" font-size="10">Hierarchical state machines</text>
+  <text x="602" y="295" text-anchor="middle" fill="#555" font-size="9.5">Query DAG → task templates → tasks</text>
+  <text x="602" y="311" text-anchor="middle" fill="#555" font-size="9.5">States: Ready / Run / Blocked / Failed / Success</text>
+  <text x="602" y="327" text-anchor="middle" fill="#555" font-size="9.5">Transient failures retried at task level</text>
+  <text x="602" y="344" text-anchor="middle" fill="#555" font-size="9.5">All transitions logged — resumable execution</text>
+
+  <!-- Auto-scaler -->
+  <rect x="724" y="242" width="186" height="124" rx="8" fill="white" stroke="#0E7C5B" stroke-width="1.2"/>
+  <text x="817" y="262" text-anchor="middle" fill="#0E7C5B" font-size="11" font-weight="700">Serverless Auto-Scaler</text>
+  <text x="817" y="279" text-anchor="middle" fill="#1E2B38" font-size="10">Detects resource pressure</text>
+  <text x="817" y="295" text-anchor="middle" fill="#555" font-size="9.5">Acquires new nodes in ~seconds</text>
+  <text x="817" y="311" text-anchor="middle" fill="#555" font-size="9.5">Online — in-flight queries continue</text>
+  <text x="817" y="327" text-anchor="middle" fill="#555" font-size="9.5">Node failure → tasks redistributed</text>
+  <text x="817" y="344" text-anchor="middle" fill="#555" font-size="9.5">Scales down when pressure subsides</text>
+
+  <!-- vertical drop from FE to DQP -->
+  <line x1="480" y1="178" x2="480" y2="210" stroke="#0E7C5B" stroke-width="1.8" stroke-dasharray="4 3" marker-end="url(#arrowSlate)"/>
+  <text x="490" y="198" fill="#0E7C5B" font-size="9.5">plan hand-off</text>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       LAYER 3 — BACK-END COMPUTE POOL  (y 398–540)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <rect x="30" y="394" width="900" height="162" rx="10" fill="url(#beGrad)"
+        stroke="#2E4057" stroke-width="1.4" filter="url(#cardShadow)"/>
+  <text x="44" y="414" fill="#1E2B38" font-size="11" font-weight="700" letter-spacing="1">BACK-END COMPUTE POOL  (stateless SQL Server nodes)</text>
+
+  <!-- Three compute nodes -->
+  <!-- Node A -->
+  <rect x="52" y="424" width="166" height="116" rx="8" fill="white" stroke="#2E4057" stroke-width="1.1"/>
+  <rect x="52" y="424" width="166" height="24" rx="8" fill="#2E4057"/>
+  <rect x="52" y="436" width="166" height="12" fill="#2E4057"/>
+  <text x="135" y="441" text-anchor="middle" fill="white" font-size="10" font-weight="700">Compute Node A</text>
+  <text x="135" y="463" text-anchor="middle" fill="#1E2B38" font-size="9.5">SQL Server (columnar exec)</text>
+  <text x="135" y="477" text-anchor="middle" fill="#555" font-size="9">T-SQL task template executes</text>
+  <text x="135" y="491" text-anchor="middle" fill="#555" font-size="9">Buffer pool + local SSD cache</text>
+  <text x="135" y="507" text-anchor="middle" fill="#555" font-size="9">Cells affinitized by hash range</text>
+  <text x="135" y="521" text-anchor="middle" fill="#13A176" font-size="9" font-style="italic">cache preserved on scale events</text>
+
+  <!-- Node B -->
+  <rect x="242" y="424" width="166" height="116" rx="8" fill="white" stroke="#2E4057" stroke-width="1.1"/>
+  <rect x="242" y="424" width="166" height="24" rx="8" fill="#2E4057"/>
+  <rect x="242" y="436" width="166" height="12" fill="#2E4057"/>
+  <text x="325" y="441" text-anchor="middle" fill="white" font-size="10" font-weight="700">Compute Node B</text>
+  <text x="325" y="463" text-anchor="middle" fill="#1E2B38" font-size="9.5">SQL Server (columnar exec)</text>
+  <text x="325" y="477" text-anchor="middle" fill="#555" font-size="9">T-SQL task template executes</text>
+  <text x="325" y="491" text-anchor="middle" fill="#555" font-size="9">Buffer pool + local SSD cache</text>
+  <text x="325" y="507" text-anchor="middle" fill="#555" font-size="9">Cells affinitized by hash range</text>
+  <text x="325" y="521" text-anchor="middle" fill="#13A176" font-size="9" font-style="italic">cache preserved on scale events</text>
+
+  <!-- Node C -->
+  <rect x="432" y="424" width="166" height="116" rx="8" fill="white" stroke="#2E4057" stroke-width="1.1"/>
+  <rect x="432" y="424" width="166" height="24" rx="8" fill="#2E4057"/>
+  <rect x="432" y="436" width="166" height="12" fill="#2E4057"/>
+  <text x="515" y="441" text-anchor="middle" fill="white" font-size="10" font-weight="700">Compute Node C</text>
+  <text x="515" y="463" text-anchor="middle" fill="#1E2B38" font-size="9.5">SQL Server (columnar exec)</text>
+  <text x="515" y="477" text-anchor="middle" fill="#555" font-size="9">T-SQL task template executes</text>
+  <text x="515" y="491" text-anchor="middle" fill="#555" font-size="9">Buffer pool + local SSD cache</text>
+  <text x="515" y="507" text-anchor="middle" fill="#555" font-size="9">Cells affinitized by hash range</text>
+  <text x="515" y="521" text-anchor="middle" fill="#13A176" font-size="9" font-style="italic">cache preserved on scale events</text>
+
+  <!-- Node D (new, added on scale-out) -->
+  <rect x="622" y="424" width="166" height="116" rx="8" fill="white" stroke="#E8A020" stroke-width="1.5" stroke-dasharray="6 3"/>
+  <rect x="622" y="424" width="166" height="24" rx="8" fill="#E8A020"/>
+  <rect x="622" y="436" width="166" height="12" fill="#E8A020"/>
+  <text x="705" y="441" text-anchor="middle" fill="white" font-size="10" font-weight="700">Node D  (scale-out)</text>
+  <text x="705" y="463" text-anchor="middle" fill="#1E2B38" font-size="9.5">Acquired in ~seconds</text>
+  <text x="705" y="477" text-anchor="middle" fill="#555" font-size="9">Warm-up from OneLake</text>
+  <text x="705" y="491" text-anchor="middle" fill="#555" font-size="9">Existing nodes keep cache</text>
+  <text x="705" y="507" text-anchor="middle" fill="#555" font-size="9">In-flight queries unaffected</text>
+  <text x="705" y="521" text-anchor="middle" fill="#E8A020" font-size="9" font-style="italic">online topology change</text>
+
+  <!-- Perf callout -->
+  <rect x="806" y="424" width="110" height="116" rx="8" fill="#FFF8EC" stroke="#E8A020" stroke-width="1.2"/>
+  <text x="861" y="442" text-anchor="middle" fill="#E8A020" font-size="10" font-weight="700">Scale Benchmarks</text>
+  <text x="861" y="459" text-anchor="middle" fill="#1E2B38" font-size="9">1 PB TPC-H</text>
+  <text x="861" y="472" text-anchor="middle" fill="#1E2B38" font-size="9">420 nodes</text>
+  <text x="861" y="485" text-anchor="middle" fill="#555" font-size="9">all 22 queries</text>
+  <line x1="820" y1="494" x2="906" y2="494" stroke="#E8A020" stroke-width="0.7"/>
+  <text x="861" y="507" text-anchor="middle" fill="#1E2B38" font-size="9">5,000 sessions</text>
+  <text x="861" y="520" text-anchor="middle" fill="#1E2B38" font-size="9">10 nodes TPC-DS</text>
+  <text x="861" y="533" text-anchor="middle" fill="#555" font-size="9">~9k tasks concurrent</text>
+
+  <!-- DQP → Compute arrow -->
+  <line x1="480" y1="380" x2="480" y2="392" stroke="#2E4057" stroke-width="1.8" stroke-dasharray="4 3" marker-end="url(#arrowSlate)"/>
+  <text x="490" y="390" fill="#2E4057" font-size="9.5">dispatch tasks</text>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       LAYER 4 — CELL-BASED DATA DISTRIBUTION  (y 572–640)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <rect x="30" y="570" width="900" height="86" rx="10" fill="#EAF6F1"
+        stroke="#13A176" stroke-width="1.2" filter="url(#cardShadow)"/>
+  <text x="44" y="590" fill="#0E7C5B" font-size="11" font-weight="700" letter-spacing="1">CELL-BASED DATA DISTRIBUTION</text>
+
+  <!-- Partition axis -->
+  <rect x="50" y="598" width="196" height="44" rx="6" fill="white" stroke="#13A176" stroke-width="1"/>
+  <text x="148" y="615" text-anchor="middle" fill="#0E7C5B" font-size="10" font-weight="600">Partition Dimension</text>
+  <text x="148" y="630" text-anchor="middle" fill="#555" font-size="9">User-defined partition function</text>
+  <text x="148" y="642" text-anchor="middle" fill="#555" font-size="9">range / equality predicate pruning</text>
+
+  <!-- Hash axis -->
+  <rect x="262" y="598" width="196" height="44" rx="6" fill="white" stroke="#13A176" stroke-width="1"/>
+  <text x="360" y="615" text-anchor="middle" fill="#0E7C5B" font-size="10" font-weight="600">Hash-Distribution Dimension</text>
+  <text x="360" y="630" text-anchor="middle" fill="#555" font-size="9">System-chosen hash function</text>
+  <text x="360" y="642" text-anchor="middle" fill="#555" font-size="9">rows → many buckets across nodes</text>
+
+  <!-- Cell grid visual -->
+  <rect x="474" y="596" width="204" height="48" rx="6" fill="white" stroke="#13A176" stroke-width="1"/>
+  <text x="576" y="611" text-anchor="middle" fill="#0E7C5B" font-size="10" font-weight="600">Data Cell Grid</text>
+  <!-- mini grid -->
+  <rect x="488" y="618" width="18" height="14" rx="2" fill="#19C37D" opacity="0.7"/>
+  <rect x="510" y="618" width="18" height="14" rx="2" fill="#13A176" opacity="0.6"/>
+  <rect x="532" y="618" width="18" height="14" rx="2" fill="#0E7C5B" opacity="0.5"/>
+  <rect x="554" y="618" width="18" height="14" rx="2" fill="#19C37D" opacity="0.7"/>
+  <rect x="576" y="618" width="18" height="14" rx="2" fill="#13A176" opacity="0.6"/>
+  <rect x="598" y="618" width="18" height="14" rx="2" fill="#0E7C5B" opacity="0.5"/>
+  <rect x="620" y="618" width="18" height="14" rx="2" fill="#19C37D" opacity="0.7"/>
+  <rect x="648" y="614" width="24" height="10" rx="2" fill="none" stroke="#555" stroke-width="0.8"/>
+  <text x="660" y="622" text-anchor="middle" fill="#555" font-size="8">cell</text>
+
+  <!-- Storage-agnostic note -->
+  <rect x="694" y="596" width="222" height="48" rx="6" fill="white" stroke="#13A176" stroke-width="1"/>
+  <text x="805" y="613" text-anchor="middle" fill="#0E7C5B" font-size="10" font-weight="600">Storage-Agnostic DQP</text>
+  <text x="805" y="628" text-anchor="middle" fill="#555" font-size="9">DQP sees cells only; local engine reads</text>
+  <text x="805" y="641" text-anchor="middle" fill="#555" font-size="9">Delta/Parquet/ADLS inside cells</text>
+
+  <!-- Compute → Cell arrow -->
+  <line x1="480" y1="558" x2="480" y2="568" stroke="#13A176" stroke-width="1.5" marker-end="url(#arrowTeal)"/>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       LAYER 5 — ONELAKE STORAGE  (y 668–720)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <rect x="30" y="666" width="900" height="60" rx="10" fill="url(#storeGrad)"
+        stroke="#13A176" stroke-width="1.2" filter="url(#cardShadow)"/>
+  <text x="44" y="686" fill="#0E7C5B" font-size="11" font-weight="700" letter-spacing="1">ONELAKE  —  Remote Durable State (data · metadata · transaction logs)</text>
+  <text x="480" y="706" text-anchor="middle" fill="#1E2B38" font-size="10">Delta Lake / Parquet files · shared across Warehouse and SQL Analytics Endpoint · compute is stateless — caches rebuilt lazily from persisted data</text>
+  <text x="480" y="720" text-anchor="middle" fill="#0E7C5B" font-size="9.5">Cache loss never fails in-flight work · partial query restarts supported · same task engine serves query and ingest paths</text>
+
+  <!-- Cell → OneLake arrow -->
+  <line x1="480" y1="656" x2="480" y2="665" stroke="#13A176" stroke-width="1.5" marker-end="url(#arrowTeal)"/>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       Results flow-back arrow (right side, FE ← DQP ← Compute)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <path d="M930 482 Q946 482 946 304 Q946 136 930 136"
+        fill="none" stroke="#19C37D" stroke-width="1.6" stroke-dasharray="5 3"
+        marker-end="url(#arrowTeal)"/>
+  <text x="950" y="316" text-anchor="middle" fill="#0E7C5B" font-size="9"
+        transform="rotate(90,950,316)">results flow back to caller</text>
+
+</svg>
