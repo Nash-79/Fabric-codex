@@ -19,7 +19,7 @@ from difflib import SequenceMatcher
 from typing import Optional
 from sqlmodel import Session, select
 from app import llm, search
-from app.db import LLM_MODE
+from app.db import LLM_MODE, ANTHROPIC_API_KEY
 
 from app.models import (
     Source,
@@ -697,40 +697,84 @@ def _advisor_context(
     return ctx, "\n".join(legend_lines), claims
 
 
+def _llm_key_available() -> bool:
+    return bool(ANTHROPIC_API_KEY)
+
+
+def _advisor_fallback_reason() -> str:
+    if LLM_MODE != "api":
+        return "local_mode"
+    return "missing_api_key"
+
+
+def _advisor_fallback_answer(reason: str, claim_count: int) -> str:
+    if reason == "local_mode":
+        why = "LLM_MODE is not set to api"
+    else:
+        why = "ANTHROPIC_API_KEY is not configured"
+    return (
+        f"Server-side Advisor generation is disabled because {why}. "
+        f"I found {claim_count} scoped knowledge-base claim(s) and returned them as "
+        "`context` with the citation `legend` and `system` prompt. Use the local `/advise` "
+        "agent or a client-side generator with that context to produce a cited answer. "
+        "Do not answer from general knowledge if the returned context is insufficient."
+    )
+
+
 def advisor_chat(
     session: Session,
     question: str,
     capabilities: Optional[list[str]] = None,
     history: Optional[list[dict]] = None,
 ) -> dict:
-    """Answer a Fabric question grounded only in KB claims, cited [Sn]. Retrieval scoped to
-    the given capabilities (or the whole verified KB if none given). Requires LLM_MODE=api
-    with a key — in local mode the fabric-advisor agent does this on the laptop instead.
+    """Grounded Fabric Q&A over the KB, scoped to the given capabilities (or the whole verified
+    KB if none given). Key-optional by design, so it works in the no-server-key local model:
+
+    - If a key is available (LLM_MODE=api): the server generates the cited answer and returns
+      it in `answer` (mode="answer").
+    - Otherwise: the server returns a clear fallback message plus the *retrieval payload* —
+      the scoped [Sn]-tagged `context`, `legend`, and the advisor `system` prompt — so a client
+      or local agent can generate the grounded answer itself (mode="context"). No LLM call, no key.
+
+    Either way the retrieval and grounding guardrails are the same; only the generator differs.
     """
     caps = [c for c in (capabilities or []) if c in llm.CAPABILITY_IDS]
     ctx, legend, claims = _advisor_context(session, caps or None)
-    if not claims:
-        return {
-            "answer": "The knowledge base has no verified claims for that question yet. "
-            "Ingest an authoritative source (/ingest <url> tier=<n>) and verify "
-            "its claims, then ask again.",
-            "legend": "",
-            "grounded": False,
-            "claim_count": 0,
-        }
-    if LLM_MODE != "api":
-        raise ValueError(
-            "Advisor chat needs LLM_MODE=api with an ANTHROPIC_API_KEY. In local mode, use the "
-            "fabric-advisor agent (the /advise skill) which runs the same retrieval on the laptop."
-        )
-    answer = llm.advisor_answer(question, ctx, legend, history=history)
-    return {
-        "answer": answer,
+    base = {
         "legend": legend,
-        "grounded": True,
         "claim_count": len(claims),
         "capabilities": caps or "all",
     }
+    if not claims:
+        return {
+            **base,
+            "mode": "empty",
+            "answer": "The knowledge base has no verified claims for that question yet. "
+            "Ingest an authoritative source (/ingest <url> tier=<n>) and verify "
+            "its claims, then ask again.",
+            "grounded": False,
+        }
+
+    # No server-side key: hand the grounding back for client-side generation (Lovable AI).
+    if LLM_MODE != "api" or not _llm_key_available():
+        reason = _advisor_fallback_reason()
+        return {
+            **base,
+            "mode": "context",
+            "answer": _advisor_fallback_answer(reason, len(claims)),
+            "grounded": True,
+            "fallback_reason": reason,
+            "server_generation": False,
+            "question": question,
+            "context": ctx,
+            "system": llm.ADVISOR_SYSTEM,
+            "note": "Returning grounded context for local or client-side generation. "
+            "Cite [Sn] from the legend; do not add facts beyond the context.",
+        }
+
+    # Server-side generation (LLM_MODE=api with a key).
+    answer = llm.advisor_answer(question, ctx, legend, history=history)
+    return {**base, "mode": "answer", "answer": answer, "grounded": True}
 
 
 def create_design(

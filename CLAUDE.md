@@ -102,9 +102,10 @@ python scripts/replay_verified_status.py                            # ONCE: rest
 python scripts/validate_migration.py                                # assert KB invariants (also runs at end of /ingest-batch)
 ```
 
-**Advisor chat:** `POST /advisor/chat` answers Fabric questions grounded only in KB claims
-(cited `[Sn]`, refuses where silent). Needs `LLM_MODE=api` + a key; the Lovable UI renders it.
-In local mode use the `/advise` skill (fabric-advisor agent) which runs the same retrieval.
+**Advisor chat:** `POST /advisor/chat` is key-optional. With `LLM_MODE=api` + a key it
+returns a server-generated, cited answer. In local mode or without a key it returns a clear
+fallback plus the scoped claim context, citation legend, and advisor system prompt; use the
+`/advise` skill or a client-side generator to produce the answer from that returned context.
 
 ## Core domain rules (enforce these in code and in every agent)
 

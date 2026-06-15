@@ -38,7 +38,9 @@ def load_registry() -> set[str]:
     """The capability registry lives in backend/app/llm.py (the enforcement copy)."""
     llm_py = ROOT / "backend" / "app" / "llm.py"
     try:
-        m = re.search(r"CAPABILITY_IDS\s*=\s*\[(.*?)\]", llm_py.read_text(encoding="utf-8"), re.S)
+        m = re.search(
+            r"CAPABILITY_IDS\s*=\s*\[(.*?)\]", llm_py.read_text(encoding="utf-8"), re.S
+        )
         return set(re.findall(r'"([a-z0-9-]+)"', m.group(1))) if m else set()
     except OSError:
         return set()
@@ -87,8 +89,10 @@ def validate(base: str, expect_sources: int, expect_blogs: int) -> Report:
     if not blogs:
         r.fail("No blogs in the KB.")
     if not verified:
-        r.fail("No verified claims — blogs/advisor would be ungrounded "
-               "(did you run replay_verified_status.py?).")
+        r.fail(
+            "No verified claims — blogs/advisor would be ungrounded "
+            "(did you run replay_verified_status.py?)."
+        )
 
     if expect_sources and len(sources) != expect_sources:
         r.warn(f"Source count {len(sources)} != expected {expect_sources}.")
@@ -109,15 +113,19 @@ def validate(base: str, expect_sources: int, expect_blogs: int) -> Report:
     ]:
         dups = dup_keys(rows, key)
         if dups:
-            r.fail(f"Versioning invariant violated: {len(dups)} {label}(s) have >1 active "
-                   f"version (e.g. {dups[:3]}).")
+            r.fail(
+                f"Versioning invariant violated: {len(dups)} {label}(s) have >1 active "
+                f"version (e.g. {dups[:3]})."
+            )
 
     # 3. Referential integrity.
     source_ids = {s["id"] for s in sources}
     active_source_ids = {s["id"] for s in sources if s.get("active")}
     for c in active_claims:
         if c.get("source_id") not in source_ids:
-            r.fail(f"Claim {c['id']} references missing source_id {c.get('source_id')}.")
+            r.fail(
+                f"Claim {c['id']} references missing source_id {c.get('source_id')}."
+            )
     for b in blogs:
         for sid in b.get("cited_source_ids", []):
             if sid not in active_source_ids:
@@ -150,7 +158,9 @@ def validate(base: str, expect_sources: int, expect_blogs: int) -> Report:
     try:
         hits = _get(base, "/search?q=fabric")
         if not any(hits.get(k) for k in ("blogs", "topics", "claims", "sources")):
-            r.warn("Search returned no hits for 'fabric' — index may need POST /search/rebuild.")
+            r.warn(
+                "Search returned no hits for 'fabric' — index may need POST /search/rebuild."
+            )
     except Exception as e:  # noqa: BLE001
         r.warn(f"Search check skipped: {e}")
 

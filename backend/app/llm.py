@@ -173,7 +173,9 @@ def write_lesson(capability: str, level: str, claim_context: str) -> str:
 
 
 # ------------------------------------------------------------------ advisor
-_ADVISOR_SYS = (
+# Exported (not underscore-private) because the key-optional advisor path hands this system
+# prompt back to the client for client-side generation when there is no server-side key.
+ADVISOR_SYSTEM = (
     "You are the Expert Adviser for Microsoft Fabric Atlas. Answer the user's question using "
     "ONLY the provided knowledge-base claims as your factual source — you are the "
     "conversational view over the same governed claims that power architectures and lessons, "
@@ -204,4 +206,4 @@ def advisor_answer(
         f"Knowledge base (cite with the bracket tags):\n{claim_context}\n\n"
         f"Source legend:\n{legend}"
     )
-    return _complete(_ADVISOR_SYS, prompt, max_tokens=2000)
+    return _complete(ADVISOR_SYSTEM, prompt, max_tokens=2000)

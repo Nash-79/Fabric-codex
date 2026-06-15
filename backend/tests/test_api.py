@@ -446,3 +446,25 @@ def test_validation_flags_missing_and_superseded_sources(client):
     validators = {(i["validator"], i["severity"]) for i in v["issues"]}
     assert ("citation", "critical") in validators  # ghost id
     assert ("freshness", "warning") in validators  # superseded source revision
+
+
+# ------------------------------------------------------------------- advisor
+def test_advisor_chat_returns_key_optional_context_fallback(client, monkeypatch):
+    from app import services
+
+    res = client.post("/sources/ingest", json=_payload()).json()
+    client.post(f"/claims/{res['claims'][0]['id']}/verify")
+
+    monkeypatch.setattr(services, "LLM_MODE", "local")
+    monkeypatch.setattr(services, "ANTHROPIC_API_KEY", "")
+
+    r = client.post("/advisor/chat", json={"message": "What is OneLake?"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["mode"] == "context"
+    assert body["fallback_reason"] == "local_mode"
+    assert body["server_generation"] is False
+    assert "Server-side Advisor generation is disabled" in body["answer"]
+    assert "[S1]" in body["context"]
+    assert "OneLake overview" in body["legend"]
+    assert body["grounded"] is True

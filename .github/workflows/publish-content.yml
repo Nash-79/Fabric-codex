@@ -1,0 +1,42 @@
+name: publish-content
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "content/**"
+      - "scripts/import_content.py"
+      - "scripts/migrate_to_supabase.py"
+      - "scripts/validate_migration.py"
+
+concurrency:
+  group: publish-content-main
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish content to Supabase-backed Atlas
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      FABRIC_ATLAS_BASE_URL: ${{ secrets.FABRIC_ATLAS_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check publish target
+        run: |
+          if [ -z "$FABRIC_ATLAS_BASE_URL" ]; then
+            echo "FABRIC_ATLAS_BASE_URL secret is required."
+            exit 1
+          fi
+
+      - name: Publish content
+        run: python scripts/migrate_to_supabase.py --base "$FABRIC_ATLAS_BASE_URL"
+
+      - name: Validate published knowledge base
+        run: python scripts/validate_migration.py --base "$FABRIC_ATLAS_BASE_URL"

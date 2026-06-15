@@ -39,8 +39,12 @@ def _get(base: str, path: str):
 
 def _post(base: str, path: str, payload: dict | None = None):
     data = json.dumps(payload or {}).encode("utf-8")
-    req = urllib.request.Request(base.rstrip("/") + path, data=data,
-                                 headers={"Content-Type": "application/json"}, method="POST")
+    req = urllib.request.Request(
+        base.rstrip("/") + path,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
     with urllib.request.urlopen(req, timeout=120) as resp:
         return json.loads(resp.read().decode("utf-8"))
 
@@ -51,7 +55,9 @@ def _reachable(base: str) -> bool:
         return True
     except Exception as e:  # noqa: BLE001
         print(f"  Server not reachable at {base}: {e}")
-        print("  Start the backend (uvicorn app.main:app) with DATABASE_URL set to Supabase first.")
+        print(
+            "  Start the backend (uvicorn app.main:app) with DATABASE_URL set to Supabase first."
+        )
         return False
 
 
@@ -83,7 +89,9 @@ def main() -> int:
 
     # 1. Replay all content (reuses import_content's main, which is idempotent).
     print("\n-- Replaying content/ --")
-    sys.argv = ["import_content", "--base", args.base] + (["--dry-run"] if args.dry_run else [])
+    sys.argv = ["import_content", "--base", args.base] + (
+        ["--dry-run"] if args.dry_run else []
+    )
     rc = import_content.main()
     if rc != 0:
         print("  import_content reported a failure; aborting before search rebuild.")
@@ -103,7 +111,9 @@ def main() -> int:
         print("\n-- Summary --")
         for k, v in summarize(args.base).items():
             print(f"  {k}: {v}")
-        print("\nNext: run scripts/replay_verified_status.py once (restores curation status),")
+        print(
+            "\nNext: run scripts/replay_verified_status.py once (restores curation status),"
+        )
         print("then scripts/validate_migration.py to assert the KB invariants.")
     return 0
 
