@@ -36,3 +36,36 @@ claims simply has no performance section, by design.
 
 Articles are never edited in place. Republishing a topic creates a new version and retires
 the old one; the **version history** link at the bottom of an article shows the chain.
+
+## Adding or changing topics
+
+Topics live in two places that stay in sync:
+
+- **The seed file** — `content/topics.json` in the repo is the source of truth. Add a node
+  with a unique `slug`, a `name`, at least one `capability_ids` entry, and optionally a
+  `parent_slug` (any nesting depth) and `order`. Then run
+  `python scripts/import_content.py` — existing slugs are skipped, new ones are created.
+- **The API** — for live curation, `POST /topics` creates a node and `PATCH /topics/<id>`
+  renames, re-describes, re-orders, re-parents, or re-maps capabilities. Topics are
+  curation surface, not knowledge, so they can be edited in place (unlike claims and
+  articles). Mirror any API change back into `content/topics.json` so a fresh server
+  seeds the same tree.
+
+Every topic must map to at least one capability from the registry — that mapping is where
+its claims, coverage numbers, and article grounding come from.
+
+## Generating an article
+
+Articles are authored by agents in the IDE, never by the server:
+
+- `/blog <topic-slug>` — the blog-author reads the topic's verified claims, writes a cited
+  article (`content/blogs/<slug>.json`), publishes it, and the validation-reviewer
+  immediately checks it. Use this when the topic already has verified coverage.
+- `/publish-topic <topic-slug>` — the full chain: coverage check (suggests sources to
+  queue if the topic is thin), a stop for human claim verification, an original diagram,
+  the article, validation, and a Help-section sync. Use this for a topic starting cold.
+
+If a topic has too few verified claims, the blog-author **refuses and reports the gap**
+instead of writing filler — queue more sources for it (see *Submitting sources*), verify
+them, and run it again. To refresh an existing article after new claims arrive, just run
+`/blog <topic-slug>` again — the new version supersedes the old one with full history.
