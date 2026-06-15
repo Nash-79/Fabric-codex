@@ -1,9 +1,18 @@
 import { createServerFn } from "@tanstack/react-start";
+import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import type { Database } from "@/integrations/supabase/types";
 
+// Public reads use the anon/publishable key (RLS allows public SELECT on KB tables).
+// This avoids needing the service-role key at runtime.
 async function admin() {
-  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  return supabaseAdmin;
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL!;
+  const key =
+    process.env.SUPABASE_PUBLISHABLE_KEY ??
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
+  return createClient<Database>(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 }
 
 export const listTopics = createServerFn({ method: "GET" }).handler(async () => {
