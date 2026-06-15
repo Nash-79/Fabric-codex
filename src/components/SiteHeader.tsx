@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { FabricMark } from "./FabricMark";
 
-const NAV = [
+const NAV: { to: string; label: string; exact?: boolean }[] = [
   { to: "/", label: "Overview", exact: true },
   { to: "/topics", label: "Topics" },
   { to: "/search", label: "Search" },
@@ -13,7 +13,7 @@ const NAV = [
   { to: "/learn", label: "Learn" },
   { to: "/help", label: "Help" },
   { to: "/author", label: "Author" },
-] as const;
+];
 
 export function SiteHeader() {
   const [signedIn, setSignedIn] = useState(false);

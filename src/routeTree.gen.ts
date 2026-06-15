@@ -12,7 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as TopicsRouteImport } from './routes/topics'
 import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as RegistryRouteImport } from './routes/registry'
+import { Route as LearnRouteImport } from './routes/learn'
 import { Route as HelpRouteImport } from './routes/help'
+import { Route as DesignsRouteImport } from './routes/designs'
+import { Route as AuthorRouteImport } from './routes/author'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AdvisorRouteImport } from './routes/advisor'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
@@ -38,9 +42,29 @@ const SearchRoute = SearchRouteImport.update({
   path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RegistryRoute = RegistryRouteImport.update({
+  id: '/registry',
+  path: '/registry',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LearnRoute = LearnRouteImport.update({
+  id: '/learn',
+  path: '/learn',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HelpRoute = HelpRouteImport.update({
   id: '/help',
   path: '/help',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DesignsRoute = DesignsRouteImport.update({
+  id: '/designs',
+  path: '/designs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthorRoute = AuthorRouteImport.update({
+  id: '/author',
+  path: '/author',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthRoute = AuthRouteImport.update({
@@ -92,7 +116,11 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/advisor': typeof AdvisorRoute
   '/auth': typeof AuthRoute
+  '/author': typeof AuthorRoute
+  '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
+  '/learn': typeof LearnRoute
+  '/registry': typeof RegistryRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
   '/topics': typeof TopicsRouteWithChildren
@@ -106,7 +134,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/advisor': typeof AdvisorRoute
   '/auth': typeof AuthRoute
+  '/author': typeof AuthorRoute
+  '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
+  '/learn': typeof LearnRoute
+  '/registry': typeof RegistryRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
   '/topics': typeof TopicsRouteWithChildren
@@ -122,7 +154,11 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/advisor': typeof AdvisorRoute
   '/auth': typeof AuthRoute
+  '/author': typeof AuthorRoute
+  '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
+  '/learn': typeof LearnRoute
+  '/registry': typeof RegistryRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
   '/topics': typeof TopicsRouteWithChildren
@@ -138,7 +174,11 @@ export interface FileRouteTypes {
     | '/'
     | '/advisor'
     | '/auth'
+    | '/author'
+    | '/designs'
     | '/help'
+    | '/learn'
+    | '/registry'
     | '/search'
     | '/sources'
     | '/topics'
@@ -152,7 +192,11 @@ export interface FileRouteTypes {
     | '/'
     | '/advisor'
     | '/auth'
+    | '/author'
+    | '/designs'
     | '/help'
+    | '/learn'
+    | '/registry'
     | '/search'
     | '/sources'
     | '/topics'
@@ -167,7 +211,11 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/advisor'
     | '/auth'
+    | '/author'
+    | '/designs'
     | '/help'
+    | '/learn'
+    | '/registry'
     | '/search'
     | '/sources'
     | '/topics'
@@ -183,7 +231,11 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AdvisorRoute: typeof AdvisorRoute
   AuthRoute: typeof AuthRoute
+  AuthorRoute: typeof AuthorRoute
+  DesignsRoute: typeof DesignsRoute
   HelpRoute: typeof HelpRoute
+  LearnRoute: typeof LearnRoute
+  RegistryRoute: typeof RegistryRoute
   SearchRoute: typeof SearchRoute
   SourcesRoute: typeof SourcesRoute
   TopicsRoute: typeof TopicsRouteWithChildren
@@ -214,11 +266,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/registry': {
+      id: '/registry'
+      path: '/registry'
+      fullPath: '/registry'
+      preLoaderRoute: typeof RegistryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/learn': {
+      id: '/learn'
+      path: '/learn'
+      fullPath: '/learn'
+      preLoaderRoute: typeof LearnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/help': {
       id: '/help'
       path: '/help'
       fullPath: '/help'
       preLoaderRoute: typeof HelpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/designs': {
+      id: '/designs'
+      path: '/designs'
+      fullPath: '/designs'
+      preLoaderRoute: typeof DesignsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/author': {
+      id: '/author'
+      path: '/author'
+      fullPath: '/author'
+      preLoaderRoute: typeof AuthorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth': {
@@ -316,7 +396,11 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AdvisorRoute: AdvisorRoute,
   AuthRoute: AuthRoute,
+  AuthorRoute: AuthorRoute,
+  DesignsRoute: DesignsRoute,
   HelpRoute: HelpRoute,
+  LearnRoute: LearnRoute,
+  RegistryRoute: RegistryRoute,
   SearchRoute: SearchRoute,
   SourcesRoute: SourcesRoute,
   TopicsRoute: TopicsRouteWithChildren,
@@ -326,13 +410,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
