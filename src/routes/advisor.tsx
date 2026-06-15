@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { SiteHeader } from "@/components/SiteHeader";
+import { ADVISOR_MODELS, DEFAULT_ADVISOR_MODEL, ADVISOR_MODEL_IDS } from "@/lib/advisor-models";
 
 export const Route = createFileRoute("/advisor")({
   head: () => ({
@@ -17,6 +18,24 @@ export const Route = createFileRoute("/advisor")({
 });
 
 const STORAGE_KEY = "fa.advisor.messages.v1";
+const MODEL_KEY = "fa.advisor.model";
+
+const TIER_LABEL: Record<string, string> = {
+  cheap: "Cheap",
+  moderate: "Moderate",
+  expensive: "Expensive",
+};
+const TIER_DOT: Record<string, string> = {
+  cheap: "bg-emerald-400",
+  moderate: "bg-amber-400",
+  expensive: "bg-rose-400",
+};
+
+function loadModel(): string {
+  if (typeof window === "undefined") return DEFAULT_ADVISOR_MODEL;
+  const stored = window.localStorage.getItem(MODEL_KEY) ?? "";
+  return ADVISOR_MODEL_IDS.has(stored) ? stored : DEFAULT_ADVISOR_MODEL;
+}
 
 function AdvisorPage() {
   const [initial] = useState<UIMessage[]>(() => {
@@ -29,10 +48,24 @@ function AdvisorPage() {
     }
   });
 
+  const [modelId, setModelId] = useState<string>(() => loadModel());
+  useEffect(() => {
+    if (typeof window !== "undefined") window.localStorage.setItem(MODEL_KEY, modelId);
+  }, [modelId]);
+
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: "/api/chat",
+        body: () => ({ model: modelId }),
+      }),
+    [modelId],
+  );
+
   const { messages, sendMessage, status, error, setMessages } = useChat({
     id: "advisor",
     messages: initial,
-    transport: new DefaultChatTransport({ api: "/api/chat" }),
+    transport,
   });
 
   useEffect(() => {
@@ -50,6 +83,7 @@ function AdvisorPage() {
   useEffect(() => { scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }); }, [messages, status]);
 
   const isLoading = status === "submitted" || status === "streaming";
+  const activeModel = ADVISOR_MODELS.find((m) => m.id === modelId) ?? ADVISOR_MODELS[1];
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,20 +103,41 @@ function AdvisorPage() {
           <p className="mt-2 text-sm text-white/55">
             The Advisor retrieves cited claims from the knowledge base. It will refuse where the atlas is silent and label inferences.
           </p>
-          {messages.length > 0 && (
-            <button
-              onClick={() => { setMessages([]); window.localStorage.removeItem(STORAGE_KEY); }}
-              className="mt-3 text-xs text-white/45 hover:text-white"
-            >
-              Clear conversation
-            </button>
-          )}
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-xs text-white/55">
+              <span className="font-medium uppercase tracking-wide text-white/40">Model</span>
+              <select
+                value={modelId}
+                onChange={(e) => setModelId(e.target.value)}
+                className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+              >
+                {ADVISOR_MODELS.map((m) => (
+                  <option key={m.id} value={m.id} className="bg-[#0b1124]">
+                    {m.label} — {TIER_LABEL[m.tier]} · {m.hint}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/55">
+              <span className={`inline-block h-1.5 w-1.5 rounded-full ${TIER_DOT[activeModel.tier]}`} />
+              {TIER_LABEL[activeModel.tier]}
+            </span>
+            {messages.length > 0 && (
+              <button
+                onClick={() => { setMessages([]); window.localStorage.removeItem(STORAGE_KEY); }}
+                className="text-xs text-white/45 hover:text-white"
+              >
+                Clear conversation
+              </button>
+            )}
+          </div>
         </header>
 
         <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.02] p-5">
           {messages.length === 0 && (
             <div className="text-sm text-white/45">
-              Try: <em>“When does Direct Lake fall back to DirectQuery?”</em> or <em>“What are OneLake shortcut limits?”</em>
+              Try: <em>"When does Direct Lake fall back to DirectQuery?"</em> or <em>"What are OneLake shortcut limits?"</em>
             </div>
           )}
           {messages.map((m) => {

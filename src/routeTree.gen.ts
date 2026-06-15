@@ -14,7 +14,6 @@ import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as AuthRouteImport } from './routes/auth'
-import { Route as AtlasRouteImport } from './routes/atlas'
 import { Route as AdvisorRouteImport } from './routes/advisor'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -47,11 +46,6 @@ const HelpRoute = HelpRouteImport.update({
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AtlasRoute = AtlasRouteImport.update({
-  id: '/atlas',
-  path: '/atlas',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdvisorRoute = AdvisorRouteImport.update({
@@ -97,7 +91,6 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/advisor': typeof AdvisorRoute
-  '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/help': typeof HelpRoute
   '/search': typeof SearchRoute
@@ -112,7 +105,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/advisor': typeof AdvisorRoute
-  '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/help': typeof HelpRoute
   '/search': typeof SearchRoute
@@ -129,7 +121,6 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/advisor': typeof AdvisorRoute
-  '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/help': typeof HelpRoute
   '/search': typeof SearchRoute
@@ -146,7 +137,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/advisor'
-    | '/atlas'
     | '/auth'
     | '/help'
     | '/search'
@@ -161,7 +151,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/advisor'
-    | '/atlas'
     | '/auth'
     | '/help'
     | '/search'
@@ -177,7 +166,6 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/advisor'
-    | '/atlas'
     | '/auth'
     | '/help'
     | '/search'
@@ -194,7 +182,6 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AdvisorRoute: typeof AdvisorRoute
-  AtlasRoute: typeof AtlasRoute
   AuthRoute: typeof AuthRoute
   HelpRoute: typeof HelpRoute
   SearchRoute: typeof SearchRoute
@@ -239,13 +226,6 @@ declare module '@tanstack/react-router' {
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/atlas': {
-      id: '/atlas'
-      path: '/atlas'
-      fullPath: '/atlas'
-      preLoaderRoute: typeof AtlasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/advisor': {
@@ -335,7 +315,6 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AdvisorRoute: AdvisorRoute,
-  AtlasRoute: AtlasRoute,
   AuthRoute: AuthRoute,
   HelpRoute: HelpRoute,
   SearchRoute: SearchRoute,
@@ -347,3 +326,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
