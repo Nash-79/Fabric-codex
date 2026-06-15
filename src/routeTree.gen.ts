@@ -13,7 +13,6 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AtlasRouteImport } from './routes/atlas'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AtlasSlugRouteImport } from './routes/atlas.$slug'
 import { Route as AuthenticatedFavoritesRouteImport } from './routes/_authenticated/favorites'
 
 const AuthRoute = AuthRouteImport.update({
@@ -35,11 +34,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AtlasSlugRoute = AtlasSlugRouteImport.update({
-  id: '/$slug',
-  path: '/$slug',
-  getParentRoute: () => AtlasRoute,
-} as any)
 const AuthenticatedFavoritesRoute = AuthenticatedFavoritesRouteImport.update({
   id: '/favorites',
   path: '/favorites',
@@ -48,32 +42,29 @@ const AuthenticatedFavoritesRoute = AuthenticatedFavoritesRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/atlas': typeof AtlasRouteWithChildren
+  '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
-  '/atlas/$slug': typeof AtlasSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/atlas': typeof AtlasRouteWithChildren
+  '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
-  '/atlas/$slug': typeof AtlasSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/atlas': typeof AtlasRouteWithChildren
+  '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
   '/_authenticated/favorites': typeof AuthenticatedFavoritesRoute
-  '/atlas/$slug': typeof AtlasSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/atlas' | '/auth' | '/favorites' | '/atlas/$slug'
+  fullPaths: '/' | '/atlas' | '/auth' | '/favorites'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/atlas' | '/auth' | '/favorites' | '/atlas/$slug'
+  to: '/' | '/atlas' | '/auth' | '/favorites'
   id:
     | '__root__'
     | '/'
@@ -81,13 +72,12 @@ export interface FileRouteTypes {
     | '/atlas'
     | '/auth'
     | '/_authenticated/favorites'
-    | '/atlas/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  AtlasRoute: typeof AtlasRouteWithChildren
+  AtlasRoute: typeof AtlasRoute
   AuthRoute: typeof AuthRoute
 }
 
@@ -121,13 +111,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/atlas/$slug': {
-      id: '/atlas/$slug'
-      path: '/$slug'
-      fullPath: '/atlas/$slug'
-      preLoaderRoute: typeof AtlasSlugRouteImport
-      parentRoute: typeof AtlasRoute
-    }
     '/_authenticated/favorites': {
       id: '/_authenticated/favorites'
       path: '/favorites'
@@ -149,20 +132,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
-interface AtlasRouteChildren {
-  AtlasSlugRoute: typeof AtlasSlugRoute
-}
-
-const AtlasRouteChildren: AtlasRouteChildren = {
-  AtlasSlugRoute: AtlasSlugRoute,
-}
-
-const AtlasRouteWithChildren = AtlasRoute._addFileChildren(AtlasRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  AtlasRoute: AtlasRouteWithChildren,
+  AtlasRoute: AtlasRoute,
   AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
