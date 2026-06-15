@@ -1,0 +1,88 @@
+{
+  "url": "https://milescole.dev/data-engineering/2024/11/04/Deletion-Vectors.html",
+  "title": "Unlock Faster Writes in Delta Lake with Deletion Vectors",
+  "tier": 4,
+  "summary": "A technical community walkthrough of Delta Lake deletion vectors and their performance tradeoffs. The extracted claims explain merge-on-read mutation behavior, deletion-vector metadata, benchmark results, read overhead, OPTIMIZE requirements, and compatibility concerns for Fabric workloads.",
+  "audience": "Fabric lakehouse engineers, Spark practitioners, and performance-focused architects working with Delta tables.",
+  "why_it_matters": "Deletion vectors can reduce write amplification for mutation-heavy tables, but they introduce protocol compatibility and read-maintenance considerations. The source is useful for deciding when the feature improves net pipeline performance and when it creates downstream risk.",
+  "takeaways": [
+    "Deletion vectors avoid rewriting entire Parquet files by recording row positions to filter at read time.",
+    "Write-heavy workloads can benefit, but read performance depends on regular OPTIMIZE maintenance.",
+    "Delta protocol version requirements can break unsupported downstream readers.",
+    "Fabric Copy Activity compatibility needs special caution when deletion vectors are enabled."
+  ],
+  "tags": ["MicrosoftFabric", "DataEngineering", "DeltaLake", "DeletionVectors", "Performance", "MergeOnRead", "Spark"],
+  "claims": [
+    {
+      "capability_id": "lakehouse",
+      "text": "Deletion vectors shift Delta Lake mutations from copy-on-write to merge-on-read: rather than rewriting entire Parquet files for any changed record, the system records the positions of affected rows in a small binary file and filters those rows out at query time.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DeletionVectors", "MergeOnRead", "CopyOnWrite", "DeltaLake"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Deletion vector metadata is stored as .bin files named with a UUID pattern; the Delta log entry for the affected Parquet file is annotated with storageType, path, offset, sizeInBytes, and cardinality fields pointing to the corresponding deletion vector file.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DeletionVectors", "DeltaLog", "Internals", "DeltaLake"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "For UPDATE operations, deletion vectors soft-delete the old version of changed rows in their existing Parquet file via a new .bin record, then write only the updated row values to a new, smaller Parquet file — avoiding a full rewrite of the source file.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DeletionVectors", "UPDATE", "DeltaLake", "WriteAmplification"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Enabling deletion vectors permanently raises a table's minReaderVersion to 3 and minWriterVersion to 7, requiring Delta reader/writer protocol version 2.3 or later; downstream consumers that do not support these versions will be unable to read the table.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["DeletionVectors", "DeltaProtocol", "Compatibility", "DeltaLake"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "In the author's benchmark against a 100-million-row synthetic dataset, deletion vectors reduced single-row delete time by roughly 8x, cut time for a 33% mass deletion by approximately 2.5x, sped up OPTIMIZE by about 2x, and reduced VACUUM duration by around 1.7x — with cumulative write-plus-maintenance time roughly halved compared to the baseline. These figures are from the author's controlled test and should be treated as directional.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["DeletionVectors", "Performance", "Benchmark", "OPTIMIZE", "VACUUM"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Before running OPTIMIZE, deletion vectors produced about 3x less storage (2,351 MB versus 7,705 MB) and roughly 1.5x fewer files than the copy-on-write baseline in the author's benchmark, because soft-deletes avoid rewriting large unchanged files.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["DeletionVectors", "StorageEfficiency", "SmallFileProblem", "Benchmark"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "If deletion vectors accumulate without periodic OPTIMIZE, read performance degrades: the author's benchmark showed a scenario with 53% non-append changes and no compaction running 2.3x slower, and a MERGE-only scenario with 5M new records running 1.5x slower than the copy-on-write baseline.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["DeletionVectors", "ReadPerformance", "OPTIMIZE", "Maintenance"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "After running OPTIMIZE to compact accumulated deletion vectors, read performance in the author's benchmark was identical between deletion-vector and copy-on-write tables, confirming that regular compaction eliminates the read overhead.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["DeletionVectors", "OPTIMIZE", "ReadPerformance", "Maintenance"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Deletion vectors are not suitable for tables consumed by Fabric COPY Activity: the feature is currently unsupported by that connector, and deleted or updated rows will reappear in the destination unless an OPTIMIZE is run immediately before each copy operation.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["DeletionVectors", "CopyActivity", "DataFactory", "Compatibility"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "When the overall workflow includes regular OPTIMIZE and VACUUM, the author's benchmark found that deletion-vector tables had the lowest cumulative processing time across all operations, making the approach net-positive for write-heavy pipelines with proper maintenance.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["DeletionVectors", "Maintenance", "Performance", "OPTIMIZE", "VACUUM"]
+    }
+  ],
+  "assets": []
+}

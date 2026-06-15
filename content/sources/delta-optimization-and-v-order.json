@@ -1,0 +1,93 @@
+{
+  "url": "https://learn.microsoft.com/en-us/fabric/data-engineering/delta-optimization-and-v-order",
+  "title": "Optimize Delta Lake tables with V-Order in Fabric",
+  "tier": 1,
+  "tags": ["MicrosoftFabric", "Lakehouse", "DeltaLake", "VOrder", "Parquet", "Performance", "Spark"],
+  "claims": [
+    {
+      "capability_id": "lakehouse",
+      "text": "V-Order is a write-time optimization for Parquet files that improves downstream read performance across Fabric engines; it pays off most in read-heavy patterns like dashboarding, interactive analytics, and repeated scans.",
+      "depth": 1,
+      "type": "fact",
+      "tags": ["VOrder", "Performance", "Parquet"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Internally, V-Order reorganizes the physical Parquet layout at write time — adjusting row-group distribution, encoding choices, and compression — rather than changing the logical data, which is why it speeds up reads without altering query semantics.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["VOrder", "Parquet", "RowGroups", "Compression"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "V-Ordered files remain fully compliant with the open-source Parquet specification, so any standard Parquet reader can consume them; non-Fabric engines simply do not get the read acceleration.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["VOrder", "Parquet", "Interoperability"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Microsoft states the typical V-Order tradeoff as writes taking roughly 15% longer on average, in exchange for reads that can improve significantly depending on the workload.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["VOrder", "Performance", "WriteAmplification"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "V-Order is disabled by default in all newly created Fabric workspaces (spark.sql.parquet.vorder.default=false), a deliberate default that favors write-heavy ingestion and transformation pipelines over read optimization.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["VOrder", "Spark", "Defaults"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "V-Order can be controlled at three levels: the Spark session config spark.sql.parquet.vorder.default, the Delta table property delta.parquet.vorder.enabled, and the per-write DataFrame writer option parquet.vorder.enabled.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["VOrder", "Spark", "Configuration"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Session and write-level V-Order settings take precedence over the table property: enabling V-Order for a session applies it to every Parquet write in that session, including Delta tables whose delta.parquet.vorder.enabled property is explicitly false, and even non-Delta Parquet writes.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["VOrder", "Spark", "Precedence", "Configuration"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Toggling the V-Order table property only affects future writes; files already on disk keep the layout they were written with, so applying or removing V-Order on existing data requires a physical rewrite via table compaction (OPTIMIZE).",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["VOrder", "Optimize", "Compaction"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "For read-heavy workloads, enable V-Order either by setting spark.sql.parquet.vorder.default to true for the session or by selecting the readHeavyforSpark or ReadHeavy Spark resource profiles, which turn V-Order on automatically.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["VOrder", "ResourceProfiles", "Spark", "Performance"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Leaving V-Order enabled on write-dominated ingestion or transformation pipelines is counterproductive: the write penalty is paid on every job while the read-side benefit goes unused; disable it at session level for such workloads.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["VOrder", "Ingestion", "Performance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Fabric Runtime 1.3 removed the legacy spark.sql.parquet.vorder.enable setting; code migrated from earlier runtimes should drop it, since V-Order can instead be applied during Delta OPTIMIZE compaction.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["VOrder", "FabricRuntime", "Migration", "Spark"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "In an overwrite using a replaceWhere predicate, V-Order is applied only to the files actually rewritten by that predicate, not to the whole table; V-Order is file-level and composes with Delta features like Z-Order, compaction, vacuum, and time travel.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["VOrder", "DeltaLake", "ZOrder", "ReplaceWhere"]
+    }
+  ],
+  "assets": []
+}

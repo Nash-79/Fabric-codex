@@ -1,0 +1,93 @@
+{
+  "url": "https://learn.microsoft.com/en-us/fabric/data-warehouse/guidelines-warehouse-performance",
+  "title": "Performance guidelines in Fabric Data Warehouse",
+  "tier": 1,
+  "tags": ["MicrosoftFabric", "DataWarehouse", "Performance", "TSQL", "DeltaLake", "VOrder"],
+  "claims": [
+    {
+      "capability_id": "warehouse",
+      "text": "The warehouse and SQL analytics endpoint automatically create and maintain histogram statistics, average column length statistics, and table cardinality statistics, which the query optimizer uses to cost and choose plans; CREATE/UPDATE STATISTICS remain available for single-column histograms during maintenance windows.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Statistics", "QueryOptimizer"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "A query's first execution can suffer a cold start: data must be fetched from OneLake into cache, statistics may need to be generated on first access, and paused compute nodes must resume (node resume or creation typically takes under one second). Cold starts can be partial, with some nodes or data already warm.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["ColdStart", "Caching", "Autoscaling"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Detect cold starts via the queryinsights.exec_requests_history view: a non-zero data_scanned_remote_storage_mb means data came from OneLake during execution, while zero means the query was served entirely from cache. Never judge performance from a first run.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["QueryInsights", "Monitoring", "ColdStart"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Oversized string types hurt performance: declare varchar(n) sized to the real data instead of varchar(8000) or varchar(max), because statistics and cost estimation get less accurate as declared length diverges from actual values. Spark string columns created without a length are seen by the warehouse as varchar(8000).",
+      "depth": 2,
+      "type": "antipattern",
+      "tags": ["DataTypes", "Varchar", "Statistics"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Because warehouse data lives in immutable Parquet files, transaction rollback is fast: the engine simply reverts to the previous file versions rather than undoing row changes.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Transactions", "Parquet", "Rollback"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Every INSERT, UPDATE, or DELETE appends a JSON file to the table's Delta transaction log; automatic checkpointing periodically summarizes the log into a checkpoint file so readers only parse the latest checkpoint plus newer entries instead of the whole log history, sharply cutting metadata I/O on frequently updated tables.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["DeltaLake", "Checkpointing", "TransactionLog"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "A background data compaction service automatically merges small Parquet files and removes logically deleted rows; since October 2025 compaction preemption makes it check for shared locks held by user queries and wait or abort rather than commit a conflicting write, though write-write conflicts with explicit user transactions remain possible.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Compaction", "Concurrency", "Parquet"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Avoid trickle DML: each small INSERT, UPDATE, or DELETE writes a new Parquet file, producing fragmented row groups, slower scans, higher cost, and more reliance on background compaction. Batch writes instead and perform updates and deletes in batches.",
+      "depth": 2,
+      "type": "antipattern",
+      "tags": ["TrickleInserts", "Ingestion", "Fragmentation"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "For COPY INTO (or its synonym BULK INSERT), Microsoft recommends source files between 100 MB and 1 GB, many files to maximize parallelism, parallel COPY INTO statements into different tables, and scaling to a larger capacity for big volumes.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["CopyInto", "Ingestion", "Parallelism"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "V-Order, a write-time Parquet sorting and compression optimization, is enabled by default on all warehouses to speed reads; it adds a small ingestion overhead, and once disabled on a warehouse it cannot be re-enabled. A common pattern is a V-Order-disabled staging warehouse for heavy ingestion feeding a V-Order-enabled warehouse for reads.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["VOrder", "Parquet", "Ingestion"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "T-SQL data clustering (in CREATE TABLE and CTAS) orders rows along a space-filling curve so similar values across the clustering columns land in adjacent storage; clustering metadata embedded in the manifest at ingestion lets the engine skip entire files and row groups outside a filter predicate's range, and the benefit grows with table size.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["DataClustering", "FileSkipping", "SpaceFillingCurve"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The warehouse runs on a massively parallel processing (MPP) architecture, but some semantics (TOP, global sorts, final result merging) force single-node execution and trigger a 'non-scalable operation' warning; reduce the filtered dataset or apply OPTION (FORCE DISTRIBUTED PLAN) when single-node execution is not semantically required.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["MPP", "QueryHints", "DistributedPlan"]
+    }
+  ],
+  "assets": []
+}
