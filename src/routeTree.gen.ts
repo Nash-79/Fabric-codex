@@ -9,13 +9,41 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as TopicsRouteImport } from './routes/topics'
+import { Route as SourcesRouteImport } from './routes/sources'
+import { Route as SearchRouteImport } from './routes/search'
+import { Route as HelpRouteImport } from './routes/help'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AtlasRouteImport } from './routes/atlas'
+import { Route as AdvisorRouteImport } from './routes/advisor'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AtlasSlugRouteImport } from './routes/atlas.$slug'
+import { Route as TopicsSlugRouteImport } from './routes/topics.$slug'
+import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
+import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as AuthenticatedFavoritesRouteImport } from './routes/_authenticated/favorites'
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 
+const TopicsRoute = TopicsRouteImport.update({
+  id: '/topics',
+  path: '/topics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SourcesRoute = SourcesRouteImport.update({
+  id: '/sources',
+  path: '/sources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -24,6 +52,11 @@ const AuthRoute = AuthRouteImport.update({
 const AtlasRoute = AtlasRouteImport.update({
   id: '/atlas',
   path: '/atlas',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdvisorRoute = AdvisorRouteImport.update({
+  id: '/advisor',
+  path: '/advisor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
@@ -35,64 +68,172 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AtlasSlugRoute = AtlasSlugRouteImport.update({
+const TopicsSlugRoute = TopicsSlugRouteImport.update({
   id: '/$slug',
   path: '/$slug',
-  getParentRoute: () => AtlasRoute,
+  getParentRoute: () => TopicsRoute,
+} as any)
+const BlogSlugRoute = BlogSlugRouteImport.update({
+  id: '/blog/$slug',
+  path: '/blog/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiChatRoute = ApiChatRouteImport.update({
+  id: '/api/chat',
+  path: '/api/chat',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedFavoritesRoute = AuthenticatedFavoritesRouteImport.update({
   id: '/favorites',
   path: '/favorites',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/atlas': typeof AtlasRouteWithChildren
+  '/advisor': typeof AdvisorRoute
+  '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
+  '/help': typeof HelpRoute
+  '/search': typeof SearchRoute
+  '/sources': typeof SourcesRoute
+  '/topics': typeof TopicsRouteWithChildren
+  '/admin': typeof AuthenticatedAdminRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
-  '/atlas/$slug': typeof AtlasSlugRoute
+  '/api/chat': typeof ApiChatRoute
+  '/blog/$slug': typeof BlogSlugRoute
+  '/topics/$slug': typeof TopicsSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/atlas': typeof AtlasRouteWithChildren
+  '/advisor': typeof AdvisorRoute
+  '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
+  '/help': typeof HelpRoute
+  '/search': typeof SearchRoute
+  '/sources': typeof SourcesRoute
+  '/topics': typeof TopicsRouteWithChildren
+  '/admin': typeof AuthenticatedAdminRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
-  '/atlas/$slug': typeof AtlasSlugRoute
+  '/api/chat': typeof ApiChatRoute
+  '/blog/$slug': typeof BlogSlugRoute
+  '/topics/$slug': typeof TopicsSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/atlas': typeof AtlasRouteWithChildren
+  '/advisor': typeof AdvisorRoute
+  '/atlas': typeof AtlasRoute
   '/auth': typeof AuthRoute
+  '/help': typeof HelpRoute
+  '/search': typeof SearchRoute
+  '/sources': typeof SourcesRoute
+  '/topics': typeof TopicsRouteWithChildren
+  '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/favorites': typeof AuthenticatedFavoritesRoute
-  '/atlas/$slug': typeof AtlasSlugRoute
+  '/api/chat': typeof ApiChatRoute
+  '/blog/$slug': typeof BlogSlugRoute
+  '/topics/$slug': typeof TopicsSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/atlas' | '/auth' | '/favorites' | '/atlas/$slug'
+  fullPaths:
+    | '/'
+    | '/advisor'
+    | '/atlas'
+    | '/auth'
+    | '/help'
+    | '/search'
+    | '/sources'
+    | '/topics'
+    | '/admin'
+    | '/favorites'
+    | '/api/chat'
+    | '/blog/$slug'
+    | '/topics/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/atlas' | '/auth' | '/favorites' | '/atlas/$slug'
+  to:
+    | '/'
+    | '/advisor'
+    | '/atlas'
+    | '/auth'
+    | '/help'
+    | '/search'
+    | '/sources'
+    | '/topics'
+    | '/admin'
+    | '/favorites'
+    | '/api/chat'
+    | '/blog/$slug'
+    | '/topics/$slug'
   id:
     | '__root__'
     | '/'
     | '/_authenticated'
+    | '/advisor'
     | '/atlas'
     | '/auth'
+    | '/help'
+    | '/search'
+    | '/sources'
+    | '/topics'
+    | '/_authenticated/admin'
     | '/_authenticated/favorites'
-    | '/atlas/$slug'
+    | '/api/chat'
+    | '/blog/$slug'
+    | '/topics/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  AtlasRoute: typeof AtlasRouteWithChildren
+  AdvisorRoute: typeof AdvisorRoute
+  AtlasRoute: typeof AtlasRoute
   AuthRoute: typeof AuthRoute
+  HelpRoute: typeof HelpRoute
+  SearchRoute: typeof SearchRoute
+  SourcesRoute: typeof SourcesRoute
+  TopicsRoute: typeof TopicsRouteWithChildren
+  ApiChatRoute: typeof ApiChatRoute
+  BlogSlugRoute: typeof BlogSlugRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/topics': {
+      id: '/topics'
+      path: '/topics'
+      fullPath: '/topics'
+      preLoaderRoute: typeof TopicsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sources': {
+      id: '/sources'
+      path: '/sources'
+      fullPath: '/sources'
+      preLoaderRoute: typeof SourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -105,6 +246,13 @@ declare module '@tanstack/react-router' {
       path: '/atlas'
       fullPath: '/atlas'
       preLoaderRoute: typeof AtlasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/advisor': {
+      id: '/advisor'
+      path: '/advisor'
+      fullPath: '/advisor'
+      preLoaderRoute: typeof AdvisorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -121,12 +269,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/atlas/$slug': {
-      id: '/atlas/$slug'
+    '/topics/$slug': {
+      id: '/topics/$slug'
       path: '/$slug'
-      fullPath: '/atlas/$slug'
-      preLoaderRoute: typeof AtlasSlugRouteImport
-      parentRoute: typeof AtlasRoute
+      fullPath: '/topics/$slug'
+      preLoaderRoute: typeof TopicsSlugRouteImport
+      parentRoute: typeof TopicsRoute
+    }
+    '/blog/$slug': {
+      id: '/blog/$slug'
+      path: '/blog/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof BlogSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/chat': {
+      id: '/api/chat'
+      path: '/api/chat'
+      fullPath: '/api/chat'
+      preLoaderRoute: typeof ApiChatRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/favorites': {
       id: '/_authenticated/favorites'
@@ -135,36 +297,63 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFavoritesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin': {
+      id: '/_authenticated/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AuthenticatedAdminRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
   }
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedFavoritesRoute: typeof AuthenticatedFavoritesRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedFavoritesRoute: AuthenticatedFavoritesRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
-interface AtlasRouteChildren {
-  AtlasSlugRoute: typeof AtlasSlugRoute
+interface TopicsRouteChildren {
+  TopicsSlugRoute: typeof TopicsSlugRoute
 }
 
-const AtlasRouteChildren: AtlasRouteChildren = {
-  AtlasSlugRoute: AtlasSlugRoute,
+const TopicsRouteChildren: TopicsRouteChildren = {
+  TopicsSlugRoute: TopicsSlugRoute,
 }
 
-const AtlasRouteWithChildren = AtlasRoute._addFileChildren(AtlasRouteChildren)
+const TopicsRouteWithChildren =
+  TopicsRoute._addFileChildren(TopicsRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  AtlasRoute: AtlasRouteWithChildren,
+  AdvisorRoute: AdvisorRoute,
+  AtlasRoute: AtlasRoute,
   AuthRoute: AuthRoute,
+  HelpRoute: HelpRoute,
+  SearchRoute: SearchRoute,
+  SourcesRoute: SourcesRoute,
+  TopicsRoute: TopicsRouteWithChildren,
+  ApiChatRoute: ApiChatRoute,
+  BlogSlugRoute: BlogSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
