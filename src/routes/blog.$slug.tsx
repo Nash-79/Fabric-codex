@@ -108,6 +108,3 @@ function BlogPage() {
     </div>
   );
 }
-
-// suppress unused warning
-void citeMap;
