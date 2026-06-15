@@ -9,7 +9,7 @@ const assetQO = (slug: string) =>
   queryOptions({ queryKey: ["asset", slug], queryFn: () => getAssetBySlug({ data: { slug } }) });
 
 export const Route = createFileRoute("/atlas/$slug")({
-  head: ({ loaderData }) => ({
+  head: ({ loaderData }: { loaderData?: Awaited<ReturnType<typeof getAssetBySlug>> }) => ({
     meta: [
       { title: loaderData ? `${loaderData.title} — Fabric Atlas` : "Asset — Fabric Atlas" },
       { name: "description", content: loaderData?.summary ?? "Microsoft Fabric pattern." },

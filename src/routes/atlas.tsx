@@ -97,7 +97,7 @@ function AtlasPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/40" />
             <Input
               defaultValue={q ?? ""}
-              onChange={(e) => nav({ search: (prev) => ({ ...prev, q: e.target.value || undefined }) })}
+              onChange={(e) => nav({ search: (prev: z.infer<typeof SearchSchema>) => ({ ...prev, q: e.target.value || undefined }) })}
               placeholder="Search the atlas…"
               className="border-white/10 bg-white/[0.04] pl-9 text-white placeholder:text-white/40"
             />
@@ -105,7 +105,7 @@ function AtlasPage() {
         </div>
 
         <div className="mt-6 flex flex-wrap gap-2">
-          <Chip active={!domain} onClick={() => nav({ search: (p) => ({ ...p, domain: undefined }) })} label={`All (${assets.length})`} />
+          <Chip active={!domain} onClick={() => nav({ search: (p: z.infer<typeof SearchSchema>) => ({ ...p, domain: undefined }) })} label={`All (${assets.length})`} />
           {domains.map((d) => {
             const a = accent(d.accent);
             const count = assets.filter((x) => x.domains?.slug === d.slug).length;
@@ -113,7 +113,7 @@ function AtlasPage() {
               <Chip
                 key={d.id}
                 active={domain === d.slug}
-                onClick={() => nav({ search: (p) => ({ ...p, domain: d.slug }) })}
+                onClick={() => nav({ search: (p: z.infer<typeof SearchSchema>) => ({ ...p, domain: d.slug }) })}
                 label={
                   <span className="inline-flex items-center gap-1.5">
                     <span className={`h-1.5 w-1.5 rounded-full ${a.dot}`} /> {d.name}
