@@ -14,7 +14,136 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      assets: {
+        Row: {
+          asset_type: string
+          body: string
+          created_at: string
+          domain_id: string
+          id: string
+          maturity: string
+          slug: string
+          summary: string
+          tags: string[]
+          title: string
+        }
+        Insert: {
+          asset_type?: string
+          body: string
+          created_at?: string
+          domain_id: string
+          id?: string
+          maturity?: string
+          slug: string
+          summary: string
+          tags?: string[]
+          title: string
+        }
+        Update: {
+          asset_type?: string
+          body?: string
+          created_at?: string
+          domain_id?: string
+          id?: string
+          maturity?: string
+          slug?: string
+          summary?: string
+          tags?: string[]
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assets_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      domains: {
+        Row: {
+          accent: string
+          created_at: string
+          description: string
+          id: string
+          name: string
+          slug: string
+          sort_order: number
+          tagline: string
+        }
+        Insert: {
+          accent?: string
+          created_at?: string
+          description: string
+          id?: string
+          name: string
+          slug: string
+          sort_order?: number
+          tagline: string
+        }
+        Update: {
+          accent?: string
+          created_at?: string
+          description?: string
+          id?: string
+          name?: string
+          slug?: string
+          sort_order?: number
+          tagline?: string
+        }
+        Relationships: []
+      }
+      favorites: {
+        Row: {
+          asset_id: string
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "favorites_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
