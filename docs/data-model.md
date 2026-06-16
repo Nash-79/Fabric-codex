@@ -2,52 +2,59 @@
 
 Read this before changing `backend/app/models.py`.
 
+## Storage: the unified Supabase schema
+
+The schema is **owned by the Supabase migrations** (`supabase/migrations/*`) — plural tables
+(`sources`, `claims`, `blogs`, `topics`, `designs`, `queue_items`, …), **uuid** primary keys,
+real foreign keys, junction tables, a `capabilities` registry table, and Postgres array
+columns. The SQLModel classes in `models.py` **map onto** that schema (`__tablename__`,
+portable array/uuid column types that fall back to JSON/text on the SQLite test DB); they do
+not own it. The FastAPI backend connects as the Supabase service role and owns all writes; the
+TanStack frontend reads the same tables directly (RLS grants anon/authenticated SELECT).
+
 ## Entities
 
 ```
-Source ──< Claim >── (cited_by) ── Design ──< ValidationRun ──< Issue
-                └─── (cited_by) ── Blog ────< ValidationRun (target_kind="blog")
-Topic (n-nested tree) ──< Blog          QueueItem (frontend → agent ingestion)
+sources ──< claims >── design_sources ── designs ──< validation_runs ──< issues
+       └─────────────── blog_sources ──── blogs ────< validation_runs (target_kind="blog")
+topics ──< blogs        topic_capabilities >── capabilities (registry spine)
+claimevents (audit)     queue_items (frontend → agent ingestion)
 ```
 
-- **Source** — one revision of an approved source. A source *family* shares a `source_key`
-  (slug of the URL/title); each revision bumps `version` and only the newest is `active`.
-  Sources also carry reader metadata: an original `summary`, intended `audience`,
-  `why_it_matters`, and a short `takeaways` list. These fields make source cards readable;
-  they are not copied article text.
-- **Claim** — one atomic, paraphrased, cited fact/pattern/anti-pattern/internal, tagged to a
-  capability and depth, pointing at the exact `Source` revision it came from.
-- **Design** — a generated architecture, storing the cited source ids so drift can find it.
-- **ValidationRun / Issue** — the result of one validation pass over a design **or a blog**.
-  `target_kind` (`design` | `blog`) + `target_id` are the generalised pointer; `design_id`
-  stays populated on design runs for older readers.
-- **Topic** (v0.4) — a node in the n-nested reading taxonomy (adjacency list via `parent_id`,
-  unique `slug`). Each topic maps to **one or more capabilities** (`capability_ids_json`) so
-  claims, coverage, and blogs all flow from the flat capability registry — the spine is
-  unchanged. Topics are curation surface, not knowledge: they can be renamed/reordered in
-  place and are not versioned.
-- **Blog** (v0.4) — a cited long-form article for a topic. Versioned exactly like a claim:
-  `blog_key` + `version` + `supersedes_id` + `active`; republishing a topic's article creates
-  a new version and deactivates the old one. Validated exactly like a design (same status
-  enum `draft|checked|validated|needs_review`, same confidence formula, same
-  `ready_to_share` gate). `cited_source_ids_json` lets drift find blogs the same way it finds
-  designs. Blogs are **stricter than designs**: every cited source must back at least one
-  verified active claim, because blogs are public-facing prose.
-- **QueueItem** (v0.4) — a URL submitted via the frontend awaiting local agent ingestion.
+- **sources** — one row per approved source, keyed by a unique `slug`. Drift updates the row
+  **in place** (bump `version`, refresh `content_hash`) — slug is UNIQUE, so there is no second
+  source row; versioning happens at the claim level (below). Carries reader metadata
+  (`summary`, `audience`, `why_it_matters`, `takeaways`).
+- **claims** — one atomic, paraphrased, cited fact/pattern/anti-pattern/internal, tagged to a
+  `capability_id` (FK to `capabilities`) and `depth`, pointing at its `source_id`. Versioned
+  via a `supersedes_id` chain; `active` flags the current version.
+- **capabilities / topic_capabilities** — the registry is a real table now (FK target);
+  a topic's capability mapping is the `topic_capabilities` junction (a set, not ordered).
+- **designs / design_sources**, **blogs / blog_sources** — citations are junction rows
+  (`label` = `S1`,`S2`…, `position` orders them) rather than a JSON id list. Drift finds a
+  citing design/blog by querying the junction for the changed source.
+- **validation_runs / issues** — one validation pass over a design **or** a blog
+  (`target_kind` + `target_id`). Blog score lands in `blogs.validation_confidence`, design
+  score in `designs.confidence`.
+- **topics** — keyed by `slug` (text PK); adjacency via `parent_slug`. Not versioned.
+- **blogs** — a cited long-form article per topic (`topic_slug`). Versioned via `supersedes_id`
+  + `active` (republishing supersedes the prior version; the prior row's slug is suffixed
+  `@vN` to free the UNIQUE slug). Stricter than designs: every cited source must back ≥1
+  verified active claim.
+- **claimevents** — append-only audit trail of human curation actions on claims.
+- **queue_items** — a URL submitted via the frontend awaiting local agent ingestion.
   State machine: `queued → claimed → ingested | failed (→ queued via requeue)`, or
-  `queued → dismissed` by a human. The queue is user intent, not knowledge — it is not
-  git-tracked; the source JSON the curator writes is what gets committed.
+  `queued → dismissed`. User intent, not knowledge — not git-tracked.
 
 ## The claim version chain (the important part)
 
-Claims are **append-only**. Text is never edited in place.
+Claims are **append-only**. Text is never edited in place. Identity is the **supersedes_id
+chain** (no `claim_key` family column):
 
 ```
-claim_key = "abc"              one claim "family" = one idea over time
-
- v1  status=superseded active=false  ── supersedes_id ──┐
- v2  status=superseded active=false  ── supersedes_id ──┤
- v3  status=verified   active=true   <───────────────────┘   (only one active per key)
+ v1  status=superseded active=false  <── supersedes_id ── v2
+ v2  status=superseded active=false  <── supersedes_id ── v3
+ v3  status=verified   active=true                       (only one active claim per chain)
 ```
 
 State transitions:

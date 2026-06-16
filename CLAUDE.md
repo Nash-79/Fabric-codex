@@ -25,14 +25,18 @@ capability; coverage gaps are visible per capability and depth. Build around it.
 ## Repo layout
 
 ```
-backend/            FastAPI + SQLModel. Claim versioning + validation pass live here.
-  app/models.py     Source, Claim (version chain), Design, ValidationRun, Issue,
-                    Topic (n-nested tree), Blog (versioned article), QueueItem
+backend/            FastAPI + SQLModel mapping onto the unified Supabase schema (plural
+                    tables, uuid PKs). Claim versioning + validation pass live here.
+  app/models.py     maps to capabilities/topics/topic_capabilities/sources/claims/claimevents/
+                    blogs/blog_sources/designs/design_sources/validation_runs/issues/
+                    queue_items/assets. Versioning = slug + supersedes_id chains.
   app/services.py   ingestion, versioning/supersede, generation, validation, drift,
                     queue, topics, blogs
   app/routers.py    REST API
-  app/search.py     Postgres tsvector search over claims/sources/blogs/topics (LIKE fallback on SQLite test DB)
+  app/search.py     Postgres per-table GIN tsvector search (LIKE fallback on SQLite test DB)
   app/llm.py        Anthropic wrapper + structured-output helpers (graceful w/o key)
+supabase/migrations/  the canonical KB schema (Lovable-owned) + the backend-unify migration
+src/                TanStack Start app — reads the same Supabase tables directly (RLS).
 frontend/           React + Vite SPA. src/views/ per page, src/components/, React Router.
                     Portal routes: /topics (tree), /blog/<slug> (reader), /search, /help.
 .claude/agents/     Subagents (curator, architect, validator, drift, learning, coverage,

@@ -1,22 +1,25 @@
 """Domain services. The backend owns all versioning + deterministic validation invariants.
 
-Two modes (set LLM_MODE in .env):
-  - "local" (default): the Claude Code / Codex agents do extraction, generation, diagrams, and
-    grounding/coverage/antipattern reasoning on your laptop, then POST structured results here.
-    The server makes NO LLM calls and needs NO API key.
-  - "api": the server calls the Anthropic API on the fly via llm.py (the original v0.1 behaviour).
+Unified on the canonical Supabase schema (plural tables, uuid PKs, junction tables). Key
+shifts from the old schema:
+  - Identity is `slug` (sources/blogs/topics) — no *_key family columns.
+  - Source drift updates the source row IN PLACE (slug is UNIQUE); versioning happens at the
+    CLAIM level via supersedes_id chains (active flags the current version).
+  - Blog/Design citations live in junction tables (blog_sources / design_sources), label = Sn.
+  - Topic↔capability mapping lives in topic_capabilities; capabilities are a real table.
+  - tags / takeaways / depth_levels are list columns (native arrays on PG, JSON on SQLite).
 
-Sections: helpers · ingestion · versioning · assets · generation · validation · drift · serialisers
+Two modes (set LLM_MODE in .env): "local" (default, agents POST structured data, no key) and
+"api" (server calls the Anthropic API via llm.py).
 """
 
 from __future__ import annotations
 import hashlib
-import json
 import logging
 import re
 from difflib import SequenceMatcher
-
 from typing import Optional
+
 from sqlmodel import Session, select
 from app import llm, search
 from app.db import LLM_MODE, ANTHROPIC_API_KEY
@@ -25,17 +28,18 @@ from app.models import (
     Source,
     Claim,
     ClaimEvent,
+    Capability,
     Design,
+    DesignSource,
     ValidationRun,
     Issue,
-    Asset,
     Topic,
+    TopicCapability,
     Blog,
+    BlogSource,
     QueueItem,
-    dump_tags,
-    load_tags,
-    dump_list,
-    load_list,
+    Asset,
+    _now,
 )
 
 log = logging.getLogger(__name__)
@@ -45,31 +49,30 @@ CHANGED = 0.55
 SEVERITY_WEIGHT = {"critical": 0.4, "warning": 0.15, "info": 0.0}
 
 
+class DuplicateSubmission(ValueError):
+    def __init__(self, message: str, source_key: str = "", queue_id: str = ""):
+        super().__init__(message)
+        self.source_key = source_key
+        self.queue_id = queue_id
+
+
 # --------------------------------------------------------------- helpers
-# Common Windows-1252-decoded-as-UTF-8 mojibake → the character it should have been.
-# Order matters: the 3-byte sequences (em/en dash, bullet) must be tried before the
-# 2-byte ones so a longer match wins. Applied to *incoming* text only, never to stored
-# rows — versioned claims/blogs are append-only and must not be rewritten in place.
 _MOJIBAKE = [
-    ("â€™", "'"),  # â€™  right single quote / apostrophe
-    ("â€œ", '"'),  # â€œ  left double quote
-    ("â€", '"'),  # â€\x9d right double quote
-    ("â€”", "—"),  # â€"  em dash
-    ("â€“", "–"),  # â€"  en dash
-    ("â€¢", "•"),  # â€¢  bullet
-    ("â€¦", "…"),  # â€¦  ellipsis
-    ("â€", '"'),  # bare â€ leftover → straight quote
-    ("Â ", " "),  # Â + nbsp → space
+    ("â€™", "'"),
+    ("â€œ", '"'),
+    ("â€\x9d", '"'),
+    ("â€”", "—"),
+    ("â€“", "–"),
+    ("â€¢", "•"),
+    ("â€¦", "…"),
+    ("â€", '"'),
+    ("Â ", " "),
 ]
 
 
 def normalize_text(s: str) -> str:
-    """Repair common UTF-8 mojibake on text as it enters the knowledge base.
-
-    Runs at the ingestion boundary (before a new claim/source/blog version is
-    persisted) so future imports stay clean without ever mutating existing,
-    versioned rows. A no-op for already-clean text."""
-    if not s or "â€" not in s and "Â " not in s:
+    """Repair common UTF-8 mojibake on text as it enters the KB. No-op for clean text."""
+    if not s or "â€" not in s and "Â " not in s:
         return s
     for bad, good in _MOJIBAKE:
         s = s.replace(bad, good)
@@ -81,12 +84,10 @@ def content_hash(text: str) -> str:
 
 
 def _source_fingerprint(content: str, claims: Optional[list[dict]]) -> str:
-    """Drift hash. For structured payloads, hash the sorted claim texts so reordering
-    claims in a content file or editing tags/depth does not register as drift."""
     if content:
         return content_hash(content)
     texts = sorted((c.get("text") or "").strip() for c in (claims or []))
-    return content_hash(json.dumps(texts))
+    return content_hash(__import__("json").dumps(texts))
 
 
 def slugify(value: str) -> str:
@@ -97,6 +98,21 @@ def slugify(value: str) -> str:
 
 def _sim(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+
+def _clean_tags(tags) -> list[str]:
+    return [str(t).lstrip("#").strip() for t in (tags or []) if str(t).strip()]
+
+
+def _clean_list(items) -> list[str]:
+    return [str(x).strip() for x in (items or []) if str(x).strip()]
+
+
+def _ensure_capability(session: Session, cid: str) -> None:
+    """Capabilities are a FK target now. Seed a row if the registry id is missing so claims
+    referencing a valid CAPABILITY_IDS id never fail the FK (idempotent)."""
+    if cid in llm.CAPABILITY_IDS and session.get(Capability, cid) is None:
+        session.add(Capability(id=cid, name=cid.replace("-", " ").title()))
 
 
 def _norm_extracted(items: list[dict]) -> list[dict]:
@@ -110,7 +126,7 @@ def _norm_extracted(items: list[dict]) -> list[dict]:
                     "text": normalize_text(x["text"].strip()),
                     "depth": max(1, min(5, int(x.get("depth", 1)))),
                     "type": x.get("type", "fact"),
-                    "tags": x.get("tags", []),
+                    "tags": _clean_tags(x.get("tags")),
                 }
             )
     return out
@@ -120,37 +136,23 @@ def _norm_extracted(items: list[dict]) -> list[dict]:
 def _find_duplicate(
     session: Session, text: str, capability_id: str, exclude_source_ids: set[str]
 ) -> Optional[Claim]:
-    """Cross-source dedup: an active claim in the same capability, from a different
-    source family, whose text is near-identical (>= SAME)."""
     candidates = session.exec(
-        select(Claim).where(
-            Claim.active == True, Claim.capability_id == capability_id  # noqa: E712
-        )
-    ).all()
+        select(Claim).where(Claim.active == True, Claim.capability_id == capability_id)
+    ).all()  # noqa: E712
     for c in candidates:
         if c.source_id not in exclude_source_ids and _sim(c.text, text) >= SAME:
             return c
     return None
 
 
-def _family_source_ids(session: Session, source_key: str) -> set[str]:
-    return {
-        s.id
-        for s in session.exec(
-            select(Source).where(Source.source_key == source_key)
-        ).all()
-    }
-
-
-def _insert_claims(
-    session: Session, source: Source, extracted: list[dict]
-) -> list[Claim]:
-    """Insert extracted claims. Claims that near-duplicate an active claim from another
-    source are stored as status='duplicate', active=False — flagged for human merge,
-    kept out of retrieval and coverage."""
-    family = _family_source_ids(session, source.source_key)
+def _insert_claims(session: Session, source: Source, extracted: list[dict]):
+    """Insert extracted claims; near-duplicates of an active claim from ANOTHER source are
+    stored status='duplicate', active=False. (One source row per slug, so the only excluded
+    family is this source itself.)"""
+    family = {source.id}
     created, duplicates = [], []
     for e in extracted:
+        _ensure_capability(session, e["capability_id"])
         dup = _find_duplicate(session, e["text"], e["capability_id"], family)
         c = Claim(
             capability_id=e["capability_id"],
@@ -159,7 +161,7 @@ def _insert_claims(
             type=e["type"],
             status="duplicate" if dup else "pending",
             source_id=source.id,
-            tags_json=dump_tags(e.get("tags")),
+            tags=e.get("tags", []),
             active=not dup,
         )
         session.add(c)
@@ -184,14 +186,13 @@ def _insert_claims(
 
 
 def _resolve_claims(content: str, provided: Optional[list[dict]]) -> list[dict]:
-    """Local mode uses agent-provided claims; api mode extracts from content."""
     if provided:
         return _norm_extracted(provided)
     if LLM_MODE == "api" and content:
         return _norm_extracted(llm.extract_claims(content))
     raise ValueError(
-        "No claims provided. In local mode, the curator agent extracts claims and posts them as "
-        "`claims`. (Set LLM_MODE=api to extract server-side from `content`.)"
+        "No claims provided. In local mode, the curator agent extracts claims and posts them "
+        "as `claims`. (Set LLM_MODE=api to extract server-side from `content`.)"
     )
 
 
@@ -209,14 +210,14 @@ def ingest_source(
     why_it_matters: str = "",
     takeaways: Optional[list[str]] = None,
 ) -> dict:
-    key = slugify(url or title)
+    slug = slugify(url or title)
     existing = session.exec(
-        select(Source).where(Source.source_key == key, Source.active == True)
+        select(Source).where(Source.slug == slug, Source.active == True)
     ).first()  # noqa: E712
     if existing:
         return detect_drift(
             session,
-            key,
+            slug,
             content=content,
             claims=claims,
             url=url,
@@ -230,19 +231,19 @@ def ingest_source(
             takeaways=takeaways,
         )
 
-    extracted = _resolve_claims(content, claims)  # may raise — do it before any writes
+    extracted = _resolve_claims(content, claims)  # may raise — before any writes
     src = Source(
-        source_key=key,
+        slug=slug,
         version=1,
         url=url,
-        title=normalize_text(title) or url or key,
+        title=normalize_text(title) or url or slug,
         tier=tier,
         content_hash=_source_fingerprint(content, claims),
         summary=normalize_text(summary),
         audience=normalize_text(audience),
         why_it_matters=normalize_text(why_it_matters),
-        takeaways_json=dump_list([normalize_text(t) for t in (takeaways or [])]),
-        tags_json=dump_tags(tags),
+        takeaways=[normalize_text(t) for t in _clean_list(takeaways)],
+        tags=_clean_tags(tags),
         active=True,
     )
     session.add(src)
@@ -255,7 +256,8 @@ def ingest_source(
     saved_assets = add_assets(session, assets, source_id=src.id)
     return {
         "source_id": src.id,
-        "source_key": key,
+        "source_key": slug,
+        "slug": slug,
         "version": 1,
         "drift": False,
         "claims_added": len(inserted) - len(duplicates),
@@ -265,23 +267,20 @@ def ingest_source(
     }
 
 
-# --------------------------------------------------------------- versioning
+# --------------------------------------------------------------- versioning / curation
 def _record_event(
     session: Session, claim: Claim, action: str, prev_status: str
 ) -> None:
-    """Append one ClaimEvent row for every human curation action.
-    Called after the claim status has already been updated so claim.status
-    reflects the new state."""
-    ev = ClaimEvent(
-        claim_id=claim.id,
-        claim_key=claim.claim_key,
-        capability_id=claim.capability_id,
-        action=action,
-        prev_status=prev_status,
-        new_status=claim.status,
-        text_snippet=claim.text[:120],
+    session.add(
+        ClaimEvent(
+            claim_id=claim.id,
+            capability_id=claim.capability_id,
+            action=action,
+            prev_status=prev_status,
+            new_status=claim.status,
+            text_snippet=claim.text[:120],
+        )
     )
-    session.add(ev)
 
 
 def verify_claim(session: Session, claim_id: str) -> Optional[Claim]:
@@ -290,8 +289,8 @@ def verify_claim(session: Session, claim_id: str) -> Optional[Claim]:
         return None
     if not c.active:
         raise ValueError(
-            f"Claim {claim_id} is {c.status} (inactive); "
-            "only active claims can be verified."
+            f"Claim {claim_id} is {c.status} (inactive); only active claims "
+            "can be verified."
         )
     prev = c.status
     c.status = "verified"
@@ -308,8 +307,6 @@ def verify_claims_bulk(
     source_id: Optional[str] = None,
     claim_ids: Optional[list[str]] = None,
 ) -> dict:
-    """Verify all active pending claims for a source, or an explicit id list.
-    Inactive / non-pending claims are skipped and reported, never flipped."""
     if source_id:
         rows = session.exec(select(Claim).where(Claim.source_id == source_id)).all()
     elif claim_ids:
@@ -332,17 +329,13 @@ def verify_claims_bulk(
 
 
 def reject_claim(session: Session, claim_id: str) -> Optional[Claim]:
-    """Human dismissal: mark a pending active claim as rejected and deactivate it.
-    Only active claims with status='pending' may be rejected via this path;
-    use dismiss_duplicate_claim() for inactive duplicate claims."""
     c = session.get(Claim, claim_id)
     if not c:
         return None
     if not c.active or c.status != "pending":
         raise ValueError(
-            f"Claim {claim_id} has status='{c.status}', active={c.active}; "
-            "only active pending claims can be rejected. "
-            "For duplicate claims use the /dismiss endpoint."
+            f"Claim {claim_id} has status='{c.status}', active={c.active}; only active "
+            "pending claims can be rejected. For duplicate claims use the /dismiss endpoint."
         )
     prev = c.status
     c.status = "rejected"
@@ -355,20 +348,17 @@ def reject_claim(session: Session, claim_id: str) -> Optional[Claim]:
 
 
 def dismiss_duplicate_claim(session: Session, claim_id: str) -> Optional[Claim]:
-    """Confirm an inactive duplicate claim as permanently dismissed (rejected).
-    Duplicate claims are stored inactive=False; dismiss sets status='rejected'
-    to make the human decision explicit and queryable."""
     c = session.get(Claim, claim_id)
     if not c:
         return None
     if c.status != "duplicate":
         raise ValueError(
-            f"Claim {claim_id} has status='{c.status}'; "
-            "only duplicate claims can be dismissed via this endpoint."
+            f"Claim {claim_id} has status='{c.status}'; only duplicate claims "
+            "can be dismissed via this endpoint."
         )
     prev = c.status
     c.status = "rejected"
-    c.active = False  # already False, but be explicit
+    c.active = False
     _record_event(session, c, "dismissed", prev)
     session.add(c)
     session.commit()
@@ -381,8 +371,6 @@ def reject_claims_bulk(
     source_id: Optional[str] = None,
     claim_ids: Optional[list[str]] = None,
 ) -> dict:
-    """Reject all active pending claims for a source, or an explicit id list.
-    Inactive / non-pending claims are skipped."""
     if source_id:
         rows = session.exec(select(Claim).where(Claim.source_id == source_id)).all()
     elif claim_ids:
@@ -405,9 +393,6 @@ def reject_claims_bulk(
 
 
 def revert_claims(session: Session, claim_ids: list[str]) -> dict:
-    """Revert a list of recently actioned claims back to pending/active.
-    Accepts claims that are currently verified (active=True) or rejected
-    (active=False). Used by the undo toast in the UI."""
     reverted, skipped = [], []
     for cid in claim_ids:
         c = session.get(Claim, cid)
@@ -430,15 +415,13 @@ def revert_claims(session: Session, claim_ids: list[str]) -> dict:
 
 
 def promote_claim(session: Session, claim_id: str) -> Optional[Claim]:
-    """Promote a duplicate claim back to pending/active for human review.
-    Only claims with status='duplicate' and active=False may be promoted."""
     c = session.get(Claim, claim_id)
     if not c:
         return None
     if c.status != "duplicate":
         raise ValueError(
-            f"Claim {claim_id} has status '{c.status}'; "
-            "only duplicate claims can be promoted."
+            f"Claim {claim_id} has status '{c.status}'; only duplicate claims "
+            "can be promoted."
         )
     prev = c.status
     c.status = "pending"
@@ -451,9 +434,6 @@ def promote_claim(session: Session, claim_id: str) -> Optional[Claim]:
 
 
 def recent_claim_events(session: Session, limit: int = 30) -> list[dict]:
-    """Return the most recent curation events across all claims, newest first."""
-    from app.models import ClaimEvent
-
     rows = session.exec(
         select(ClaimEvent).order_by(ClaimEvent.actioned_at.desc()).limit(limit)
     ).all()
@@ -461,7 +441,6 @@ def recent_claim_events(session: Session, limit: int = 30) -> list[dict]:
         {
             "id": ev.id,
             "claim_id": ev.claim_id,
-            "claim_key": ev.claim_key,
             "capability_id": ev.capability_id,
             "action": ev.action,
             "prev_status": ev.prev_status,
@@ -483,7 +462,6 @@ def supersede_claim(
     tags: Optional[list[str]] = None,
 ) -> Claim:
     new = Claim(
-        claim_key=old.claim_key,
         version=old.version + 1,
         capability_id=old.capability_id,
         text=new_text,
@@ -492,7 +470,7 @@ def supersede_claim(
         status="pending",
         source_id=source.id,
         supersedes_id=old.id,
-        tags_json=dump_tags(tags) if tags else old.tags_json,
+        tags=_clean_tags(tags) if tags else list(old.tags),
         active=True,
     )
     old.active = False
@@ -515,10 +493,29 @@ def deprecate_claim(session: Session, old: Claim) -> Claim:
     return old
 
 
-def claim_history(session: Session, claim_key: str) -> list[Claim]:
-    return session.exec(
-        select(Claim).where(Claim.claim_key == claim_key).order_by(Claim.version)
-    ).all()
+def claim_history(session: Session, claim_id: str) -> list[Claim]:
+    """Walk the supersedes_id chain for a claim (oldest first). `claim_id` may be any
+    version in the chain — we walk back to the root then forward."""
+    start = session.get(Claim, claim_id)
+    if not start:
+        return []
+    # walk back to root
+    root = start
+    seen = {root.id}
+    while root.supersedes_id and root.supersedes_id not in seen:
+        prev = session.get(Claim, root.supersedes_id)
+        if not prev:
+            break
+        root, _ = prev, seen.add(prev.id)
+    # walk forward from root following who-supersedes-whom
+    chain, cur = [root], root
+    while True:
+        nxt = session.exec(select(Claim).where(Claim.supersedes_id == cur.id)).first()
+        if not nxt or nxt.id in {c.id for c in chain}:
+            break
+        chain.append(nxt)
+        cur = nxt
+    return chain
 
 
 # ------------------------------------------------------------------ assets
@@ -529,9 +526,6 @@ def add_assets(
     design_id: Optional[str] = None,
     blog_id: Optional[str] = None,
 ) -> list[Asset]:
-    """Insert assets, deduplicating by path (generated) or url (referenced) within the same
-    source/design/blog scope. Returns a list of Asset objects (existing or newly created).
-    """
     saved = []
     for a in assets or []:
         kind = a.get("kind", "generated")
@@ -539,58 +533,38 @@ def add_assets(
         eff_design_id = a.get("design_id", design_id)
         eff_blog_id = a.get("blog_id", blog_id)
 
-        # Dedup: skip if an identical asset already exists in the same scope.
-        if kind == "generated":
-            path_val = a.get("path", "")
-            if path_val:
-                existing = session.exec(
-                    select(Asset).where(
-                        Asset.kind == "generated",
-                        Asset.path == path_val,
-                        Asset.source_id == eff_source_id,
-                        Asset.design_id == eff_design_id,
-                        Asset.blog_id == eff_blog_id,
-                    )
-                ).first()
-                if existing:
-                    log.warning(
-                        "add_assets: skipping duplicate generated asset path=%s "
-                        "(source_id=%s, design_id=%s, existing id=%s)",
-                        path_val,
-                        eff_source_id,
-                        eff_design_id,
-                        existing.id,
-                    )
-                    saved.append(existing)
-                    continue
-        else:
-            url_val = a.get("url", "")
-            if url_val:
-                existing = session.exec(
-                    select(Asset).where(
-                        Asset.kind == "referenced",
-                        Asset.url == url_val,
-                        Asset.source_id == eff_source_id,
-                        Asset.design_id == eff_design_id,
-                        Asset.blog_id == eff_blog_id,
-                    )
-                ).first()
-                if existing:
-                    log.warning(
-                        "add_assets: skipping duplicate referenced asset url=%s "
-                        "(source_id=%s, design_id=%s, existing id=%s)",
-                        url_val,
-                        eff_source_id,
-                        eff_design_id,
-                        existing.id,
-                    )
-                    saved.append(existing)
-                    continue
+        if kind == "generated" and a.get("path"):
+            existing = session.exec(
+                select(Asset).where(
+                    Asset.kind == "generated",
+                    Asset.path == a["path"],
+                    Asset.source_id == eff_source_id,
+                    Asset.design_id == eff_design_id,
+                    Asset.blog_id == eff_blog_id,
+                )
+            ).first()
+            if existing:
+                saved.append(existing)
+                continue
+        elif kind == "referenced" and a.get("url"):
+            existing = session.exec(
+                select(Asset).where(
+                    Asset.kind == "referenced",
+                    Asset.url == a["url"],
+                    Asset.source_id == eff_source_id,
+                    Asset.design_id == eff_design_id,
+                    Asset.blog_id == eff_blog_id,
+                )
+            ).first()
+            if existing:
+                saved.append(existing)
+                continue
 
-        # referenced (external) images must carry attribution — never re-hosted, link only.
         attribution = a.get("attribution", "")
         if kind == "referenced" and not attribution:
-            attribution = "Source unknown — attribution required before display."
+            raise ValueError(
+                "Referenced assets require attribution (copyright); never re-host."
+            )
         asset = Asset(
             kind=kind,
             url=a.get("url", ""),
@@ -621,20 +595,18 @@ def add_assets(
     return saved
 
 
-# --------------------------------------------------------------- generation
+# --------------------------------------------------------------- generation / grounding
 def _grounding_context(session: Session, limit: int = 70):
-    # Deterministic order: verified before pending, then oldest first — so the [Sn]
-    # legend is stable across calls (citation parsing depends on this).
     verified = session.exec(
         select(Claim)
-        .where(Claim.active == True, Claim.status == "verified")  # noqa: E712
+        .where(Claim.active == True, Claim.status == "verified")
         .order_by(Claim.created_at, Claim.id)
-    ).all()
+    ).all()  # noqa: E712
     pending = session.exec(
         select(Claim)
-        .where(Claim.active == True, Claim.status == "pending")  # noqa: E712
+        .where(Claim.active == True, Claim.status == "pending")
         .order_by(Claim.created_at, Claim.id)
-    ).all()
+    ).all()  # noqa: E712
     claims = (verified + pending)[:limit]
     src_order, tag_of = [], {}
     for c in claims:
@@ -662,11 +634,6 @@ def _parse_cited(md: str, tag_to_source: dict) -> list[str]:
 def _advisor_context(
     session: Session, capabilities: Optional[list[str]] = None, limit: int = 60
 ):
-    """Scoped grounding for the advisor: verified active claims first (optionally filtered
-    to the capabilities the question touches), then pending to fill if verified is thin.
-    Returns (context, legend, claims) with a stable [Sn] legend (verified-then-pending,
-    oldest first) — same ordering discipline as _grounding_context."""
-
     def _scoped(status: str):
         stmt = select(Claim).where(
             Claim.active == True, Claim.status == status
@@ -677,9 +644,8 @@ def _advisor_context(
 
     verified = _scoped("verified")
     claims = verified[:limit]
-    if len(claims) < 6:  # thin verified coverage — allow pending, flagged in the legend
+    if len(claims) < 6:
         claims = (verified + _scoped("pending"))[:limit]
-
     src_order, tag_of = [], {}
     for c in claims:
         if c.source_id not in tag_of:
@@ -702,22 +668,21 @@ def _llm_key_available() -> bool:
 
 
 def _advisor_fallback_reason() -> str:
-    if LLM_MODE != "api":
-        return "local_mode"
-    return "missing_api_key"
+    return "local_mode" if LLM_MODE != "api" else "missing_api_key"
 
 
 def _advisor_fallback_answer(reason: str, claim_count: int) -> str:
-    if reason == "local_mode":
-        why = "LLM_MODE is not set to api"
-    else:
-        why = "ANTHROPIC_API_KEY is not configured"
+    why = (
+        "LLM_MODE is not set to api"
+        if reason == "local_mode"
+        else "ANTHROPIC_API_KEY is not configured"
+    )
     return (
         f"Server-side Advisor generation is disabled because {why}. "
-        f"I found {claim_count} scoped knowledge-base claim(s) and returned them as "
-        "`context` with the citation `legend` and `system` prompt. Use the local `/advise` "
-        "agent or a client-side generator with that context to produce a cited answer. "
-        "Do not answer from general knowledge if the returned context is insufficient."
+        f"I found {claim_count} scoped knowledge-base claim(s) and returned them as `context` "
+        "with the citation `legend` and `system` prompt. Use the local `/advise` agent or a "
+        "client-side generator with that context to produce a cited answer. Do not answer from "
+        "general knowledge if the returned context is insufficient."
     )
 
 
@@ -727,42 +692,28 @@ def advisor_chat(
     capabilities: Optional[list[str]] = None,
     history: Optional[list[dict]] = None,
 ) -> dict:
-    """Grounded Fabric Q&A over the KB, scoped to the given capabilities (or the whole verified
-    KB if none given). Key-optional by design, so it works in the no-server-key local model:
-
-    - If a key is available (LLM_MODE=api): the server generates the cited answer and returns
-      it in `answer` (mode="answer").
-    - Otherwise: the server returns a clear fallback message plus the *retrieval payload* —
-      the scoped [Sn]-tagged `context`, `legend`, and the advisor `system` prompt — so a client
-      or local agent can generate the grounded answer itself (mode="context"). No LLM call, no key.
-
-    Either way the retrieval and grounding guardrails are the same; only the generator differs.
+    """Grounded Fabric Q&A over the KB. Key-optional: with a key it generates the answer; without
+    one it returns the grounded retrieval payload for client-side (Lovable AI) generation.
     """
     caps = [c for c in (capabilities or []) if c in llm.CAPABILITY_IDS]
     ctx, legend, claims = _advisor_context(session, caps or None)
-    base = {
-        "legend": legend,
-        "claim_count": len(claims),
-        "capabilities": caps or "all",
-    }
+    base = {"legend": legend, "claim_count": len(claims), "capabilities": caps or "all"}
     if not claims:
         return {
             **base,
             "mode": "empty",
-            "answer": "The knowledge base has no verified claims for that question yet. "
-            "Ingest an authoritative source (/ingest <url> tier=<n>) and verify "
-            "its claims, then ask again.",
             "grounded": False,
+            "answer": "The knowledge base has no verified claims for that question yet. "
+            "Ingest an authoritative source (/ingest <url> tier=<n>) and verify its claims, "
+            "then ask again.",
         }
-
-    # No server-side key: hand the grounding back for client-side generation (Lovable AI).
     if LLM_MODE != "api" or not _llm_key_available():
         reason = _advisor_fallback_reason()
         return {
             **base,
             "mode": "context",
-            "answer": _advisor_fallback_answer(reason, len(claims)),
             "grounded": True,
+            "answer": _advisor_fallback_answer(reason, len(claims)),
             "fallback_reason": reason,
             "server_generation": False,
             "question": question,
@@ -771,10 +722,64 @@ def advisor_chat(
             "note": "Returning grounded context for local or client-side generation. "
             "Cite [Sn] from the legend; do not add facts beyond the context.",
         }
-
-    # Server-side generation (LLM_MODE=api with a key).
     answer = llm.advisor_answer(question, ctx, legend, history=history)
-    return {**base, "mode": "answer", "answer": answer, "grounded": True}
+    return {
+        **base,
+        "mode": "answer",
+        "answer": answer,
+        "grounded": True,
+        "server_generation": True,
+    }
+
+
+def _set_citations(
+    session: Session,
+    *,
+    blog_id: Optional[str] = None,
+    design_id: Optional[str] = None,
+    source_ids: list[str],
+) -> None:
+    """Replace the citation junction rows (blog_sources / design_sources) for a target.
+    label = S1,S2… in the given order; position preserves it."""
+    if blog_id is not None:
+        for row in session.exec(
+            select(BlogSource).where(BlogSource.blog_id == blog_id)
+        ).all():
+            session.delete(row)
+        for i, sid in enumerate(source_ids, start=1):
+            session.add(
+                BlogSource(blog_id=blog_id, label=f"S{i}", source_id=sid, position=i)
+            )
+    if design_id is not None:
+        for row in session.exec(
+            select(DesignSource).where(DesignSource.design_id == design_id)
+        ).all():
+            session.delete(row)
+        for i, sid in enumerate(source_ids, start=1):
+            session.add(
+                DesignSource(
+                    design_id=design_id, label=f"S{i}", source_id=sid, position=i
+                )
+            )
+    session.commit()
+
+
+def _cited_source_ids(
+    session: Session, *, blog_id: Optional[str] = None, design_id: Optional[str] = None
+) -> list[str]:
+    if blog_id is not None:
+        rows = session.exec(
+            select(BlogSource)
+            .where(BlogSource.blog_id == blog_id)
+            .order_by(BlogSource.position)
+        ).all()
+    else:
+        rows = session.exec(
+            select(DesignSource)
+            .where(DesignSource.design_id == design_id)
+            .order_by(DesignSource.position)
+        ).all()
+    return [r.source_id for r in rows]
 
 
 def create_design(
@@ -787,31 +792,27 @@ def create_design(
     assets: Optional[list[dict]] = None,
     title: str = "",
 ) -> dict:
-    """Local-authoring path: the architect agent already produced the design; persist it.
-
-    `cited_source_ids` must come from whoever built the [Sn] legend the design text uses.
-    Re-deriving the mapping here from a fresh grounding context silently mis-attributes
-    citations when the author used a different claim set/order, so it is rejected."""
     if cited_source_ids is None:
         raise ValueError(
-            "cited_source_ids is required: pass the source ids behind the [Sn] tags used "
-            "in output_md (the agent that authored the design owns that mapping)."
+            "cited_source_ids is required: pass the source ids behind the [Sn] "
+            "tags used in output_md."
         )
     unknown = [sid for sid in cited_source_ids if session.get(Source, sid) is None]
     if unknown:
         raise ValueError(f"cited_source_ids contains unknown source id(s): {unknown}")
     design = Design(
+        slug=slugify(title or scenario[:60]),
         title=title or scenario[:60],
         scenario=scenario,
-        constraints_json=json.dumps(constraints or {}),
-        output_md=output_md,
-        tags_json=dump_tags(tags),
-        cited_source_ids_json=json.dumps(cited_source_ids),
+        constraints=constraints or {},
+        body_md=output_md,
+        tags=_clean_tags(tags),
         status="draft",
     )
     session.add(design)
     session.commit()
     session.refresh(design)
+    _set_citations(session, design_id=design.id, source_ids=cited_source_ids)
     add_assets(session, assets, design_id=design.id)
     return {
         "design_id": design.id,
@@ -821,7 +822,6 @@ def create_design(
 
 
 def generate_design(session: Session, scenario: str, constraints: dict) -> dict:
-    """API path (LLM_MODE=api): server generates via llm.py."""
     ctx, legend, tag_to_source, claims = _grounding_context(session)
     if not claims:
         raise ValueError("Knowledge base is empty — ingest sources first.")
@@ -848,20 +848,14 @@ def _validate_document(
     agent_issues: Optional[list[dict]],
     scenario: str = "",
 ) -> dict:
-    """Shared validation core for designs and blogs. Runs the deterministic
-    citation + freshness validators, merges agent/API grounding issues, computes
-    confidence, writes a ValidationRun, and updates the target's
-    status/confidence/ready_to_share (Design and Blog share those field names)."""
     issues: list[dict] = []
-
-    # deterministic (always, no key)
     if not re.findall(r"\[S(\d+)\]", md):
         issues.append(
             {
                 "validator": "citation",
                 "severity": "warning",
-                "message": f"{target_kind.capitalize()} contains no citations; "
-                "factual claims are untraceable.",
+                "message": f"{target_kind.capitalize()} contains no citations; factual "
+                "claims are untraceable.",
                 "ref": "",
             }
         )
@@ -893,7 +887,8 @@ def _validate_document(
                 {
                     "validator": "freshness",
                     "severity": "info",
-                    "message": f"{len(stale)} claim(s) from this source are superseded/deprecated.",
+                    "message": f"{len(stale)} claim(s) from this source are "
+                    "superseded/deprecated.",
                     "ref": sid,
                 }
             )
@@ -901,14 +896,13 @@ def _validate_document(
     if target_kind == "blog":
         issues.extend(_check_blog_images(md))
 
-    # grounding / coverage / antipattern
     valid_v, valid_s = {"grounding", "coverage", "antipattern"}, {
         "critical",
         "warning",
         "info",
     }
-    full_pass = True  # False = only deterministic validators ran -> status "checked"
-    if agent_issues is not None:  # local mode: validation-reviewer agent supplies these
+    full_pass = True
+    if agent_issues is not None:
         issues.extend(
             {
                 "validator": i.get("validator", "grounding"),
@@ -950,9 +944,10 @@ def _validate_document(
     penalty = sum(SEVERITY_WEIGHT.get(i["severity"], 0.0) for i in issues)
     confidence = round(max(0.0, 1.0 - penalty), 2)
     run = ValidationRun(
-        design_id=target.id if target_kind == "design" else "",
+        design_id=target.id if target_kind == "design" else None,
         target_kind=target_kind,
         target_id=target.id,
+        score=confidence,
         confidence=confidence,
     )
     session.add(run)
@@ -961,7 +956,7 @@ def _validate_document(
     for i in issues:
         session.add(
             Issue(
-                run_id=run.id,
+                validation_run_id=run.id,
                 validator=i["validator"],
                 severity=i["severity"],
                 message=i["message"],
@@ -970,10 +965,12 @@ def _validate_document(
         )
     has_critical = any(i["severity"] == "critical" for i in issues)
     rts = full_pass and not has_critical
-    target.confidence = confidence
+    # Blog stores its score in validation_confidence; Design in confidence.
+    if target_kind == "blog":
+        target.validation_confidence = confidence
+    else:
+        target.confidence = confidence
     target.ready_to_share = rts
-    # "checked" = only deterministic citation/freshness validators ran; "validated" means a
-    # grounding/coverage/antipattern review (agent or API) was part of this run.
     target.status = (
         "needs_review" if has_critical else "validated" if full_pass else "checked"
     )
@@ -989,10 +986,6 @@ def _validate_document(
 
 
 def _check_blog_images(md: str) -> list[dict]:
-    """Blogs embed only generated diagrams under content/diagrams/. A referenced
-    diagram that is missing on disk is a content-integrity failure (the published
-    article would render a broken image), so it is a *critical* issue: the blog must
-    not reach ready_to_share until the diagram exists or the reference is removed."""
     from pathlib import Path
 
     repo_root = Path(__file__).resolve().parents[2]
@@ -1000,8 +993,7 @@ def _check_blog_images(md: str) -> list[dict]:
     for path in re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", md):
         if "content/diagrams/" not in path:
             continue
-        rel = path.lstrip("/")
-        if not (repo_root / rel).exists():
+        if not (repo_root / path.lstrip("/")).exists():
             issues.append(
                 {
                     "validator": "citation",
@@ -1023,8 +1015,8 @@ def validate_design(
         session,
         target_kind="design",
         target=design,
-        md=design.output_md,
-        cited_ids=json.loads(design.cited_source_ids_json or "[]"),
+        md=design.body_md,
+        cited_ids=_cited_source_ids(session, design_id=design.id),
         agent_issues=agent_issues,
         scenario=design.scenario,
     )
@@ -1042,7 +1034,7 @@ def validate_blog(
         target_kind="blog",
         target=blog,
         md=blog.body_md,
-        cited_ids=json.loads(blog.cited_source_ids_json or "[]"),
+        cited_ids=_cited_source_ids(session, blog_id=blog.id),
         agent_issues=agent_issues,
         scenario=blog.title,
     )
@@ -1065,13 +1057,16 @@ def detect_drift(
     why_it_matters: str = "",
     takeaways: Optional[list[str]] = None,
 ) -> dict:
-    current_src = session.exec(
-        select(Source).where(Source.source_key == source_key, Source.active == True)
+    """Source slug is UNIQUE: the source row is updated IN PLACE; versioning happens at the
+    claim level via supersedes chains."""
+    slug = source_key
+    src = session.exec(
+        select(Source).where(Source.slug == slug, Source.active == True)
     ).first()  # noqa: E712
-    if current_src is None:
+    if src is None:
         return ingest_source(
             session,
-            url or source_key,
+            url or slug,
             title,
             tier or 6,
             content=content,
@@ -1085,26 +1080,25 @@ def detect_drift(
         )
 
     new_hash = _source_fingerprint(content, claims)
-    if new_hash == current_src.content_hash:
-        # Reader metadata is discovery text, not knowledge — backfill in place on a no-op
-        # drift so re-running import_content.py can enrich older rows without versioning.
+    if new_hash == src.content_hash:
         backfilled = False
         for field, value in (
             ("summary", summary),
             ("audience", audience),
             ("why_it_matters", why_it_matters),
         ):
-            if value and getattr(current_src, field) != value:
-                setattr(current_src, field, value)
+            if value and getattr(src, field) != value:
+                setattr(src, field, value)
                 backfilled = True
-        if takeaways is not None and dump_list(takeaways) != current_src.takeaways_json:
-            current_src.takeaways_json = dump_list(takeaways)
+        if takeaways is not None and _clean_list(takeaways) != list(src.takeaways):
+            src.takeaways = _clean_list(takeaways)
             backfilled = True
         if backfilled:
-            session.add(current_src)
+            session.add(src)
             session.commit()
         return {
-            "source_key": source_key,
+            "source_key": slug,
+            "slug": slug,
             "drift": False,
             "reason": "content unchanged",
             "metadata_updated": backfilled,
@@ -1116,47 +1110,35 @@ def detect_drift(
             "affected_blogs": [],
         }
 
-    extracted = _resolve_claims(content, claims)  # may raise — do it before any writes
+    extracted = _resolve_claims(content, claims)  # may raise — before any writes
 
-    current_src.active = False
-    session.add(current_src)
-    new_src = Source(
-        source_key=source_key,
-        version=current_src.version + 1,
-        url=url or current_src.url,
-        title=title or current_src.title,
-        tier=tier if tier is not None else current_src.tier,
-        content_hash=new_hash,
-        summary=summary or current_src.summary,
-        audience=audience or current_src.audience,
-        why_it_matters=why_it_matters or current_src.why_it_matters,
-        takeaways_json=(
-            dump_list(takeaways)
-            if takeaways is not None
-            else current_src.takeaways_json
-        ),
-        tags_json=dump_tags(tags) if tags else current_src.tags_json,
-        active=True,
-    )
-    session.add(new_src)
+    # Update the source row in place (one row per slug); bump version + refresh metadata.
+    src.version += 1
+    src.content_hash = new_hash
+    src.url = url or src.url
+    src.title = title or src.title
+    if tier is not None:
+        src.tier = tier
+    src.summary = summary or src.summary
+    src.audience = audience or src.audience
+    src.why_it_matters = why_it_matters or src.why_it_matters
+    if takeaways is not None:
+        src.takeaways = _clean_list(takeaways)
+    if tags:
+        src.tags = _clean_tags(tags)
+    session.add(src)
     session.commit()
-    session.refresh(new_src)
-    search.index_source(session, new_src)
+    session.refresh(src)
+    search.index_source(session, src)
     session.commit()
-    add_assets(session, assets, source_id=new_src.id)
+    add_assets(session, assets, source_id=src.id)
 
-    family_ids = [
-        s.id
-        for s in session.exec(
-            select(Source).where(Source.source_key == source_key)
-        ).all()
-    ]
     old_claims = session.exec(
-        select(Claim).where(Claim.active == True, Claim.source_id.in_(family_ids))
+        select(Claim).where(Claim.active == True, Claim.source_id == src.id)
     ).all()  # noqa: E712
-
     matched, added, changed, unchanged = set(), [], [], []
     for e in extracted:
+        _ensure_capability(session, e["capability_id"])
         cands = [c for c in old_claims if c.capability_id == e["capability_id"]]
         best, score = None, 0.0
         for c in cands:
@@ -1165,27 +1147,23 @@ def detect_drift(
                 best, score = c, sc
         if best and score >= SAME:
             matched.add(best.id)
-            best.source_id = new_src.id
-            session.add(best)
             unchanged.append({"claim_id": best.id})
         elif best and score >= CHANGED:
             matched.add(best.id)
             nc = supersede_claim(
-                session, best, e["text"], new_src, e["depth"], e["type"], e.get("tags")
+                session, best, e["text"], src, e["depth"], e["type"], e.get("tags")
             )
             changed.append({"old_id": best.id, "new_id": nc.id, "text": e["text"]})
         else:
-            dup = _find_duplicate(
-                session, e["text"], e["capability_id"], set(family_ids)
-            )
+            dup = _find_duplicate(session, e["text"], e["capability_id"], {src.id})
             nc = Claim(
                 capability_id=e["capability_id"],
                 text=e["text"],
                 depth=e["depth"],
                 type=e["type"],
                 status="duplicate" if dup else "pending",
-                source_id=new_src.id,
-                tags_json=dump_tags(e.get("tags")),
+                source_id=src.id,
+                tags=e.get("tags", []),
                 active=not dup,
             )
             session.add(nc)
@@ -1207,25 +1185,40 @@ def detect_drift(
             deprecate_claim(session, c)
             removed.append({"claim_id": c.id, "text": c.text})
 
-    affected, fam = [], set(family_ids) | {new_src.id}
-    for d in session.exec(select(Design)).all():
-        if set(json.loads(d.cited_source_ids_json or "[]")) & fam:
+    # Citing designs/blogs (via junction) → needs_review.
+    citing_designs = {
+        r.design_id
+        for r in session.exec(
+            select(DesignSource).where(DesignSource.source_id == src.id)
+        ).all()
+    }
+    affected = []
+    for did in citing_designs:
+        d = session.get(Design, did)
+        if d:
             d.status = "needs_review"
             session.add(d)
             affected.append({"design_id": d.id, "title": d.title})
-    # Published articles must not silently outlive the sources behind them.
+    citing_blogs = {
+        r.blog_id
+        for r in session.exec(
+            select(BlogSource).where(BlogSource.source_id == src.id)
+        ).all()
+    }
     affected_blogs = []
-    for b in session.exec(select(Blog).where(Blog.active == True)).all():  # noqa: E712
-        if set(json.loads(b.cited_source_ids_json or "[]")) & fam:
+    for bid in citing_blogs:
+        b = session.get(Blog, bid)
+        if b and b.active:
             b.status = "needs_review"
             b.ready_to_share = False
             session.add(b)
             affected_blogs.append({"blog_id": b.id, "slug": b.slug, "title": b.title})
     session.commit()
     return {
-        "source_key": source_key,
+        "source_key": slug,
+        "slug": slug,
         "drift": True,
-        "new_version": new_src.version,
+        "new_version": src.version,
         "added": len(added),
         "changed": len(changed),
         "removed": len(removed),
@@ -1246,8 +1239,6 @@ def submit_queue_item(
     tags: Optional[list[str]] = None,
     submitted_by: str = "",
 ) -> dict:
-    """Queue a URL for local agent ingestion. Rejects duplicates of sources already
-    in the KB and of URLs already queued/claimed (returns the conflict for the UI)."""
     url = (url or "").strip()
     if not url.lower().startswith(("http://", "https://")):
         raise ValueError("A valid http(s) URL is required.")
@@ -1255,7 +1246,7 @@ def submit_queue_item(
         raise ValueError("tier must be between 1 (Microsoft Learn) and 6 (unknown).")
     key = slugify(url)
     existing_src = session.exec(
-        select(Source).where(Source.source_key == key, Source.active == True)
+        select(Source).where(Source.slug == key, Source.active == True)
     ).first()  # noqa: E712
     if existing_src:
         raise DuplicateSubmission(
@@ -1273,21 +1264,15 @@ def submit_queue_item(
         url=url,
         title=title,
         tier=int(tier),
+        note=notes,
         notes=notes,
-        tags_json=dump_tags(tags),
-        submitted_by=submitted_by,
+        tags=_clean_tags(tags),
+        submitted_by=submitted_by or None,
     )
     session.add(item)
     session.commit()
     session.refresh(item)
     return _queue_dict(item)
-
-
-class DuplicateSubmission(ValueError):
-    def __init__(self, message: str, source_key: str = "", queue_id: str = ""):
-        super().__init__(message)
-        self.source_key = source_key
-        self.queue_id = queue_id
 
 
 def list_queue(session: Session, status: Optional[str] = None) -> list[dict]:
@@ -1321,8 +1306,6 @@ def _queue_transition(
 
 
 def claim_queue_item(session: Session, item_id: str) -> dict:
-    from app.models import _now
-
     return _queue_transition(
         session, item_id, ("queued",), "claimed", claimed_at=_now()
     )
@@ -1356,6 +1339,15 @@ def dismiss_queue_item(session: Session, item_id: str) -> dict:
 
 
 # --------------------------------------------------------------- topics
+def _topic_capabilities(session: Session, slug: str) -> list[str]:
+    return [
+        r.capability_id
+        for r in session.exec(
+            select(TopicCapability).where(TopicCapability.topic_slug == slug)
+        ).all()
+    ]
+
+
 def create_topic(
     session: Session,
     slug: str,
@@ -1367,62 +1359,76 @@ def create_topic(
     tags: Optional[list[str]] = None,
 ) -> dict:
     slug = slugify(slug or name)
-    if session.exec(select(Topic).where(Topic.slug == slug)).first():
+    if session.get(Topic, slug):
         raise ValueError(f"Topic slug '{slug}' already exists.")
-    unknown = [c for c in capability_ids or [] if c not in llm.CAPABILITY_IDS]
-    if unknown:
-        raise ValueError(f"Unknown capability id(s): {unknown}")
     if not capability_ids:
         raise ValueError(
             "A topic must map to at least one capability (the registry is the spine)."
         )
+    unknown = [c for c in capability_ids if c not in llm.CAPABILITY_IDS]
+    if unknown:
+        raise ValueError(f"Unknown capability id(s): {unknown}")
+    # parent_id is the parent topic slug (Topic PK is slug).
     if parent_id and session.get(Topic, parent_id) is None:
-        raise ValueError("parent_id does not exist.")
+        raise ValueError("parent_id (parent slug) does not exist.")
     t = Topic(
         slug=slug,
         name=name or slug,
-        parent_id=parent_id,
+        parent_slug=parent_id,
         description=description,
-        capability_ids_json=json.dumps(capability_ids),
-        order=order,
-        tags_json=dump_tags(tags),
+        sort_order=order,
+        tags=_clean_tags(tags),
     )
     session.add(t)
+    for cid in capability_ids:
+        _ensure_capability(session, cid)
+        session.add(TopicCapability(topic_slug=slug, capability_id=cid))
     session.commit()
     session.refresh(t)
     search.index_topic(session, t)
     session.commit()
-    return _topic_dict(t)
+    return _topic_dict(session, t)
 
 
 def update_topic(session: Session, topic_id: str, **fields) -> dict:
-    t = session.get(Topic, topic_id)
+    t = session.get(Topic, topic_id)  # topic_id is the slug
     if not t:
         raise LookupError("Topic not found.")
-    if "capability_ids" in fields and fields["capability_ids"] is not None:
+    if fields.get("capability_ids") is not None:
         caps = fields.pop("capability_ids")
+        if not caps:
+            raise ValueError("A topic must keep at least one capability mapping.")
         unknown = [c for c in caps if c not in llm.CAPABILITY_IDS]
         if unknown:
             raise ValueError(f"Unknown capability id(s): {unknown}")
-        if not caps:
-            raise ValueError("A topic must keep at least one capability mapping.")
-        t.capability_ids_json = json.dumps(caps)
-    for k in ("name", "description", "order", "parent_id", "active"):
-        if k in fields and fields[k] is not None:
-            setattr(t, k, fields[k])
+        for r in session.exec(
+            select(TopicCapability).where(TopicCapability.topic_slug == t.slug)
+        ).all():
+            session.delete(r)
+        for cid in caps:
+            _ensure_capability(session, cid)
+            session.add(TopicCapability(topic_slug=t.slug, capability_id=cid))
+    mapping = {
+        "name": "name",
+        "description": "description",
+        "order": "sort_order",
+        "parent_id": "parent_slug",
+        "active": "active",
+    }
+    for k, attr in mapping.items():
+        if fields.get(k) is not None:
+            setattr(t, attr, fields[k])
     session.add(t)
     session.commit()
     session.refresh(t)
-    return _topic_dict(t)
+    return _topic_dict(session, t)
 
 
 def list_topics(session: Session, include_counts: bool = False) -> list[dict]:
     rows = session.exec(
-        select(Topic)
-        .where(Topic.active == True)  # noqa: E712
-        .order_by(Topic.order, Topic.name)
-    ).all()
-    out = [_topic_dict(t) for t in rows]
+        select(Topic).where(Topic.active == True).order_by(Topic.sort_order, Topic.name)
+    ).all()  # noqa: E712
+    out = [_topic_dict(session, t) for t in rows]
     if include_counts:
         for d in out:
             caps = d["capability_ids"]
@@ -1430,8 +1436,8 @@ def list_topics(session: Session, include_counts: bool = False) -> list[dict]:
                 len(
                     session.exec(
                         select(Claim).where(
-                            Claim.active == True,  # noqa: E712
-                            Claim.status == "verified",
+                            Claim.active == True,
+                            Claim.status == "verified",  # noqa: E712
                             Claim.capability_id.in_(caps),
                         )
                     ).all()
@@ -1439,7 +1445,7 @@ def list_topics(session: Session, include_counts: bool = False) -> list[dict]:
                 if caps
                 else 0
             )
-            blog = _active_blog_for_topic(session, d["id"])
+            blog = _active_blog_for_topic(session, d["slug"])
             d["blog"] = (
                 {
                     "slug": blog.slug,
@@ -1453,28 +1459,28 @@ def list_topics(session: Session, include_counts: bool = False) -> list[dict]:
     return out
 
 
-def _active_blog_for_topic(session: Session, topic_id: str) -> Optional[Blog]:
+def _active_blog_for_topic(session: Session, topic_slug: str) -> Optional[Blog]:
     return session.exec(
         select(Blog)
-        .where(Blog.topic_id == topic_id, Blog.active == True)  # noqa: E712
-        .order_by(Blog.created_at.desc())
+        .where(Blog.topic_slug == topic_slug, Blog.active == True)
+        .order_by(Blog.created_at.desc())  # noqa: E712
     ).first()
 
 
 def get_topic(session: Session, slug: str) -> dict:
-    t = session.exec(select(Topic).where(Topic.slug == slug)).first()
+    t = session.get(Topic, slug)
     if not t:
         raise LookupError("Topic not found.")
     children = session.exec(
         select(Topic)
-        .where(Topic.parent_id == t.id, Topic.active == True)  # noqa: E712
-        .order_by(Topic.order, Topic.name)
+        .where(Topic.parent_slug == t.slug, Topic.active == True)
+        .order_by(Topic.sort_order, Topic.name)  # noqa: E712
     ).all()
-    blog = _active_blog_for_topic(session, t.id)
+    blog = _active_blog_for_topic(session, t.slug)
     return {
-        **_topic_dict(t),
-        "children": [_topic_dict(c) for c in children],
-        "blog": _blog_dict(blog, body=False) if blog else None,
+        **_topic_dict(session, t),
+        "children": [_topic_dict(session, c) for c in children],
+        "blog": _blog_dict(session, blog, body=False) if blog else None,
     }
 
 
@@ -1491,16 +1497,14 @@ def create_blog(
     depth_levels: Optional[list[int]] = None,
     assets: Optional[list[dict]] = None,
 ) -> dict:
-    """Persist a locally-authored blog article. Stricter than designs: every cited
-    source must back at least one verified active claim — blogs are public prose.
-    Re-posting a slug supersedes the prior version (append-only, like claims)."""
-    if cited_source_ids is None or not cited_source_ids:
+    """topic_id is the topic slug. Re-posting a slug supersedes the prior version."""
+    if not cited_source_ids:
         raise ValueError(
-            "cited_source_ids is required and non-empty: a blog with no citations is "
-            "untraceable prose. Pass the source ids behind the [Sn] tags in body_md."
+            "cited_source_ids is required and non-empty: a blog with no citations "
+            "is untraceable prose."
         )
     if session.get(Topic, topic_id) is None:
-        raise ValueError("topic_id does not exist.")
+        raise ValueError("topic_id (topic slug) does not exist.")
     for sid in cited_source_ids:
         s = session.get(Source, sid)
         if s is None:
@@ -1514,8 +1518,8 @@ def create_blog(
         ).first()
         if backed is None:
             raise ValueError(
-                f"Source '{s.title}' ({sid}) has no verified active claims; blogs may "
-                "only cite sources whose claims a human has verified."
+                f"Source '{s.title}' ({sid}) has no verified active claims; blogs "
+                "may only cite sources whose claims a human has verified."
             )
 
     slug = slugify(slug or title)
@@ -1528,29 +1532,31 @@ def create_blog(
         select(Blog).where(Blog.slug == slug, Blog.active == True)
     ).first()  # noqa: E712
     blog = Blog(
-        topic_id=topic_id,
+        topic_slug=topic_id,
         slug=slug,
         title=title,
         summary=summary,
         body_md=body_md,
-        cited_source_ids_json=json.dumps(cited_source_ids),
-        tags_json=dump_tags(tags),
-        depth_levels_json=json.dumps(sorted({int(d) for d in (depth_levels or [])})),
+        tags=_clean_tags(tags),
+        depth_levels=sorted({int(d) for d in (depth_levels or [])}),
         status="draft",
     )
     if prior:
-        blog.blog_key = prior.blog_key
+        # slug is UNIQUE — free the slug on the prior row by suffixing it, keep history.
         blog.version = prior.version + 1
         blog.supersedes_id = prior.id
         prior.active = False
+        prior.slug = f"{prior.slug}@v{prior.version}"
         session.add(prior)
+        session.commit()
     session.add(blog)
     session.commit()
     session.refresh(blog)
+    _set_citations(session, blog_id=blog.id, source_ids=cited_source_ids)
     search.index_blog(session, blog)
     session.commit()
     add_assets(session, assets, blog_id=blog.id)
-    return _blog_dict(blog)
+    return _blog_dict(session, blog)
 
 
 def list_blogs(
@@ -1563,14 +1569,14 @@ def list_blogs(
         select(Blog).where(Blog.active == True).order_by(Blog.created_at.desc())
     )  # noqa: E712
     if topic_id:
-        stmt = stmt.where(Blog.topic_id == topic_id)
+        stmt = stmt.where(Blog.topic_slug == topic_id)
     if status:
         stmt = stmt.where(Blog.status == status)
     rows = session.exec(stmt).all()
     if tag:
         norm = tag.lstrip("#").lower()
-        rows = [b for b in rows if norm in [t.lower() for t in load_tags(b.tags_json)]]
-    return [_blog_dict(b, body=False) for b in rows]
+        rows = [b for b in rows if norm in [t.lower() for t in b.tags]]
+    return [_blog_dict(session, b, body=False) for b in rows]
 
 
 def get_blog(session: Session, slug: str) -> dict:
@@ -1579,14 +1585,18 @@ def get_blog(session: Session, slug: str) -> dict:
     ).first()  # noqa: E712
     if not b:
         raise LookupError("Blog not found.")
-    cited = json.loads(b.cited_source_ids_json or "[]")
+    rows = session.exec(
+        select(BlogSource)
+        .where(BlogSource.blog_id == b.id)
+        .order_by(BlogSource.position)
+    ).all()
     legend = []
-    for i, sid in enumerate(cited, start=1):
-        s = session.get(Source, sid)
+    for r in rows:
+        s = session.get(Source, r.source_id)
         if s:
             legend.append(
                 {
-                    "tag": f"S{i}",
+                    "tag": r.label,
                     "id": s.id,
                     "title": s.title,
                     "tier": s.tier,
@@ -1596,20 +1606,29 @@ def get_blog(session: Session, slug: str) -> dict:
             )
     assets = session.exec(select(Asset).where(Asset.blog_id == b.id)).all()
     return {
-        **_blog_dict(b),
+        **_blog_dict(session, b),
         "legend": legend,
         "assets": [_asset_dict(a) for a in assets],
     }
 
 
 def blog_history(session: Session, slug: str) -> list[dict]:
-    any_version = session.exec(select(Blog).where(Blog.slug == slug)).first()
-    if not any_version:
+    """Walk the supersedes chain. slug may be the active slug; superseded versions carry a
+    @vN suffix, so resolve the active row then walk supersedes_id backward."""
+    active = session.exec(select(Blog).where(Blog.slug == slug)).first()
+    if not active:
+        # maybe a suffixed historical slug
+        active = session.exec(select(Blog).where(Blog.slug.like(f"{slug}@v%"))).first()
+    if not active:
         raise LookupError("Blog not found.")
-    chain = session.exec(
-        select(Blog).where(Blog.blog_key == any_version.blog_key).order_by(Blog.version)
-    ).all()
-    return [_blog_dict(b, body=False) for b in chain]
+    chain, cur = [], active
+    seen = set()
+    while cur and cur.id not in seen:
+        chain.append(cur)
+        seen.add(cur.id)
+        cur = session.get(Blog, cur.supersedes_id) if cur.supersedes_id else None
+    chain.reverse()
+    return [_blog_dict(session, b, body=False) for b in chain]
 
 
 # --------------------------------------------------------------- serialisers
@@ -1619,8 +1638,8 @@ def _queue_dict(q: QueueItem) -> dict:
         "url": q.url,
         "title": q.title,
         "tier": q.tier,
-        "notes": q.notes,
-        "tags": load_tags(q.tags_json),
+        "notes": q.notes or q.note,
+        "tags": list(q.tags),
         "status": q.status,
         "claimed_at": q.claimed_at.isoformat() if q.claimed_at else None,
         "result_source_id": q.result_source_id,
@@ -1630,35 +1649,35 @@ def _queue_dict(q: QueueItem) -> dict:
     }
 
 
-def _topic_dict(t: Topic) -> dict:
+def _topic_dict(session: Session, t: Topic) -> dict:
     return {
-        "id": t.id,
+        "id": t.slug,
         "slug": t.slug,
         "name": t.name,
-        "parent_id": t.parent_id,
+        "parent_id": t.parent_slug,
         "description": t.description,
-        "capability_ids": json.loads(t.capability_ids_json or "[]"),
-        "order": t.order,
-        "tags": load_tags(t.tags_json),
+        "capability_ids": _topic_capabilities(session, t.slug),
+        "order": t.sort_order,
+        "tags": list(t.tags),
         "active": t.active,
         "created_at": t.created_at.isoformat(),
     }
 
 
-def _blog_dict(b: Blog, body: bool = True) -> dict:
+def _blog_dict(session: Session, b: Blog, body: bool = True) -> dict:
     d = {
         "id": b.id,
-        "blog_key": b.blog_key,
         "version": b.version,
-        "topic_id": b.topic_id,
+        "topic_id": b.topic_slug,
+        "topic_slug": b.topic_slug,
         "slug": b.slug,
         "title": b.title,
         "summary": b.summary,
-        "cited_source_ids": json.loads(b.cited_source_ids_json or "[]"),
-        "tags": load_tags(b.tags_json),
-        "depth_levels": json.loads(b.depth_levels_json or "[]"),
+        "cited_source_ids": _cited_source_ids(session, blog_id=b.id),
+        "tags": list(b.tags),
+        "depth_levels": list(b.depth_levels),
         "status": b.status,
-        "confidence": b.confidence,
+        "confidence": b.validation_confidence,
         "ready_to_share": b.ready_to_share,
         "supersedes_id": b.supersedes_id,
         "active": b.active,
@@ -1672,7 +1691,8 @@ def _blog_dict(b: Blog, body: bool = True) -> dict:
 def _source_dict(s: Source) -> dict:
     return {
         "id": s.id,
-        "source_key": s.source_key,
+        "source_key": s.slug,
+        "slug": s.slug,
         "version": s.version,
         "url": s.url,
         "title": s.title,
@@ -1680,8 +1700,8 @@ def _source_dict(s: Source) -> dict:
         "summary": s.summary,
         "audience": s.audience,
         "why_it_matters": s.why_it_matters,
-        "takeaways": load_list(s.takeaways_json),
-        "tags": load_tags(s.tags_json),
+        "takeaways": list(s.takeaways),
+        "tags": list(s.tags),
         "active": s.active,
         "created_at": s.created_at.isoformat(),
     }
@@ -1690,7 +1710,6 @@ def _source_dict(s: Source) -> dict:
 def _claim_dict(c: Claim) -> dict:
     return {
         "id": c.id,
-        "claim_key": c.claim_key,
         "version": c.version,
         "capability_id": c.capability_id,
         "text": c.text,
@@ -1700,7 +1719,7 @@ def _claim_dict(c: Claim) -> dict:
         "source_id": c.source_id,
         "supersedes_id": c.supersedes_id,
         "confidence": c.confidence,
-        "tags": load_tags(c.tags_json),
+        "tags": list(c.tags),
         "active": c.active,
         "created_at": c.created_at.isoformat(),
     }

@@ -181,8 +181,9 @@ def test_drift_supersedes_changed_and_deprecates_removed(client):
     active_source = [s for s in client.get("/sources").json() if s["active"]][0]
     assert active_source["summary"] == "New source revision summary."
     assert active_source["takeaways"] == ["Changed claim."]
-    history_key = client.get("/claims").json()[0]["claim_key"]
-    chain = client.get(f"/claims/{history_key}/history").json()
+    # history is by claim id now (slug+supersedes model); the active claim is v2.
+    active_claim = client.get("/claims").json()[0]["id"]
+    chain = client.get(f"/claims/{active_claim}/history").json()
     assert [c["version"] for c in chain] == [1, 2]
     assert chain[0]["active"] is False and chain[0]["status"] == "superseded"
     assert chain[1]["active"] is True and chain[1]["status"] == "pending"
@@ -430,22 +431,19 @@ def test_validation_flags_missing_and_superseded_sources(client):
             "cited_source_ids": [res["source_id"]],
         },
     ).json()["design_id"]
+    # Re-ingesting drifts the source: it updates IN PLACE and supersedes the changed claim,
+    # so the cited source stays active but has a superseded claim (freshness "info").
     client.post("/sources/ingest", json=_payload(texts=["Replacement fact entirely."]))
-    # a ghost citation can no longer be created via the API; simulate legacy data directly
-    import json as _json
-    from app.models import Design
+    # a ghost citation can no longer be created via the API; inject one as a junction row.
+    from app.models import DesignSource
 
     with Session(client.engine) as s:
-        d = s.get(Design, did)
-        d.cited_source_ids_json = _json.dumps(
-            _json.loads(d.cited_source_ids_json) + ["ghost-id"]
-        )
-        s.add(d)
+        s.add(DesignSource(design_id=did, label="S9", source_id="ghost-id", position=9))
         s.commit()
     v = client.post(f"/designs/{did}/validate", json={}).json()
     validators = {(i["validator"], i["severity"]) for i in v["issues"]}
-    assert ("citation", "critical") in validators  # ghost id
-    assert ("freshness", "warning") in validators  # superseded source revision
+    assert ("citation", "critical") in validators  # ghost id does not exist
+    assert ("freshness", "info") in validators  # cited source has a superseded claim
 
 
 # ------------------------------------------------------------------- advisor

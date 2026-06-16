@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
 from app.db import get_session
-from app.models import Source, Claim, Design, ValidationRun, Issue, Asset, load_tags
+from app.models import Source, Claim, Design, ValidationRun, Issue, Asset
 from app import services, llm
 from app import search as search_mod
 
@@ -219,9 +219,10 @@ def list_claims(
     return rows
 
 
-@router.get("/claims/{claim_key}/history")
-def history(claim_key: str, session: Session = Depends(get_session)):
-    return [services._claim_dict(c) for c in services.claim_history(session, claim_key)]
+@router.get("/claims/{claim_id}/history")
+def history(claim_id: str, session: Session = Depends(get_session)):
+    """Version chain for a claim — pass any claim id in the chain (slug+supersedes model)."""
+    return [services._claim_dict(c) for c in services.claim_history(session, claim_id)]
 
 
 @router.post("/claims/{claim_id}/verify")
@@ -323,7 +324,7 @@ def list_tags(session: Session = Depends(get_session)):
     for c in session.exec(
         select(Claim).where(Claim.active == True)
     ).all():  # noqa: E712
-        for t in load_tags(c.tags_json):
+        for t in c.tags:
             counts[t] = counts.get(t, 0) + 1
     return dict(sorted(counts.items(), key=lambda kv: -kv[1]))
 
@@ -397,7 +398,14 @@ def design_generate(body: DesignGenerateIn, session: Session = Depends(get_sessi
 @router.get("/designs")
 def list_designs(session: Session = Depends(get_session)):
     rows = session.exec(select(Design).order_by(Design.created_at.desc())).all()
-    return [{**r.model_dump(), "tags": load_tags(r.tags_json)} for r in rows]
+    return [
+        {
+            **r.model_dump(),
+            "output_md": r.body_md,
+            "cited_source_ids": services._cited_source_ids(session, design_id=r.id),
+        }
+        for r in rows
+    ]
 
 
 @router.get("/designs/{design_id}")
@@ -408,7 +416,8 @@ def get_design(design_id: str, session: Session = Depends(get_session)):
     assets = session.exec(select(Asset).where(Asset.design_id == design_id)).all()
     return {
         **d.model_dump(),
-        "tags": load_tags(d.tags_json),
+        "output_md": d.body_md,
+        "cited_source_ids": services._cited_source_ids(session, design_id=d.id),
         "assets": [services._asset_dict(a) for a in assets],
     }
 
@@ -430,11 +439,13 @@ def list_validations(design_id: str, session: Session = Depends(get_session)):
     runs = session.exec(
         select(ValidationRun)
         .where(ValidationRun.design_id == design_id)
-        .order_by(ValidationRun.created_at.desc())
+        .order_by(ValidationRun.ran_at.desc())
     ).all()
     out = []
     for r in runs:
-        issues = session.exec(select(Issue).where(Issue.run_id == r.id)).all()
+        issues = session.exec(
+            select(Issue).where(Issue.validation_run_id == r.id)
+        ).all()
         out.append({**r.model_dump(), "issues": [i.model_dump() for i in issues]})
     return out
 
@@ -641,11 +652,13 @@ def blog_validations(blog_id: str, session: Session = Depends(get_session)):
     runs = session.exec(
         select(ValidationRun)
         .where(ValidationRun.target_kind == "blog", ValidationRun.target_id == blog_id)
-        .order_by(ValidationRun.created_at.desc())
+        .order_by(ValidationRun.ran_at.desc())
     ).all()
     out = []
     for r in runs:
-        issues = session.exec(select(Issue).where(Issue.run_id == r.id)).all()
+        issues = session.exec(
+            select(Issue).where(Issue.validation_run_id == r.id)
+        ).all()
         out.append({**r.model_dump(), "issues": [i.model_dump() for i in issues]})
     return out
 
@@ -681,8 +694,12 @@ def search_rebuild(session: Session = Depends(get_session)):
 def advisor_chat(body: AdvisorChatIn, session: Session = Depends(get_session)):
     """Grounded Fabric Q&A over the knowledge base — answers only from KB claims, cited [Sn],
     and refuses where the KB is silent. Retrieval is scoped to `capabilities` when given.
-    Requires LLM_MODE=api with a key (the Lovable chat UI calls this); in local mode use the
-    /advise skill (fabric-advisor agent) which runs the same retrieval on the laptop."""
+
+    Key-optional. With a server-side key (LLM_MODE=api) it returns the generated answer
+    (mode="answer"). Without one — the default no-key local model — it returns the grounded
+    retrieval payload (mode="context": scoped [Sn] context, legend, advisor system prompt) so
+    the Lovable chat UI generates the answer client-side. Either way the grounding is identical.
+    """
     if not (body.message or "").strip():
         raise HTTPException(400, "message is required.")
     try:

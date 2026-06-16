@@ -1,30 +1,25 @@
 """Full-text search over the knowledge base.
 
 Backends:
-- **Postgres (Supabase)** — a unified `search_doc(kind, ref_id, title, body, tags, tsv)`
-  table with a generated `tsvector` column and a GIN index. Queried with
-  `websearch_to_tsquery` and snippeted with `ts_headline`.
-- **SQLite** — only used by the in-memory test database now. Falls back to a LIKE scan
-  over the live tables (the old FTS5 virtual table is gone with the SQLite backend).
+- **Postgres (Supabase)** — Lovable's schema ships per-table GIN `to_tsvector` indexes
+  (sources_search_idx, claims_search_idx, blogs_search_idx). We query each table with
+  `to_tsvector(...) @@ websearch_to_tsquery(...)` and rank/snippet there. There is no
+  separate index table to maintain — Postgres keeps the GIN indexes current automatically,
+  so the index_*/rebuild hooks are no-ops on Postgres.
+- **SQLite (tests)** — a LIKE scan over the live tables.
 
-Design notes:
-- Content rows are append-only in this system (claims and blogs are versioned, never
-  edited), so INSERTs at creation time are the only index events; status flips (verify,
-  supersede, needs_review) never touch the index because results are hydrated from the
-  live tables at query time and inactive rows are dropped there.
-- `rebuild_search_index` repopulates from scratch — called at startup when the index is
-  empty (covers pre-existing databases) and exposed as POST /search/rebuild.
+Results are always hydrated from the live tables so status/activity reflect current state;
+inactive (superseded/deprecated) rows never surface.
 """
 
 from __future__ import annotations
-import json
 import logging
 from typing import Optional
 
 from sqlalchemy import text
 from sqlmodel import Session, select
 
-from app.models import Source, Claim, Blog, Topic, load_tags
+from app.models import Source, Claim, Blog, Topic
 
 log = logging.getLogger(__name__)
 
@@ -33,109 +28,36 @@ def _is_postgres(session: Session) -> bool:
     return session.connection().engine.url.get_backend_name() == "postgresql"
 
 
-def _insert(
-    session: Session, kind: str, ref_id: str, title: str, body: str, tags: list[str]
-) -> None:
-    """Insert a row into search_doc (Postgres). The tsv column is generated."""
-    session.connection().execute(
-        text(
-            "INSERT INTO search_doc (kind, ref_id, title, body, tags) "
-            "VALUES (:kind, :ref_id, :title, :body, :tags)"
-        ),
-        {
-            "kind": kind,
-            "ref_id": ref_id,
-            "title": title or "",
-            "body": body or "",
-            "tags": " ".join(tags or []),
-        },
-    )
-
-
-def index_claim(session: Session, claim: Claim) -> None:
-    if _is_postgres(session):
-        _insert(
-            session,
-            "claim",
-            claim.id,
-            claim.capability_id,
-            claim.text,
-            load_tags(claim.tags_json),
-        )
+# Index hooks are no-ops: Postgres maintains the GIN indexes; SQLite uses a live LIKE scan.
+def index_claim(session: Session, claim: Claim) -> None:  # noqa: D401
+    return None
 
 
 def index_source(session: Session, src: Source) -> None:
-    if _is_postgres(session):
-        body = " ".join(filter(None, [src.summary, src.why_it_matters, src.audience]))
-        _insert(session, "source", src.id, src.title, body, load_tags(src.tags_json))
+    return None
 
 
 def index_blog(session: Session, blog: Blog) -> None:
-    if _is_postgres(session):
-        _insert(
-            session,
-            "blog",
-            blog.id,
-            blog.title,
-            " ".join(filter(None, [blog.summary, blog.body_md])),
-            load_tags(blog.tags_json),
-        )
+    return None
 
 
 def index_topic(session: Session, topic: Topic) -> None:
-    if _is_postgres(session):
-        _insert(
-            session,
-            "topic",
-            topic.id,
-            topic.name,
-            topic.description,
-            load_tags(topic.tags_json),
-        )
+    return None
 
 
 def rebuild_search_index(session: Session) -> dict:
-    """Repopulate the index from the live tables. Active rows only — superseded and
-    deprecated content is history, not search surface."""
-    if not _is_postgres(session):
-        return {
-            "rebuilt": False,
-            "reason": "search_doc index only exists on Postgres; "
-            "SQLite uses a live LIKE scan.",
-        }
-    session.connection().execute(text("DELETE FROM search_doc"))
-    counts = {"claim": 0, "source": 0, "blog": 0, "topic": 0}
-    for c in session.exec(
-        select(Claim).where(Claim.active == True)
-    ).all():  # noqa: E712
-        index_claim(session, c)
-        counts["claim"] += 1
-    for s in session.exec(
-        select(Source).where(Source.active == True)
-    ).all():  # noqa: E712
-        index_source(session, s)
-        counts["source"] += 1
-    for b in session.exec(select(Blog).where(Blog.active == True)).all():  # noqa: E712
-        index_blog(session, b)
-        counts["blog"] += 1
-    for t in session.exec(
-        select(Topic).where(Topic.active == True)
-    ).all():  # noqa: E712
-        index_topic(session, t)
-        counts["topic"] += 1
-    session.commit()
-    return {"rebuilt": True, "indexed": counts}
+    """No-op: search reads the live tables (Postgres GIN indexes are always current; SQLite
+    uses a LIKE scan). Kept for API compatibility with POST /search/rebuild."""
+    backend = "postgres" if _is_postgres(session) else "sqlite"
+    return {
+        "rebuilt": False,
+        "reason": f"search reads live tables on {backend}; "
+        "no separate index to rebuild.",
+    }
 
 
 def ensure_index(session: Session) -> None:
-    """Startup hook: populate the index when it is empty but the KB is not — the
-    upgrade path for databases that predate the search feature (or a fresh import)."""
-    if not _is_postgres(session):
-        return
-    n = session.connection().execute(text("SELECT count(*) FROM search_doc")).scalar()
-    if n == 0 and session.exec(select(Claim)).first() is not None:
-        log.info("search index empty — rebuilding from live tables")
-        rebuild_search_index(session)
+    return None
 
 
 def _norm_tag(tag: str) -> str:
@@ -150,15 +72,15 @@ def search(
     capability: Optional[str] = None,
     limit: int = 20,
 ) -> dict:
-    """Grouped search results. Hydrates every hit from the live tables so status,
-    activity, and filters always reflect current state, not index-time state."""
+    """Grouped search results, hydrated from live tables (status/activity always current)."""
     groups: dict[str, list] = {"blogs": [], "topics": [], "claims": [], "sources": []}
     if not (q or "").strip():
         return groups
-    if _is_postgres(session):
-        rows = _pg_rows(session, q, kind, limit * 8)
-    else:
-        rows = _like_rows(session, q, kind, limit * 8)
+    rows = (
+        _pg_rows(session, q, kind, limit * 8)
+        if _is_postgres(session)
+        else _like_rows(session, q, kind, limit * 8)
+    )
 
     for row_kind, ref_id, snippet in rows:
         hit = _hydrate(session, row_kind, ref_id, snippet)
@@ -182,23 +104,61 @@ def search(
 
 
 def _pg_rows(session: Session, q: str, kind: Optional[str], limit: int) -> list[tuple]:
-    """Postgres full-text path: websearch_to_tsquery against the GIN-indexed tsv, with a
-    ts_headline snippet. websearch_to_tsquery is injection-safe (it parses user syntax),
-    so the raw query string can be passed straight through."""
-    sql = (
-        "SELECT kind, ref_id, "
-        "  ts_headline('english', body, websearch_to_tsquery('english', :q), "
-        "    'StartSel=<b>,StopSel=</b>,MaxWords=18,MinWords=6,ShortWord=2') AS snippet "
-        "FROM search_doc "
-        "WHERE tsv @@ websearch_to_tsquery('english', :q) "
-    )
-    params: dict = {"q": q}
-    if kind:
-        sql += "AND kind = :k "
-        params["k"] = kind
-    sql += "ORDER BY ts_rank(tsv, websearch_to_tsquery('english', :q)) DESC LIMIT :n"
-    params["n"] = limit
-    return list(session.connection().execute(text(sql), params).fetchall())
+    """Per-table Postgres full-text. Each subquery mirrors the GIN-indexed expression in the
+    migration so the index is used; websearch_to_tsquery is injection-safe."""
+    parts = []
+    if kind in (None, "claim"):
+        parts.append(
+            "SELECT 'claim' AS kind, id::text AS ref_id, "
+            "ts_headline('english', text, websearch_to_tsquery('english', :q), "
+            "  'StartSel=<b>,StopSel=</b>,MaxWords=18,MinWords=6') AS snippet, "
+            "ts_rank(to_tsvector('english', text), websearch_to_tsquery('english', :q)) AS rank "
+            "FROM claims WHERE active AND to_tsvector('english', text) "
+            "@@ websearch_to_tsquery('english', :q)"
+        )
+    if kind in (None, "source"):
+        parts.append(
+            "SELECT 'source', id::text, "
+            "ts_headline('english', coalesce(summary,''), websearch_to_tsquery('english', :q), "
+            "  'StartSel=<b>,StopSel=</b>,MaxWords=18,MinWords=6'), "
+            "ts_rank(to_tsvector('english', title || ' ' || coalesce(summary,'')), "
+            "  websearch_to_tsquery('english', :q)) "
+            "FROM sources WHERE active AND "
+            "to_tsvector('english', title || ' ' || coalesce(summary,'')) "
+            "@@ websearch_to_tsquery('english', :q)"
+        )
+    if kind in (None, "blog"):
+        parts.append(
+            "SELECT 'blog', id::text, "
+            "ts_headline('english', coalesce(summary,'') || ' ' || coalesce(body_md,''), "
+            "  websearch_to_tsquery('english', :q), "
+            "  'StartSel=<b>,StopSel=</b>,MaxWords=18,MinWords=6'), "
+            "ts_rank(to_tsvector('english', title || ' ' || coalesce(summary,'') || ' ' || "
+            "  coalesce(body_md,'')), websearch_to_tsquery('english', :q)) "
+            "FROM blogs WHERE active AND "
+            "to_tsvector('english', title || ' ' || coalesce(summary,'') || ' ' || "
+            "  coalesce(body_md,'')) @@ websearch_to_tsquery('english', :q)"
+        )
+    if kind in (None, "topic"):
+        parts.append(
+            "SELECT 'topic', slug, "
+            "ts_headline('english', coalesce(description,''), websearch_to_tsquery('english', :q), "
+            "  'StartSel=<b>,StopSel=</b>,MaxWords=18,MinWords=6'), "
+            "ts_rank(to_tsvector('english', name || ' ' || coalesce(description,'')), "
+            "  websearch_to_tsquery('english', :q)) "
+            "FROM topics WHERE active AND "
+            "to_tsvector('english', name || ' ' || coalesce(description,'')) "
+            "@@ websearch_to_tsquery('english', :q)"
+        )
+    if not parts:
+        return []
+    sql = " UNION ALL ".join(f"({p})" for p in parts) + " ORDER BY rank DESC LIMIT :n"
+    return [
+        (r[0], r[1], r[2])
+        for r in session.connection()
+        .execute(text(sql), {"q": q, "n": limit})
+        .fetchall()
+    ]
 
 
 def _hydrate(session: Session, kind: str, ref_id: str, snippet: str) -> Optional[dict]:
@@ -214,7 +174,7 @@ def _hydrate(session: Session, kind: str, ref_id: str, snippet: str) -> Optional
             "capability_id": c.capability_id,
             "status": c.status,
             "depth": c.depth,
-            "tags": load_tags(c.tags_json),
+            "tags": list(c.tags),
             "snippet": snippet,
         }
     if kind == "source":
@@ -223,12 +183,12 @@ def _hydrate(session: Session, kind: str, ref_id: str, snippet: str) -> Optional
             return None
         return {
             "kind": "source",
-            "ref": s.source_key,
+            "ref": s.slug,
             "id": s.id,
             "title": s.title,
             "tier": s.tier,
             "url": s.url,
-            "tags": load_tags(s.tags_json),
+            "tags": list(s.tags),
             "snippet": snippet,
         }
     if kind == "blog":
@@ -241,21 +201,23 @@ def _hydrate(session: Session, kind: str, ref_id: str, snippet: str) -> Optional
             "id": b.id,
             "title": b.title,
             "status": b.status,
-            "topic_id": b.topic_id,
-            "tags": load_tags(b.tags_json),
+            "topic_id": b.topic_slug,
+            "tags": list(b.tags),
             "snippet": snippet,
         }
     if kind == "topic":
         t = session.get(Topic, ref_id)
         if not t or not t.active:
             return None
+        from app.services import _topic_capabilities
+
         return {
             "kind": "topic",
             "ref": t.slug,
-            "id": t.id,
+            "id": t.slug,
             "title": t.name,
-            "capability_ids": json.loads(t.capability_ids_json or "[]"),
-            "tags": load_tags(t.tags_json),
+            "capability_ids": _topic_capabilities(session, t.slug),
+            "tags": list(t.tags),
             "snippet": snippet,
         }
     return None
@@ -264,12 +226,11 @@ def _hydrate(session: Session, kind: str, ref_id: str, snippet: str) -> Optional
 def _like_rows(
     session: Session, q: str, kind: Optional[str], limit: int
 ) -> list[tuple]:
-    """Fallback for the SQLite test database: LIKE scan with a crude excerpt."""
-    needle = f"%{q.lower()}%"
-    rows: list[tuple] = []
+    """SQLite test-DB fallback: LIKE scan over live tables with a crude excerpt."""
+    needle = q.lower()
 
     def excerpt(body: str) -> str:
-        i = (body or "").lower().find(q.lower())
+        i = (body or "").lower().find(needle)
         if i < 0:
             return (body or "")[:120]
         start = max(0, i - 40)
@@ -283,31 +244,32 @@ def _like_rows(
             + "…"
         )
 
+    rows: list[tuple] = []
     if kind in (None, "claim"):
         for c in session.exec(
             select(Claim).where(Claim.active == True)
         ).all():  # noqa: E712
-            if needle.strip("%") in c.text.lower():
+            if needle in c.text.lower():
                 rows.append(("claim", c.id, excerpt(c.text)))
     if kind in (None, "source"):
         for s in session.exec(
             select(Source).where(Source.active == True)
         ).all():  # noqa: E712
             hay = " ".join([s.title, s.summary or ""])
-            if needle.strip("%") in hay.lower():
+            if needle in hay.lower():
                 rows.append(("source", s.id, excerpt(hay)))
     if kind in (None, "blog"):
         for b in session.exec(
             select(Blog).where(Blog.active == True)
         ).all():  # noqa: E712
             hay = " ".join([b.title, b.summary or "", b.body_md or ""])
-            if needle.strip("%") in hay.lower():
+            if needle in hay.lower():
                 rows.append(("blog", b.id, excerpt(hay)))
     if kind in (None, "topic"):
         for t in session.exec(
             select(Topic).where(Topic.active == True)
         ).all():  # noqa: E712
             hay = " ".join([t.name, t.description or ""])
-            if needle.strip("%") in hay.lower():
-                rows.append(("topic", t.id, excerpt(hay)))
+            if needle in hay.lower():
+                rows.append(("topic", t.slug, excerpt(hay)))
     return rows[:limit]

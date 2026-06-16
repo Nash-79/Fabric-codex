@@ -219,7 +219,8 @@ def test_topic_patch(client):
         json={"description": "The lake.", "capability_ids": ["onelake", "lakehouse"]},
     )
     assert r.json()["description"] == "The lake."
-    assert r.json()["capability_ids"] == ["onelake", "lakehouse"]
+    # capability mapping is a set (topic_capabilities junction has no inherent order)
+    assert set(r.json()["capability_ids"]) == {"onelake", "lakehouse"}
 
 
 # ------------------------------------------------------------------ blogs
@@ -249,9 +250,9 @@ def test_blog_create_supersede_and_history(client):
             t["id"], sid, body_md="OneLake is the tenant-wide lake, revised [S1]."
         ),
     ).json()
-    assert v2["version"] == 2 and v2["blog_key"] == v1["blog_key"]
-    assert v2["supersedes_id"] == v1["id"]
+    assert v2["version"] == 2 and v2["supersedes_id"] == v1["id"]
 
+    # History walks the supersedes_id chain (slug+supersedes model, no blog_key family).
     chain = client.get("/blogs/onelake-explained/history").json()
     assert [b["version"] for b in chain] == [1, 2]
     assert chain[0]["active"] is False and chain[1]["active"] is True
@@ -314,6 +315,32 @@ def test_blog_flags_missing_diagram(client):
     assert miss and miss[0]["severity"] == "critical"
     assert res["ready_to_share"] is False
     assert client.get(f"/blogs/{blog['slug']}").json()["status"] == "needs_review"
+
+
+# ------------------------------------------------------------------ advisor chat
+def test_advisor_chat_returns_context_without_key(client):
+    """No server-side key (the default local model): the advisor returns the grounded
+    retrieval payload for client-side generation, not a server-generated answer."""
+    _verified_source(client)
+    res = client.post(
+        "/advisor/chat",
+        json={"message": "What is OneLake?", "capabilities": ["onelake"]},
+    ).json()
+    assert res["mode"] == "context"
+    assert res["grounded"] is True and res["claim_count"] >= 1
+    assert "[S1]" in res["context"] and res["legend"].startswith("S1 = ")
+    assert (
+        res["server_generation"] is False and res["system"]
+    )  # grounding handed to the client
+
+
+def test_advisor_chat_empty_kb(client):
+    res = client.post("/advisor/chat", json={"message": "anything"}).json()
+    assert res["mode"] == "empty" and res["grounded"] is False
+
+
+def test_advisor_chat_requires_message(client):
+    assert client.post("/advisor/chat", json={"message": "  "}).status_code == 400
 
 
 # ------------------------------------------------------------------ search
