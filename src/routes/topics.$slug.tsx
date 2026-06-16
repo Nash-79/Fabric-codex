@@ -4,6 +4,18 @@ import { getTopic } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { accent } from "@/lib/fabric-theme";
 
+type TopicCapability = {
+  id: string;
+  name: string;
+  accent: string;
+};
+
+type TopicBlog = {
+  slug: string;
+  title: string;
+  summary: string;
+};
+
 const topicQO = (slug: string) =>
   queryOptions({ queryKey: ["topic", slug], queryFn: () => getTopic({ data: { slug } }) });
 
@@ -25,14 +37,18 @@ export const Route = createFileRoute("/topics/$slug")({
     <div className="min-h-screen bg-[#070b16] p-10 text-white">
       <SiteHeader />
       <p className="mt-6 text-rose-300">{error.message}</p>
-      <button className="mt-3 underline" onClick={reset}>Retry</button>
+      <button className="mt-3 underline" onClick={reset}>
+        Retry
+      </button>
     </div>
   ),
   notFoundComponent: () => (
     <div className="min-h-screen bg-[#070b16] p-10 text-white">
       <SiteHeader />
       <p className="mt-6">Topic not found.</p>
-      <Link to="/topics" className="mt-3 inline-block underline">Back to topics</Link>
+      <Link to="/topics" className="mt-3 inline-block underline">
+        Back to topics
+      </Link>
     </div>
   ),
   component: TopicPage,
@@ -47,22 +63,25 @@ function TopicPage() {
     <div className="min-h-screen bg-[#070b16] text-white">
       <SiteHeader />
       <div className="mx-auto max-w-4xl px-6 py-12">
-        <Link to="/topics" className="text-xs text-white/55 hover:text-white">← All topics</Link>
+        <Link to="/topics" className="text-xs text-white/55 hover:text-white">
+          ← All topics
+        </Link>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight">{topic.name}</h1>
         <p className="mt-3 text-lg leading-relaxed text-white/70">{topic.description}</p>
 
         {capabilities.length > 0 && (
           <div className="mt-6 flex flex-wrap gap-1.5">
-            {capabilities.map((c: any) => {
+            {(capabilities as TopicCapability[]).map((c) => {
               const a = accent(c.accent);
               return (
                 <Link
                   key={c.id}
-                  to="/atlas"
-                  search={{ capability: c.id }}
+                  to="/registry"
                   className={`rounded-full border px-2.5 py-1 text-xs font-medium ${a.chip}`}
                 >
-                  <span className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${a.dot}`} />
+                  <span
+                    className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${a.dot}`}
+                  />
                   {c.name}
                 </Link>
               );
@@ -72,9 +91,11 @@ function TopicPage() {
 
         {blogs.length > 0 && (
           <section className="mt-10">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">Articles</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">
+              Articles
+            </h2>
             <ul className="mt-3 space-y-2">
-              {blogs.map((b: any) => (
+              {(blogs as TopicBlog[]).map((b) => (
                 <li key={b.slug}>
                   <Link
                     to="/blog/$slug"
@@ -92,7 +113,9 @@ function TopicPage() {
 
         {children.length > 0 && (
           <section className="mt-10">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">Subtopics</h2>
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">
+              Subtopics
+            </h2>
             <ul className="mt-3 space-y-1.5">
               {children.map((c) => (
                 <li key={c.slug}>

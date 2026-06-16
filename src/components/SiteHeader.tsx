@@ -1,9 +1,10 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { FabricMark } from "./FabricMark";
 
-const NAV: { to: string; label: string; exact?: boolean }[] = [
+const NAV = [
   { to: "/", label: "Overview", exact: true },
   { to: "/topics", label: "Topics" },
   { to: "/search", label: "Search" },
@@ -13,29 +14,50 @@ const NAV: { to: string; label: string; exact?: boolean }[] = [
   { to: "/learn", label: "Learn" },
   { to: "/help", label: "Help" },
   { to: "/author", label: "Author" },
-];
+] as const;
 
 export function SiteHeader() {
   const [signedIn, setSignedIn] = useState(false);
+  const [admin, setAdmin] = useState(false);
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setSignedIn(!!data.session));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSignedIn(!!s));
+    async function sync(session?: Session | null) {
+      const isSignedIn = !!session;
+      setSignedIn(isSignedIn);
+      if (!isSignedIn) {
+        setAdmin(false);
+        return;
+      }
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) {
+        setAdmin(false);
+        return;
+      }
+      const { data } = await supabase.rpc("has_role", { _user_id: user.user.id, _role: "admin" });
+      setAdmin(!!data);
+    }
+    supabase.auth.getSession().then(({ data }) => sync(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => sync(s));
     return () => sub.subscription.unsubscribe();
   }, []);
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/5 bg-[#070b16]/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-6">
-        <Link to="/" className="flex items-center gap-2 font-semibold tracking-tight text-white shrink-0">
+        <Link
+          to="/"
+          className="flex items-center gap-2 font-semibold tracking-tight text-white shrink-0"
+        >
           <FabricMark className="h-6 w-6" />
           <span>Fabric Atlas</span>
-          <span className="hidden text-xs font-normal text-white/40 lg:inline">for Microsoft Fabric</span>
+          <span className="hidden text-xs font-normal text-white/40 lg:inline">
+            for Microsoft Fabric
+          </span>
         </Link>
         <nav className="hidden flex-1 items-center justify-center gap-0.5 md:flex">
           {NAV.map((n) => (
             <Link
               key={n.to}
-              to={n.to as any}
+              to={n.to}
               className="rounded-md px-2.5 py-1.5 text-sm text-white/65 transition hover:bg-white/5 hover:text-white"
               activeProps={{ className: "bg-white/10 text-white" }}
               activeOptions={{ exact: n.exact ?? false }}
@@ -53,7 +75,20 @@ export function SiteHeader() {
           </Link>
           {signedIn ? (
             <>
-              <Link to="/favorites" className="hidden text-xs text-white/65 hover:text-white md:inline">Favorites</Link>
+              <Link
+                to="/favorites"
+                className="hidden text-xs text-white/65 hover:text-white md:inline"
+              >
+                Favorites
+              </Link>
+              {admin && (
+                <Link
+                  to="/settings"
+                  className="hidden text-xs text-white/65 hover:text-white md:inline"
+                >
+                  Settings
+                </Link>
+              )}
               <button
                 onClick={() => supabase.auth.signOut()}
                 className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:bg-white/5"

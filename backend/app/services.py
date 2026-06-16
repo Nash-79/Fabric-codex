@@ -209,6 +209,7 @@ def ingest_source(
     audience: str = "",
     why_it_matters: str = "",
     takeaways: Optional[list[str]] = None,
+    document: Optional[dict] = None,
 ) -> dict:
     slug = slugify(url or title)
     existing = session.exec(
@@ -229,6 +230,7 @@ def ingest_source(
             audience=audience,
             why_it_matters=why_it_matters,
             takeaways=takeaways,
+            document=document,
         )
 
     extracted = _resolve_claims(content, claims)  # may raise — before any writes
@@ -239,6 +241,7 @@ def ingest_source(
         title=normalize_text(title) or url or slug,
         tier=tier,
         content_hash=_source_fingerprint(content, claims),
+        document=document or {},
         summary=normalize_text(summary),
         audience=normalize_text(audience),
         why_it_matters=normalize_text(why_it_matters),
@@ -481,6 +484,42 @@ def supersede_claim(
     session.refresh(new)
     search.index_claim(session, new)
     session.commit()
+    return new
+
+
+def supersede_claim_text(
+    session: Session,
+    claim_id: str,
+    new_text: str,
+    depth: Optional[int] = None,
+    ctype: Optional[str] = None,
+    tags: Optional[list[str]] = None,
+) -> Optional[Claim]:
+    old = session.get(Claim, claim_id)
+    if not old:
+        return None
+    if not old.active:
+        raise ValueError("Only active claims can be superseded.")
+    text = normalize_text((new_text or "").strip())
+    if not text:
+        raise ValueError("new_text is required.")
+    source = session.get(Source, old.source_id)
+    if not source:
+        raise ValueError("Claim source no longer exists.")
+    prev_status = old.status
+    new = supersede_claim(
+        session,
+        old,
+        text,
+        source,
+        depth=depth,
+        ctype=ctype,
+        tags=tags,
+    )
+    _record_event(session, new, "superseded", prev_status)
+    session.add(new)
+    session.commit()
+    session.refresh(new)
     return new
 
 
@@ -791,6 +830,8 @@ def create_design(
     cited_source_ids: Optional[list[str]] = None,
     assets: Optional[list[dict]] = None,
     title: str = "",
+    slug: str = "",
+    document: Optional[dict] = None,
 ) -> dict:
     if cited_source_ids is None:
         raise ValueError(
@@ -800,14 +841,48 @@ def create_design(
     unknown = [sid for sid in cited_source_ids if session.get(Source, sid) is None]
     if unknown:
         raise ValueError(f"cited_source_ids contains unknown source id(s): {unknown}")
+    slug = slugify(slug or title or scenario[:60])
+    new_hash = content_hash(output_md)
+    # slug is UNIQUE; designs update in place (no supersedes chain) so re-import is idempotent.
+    existing = session.exec(select(Design).where(Design.slug == slug)).first()
+    if existing:
+        if existing.content_hash == new_hash:
+            return {
+                "design_id": existing.id,
+                "output_md": existing.body_md,
+                "cited_source_ids": cited_source_ids,
+                "drift": False,
+                "reason": "content unchanged",
+            }
+        existing.title = title or existing.title
+        existing.scenario = scenario
+        existing.constraints = constraints or {}
+        existing.body_md = output_md
+        existing.tags = _clean_tags(tags)
+        existing.content_hash = new_hash
+        if document is not None:
+            existing.document = document
+        existing.status = "draft"
+        session.add(existing)
+        session.commit()
+        _set_citations(session, design_id=existing.id, source_ids=cited_source_ids)
+        add_assets(session, assets, design_id=existing.id)
+        return {
+            "design_id": existing.id,
+            "output_md": output_md,
+            "cited_source_ids": cited_source_ids,
+            "drift": True,
+        }
     design = Design(
-        slug=slugify(title or scenario[:60]),
+        slug=slug,
         title=title or scenario[:60],
         scenario=scenario,
         constraints=constraints or {},
         body_md=output_md,
         tags=_clean_tags(tags),
         status="draft",
+        content_hash=new_hash,
+        document=document or {},
     )
     session.add(design)
     session.commit()
@@ -818,6 +893,7 @@ def create_design(
         "design_id": design.id,
         "output_md": output_md,
         "cited_source_ids": cited_source_ids,
+        "drift": False,
     }
 
 
@@ -1056,6 +1132,7 @@ def detect_drift(
     audience: str = "",
     why_it_matters: str = "",
     takeaways: Optional[list[str]] = None,
+    document: Optional[dict] = None,
 ) -> dict:
     """Source slug is UNIQUE: the source row is updated IN PLACE; versioning happens at the
     claim level via supersedes chains."""
@@ -1077,6 +1154,7 @@ def detect_drift(
             audience=audience,
             why_it_matters=why_it_matters,
             takeaways=takeaways,
+            document=document,
         )
 
     new_hash = _source_fingerprint(content, claims)
@@ -1092,6 +1170,9 @@ def detect_drift(
                 backfilled = True
         if takeaways is not None and _clean_list(takeaways) != list(src.takeaways):
             src.takeaways = _clean_list(takeaways)
+            backfilled = True
+        if document is not None and document != src.document:
+            src.document = document
             backfilled = True
         if backfilled:
             session.add(src)
@@ -1115,6 +1196,8 @@ def detect_drift(
     # Update the source row in place (one row per slug); bump version + refresh metadata.
     src.version += 1
     src.content_hash = new_hash
+    if document is not None:
+        src.document = document
     src.url = url or src.url
     src.title = title or src.title
     if tier is not None:
@@ -1496,6 +1579,7 @@ def create_blog(
     tags: Optional[list[str]] = None,
     depth_levels: Optional[list[int]] = None,
     assets: Optional[list[dict]] = None,
+    document: Optional[dict] = None,
 ) -> dict:
     """topic_id is the topic slug. Re-posting a slug supersedes the prior version."""
     if not cited_source_ids:
@@ -1540,6 +1624,8 @@ def create_blog(
         tags=_clean_tags(tags),
         depth_levels=sorted({int(d) for d in (depth_levels or [])}),
         status="draft",
+        content_hash=content_hash(body_md),
+        document=document or {},
     )
     if prior:
         # slug is UNIQUE — free the slug on the prior row by suffixing it, keep history.

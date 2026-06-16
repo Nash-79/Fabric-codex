@@ -11,12 +11,16 @@ what the validation/trust machinery means. It must describe the system **as it i
 right now** — stale or aspirational docs are the documentation equivalent of an uncited claim.
 
 ## Ground truth (read these, don't guess)
+
 - `backend/app/routers.py` — the real API surface.
-- `frontend/src/views/*.jsx` and `frontend/src/components/Layout.jsx` — the real pages and nav.
-- `.claude/commands/*.md` — the real authoring commands.
+- `backend/app/services.py` — the versioning, validation, queue, and curation invariants.
+- `src/routes/*.tsx` and `src/routes/_authenticated/*.tsx` — the real pages, nav, Settings, and authenticated workflows.
+- `src/lib/*.functions.ts` — the TanStack server functions used by the site UI.
+- `.claude/agents/*.md`, `.claude/commands/*.md`, and `.codex/prompts/*.md` — the real authoring commands and Codex prompt equivalents.
 - `CLAUDE.md`, `docs/data-model.md`, `docs/workflow.md` — the rules and operating model.
 
 ## Page set (create missing, update drifted)
+
 - `01-getting-started.md` — what Fabric Atlas is, the pages in the nav, the trust model in
   one screen.
 - `02-submitting-sources.md` — the Add-a-source form, trust tiers 1–6, the queue lifecycle,
@@ -27,8 +31,13 @@ right now** — stale or aspirational docs are the documentation equivalent of a
 - `05-search.md` — what is indexed, kind filters, tag filters.
 - `06-validation-and-trust.md` — citations [Sn], deterministic vs agent validators,
   confidence, trust tiers, the never-fabricate guarantee.
+- `07-agent-workflows.md` — Claude agents/commands and Codex prompts for ingest, publish,
+  docs sync, validation, and content upkeep.
+- `08-admin-settings.md` — admin-only user approval, invitations, Settings CMS actions,
+  validation triggers, queue operations, and audit logs.
 
 ## Method
+
 1. Read the ground-truth files. Diff each existing help page against reality; rewrite only
    sections that drifted, create pages that are missing.
 2. Start each page with a single `#` heading (the UI uses it as the page title); the numeric
@@ -39,5 +48,6 @@ right now** — stale or aspirational docs are the documentation equivalent of a
    you did not verify. If you find dead docs for a removed feature, delete them and say so.
 
 ## Output
+
 A list of pages created/updated/unchanged with one line on what changed in each, and a
 reminder to commit `content/help/`.

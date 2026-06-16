@@ -34,7 +34,9 @@ function SearchPage() {
       <SiteHeader />
       <div className="mx-auto max-w-4xl px-6 py-10">
         <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Search</h1>
-        <p className="mt-2 text-sm text-white/55">Search across topics, articles, claims, and sources.</p>
+        <p className="mt-2 text-sm text-white/55">
+          Search across topics, articles, claims, and sources.
+        </p>
         <form onSubmit={run} className="mt-6 flex gap-2">
           <Input
             value={q}
@@ -54,7 +56,12 @@ function SearchPage() {
           <div className="mt-10 space-y-10">
             <Section title={`Topics (${results.topics.length})`}>
               {results.topics.map((t) => (
-                <Link key={t.slug} to="/topics/$slug" params={{ slug: t.slug }} className="block rounded-md p-2 hover:bg-white/5">
+                <Link
+                  key={t.slug}
+                  to="/topics/$slug"
+                  params={{ slug: t.slug }}
+                  className="block rounded-md p-2 hover:bg-white/5"
+                >
                   <div className="text-sm font-medium text-white">{t.name}</div>
                   <div className="text-xs text-white/55">{t.description}</div>
                 </Link>
@@ -62,7 +69,12 @@ function SearchPage() {
             </Section>
             <Section title={`Articles (${results.blogs.length})`}>
               {results.blogs.map((b) => (
-                <Link key={b.slug} to="/blog/$slug" params={{ slug: b.slug }} className="block rounded-md p-2 hover:bg-white/5">
+                <Link
+                  key={b.slug}
+                  to="/blog/$slug"
+                  params={{ slug: b.slug }}
+                  className="block rounded-md p-2 hover:bg-white/5"
+                >
                   <div className="text-sm font-medium text-white">{b.title}</div>
                   <div className="text-xs text-white/55">{b.summary}</div>
                 </Link>
@@ -74,11 +86,18 @@ function SearchPage() {
                   <div className="flex items-center gap-2">
                     <DepthBadge depth={c.depth} />
                     {c.sources?.tier && <TierBadge tier={c.sources.tier} />}
-                    <span className="text-[10px] uppercase tracking-wider text-white/40">{c.capability_id}</span>
+                    <span className="text-[10px] uppercase tracking-wider text-white/40">
+                      {c.capability_id}
+                    </span>
                   </div>
                   <p className="mt-1.5 text-sm text-white/80">{c.text}</p>
                   {c.sources && (
-                    <a href={c.sources.url} target="_blank" rel="noreferrer" className="mt-1 block text-xs text-teal-300 hover:underline">
+                    <a
+                      href={c.sources.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-1 block text-xs text-teal-300 hover:underline"
+                    >
                       {c.sources.title}
                     </a>
                   )}
@@ -87,7 +106,13 @@ function SearchPage() {
             </Section>
             <Section title={`Sources (${results.sources.length})`}>
               {results.sources.map((s) => (
-                <a key={s.slug} href={s.url} target="_blank" rel="noreferrer" className="block rounded-md p-2 hover:bg-white/5">
+                <a
+                  key={s.slug}
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block rounded-md p-2 hover:bg-white/5"
+                >
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-medium text-white">{s.title}</span>
                     <TierBadge tier={s.tier} />

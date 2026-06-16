@@ -10,7 +10,10 @@ export const Route = createFileRoute("/topics")({
   head: () => ({
     meta: [
       { title: "Topics — Fabric Atlas" },
-      { name: "description", content: "Browse Microsoft Fabric topics organised by capability and depth." },
+      {
+        name: "description",
+        content: "Browse Microsoft Fabric topics organised by capability and depth.",
+      },
     ],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(topicsQO),
@@ -18,14 +21,22 @@ export const Route = createFileRoute("/topics")({
     <div className="min-h-screen bg-[#070b16] p-10 text-white">
       <SiteHeader />
       <p className="mt-6 text-rose-300">Could not load topics. {error.message}</p>
-      <button className="mt-3 underline" onClick={reset}>Retry</button>
+      <button className="mt-3 underline" onClick={reset}>
+        Retry
+      </button>
     </div>
   ),
   notFoundComponent: () => <div className="p-10 text-white">Not found.</div>,
   component: TopicsPage,
 });
 
-type Topic = { slug: string; parent_slug: string | null; name: string; description: string; sort_order: number };
+type Topic = {
+  slug: string;
+  parent_slug: string | null;
+  name: string;
+  description: string;
+  sort_order: number;
+};
 
 function TopicsPage() {
   const { data: topics } = useSuspenseQuery(topicsQO);
@@ -42,15 +53,21 @@ function TopicsPage() {
     <div className="min-h-screen bg-[#070b16] text-white">
       <SiteHeader />
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">Knowledge map</div>
+        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
+          Knowledge map
+        </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">Topics</h1>
         <p className="mt-2 max-w-2xl text-sm text-white/55">
-          Microsoft Fabric organised by capability area. Pick a topic to read its cited article and source claims.
+          Microsoft Fabric organised by capability area. Pick a topic to read its cited article and
+          source claims.
         </p>
 
         <div className="mt-10 grid gap-6 md:grid-cols-2">
           {roots.map((root) => (
-            <section key={root.slug} className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <section
+              key={root.slug}
+              className="rounded-2xl border border-white/10 bg-white/[0.02] p-5"
+            >
               <h2 className="text-lg font-semibold text-white">{root.name}</h2>
               <p className="mt-1 text-sm text-white/55">{root.description}</p>
               <ul className="mt-4 space-y-1.5">
@@ -61,7 +78,9 @@ function TopicsPage() {
                       params={{ slug: child.slug }}
                       className="group flex items-baseline justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-white/5"
                     >
-                      <span className="text-sm font-medium text-white/85 group-hover:text-white">{child.name}</span>
+                      <span className="text-sm font-medium text-white/85 group-hover:text-white">
+                        {child.name}
+                      </span>
                       <span className="truncate text-xs text-white/45">{child.description}</span>
                     </Link>
                   </li>
@@ -72,7 +91,10 @@ function TopicsPage() {
           {roots.length === 0 && (
             <div className="col-span-full rounded-xl border border-dashed border-white/15 p-12 text-center text-white/55">
               No topics yet. An admin can seed the content from the{" "}
-              <Link to="/admin" className="text-teal-300 underline-offset-4 hover:underline">admin page</Link>.
+              <Link to="/settings" className="text-teal-300 underline-offset-4 hover:underline">
+                settings page
+              </Link>
+              .
             </div>
           )}
         </div>

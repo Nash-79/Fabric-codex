@@ -22,8 +22,10 @@ import { Route as AdvisorRouteImport } from './routes/advisor'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TopicsSlugRouteImport } from './routes/topics.$slug'
+import { Route as DesignSlugRouteImport } from './routes/design.$slug'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedFavoritesRouteImport } from './routes/_authenticated/favorites'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 
@@ -91,6 +93,11 @@ const TopicsSlugRoute = TopicsSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => TopicsRoute,
 } as any)
+const DesignSlugRoute = DesignSlugRouteImport.update({
+  id: '/design/$slug',
+  path: '/design/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BlogSlugRoute = BlogSlugRouteImport.update({
   id: '/blog/$slug',
   path: '/blog/$slug',
@@ -100,6 +107,11 @@ const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedFavoritesRoute = AuthenticatedFavoritesRouteImport.update({
   id: '/favorites',
@@ -126,8 +138,10 @@ export interface FileRoutesByFullPath {
   '/topics': typeof TopicsRouteWithChildren
   '/admin': typeof AuthenticatedAdminRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/blog/$slug': typeof BlogSlugRoute
+  '/design/$slug': typeof DesignSlugRoute
   '/topics/$slug': typeof TopicsSlugRoute
 }
 export interface FileRoutesByTo {
@@ -144,8 +158,10 @@ export interface FileRoutesByTo {
   '/topics': typeof TopicsRouteWithChildren
   '/admin': typeof AuthenticatedAdminRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/blog/$slug': typeof BlogSlugRoute
+  '/design/$slug': typeof DesignSlugRoute
   '/topics/$slug': typeof TopicsSlugRoute
 }
 export interface FileRoutesById {
@@ -164,8 +180,10 @@ export interface FileRoutesById {
   '/topics': typeof TopicsRouteWithChildren
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/favorites': typeof AuthenticatedFavoritesRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
   '/blog/$slug': typeof BlogSlugRoute
+  '/design/$slug': typeof DesignSlugRoute
   '/topics/$slug': typeof TopicsSlugRoute
 }
 export interface FileRouteTypes {
@@ -184,8 +202,10 @@ export interface FileRouteTypes {
     | '/topics'
     | '/admin'
     | '/favorites'
+    | '/settings'
     | '/api/chat'
     | '/blog/$slug'
+    | '/design/$slug'
     | '/topics/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -202,8 +222,10 @@ export interface FileRouteTypes {
     | '/topics'
     | '/admin'
     | '/favorites'
+    | '/settings'
     | '/api/chat'
     | '/blog/$slug'
+    | '/design/$slug'
     | '/topics/$slug'
   id:
     | '__root__'
@@ -221,8 +243,10 @@ export interface FileRouteTypes {
     | '/topics'
     | '/_authenticated/admin'
     | '/_authenticated/favorites'
+    | '/_authenticated/settings'
     | '/api/chat'
     | '/blog/$slug'
+    | '/design/$slug'
     | '/topics/$slug'
   fileRoutesById: FileRoutesById
 }
@@ -241,6 +265,7 @@ export interface RootRouteChildren {
   TopicsRoute: typeof TopicsRouteWithChildren
   ApiChatRoute: typeof ApiChatRoute
   BlogSlugRoute: typeof BlogSlugRoute
+  DesignSlugRoute: typeof DesignSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -336,6 +361,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TopicsSlugRouteImport
       parentRoute: typeof TopicsRoute
     }
+    '/design/$slug': {
+      id: '/design/$slug'
+      path: '/design/$slug'
+      fullPath: '/design/$slug'
+      preLoaderRoute: typeof DesignSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/blog/$slug': {
       id: '/blog/$slug'
       path: '/blog/$slug'
@@ -349,6 +381,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/api/chat'
       preLoaderRoute: typeof ApiChatRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/favorites': {
       id: '/_authenticated/favorites'
@@ -370,11 +409,13 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedFavoritesRoute: typeof AuthenticatedFavoritesRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedFavoritesRoute: AuthenticatedFavoritesRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
@@ -406,7 +447,18 @@ const rootRouteChildren: RootRouteChildren = {
   TopicsRoute: TopicsRouteWithChildren,
   ApiChatRoute: ApiChatRoute,
   BlogSlugRoute: BlogSlugRoute,
+  DesignSlugRoute: DesignSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

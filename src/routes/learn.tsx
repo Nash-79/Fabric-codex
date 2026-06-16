@@ -7,18 +7,40 @@ export const Route = createFileRoute("/learn")({
   head: () => ({
     meta: [
       { title: "Learn — Fabric Atlas" },
-      { name: "description", content: "Tiered Microsoft Fabric learning paths: Beginner (L1–L2), Intermediate (L3), Expert (L4–L5)." },
+      {
+        name: "description",
+        content:
+          "Tiered Microsoft Fabric learning paths: Beginner (L1–L2), Intermediate (L3), Expert (L4–L5).",
+      },
       { property: "og:title", content: "Learn — Fabric Atlas" },
-      { property: "og:description", content: "Tiered Microsoft Fabric learning paths grounded in cited claims." },
+      {
+        property: "og:description",
+        content: "Tiered Microsoft Fabric learning paths grounded in cited claims.",
+      },
     ],
   }),
   component: LearnPage,
 });
 
 const TIERS: { id: string; label: string; depths: string[]; blurb: string }[] = [
-  { id: "beginner", label: "Beginner", depths: ["L1", "L2"], blurb: "Conceptual and practitioner essentials." },
-  { id: "intermediate", label: "Intermediate", depths: ["L3"], blurb: "Architect-level decisions and trade-offs." },
-  { id: "expert", label: "Expert", depths: ["L4", "L5"], blurb: "Performance tuning and internals." },
+  {
+    id: "beginner",
+    label: "Beginner",
+    depths: ["L1", "L2"],
+    blurb: "Conceptual and practitioner essentials.",
+  },
+  {
+    id: "intermediate",
+    label: "Intermediate",
+    depths: ["L3"],
+    blurb: "Architect-level decisions and trade-offs.",
+  },
+  {
+    id: "expert",
+    label: "Expert",
+    depths: ["L4", "L5"],
+    blurb: "Performance tuning and internals.",
+  },
 ];
 
 function LearnPage() {
@@ -38,7 +60,9 @@ function LearnPage() {
     <div className="min-h-screen bg-[#070b16] text-white">
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">Paths</div>
+        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
+          Paths
+        </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Learn Microsoft Fabric</h1>
         <p className="mt-2 max-w-2xl text-sm text-white/55">
           Every lesson is grounded in approved, cited claims. Pick a tier.
@@ -57,11 +81,18 @@ function LearnPage() {
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {isLoading && <div className="text-sm text-white/40">Loading…</div>}
                   {!isLoading && lessons.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-white/40">No lessons yet.</div>
+                    <div className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-white/40">
+                      No lessons yet.
+                    </div>
                   )}
                   {lessons.map((l) => (
-                    <div key={l.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
-                      <div className="text-[10px] uppercase tracking-wide text-teal-300/70">{l.depth}</div>
+                    <div
+                      key={l.id}
+                      className="rounded-xl border border-white/10 bg-white/[0.02] p-4"
+                    >
+                      <div className="text-[10px] uppercase tracking-wide text-teal-300/70">
+                        {l.depth}
+                      </div>
                       <div className="mt-1 text-sm font-medium text-white">{l.title}</div>
                     </div>
                   ))}

@@ -16,11 +16,16 @@ export const Route = createFileRoute("/api/chat")({
         if (!key) return new Response("LOVABLE_API_KEY not configured", { status: 500 });
 
         const requestedModel = typeof body.model === "string" ? body.model : "";
-        const modelId = ADVISOR_MODEL_IDS.has(requestedModel) ? requestedModel : DEFAULT_ADVISOR_MODEL;
+        const modelId = ADVISOR_MODEL_IDS.has(requestedModel)
+          ? requestedModel
+          : DEFAULT_ADVISOR_MODEL;
 
         const lastUser = [...messages].reverse().find((m) => m.role === "user");
         const userText =
-          lastUser?.parts.map((p: any) => (p.type === "text" ? p.text : "")).join(" ").trim() ?? "";
+          lastUser?.parts
+            .map((p: any) => (p.type === "text" ? p.text : ""))
+            .join(" ")
+            .trim() ?? "";
 
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const words = userText

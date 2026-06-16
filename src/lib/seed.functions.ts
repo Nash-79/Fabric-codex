@@ -1,34 +1,61 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
+// In-app convenience seed (admin-triggered) that replays the bundled content/ files straight into
+// Supabase for no-backend deploys. NOTE: the CANONICAL, version-aware path is the Python backend —
+// `python scripts/import_content.py --base <supabase-backed server>` — which owns claim versioning,
+// drift/merge (supersedes_id chains) and the raw `document` snapshot. This seed is deliberately a
+// thin, idempotent UPSERT replay: it must never blanket-delete versioned rows or reset curated
+// status. Keep it dumb; do real versioning through the backend.
+
 // Bundle the content/ JSON and markdown at build time.
-const topicsJson = import.meta.glob("/content/topics.json", { eager: true }) as Record<string, { default: any }>;
-const sourceJsons = import.meta.glob("/content/sources/*.json", { eager: true }) as Record<string, { default: any }>;
-const blogJsons = import.meta.glob("/content/blogs/*.json", { eager: true }) as Record<string, { default: any }>;
-const diagramAssets = import.meta.glob("/content/diagrams/assets.json", { eager: true }) as Record<string, { default: any }>;
-const helpMd = import.meta.glob("/content/help/*.md", { eager: true, query: "?raw", import: "default" }) as Record<string, string>;
+const topicsJson = import.meta.glob("/content/topics.json", { eager: true }) as Record<
+  string,
+  { default: any }
+>;
+const sourceJsons = import.meta.glob("/content/sources/*.json", { eager: true }) as Record<
+  string,
+  { default: any }
+>;
+const blogJsons = import.meta.glob("/content/blogs/*.json", { eager: true }) as Record<
+  string,
+  { default: any }
+>;
+const designJsons = import.meta.glob("/content/designs/*.json", { eager: true }) as Record<
+  string,
+  { default: any }
+>;
+const diagramAssets = import.meta.glob("/content/diagrams/assets.json", { eager: true }) as Record<
+  string,
+  { default: any }
+>;
+const helpMd = import.meta.glob("/content/help/*.md", {
+  eager: true,
+  query: "?raw",
+  import: "default",
+}) as Record<string, string>;
 
 const CAPABILITY_NAMES: Record<string, { name: string; accent: string }> = {
-  "fabric-platform":   { name: "Fabric Platform",          accent: "indigo" },
-  "capacity":          { name: "Capacity & Cost",          accent: "amber" },
-  "purview":           { name: "Governance & Purview",     accent: "violet" },
-  "onelake":           { name: "OneLake",                  accent: "teal" },
-  "lakehouse":         { name: "Lakehouse",                accent: "teal" },
-  "mirroring":         { name: "Mirroring",                accent: "teal" },
-  "spark":             { name: "Spark",                    accent: "rose" },
-  "data-factory":      { name: "Data Factory",             accent: "rose" },
-  "dataflow-gen2":     { name: "Dataflow Gen2",            accent: "rose" },
-  "warehouse":         { name: "Warehouse",                accent: "yellow" },
-  "polaris":           { name: "Polaris SQL Engine",       accent: "yellow" },
-  "sql-database":      { name: "SQL Database in Fabric",   accent: "yellow" },
-  "direct-lake":       { name: "Direct Lake",              accent: "indigo" },
-  "semantic-model":    { name: "Semantic Model",           accent: "indigo" },
-  "power-bi":          { name: "Power BI",                 accent: "indigo" },
-  "rti":               { name: "Real-Time Intelligence",   accent: "rose" },
-  "eventhouse-kql":    { name: "Eventhouse / KQL",         accent: "rose" },
-  "fabric-data-agent": { name: "Fabric Data Agent",        accent: "violet" },
-  "fabric-iq":         { name: "Fabric IQ",                accent: "violet" },
-  "graphql-api":       { name: "GraphQL API",              accent: "violet" },
+  "fabric-platform": { name: "Fabric Platform", accent: "indigo" },
+  capacity: { name: "Capacity & Cost", accent: "amber" },
+  purview: { name: "Governance & Purview", accent: "violet" },
+  onelake: { name: "OneLake", accent: "teal" },
+  lakehouse: { name: "Lakehouse", accent: "teal" },
+  mirroring: { name: "Mirroring", accent: "teal" },
+  spark: { name: "Spark", accent: "rose" },
+  "data-factory": { name: "Data Factory", accent: "rose" },
+  "dataflow-gen2": { name: "Dataflow Gen2", accent: "rose" },
+  warehouse: { name: "Warehouse", accent: "yellow" },
+  polaris: { name: "Polaris SQL Engine", accent: "yellow" },
+  "sql-database": { name: "SQL Database in Fabric", accent: "yellow" },
+  "direct-lake": { name: "Direct Lake", accent: "indigo" },
+  "semantic-model": { name: "Semantic Model", accent: "indigo" },
+  "power-bi": { name: "Power BI", accent: "indigo" },
+  rti: { name: "Real-Time Intelligence", accent: "rose" },
+  "eventhouse-kql": { name: "Eventhouse / KQL", accent: "rose" },
+  "fabric-data-agent": { name: "Fabric Data Agent", accent: "violet" },
+  "fabric-iq": { name: "Fabric IQ", accent: "violet" },
+  "graphql-api": { name: "GraphQL API", accent: "violet" },
 };
 
 export const seedFromContent = createServerFn({ method: "POST" })
@@ -50,17 +77,21 @@ export const seedFromContent = createServerFn({ method: "POST" })
     // 1) Capabilities (derived from topics + claims)
     const capIds = new Set<string>();
     for (const t of topicsArr) (t.capability_ids ?? []).forEach((id: string) => capIds.add(id));
-    for (const s of sources) (s.claims ?? []).forEach((c: any) => c.capability_id && capIds.add(c.capability_id));
+    for (const s of sources)
+      (s.claims ?? []).forEach((c: any) => c.capability_id && capIds.add(c.capability_id));
     const capRows = [...capIds].map((id) => ({
       id,
       name: CAPABILITY_NAMES[id]?.name ?? id,
       accent: CAPABILITY_NAMES[id]?.accent ?? "teal",
       description: "",
     }));
-    if (capRows.length) await supabaseAdmin.from("capabilities").upsert(capRows, { onConflict: "id" });
+    if (capRows.length)
+      await supabaseAdmin.from("capabilities").upsert(capRows, { onConflict: "id" });
 
     // 2) Topics (parents first)
-    const ordered = [...topicsArr].sort((a, b) => (a.parent_slug ? 1 : 0) - (b.parent_slug ? 1 : 0));
+    const ordered = [...topicsArr].sort(
+      (a, b) => (a.parent_slug ? 1 : 0) - (b.parent_slug ? 1 : 0),
+    );
     for (const t of ordered) {
       await supabaseAdmin.from("topics").upsert(
         {
@@ -78,34 +109,39 @@ export const seedFromContent = createServerFn({ method: "POST" })
     await supabaseAdmin.from("topic_capabilities").delete().neq("topic_slug", "__never__");
     const tcRows: { topic_slug: string; capability_id: string }[] = [];
     for (const t of topicsArr) {
-      for (const id of t.capability_ids ?? []) tcRows.push({ topic_slug: t.slug, capability_id: id });
+      for (const id of t.capability_ids ?? [])
+        tcRows.push({ topic_slug: t.slug, capability_id: id });
     }
     if (tcRows.length) await supabaseAdmin.from("topic_capabilities").upsert(tcRows);
 
-    // 4) Sources + Claims (replace existing for clean re-seed)
-    await supabaseAdmin.from("claims").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    await supabaseAdmin.from("blog_sources").delete().neq("blog_id", "00000000-0000-0000-0000-000000000000");
-    await supabaseAdmin.from("blogs").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-    await supabaseAdmin.from("sources").delete().neq("id", "00000000-0000-0000-0000-000000000000");
-
+    // 4) Sources + Claims.
+    // Non-destructive replay: upsert each source by slug (the family identity), then refresh
+    // ONLY that source's claims. We never blanket-delete claims/blogs, so curated status/version
+    // the backend owns on other rows survives. The backend (import_content.py against Supabase)
+    // remains the canonical, version-aware path — see the banner comment at the top of this file.
     const slugById = new Map<string, string>();
     for (const [path, mod] of Object.entries(sourceJsons)) {
       const s = (mod as any).default;
       const slug = path.split("/").pop()!.replace(".json", "");
       const { data: ins, error } = await supabaseAdmin
         .from("sources")
-        .insert({
-          slug,
-          url: s.url,
-          title: s.title,
-          tier: s.tier ?? 6,
-          tags: s.tags ?? [],
-          summary: s.summary ?? "",
-        })
+        .upsert(
+          {
+            slug,
+            url: s.url,
+            title: s.title,
+            tier: s.tier ?? 6,
+            tags: s.tags ?? [],
+            summary: s.summary ?? "",
+          },
+          { onConflict: "slug" },
+        )
         .select("id")
         .single();
       if (error) throw new Error(`source ${slug}: ${error.message}`);
       slugById.set(slug, ins.id);
+      // Replace just this source's claims so re-seeding doesn't accumulate duplicates.
+      await supabaseAdmin.from("claims").delete().eq("source_id", ins.id);
       const claimRows = (s.claims ?? [])
         .filter((c: any) => c.capability_id && capIds.has(c.capability_id))
         .map((c: any) => ({
@@ -119,21 +155,25 @@ export const seedFromContent = createServerFn({ method: "POST" })
       if (claimRows.length) await supabaseAdmin.from("claims").insert(claimRows);
     }
 
-    // 5) Blogs + citations
+    // 5) Blogs + citations (upsert by slug; refresh that blog's citation legend).
     for (const b of blogs) {
       const { data: ins, error } = await supabaseAdmin
         .from("blogs")
-        .insert({
-          slug: b.slug,
-          topic_slug: b.topic_slug ?? null,
-          title: b.title,
-          summary: b.summary ?? "",
-          body_md: b.body_md ?? "",
-          status: "published",
-        })
+        .upsert(
+          {
+            slug: b.slug,
+            topic_slug: b.topic_slug ?? null,
+            title: b.title,
+            summary: b.summary ?? "",
+            body_md: b.body_md ?? "",
+            status: "published",
+          },
+          { onConflict: "slug" },
+        )
         .select("id")
         .single();
       if (error) throw new Error(`blog ${b.slug}: ${error.message}`);
+      await supabaseAdmin.from("blog_sources").delete().eq("blog_id", ins.id);
       const keys: string[] = b.cited_source_keys ?? [];
       const bsRows = keys
         .map((k, i) => {
@@ -144,10 +184,47 @@ export const seedFromContent = createServerFn({ method: "POST" })
       if (bsRows.length) await supabaseAdmin.from("blog_sources").insert(bsRows);
     }
 
+    // 5b) Designs + citations (upsert by slug; mirror blogs). Un-empties the Designer section.
+    let designCount = 0;
+    for (const [path, mod] of Object.entries(designJsons)) {
+      const d = (mod as any).default;
+      const slug = d.slug ?? path.split("/").pop()!.replace(".json", "");
+      const { data: ins, error } = await (supabaseAdmin as any)
+        .from("designs")
+        .upsert(
+          {
+            slug,
+            title: d.title ?? slug,
+            summary: d.summary ?? "",
+            body_md: d.body_md ?? "",
+            status: "published",
+          },
+          { onConflict: "slug" },
+        )
+        .select("id")
+        .single();
+      if (error) throw new Error(`design ${slug}: ${error.message}`);
+      designCount++;
+      await (supabaseAdmin as any).from("design_sources").delete().eq("design_id", ins.id);
+      const keys: string[] = d.cited_source_keys ?? [];
+      const dsRows = keys
+        .map((k, i) => {
+          const sid = slugById.get(k);
+          return sid
+            ? { design_id: ins.id, source_id: sid, label: `S${i + 1}`, position: i }
+            : null;
+        })
+        .filter(Boolean) as any[];
+      if (dsRows.length) await (supabaseAdmin as any).from("design_sources").insert(dsRows);
+    }
+
     // 6) Diagrams
     await supabaseAdmin.from("diagrams").delete().neq("slug", "__never__");
     const diagRows = diagrams.map((d: any) => {
-      const slug = d.path.split("/").pop().replace(/\.(svg|mmd)$/i, "");
+      const slug = d.path
+        .split("/")
+        .pop()
+        .replace(/\.(svg|mmd)$/i, "");
       return {
         slug,
         path: `/diagrams/${slug}.svg`,
@@ -156,7 +233,8 @@ export const seedFromContent = createServerFn({ method: "POST" })
         topic_slug: null,
       };
     });
-    if (diagRows.length) await supabaseAdmin.from("diagrams").upsert(diagRows, { onConflict: "slug" });
+    if (diagRows.length)
+      await supabaseAdmin.from("diagrams").upsert(diagRows, { onConflict: "slug" });
 
     // 7) Help docs
     await supabaseAdmin.from("help_docs").delete().neq("slug", "__never__");
@@ -173,7 +251,8 @@ export const seedFromContent = createServerFn({ method: "POST" })
         sort_order: order,
       };
     });
-    if (helpRows.length) await supabaseAdmin.from("help_docs").upsert(helpRows, { onConflict: "slug" });
+    if (helpRows.length)
+      await supabaseAdmin.from("help_docs").upsert(helpRows, { onConflict: "slug" });
 
     return {
       ok: true,
@@ -182,6 +261,7 @@ export const seedFromContent = createServerFn({ method: "POST" })
         capabilities: capRows.length,
         sources: Object.keys(sourceJsons).length,
         blogs: blogs.length,
+        designs: designCount,
         diagrams: diagRows.length,
         help: helpRows.length,
       },

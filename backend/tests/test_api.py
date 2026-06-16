@@ -137,6 +137,31 @@ def test_verify_inactive_claim_is_rejected(client):
     assert client.post(f"/claims/{cid}/verify").status_code == 409
 
 
+def test_supersede_claim_creates_append_only_version(client):
+    res = client.post("/sources/ingest", json=_payload()).json()
+    old_id = res["claims"][0]["id"]
+    r = client.post(
+        f"/claims/{old_id}/supersede",
+        json={
+            "new_text": "OneLake is represented as a single logical data lake across a Fabric tenant.",
+            "depth": 2,
+            "type": "fact",
+            "tags": ["OneLake", "Tenant"],
+        },
+    )
+    assert r.status_code == 200
+    new = r.json()
+    assert new["id"] != old_id
+    assert new["version"] == 2
+    assert new["supersedes_id"] == old_id
+    assert new["active"] is True
+    assert new["status"] == "pending"
+    chain = client.get(f"/claims/{new['id']}/history").json()
+    assert [c["id"] for c in chain] == [old_id, new["id"]]
+    assert chain[0]["active"] is False
+    assert chain[0]["status"] == "superseded"
+
+
 # ------------------------------------------------------------------- drift
 def test_reingest_same_claims_is_noop_even_reordered(client):
     client.post("/sources/ingest", json=_payload(texts=["First fact.", "Second fact."]))
@@ -278,6 +303,41 @@ def test_design_requires_cited_source_ids(client):
         json={"scenario": "s", "output_md": "x [S1]", "cited_source_ids": ["nope"]},
     )
     assert r.status_code == 400 and "unknown source" in r.json()["detail"]
+
+
+def test_design_idempotent_by_slug(client):
+    """Re-posting the same slug updates in place (no duplicate row); unchanged body is a no-op."""
+    res = client.post("/sources/ingest", json=_payload()).json()
+    body = {
+        "scenario": "s",
+        "slug": "my-design",
+        "title": "My Design",
+        "output_md": "Use OneLake [S1].",
+        "cited_source_ids": [res["source_id"]],
+    }
+    first = client.post("/designs", json=body).json()
+    assert first.get("drift") is False
+    # Same body again -> no-op, same design id, still one design.
+    again = client.post("/designs", json=body).json()
+    assert again["design_id"] == first["design_id"]
+    assert len(client.get("/designs").json()) == 1
+    # Changed body -> updates in place, still one design row.
+    changed = client.post(
+        "/designs", json={**body, "output_md": "Use the lakehouse [S1]."}
+    ).json()
+    assert changed["design_id"] == first["design_id"] and changed.get("drift") is True
+    assert len(client.get("/designs").json()) == 1
+
+
+def test_document_snapshot_persisted(client):
+    """The raw captured JSON passed as `document` is stored on the source row."""
+    from app.models import Source
+
+    body = {**_payload(), "document": {"hello": "world", "n": 1}}
+    res = client.post("/sources/ingest", json=body).json()
+    with Session(client.engine) as s:
+        src = s.get(Source, res["source_id"])
+        assert src.document == {"hello": "world", "n": 1}
 
 
 def test_validation_statuses(client):

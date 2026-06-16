@@ -24,7 +24,7 @@ claimevents (audit)     queue_items (frontend → agent ingestion)
 - **sources** — one row per approved source, keyed by a unique `slug`. Drift updates the row
   **in place** (bump `version`, refresh `content_hash`) — slug is UNIQUE, so there is no second
   source row; versioning happens at the claim level (below). Carries reader metadata
-  (`summary`, `audience`, `why_it_matters`, `takeaways`).
+  (`summary`, `audience`, `why_it_matters`, `takeaways`) and the raw captured `document` (below).
 - **claims** — one atomic, paraphrased, cited fact/pattern/anti-pattern/internal, tagged to a
   `capability_id` (FK to `capabilities`) and `depth`, pointing at its `source_id`. Versioned
   via a `supersedes_id` chain; `active` flags the current version.
@@ -99,6 +99,26 @@ audit trail and rollback surface.
 The similarity thresholds (`SAME`, `CHANGED` in `services.py`) are the tuning knobs. They use
 `difflib` for zero dependencies; for production matching, replace with embeddings + pgvector
 so semantically-equal-but-reworded claims match reliably.
+
+## Raw captured document (audit/diff) and the one-active guardrail
+
+Each `sources` / `blogs` / `designs` row carries a `document` **jsonb** column holding the full
+captured JSON exactly as imported (claims + diagram refs + cited keys), plus a `content_hash`.
+Git remains the versioned document of record; `document` is an **in-DB audit/diff snapshot** so a
+row can be compared against what was last imported without checking out the repo. The importer
+(`import_content.py`) passes the file JSON through as `document`; the backend persists it in
+`ingest_source` / `detect_drift` / `create_blog` / `create_design`. `content_hash` makes a re-import
+of an identical document a cheap no-op (designs short-circuit on it; sources/claims already did).
+
+**Guardrail (hybrid DB logic):** versioning still lives in `services.py`, but a partial unique
+index `blogs_one_active_slug ON blogs(slug) WHERE active` makes it impossible to leave two active
+rows sharing a slug regardless of writer. Sources are one-row-per-slug (UNIQUE) and designs update
+in place (UNIQUE slug, no supersedes chain), so neither needs an extra partial index. See
+`supabase/migrations/*_content_documents_and_guards.sql`.
+
+Designs are **idempotent by slug + content_hash**: re-importing an unchanged design is a no-op; a
+changed body updates the row in place and refreshes its `design_sources` citation legend. Unlike
+blogs, designs do **not** keep a supersedes chain — the slug is the single identity.
 
 ## The validation pass (services.validate_design / services.validate_blog)
 

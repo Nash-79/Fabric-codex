@@ -7,9 +7,7 @@ import type { Database } from "@/integrations/supabase/types";
 // This avoids needing the service-role key at runtime.
 async function admin() {
   const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL!;
-  const key =
-    process.env.SUPABASE_PUBLISHABLE_KEY ??
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
   return createClient<Database>(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -27,9 +25,7 @@ export const listTopics = createServerFn({ method: "GET" }).handler(async () => 
 
 export const listCapabilities = createServerFn({ method: "GET" }).handler(async () => {
   const sb = await admin();
-  const { data, error } = await sb
-    .from("capabilities")
-    .select("id,name,description,accent");
+  const { data, error } = await sb.from("capabilities").select("id,name,description,accent");
   if (error) throw new Error(error.message);
   return data ?? [];
 });
@@ -41,9 +37,21 @@ export const getTopic = createServerFn({ method: "GET" })
     const [{ data: topic }, { data: children }, { data: caps }, { data: blogs }] =
       await Promise.all([
         sb.from("topics").select("*").eq("slug", data.slug).maybeSingle(),
-        sb.from("topics").select("slug,name,description,sort_order").eq("parent_slug", data.slug).order("sort_order"),
-        sb.from("topic_capabilities").select("capability_id, capabilities(id,name,description,accent)").eq("topic_slug", data.slug),
-        sb.from("blogs").select("slug,title,summary,updated_at").eq("topic_slug", data.slug).eq("status","published").order("updated_at", { ascending: false }),
+        sb
+          .from("topics")
+          .select("slug,name,description,sort_order")
+          .eq("parent_slug", data.slug)
+          .order("sort_order"),
+        sb
+          .from("topic_capabilities")
+          .select("capability_id, capabilities(id,name,description,accent)")
+          .eq("topic_slug", data.slug),
+        sb
+          .from("blogs")
+          .select("slug,title,summary,updated_at")
+          .eq("topic_slug", data.slug)
+          .eq("status", "published")
+          .order("updated_at", { ascending: false }),
       ]);
     if (!topic) throw new Error("Topic not found");
     return {
@@ -58,7 +66,11 @@ export const getBlog = createServerFn({ method: "GET" })
   .inputValidator((d: { slug: string }) => d)
   .handler(async ({ data }) => {
     const sb = await admin();
-    const { data: blog, error } = await sb.from("blogs").select("*").eq("slug", data.slug).maybeSingle();
+    const { data: blog, error } = await sb
+      .from("blogs")
+      .select("*")
+      .eq("slug", data.slug)
+      .maybeSingle();
     if (error) throw new Error(error.message);
     if (!blog) throw new Error("Blog not found");
     const { data: cites } = await sb
@@ -66,7 +78,32 @@ export const getBlog = createServerFn({ method: "GET" })
       .select("label,position,sources(id,slug,url,title,tier,tags,summary)")
       .eq("blog_id", blog.id)
       .order("position");
-    return { blog, citations: (cites ?? []).map((c: any) => ({ label: c.label, source: c.sources })) };
+    return {
+      blog,
+      citations: (cites ?? []).map((c: any) => ({ label: c.label, source: c.sources })),
+    };
+  });
+
+export const getDesign = createServerFn({ method: "GET" })
+  .inputValidator((d: { slug: string }) => d)
+  .handler(async ({ data }) => {
+    const sb = await admin();
+    const { data: design, error } = await sb
+      .from("designs")
+      .select("*")
+      .eq("slug", data.slug)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!design) throw new Error("Design not found");
+    const { data: cites } = await (sb as any)
+      .from("design_sources")
+      .select("label,position,sources(id,slug,url,title,tier,tags,summary)")
+      .eq("design_id", (design as any).id)
+      .order("position");
+    return {
+      design,
+      citations: (cites ?? []).map((c: any) => ({ label: c.label, source: c.sources })),
+    };
   });
 
 export const listBlogs = createServerFn({ method: "GET" }).handler(async () => {
@@ -121,12 +158,34 @@ export const searchAll = createServerFn({ method: "GET" })
     if (!term) return { blogs: [], claims: [], sources: [], topics: [] };
     const like = `%${term}%`;
     const [b, c, s, t] = await Promise.all([
-      sb.from("blogs").select("slug,title,summary").or(`title.ilike.${like},summary.ilike.${like},body_md.ilike.${like}`).limit(15),
-      sb.from("claims").select("id,text,depth,capability_id,sources(slug,title,tier,url)").eq("active", true).ilike("text", like).limit(20),
-      sb.from("sources").select("slug,title,url,tier,summary").or(`title.ilike.${like},summary.ilike.${like}`).limit(15),
-      sb.from("topics").select("slug,name,description").or(`name.ilike.${like},description.ilike.${like}`).limit(10),
+      sb
+        .from("blogs")
+        .select("slug,title,summary")
+        .or(`title.ilike.${like},summary.ilike.${like},body_md.ilike.${like}`)
+        .limit(15),
+      sb
+        .from("claims")
+        .select("id,text,depth,capability_id,sources(slug,title,tier,url)")
+        .eq("active", true)
+        .ilike("text", like)
+        .limit(20),
+      sb
+        .from("sources")
+        .select("slug,title,url,tier,summary")
+        .or(`title.ilike.${like},summary.ilike.${like}`)
+        .limit(15),
+      sb
+        .from("topics")
+        .select("slug,name,description")
+        .or(`name.ilike.${like},description.ilike.${like}`)
+        .limit(10),
     ]);
-    return { blogs: b.data ?? [], claims: c.data ?? [], sources: s.data ?? [], topics: t.data ?? [] };
+    return {
+      blogs: b.data ?? [],
+      claims: c.data ?? [],
+      sources: s.data ?? [],
+      topics: t.data ?? [],
+    };
   });
 
 // Favorites
@@ -174,17 +233,31 @@ export const toggleFavorite = createServerFn({ method: "POST" })
 export const amIAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
+    const { data } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
     return { admin: !!data };
   });
 
 export const adminStats = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: isAdmin } = await context.supabase.rpc("has_role", { _user_id: context.userId, _role: "admin" });
+    const { data: isAdmin } = await context.supabase.rpc("has_role", {
+      _user_id: context.userId,
+      _role: "admin",
+    });
     if (!isAdmin) throw new Error("Forbidden");
     const sb = await admin();
-    const tables = ["topics", "capabilities", "sources", "claims", "blogs", "diagrams", "help_docs"] as const;
+    const tables = [
+      "topics",
+      "capabilities",
+      "sources",
+      "claims",
+      "blogs",
+      "diagrams",
+      "help_docs",
+    ] as const;
     const counts: Record<string, number> = {};
     for (const t of tables) {
       const { count } = await sb.from(t).select("*", { count: "exact", head: true });

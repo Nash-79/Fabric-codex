@@ -2,25 +2,35 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { getBlog } from "@/lib/atlas.functions";
+import { getDesign } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { TierBadge } from "@/components/Badges";
 
-const blogQO = (slug: string) =>
-  queryOptions({ queryKey: ["blog", slug], queryFn: () => getBlog({ data: { slug } }) });
+type Citation = {
+  label: string;
+  source?: {
+    url?: string;
+    title?: string;
+    tier?: number;
+    summary?: string;
+  };
+};
 
-export const Route = createFileRoute("/blog/$slug")({
-  head: ({ loaderData }: { loaderData?: Awaited<ReturnType<typeof getBlog>> }) => ({
+const designQO = (slug: string) =>
+  queryOptions({ queryKey: ["design", slug], queryFn: () => getDesign({ data: { slug } }) });
+
+export const Route = createFileRoute("/design/$slug")({
+  head: ({ loaderData }: { loaderData?: Awaited<ReturnType<typeof getDesign>> }) => ({
     meta: [
-      { title: loaderData ? `${loaderData.blog.title} — Fabric Atlas` : "Article — Fabric Atlas" },
-      { name: "description", content: loaderData?.blog.summary ?? "" },
-      { property: "og:title", content: loaderData?.blog.title ?? "Fabric Atlas" },
-      { property: "og:description", content: loaderData?.blog.summary ?? "" },
+      { title: loaderData ? `${loaderData.design.title} — Fabric Atlas` : "Design — Fabric Atlas" },
+      { name: "description", content: loaderData?.design.summary ?? "" },
+      { property: "og:title", content: loaderData?.design.title ?? "Fabric Atlas" },
+      { property: "og:description", content: loaderData?.design.summary ?? "" },
     ],
   }),
   loader: async ({ context, params }) => {
     try {
-      return await context.queryClient.ensureQueryData(blogQO(params.slug));
+      return await context.queryClient.ensureQueryData(designQO(params.slug));
     } catch {
       throw notFound();
     }
@@ -37,36 +47,33 @@ export const Route = createFileRoute("/blog/$slug")({
   notFoundComponent: () => (
     <div className="min-h-screen bg-[#070b16] p-10 text-white">
       <SiteHeader />
-      <p className="mt-6">Article not found.</p>
-      <Link to="/topics" className="mt-3 inline-block underline">
-        Back to topics
+      <p className="mt-6">Design not found.</p>
+      <Link to="/designs" className="mt-3 inline-block underline">
+        Back to designs
       </Link>
     </div>
   ),
-  component: BlogPage,
+  component: DesignPage,
 });
 
-function BlogPage() {
+function DesignPage() {
   const { slug } = Route.useParams();
-  const { data } = useSuspenseQuery(blogQO(slug));
-  const { blog, citations } = data;
-  const citeMap = new Map(citations.map((c) => [c.label, c.source]));
+  const { data } = useSuspenseQuery(designQO(slug));
+  const { design, citations } = data;
 
-  // Replace [S1] / [S1][S2] inline citations with clickable superscripts.
-  const renderedBody = blog.body_md.replace(
-    /\[S(\d+)\]/g,
-    (_m, n) => ` <sup id="cite-${n}"><a href="#src-${n}" class="cite">[S${n}]</a></sup>`,
-  );
+  const renderedBody = design.body_md.replace(/\[S(\d+)\]/g, (_m, n) => `[S${n}](#src-${n})`);
 
   return (
     <div className="min-h-screen bg-[#070b16] text-white">
       <SiteHeader />
       <article className="mx-auto max-w-3xl px-6 py-12">
-        <Link to="/topics" className="text-xs text-white/55 hover:text-white">
-          ← Topics
+        <Link to="/designs" className="text-xs text-white/55 hover:text-white">
+          ← Designs
         </Link>
-        <h1 className="mt-3 text-4xl font-semibold tracking-tight">{blog.title}</h1>
-        <p className="mt-3 text-lg leading-relaxed text-white/70">{blog.summary}</p>
+        <h1 className="mt-3 text-4xl font-semibold tracking-tight">{design.title}</h1>
+        {design.summary && (
+          <p className="mt-3 text-lg leading-relaxed text-white/70">{design.summary}</p>
+        )}
 
         <div className="prose prose-invert mt-8 max-w-none prose-headings:tracking-tight prose-a:text-teal-300 prose-img:rounded-xl prose-img:border prose-img:border-white/10">
           <ReactMarkdown
@@ -77,13 +84,14 @@ function BlogPage() {
                 : url
             }
             components={{
-              sup: ({ children, ...rest }) => <sup {...rest}>{children}</sup>,
               a: ({ href, children, ...rest }) => {
                 if (href?.startsWith("#src-")) {
                   return (
-                    <a href={href} className="text-teal-300 no-underline hover:underline">
-                      {children}
-                    </a>
+                    <sup>
+                      <a href={href} className="text-teal-300 no-underline hover:underline">
+                        {children}
+                      </a>
+                    </sup>
                   );
                 }
                 return (
@@ -104,7 +112,7 @@ function BlogPage() {
               Sources
             </h2>
             <ol className="mt-4 space-y-3">
-              {citations.map((c, i) => {
+              {citations.map((c: Citation, i: number) => {
                 const n = i + 1;
                 return (
                   <li

@@ -14,7 +14,9 @@ export const Route = createFileRoute("/help")({
     <div className="min-h-screen bg-[#070b16] p-10 text-white">
       <SiteHeader />
       <p className="mt-6 text-rose-300">{error.message}</p>
-      <button className="mt-3 underline" onClick={reset}>Retry</button>
+      <button className="mt-3 underline" onClick={reset}>
+        Retry
+      </button>
     </div>
   ),
   notFoundComponent: () => <div className="p-10 text-white">Not found.</div>,

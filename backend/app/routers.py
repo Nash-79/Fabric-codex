@@ -32,6 +32,7 @@ class IngestIn(BaseModel):
     content: str = ""  # used only in LLM_MODE=api
     claims: Optional[list[dict]] = None  # local mode: agent-extracted claims
     assets: list[dict] = []
+    document: dict = {}  # full captured JSON snapshot, persisted for audit/diff
 
 
 class DriftIn(BaseModel):
@@ -51,10 +52,12 @@ class DesignCreateIn(BaseModel):  # local mode: agent-authored design
     scenario: str
     output_md: str
     title: str = ""
+    slug: str = ""
     constraints: dict = {}
     tags: list[str] = []
     cited_source_ids: Optional[list[str]] = None
     assets: list[dict] = []
+    document: dict = {}  # full captured JSON snapshot, persisted for audit/diff
 
 
 class DesignGenerateIn(BaseModel):  # api mode
@@ -88,6 +91,13 @@ class LessonIn(BaseModel):
 class BulkClaimIn(BaseModel):
     source_id: Optional[str] = None
     claim_ids: Optional[list[str]] = None
+
+
+class ClaimSupersedeIn(BaseModel):
+    new_text: str
+    depth: Optional[int] = None
+    type: Optional[str] = None
+    tags: Optional[list[str]] = None
 
 
 class QueueSubmitIn(BaseModel):
@@ -136,6 +146,7 @@ class BlogCreateIn(BaseModel):
     tags: list[str] = []
     depth_levels: list[int] = []
     assets: list[dict] = []
+    document: dict = {}  # full captured JSON snapshot, persisted for audit/diff
 
 
 class AdvisorChatIn(BaseModel):
@@ -162,6 +173,7 @@ def ingest(body: IngestIn, session: Session = Depends(get_session)):
             audience=body.audience,
             why_it_matters=body.why_it_matters,
             takeaways=(body.takeaways if "takeaways" in fields else None),
+            document=body.document or None,
         )
     except llm.LLMUnavailable as e:
         raise HTTPException(503, str(e))
@@ -298,6 +310,28 @@ def dismiss(claim_id: str, session: Session = Depends(get_session)):
     return services._claim_dict(c)
 
 
+@router.post("/claims/{claim_id}/supersede")
+def supersede(
+    claim_id: str, body: ClaimSupersedeIn, session: Session = Depends(get_session)
+):
+    """Append-only claim text change. Creates a new pending version and marks the
+    prior active claim superseded; the old row is never edited in place."""
+    try:
+        c = services.supersede_claim_text(
+            session,
+            claim_id,
+            body.new_text,
+            depth=body.depth,
+            ctype=body.type,
+            tags=body.tags,
+        )
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    if not c:
+        raise HTTPException(404, "Claim not found.")
+    return services._claim_dict(c)
+
+
 class RevertIn(BaseModel):
     claim_ids: list[str]
 
@@ -380,6 +414,8 @@ def design_create(body: DesignCreateIn, session: Session = Depends(get_session))
             cited_source_ids=body.cited_source_ids,
             assets=body.assets,
             title=body.title,
+            slug=body.slug,
+            document=body.document or None,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))
@@ -604,6 +640,7 @@ def blog_create(body: BlogCreateIn, session: Session = Depends(get_session)):
             tags=body.tags,
             depth_levels=body.depth_levels,
             assets=body.assets,
+            document=body.document or None,
         )
     except ValueError as e:
         raise HTTPException(400, str(e))

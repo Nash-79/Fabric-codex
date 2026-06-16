@@ -23,6 +23,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCES = ROOT / "content" / "sources"
 BLOGS = ROOT / "content" / "blogs"
+DESIGNS = ROOT / "content" / "designs"
 TOPICS_FILE = ROOT / "content" / "topics.json"
 ASSET_MANIFEST = ROOT / "content" / "diagrams" / "assets.json"
 
@@ -227,6 +228,7 @@ def replay_blogs(base: str, dry_run: bool) -> tuple[int, int, int]:
             "tags": b.get("tags", []),
             "depth_levels": b.get("depth_levels", []),
             "assets": b.get("assets", []),
+            "document": b,  # persist the full captured JSON for audit/diff
         }
         try:
             res = post(base, "/blogs", payload)
@@ -234,6 +236,65 @@ def replay_blogs(base: str, dry_run: bool) -> tuple[int, int, int]:
                 f"  OK   blog {f.name}: v{res.get('version')} '{res.get('title')}'"
                 " — run /validate-blog or the validation-reviewer before sharing"
             )
+            added += 1
+        except Exception as e:  # noqa: BLE001
+            print(f"  FAIL {f.name}: {e}")
+            failures += 1
+    return added, skipped, failures
+
+
+def replay_designs(base: str, dry_run: bool) -> tuple[int, int, int]:
+    """Replay solution designs from content/designs/*.json. Like blogs, the files store
+    portable cited_source_keys resolved to ids here. The backend (services.create_design)
+    is idempotent by slug + content_hash: an unchanged design is a no-op, a changed body
+    updates the row in place. Designs cite sources via the design_sources junction."""
+    files = sorted(DESIGNS.glob("*.json")) if DESIGNS.is_dir() else []
+    if not files:
+        return 0, 0, 0
+    try:
+        sources = {
+            s["source_key"]: s["id"] for s in get(base, "/sources") if s.get("active")
+        }
+    except Exception:  # noqa: BLE001
+        sources = {}
+    added = skipped = failures = 0
+    for f in files:
+        try:
+            d = json.loads(f.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as e:
+            print(f"  FAIL {f.name}: invalid JSON ({e})")
+            failures += 1
+            continue
+        if not d.get("cited_source_keys"):
+            print(
+                f"  WARN {f.name}: design has no cited_source_keys — the server will reject it"
+            )
+        if dry_run:
+            print(f"  DRY  design {f.name}: '{d.get('title')}'")
+            added += 1
+            continue
+        cited, missing = [], []
+        for key in d.get("cited_source_keys", []):
+            (cited if key in sources else missing).append(sources.get(key, key))
+        if missing:
+            print(f"  FAIL {f.name}: cited source key(s) not on server: {missing}")
+            failures += 1
+            continue
+        payload = {
+            "slug": d.get("slug") or f.stem,
+            "title": d.get("title", ""),
+            "scenario": d.get("scenario", ""),
+            "output_md": d.get("body_md", ""),
+            "constraints": d.get("constraints", {}),
+            "cited_source_ids": cited,
+            "tags": d.get("tags", []),
+            "assets": d.get("assets", []),
+            "document": d,  # persist the full captured JSON for audit/diff
+        }
+        try:
+            res = post(base, "/designs", payload)
+            state = "drift" if res.get("drift") else "ok"
+            print(f"  OK   design {f.name}: {state} '{d.get('title')}'")
             added += 1
         except Exception as e:  # noqa: BLE001
             print(f"  FAIL {f.name}: {e}")
@@ -295,7 +356,8 @@ def main() -> int:
             total_assets += assets
             continue
         try:
-            res = post(args.base, "/sources/ingest", payload)
+            # Persist the full captured JSON alongside the normalized claims (audit/diff).
+            res = post(args.base, "/sources/ingest", {**payload, "document": payload})
         except Exception as e:  # noqa: BLE001
             print(f"  FAIL {f.name}: {e}")
             failures += 1
@@ -327,6 +389,12 @@ def main() -> int:
     failures += b_failures
     if b_added or b_skipped:
         print(f"  Blogs: {b_added} published, {b_skipped} unchanged.")
+
+    # Designs also cite sources; replay after sources exist.
+    d_added, d_skipped, d_failures = replay_designs(args.base, args.dry_run)
+    failures += d_failures
+    if d_added or d_skipped:
+        print(f"  Designs: {d_added} published, {d_skipped} unchanged.")
 
     print(
         f"\nPublished {len(files)} source file(s): ~{total_claims} claims, ~{total_assets} assets"

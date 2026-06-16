@@ -12,7 +12,10 @@ export const Route = createFileRoute("/sources")({
   head: () => ({
     meta: [
       { title: "Sources — Fabric Atlas" },
-      { name: "description", content: "Approved sources backing every claim in the Fabric Atlas, scored by trust tier." },
+      {
+        name: "description",
+        content: "Approved sources backing every claim in the Fabric Atlas, scored by trust tier.",
+      },
     ],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(sourcesQO),
@@ -20,7 +23,9 @@ export const Route = createFileRoute("/sources")({
     <div className="min-h-screen bg-[#070b16] p-10 text-white">
       <SiteHeader />
       <p className="mt-6 text-rose-300">{error.message}</p>
-      <button className="mt-3 underline" onClick={reset}>Retry</button>
+      <button className="mt-3 underline" onClick={reset}>
+        Retry
+      </button>
     </div>
   ),
   notFoundComponent: () => <div className="p-10 text-white">Not found.</div>,
@@ -36,7 +41,11 @@ function SourcesPage() {
     return sources.filter((s) => {
       if (tier && s.tier !== tier) return false;
       if (!term) return true;
-      return s.title.toLowerCase().includes(term) || s.summary.toLowerCase().includes(term) || s.tags?.some((t) => t.toLowerCase().includes(term));
+      return (
+        s.title.toLowerCase().includes(term) ||
+        s.summary.toLowerCase().includes(term) ||
+        s.tags?.some((t) => t.toLowerCase().includes(term))
+      );
     });
   }, [sources, q, tier]);
 
@@ -44,9 +53,13 @@ function SourcesPage() {
     <div className="min-h-screen bg-[#070b16] text-white">
       <SiteHeader />
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">Approved sources</div>
+        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
+          Approved sources
+        </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">Sources</h1>
-        <p className="mt-2 max-w-2xl text-sm text-white/55">Every claim cites one of these. Tier 1 = Microsoft Learn, 6 = unknown.</p>
+        <p className="mt-2 max-w-2xl text-sm text-white/55">
+          Every claim cites one of these. Tier 1 = Microsoft Learn, 6 = unknown.
+        </p>
 
         <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center">
           <Input
@@ -76,7 +89,12 @@ function SourcesPage() {
           {filtered.map((s) => (
             <li key={s.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
               <div className="flex items-start justify-between gap-3">
-                <a href={s.url} target="_blank" rel="noreferrer" className="text-sm font-semibold text-white hover:text-teal-300">
+                <a
+                  href={s.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm font-semibold text-white hover:text-teal-300"
+                >
                   {s.title}
                 </a>
                 <TierBadge tier={s.tier} />
@@ -85,7 +103,12 @@ function SourcesPage() {
               {s.tags?.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {s.tags.slice(0, 8).map((t) => (
-                    <span key={t} className="rounded border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-white/55">{t}</span>
+                    <span
+                      key={t}
+                      className="rounded border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-white/55"
+                    >
+                      {t}
+                    </span>
                   ))}
                 </div>
               )}

@@ -8,7 +8,8 @@ This is the "publish" step for the Supabase era. It assumes:
 
 It then:
   - checks the server is reachable,
-  - replays content/ (topics -> sources+claims -> diagrams -> blogs) via import_content.py,
+  - mirrors content/diagrams/* into public/diagrams so the reader can serve them statically,
+  - replays content/ (topics -> sources+claims -> diagrams -> blogs -> designs) via import_content.py,
   - rebuilds the Postgres tsvector search index (POST /search/rebuild),
   - prints a per-table summary.
 
@@ -22,6 +23,7 @@ Usage:
 """
 import argparse
 import json
+import shutil
 import sys
 import urllib.request
 from pathlib import Path
@@ -30,6 +32,27 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 import import_content  # noqa: E402  — reuse the idempotent replay logic
+
+CONTENT_DIAGRAMS = ROOT / "content" / "diagrams"
+PUBLIC_DIAGRAMS = ROOT / "public" / "diagrams"
+
+
+def sync_diagrams() -> int:
+    """Mirror content/diagrams/*.svg|*.mmd into public/diagrams so the TanStack reader can
+    serve them as static files (blog/design markdown rewrites /content/diagrams/ -> /diagrams/).
+    The diagrams table stores the /diagrams/<slug>.svg path; the file must exist there."""
+    if not CONTENT_DIAGRAMS.is_dir():
+        return 0
+    PUBLIC_DIAGRAMS.mkdir(parents=True, exist_ok=True)
+    copied = 0
+    for f in CONTENT_DIAGRAMS.glob("*"):
+        if f.suffix.lower() not in {".svg", ".mmd"}:
+            continue
+        dest = PUBLIC_DIAGRAMS / f.name
+        if not dest.exists() or dest.read_bytes() != f.read_bytes():
+            shutil.copy2(f, dest)
+            copied += 1
+    return copied
 
 
 def _get(base: str, path: str):
@@ -68,6 +91,7 @@ def summarize(base: str) -> dict:
         counts["sources"] = len(_get(base, "/sources"))
         counts["topics"] = len(_get(base, "/topics"))
         counts["blogs"] = len(_get(base, "/blogs"))
+        counts["designs"] = len(_get(base, "/designs"))
         counts["claims_verified"] = len(_get(base, "/claims?status=verified"))
         counts["claims_pending"] = len(_get(base, "/claims?status=pending"))
         cov = _get(base, "/coverage")
@@ -86,6 +110,13 @@ def main() -> int:
     print(f"== Migrate content -> Supabase via {args.base} ==")
     if not args.dry_run and not _reachable(args.base):
         return 2
+
+    # 0. Mirror diagrams into public/ so the reader can serve them as static files.
+    print("\n-- Syncing diagrams content/ -> public/ --")
+    if args.dry_run:
+        print("  (dry run — skipped)")
+    else:
+        print(f"  {sync_diagrams()} diagram file(s) copied/updated into public/diagrams.")
 
     # 1. Replay all content (reuses import_content's main, which is idempotent).
     print("\n-- Replaying content/ --")

@@ -144,6 +144,11 @@ class Source(SQLModel, table=True):
     why_it_matters: str = ""
     takeaways: list[str] = Field(default_factory=list, sa_column=_str_array())
     content_hash: str = ""
+    # Raw captured JSON snapshot (claims + diagram refs) for in-DB audit/diff.
+    document: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default="{}"),
+    )
     tags: list[str] = Field(default_factory=list, sa_column=_str_array())
     active: bool = True
     created_at: datetime = Field(default_factory=_now)
@@ -217,6 +222,12 @@ class Blog(SQLModel, table=True):
     ready_to_share: bool = False
     supersedes_id: Optional[str] = Field(default=None, foreign_key="blogs.id")
     active: bool = True
+    content_hash: str = ""
+    # Raw captured JSON snapshot (body + cited keys + diagram refs) for audit/diff.
+    document: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default="{}"),
+    )
     created_at: datetime = Field(default_factory=_now)
 
 
@@ -248,6 +259,12 @@ class Design(SQLModel, table=True):
     status: str = "draft"
     confidence: Optional[float] = None
     ready_to_share: bool = False
+    content_hash: str = ""
+    # Raw captured JSON snapshot (scenario + body + cited keys + diagram refs) for audit/diff.
+    document: dict = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False, server_default="{}"),
+    )
     created_at: datetime = Field(default_factory=_now)
 
 
