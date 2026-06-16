@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_audit_events: {
+        Row: {
+          action: string
+          actor_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          target_id: string
+          target_type: string
+        }
+        Insert: {
+          action: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          target_id?: string
+          target_type?: string
+        }
+        Update: {
+          action?: string
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          target_id?: string
+          target_type?: string
+        }
+        Relationships: []
+      }
       assets: {
         Row: {
           attribution: string
@@ -134,8 +164,10 @@ export type Database = {
         Row: {
           active: boolean
           body_md: string
+          content_hash: string
           created_at: string
           depth_levels: number[]
+          document: Json
           id: string
           ready_to_share: boolean
           slug: string
@@ -152,8 +184,10 @@ export type Database = {
         Insert: {
           active?: boolean
           body_md?: string
+          content_hash?: string
           created_at?: string
           depth_levels?: number[]
+          document?: Json
           id?: string
           ready_to_share?: boolean
           slug: string
@@ -170,8 +204,10 @@ export type Database = {
         Update: {
           active?: boolean
           body_md?: string
+          content_hash?: string
           created_at?: string
           depth_levels?: number[]
+          document?: Json
           id?: string
           ready_to_share?: boolean
           slug?: string
@@ -378,7 +414,9 @@ export type Database = {
           body_md: string
           confidence: number | null
           constraints: Json
+          content_hash: string
           created_at: string
+          document: Json
           id: string
           ready_to_share: boolean
           scenario: string
@@ -393,7 +431,9 @@ export type Database = {
           body_md?: string
           confidence?: number | null
           constraints?: Json
+          content_hash?: string
           created_at?: string
+          document?: Json
           id?: string
           ready_to_share?: boolean
           scenario?: string
@@ -408,7 +448,9 @@ export type Database = {
           body_md?: string
           confidence?: number | null
           constraints?: Json
+          content_hash?: string
           created_at?: string
+          document?: Json
           id?: string
           ready_to_share?: boolean
           scenario?: string
@@ -582,24 +624,39 @@ export type Database = {
       }
       profiles: {
         Row: {
+          approved_at: string | null
+          approved_by: string | null
           avatar_url: string | null
           created_at: string
           display_name: string | null
           id: string
+          status: string
+          suspended_at: string | null
+          suspended_by: string | null
           updated_at: string
         }
         Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
           id: string
+          status?: string
+          suspended_at?: string | null
+          suspended_by?: string | null
           updated_at?: string
         }
         Update: {
+          approved_at?: string | null
+          approved_by?: string | null
           avatar_url?: string | null
           created_at?: string
           display_name?: string | null
           id?: string
+          status?: string
+          suspended_at?: string | null
+          suspended_by?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -669,6 +726,7 @@ export type Database = {
           audience: string
           content_hash: string
           created_at: string
+          document: Json
           id: string
           slug: string
           summary: string
@@ -685,6 +743,7 @@ export type Database = {
           audience?: string
           content_hash?: string
           created_at?: string
+          document?: Json
           id?: string
           slug: string
           summary?: string
@@ -701,6 +760,7 @@ export type Database = {
           audience?: string
           content_hash?: string
           created_at?: string
+          document?: Json
           id?: string
           slug?: string
           summary?: string
@@ -785,6 +845,42 @@ export type Database = {
           },
         ]
       }
+      user_invitations: {
+        Row: {
+          accepted_at: string | null
+          accepted_user_id: string | null
+          created_at: string
+          email: string
+          id: string
+          intended_role: Database["public"]["Enums"]["app_role"]
+          invited_by: string | null
+          revoked_at: string | null
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          accepted_user_id?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          intended_role?: Database["public"]["Enums"]["app_role"]
+          invited_by?: string | null
+          revoked_at?: string | null
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          accepted_user_id?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          intended_role?: Database["public"]["Enums"]["app_role"]
+          invited_by?: string | null
+          revoked_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -849,6 +945,34 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_approve_user: {
+        Args: {
+          _roles?: Database["public"]["Enums"]["app_role"][]
+          _user_id: string
+        }
+        Returns: undefined
+      }
+      admin_record_event: {
+        Args: {
+          _action: string
+          _metadata?: Json
+          _target_id?: string
+          _target_type?: string
+        }
+        Returns: string
+      }
+      admin_set_user_roles: {
+        Args: {
+          _roles: Database["public"]["Enums"]["app_role"][]
+          _user_id: string
+        }
+        Returns: undefined
+      }
+      admin_suspend_user: { Args: { _user_id: string }; Returns: undefined }
+      current_user_has_role: {
+        Args: { _role: Database["public"]["Enums"]["app_role"] }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
