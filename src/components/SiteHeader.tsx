@@ -57,7 +57,7 @@ export function SiteHeader() {
           {NAV.map((n) => (
             <Link
               key={n.to}
-              to={n.to}
+              to={n.to as "/"}
               className="rounded-md px-2.5 py-1.5 text-sm text-white/65 transition hover:bg-white/5 hover:text-white"
               activeProps={{ className: "bg-white/10 text-white" }}
               activeOptions={{ exact: n.exact ?? false }}
