@@ -94,6 +94,109 @@ export type Database = {
           },
         ]
       }
+      admin_audit_events: {
+        Row: {
+          action: string;
+          actor_id: string | null;
+          created_at: string;
+          id: string;
+          metadata: Json;
+          target_id: string;
+          target_type: string;
+        };
+        Insert: {
+          action: string;
+          actor_id?: string | null;
+          created_at?: string;
+          id?: string;
+          metadata?: Json;
+          target_id?: string;
+          target_type?: string;
+        };
+        Update: {
+          action?: string;
+          actor_id?: string | null;
+          created_at?: string;
+          id?: string;
+          metadata?: Json;
+          target_id?: string;
+          target_type?: string;
+        };
+        Relationships: [];
+      };
+      assets: {
+        Row: {
+          attribution: string;
+          blog_id: string | null;
+          capability_id: string | null;
+          caption: string;
+          claim_id: string | null;
+          created_at: string;
+          design_id: string | null;
+          id: string;
+          kind: string;
+          license_note: string;
+          mime: string;
+          path: string;
+          source_id: string | null;
+          url: string;
+        };
+        Insert: {
+          attribution?: string;
+          blog_id?: string | null;
+          capability_id?: string | null;
+          caption?: string;
+          claim_id?: string | null;
+          created_at?: string;
+          design_id?: string | null;
+          id?: string;
+          kind?: string;
+          license_note?: string;
+          mime?: string;
+          path?: string;
+          source_id?: string | null;
+          url?: string;
+        };
+        Update: {
+          attribution?: string;
+          blog_id?: string | null;
+          capability_id?: string | null;
+          caption?: string;
+          claim_id?: string | null;
+          created_at?: string;
+          design_id?: string | null;
+          id?: string;
+          kind?: string;
+          license_note?: string;
+          mime?: string;
+          path?: string;
+          source_id?: string | null;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "assets_blog_id_fkey";
+            columns: ["blog_id"];
+            isOneToOne: false;
+            referencedRelation: "blogs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "assets_design_id_fkey";
+            columns: ["design_id"];
+            isOneToOne: false;
+            referencedRelation: "designs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "assets_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       blog_sources: {
         Row: {
           blog_id: string
@@ -132,6 +235,7 @@ export type Database = {
       }
       blogs: {
         Row: {
+<<<<<<< HEAD
           active: boolean
           body_md: string
           created_at: string
@@ -192,6 +296,81 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "blogs"
             referencedColumns: ["id"]
+=======
+          body_md: string;
+          created_at: string;
+          id: string;
+          slug: string;
+          status: string;
+          summary: string;
+          title: string;
+          topic_slug: string | null;
+          updated_at: string;
+          validation_confidence: number | null;
+          version: number;
+          active: boolean;
+          content_hash: string;
+          depth_levels: number[];
+          document: Json;
+          ready_to_share: boolean;
+          supersedes_id: string | null;
+          tags: string[];
+        };
+        Insert: {
+          body_md?: string;
+          created_at?: string;
+          id?: string;
+          slug: string;
+          status?: string;
+          summary?: string;
+          title: string;
+          topic_slug?: string | null;
+          updated_at?: string;
+          validation_confidence?: number | null;
+          version?: number;
+          active?: boolean;
+          content_hash?: string;
+          depth_levels?: number[];
+          document?: Json;
+          ready_to_share?: boolean;
+          supersedes_id?: string | null;
+          tags?: string[];
+        };
+        Update: {
+          body_md?: string;
+          created_at?: string;
+          id?: string;
+          slug?: string;
+          status?: string;
+          summary?: string;
+          title?: string;
+          topic_slug?: string | null;
+          updated_at?: string;
+          validation_confidence?: number | null;
+          version?: number;
+          active?: boolean;
+          content_hash?: string;
+          depth_levels?: number[];
+          document?: Json;
+          ready_to_share?: boolean;
+          supersedes_id?: string | null;
+          tags?: string[];
+        };
+        Relationships: [
+          {
+            foreignKeyName: "blogs_supersedes_id_fkey";
+            columns: ["supersedes_id"];
+            isOneToOne: false;
+            referencedRelation: "blogs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "blogs_topic_slug_fkey";
+            columns: ["topic_slug"];
+            isOneToOne: false;
+            referencedRelation: "topics";
+            referencedColumns: ["slug"];
+>>>>>>> wip-supabase-types
           },
           {
             foreignKeyName: "blogs_topic_slug_fkey"
@@ -218,6 +397,7 @@ export type Database = {
           name: string
         }
         Update: {
+<<<<<<< HEAD
           accent?: string
           created_at?: string
           description?: string
@@ -313,6 +493,103 @@ export type Database = {
           type?: string
           version?: number
         }
+=======
+          accent?: string;
+          created_at?: string;
+          description?: string;
+          id?: string;
+          name?: string;
+        };
+        Relationships: [];
+      };
+      claimevents: {
+        Row: {
+          action: string;
+          actioned_at: string;
+          capability_id: string;
+          claim_id: string | null;
+          id: string;
+          new_status: string;
+          prev_status: string;
+          text_snippet: string;
+        };
+        Insert: {
+          action?: string;
+          actioned_at?: string;
+          capability_id?: string;
+          claim_id?: string | null;
+          id?: string;
+          new_status?: string;
+          prev_status?: string;
+          text_snippet?: string;
+        };
+        Update: {
+          action?: string;
+          actioned_at?: string;
+          capability_id?: string;
+          claim_id?: string | null;
+          id?: string;
+          new_status?: string;
+          prev_status?: string;
+          text_snippet?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "claimevents_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "claims";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      claims: {
+        Row: {
+          active: boolean;
+          capability_id: string;
+          confidence: number;
+          created_at: string;
+          depth: number;
+          id: string;
+          source_id: string;
+          status: string;
+          supersedes_id: string | null;
+          tags: string[];
+          text: string;
+          type: string;
+          version: number;
+        };
+        Insert: {
+          active?: boolean;
+          capability_id: string;
+          confidence?: number;
+          created_at?: string;
+          depth: number;
+          id?: string;
+          source_id: string;
+          status?: string;
+          supersedes_id?: string | null;
+          tags?: string[];
+          text: string;
+          type?: string;
+          version?: number;
+        };
+        Update: {
+          active?: boolean;
+          capability_id?: string;
+          confidence?: number;
+          created_at?: string;
+          depth?: number;
+          id?: string;
+          source_id?: string;
+          status?: string;
+          supersedes_id?: string | null;
+          tags?: string[];
+          text?: string;
+          type?: string;
+          version?: number;
+        };
+>>>>>>> wip-supabase-types
         Relationships: [
           {
             foreignKeyName: "claims_capability_id_fkey"
@@ -335,6 +612,7 @@ export type Database = {
             referencedRelation: "claims"
             referencedColumns: ["id"]
           },
+<<<<<<< HEAD
         ]
       }
       design_sources: {
@@ -421,6 +699,100 @@ export type Database = {
         }
         Relationships: []
       }
+=======
+        ];
+      };
+      design_sources: {
+        Row: {
+          design_id: string;
+          label: string;
+          position: number;
+          source_id: string;
+        };
+        Insert: {
+          design_id: string;
+          label: string;
+          position?: number;
+          source_id: string;
+        };
+        Update: {
+          design_id?: string;
+          label?: string;
+          position?: number;
+          source_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "design_sources_design_id_fkey";
+            columns: ["design_id"];
+            isOneToOne: false;
+            referencedRelation: "designs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "design_sources_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      designs: {
+        Row: {
+          body_md: string;
+          confidence: number | null;
+          constraints: Json;
+          content_hash: string;
+          created_at: string;
+          document: Json;
+          id: string;
+          ready_to_share: boolean;
+          scenario: string;
+          slug: string;
+          status: string;
+          summary: string | null;
+          tags: string[];
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          body_md?: string;
+          confidence?: number | null;
+          constraints?: Json;
+          content_hash?: string;
+          created_at?: string;
+          document?: Json;
+          id?: string;
+          ready_to_share?: boolean;
+          scenario?: string;
+          slug: string;
+          status?: string;
+          summary?: string | null;
+          tags?: string[];
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          body_md?: string;
+          confidence?: number | null;
+          constraints?: Json;
+          content_hash?: string;
+          created_at?: string;
+          document?: Json;
+          id?: string;
+          ready_to_share?: boolean;
+          scenario?: string;
+          slug?: string;
+          status?: string;
+          summary?: string | null;
+          tags?: string[];
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+>>>>>>> wip-supabase-types
       diagrams: {
         Row: {
           caption: string
@@ -606,6 +978,7 @@ export type Database = {
       }
       queue_items: {
         Row: {
+<<<<<<< HEAD
           claimed_at: string | null
           created_at: string
           error: string
@@ -714,6 +1087,128 @@ export type Database = {
         }
         Relationships: []
       }
+=======
+          claimed_at: string | null;
+          created_at: string;
+          error: string;
+          id: string;
+          kind: string;
+          note: string | null;
+          notes: string;
+          result_source_id: string | null;
+          scheduled_at: string | null;
+          status: string;
+          submitted_by: string | null;
+          tags: string[];
+          target_slug: string | null;
+          tier: number;
+          title: string;
+          updated_at: string;
+          url: string;
+        };
+        Insert: {
+          claimed_at?: string | null;
+          created_at?: string;
+          error?: string;
+          id?: string;
+          kind?: string;
+          note?: string | null;
+          notes?: string;
+          result_source_id?: string | null;
+          scheduled_at?: string | null;
+          status?: string;
+          submitted_by?: string | null;
+          tags?: string[];
+          target_slug?: string | null;
+          tier?: number;
+          title?: string;
+          updated_at?: string;
+          url: string;
+        };
+        Update: {
+          claimed_at?: string | null;
+          created_at?: string;
+          error?: string;
+          id?: string;
+          kind?: string;
+          note?: string | null;
+          notes?: string;
+          result_source_id?: string | null;
+          scheduled_at?: string | null;
+          status?: string;
+          submitted_by?: string | null;
+          tags?: string[];
+          target_slug?: string | null;
+          tier?: number;
+          title?: string;
+          updated_at?: string;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "queue_items_result_source_id_fkey";
+            columns: ["result_source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      sources: {
+        Row: {
+          active: boolean;
+          audience: string;
+          content_hash: string;
+          created_at: string;
+          document: Json;
+          id: string;
+          slug: string;
+          summary: string;
+          tags: string[];
+          takeaways: string[];
+          tier: number;
+          title: string;
+          url: string;
+          version: number;
+          why_it_matters: string;
+        };
+        Insert: {
+          active?: boolean;
+          audience?: string;
+          content_hash?: string;
+          created_at?: string;
+          document?: Json;
+          id?: string;
+          slug: string;
+          summary?: string;
+          tags?: string[];
+          takeaways?: string[];
+          tier: number;
+          title: string;
+          url: string;
+          version?: number;
+          why_it_matters?: string;
+        };
+        Update: {
+          active?: boolean;
+          audience?: string;
+          content_hash?: string;
+          created_at?: string;
+          document?: Json;
+          id?: string;
+          slug?: string;
+          summary?: string;
+          tags?: string[];
+          takeaways?: string[];
+          tier?: number;
+          title?: string;
+          url?: string;
+          version?: number;
+          why_it_matters?: string;
+        };
+        Relationships: [];
+      };
+>>>>>>> wip-supabase-types
       topic_capabilities: {
         Row: {
           capability_id: string
@@ -746,6 +1241,7 @@ export type Database = {
       }
       topics: {
         Row: {
+<<<<<<< HEAD
           active: boolean
           created_at: string
           description: string
@@ -775,6 +1271,37 @@ export type Database = {
           sort_order?: number
           tags?: string[]
         }
+=======
+          active: boolean;
+          created_at: string;
+          description: string;
+          name: string;
+          parent_slug: string | null;
+          slug: string;
+          sort_order: number;
+          tags: string[];
+        };
+        Insert: {
+          active?: boolean;
+          created_at?: string;
+          description?: string;
+          name: string;
+          parent_slug?: string | null;
+          slug: string;
+          sort_order?: number;
+          tags?: string[];
+        };
+        Update: {
+          active?: boolean;
+          created_at?: string;
+          description?: string;
+          name?: string;
+          parent_slug?: string | null;
+          slug?: string;
+          sort_order?: number;
+          tags?: string[];
+        };
+>>>>>>> wip-supabase-types
         Relationships: [
           {
             foreignKeyName: "topics_parent_slug_fkey"
