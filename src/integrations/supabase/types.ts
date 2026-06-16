@@ -8,6 +8,109 @@ export type Database = {
   };
   public: {
     Tables: {
+      admin_audit_events: {
+        Row: {
+          action: string;
+          actor_id: string | null;
+          created_at: string;
+          id: string;
+          metadata: Json;
+          target_id: string;
+          target_type: string;
+        };
+        Insert: {
+          action: string;
+          actor_id?: string | null;
+          created_at?: string;
+          id?: string;
+          metadata?: Json;
+          target_id?: string;
+          target_type?: string;
+        };
+        Update: {
+          action?: string;
+          actor_id?: string | null;
+          created_at?: string;
+          id?: string;
+          metadata?: Json;
+          target_id?: string;
+          target_type?: string;
+        };
+        Relationships: [];
+      };
+      assets: {
+        Row: {
+          attribution: string;
+          blog_id: string | null;
+          capability_id: string | null;
+          caption: string;
+          claim_id: string | null;
+          created_at: string;
+          design_id: string | null;
+          id: string;
+          kind: string;
+          license_note: string;
+          mime: string;
+          path: string;
+          source_id: string | null;
+          url: string;
+        };
+        Insert: {
+          attribution?: string;
+          blog_id?: string | null;
+          capability_id?: string | null;
+          caption?: string;
+          claim_id?: string | null;
+          created_at?: string;
+          design_id?: string | null;
+          id?: string;
+          kind?: string;
+          license_note?: string;
+          mime?: string;
+          path?: string;
+          source_id?: string | null;
+          url?: string;
+        };
+        Update: {
+          attribution?: string;
+          blog_id?: string | null;
+          capability_id?: string | null;
+          caption?: string;
+          claim_id?: string | null;
+          created_at?: string;
+          design_id?: string | null;
+          id?: string;
+          kind?: string;
+          license_note?: string;
+          mime?: string;
+          path?: string;
+          source_id?: string | null;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "assets_blog_id_fkey";
+            columns: ["blog_id"];
+            isOneToOne: false;
+            referencedRelation: "blogs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "assets_design_id_fkey";
+            columns: ["design_id"];
+            isOneToOne: false;
+            referencedRelation: "designs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "assets_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       blog_sources: {
         Row: {
           blog_id: string;
@@ -57,6 +160,13 @@ export type Database = {
           updated_at: string;
           validation_confidence: number | null;
           version: number;
+          active: boolean;
+          content_hash: string;
+          depth_levels: number[];
+          document: Json;
+          ready_to_share: boolean;
+          supersedes_id: string | null;
+          tags: string[];
         };
         Insert: {
           body_md?: string;
@@ -70,6 +180,13 @@ export type Database = {
           updated_at?: string;
           validation_confidence?: number | null;
           version?: number;
+          active?: boolean;
+          content_hash?: string;
+          depth_levels?: number[];
+          document?: Json;
+          ready_to_share?: boolean;
+          supersedes_id?: string | null;
+          tags?: string[];
         };
         Update: {
           body_md?: string;
@@ -83,8 +200,22 @@ export type Database = {
           updated_at?: string;
           validation_confidence?: number | null;
           version?: number;
+          active?: boolean;
+          content_hash?: string;
+          depth_levels?: number[];
+          document?: Json;
+          ready_to_share?: boolean;
+          supersedes_id?: string | null;
+          tags?: string[];
         };
         Relationships: [
+          {
+            foreignKeyName: "blogs_supersedes_id_fkey";
+            columns: ["supersedes_id"];
+            isOneToOne: false;
+            referencedRelation: "blogs";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "blogs_topic_slug_fkey";
             columns: ["topic_slug"];
@@ -118,10 +249,52 @@ export type Database = {
         };
         Relationships: [];
       };
+      claimevents: {
+        Row: {
+          action: string;
+          actioned_at: string;
+          capability_id: string;
+          claim_id: string | null;
+          id: string;
+          new_status: string;
+          prev_status: string;
+          text_snippet: string;
+        };
+        Insert: {
+          action?: string;
+          actioned_at?: string;
+          capability_id?: string;
+          claim_id?: string | null;
+          id?: string;
+          new_status?: string;
+          prev_status?: string;
+          text_snippet?: string;
+        };
+        Update: {
+          action?: string;
+          actioned_at?: string;
+          capability_id?: string;
+          claim_id?: string | null;
+          id?: string;
+          new_status?: string;
+          prev_status?: string;
+          text_snippet?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "claimevents_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "claims";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       claims: {
         Row: {
           active: boolean;
           capability_id: string;
+          confidence: number;
           created_at: string;
           depth: number;
           id: string;
@@ -136,6 +309,7 @@ export type Database = {
         Insert: {
           active?: boolean;
           capability_id: string;
+          confidence?: number;
           created_at?: string;
           depth: number;
           id?: string;
@@ -150,6 +324,7 @@ export type Database = {
         Update: {
           active?: boolean;
           capability_id?: string;
+          confidence?: number;
           created_at?: string;
           depth?: number;
           id?: string;
@@ -185,34 +360,91 @@ export type Database = {
           },
         ];
       };
+      design_sources: {
+        Row: {
+          design_id: string;
+          label: string;
+          position: number;
+          source_id: string;
+        };
+        Insert: {
+          design_id: string;
+          label: string;
+          position?: number;
+          source_id: string;
+        };
+        Update: {
+          design_id?: string;
+          label?: string;
+          position?: number;
+          source_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "design_sources_design_id_fkey";
+            columns: ["design_id"];
+            isOneToOne: false;
+            referencedRelation: "designs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "design_sources_source_id_fkey";
+            columns: ["source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       designs: {
         Row: {
           body_md: string;
+          confidence: number | null;
+          constraints: Json;
+          content_hash: string;
           created_at: string;
+          document: Json;
           id: string;
+          ready_to_share: boolean;
+          scenario: string;
           slug: string;
           status: string;
           summary: string | null;
+          tags: string[];
           title: string;
           updated_at: string;
         };
         Insert: {
           body_md?: string;
+          confidence?: number | null;
+          constraints?: Json;
+          content_hash?: string;
           created_at?: string;
+          document?: Json;
           id?: string;
+          ready_to_share?: boolean;
+          scenario?: string;
           slug: string;
           status?: string;
           summary?: string | null;
+          tags?: string[];
           title: string;
           updated_at?: string;
         };
         Update: {
           body_md?: string;
+          confidence?: number | null;
+          constraints?: Json;
+          content_hash?: string;
           created_at?: string;
+          document?: Json;
           id?: string;
+          ready_to_share?: boolean;
+          scenario?: string;
           slug?: string;
           status?: string;
           summary?: string | null;
+          tags?: string[];
           title?: string;
           updated_at?: string;
         };
@@ -397,64 +629,123 @@ export type Database = {
       };
       queue_items: {
         Row: {
+          claimed_at: string | null;
           created_at: string;
+          error: string;
           id: string;
+          kind: string;
           note: string | null;
+          notes: string;
+          result_source_id: string | null;
+          scheduled_at: string | null;
           status: string;
           submitted_by: string | null;
+          tags: string[];
+          target_slug: string | null;
+          tier: number;
+          title: string;
           updated_at: string;
           url: string;
         };
         Insert: {
+          claimed_at?: string | null;
           created_at?: string;
+          error?: string;
           id?: string;
+          kind?: string;
           note?: string | null;
+          notes?: string;
+          result_source_id?: string | null;
+          scheduled_at?: string | null;
           status?: string;
           submitted_by?: string | null;
+          tags?: string[];
+          target_slug?: string | null;
+          tier?: number;
+          title?: string;
           updated_at?: string;
           url: string;
         };
         Update: {
+          claimed_at?: string | null;
           created_at?: string;
+          error?: string;
           id?: string;
+          kind?: string;
           note?: string | null;
+          notes?: string;
+          result_source_id?: string | null;
+          scheduled_at?: string | null;
           status?: string;
           submitted_by?: string | null;
+          tags?: string[];
+          target_slug?: string | null;
+          tier?: number;
+          title?: string;
           updated_at?: string;
           url?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "queue_items_result_source_id_fkey";
+            columns: ["result_source_id"];
+            isOneToOne: false;
+            referencedRelation: "sources";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       sources: {
         Row: {
+          active: boolean;
+          audience: string;
+          content_hash: string;
           created_at: string;
+          document: Json;
           id: string;
           slug: string;
           summary: string;
           tags: string[];
+          takeaways: string[];
           tier: number;
           title: string;
           url: string;
+          version: number;
+          why_it_matters: string;
         };
         Insert: {
+          active?: boolean;
+          audience?: string;
+          content_hash?: string;
           created_at?: string;
+          document?: Json;
           id?: string;
           slug: string;
           summary?: string;
           tags?: string[];
+          takeaways?: string[];
           tier: number;
           title: string;
           url: string;
+          version?: number;
+          why_it_matters?: string;
         };
         Update: {
+          active?: boolean;
+          audience?: string;
+          content_hash?: string;
           created_at?: string;
+          document?: Json;
           id?: string;
           slug?: string;
           summary?: string;
           tags?: string[];
+          takeaways?: string[];
           tier?: number;
           title?: string;
           url?: string;
+          version?: number;
+          why_it_matters?: string;
         };
         Relationships: [];
       };
@@ -490,28 +781,34 @@ export type Database = {
       };
       topics: {
         Row: {
+          active: boolean;
           created_at: string;
           description: string;
           name: string;
           parent_slug: string | null;
           slug: string;
           sort_order: number;
+          tags: string[];
         };
         Insert: {
+          active?: boolean;
           created_at?: string;
           description?: string;
           name: string;
           parent_slug?: string | null;
           slug: string;
           sort_order?: number;
+          tags?: string[];
         };
         Update: {
+          active?: boolean;
           created_at?: string;
           description?: string;
           name?: string;
           parent_slug?: string | null;
           slug?: string;
           sort_order?: number;
+          tags?: string[];
         };
         Relationships: [
           {
