@@ -4,7 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { FabricMark } from "./FabricMark";
 
-const NAV = [
+const NAV: ReadonlyArray<{ to: string; label: string; exact?: boolean }> = [
   { to: "/", label: "Overview", exact: true },
   { to: "/topics", label: "Topics" },
   { to: "/search", label: "Search" },
@@ -14,7 +14,7 @@ const NAV = [
   { to: "/learn", label: "Learn" },
   { to: "/help", label: "Help" },
   { to: "/author", label: "Author" },
-] as const;
+];
 
 export function SiteHeader() {
   const [signedIn, setSignedIn] = useState(false);
@@ -57,7 +57,7 @@ export function SiteHeader() {
           {NAV.map((n) => (
             <Link
               key={n.to}
-              to={n.to}
+              to={n.to as "/"}
               className="rounded-md px-2.5 py-1.5 text-sm text-white/65 transition hover:bg-white/5 hover:text-white"
               activeProps={{ className: "bg-white/10 text-white" }}
               activeOptions={{ exact: n.exact ?? false }}

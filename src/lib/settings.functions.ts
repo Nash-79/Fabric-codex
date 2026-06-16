@@ -610,10 +610,11 @@ export const validateContent = createServerFn({ method: "POST" })
   .inputValidator((d: { kind: "blog" | "design"; id: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
-    const result = await backendJson(`/${data.kind}s/${data.id}/validate`, {
+    type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
+    const result = await backendJson<JsonValue>(`/${data.kind}s/${data.id}/validate`, {
       method: "POST",
       json: {},
     });
     await recordAudit(context.userId, `${data.kind}.validation_run`, data.kind, data.id);
-    return { ok: true, result };
+    return { ok: true as const, result };
   });
