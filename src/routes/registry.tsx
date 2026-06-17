@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/SiteHeader";
-import { supabase } from "@/integrations/supabase/client";
+import { listCapabilities } from "@/lib/atlas.functions";
 
 export const Route = createFileRoute("/registry")({
   head: () => ({
@@ -23,15 +23,9 @@ export const Route = createFileRoute("/registry")({
 });
 
 function RegistryPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["capabilities-registry"],
-    queryFn: async () => {
-      const { data: caps } = await supabase
-        .from("capabilities")
-        .select("id,name,description")
-        .order("name");
-      return caps ?? [];
-    },
+    queryFn: () => listCapabilities(),
   });
 
   return (
@@ -60,6 +54,13 @@ function RegistryPage() {
                 <tr>
                   <td colSpan={2} className="px-4 py-8 text-center text-white/40">
                     Loading…
+                  </td>
+                </tr>
+              )}
+              {error && (
+                <tr>
+                  <td colSpan={2} className="px-4 py-8 text-center text-rose-300">
+                    {(error as Error).message}
                   </td>
                 </tr>
               )}

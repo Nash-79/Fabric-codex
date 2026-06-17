@@ -42,9 +42,12 @@ claimevents (audit)     queue_items (frontend → agent ingestion)
   `@vN` to free the UNIQUE slug). Stricter than designs: every cited source must back ≥1
   verified active claim.
 - **claimevents** — append-only audit trail of human curation actions on claims.
-- **queue_items** — a URL submitted via the frontend awaiting local agent ingestion.
-  State machine: `queued → claimed → ingested | failed (→ queued via requeue)`, or
-  `queued → dismissed`. User intent, not knowledge — not git-tracked.
+- **queue_items** — work awaiting a local agent. State machine:
+  `queued → claimed → ingested | failed (→ queued via requeue)`, or `queued → dismissed`.
+  `kind` is `source` (a URL to ingest, default) or `diagram` (commission a diagram for
+  `target_slug`); `scheduled_at` (a future timestamp) hides an item until it is due, which is how
+  Settings → Diagrams commissions diagrams "at intervals". User intent, not knowledge — not
+  git-tracked.
 
 ## The claim version chain (the important part)
 

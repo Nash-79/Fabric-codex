@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/SiteHeader";
-import { supabase } from "@/integrations/supabase/client";
+import { listLessons } from "@/lib/atlas.functions";
 
 export const Route = createFileRoute("/learn")({
   head: () => ({
@@ -44,16 +44,9 @@ const TIERS: { id: string; label: string; depths: string[]; blurb: string }[] = 
 ];
 
 function LearnPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["lessons"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("lessons")
-        .select("id,slug,title,depth,capability_id")
-        .order("depth")
-        .order("title");
-      return data ?? [];
-    },
+    queryFn: () => listLessons(),
   });
 
   return (
@@ -69,6 +62,7 @@ function LearnPage() {
         </p>
 
         <div className="mt-8 space-y-8">
+          {error && <div className="text-sm text-rose-300">{(error as Error).message}</div>}
           {TIERS.map((t) => {
             const lessons = (data ?? []).filter((l) => t.depths.includes(l.depth));
             return (

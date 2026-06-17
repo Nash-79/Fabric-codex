@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { FabricMark } from "./FabricMark";
+import { ThemeToggle } from "./ThemeToggle";
 
-const NAV = [
+const NAV: { to: string; label: string; exact?: boolean }[] = [
   { to: "/", label: "Overview", exact: true },
   { to: "/topics", label: "Topics" },
   { to: "/search", label: "Search" },
@@ -14,7 +15,7 @@ const NAV = [
   { to: "/learn", label: "Learn" },
   { to: "/help", label: "Help" },
   { to: "/author", label: "Author" },
-] as const;
+];
 
 export function SiteHeader() {
   const [signedIn, setSignedIn] = useState(false);
@@ -67,6 +68,7 @@ export function SiteHeader() {
           ))}
         </nav>
         <div className="flex shrink-0 items-center gap-2">
+          <ThemeToggle />
           <Link
             to="/advisor"
             className="hidden rounded-md border border-teal-400/30 bg-teal-500/10 px-3 py-1.5 text-xs font-medium text-teal-200 hover:bg-teal-500/20 md:inline-block"

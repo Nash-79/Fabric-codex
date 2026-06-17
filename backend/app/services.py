@@ -1358,11 +1358,123 @@ def submit_queue_item(
     return _queue_dict(item)
 
 
-def list_queue(session: Session, status: Optional[str] = None) -> list[dict]:
+def list_queue(
+    session: Session,
+    status: Optional[str] = None,
+    kind: Optional[str] = None,
+    due_only: bool = False,
+) -> list[dict]:
+    """List queue items. kind filters source|diagram; due_only hides items whose
+    scheduled_at is still in the future (so a 'commission in 1 week' item is not yet claimable)."""
     stmt = select(QueueItem).order_by(QueueItem.created_at.desc())
     if status:
         stmt = stmt.where(QueueItem.status == status)
-    return [_queue_dict(q) for q in session.exec(stmt).all()]
+    if kind:
+        stmt = stmt.where(QueueItem.kind == kind)
+    rows = session.exec(stmt).all()
+    if due_only:
+        now = _now()
+
+        def _due(q: QueueItem) -> bool:
+            if q.scheduled_at is None:
+                return True
+            sched = q.scheduled_at
+            # Normalise tz-awareness so naive (SQLite) and aware (PG) both compare.
+            if sched.tzinfo is None:
+                from datetime import timezone as _tz
+
+                sched = sched.replace(tzinfo=_tz.utc)
+            return sched <= now
+
+        rows = [q for q in rows if _due(q)]
+    return [_queue_dict(q) for q in rows]
+
+
+def commission_diagram(
+    session: Session,
+    target_slug: str,
+    title: str = "",
+    notes: str = "",
+    scheduled_at: Optional[datetime] = None,
+    submitted_by: str = "",
+) -> dict:
+    """Enqueue a diagram-commission task for a topic/capability. The local diagram-author
+    agent drains kind='diagram' items, writes the SVG, posts the asset, and marks it ingested.
+    scheduled_at lets the user commission diagrams at intervals (now / +1 week / +1 month)."""
+    target_slug = (target_slug or "").strip()
+    if not target_slug:
+        raise ValueError("target_slug (a topic or capability) is required.")
+    # Avoid stacking duplicate open commissions for the same target.
+    for q in session.exec(
+        select(QueueItem).where(
+            QueueItem.kind == "diagram",
+            QueueItem.target_slug == target_slug,
+            QueueItem.status.in_(["queued", "claimed"]),
+        )
+    ).all():
+        raise DuplicateSubmission(
+            f"A diagram is already commissioned for '{target_slug}'.", queue_id=q.id
+        )
+    item = QueueItem(
+        kind="diagram",
+        target_slug=target_slug,
+        title=title or f"Diagram for {target_slug}",
+        note=notes,
+        notes=notes,
+        scheduled_at=scheduled_at,
+        submitted_by=submitted_by or None,
+        url="",
+    )
+    session.add(item)
+    session.commit()
+    session.refresh(item)
+    return _queue_dict(item)
+
+
+def diagram_coverage(session: Session) -> list[dict]:
+    """Per-topic diagram coverage: how many generated diagrams cover each topic (via the
+    topic's capabilities), plus any open commission. Drives the Settings 'Diagrams' gap table.
+
+    Diagrams are generated Assets tagged by capability_id; a topic maps to capabilities via
+    topic_capabilities, so a topic's diagram count is the assets across its capabilities."""
+    topics = session.exec(select(Topic).order_by(Topic.sort_order)).all()
+    # capability_id -> number of generated diagram assets.
+    diagrams_by_cap: dict[str, int] = {}
+    for a in session.exec(
+        select(Asset).where(Asset.kind == "generated")
+    ).all():
+        if a.capability_id:
+            diagrams_by_cap[a.capability_id] = diagrams_by_cap.get(a.capability_id, 0) + 1
+    # topic_slug -> set of capability_ids.
+    caps_by_topic: dict[str, set[str]] = {}
+    for tc in session.exec(select(TopicCapability)).all():
+        caps_by_topic.setdefault(tc.topic_slug, set()).add(tc.capability_id)
+    by_topic: dict[str, int] = {
+        slug: sum(diagrams_by_cap.get(cid, 0) for cid in caps)
+        for slug, caps in caps_by_topic.items()
+    }
+    open_commissions = {
+        q.target_slug
+        for q in session.exec(
+            select(QueueItem).where(
+                QueueItem.kind == "diagram",
+                QueueItem.status.in_(["queued", "claimed"]),
+            )
+        ).all()
+    }
+    out = []
+    for t in topics:
+        count = by_topic.get(t.slug, 0)
+        out.append(
+            {
+                "slug": t.slug,
+                "name": t.name,
+                "diagram_count": count,
+                "has_diagram": count > 0,
+                "commission_open": t.slug in open_commissions,
+            }
+        )
+    return out
 
 
 def _queue_transition(
@@ -1727,6 +1839,9 @@ def _queue_dict(q: QueueItem) -> dict:
         "notes": q.notes or q.note,
         "tags": list(q.tags),
         "status": q.status,
+        "kind": q.kind,
+        "target_slug": q.target_slug,
+        "scheduled_at": q.scheduled_at.isoformat() if q.scheduled_at else None,
         "claimed_at": q.claimed_at.isoformat() if q.claimed_at else None,
         "result_source_id": q.result_source_id,
         "error": q.error,

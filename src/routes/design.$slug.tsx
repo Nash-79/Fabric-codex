@@ -5,6 +5,8 @@ import remarkGfm from "remark-gfm";
 import { getDesign } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { TierBadge } from "@/components/Badges";
+import { PrintButton } from "@/components/PrintButton";
+import { readingTime } from "@/lib/reading-time";
 
 type Citation = {
   label: string;
@@ -67,10 +69,14 @@ function DesignPage() {
     <div className="min-h-screen bg-[#070b16] text-white">
       <SiteHeader />
       <article className="mx-auto max-w-3xl px-6 py-12">
-        <Link to="/designs" className="text-xs text-white/55 hover:text-white">
-          ← Designs
-        </Link>
+        <div className="flex items-center justify-between gap-3">
+          <Link to="/designs" className="text-xs text-white/55 hover:text-white">
+            ← Designs
+          </Link>
+          <PrintButton />
+        </div>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight">{design.title}</h1>
+        <p className="mt-2 text-xs text-white/45">{readingTime(design.body_md)} min read</p>
         {design.summary && (
           <p className="mt-3 text-lg leading-relaxed text-white/70">{design.summary}</p>
         )}
@@ -107,7 +113,7 @@ function DesignPage() {
         </div>
 
         {citations.length > 0 && (
-          <section className="mt-14 border-t border-white/10 pt-8">
+          <section className="print-sources mt-14 border-t border-white/10 pt-8">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">
               Sources
             </h2>

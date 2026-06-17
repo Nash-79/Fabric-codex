@@ -109,6 +109,13 @@ class QueueSubmitIn(BaseModel):
     submitted_by: str = ""
 
 
+class DiagramCommissionIn(BaseModel):
+    target_slug: str  # topic or capability the diagram is for
+    title: str = ""
+    notes: str = ""
+    scheduled_at: str = ""  # ISO-8601; empty = claimable immediately
+
+
 class QueueCompleteIn(BaseModel):
     source_id: str
 
@@ -533,8 +540,45 @@ def queue_submit(body: QueueSubmitIn, session: Session = Depends(get_session)):
 
 
 @router.get("/queue")
-def queue_list(status: Optional[str] = None, session: Session = Depends(get_session)):
-    return services.list_queue(session, status=status)
+def queue_list(
+    status: Optional[str] = None,
+    kind: Optional[str] = None,
+    due_only: bool = False,
+    session: Session = Depends(get_session),
+):
+    return services.list_queue(session, status=status, kind=kind, due_only=due_only)
+
+
+@router.get("/coverage/diagrams")
+def coverage_diagrams(session: Session = Depends(get_session)):
+    """Per-topic diagram coverage for the Settings 'Diagrams' tab."""
+    return services.diagram_coverage(session)
+
+
+@router.post("/queue/diagram")
+def queue_diagram(body: DiagramCommissionIn, session: Session = Depends(get_session)):
+    """Commission a diagram for a topic/capability (optionally scheduled). The local
+    diagram-author agent drains kind='diagram' queue items via /commission-diagrams."""
+    from datetime import datetime as _dt
+
+    scheduled = None
+    if body.scheduled_at:
+        try:
+            scheduled = _dt.fromisoformat(body.scheduled_at)
+        except ValueError:
+            raise HTTPException(400, "scheduled_at must be ISO-8601.")
+    try:
+        return services.commission_diagram(
+            session,
+            body.target_slug,
+            title=body.title,
+            notes=body.notes,
+            scheduled_at=scheduled,
+        )
+    except services.DuplicateSubmission as e:
+        raise HTTPException(409, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
 
 def _queue_action(fn, *args):

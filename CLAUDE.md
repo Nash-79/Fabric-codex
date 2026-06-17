@@ -161,6 +161,13 @@ as the offline fallback.
   backend validation pass treats a missing embedded diagram as a **critical** issue, so the
   blog cannot reach `ready_to_share` until it is fixed.
 
+**Diagram commission queue (Settings → Diagrams).** Admins can commission more diagrams per topic
+at chosen intervals from the Settings UI. This reuses the `queue_items` lifecycle with
+`kind='diagram'`, `target_slug`, and `scheduled_at` (a future timestamp hides the item until it is
+due). The server only schedules — `/commission-diagrams` drains the due queue with the
+**diagram-author**, which authors an original SVG, mirrors it to `public/diagrams/`, and registers
+it as a generated asset (flipping the topic from *gap* to *covered* in the coverage table).
+
 ## Conventions
 
 - Python: type hints, `ruff`/`black` clean, no bare excepts. Tests in `backend/tests`.

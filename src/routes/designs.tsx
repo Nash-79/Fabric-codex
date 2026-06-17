@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/SiteHeader";
-import { supabase } from "@/integrations/supabase/client";
+import { listDesigns } from "@/lib/atlas.functions";
 
 export const Route = createFileRoute("/designs")({
   head: () => ({
@@ -23,15 +23,9 @@ export const Route = createFileRoute("/designs")({
 });
 
 function DesignsPage() {
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["designs"],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("designs")
-        .select("id,slug,title,summary,status,updated_at")
-        .order("updated_at", { ascending: false });
-      return data ?? [];
-    },
+    queryFn: () => listDesigns(),
   });
 
   return (
@@ -49,6 +43,7 @@ function DesignsPage() {
 
         <div className="mt-8 space-y-3">
           {isLoading && <div className="text-sm text-white/40">Loading…</div>}
+          {error && <div className="text-sm text-rose-300">{(error as Error).message}</div>}
           {!isLoading && (data ?? []).length === 0 && (
             <div className="rounded-2xl border border-dashed border-white/15 p-8 text-center text-sm text-white/45">
               No designs published yet. Designs are authored locally and synced via{" "}

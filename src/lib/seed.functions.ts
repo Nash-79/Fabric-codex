@@ -189,7 +189,7 @@ export const seedFromContent = createServerFn({ method: "POST" })
     for (const [path, mod] of Object.entries(designJsons)) {
       const d = (mod as any).default;
       const slug = d.slug ?? path.split("/").pop()!.replace(".json", "");
-      const { data: ins, error } = await (supabaseAdmin as any)
+      const { data: ins, error } = await supabaseAdmin
         .from("designs")
         .upsert(
           {
@@ -205,7 +205,7 @@ export const seedFromContent = createServerFn({ method: "POST" })
         .single();
       if (error) throw new Error(`design ${slug}: ${error.message}`);
       designCount++;
-      await (supabaseAdmin as any).from("design_sources").delete().eq("design_id", ins.id);
+      await supabaseAdmin.from("design_sources").delete().eq("design_id", ins.id);
       const keys: string[] = d.cited_source_keys ?? [];
       const dsRows = keys
         .map((k, i) => {
@@ -215,7 +215,7 @@ export const seedFromContent = createServerFn({ method: "POST" })
             : null;
         })
         .filter(Boolean) as any[];
-      if (dsRows.length) await (supabaseAdmin as any).from("design_sources").insert(dsRows);
+      if (dsRows.length) await supabaseAdmin.from("design_sources").insert(dsRows);
     }
 
     // 6) Diagrams

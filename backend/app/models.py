@@ -310,6 +310,12 @@ class QueueItem(SQLModel, table=True):
     note: str = ""  # Lovable's original column
     notes: str = ""  # backend alias (kept in sync on write)
     tags: list[str] = Field(default_factory=list, sa_column=_str_array())
+    # source | diagram — what kind of work this queue item commissions.
+    kind: str = "source"
+    # topic/capability slug a diagram commission targets (null for source ingests).
+    target_slug: Optional[str] = None
+    # when the item becomes claimable; null = immediately. Drives "commission at intervals".
+    scheduled_at: Optional[datetime] = None
     # queued | claimed | ingested | failed | dismissed
     status: str = "queued"
     claimed_at: Optional[datetime] = None

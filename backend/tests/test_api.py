@@ -340,6 +340,38 @@ def test_document_snapshot_persisted(client):
         assert src.document == {"hello": "world", "n": 1}
 
 
+def test_commission_diagram_enqueues_and_filters_by_kind(client):
+    r = client.post("/queue/diagram", json={"target_slug": "onelake", "title": "OneLake diagram"})
+    assert r.status_code == 200
+    item = r.json()
+    assert item["kind"] == "diagram" and item["target_slug"] == "onelake"
+    # kind filter isolates diagram commissions from source ingests.
+    diagrams = client.get("/queue", params={"kind": "diagram"}).json()
+    assert len(diagrams) == 1 and diagrams[0]["kind"] == "diagram"
+    sources = client.get("/queue", params={"kind": "source"}).json()
+    assert sources == []
+    # Duplicate open commission for the same target is rejected.
+    assert client.post("/queue/diagram", json={"target_slug": "onelake"}).status_code == 409
+
+
+def test_commission_diagram_future_schedule_hidden_by_due_only(client):
+    client.post(
+        "/queue/diagram",
+        json={"target_slug": "lakehouse", "scheduled_at": "2099-01-01T00:00:00"},
+    )
+    # Visible without due_only, hidden when only due items are requested.
+    assert len(client.get("/queue", params={"kind": "diagram"}).json()) == 1
+    due = client.get("/queue", params={"kind": "diagram", "due_only": True}).json()
+    assert due == []
+
+
+def test_diagram_coverage_reports_gaps(client):
+    cov = client.get("/coverage/diagrams").json()
+    assert isinstance(cov, list)
+    for row in cov:
+        assert {"slug", "name", "diagram_count", "has_diagram", "commission_open"} <= set(row)
+
+
 def test_validation_statuses(client):
     res = client.post("/sources/ingest", json=_payload()).json()
     did = client.post(

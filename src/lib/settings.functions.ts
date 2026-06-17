@@ -571,6 +571,57 @@ export const mutateQueueItem = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+type DiagramCoverageRow = {
+  slug: string;
+  name: string;
+  diagram_count: number;
+  has_diagram: boolean;
+  commission_open: boolean;
+};
+
+type DiagramCoverageResult = {
+  coverage: DiagramCoverageRow[];
+  pending: Array<Record<string, unknown>>;
+};
+
+export const getDiagramCoverage = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  // @ts-expect-error TanStack ServerFn type-instantiation depth limit with the fully-typed
+  // Supabase context (same as validateContent). Runtime + build are correct.
+  .handler(async ({ context }): Promise<DiagramCoverageResult> => {
+    await requireAdmin(context);
+    const coverage = await backendJson<DiagramCoverageRow[]>("/coverage/diagrams");
+    const pending = await backendJson<Array<Record<string, unknown>>>(
+      "/queue?kind=diagram&status=queued",
+    );
+    return { coverage, pending };
+  });
+
+export const commissionDiagram = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (d: { targetSlug: string; title?: string; scheduledAt?: string }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    await backendJson("/queue/diagram", {
+      method: "POST",
+      json: {
+        target_slug: data.targetSlug,
+        title: data.title ?? "",
+        scheduled_at: data.scheduledAt ?? "",
+      },
+    });
+    await recordAudit(
+      context.userId,
+      "diagram.commissioned",
+      "topic",
+      data.targetSlug,
+      data.scheduledAt ? { scheduled_at: data.scheduledAt } : undefined,
+    );
+    return { ok: true };
+  });
+
 export const submitSourceReview = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { sourceId: string; note?: string }) => d)
@@ -608,12 +659,15 @@ export const submitSourceReview = createServerFn({ method: "POST" })
 export const validateContent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { kind: "blog" | "design"; id: string }) => d)
+  // @ts-expect-error TanStack ServerFn hits a type-instantiation depth limit here
+  // when the middleware injects the fully-typed Supabase context. Runtime is correct
+  // and the production build is unaffected; the directive self-heals if TanStack fixes it.
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
-    const result = await backendJson(`/${data.kind}s/${data.id}/validate`, {
-      method: "POST",
-      json: {},
-    });
+    const result = await backendJson<Record<string, unknown>>(
+      `/${data.kind}s/${data.id}/validate`,
+      { method: "POST", json: {} },
+    );
     await recordAudit(context.userId, `${data.kind}.validation_run`, data.kind, data.id);
     return { ok: true, result };
   });
