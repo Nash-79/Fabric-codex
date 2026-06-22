@@ -129,9 +129,10 @@ function RootShell({ children }: { children: ReactNode }) {
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{var t=localStorage.getItem('fa.theme')||localStorage.getItem('fa-theme')||'light';document.documentElement.classList.toggle('dark',t==='dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='light'}",
+              "try{var s=localStorage.getItem('fa.theme')||localStorage.getItem('fa-theme')||'system';var d=s==='dark'||(s!=='light'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.classList.toggle('dark',d);document.documentElement.dataset.theme=d?'dark':'light';document.documentElement.dataset.themeChoice=s;}catch(e){document.documentElement.dataset.theme='light'}",
           }}
         />
+
         <HeadContent />
       </head>
       <body>
