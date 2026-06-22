@@ -1,52 +1,88 @@
 import { useEffect, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Sun } from "lucide-react";
 
-type Theme = "dark" | "light";
+type Theme = "light" | "dark" | "system";
+
+const STORAGE_KEY = "fa.theme";
+const LEGACY_KEY = "fa-theme";
+
+function prefersDark() {
+  return typeof window !== "undefined" && window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function resolve(theme: Theme): "light" | "dark" {
+  if (theme === "system") return prefersDark() ? "dark" : "light";
+  return theme;
+}
 
 function applyTheme(theme: Theme) {
+  const resolved = resolve(theme);
   const root = document.documentElement;
-  root.classList.toggle("dark", theme === "dark");
-  root.dataset.theme = theme;
+  root.classList.toggle("dark", resolved === "dark");
+  root.dataset.theme = resolved;
+  root.dataset.themeChoice = theme;
 }
 
 /**
- * Light/dark toggle. Persists to localStorage and applies a `.dark` class on
- * <html> (the token system in styles.css already defines both palettes).
- * Defaults to light so the hosted app starts from the Fabric-branded default.
+ * Cycling theme control: system → light → dark → system.
+ * Persists the user's *choice* (including "system") to localStorage and live-
+ * follows the OS preference while in system mode. Defaults to system on first
+ * load so the app matches the user's OS color scheme out of the gate.
  */
 export function ThemeToggle() {
-  const [theme, setTheme] = useState<Theme>("light");
+  const [theme, setTheme] = useState<Theme>("system");
 
   // Hydrate from storage on mount (client only).
   useEffect(() => {
-    const stored = (typeof localStorage !== "undefined" &&
-      (localStorage.getItem("fa.theme") ?? localStorage.getItem("fa-theme"))) as Theme | null;
-    const initial: Theme = stored === "light" || stored === "dark" ? stored : "light";
-    setTheme(initial);
-    applyTheme(initial);
+    let stored: Theme = "system";
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY) ?? localStorage.getItem(LEGACY_KEY);
+      if (raw === "light" || raw === "dark" || raw === "system") stored = raw;
+    } catch {
+      /* storage unavailable */
+    }
+    setTheme(stored);
+    applyTheme(stored);
   }, []);
 
-  function toggle() {
-    const next: Theme = theme === "dark" ? "light" : "dark";
+  // While in system mode, follow live OS changes (e.g. macOS auto night).
+  useEffect(() => {
+    if (theme !== "system" || typeof window === "undefined") return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => applyTheme("system");
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, [theme]);
+
+  function cycle() {
+    const order: Theme[] = ["system", "light", "dark"];
+    const next = order[(order.indexOf(theme) + 1) % order.length];
     setTheme(next);
     applyTheme(next);
     try {
-      localStorage.setItem("fa.theme", next);
-      localStorage.removeItem("fa-theme");
+      localStorage.setItem(STORAGE_KEY, next);
+      localStorage.removeItem(LEGACY_KEY);
     } catch {
       /* storage unavailable — non-fatal */
     }
   }
 
+  const Icon = theme === "system" ? Monitor : theme === "dark" ? Moon : Sun;
+  const labelFor: Record<Theme, string> = {
+    system: "Theme: system (follows OS). Click for light.",
+    light: "Theme: light. Click for dark.",
+    dark: "Theme: dark. Click for system.",
+  };
+
   return (
     <button
       type="button"
-      onClick={toggle}
-      aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-      title={theme === "dark" ? "Light mode" : "Dark mode"}
+      onClick={cycle}
+      aria-label={labelFor[theme]}
+      title={labelFor[theme]}
       className="no-print inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-white/65 transition hover:bg-white/5 hover:text-white"
     >
-      {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+      <Icon className="h-4 w-4" />
     </button>
   );
 }
