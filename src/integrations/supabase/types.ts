@@ -783,6 +783,51 @@ export type Database = {
         }
         Relationships: []
       }
+      seed_runs: {
+        Row: {
+          blog_count: number
+          claim_count: number
+          content_signature: string | null
+          diagram_count: number
+          duration_ms: number | null
+          error: string | null
+          id: string
+          ran_at: string
+          skipped: boolean
+          source_count: number
+          topic_count: number
+          trigger: string
+        }
+        Insert: {
+          blog_count?: number
+          claim_count?: number
+          content_signature?: string | null
+          diagram_count?: number
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          ran_at?: string
+          skipped?: boolean
+          source_count?: number
+          topic_count?: number
+          trigger?: string
+        }
+        Update: {
+          blog_count?: number
+          claim_count?: number
+          content_signature?: string | null
+          diagram_count?: number
+          duration_ms?: number | null
+          error?: string | null
+          id?: string
+          ran_at?: string
+          skipped?: boolean
+          source_count?: number
+          topic_count?: number
+          trigger?: string
+        }
+        Relationships: []
+      }
       sources: {
         Row: {
           active: boolean
@@ -1032,6 +1077,7 @@ export type Database = {
         Returns: undefined
       }
       admin_suspend_user: { Args: { _user_id: string }; Returns: undefined }
+      atlas_health_counts: { Args: never; Returns: Json }
       current_user_has_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"] }
         Returns: boolean
