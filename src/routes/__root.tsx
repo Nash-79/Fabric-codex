@@ -98,7 +98,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         name: "twitter:description",
         content: description,
       },
+      { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#faf9f8" },
+      { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#141414" },
     ],
+
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
