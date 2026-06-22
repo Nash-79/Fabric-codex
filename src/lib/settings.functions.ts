@@ -599,9 +599,7 @@ export const getDiagramCoverage = createServerFn({ method: "GET" })
 
 export const commissionDiagram = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
-    (d: { targetSlug: string; title?: string; scheduledAt?: string }) => d,
-  )
+  .inputValidator((d: { targetSlug: string; title?: string; scheduledAt?: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     await backendJson("/queue/diagram", {
@@ -664,10 +662,11 @@ export const validateContent = createServerFn({ method: "POST" })
   // and the production build is unaffected; the directive self-heals if TanStack fixes it.
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
-    const result = await backendJson<Record<string, unknown>>(
-      `/${data.kind}s/${data.id}/validate`,
-      { method: "POST", json: {} },
-    );
+    type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
+    const result = await backendJson<JsonValue>(`/${data.kind}s/${data.id}/validate`, {
+      method: "POST",
+      json: {},
+    });
     await recordAudit(context.userId, `${data.kind}.validation_run`, data.kind, data.id);
-    return { ok: true, result };
+    return { ok: true as const, result };
   });
