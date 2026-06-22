@@ -1077,6 +1077,7 @@ export type Database = {
         Returns: undefined
       }
       admin_suspend_user: { Args: { _user_id: string }; Returns: undefined }
+      atlas_health_counts: { Args: never; Returns: Json }
       current_user_has_role: {
         Args: { _role: Database["public"]["Enums"]["app_role"] }
         Returns: boolean
