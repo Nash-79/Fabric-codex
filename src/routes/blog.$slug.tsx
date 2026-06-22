@@ -29,7 +29,7 @@ export const Route = createFileRoute("/blog/$slug")({
     }
   },
   errorComponent: ({ error, reset }) => (
-    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
       <p className="mt-6 text-rose-300">{error.message}</p>
       <button className="mt-3 underline" onClick={reset}>
@@ -38,7 +38,7 @@ export const Route = createFileRoute("/blog/$slug")({
     </div>
   ),
   notFoundComponent: () => (
-    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
       <p className="mt-6">Article not found.</p>
       <Link to="/topics" className="mt-3 inline-block underline">
@@ -58,7 +58,8 @@ function BlogPage() {
   // Replace [S1] / [S1][S2] inline citations with clickable superscripts.
   const renderedBody = blog.body_md.replace(
     /\[S(\d+)\]/g,
-    (_m: string, n: string) => ` <sup id="cite-${n}"><a href="#src-${n}" class="cite">[S${n}]</a></sup>`,
+    (_m: string, n: string) =>
+      ` <sup id="cite-${n}"><a href="#src-${n}" class="cite">[S${n}]</a></sup>`,
   );
   const headings = useMemo(
     () =>
@@ -91,20 +92,20 @@ function BlogPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
-      <div className="sticky top-14 z-20 h-1 bg-white/5">
+      <div className="sticky top-14 z-20 h-1 bg-muted">
         <div className="h-full bg-teal-300" style={{ width: `${progress}%` }} />
       </div>
       <div className="mx-auto grid max-w-7xl gap-8 px-6 py-10 lg:grid-cols-[220px_minmax(0,760px)_300px]">
         <aside className="hidden lg:block">
           <div className="sticky top-20 space-y-4">
-            <Link to="/topics" className="text-xs text-white/55 hover:text-white">
+            <Link to="/topics" className="text-xs text-muted-foreground hover:text-foreground">
               ← Topics
             </Link>
             {headings.length > 0 && (
-              <nav className="rounded-md border border-white/10 bg-white/[0.025] p-3">
-                <div className="text-xs font-semibold uppercase tracking-wide text-white/45">
+              <nav className="rounded-md border border-border bg-card p-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   Contents
                 </div>
                 <div className="mt-2 space-y-1">
@@ -112,7 +113,7 @@ function BlogPage() {
                     <a
                       key={heading.id}
                       href={`#${heading.id}`}
-                      className="block rounded px-2 py-1 text-xs text-white/55 hover:bg-white/5 hover:text-white"
+                      className="block rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
                     >
                       {heading.title}
                     </a>
@@ -125,20 +126,23 @@ function BlogPage() {
 
         <article>
           <div className="flex items-center justify-between gap-3">
-            <Link to="/topics" className="text-xs text-white/55 hover:text-white lg:hidden">
+            <Link
+              to="/topics"
+              className="text-xs text-muted-foreground hover:text-foreground lg:hidden"
+            >
               ← Topics
             </Link>
             <PrintButton />
           </div>
           <h1 className="mt-3 text-4xl font-semibold tracking-tight">{blog.title}</h1>
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/45">
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <span>{readingTime(blog.body_md)} min read</span>
             <span>·</span>
             <span>{citations.length} sources</span>
             <span>·</span>
             <span>{diagrams.length} diagrams</span>
           </div>
-          <p className="mt-4 text-lg leading-relaxed text-white/70">{blog.summary}</p>
+          <p className="mt-4 text-lg leading-relaxed text-muted-foreground">{blog.summary}</p>
 
           <div className="mt-6 grid gap-2 sm:grid-cols-3">
             <Info label="Citation policy" value="Every factual claim cites a source" />
@@ -149,7 +153,7 @@ function BlogPage() {
             <Info label="Format" value="Source-grounded article" />
           </div>
 
-          <div className="prose prose-invert mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:tracking-tight prose-a:text-teal-300 prose-img:rounded-xl prose-img:border prose-img:border-white/10">
+          <div className="prose prose-invert mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:tracking-tight prose-a:text-teal-300 prose-img:rounded-xl prose-img:border prose-img:border-border">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               urlTransform={(url) =>
@@ -193,12 +197,12 @@ function BlogPage() {
         </article>
 
         <aside className="print-sources">
-          <div className="sticky top-20 rounded-md border border-white/10 bg-white/[0.025] p-4">
-            <div className="text-xs font-semibold uppercase tracking-wide text-white/45">
+          <div className="sticky top-20 rounded-md border border-border bg-card p-4">
+            <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Sources
             </div>
             {citations.length === 0 && (
-              <p className="mt-2 text-sm text-white/45">No citations attached.</p>
+              <p className="mt-2 text-sm text-muted-foreground">No citations attached.</p>
             )}
             <ol className="mt-3 max-h-[70vh] space-y-2 overflow-auto pr-1">
               {citations.map((c, i) => {
@@ -207,21 +211,21 @@ function BlogPage() {
                   <li
                     key={c.label}
                     id={`src-${n}`}
-                    className="rounded-md border border-white/10 bg-white/[0.02] p-3"
+                    className="rounded-md border border-border bg-card p-3"
                   >
                     <div className="flex flex-col gap-2">
                       <a
                         href={c.source?.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs font-medium leading-relaxed text-white hover:text-teal-300"
+                        className="text-xs font-medium leading-relaxed text-foreground hover:text-teal-300"
                       >
                         [{c.label}] {c.source?.title}
                       </a>
                       {c.source?.tier && <TierBadge tier={c.source.tier} />}
                     </div>
                     {c.source?.summary && (
-                      <p className="mt-1 text-xs text-white/55">{c.source.summary}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{c.source.summary}</p>
                     )}
                   </li>
                 );
@@ -236,9 +240,9 @@ function BlogPage() {
 
 function Info({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.025] p-3">
-      <div className="text-[10px] uppercase tracking-wide text-white/40">{label}</div>
-      <div className="mt-1 text-xs font-medium text-white/75">{value}</div>
+    <div className="rounded-md border border-border bg-card p-3">
+      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div className="mt-1 text-xs font-medium text-muted-foreground">{value}</div>
     </div>
   );
 }

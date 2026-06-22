@@ -42,15 +42,15 @@ export function SiteHeader() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/5 bg-background/85 dark:bg-[#070b16]/85 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-6">
         <Link
           to="/"
-          className="flex items-center gap-2 font-semibold tracking-tight text-white shrink-0"
+          className="flex items-center gap-2 font-semibold tracking-tight text-foreground shrink-0"
         >
           <FabricMark className="h-6 w-6" />
           <span>Fabric Atlas</span>
-          <span className="hidden text-xs font-normal text-white/40 lg:inline">
+          <span className="hidden text-xs font-normal text-muted-foreground lg:inline">
             for Microsoft Fabric
           </span>
         </Link>
@@ -59,8 +59,8 @@ export function SiteHeader() {
             <Link
               key={n.to}
               to={n.to as "/"}
-              className="rounded-md px-2.5 py-1.5 text-sm text-white/65 transition hover:bg-white/5 hover:text-white"
-              activeProps={{ className: "bg-white/10 text-white" }}
+              className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
+              activeProps={{ className: "bg-accent text-foreground" }}
               activeOptions={{ exact: n.exact ?? false }}
             >
               {n.label}
@@ -79,21 +79,21 @@ export function SiteHeader() {
             <>
               <Link
                 to="/favorites"
-                className="hidden text-xs text-white/65 hover:text-white md:inline"
+                className="hidden text-xs text-muted-foreground hover:text-foreground md:inline"
               >
                 Favorites
               </Link>
               {admin && (
                 <Link
                   to="/settings"
-                  className="hidden text-xs text-white/65 hover:text-white md:inline"
+                  className="hidden text-xs text-muted-foreground hover:text-foreground md:inline"
                 >
                   Settings
                 </Link>
               )}
               <button
                 onClick={() => supabase.auth.signOut()}
-                className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white/70 hover:bg-white/5"
+                className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
               >
                 Sign out
               </button>
@@ -101,7 +101,7 @@ export function SiteHeader() {
           ) : (
             <Link
               to="/auth"
-              className="rounded-md border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white hover:bg-white/10"
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
             >
               Sign in
             </Link>

@@ -81,18 +81,18 @@ function AuthPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-background px-6 py-16 text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="relative flex min-h-screen items-center justify-center bg-background px-6 py-16 text-foreground">
       <Link
         to="/"
         className="absolute left-6 top-6 inline-flex items-center gap-2 text-sm font-semibold"
       >
         <FabricMark className="h-6 w-6" /> Fabric Atlas
       </Link>
-      <div className="w-full max-w-md rounded-2xl border border-white/10 bg-gradient-to-b from-white/[0.04] to-white/[0.01] p-8 shadow-2xl">
+      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-2xl">
         <h1 className="text-2xl font-semibold tracking-tight">
           {mode === "signin" ? "Welcome back" : "Create your account"}
         </h1>
-        <p className="mt-1 text-sm text-white/55">
+        <p className="mt-1 text-sm text-muted-foreground">
           {mode === "signin"
             ? "Sign in to bookmark patterns and tune your atlas."
             : "Save patterns, mark favorites and shape your view."}
@@ -102,18 +102,18 @@ function AuthPage() {
           onClick={google}
           disabled={loading}
           variant="outline"
-          className="mt-6 w-full border-white/15 bg-white/[0.03] text-white hover:bg-white/[0.08]"
+          className="mt-6 w-full border-border bg-card text-foreground hover:bg-accent"
         >
           <GoogleG className="mr-2 h-4 w-4" /> Continue with Google
         </Button>
 
-        <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wider text-white/40">
-          <div className="h-px flex-1 bg-white/10" /> or <div className="h-px flex-1 bg-white/10" />
+        <div className="my-5 flex items-center gap-3 text-[11px] uppercase tracking-wider text-muted-foreground">
+          <div className="h-px flex-1 bg-accent" /> or <div className="h-px flex-1 bg-accent" />
         </div>
 
         <form onSubmit={submit} className="space-y-4">
           <div>
-            <Label htmlFor="email" className="text-white/70">
+            <Label htmlFor="email" className="text-muted-foreground">
               Email
             </Label>
             <Input
@@ -122,11 +122,11 @@ function AuthPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="mt-1 border-white/10 bg-white/[0.04] text-white"
+              className="mt-1 border-border bg-card text-foreground"
             />
           </div>
           <div>
-            <Label htmlFor="password" className="text-white/70">
+            <Label htmlFor="password" className="text-muted-foreground">
               Password
             </Label>
             <Input
@@ -136,7 +136,7 @@ function AuthPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={8}
-              className="mt-1 border-white/10 bg-white/[0.04] text-white"
+              className="mt-1 border-border bg-card text-foreground"
             />
           </div>
           <Button
@@ -148,7 +148,7 @@ function AuthPage() {
           </Button>
         </form>
 
-        <p className="mt-5 text-center text-sm text-white/55">
+        <p className="mt-5 text-center text-sm text-muted-foreground">
           {mode === "signin" ? "Need an account? " : "Have an account? "}
           <button
             onClick={() => setMode(mode === "signin" ? "signup" : "signin")}

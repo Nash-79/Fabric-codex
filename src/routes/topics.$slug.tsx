@@ -34,7 +34,7 @@ export const Route = createFileRoute("/topics/$slug")({
     }
   },
   errorComponent: ({ error, reset }) => (
-    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
       <p className="mt-6 text-rose-300">{error.message}</p>
       <button className="mt-3 underline" onClick={reset}>
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/topics/$slug")({
     </div>
   ),
   notFoundComponent: () => (
-    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
       <p className="mt-6">Topic not found.</p>
       <Link to="/topics" className="mt-3 inline-block underline">
@@ -60,14 +60,14 @@ function TopicPage() {
   const { topic, children, capabilities, blogs } = data;
 
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <div className="mx-auto max-w-4xl px-6 py-12">
-        <Link to="/topics" className="text-xs text-white/55 hover:text-white">
+        <Link to="/topics" className="text-xs text-muted-foreground hover:text-foreground">
           ← All topics
         </Link>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight">{topic.name}</h1>
-        <p className="mt-3 text-lg leading-relaxed text-white/70">{topic.description}</p>
+        <p className="mt-3 text-lg leading-relaxed text-muted-foreground">{topic.description}</p>
 
         {capabilities.length > 0 && (
           <div className="mt-6 flex flex-wrap gap-1.5">
@@ -91,7 +91,7 @@ function TopicPage() {
 
         {blogs.length > 0 && (
           <section className="mt-10">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Articles
             </h2>
             <ul className="mt-3 space-y-2">
@@ -100,10 +100,10 @@ function TopicPage() {
                   <Link
                     to="/blog/$slug"
                     params={{ slug: b.slug }}
-                    className="block rounded-xl border border-white/10 bg-white/[0.02] p-4 hover:bg-white/[0.05]"
+                    className="block rounded-xl border border-border bg-card p-4 hover:bg-accent"
                   >
-                    <div className="font-medium text-white">{b.title}</div>
-                    <div className="mt-1 text-sm text-white/55">{b.summary}</div>
+                    <div className="font-medium text-foreground">{b.title}</div>
+                    <div className="mt-1 text-sm text-muted-foreground">{b.summary}</div>
                   </Link>
                 </li>
               ))}
@@ -113,7 +113,7 @@ function TopicPage() {
 
         {children.length > 0 && (
           <section className="mt-10">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Subtopics
             </h2>
             <ul className="mt-3 space-y-1.5">
@@ -122,9 +122,9 @@ function TopicPage() {
                   <Link
                     to="/topics/$slug"
                     params={{ slug: c.slug }}
-                    className="block rounded-md px-2 py-1.5 text-sm text-white/85 hover:bg-white/5 hover:text-white"
+                    className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
-                    {c.name} — <span className="text-white/45">{c.description}</span>
+                    {c.name} — <span className="text-muted-foreground">{c.description}</span>
                   </Link>
                 </li>
               ))}

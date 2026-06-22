@@ -80,7 +80,7 @@ export function ThemeToggle() {
       onClick={cycle}
       aria-label={labelFor[theme]}
       title={labelFor[theme]}
-      className="no-print inline-flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-white/65 transition hover:bg-white/5 hover:text-white"
+      className="no-print inline-flex h-8 w-8 items-center justify-center rounded-md border border-border text-muted-foreground transition hover:bg-accent hover:text-foreground"
     >
       <Icon className="h-4 w-4" />
     </button>

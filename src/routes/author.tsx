@@ -22,21 +22,21 @@ export const Route = createFileRoute("/author")({
 
 function AuthorPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto max-w-3xl px-6 py-10">
         <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
           Workflow
         </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Authoring the atlas</h1>
-        <p className="mt-3 text-sm text-white/60">
+        <p className="mt-3 text-sm text-muted-foreground">
           Authoring is <strong>local-first</strong>. LLM work runs in the IDE on your subscription
           via Claude Code / Codex agents — not on the server. The atlas serves pre-built, cited
           content.
         </p>
 
-        <section className="mt-8 space-y-4 text-sm leading-relaxed text-white/75">
-          <h2 className="text-lg font-semibold text-white">Flow</h2>
+        <section className="mt-8 space-y-4 text-sm leading-relaxed text-muted-foreground">
+          <h2 className="text-lg font-semibold text-foreground">Flow</h2>
           <ol className="list-decimal space-y-2 pl-5">
             <li>
               An agent reads an approved source and writes{" "}
@@ -68,7 +68,7 @@ function AuthorPage() {
             </li>
           </ol>
 
-          <h2 className="mt-6 text-lg font-semibold text-white">Domain rules</h2>
+          <h2 className="mt-6 text-lg font-semibold text-foreground">Domain rules</h2>
           <ul className="list-disc space-y-1 pl-5">
             <li>Every factual claim cites a source. No source, no claim.</li>
             <li>
@@ -90,17 +90,17 @@ function AuthorPage() {
             <li>Paraphrase fully; quotes &lt; 15 words, attributed.</li>
           </ul>
 
-          <h2 className="mt-6 text-lg font-semibold text-white">Submit a source</h2>
+          <h2 className="mt-6 text-lg font-semibold text-foreground">Submit a source</h2>
           <p>
-            Anyone signed in can suggest a URL via the{" "}
-            <a href="/sources" className="text-teal-300 hover:underline">
-              Sources
-            </a>{" "}
-            page. Submissions land in the curator's queue and are reviewed before any claims enter
-            the atlas.
+            Admins queue a source URL from{" "}
+            <a href="/settings" className="text-teal-300 hover:underline">
+              Settings → Queue
+            </a>
+            . Submissions land in the curator's queue (<code>kind=source</code>) and are extracted
+            into cited claims by <code>/ingest-batch</code> before anything enters the atlas.
           </p>
 
-          <h2 className="mt-6 text-lg font-semibold text-white">Admin and docs upkeep</h2>
+          <h2 className="mt-6 text-lg font-semibold text-foreground">Admin and docs upkeep</h2>
           <p>
             Admins use{" "}
             <a href="/settings" className="text-teal-300 hover:underline">

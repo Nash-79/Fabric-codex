@@ -50,14 +50,14 @@ function LearnPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-6 py-10">
         <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
           Paths
         </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Learn Microsoft Fabric</h1>
-        <p className="mt-2 max-w-2xl text-sm text-white/55">
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Every lesson is grounded in approved, cited claims. Pick a tier.
         </p>
 
@@ -68,26 +68,23 @@ function LearnPage() {
             return (
               <section key={t.id}>
                 <div className="flex items-baseline gap-3">
-                  <h2 className="text-xl font-semibold text-white">{t.label}</h2>
-                  <span className="text-xs text-white/40">{t.depths.join(" · ")}</span>
+                  <h2 className="text-xl font-semibold text-foreground">{t.label}</h2>
+                  <span className="text-xs text-muted-foreground">{t.depths.join(" · ")}</span>
                 </div>
-                <p className="mt-1 text-sm text-white/55">{t.blurb}</p>
+                <p className="mt-1 text-sm text-muted-foreground">{t.blurb}</p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {isLoading && <div className="text-sm text-white/40">Loading…</div>}
+                  {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
                   {!isLoading && lessons.length === 0 && (
-                    <div className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-white/40">
+                    <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
                       No lessons yet.
                     </div>
                   )}
                   {lessons.map((l) => (
-                    <div
-                      key={l.id}
-                      className="rounded-xl border border-white/10 bg-white/[0.02] p-4"
-                    >
+                    <div key={l.id} className="rounded-xl border border-border bg-card p-4">
                       <div className="text-[10px] uppercase tracking-wide text-teal-300/70">
                         {l.depth}
                       </div>
-                      <div className="mt-1 text-sm font-medium text-white">{l.title}</div>
+                      <div className="mt-1 text-sm font-medium text-foreground">{l.title}</div>
                     </div>
                   ))}
                 </div>

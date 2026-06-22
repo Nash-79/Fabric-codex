@@ -141,10 +141,10 @@ function Landing() {
     null;
 
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <main>
-        <section className="border-b border-white/10 bg-[#090f1f]">
+        <section className="border-b border-border bg-card">
           <div className="mx-auto grid max-w-7xl gap-8 px-6 py-10 lg:grid-cols-[360px_minmax(0,1fr)]">
             <div>
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
@@ -154,7 +154,7 @@ function Landing() {
               <h1 className="mt-4 text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
                 Fabric Atlas
               </h1>
-              <p className="mt-4 text-base leading-relaxed text-white/65">
+              <p className="mt-4 text-base leading-relaxed text-muted-foreground">
                 Browse Microsoft Fabric by capability, inspect cited claims, open source-backed
                 articles, and jump into Advisor prompts grounded in the same registry.
               </p>
@@ -166,17 +166,17 @@ function Landing() {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
-              <section className="rounded-md border border-white/10 bg-white/[0.025] p-4">
+              <section className="rounded-md border border-border bg-card p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs uppercase tracking-wide text-white/45">
+                    <div className="text-xs uppercase tracking-wide text-muted-foreground">
                       Capability map
                     </div>
                     <h2 className="mt-1 text-lg font-semibold">Explore the registry spine</h2>
                   </div>
                   <Link
                     to="/registry"
-                    className="rounded-md border border-white/10 px-3 py-1.5 text-xs text-white/65 hover:bg-white/5 hover:text-white"
+                    className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
                     Registry
                   </Link>
@@ -195,8 +195,8 @@ function Landing() {
                         onClick={() => setSelectedCapability(capability.id)}
                         className={`min-h-24 rounded-md border p-3 text-left transition ${
                           active
-                            ? `border-white/30 bg-white/[0.08] ring-2 ${capAccent.ring}`
-                            : "border-white/10 bg-white/[0.02] hover:border-white/20 hover:bg-white/[0.04]"
+                            ? `border-border bg-card ring-2 ${capAccent.ring}`
+                            : "border-border bg-card hover:border-border hover:bg-accent"
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2">
@@ -204,12 +204,12 @@ function Landing() {
                             className={`h-2 w-2 rounded-full ${capAccent.dot}`}
                             aria-hidden="true"
                           />
-                          <span className="text-[10px] text-white/40">{count} claims</span>
+                          <span className="text-[10px] text-muted-foreground">{count} claims</span>
                         </div>
-                        <div className="mt-2 text-sm font-semibold text-white">
+                        <div className="mt-2 text-sm font-semibold text-foreground">
                           {capability.name}
                         </div>
-                        <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-white/50">
+                        <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
                           {topic?.description ?? capability.description}
                         </div>
                       </button>
@@ -218,7 +218,7 @@ function Landing() {
                 </div>
               </section>
 
-              <aside className="rounded-md border border-white/10 bg-white/[0.025] p-4">
+              <aside className="rounded-md border border-border bg-card p-4">
                 <div className={`inline-flex rounded-full border px-2 py-1 text-xs ${a.chip}`}>
                   <span className={`mr-1.5 mt-1 h-1.5 w-1.5 rounded-full ${a.dot}`} />
                   {selected?.name ?? selectedCapability}
@@ -226,7 +226,7 @@ function Landing() {
                 <h2 className="mt-4 text-xl font-semibold tracking-tight">
                   {selectedTopic?.name ?? selected?.name}
                 </h2>
-                <p className="mt-2 text-sm leading-relaxed text-white/55">
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
                   {selectedTopic?.description ?? selected?.description}
                 </p>
                 <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
@@ -234,7 +234,7 @@ function Landing() {
                   <Stat label="Sources" value={sourceCount} />
                 </div>
                 {diagramPath && (
-                  <div className="mt-4 overflow-hidden rounded-md border border-white/10 bg-[#050816]">
+                  <div className="mt-4 overflow-hidden rounded-md border border-border bg-muted">
                     <img
                       src={diagramPath}
                       alt={`${selected?.name ?? selectedCapability} diagram`}
@@ -247,7 +247,7 @@ function Landing() {
                 )}
                 <Link
                   to="/advisor"
-                  className="mt-4 flex items-center justify-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-[#070b16] hover:bg-white/90"
+                  className="mt-4 flex items-center justify-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
                 >
                   <Bot className="h-4 w-4" />
                   Ask Advisor
@@ -259,10 +259,10 @@ function Landing() {
 
         <section className="mx-auto grid max-w-7xl gap-6 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            <section className="rounded-md border border-white/10 bg-white/[0.025]">
-              <div className="flex flex-col gap-3 border-b border-white/10 p-4 md:flex-row md:items-center md:justify-between">
+            <section className="rounded-md border border-border bg-card">
+              <div className="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/45">
+                  <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                     <Filter className="h-4 w-4" />
                     Claim workbench
                   </div>
@@ -274,7 +274,7 @@ function Landing() {
                     onChange={(event) =>
                       setDepth(event.target.value === "all" ? "all" : Number(event.target.value))
                     }
-                    className="rounded-md border border-white/10 bg-[#0b1124] px-2 py-1.5 text-xs text-white"
+                    className="rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground"
                   >
                     <option value="all">All depths</option>
                     {[1, 2, 3, 4, 5].map((d) => (
@@ -288,7 +288,7 @@ function Landing() {
                     onChange={(event) =>
                       setTier(event.target.value === "all" ? "all" : Number(event.target.value))
                     }
-                    className="rounded-md border border-white/10 bg-[#0b1124] px-2 py-1.5 text-xs text-white"
+                    className="rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground"
                   >
                     <option value="all">All tiers</option>
                     {[1, 2, 3, 4, 5, 6].map((t) => (
@@ -298,27 +298,29 @@ function Landing() {
                     ))}
                   </select>
                   <div className="relative">
-                    <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-white/35" />
+                    <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
                     <input
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
                       placeholder="Filter claims"
-                      className="w-44 rounded-md border border-white/10 bg-white/[0.04] py-1.5 pl-7 pr-2 text-xs text-white placeholder:text-white/35"
+                      className="w-44 rounded-md border border-border bg-card py-1.5 pl-7 pr-2 text-xs text-foreground placeholder:text-muted-foreground"
                     />
                   </div>
                 </div>
               </div>
-              <div className="divide-y divide-white/5">
+              <div className="divide-y divide-border">
                 {visibleClaims.map((claim: any) => (
                   <div key={claim.id} className="p-4">
                     <div className="flex flex-wrap items-center gap-2">
                       <DepthBadge depth={claim.depth} />
                       {claim.sources?.tier && <TierBadge tier={claim.sources.tier} />}
-                      <span className="text-[10px] uppercase tracking-wide text-white/35">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
                         {claim.type}
                       </span>
                     </div>
-                    <p className="mt-2 text-sm leading-relaxed text-white/80">{claim.text}</p>
+                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                      {claim.text}
+                    </p>
                     {claim.sources?.title && (
                       <a
                         href={claim.sources.url}
@@ -332,7 +334,7 @@ function Landing() {
                   </div>
                 ))}
                 {visibleClaims.length === 0 && (
-                  <div className="p-8 text-center text-sm text-white/45">
+                  <div className="p-8 text-center text-sm text-muted-foreground">
                     No claims match the current filters.
                   </div>
                 )}
@@ -341,8 +343,8 @@ function Landing() {
           </div>
 
           <aside className="space-y-6">
-            <section className="rounded-md border border-white/10 bg-white/[0.025] p-4">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/45">
+            <section className="rounded-md border border-border bg-card p-4">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                 <FileText className="h-4 w-4" />
                 Article hub
               </div>
@@ -352,10 +354,10 @@ function Landing() {
                     key={blog.slug}
                     to="/blog/$slug"
                     params={{ slug: blog.slug }}
-                    className="block rounded-md border border-white/10 bg-white/[0.02] p-3 hover:bg-white/[0.05]"
+                    className="block rounded-md border border-border bg-card p-3 hover:bg-accent"
                   >
-                    <div className="text-sm font-semibold text-white">{blog.title}</div>
-                    <div className="mt-1 line-clamp-3 text-xs leading-relaxed text-white/50">
+                    <div className="text-sm font-semibold text-foreground">{blog.title}</div>
+                    <div className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
                       {blog.summary}
                     </div>
                   </Link>
@@ -369,8 +371,8 @@ function Landing() {
               </Link>
             </section>
 
-            <section className="rounded-md border border-white/10 bg-white/[0.025] p-4">
-              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/45">
+            <section className="rounded-md border border-border bg-card p-4">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                 <Bot className="h-4 w-4" />
                 Advisor prompts
               </div>
@@ -383,7 +385,7 @@ function Landing() {
                   <Link
                     key={prompt}
                     to="/advisor"
-                    className="block rounded-md border border-white/10 bg-white/[0.02] p-3 text-white/70 hover:bg-white/[0.05] hover:text-white"
+                    className="block rounded-md border border-border bg-card p-3 text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
                     {prompt}
                   </Link>
@@ -399,8 +401,8 @@ function Landing() {
 
 function Metric({ icon: Icon, label, value }: { icon: any; label: string; value: number }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <div className="flex items-center gap-2 text-xs text-white/45">
+    <div className="rounded-md border border-border bg-card p-3">
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
         <Icon className="h-4 w-4" />
         {label}
       </div>
@@ -411,9 +413,9 @@ function Metric({ icon: Icon, label, value }: { icon: any; label: string; value:
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-      <div className="text-white/45">{label}</div>
-      <div className="mt-1 text-lg font-semibold text-white">{value}</div>
+    <div className="rounded-md border border-border bg-card p-3">
+      <div className="text-muted-foreground">{label}</div>
+      <div className="mt-1 text-lg font-semibold text-foreground">{value}</div>
     </div>
   );
 }

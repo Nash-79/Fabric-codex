@@ -38,7 +38,7 @@ export const Route = createFileRoute("/design/$slug")({
     }
   },
   errorComponent: ({ error, reset }) => (
-    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
       <p className="mt-6 text-rose-300">{error.message}</p>
       <button className="mt-3 underline" onClick={reset}>
@@ -47,7 +47,7 @@ export const Route = createFileRoute("/design/$slug")({
     </div>
   ),
   notFoundComponent: () => (
-    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
       <p className="mt-6">Design not found.</p>
       <Link to="/designs" className="mt-3 inline-block underline">
@@ -63,25 +63,28 @@ function DesignPage() {
   const { data } = useSuspenseQuery(designQO(slug));
   const { design, citations } = data;
 
-  const renderedBody = design.body_md.replace(/\[S(\d+)\]/g, (_m: string, n: string) => `[S${n}](#src-${n})`);
+  const renderedBody = design.body_md.replace(
+    /\[S(\d+)\]/g,
+    (_m: string, n: string) => `[S${n}](#src-${n})`,
+  );
 
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <article className="mx-auto max-w-3xl px-6 py-12">
         <div className="flex items-center justify-between gap-3">
-          <Link to="/designs" className="text-xs text-white/55 hover:text-white">
+          <Link to="/designs" className="text-xs text-muted-foreground hover:text-foreground">
             ← Designs
           </Link>
           <PrintButton />
         </div>
         <h1 className="mt-3 text-4xl font-semibold tracking-tight">{design.title}</h1>
-        <p className="mt-2 text-xs text-white/45">{readingTime(design.body_md)} min read</p>
+        <p className="mt-2 text-xs text-muted-foreground">{readingTime(design.body_md)} min read</p>
         {design.summary && (
-          <p className="mt-3 text-lg leading-relaxed text-white/70">{design.summary}</p>
+          <p className="mt-3 text-lg leading-relaxed text-muted-foreground">{design.summary}</p>
         )}
 
-        <div className="prose prose-invert mt-8 max-w-none prose-headings:tracking-tight prose-a:text-teal-300 prose-img:rounded-xl prose-img:border prose-img:border-white/10">
+        <div className="prose prose-invert mt-8 max-w-none prose-headings:tracking-tight prose-a:text-teal-300 prose-img:rounded-xl prose-img:border prose-img:border-border">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
             urlTransform={(url) =>
@@ -113,8 +116,8 @@ function DesignPage() {
         </div>
 
         {citations.length > 0 && (
-          <section className="print-sources mt-14 border-t border-white/10 pt-8">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-white/60">
+          <section className="print-sources mt-14 border-t border-border pt-8">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
               Sources
             </h2>
             <ol className="mt-4 space-y-3">
@@ -124,21 +127,21 @@ function DesignPage() {
                   <li
                     key={c.label}
                     id={`src-${n}`}
-                    className="rounded-xl border border-white/10 bg-white/[0.02] p-4"
+                    className="rounded-xl border border-border bg-card p-4"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <a
                         href={c.source?.url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-sm font-medium text-white hover:text-teal-300"
+                        className="text-sm font-medium text-foreground hover:text-teal-300"
                       >
                         [{c.label}] {c.source?.title}
                       </a>
                       {c.source?.tier && <TierBadge tier={c.source.tier} />}
                     </div>
                     {c.source?.summary && (
-                      <p className="mt-1 text-xs text-white/55">{c.source.summary}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{c.source.summary}</p>
                     )}
                   </li>
                 );

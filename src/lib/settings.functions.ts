@@ -619,6 +619,161 @@ export const submitSourceReview = createServerFn({ method: "POST" })
     return { ok: true, queue: queued };
   });
 
+export const submitSourceUrl = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (d: { url: string; title?: string; tier?: number; tags?: string[]; note?: string }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+
+    const url = (data.url ?? "").trim();
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new Error("Enter a valid URL (including https://).");
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("Only http(s) URLs can be queued.");
+    }
+
+    const tier = data.tier ?? 6;
+    if (tier < 1 || tier > 6) throw new Error("Tier must be between 1 and 6.");
+
+    const sb = await adminClient();
+
+    // Dedup: refuse if the URL is already an approved source or an open queue item.
+    const { data: existingSource } = await sb
+      .from("sources")
+      .select("slug")
+      .eq("url", url)
+      .maybeSingle();
+    if (existingSource) {
+      throw new Error(`Already an approved source (${existingSource.slug}).`);
+    }
+    const { data: openItem } = await sb
+      .from("queue_items")
+      .select("id,status")
+      .eq("url", url)
+      .in("status", ["queued", "claimed"])
+      .maybeSingle();
+    if (openItem) {
+      throw new Error("That URL is already in the ingestion queue.");
+    }
+
+    const note = data.note?.trim() ?? "";
+    const { data: queued, error } = await sb
+      .from("queue_items")
+      .insert({
+        url,
+        title: data.title?.trim() ?? "",
+        tier,
+        tags: data.tags ?? [],
+        kind: "source",
+        note,
+        notes: note,
+        submitted_by: context.userId,
+        status: "queued",
+      })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await recordAudit(context.userId, "source.url_submitted", "queue", queued.id, { url });
+    return { ok: true as const, queue: queued };
+  });
+
+// --- RSS subscriptions -----------------------------------------------------
+// Feeds are stored here; the local /poll-rss-feeds agent does the actual fetch/parse/queue.
+
+export const listRssSubscriptions = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { data, error } = await sb
+      .from("rss_subscriptions")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return { subscriptions: data ?? [] };
+  });
+
+export const addRssSubscription = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(
+    (d: { feedUrl: string; title?: string; defaultTier?: number; defaultTags?: string[] }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+
+    const feedUrl = (data.feedUrl ?? "").trim();
+    let parsed: URL;
+    try {
+      parsed = new URL(feedUrl);
+    } catch {
+      throw new Error("Enter a valid feed URL (including https://).");
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("Only http(s) feed URLs are supported.");
+    }
+    const tier = data.defaultTier ?? 6;
+    if (tier < 1 || tier > 6) throw new Error("Tier must be between 1 and 6.");
+
+    const sb = await adminClient();
+    const { data: row, error } = await sb
+      .from("rss_subscriptions")
+      .insert({
+        feed_url: feedUrl,
+        title: data.title?.trim() ?? "",
+        default_tier: tier,
+        default_tags: data.defaultTags ?? [],
+        status: "active",
+        created_by: context.userId,
+      })
+      .select("*")
+      .single();
+    if (error) {
+      if ((error as { code?: string }).code === "23505") {
+        throw new Error("That feed is already subscribed.");
+      }
+      throw new Error(error.message);
+    }
+    await recordAudit(context.userId, "rss.subscribed", "rss_subscription", row.id, { feedUrl });
+    return { ok: true as const, subscription: row };
+  });
+
+export const setRssSubscriptionStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string; status: "active" | "paused" }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    if (data.status !== "active" && data.status !== "paused") {
+      throw new Error("Invalid status.");
+    }
+    const sb = await adminClient();
+    const { error } = await sb
+      .from("rss_subscriptions")
+      .update({ status: data.status })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, `rss.${data.status}`, "rss_subscription", data.id);
+    return { ok: true as const };
+  });
+
+export const deleteRssSubscription = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { id: string }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { error } = await sb.from("rss_subscriptions").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "rss.unsubscribed", "rss_subscription", data.id);
+    return { ok: true as const };
+  });
+
 export const validateContent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { kind: "blog" | "design"; id: string }) => d)

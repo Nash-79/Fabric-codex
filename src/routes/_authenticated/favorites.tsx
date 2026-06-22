@@ -22,18 +22,18 @@ function FavoritesPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <div className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Favorites</h1>
-        <p className="mt-2 text-sm text-white/55">
+        <p className="mt-2 text-sm text-muted-foreground">
           Articles, topics, claims, and sources you bookmarked.
         </p>
 
         <ul className="mt-8 space-y-2">
-          {isLoading && <li className="text-white/50">Loading…</li>}
+          {isLoading && <li className="text-muted-foreground">Loading…</li>}
           {!isLoading && (data ?? []).length === 0 && (
-            <li className="rounded-xl border border-dashed border-white/15 p-10 text-center text-white/55">
+            <li className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
               Nothing bookmarked yet.{" "}
               <Link to="/topics" className="text-teal-300 underline-offset-4 hover:underline">
                 Browse the atlas
@@ -44,19 +44,19 @@ function FavoritesPage() {
           {(data ?? []).map((f) => (
             <li
               key={`${f.item_type}:${f.item_key}`}
-              className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] p-3"
+              className="flex items-center justify-between rounded-xl border border-border bg-card p-3"
             >
               <div>
-                <div className="text-[10px] uppercase tracking-wider text-white/45">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                   {f.item_type}
                 </div>
-                <div className="text-sm text-white">{f.item_key}</div>
+                <div className="text-sm text-foreground">{f.item_key}</div>
               </div>
               <button
                 onClick={() =>
                   remove.mutate({ itemType: f.item_type as FavoriteItemType, itemKey: f.item_key })
                 }
-                className="text-xs text-white/55 hover:text-white"
+                className="text-xs text-muted-foreground hover:text-foreground"
                 disabled={remove.isPending}
               >
                 Remove

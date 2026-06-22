@@ -106,7 +106,7 @@ function AdvisorPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <SiteHeader />
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 py-8">
         <header className="mb-4">
@@ -114,27 +114,29 @@ function AdvisorPage() {
             Grounded Advisor
           </div>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">Ask the atlas</h1>
-          <p className="mt-2 text-sm text-white/55">
+          <p className="mt-2 text-sm text-muted-foreground">
             The Advisor retrieves cited claims from the knowledge base. It will refuse where the
             atlas is silent and label inferences.
           </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-xs text-white/55">
-              <span className="font-medium uppercase tracking-wide text-white/40">Model</span>
+            <label className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium uppercase tracking-wide text-muted-foreground">
+                Model
+              </span>
               <select
                 value={modelId}
                 onChange={(e) => setModelId(e.target.value)}
-                className="rounded-md border border-white/10 bg-white/[0.04] px-2 py-1.5 text-xs text-white focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                className="rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-teal-500/30"
               >
                 {ADVISOR_MODELS.map((m) => (
-                  <option key={m.id} value={m.id} className="bg-[#0b1124]">
+                  <option key={m.id} value={m.id} className="bg-card">
                     {m.label} — {TIER_LABEL[m.tier]} · {m.hint}
                   </option>
                 ))}
               </select>
             </label>
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/55">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
               <span
                 className={`inline-block h-1.5 w-1.5 rounded-full ${TIER_DOT[activeModel.tier]}`}
               />
@@ -146,7 +148,7 @@ function AdvisorPage() {
                   setMessages([]);
                   window.localStorage.removeItem(STORAGE_KEY);
                 }}
-                className="text-xs text-white/45 hover:text-white"
+                className="text-xs text-muted-foreground hover:text-foreground"
               >
                 Clear conversation
               </button>
@@ -156,10 +158,10 @@ function AdvisorPage() {
 
         <div
           ref={scrollRef}
-          className="flex-1 space-y-4 overflow-y-auto rounded-2xl border border-white/10 bg-white/[0.02] p-5"
+          className="flex-1 space-y-4 overflow-y-auto rounded-2xl border border-border bg-card p-5"
         >
           {messages.length === 0 && (
-            <div className="text-sm text-white/45">
+            <div className="text-sm text-muted-foreground">
               Try: <em>"When does Direct Lake fall back to DirectQuery?"</em> or{" "}
               <em>"What are OneLake shortcut limits?"</em>
             </div>
@@ -171,7 +173,7 @@ function AdvisorPage() {
               <div key={m.id} className={mine ? "ml-auto max-w-[85%]" : "max-w-[95%]"}>
                 <div
                   className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                    mine ? "bg-teal-500/15 text-white" : "bg-white/[0.04] text-white/90"
+                    mine ? "bg-teal-500/15 text-foreground" : "bg-card text-muted-foreground"
                   }`}
                 >
                   <div className="prose prose-invert prose-sm max-w-none prose-p:my-2 prose-a:text-teal-300">
@@ -182,7 +184,7 @@ function AdvisorPage() {
             );
           })}
           {status === "submitted" && (
-            <div className="text-xs text-white/40">Retrieving from the atlas…</div>
+            <div className="text-xs text-muted-foreground">Retrieving from the atlas…</div>
           )}
           {error && (
             <div className="rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-sm text-rose-200">
@@ -204,11 +206,11 @@ function AdvisorPage() {
             }}
             rows={2}
             placeholder="Ask about OneLake, Direct Lake, capacity, governance…"
-            className="flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+            className="flex-1 resize-none rounded-xl border border-border bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-teal-500/30"
           />
           <button
             disabled={isLoading || !input.trim()}
-            className="rounded-xl bg-white px-4 py-3 text-sm font-semibold text-[#070b16] hover:bg-white/90 disabled:opacity-50"
+            className="rounded-xl bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
             Ask
           </button>

@@ -99,7 +99,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         content: description,
       },
       { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#faf9f8" },
-      { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#141414" },
+      { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#323232" },
     ],
 
     links: [
@@ -114,7 +114,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         href: appCss,
       },
     ],
-
   }),
   shellComponent: RootShell,
   component: RootComponent,

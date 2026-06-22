@@ -10,7 +10,7 @@ export function PrintButton({ label = "Export PDF" }: { label?: string }) {
     <button
       type="button"
       onClick={() => window.print()}
-      className="no-print inline-flex items-center gap-1.5 rounded-md border border-white/15 bg-white/[0.03] px-3 py-1.5 text-xs font-medium text-white/70 transition hover:border-white/30 hover:text-white"
+      className="no-print inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground"
       aria-label={label}
     >
       <Printer className="h-3.5 w-3.5" />

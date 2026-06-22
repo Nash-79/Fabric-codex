@@ -12,6 +12,7 @@ import {
   ListChecks,
   MailPlus,
   RefreshCw,
+  Rss,
   ShieldCheck,
   UserCog,
   X,
@@ -56,9 +57,14 @@ import {
   inviteUser,
   mutateClaim,
   mutateQueueItem,
+  addRssSubscription,
+  deleteRssSubscription,
+  listRssSubscriptions,
   saveBlogVersion,
+  setRssSubscriptionStatus,
   setUserRoles,
   submitSourceReview,
+  submitSourceUrl,
   supersedeClaim,
   suspendUser,
   updateInvitationStatus,
@@ -86,6 +92,7 @@ const nav = [
   { id: "blogs", label: "Blogs", icon: BookOpen },
   { id: "queue", label: "Queue", icon: FileText },
   { id: "diagrams", label: "Diagrams", icon: ImageIcon },
+  { id: "rss", label: "RSS Feeds", icon: Rss },
   { id: "logs", label: "Logs", icon: Activity },
   { id: "system", label: "System", icon: Gauge },
 ] as const;
@@ -131,11 +138,8 @@ function SettingsPage() {
           {Object.entries(overview.data?.stats ?? {})
             .slice(0, 4)
             .map(([key, value]) => (
-              <div
-                key={key}
-                className="rounded-md border border-white/10 bg-white/[0.03] px-3 py-2"
-              >
-                <div className="text-white/45">{key}</div>
+              <div key={key} className="rounded-md border border-border bg-card px-3 py-2">
+                <div className="text-muted-foreground">{key}</div>
                 <div className="text-lg font-semibold">{value as number}</div>
               </div>
             ))}
@@ -143,12 +147,12 @@ function SettingsPage() {
       </div>
 
       <Tabs defaultValue="users" className="mt-7 grid gap-5 md:grid-cols-[180px_minmax(0,1fr)]">
-        <TabsList className="flex h-auto flex-row justify-start gap-1 overflow-x-auto rounded-md border border-white/10 bg-white/[0.03] p-1 md:flex-col md:items-stretch md:overflow-visible">
+        <TabsList className="flex h-auto flex-row justify-start gap-1 overflow-x-auto rounded-md border border-border bg-card p-1 md:flex-col md:items-stretch md:overflow-visible">
           {nav.map((item) => (
             <TabsTrigger
               key={item.id}
               value={item.id}
-              className="justify-start gap-2 text-white/65 data-[state=active]:bg-white/10 data-[state=active]:text-white"
+              className="justify-start gap-2 text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground"
             >
               <item.icon className="h-4 w-4" />
               {item.label}
@@ -175,6 +179,9 @@ function SettingsPage() {
           <TabsContent value="diagrams" className="mt-0">
             <DiagramsPanel />
           </TabsContent>
+          <TabsContent value="rss" className="mt-0">
+            <RssPanel />
+          </TabsContent>
           <TabsContent value="logs" className="mt-0">
             <LogsPanel
               data={overview.data?.audit ?? cms.data?.audit ?? []}
@@ -192,7 +199,7 @@ function SettingsPage() {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto max-w-7xl px-4 py-8 md:px-6">{children}</main>
     </div>
@@ -209,8 +216,8 @@ function Panel({
   action?: ReactNode;
 }) {
   return (
-    <section className="rounded-md border border-white/10 bg-white/[0.02]">
-      <div className="flex flex-col gap-3 border-b border-white/10 px-4 py-3 md:flex-row md:items-center md:justify-between">
+    <section className="rounded-md border border-border bg-card">
+      <div className="flex flex-col gap-3 border-b border-border px-4 py-3 md:flex-row md:items-center md:justify-between">
         <h2 className="text-sm font-semibold">{title}</h2>
         {action}
       </div>
@@ -230,7 +237,7 @@ function statusBadge(status?: string) {
         ? "border-amber-400/30 bg-amber-500/10 text-amber-200"
         : status === "suspended" || status === "rejected" || status === "failed"
           ? "border-rose-400/30 bg-rose-500/10 text-rose-200"
-          : "border-white/15 bg-white/[0.04] text-white/65";
+          : "border-border bg-card text-muted-foreground";
   return <Badge className={`rounded-sm border text-[11px] ${cls}`}>{status ?? "unknown"}</Badge>;
 }
 
@@ -276,10 +283,10 @@ function UsersPanel({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="name@example.com"
-            className="h-8 border-white/10 bg-white/[0.04] text-white"
+            className="h-8 border-border bg-card text-foreground"
           />
           <Select value={role} onValueChange={(v) => setRole(v as AppRole)}>
-            <SelectTrigger className="h-8 w-32 border-white/10 bg-white/[0.04] text-white">
+            <SelectTrigger className="h-8 w-32 border-border bg-card text-foreground">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -301,9 +308,9 @@ function UsersPanel({
         <Empty text="Loading users..." />
       ) : (
         <div className="space-y-5">
-          <Table className="text-white">
+          <Table className="text-foreground">
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
+              <TableRow className="border-border hover:bg-transparent">
                 <TableHead>Email</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Roles</TableHead>
@@ -313,13 +320,13 @@ function UsersPanel({
             </TableHeader>
             <TableBody>
               {(data?.users ?? []).map((u: any) => (
-                <TableRow key={u.id} className="border-white/5 hover:bg-white/[0.03]">
+                <TableRow key={u.id} className="border-border hover:bg-accent">
                   <TableCell className="font-medium">{u.email ?? u.id}</TableCell>
                   <TableCell>{statusBadge(u.profile?.status)}</TableCell>
                   <TableCell>
                     <RoleChips roles={u.roles} />
                   </TableCell>
-                  <TableCell className="text-white/55">
+                  <TableCell className="text-muted-foreground">
                     {u.last_sign_in_at ? new Date(u.last_sign_in_at).toLocaleString() : "Never"}
                   </TableCell>
                   <TableCell>
@@ -327,7 +334,7 @@ function UsersPanel({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 border-white/10 bg-white/[0.03] text-white"
+                        className="h-8 border-border bg-card text-foreground"
                         onClick={() =>
                           mutate.mutate(
                             approveFn({
@@ -341,7 +348,7 @@ function UsersPanel({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 border-white/10 bg-white/[0.03] text-white"
+                        className="h-8 border-border bg-card text-foreground"
                         onClick={() =>
                           mutate.mutate(rolesFn({ data: { userId: u.id, roles: ["editor"] } }))
                         }
@@ -351,7 +358,7 @@ function UsersPanel({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 border-white/10 bg-white/[0.03] text-white"
+                        className="h-8 border-border bg-card text-foreground"
                         onClick={() =>
                           mutate.mutate(rolesFn({ data: { userId: u.id, roles: ["admin"] } }))
                         }
@@ -373,10 +380,10 @@ function UsersPanel({
             </TableBody>
           </Table>
           <div>
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/45">
+            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Invitations
             </div>
-            <div className="divide-y divide-white/5 rounded-md border border-white/10">
+            <div className="divide-y divide-border rounded-md border border-border">
               {(data?.invitations ?? []).map((inv: any) => (
                 <div
                   key={inv.id}
@@ -384,19 +391,19 @@ function UsersPanel({
                 >
                   <div className="min-w-0">
                     <div className="truncate font-medium">{inv.email}</div>
-                    <div className="text-xs text-white/45">
+                    <div className="text-xs text-muted-foreground">
                       invited {new Date(inv.created_at).toLocaleString()}
                     </div>
                   </div>
                   <div>{statusBadge(inv.status)}</div>
-                  <div className="text-white/65">{inv.intended_role}</div>
+                  <div className="text-muted-foreground">{inv.intended_role}</div>
                   <div className="flex justify-end gap-1">
                     {inv.status === "pending" && (
                       <>
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-8 border-white/10 bg-white/[0.03] text-white"
+                          className="h-8 border-border bg-card text-foreground"
                           onClick={() =>
                             mutate.mutate(
                               invitationFn({
@@ -441,7 +448,7 @@ function RoleChips({ roles }: { roles: string[] }) {
       {(roles?.length ? roles : ["none"]).map((r) => (
         <span
           key={r}
-          className="rounded-sm border border-white/10 bg-white/[0.04] px-1.5 py-0.5 text-[11px] text-white/65"
+          className="rounded-sm border border-border bg-card px-1.5 py-0.5 text-[11px] text-muted-foreground"
         >
           {r}
         </span>
@@ -498,8 +505,8 @@ function ContentPanel({
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
               {counts.map(([label, count]) => (
-                <div key={label} className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-                  <div className="text-xs text-white/45">{label}</div>
+                <div key={label} className="rounded-md border border-border bg-card p-3">
+                  <div className="text-xs text-muted-foreground">{label}</div>
                   <div className="text-xl font-semibold">{count}</div>
                 </div>
               ))}
@@ -514,7 +521,7 @@ function ContentPanel({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 border-white/10 bg-white/[0.03] text-white"
+                  className="h-8 border-border bg-card text-foreground"
                   disabled={review.isPending}
                   onClick={() => review.mutate(item.id)}
                 >
@@ -561,7 +568,7 @@ function ContentPanel({
                 <Button
                   size="sm"
                   variant="outline"
-                  className="h-8 border-white/10 bg-white/[0.03] text-white"
+                  className="h-8 border-border bg-card text-foreground"
                   disabled={validate.isPending}
                   onClick={() => validate.mutate(item.id)}
                 >
@@ -594,25 +601,25 @@ function CompactList({
 }) {
   return (
     <div>
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/45">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {title}
       </div>
-      <div className="divide-y divide-white/5 rounded-md border border-white/10">
+      <div className="divide-y divide-border rounded-md border border-border">
         {rows.slice(0, 8).map((row) => (
           <div
             key={row.id ?? row.slug}
             className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
           >
             <div className="min-w-0">
-              <div className="truncate text-white">{label(row)}</div>
-              <div className="truncate text-xs text-white/45">{meta(row)}</div>
+              <div className="truncate text-foreground">{label(row)}</div>
+              <div className="truncate text-xs text-muted-foreground">{meta(row)}</div>
             </div>
             <div className="flex shrink-0 gap-1">
               {extraAction?.(row)}
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8 border-white/10 bg-white/[0.03] text-white"
+                className="h-8 border-border bg-card text-foreground"
                 onClick={() => onEdit(row)}
               >
                 Edit
@@ -715,10 +722,10 @@ function ContentEditor({
         }
       }}
     >
-      <DialogContent className="max-h-[85vh] overflow-auto border-white/10 bg-[#0b1020] text-white sm:max-w-2xl">
+      <DialogContent className="max-h-[85vh] overflow-auto border-border bg-popover text-foreground sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit {edit.kind}</DialogTitle>
-          <DialogDescription className="text-white/55">
+          <DialogDescription className="text-muted-foreground">
             Metadata edits are logged. Claim text and blog body edits use versioned workflows
             elsewhere.
           </DialogDescription>
@@ -831,7 +838,7 @@ function ClaimsPanel({
         title="Claims"
         action={
           <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="h-8 w-36 border-white/10 bg-white/[0.04] text-white">
+            <SelectTrigger className="h-8 w-36 border-border bg-card text-foreground">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -847,9 +854,9 @@ function ClaimsPanel({
         {loading ? (
           <Empty text="Loading claims..." />
         ) : (
-          <Table className="text-white">
+          <Table className="text-foreground">
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
+              <TableRow className="border-border hover:bg-transparent">
                 <TableHead>Claim</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Capability</TableHead>
@@ -858,13 +865,13 @@ function ClaimsPanel({
             </TableHeader>
             <TableBody>
               {rows.slice(0, 120).map((c: any) => (
-                <TableRow key={c.id} className="border-white/5 hover:bg-white/[0.03]">
+                <TableRow key={c.id} className="border-border hover:bg-accent">
                   <TableCell>
                     <div className="max-w-2xl text-sm">{c.text}</div>
-                    <div className="mt-1 text-xs text-white/40">{c.sources?.title}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">{c.sources?.title}</div>
                   </TableCell>
                   <TableCell>{statusBadge(c.status)}</TableCell>
-                  <TableCell className="text-white/65">
+                  <TableCell className="text-muted-foreground">
                     {c.capability_id} · L{c.depth}
                   </TableCell>
                   <TableCell>
@@ -872,7 +879,7 @@ function ClaimsPanel({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 border-white/10 bg-white/[0.03] text-white"
+                        className="h-8 border-border bg-card text-foreground"
                         onClick={() =>
                           mutate.mutate(actionFn({ data: { claimId: c.id, action: "verify" } }))
                         }
@@ -882,7 +889,7 @@ function ClaimsPanel({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 border-white/10 bg-white/[0.03] text-white"
+                        className="h-8 border-border bg-card text-foreground"
                         onClick={() => {
                           setEdit(c);
                           setNewText(c.text);
@@ -911,7 +918,7 @@ function ClaimsPanel({
                         <Button
                           size="sm"
                           variant="outline"
-                          className="h-8 border-white/10 bg-white/[0.03] text-white"
+                          className="h-8 border-border bg-card text-foreground"
                           onClick={() =>
                             mutate.mutate(actionFn({ data: { claimId: c.id, action: "promote" } }))
                           }
@@ -928,10 +935,10 @@ function ClaimsPanel({
         )}
       </Panel>
       <Dialog open={!!edit} onOpenChange={(open) => !open && setEdit(null)}>
-        <DialogContent className="border-white/10 bg-[#0b1020] text-white sm:max-w-2xl">
+        <DialogContent className="border-border bg-popover text-foreground sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Supersede claim</DialogTitle>
-            <DialogDescription className="text-white/55">
+            <DialogDescription className="text-muted-foreground">
               This creates a new pending claim version and deactivates the current version.
             </DialogDescription>
           </DialogHeader>
@@ -939,7 +946,7 @@ function ClaimsPanel({
             value={newText}
             onChange={(e) => setNewText(e.target.value)}
             rows={8}
-            className="border-white/10 bg-white/[0.04] text-white"
+            className="border-border bg-card text-foreground"
           />
           <Button
             onClick={() =>
@@ -1016,9 +1023,9 @@ function BlogsPanel({
         {loading ? (
           <Empty text="Loading blogs..." />
         ) : (
-          <Table className="text-white">
+          <Table className="text-foreground">
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
+              <TableRow className="border-border hover:bg-transparent">
                 <TableHead>Title</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Version</TableHead>
@@ -1027,10 +1034,10 @@ function BlogsPanel({
             </TableHeader>
             <TableBody>
               {(data?.blogs ?? []).map((b: any) => (
-                <TableRow key={b.id} className="border-white/5 hover:bg-white/[0.03]">
+                <TableRow key={b.id} className="border-border hover:bg-accent">
                   <TableCell>
                     <div className="font-medium">{b.title}</div>
-                    <div className="text-xs text-white/40">{b.slug}</div>
+                    <div className="text-xs text-muted-foreground">{b.slug}</div>
                   </TableCell>
                   <TableCell>{statusBadge(b.status)}</TableCell>
                   <TableCell>v{b.version}</TableCell>
@@ -1039,7 +1046,7 @@ function BlogsPanel({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 border-white/10 bg-white/[0.03] text-white"
+                        className="h-8 border-border bg-card text-foreground"
                         onClick={() => validate.mutate(b.id)}
                       >
                         Validate
@@ -1047,7 +1054,7 @@ function BlogsPanel({
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-8 border-white/10 bg-white/[0.03] text-white"
+                        className="h-8 border-border bg-card text-foreground"
                         onClick={() => setEdit(b)}
                       >
                         Edit as new version
@@ -1069,10 +1076,10 @@ function BlogsPanel({
           }
         }}
       >
-        <DialogContent className="max-h-[85vh] overflow-auto border-white/10 bg-[#0b1020] text-white sm:max-w-3xl">
+        <DialogContent className="max-h-[85vh] overflow-auto border-border bg-popover text-foreground sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Blog version</DialogTitle>
-            <DialogDescription className="text-white/55">
+            <DialogDescription className="text-muted-foreground">
               Saving creates a new draft version; it does not mutate the existing article body.
             </DialogDescription>
           </DialogHeader>
@@ -1142,23 +1149,24 @@ function QueuePanel({
             value={sourceId}
             onChange={(e) => setSourceId(e.target.value)}
             placeholder="result source id"
-            className="h-8 border-white/10 bg-white/[0.04] text-white"
+            className="h-8 border-border bg-card text-foreground"
           />
           <Input
             value={failure}
             onChange={(e) => setFailure(e.target.value)}
             placeholder="failure note"
-            className="h-8 border-white/10 bg-white/[0.04] text-white"
+            className="h-8 border-border bg-card text-foreground"
           />
         </div>
       }
     >
+      <QueueSubmitForm onDone={onDone} />
       {loading ? (
         <Empty text="Loading queue..." />
       ) : (
-        <Table className="text-white">
+        <Table className="text-foreground">
           <TableHeader>
-            <TableRow className="border-white/10 hover:bg-transparent">
+            <TableRow className="border-border hover:bg-transparent">
               <TableHead>URL</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Tier</TableHead>
@@ -1167,7 +1175,7 @@ function QueuePanel({
           </TableHeader>
           <TableBody>
             {(data?.queue ?? []).map((q: any) => (
-              <TableRow key={q.id} className="border-white/5 hover:bg-white/[0.03]">
+              <TableRow key={q.id} className="border-border hover:bg-accent">
                 <TableCell>
                   <a
                     href={q.url}
@@ -1177,7 +1185,7 @@ function QueuePanel({
                   >
                     {q.title || q.url}
                   </a>
-                  <div className="text-xs text-white/40">{q.notes || q.note}</div>
+                  <div className="text-xs text-muted-foreground">{q.notes || q.note}</div>
                 </TableCell>
                 <TableCell>{statusBadge(q.status)}</TableCell>
                 <TableCell>T{q.tier}</TableCell>
@@ -1188,7 +1196,7 @@ function QueuePanel({
                         key={a}
                         size="sm"
                         variant="outline"
-                        className="h-8 border-white/10 bg-white/[0.03] text-white"
+                        className="h-8 border-border bg-card text-foreground"
                         onClick={() =>
                           mutate.mutate(
                             actionFn({
@@ -1217,26 +1225,126 @@ function QueuePanel({
   );
 }
 
+function QueueSubmitForm({ onDone }: { onDone: () => void }) {
+  const submitFn = useServerFn(submitSourceUrl);
+  const [url, setUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [tier, setTier] = useState("6");
+  const [tags, setTags] = useState("");
+  const [note, setNote] = useState("");
+
+  const submit = useMutation({
+    mutationFn: () =>
+      submitFn({
+        data: {
+          url: url.trim(),
+          title: title.trim() || undefined,
+          tier: Number(tier),
+          tags: tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean),
+          note: note.trim() || undefined,
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Queued. Run /ingest-batch to extract claims from the source.");
+      setUrl("");
+      setTitle("");
+      setTags("");
+      setNote("");
+      setTier("6");
+      onDone();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  return (
+    <div className="mb-4 rounded-md border border-border bg-card p-4">
+      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        Queue a source URL
+      </div>
+      <p className="mb-3 text-xs text-muted-foreground">
+        Adds a <code className="text-teal-300">kind=source</code> item to the ingestion queue. The
+        local knowledge-curator agent drains it (
+        <code className="text-teal-300">/ingest-batch</code>
+        ), extracts cited claims, and writes <code className="text-teal-300">content/sources/</code>
+        .
+      </p>
+      <div className="grid gap-2 md:grid-cols-2">
+        <Input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          placeholder="https://learn.microsoft.com/…"
+          className="h-8 border-border bg-card text-foreground md:col-span-2"
+        />
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Title (optional)"
+          className="h-8 border-border bg-card text-foreground"
+        />
+        <Select value={tier} onValueChange={setTier}>
+          <SelectTrigger className="h-8 border-border bg-card text-foreground">
+            <SelectValue placeholder="Trust tier" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">T1 · Microsoft Learn</SelectItem>
+            <SelectItem value="2">T2 · Fabric blog</SelectItem>
+            <SelectItem value="3">T3 · MS GitHub</SelectItem>
+            <SelectItem value="4">T4 · MVP / community</SelectItem>
+            <SelectItem value="5">T5 · Vendor</SelectItem>
+            <SelectItem value="6">T6 · Unknown</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="Tags, comma separated (optional)"
+          className="h-8 border-border bg-card text-foreground"
+        />
+        <Input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder="Note for the curator (optional)"
+          className="h-8 border-border bg-card text-foreground"
+        />
+      </div>
+      <div className="mt-3 flex justify-end">
+        <Button
+          size="sm"
+          onClick={() => submit.mutate()}
+          disabled={!url.trim() || submit.isPending}
+        >
+          {submit.isPending ? "Queuing…" : "Queue source"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function LogsPanel({ data, loading }: { data: any[]; loading: boolean }) {
   return (
     <Panel title="Admin audit log">
       {loading ? (
         <Empty text="Loading logs..." />
       ) : (
-        <div className="divide-y divide-white/5 rounded-md border border-white/10">
+        <div className="divide-y divide-border rounded-md border border-border">
           {data.map((event) => (
             <div
               key={event.id}
               className="grid gap-1 px-3 py-2 text-sm md:grid-cols-[180px_1fr_180px]"
             >
-              <div className="text-white/45">{new Date(event.created_at).toLocaleString()}</div>
+              <div className="text-muted-foreground">
+                {new Date(event.created_at).toLocaleString()}
+              </div>
               <div>
                 <span className="font-medium">{event.action}</span>
-                <span className="ml-2 text-white/45">
+                <span className="ml-2 text-muted-foreground">
                   {event.target_type}:{event.target_id}
                 </span>
               </div>
-              <div className="truncate text-xs text-white/45">{event.actor_id}</div>
+              <div className="truncate text-xs text-muted-foreground">{event.actor_id}</div>
             </div>
           ))}
           {data.length === 0 && <Empty text="No audit events yet." />}
@@ -1255,8 +1363,8 @@ function SystemPanel({ stats, loading }: { stats: Record<string, number>; loadin
         <div className="space-y-4">
           <div className="grid gap-3 md:grid-cols-3">
             {Object.entries(stats).map(([key, value]) => (
-              <div key={key} className="rounded-md border border-white/10 bg-white/[0.03] p-4">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-white/45">
+              <div key={key} className="rounded-md border border-border bg-card p-4">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                   <ShieldCheck className="h-4 w-4" />
                   {key}
                 </div>
@@ -1264,8 +1372,8 @@ function SystemPanel({ stats, loading }: { stats: Record<string, number>; loadin
               </div>
             ))}
           </div>
-          <div className="rounded-md border border-white/10 bg-white/[0.03] p-4 text-sm text-white/65">
-            <div className="font-medium text-white">Content source of truth</div>
+          <div className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
+            <div className="font-medium text-foreground">Content source of truth</div>
             <p className="mt-1">
               Settings writes operational metadata and versioned CMS changes to the backend. Export
               DB-edited content back to <code>content/</code> before treating it as
@@ -1293,12 +1401,12 @@ function CitationSelector({
   const chosen = new Set(selected);
   return (
     <div>
-      <Label className="text-white/65">Cited sources</Label>
-      <div className="mt-1 max-h-48 divide-y divide-white/5 overflow-auto rounded-md border border-white/10">
+      <Label className="text-muted-foreground">Cited sources</Label>
+      <div className="mt-1 max-h-48 divide-y divide-border overflow-auto rounded-md border border-border">
         {sources.map((source) => (
           <label
             key={source.id}
-            className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm hover:bg-white/[0.03]"
+            className="flex cursor-pointer items-start gap-3 px-3 py-2 text-sm hover:bg-accent"
           >
             <input
               type="checkbox"
@@ -1312,8 +1420,8 @@ function CitationSelector({
               }}
             />
             <span className="min-w-0">
-              <span className="block truncate text-white">{source.title}</span>
-              <span className="block truncate text-xs text-white/45">
+              <span className="block truncate text-foreground">{source.title}</span>
+              <span className="block truncate text-xs text-muted-foreground">
                 T{source.tier} · {source.slug}
               </span>
             </span>
@@ -1340,12 +1448,12 @@ function Field({
 }) {
   return (
     <div>
-      <Label className="text-white/65">{label}</Label>
+      <Label className="text-muted-foreground">{label}</Label>
       <Input
         type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 border-white/10 bg-white/[0.04] text-white"
+        className="mt-1 border-border bg-card text-foreground"
       />
     </div>
   );
@@ -1364,12 +1472,12 @@ function Area({
 }) {
   return (
     <div>
-      <Label className="text-white/65">{label}</Label>
+      <Label className="text-muted-foreground">{label}</Label>
       <Textarea
         value={value}
         rows={rows}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-1 border-white/10 bg-white/[0.04] text-white"
+        className="mt-1 border-border bg-card text-foreground"
       />
     </div>
   );
@@ -1377,7 +1485,7 @@ function Area({
 
 function Empty({ text }: { text: string }) {
   return (
-    <div className="rounded-md border border-dashed border-white/15 p-8 text-center text-sm text-white/45">
+    <div className="rounded-md border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
       {text}
     </div>
   );
@@ -1439,7 +1547,7 @@ function DiagramsPanel() {
       title="Diagram coverage & commissioning"
       action={
         <Select value={interval} onValueChange={setInterval}>
-          <SelectTrigger className="h-8 w-40 border-white/10 bg-white/[0.04] text-white">
+          <SelectTrigger className="h-8 w-40 border-border bg-card text-foreground">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -1456,15 +1564,15 @@ function DiagramsPanel() {
         <Empty text="No topics found. Seed content first." />
       ) : (
         <>
-          <p className="mb-3 text-xs text-white/45">
+          <p className="mb-3 text-xs text-muted-foreground">
             Commissioning enqueues a <code className="text-teal-300">kind=diagram</code> task. The
             local diagram-author agent drains it (
             <code className="text-teal-300">/commission-diagrams</code>), writes an original SVG,
             and posts it as a generated asset — the server never calls an LLM.
           </p>
-          <Table className="text-white">
+          <Table className="text-foreground">
             <TableHeader>
-              <TableRow className="border-white/10 hover:bg-transparent">
+              <TableRow className="border-border hover:bg-transparent">
                 <TableHead>Topic</TableHead>
                 <TableHead>Diagrams</TableHead>
                 <TableHead>Status</TableHead>
@@ -1473,7 +1581,7 @@ function DiagramsPanel() {
             </TableHeader>
             <TableBody>
               {rows.map((r) => (
-                <TableRow key={r.slug} className="border-white/5 hover:bg-white/[0.03]">
+                <TableRow key={r.slug} className="border-border hover:bg-accent">
                   <TableCell className="font-medium">{r.name}</TableCell>
                   <TableCell>{r.diagram_count}</TableCell>
                   <TableCell>
@@ -1495,7 +1603,7 @@ function DiagramsPanel() {
                       variant="outline"
                       disabled={r.commission_open || commission.isPending}
                       onClick={() => commission.mutate(r.slug)}
-                      className="h-7 border-white/15 bg-transparent text-xs text-white/80 hover:bg-white/10"
+                      className="h-7 border-border bg-transparent text-xs text-muted-foreground hover:bg-accent"
                     >
                       Commission
                     </Button>
@@ -1505,11 +1613,213 @@ function DiagramsPanel() {
             </TableBody>
           </Table>
           {pending.length > 0 && (
-            <p className="mt-4 text-xs text-white/45">
+            <p className="mt-4 text-xs text-muted-foreground">
               {pending.length} diagram commission(s) pending in the queue.
             </p>
           )}
         </>
+      )}
+    </Panel>
+  );
+}
+
+type RssRow = {
+  id: string;
+  feed_url: string;
+  title: string;
+  default_tier: number;
+  status: "active" | "paused";
+  last_polled_at: string | null;
+  error_count: number;
+  last_error: string;
+};
+
+function RssPanel() {
+  const listFn = useServerFn(listRssSubscriptions);
+  const addFn = useServerFn(addRssSubscription);
+  const statusFn = useServerFn(setRssSubscriptionStatus);
+  const deleteFn = useServerFn(deleteRssSubscription);
+  const queryClient = useQueryClient();
+
+  const subs = useQuery({ queryKey: ["rss-subscriptions"], queryFn: () => listFn() });
+  const [feedUrl, setFeedUrl] = useState("");
+  const [title, setTitle] = useState("");
+  const [tier, setTier] = useState("6");
+  const [tags, setTags] = useState("");
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["rss-subscriptions"] });
+
+  const add = useMutation({
+    mutationFn: () =>
+      addFn({
+        data: {
+          feedUrl: feedUrl.trim(),
+          title: title.trim() || undefined,
+          defaultTier: Number(tier),
+          defaultTags: tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean),
+        },
+      }),
+    onSuccess: () => {
+      toast.success("Subscribed. Run /poll-rss-feeds to queue new posts.");
+      setFeedUrl("");
+      setTitle("");
+      setTags("");
+      setTier("6");
+      invalidate();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  const toggle = useMutation({
+    mutationFn: (row: RssRow) =>
+      statusFn({ data: { id: row.id, status: row.status === "active" ? "paused" : "active" } }),
+    onSuccess: () => invalidate(),
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => deleteFn({ data: { id } }),
+    onSuccess: () => {
+      toast.success("Subscription removed.");
+      invalidate();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  const rows = (subs.data as { subscriptions: RssRow[] } | undefined)?.subscriptions ?? [];
+
+  return (
+    <Panel title="RSS feed subscriptions">
+      <p className="mb-3 text-xs text-muted-foreground">
+        Subscribe to a blog's RSS/Atom feed (e.g. the Fabric Updates Blog). The local{" "}
+        <code className="text-teal-300">/poll-rss-feeds</code> agent fetches each active feed,
+        dedupes new entries against existing sources and the queue, and adds them as{" "}
+        <code className="text-teal-300">kind=source</code> items — then{" "}
+        <code className="text-teal-300">/ingest-batch</code> extracts cited claims. The server
+        stores subscriptions; it never polls on its own. Schedule polling with{" "}
+        <code className="text-teal-300">/loop 6h /poll-rss-feeds</code> if you want it hands-off.
+      </p>
+
+      <div className="mb-4 grid gap-2 rounded-md border border-border bg-card p-4 md:grid-cols-2">
+        <Input
+          value={feedUrl}
+          onChange={(e) => setFeedUrl(e.target.value)}
+          placeholder="https://…/feed or .../rss"
+          className="h-8 border-border bg-card text-foreground md:col-span-2"
+        />
+        <Input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Feed name (optional)"
+          className="h-8 border-border bg-card text-foreground"
+        />
+        <Select value={tier} onValueChange={setTier}>
+          <SelectTrigger className="h-8 border-border bg-card text-foreground">
+            <SelectValue placeholder="Default tier" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1">T1 · Microsoft Learn</SelectItem>
+            <SelectItem value="2">T2 · Fabric blog</SelectItem>
+            <SelectItem value="3">T3 · MS GitHub</SelectItem>
+            <SelectItem value="4">T4 · MVP / community</SelectItem>
+            <SelectItem value="5">T5 · Vendor</SelectItem>
+            <SelectItem value="6">T6 · Unknown</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          value={tags}
+          onChange={(e) => setTags(e.target.value)}
+          placeholder="Default tags, comma separated (optional)"
+          className="h-8 border-border bg-card text-foreground md:col-span-2"
+        />
+        <div className="flex justify-end md:col-span-2">
+          <Button
+            size="sm"
+            onClick={() => add.mutate()}
+            disabled={!feedUrl.trim() || add.isPending}
+          >
+            {add.isPending ? "Subscribing…" : "Subscribe"}
+          </Button>
+        </div>
+      </div>
+
+      {subs.isLoading ? (
+        <Empty text="Loading subscriptions..." />
+      ) : rows.length === 0 ? (
+        <Empty text="No feeds subscribed yet." />
+      ) : (
+        <Table className="text-foreground">
+          <TableHeader>
+            <TableRow className="border-border hover:bg-transparent">
+              <TableHead>Feed</TableHead>
+              <TableHead>Tier</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Last polled</TableHead>
+              <TableHead className="text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((r) => (
+              <TableRow key={r.id} className="border-border hover:bg-accent">
+                <TableCell>
+                  <a
+                    href={r.feed_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-teal-200 hover:underline"
+                  >
+                    {r.title || r.feed_url}
+                  </a>
+                  {r.error_count > 0 && (
+                    <div className="text-xs text-rose-300">
+                      {r.error_count} error(s): {r.last_error}
+                    </div>
+                  )}
+                </TableCell>
+                <TableCell>T{r.default_tier}</TableCell>
+                <TableCell>
+                  {r.status === "active" ? (
+                    <Badge className="border-emerald-400/30 bg-emerald-500/10 text-emerald-200">
+                      active
+                    </Badge>
+                  ) : (
+                    <Badge className="border-amber-400/30 bg-amber-500/10 text-amber-200">
+                      paused
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {r.last_polled_at ? new Date(r.last_polled_at).toLocaleString() : "never"}
+                </TableCell>
+                <TableCell>
+                  <div className="flex justify-end gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-border bg-card text-foreground"
+                      onClick={() => toggle.mutate(r)}
+                      disabled={toggle.isPending}
+                    >
+                      {r.status === "active" ? "Pause" : "Resume"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-border bg-card text-foreground"
+                      onClick={() => remove.mutate(r.id)}
+                      disabled={remove.isPending}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </Panel>
   );

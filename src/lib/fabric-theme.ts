@@ -59,7 +59,7 @@ export const tierMeta = {
 } as const;
 
 export const depthMeta = {
-  1: { label: "L1 · Conceptual", cls: "bg-white/5 text-white/70 border-white/10" },
+  1: { label: "L1 · Conceptual", cls: "bg-muted text-muted-foreground border-border" },
   2: { label: "L2 · Practitioner", cls: "bg-teal-500/10 text-teal-300 border-teal-500/20" },
   3: { label: "L3 · Architect", cls: "bg-indigo-500/10 text-indigo-300 border-indigo-500/20" },
   4: { label: "L4 · Performance", cls: "bg-amber-500/10 text-amber-300 border-amber-500/20" },

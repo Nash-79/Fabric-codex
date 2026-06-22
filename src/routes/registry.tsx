@@ -29,21 +29,21 @@ function RegistryPage() {
   });
 
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto max-w-6xl px-6 py-10">
         <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
           Spine
         </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Capability Registry</h1>
-        <p className="mt-2 max-w-2xl text-sm text-white/55">
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Every claim, lesson, and design in the atlas is tagged to a capability. The registry is
           the architectural spine.
         </p>
 
-        <div className="mt-8 overflow-hidden rounded-2xl border border-white/10">
+        <div className="mt-8 overflow-hidden rounded-2xl border border-border">
           <table className="w-full text-left text-sm">
-            <thead className="bg-white/5 text-xs uppercase tracking-wide text-white/55">
+            <thead className="bg-muted text-xs uppercase tracking-wide text-muted-foreground">
               <tr>
                 <th className="px-4 py-3">Capability</th>
                 <th className="px-4 py-3">Description</th>
@@ -52,7 +52,7 @@ function RegistryPage() {
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={2} className="px-4 py-8 text-center text-white/40">
+                  <td colSpan={2} className="px-4 py-8 text-center text-muted-foreground">
                     Loading…
                   </td>
                 </tr>
@@ -66,15 +66,15 @@ function RegistryPage() {
               )}
               {!isLoading && (data ?? []).length === 0 && (
                 <tr>
-                  <td colSpan={2} className="px-4 py-8 text-center text-white/40">
+                  <td colSpan={2} className="px-4 py-8 text-center text-muted-foreground">
                     No capabilities yet.
                   </td>
                 </tr>
               )}
               {(data ?? []).map((c) => (
-                <tr key={c.id} className="border-t border-white/5">
-                  <td className="px-4 py-3 font-medium text-white">{c.name}</td>
-                  <td className="px-4 py-3 text-white/65">{c.description ?? "—"}</td>
+                <tr key={c.id} className="border-t border-border">
+                  <td className="px-4 py-3 font-medium text-foreground">{c.name}</td>
+                  <td className="px-4 py-3 text-muted-foreground">{c.description ?? "—"}</td>
                 </tr>
               ))}
             </tbody>

@@ -20,7 +20,7 @@ export const Route = createFileRoute("/sources")({
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(sourcesQO),
   errorComponent: ({ error, reset }) => (
-    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
       <p className="mt-6 text-rose-300">{error.message}</p>
       <button className="mt-3 underline" onClick={reset}>
@@ -28,7 +28,7 @@ export const Route = createFileRoute("/sources")({
       </button>
     </div>
   ),
-  notFoundComponent: () => <div className="p-10 text-white">Not found.</div>,
+  notFoundComponent: () => <div className="p-10 text-foreground">Not found.</div>,
   component: SourcesPage,
 });
 
@@ -50,14 +50,14 @@ function SourcesPage() {
   }, [sources, q, tier]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
+    <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <div className="mx-auto max-w-7xl px-6 py-10">
         <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
           Approved sources
         </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">Sources</h1>
-        <p className="mt-2 max-w-2xl text-sm text-white/55">
+        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
           Every claim cites one of these. Tier 1 = Microsoft Learn, 6 = unknown.
         </p>
 
@@ -66,7 +66,7 @@ function SourcesPage() {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search sources…"
-            className="border-white/10 bg-white/[0.04] text-white placeholder:text-white/40 md:max-w-sm"
+            className="border-border bg-card text-foreground placeholder:text-muted-foreground md:max-w-sm"
           />
           <div className="flex flex-wrap gap-1.5">
             {[null, 1, 2, 3, 4, 5, 6].map((t) => (
@@ -75,8 +75,8 @@ function SourcesPage() {
                 onClick={() => setTier(t)}
                 className={`rounded-full border px-3 py-1 text-xs ${
                   tier === t
-                    ? "border-white/30 bg-white/10 text-white"
-                    : "border-white/10 bg-white/[0.02] text-white/60 hover:bg-white/5"
+                    ? "border-border bg-accent text-foreground"
+                    : "border-border bg-card text-muted-foreground hover:bg-accent"
                 }`}
               >
                 {t === null ? "All tiers" : `T${t}`}
@@ -87,25 +87,25 @@ function SourcesPage() {
 
         <ul className="mt-8 grid gap-3 md:grid-cols-2">
           {filtered.map((s) => (
-            <li key={s.id} className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+            <li key={s.id} className="rounded-xl border border-border bg-card p-4">
               <div className="flex items-start justify-between gap-3">
                 <a
                   href={s.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sm font-semibold text-white hover:text-teal-300"
+                  className="text-sm font-semibold text-foreground hover:text-teal-300"
                 >
                   {s.title}
                 </a>
                 <TierBadge tier={s.tier} />
               </div>
-              {s.summary && <p className="mt-1.5 text-xs text-white/55">{s.summary}</p>}
+              {s.summary && <p className="mt-1.5 text-xs text-muted-foreground">{s.summary}</p>}
               {s.tags?.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
                   {s.tags.slice(0, 8).map((t: string) => (
                     <span
                       key={t}
-                      className="rounded border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-white/55"
+                      className="rounded border border-border bg-card px-1.5 py-0.5 text-[10px] text-muted-foreground"
                     >
                       {t}
                     </span>
@@ -115,7 +115,7 @@ function SourcesPage() {
             </li>
           ))}
           {filtered.length === 0 && (
-            <div className="col-span-full rounded-xl border border-dashed border-white/15 p-12 text-center text-white/55">
+            <div className="col-span-full rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground">
               No sources match.
             </div>
           )}
