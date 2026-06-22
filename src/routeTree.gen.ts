@@ -30,6 +30,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedFavoritesRouteImport } from './routes/_authenticated/favorites'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as ApiPublicHooksSeedContentRouteImport } from './routes/api/public/hooks/seed-content'
+import { Route as ApiPublicHealthAtlasRouteImport } from './routes/api/public/health/atlas'
 
 const TopicsRoute = TopicsRouteImport.update({
   id: '/topics',
@@ -136,6 +137,11 @@ const ApiPublicHooksSeedContentRoute =
     path: '/api/public/hooks/seed-content',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHealthAtlasRoute = ApiPublicHealthAtlasRouteImport.update({
+  id: '/api/public/health/atlas',
+  path: '/api/public/health/atlas',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -157,6 +163,7 @@ export interface FileRoutesByFullPath {
   '/design/$slug': typeof DesignSlugRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
+  '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
 }
 export interface FileRoutesByTo {
@@ -179,6 +186,7 @@ export interface FileRoutesByTo {
   '/design/$slug': typeof DesignSlugRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
+  '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
 }
 export interface FileRoutesById {
@@ -203,6 +211,7 @@ export interface FileRoutesById {
   '/design/$slug': typeof DesignSlugRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
+  '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
 }
 export interface FileRouteTypes {
@@ -227,6 +236,7 @@ export interface FileRouteTypes {
     | '/design/$slug'
     | '/registry/$id'
     | '/topics/$slug'
+    | '/api/public/health/atlas'
     | '/api/public/hooks/seed-content'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -249,6 +259,7 @@ export interface FileRouteTypes {
     | '/design/$slug'
     | '/registry/$id'
     | '/topics/$slug'
+    | '/api/public/health/atlas'
     | '/api/public/hooks/seed-content'
   id:
     | '__root__'
@@ -272,6 +283,7 @@ export interface FileRouteTypes {
     | '/design/$slug'
     | '/registry/$id'
     | '/topics/$slug'
+    | '/api/public/health/atlas'
     | '/api/public/hooks/seed-content'
   fileRoutesById: FileRoutesById
 }
@@ -291,6 +303,7 @@ export interface RootRouteChildren {
   ApiChatRoute: typeof ApiChatRoute
   BlogSlugRoute: typeof BlogSlugRoute
   DesignSlugRoute: typeof DesignSlugRoute
+  ApiPublicHealthAtlasRoute: typeof ApiPublicHealthAtlasRoute
   ApiPublicHooksSeedContentRoute: typeof ApiPublicHooksSeedContentRoute
 }
 
@@ -443,6 +456,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksSeedContentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/health/atlas': {
+      id: '/api/public/health/atlas'
+      path: '/api/public/health/atlas'
+      fullPath: '/api/public/health/atlas'
+      preLoaderRoute: typeof ApiPublicHealthAtlasRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -500,6 +520,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiChatRoute: ApiChatRoute,
   BlogSlugRoute: BlogSlugRoute,
   DesignSlugRoute: DesignSlugRoute,
+  ApiPublicHealthAtlasRoute: ApiPublicHealthAtlasRoute,
   ApiPublicHooksSeedContentRoute: ApiPublicHooksSeedContentRoute,
 }
 export const routeTree = rootRouteImport
