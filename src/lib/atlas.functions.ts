@@ -185,8 +185,11 @@ export const listLessons = createServerFn({ method: "GET" }).handler(async () =>
 });
 
 export const listClaimsByCapability = createServerFn({ method: "GET" })
-  .inputValidator((d: { capabilityId?: string }) => d)
+  .inputValidator(
+    (d: { capabilityId?: string; limit?: number; depth?: number; tier?: number; q?: string }) => d,
+  )
   .handler(async ({ data }) => {
+    const limit = Math.min(Math.max(data.limit ?? 500, 1), 500);
     try {
       const sb = await admin();
       let q = sb
@@ -195,17 +198,46 @@ export const listClaimsByCapability = createServerFn({ method: "GET" })
         .eq("active", true)
         .order("depth");
       if (data.capabilityId) q = q.eq("capability_id", data.capabilityId);
-      const { data: rows, error } = await q.limit(500);
+      if (data.depth) q = q.eq("depth", data.depth);
+      if (data.tier) q = q.eq("sources.tier", data.tier);
+      if (data.q?.trim()) q = q.ilike("text", `%${data.q.trim()}%`);
+      const { data: rows, error } = await q.limit(limit);
       if (error) throw new Error(error.message);
       if (rows?.length) return rows;
     } catch {
       // Fall through to bundled content.
     }
-    const claims = bundledContent.claims();
-    return data.capabilityId
-      ? claims.filter((claim) => claim.capability_id === data.capabilityId)
-      : claims.slice(0, 500);
+    const term = data.q?.trim().toLowerCase() ?? "";
+    return bundledContent
+      .claims()
+      .filter((claim) => !data.capabilityId || claim.capability_id === data.capabilityId)
+      .filter((claim) => !data.depth || claim.depth === data.depth)
+      .filter((claim: any) => !data.tier || claim.sources?.tier === data.tier)
+      .filter(
+        (claim) => !term || `${claim.text} ${claim.tags?.join(" ")}`.toLowerCase().includes(term),
+      )
+      .slice(0, limit);
   });
+
+export const listClaimCountsByCapability = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const sb = await admin();
+    const { data, error } = await sb.from("claims").select("capability_id").eq("active", true);
+    if (error) throw new Error(error.message);
+    if (data?.length) {
+      return data.reduce<Record<string, number>>((acc, row) => {
+        acc[row.capability_id] = (acc[row.capability_id] ?? 0) + 1;
+        return acc;
+      }, {});
+    }
+  } catch {
+    // Fall through to bundled content.
+  }
+  return bundledContent.claims().reduce<Record<string, number>>((acc, claim) => {
+    acc[claim.capability_id] = (acc[claim.capability_id] ?? 0) + 1;
+    return acc;
+  }, {});
+});
 
 export const listSources = createServerFn({ method: "GET" }).handler(async () => {
   try {
@@ -219,6 +251,17 @@ export const listSources = createServerFn({ method: "GET" }).handler(async () =>
     return data?.length ? data : bundledContent.sources();
   } catch {
     return bundledContent.sources();
+  }
+});
+
+export const listDiagrams = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const sb = await admin();
+    const { data, error } = await sb.from("diagrams").select("slug,path,caption,kind,topic_slug");
+    if (error) throw new Error(error.message);
+    return data?.length ? data : bundledContent.diagrams();
+  } catch {
+    return bundledContent.diagrams();
   }
 });
 
@@ -240,36 +283,23 @@ export const searchAll = createServerFn({ method: "GET" })
     if (!term) return { blogs: [], claims: [], sources: [], topics: [] };
     try {
       const sb = await admin();
-      const like = `%${term}%`;
-      const [b, c, s, t] = await Promise.all([
-        sb
-          .from("blogs")
-          .select("slug,title,summary")
-          .or(`title.ilike.${like},summary.ilike.${like},body_md.ilike.${like}`)
-          .limit(15),
-        sb
-          .from("claims")
-          .select("id,text,depth,capability_id,sources(slug,title,tier,url)")
-          .eq("active", true)
-          .ilike("text", like)
-          .limit(20),
-        sb
-          .from("sources")
-          .select("slug,title,url,tier,summary")
-          .or(`title.ilike.${like},summary.ilike.${like}`)
-          .limit(15),
-        sb
-          .from("topics")
-          .select("slug,name,description")
-          .or(`name.ilike.${like},description.ilike.${like}`)
-          .limit(10),
-      ]);
+      const { data: rows, error } = await (sb as any).rpc("search_atlas", {
+        term,
+        max_results: 20,
+      });
+      if (error) throw new Error(error.message);
       const result = {
-        blogs: b.data ?? [],
-        claims: c.data ?? [],
-        sources: s.data ?? [],
-        topics: t.data ?? [],
+        blogs: [] as any[],
+        claims: [] as any[],
+        sources: [] as any[],
+        topics: [] as any[],
       };
+      for (const row of rows ?? []) {
+        if (row.kind === "blog") result.blogs.push(row.payload);
+        if (row.kind === "claim") result.claims.push(row.payload);
+        if (row.kind === "source") result.sources.push(row.payload);
+        if (row.kind === "topic") result.topics.push(row.payload);
+      }
       if (Object.values(result).some((rows) => rows.length > 0)) return result;
     } catch {
       // Fall through to bundled search.

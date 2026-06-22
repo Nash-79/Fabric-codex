@@ -17,14 +17,16 @@ AGENTS.md            The same, for Codex / other agents (committed, repo-shared)
 .claude/commands/    Slash commands: /ingest /ingest-batch /design /validate /drift /lesson
                      /diagram /advise
 .codex/prompts/      The same intents as Codex prompts (+ .codex/README.md install note)
-backend/             FastAPI + SQLModel — claim versioning + the validation pass
+backend/             Local/legacy FastAPI + SQLModel authoring/import service
+src/                 Lovable-hosted TanStack Start production app
+supabase/            Lovable/Supabase schema migrations and generated types
 content/             Git-tracked authored knowledge: sources/ diagrams/ designs/ lessons/
-scripts/             import_content.py — publish authored content to a running server
+scripts/             import_content.py — publish authored content to a running local/legacy server
                      migrate_to_supabase.py / replay_verified_status.py / validate_migration.py
 docs/workflow.md     Author-locally / publish-to-server model + VS Code extension setup
 docs/data-model.md   How versioning, supersede, drift, tags, assets, and validation work
 docs/extending.md    Every extension point: content, capabilities, theme, views, agents
-frontend/            React app (see "Frontend" below)
+frontend/            Legacy local SPA retained for reference; not hosted by Lovable
 ```
 
 ## Two ways to run the LLM work
@@ -66,20 +68,25 @@ scenario ──▶ solution-architect ──▶ cited architecture ──▶ val
 same claims ──▶ learning-author ──▶ Beginner / Intermediate / Expert lessons (grounded, cited)
 ```
 
-## Frontend
+## Lovable App
 
-A real Vite + React app lives in `frontend/` (the old `fabric-atlas.jsx` was a claude.ai-only
-artifact prototype — it does not run locally and can be deleted). Run it alongside the backend:
+The production app is the root TanStack Start app in `src/`, built and hosted by Lovable using
+`.lovable/project.json` and `vite.config.ts`.
 
 ```bash
-cd frontend
 npm install
-npm run dev          # http://localhost:5173 (proxies API calls to :8000 — start the backend first)
+npm run dev
+npm run build
 ```
 
-The UI is themed to the **Microsoft Fabric design language** — Fluent neutrals plus the
-Fabric brand ramp sampled from the official product icon, light theme by default with a
-dark toggle (tokens in `frontend/src/theme.js`).
+Set runtime environment variables in Lovable: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`,
+`SUPABASE_SERVICE_ROLE_KEY` for admin seeding/functions, and `LOVABLE_API_KEY` for Advisor.
+
+The legacy `frontend/` SPA can still be useful as a local reference for prior UI behavior, but it is
+not the hosted application path.
+
+The UI should follow the **Microsoft Fabric design language** — Fluent neutrals plus the
+Fabric brand ramp, light theme by default with a dark toggle.
 
 Tabs: **Overview** (the overarching Microsoft Fabric view — platform story, original
 architecture diagram, platform-level claims, jump-offs into every capability),

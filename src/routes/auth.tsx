@@ -81,7 +81,7 @@ function AuthPage() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-[#070b16] px-6 py-16 text-white">
+    <div className="relative flex min-h-screen items-center justify-center bg-background px-6 py-16 text-foreground dark:bg-[#070b16] dark:text-white">
       <Link
         to="/"
         className="absolute left-6 top-6 inline-flex items-center gap-2 text-sm font-semibold"

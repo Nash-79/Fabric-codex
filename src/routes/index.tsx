@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQueries, queryOptions } from "@tanstack/react-query";
+import { useSuspenseQueries, useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { Bot, BookOpen, Database, FileText, Filter, Network, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { DepthBadge, TierBadge } from "@/components/Badges";
@@ -8,7 +8,9 @@ import { SiteHeader } from "@/components/SiteHeader";
 import {
   listBlogs,
   listCapabilities,
+  listClaimCountsByCapability,
   listClaimsByCapability,
+  listDiagrams,
   listSources,
   listTopics,
 } from "@/lib/atlas.functions";
@@ -21,10 +23,53 @@ const capabilitiesQO = queryOptions({
   queryKey: ["home-capabilities"],
   queryFn: () => listCapabilities(),
 });
-const claimsQO = queryOptions({
-  queryKey: ["home-claims"],
-  queryFn: () => listClaimsByCapability({ data: {} }),
+const claimCountsQO = queryOptions({
+  queryKey: ["home-claim-counts"],
+  queryFn: () => listClaimCountsByCapability(),
 });
+const diagramsQO = queryOptions({
+  queryKey: ["home-diagrams"],
+  queryFn: () => listDiagrams(),
+});
+const claimsQO = (
+  capabilityId: string,
+  depth: number | "all" = "all",
+  tier: number | "all" = "all",
+  q = "",
+) =>
+  queryOptions({
+    queryKey: ["home-claims", capabilityId, depth, tier, q],
+    queryFn: () =>
+      listClaimsByCapability({
+        data: {
+          capabilityId,
+          limit: 8,
+          depth: depth === "all" ? undefined : depth,
+          tier: tier === "all" ? undefined : tier,
+          q: q.trim() || undefined,
+        },
+      }),
+  });
+
+const capabilityDiagramPath: Record<string, string> = {
+  capacity: "/diagrams/capacity-throttling.svg",
+  "data-factory": "/diagrams/data-factory-pipelines.svg",
+  "dataflow-gen2": "/diagrams/dataflow-gen2.svg",
+  "direct-lake": "/diagrams/direct-lake-query-path.svg",
+  "eventhouse-kql": "/diagrams/eventhouse-kql.svg",
+  "fabric-platform": "/diagrams/fabric-platform-overview.svg",
+  lakehouse: "/diagrams/lakehouse-architecture.svg",
+  mirroring: "/diagrams/mirroring-flow.svg",
+  onelake: "/diagrams/onelake-architecture.svg",
+  polaris: "/diagrams/polaris-engine.svg",
+  "power-bi": "/diagrams/power-bi-consumption.svg",
+  purview: "/diagrams/governance-layers.svg",
+  rti: "/diagrams/rti-flow.svg",
+  "semantic-model": "/diagrams/semantic-model-storage-modes.svg",
+  "sql-database": "/diagrams/sql-database-translytical.svg",
+  spark: "/diagrams/spark-engineering.svg",
+  warehouse: "/diagrams/warehouse-architecture.svg",
+};
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -48,7 +93,9 @@ export const Route = createFileRoute("/")({
       context.queryClient.ensureQueryData(blogsQO),
       context.queryClient.ensureQueryData(sourcesQO),
       context.queryClient.ensureQueryData(capabilitiesQO),
-      context.queryClient.ensureQueryData(claimsQO),
+      context.queryClient.ensureQueryData(claimCountsQO),
+      context.queryClient.ensureQueryData(diagramsQO),
+      context.queryClient.ensureQueryData(claimsQO("direct-lake")),
     ]),
   component: Landing,
 });
@@ -59,14 +106,16 @@ function Landing() {
     { data: blogs },
     { data: sources },
     { data: capabilities },
-    { data: claims },
+    { data: claimCounts },
+    { data: diagrams },
   ] = useSuspenseQueries({
-    queries: [topicsQO, blogsQO, sourcesQO, capabilitiesQO, claimsQO],
+    queries: [topicsQO, blogsQO, sourcesQO, capabilitiesQO, claimCountsQO, diagramsQO],
   });
   const [selectedCapability, setSelectedCapability] = useState("direct-lake");
   const [depth, setDepth] = useState<number | "all">("all");
   const [tier, setTier] = useState<number | "all">("all");
   const [query, setQuery] = useState("");
+  const { data: claims } = useSuspenseQuery(claimsQO(selectedCapability, depth, tier, query));
 
   const childTopics = useMemo(() => topics.filter((topic) => topic.parent_slug), [topics]);
   const selected = capabilities.find((capability) => capability.id === selectedCapability);
@@ -75,15 +124,7 @@ function Landing() {
     childTopics.find((topic) => topic.slug === selectedCapability);
   const selectedBlogs = blogs.filter((blog) => blog.topic_slug === selectedTopic?.slug);
 
-  const visibleClaims = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return claims
-      .filter((claim) => claim.capability_id === selectedCapability)
-      .filter((claim) => depth === "all" || claim.depth === depth)
-      .filter((claim: any) => tier === "all" || claim.sources?.tier === tier)
-      .filter((claim) => !q || `${claim.text} ${claim.tags?.join(" ")}`.toLowerCase().includes(q))
-      .slice(0, 8);
-  }, [claims, depth, query, selectedCapability, tier]);
+  const visibleClaims = claims;
 
   const sourceCount = new Set(
     claims
@@ -93,10 +134,14 @@ function Landing() {
   ).size;
 
   const a = accent(selected?.accent);
-  const diagramPath = `/diagrams/${selectedCapability}.svg`;
+  const diagramPath =
+    (diagrams as any[]).find((diagram) => diagram.capability_id === selectedCapability)?.path ??
+    capabilityDiagramPath[selectedCapability] ??
+    (diagrams as any[]).find((diagram) => diagram.topic_slug === selectedTopic?.slug)?.path ??
+    null;
 
   return (
-    <div className="min-h-screen bg-[#070b16] text-white">
+    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <main>
         <section className="border-b border-white/10 bg-[#090f1f]">
@@ -143,9 +188,7 @@ function Landing() {
                     const topic = childTopics.find((t: any) =>
                       t.capability_ids?.includes(capability.id),
                     );
-                    const count = claims.filter(
-                      (claim) => claim.capability_id === capability.id,
-                    ).length;
+                    const count = claimCounts[capability.id] ?? 0;
                     return (
                       <button
                         key={capability.id}
@@ -190,16 +233,18 @@ function Landing() {
                   <Stat label="Claims" value={visibleClaims.length} />
                   <Stat label="Sources" value={sourceCount} />
                 </div>
-                <div className="mt-4 overflow-hidden rounded-md border border-white/10 bg-[#050816]">
-                  <img
-                    src={diagramPath}
-                    alt={`${selected?.name ?? selectedCapability} diagram`}
-                    className="aspect-[4/3] w-full object-contain p-3"
-                    onError={(event) => {
-                      event.currentTarget.style.display = "none";
-                    }}
-                  />
-                </div>
+                {diagramPath && (
+                  <div className="mt-4 overflow-hidden rounded-md border border-white/10 bg-[#050816]">
+                    <img
+                      src={diagramPath}
+                      alt={`${selected?.name ?? selectedCapability} diagram`}
+                      className="aspect-[4/3] w-full object-contain p-3"
+                      onError={(event) => {
+                        event.currentTarget.style.display = "none";
+                      }}
+                    />
+                  </div>
+                )}
                 <Link
                   to="/advisor"
                   className="mt-4 flex items-center justify-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-[#070b16] hover:bg-white/90"

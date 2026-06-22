@@ -34,7 +34,7 @@ export const Route = createFileRoute("/topics/$slug")({
     }
   },
   errorComponent: ({ error, reset }) => (
-    <div className="min-h-screen bg-[#070b16] p-10 text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <p className="mt-6 text-rose-300">{error.message}</p>
       <button className="mt-3 underline" onClick={reset}>
@@ -43,7 +43,7 @@ export const Route = createFileRoute("/topics/$slug")({
     </div>
   ),
   notFoundComponent: () => (
-    <div className="min-h-screen bg-[#070b16] p-10 text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <p className="mt-6">Topic not found.</p>
       <Link to="/topics" className="mt-3 inline-block underline">
@@ -60,7 +60,7 @@ function TopicPage() {
   const { topic, children, capabilities, blogs } = data;
 
   return (
-    <div className="min-h-screen bg-[#070b16] text-white">
+    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <div className="mx-auto max-w-4xl px-6 py-12">
         <Link to="/topics" className="text-xs text-white/55 hover:text-white">

@@ -1,45 +1,61 @@
 ---
 name: Production deployment setup
-description: How Fabric Atlas is wired for autoscale deployment — single FastAPI process serves both the API and the built React SPA.
+description: How Fabric Atlas is wired for Lovable deployment through the root TanStack Start app.
 ---
 
 # Production deployment setup
 
 ## The pattern
 
-Autoscale = one process, one port. FastAPI (port 5000) serves everything:
-- API routes (`/claims`, `/designs`, etc.) — matched first via `include_router`
-- `/content` static mount — authored diagrams/lessons
-- `/assets` static mount — built React JS/CSS bundle (`frontend/dist/assets/`)
-- `/{full_path:path}` catch-all — returns `frontend/dist/index.html` for SPA client-side routing
+Production is the Lovable-hosted TanStack Start app in `src/`.
 
-The SPA mounts only activate when `frontend/dist/` exists (i.e. after `npm run build`).
-In dev, `dist/` may or may not exist; dev traffic hits the Vite dev server on port 5000 directly.
+- `.lovable/project.json` selects the Lovable TanStack Start template.
+- `vite.config.ts` extends `@lovable.dev/vite-tanstack-config`.
+- `src/routes/*` is the routed app surface.
+- `src/lib/*.functions.ts` provides TanStack server functions.
+- Supabase is the production knowledge base, with bundled `content/` as fallback where implemented.
+- `/api/chat` uses the Lovable AI Gateway and requires `LOVABLE_API_KEY`.
 
-## Build command (in `.replit [deployment]`)
+The legacy `frontend/` SPA and `backend/` FastAPI service are local/authoring assets unless they
+are deliberately hosted separately. They are not part of the Lovable production deployment.
 
-```
-bash -c "pip install -r backend/requirements.txt && cd frontend && npm install && npm run build"
-```
+## Build command
 
-**Why explicit install steps:** The deployer's auto-install step looks for `package.json` at the project root. A minimal root `package.json` (`package.json` — name/version/private only, no deps) satisfies the auto-detector so it doesn't error. The build command then handles both Python and Node deps explicitly.
+Lovable builds from the repository root using the root package scripts:
 
-## Run command
-
-```
-bash -c "cd backend && uvicorn app.main:app --host 0.0.0.0 --port 5000"
+```bash
+npm run build
 ```
 
-**Why:** Must bind to `0.0.0.0` (not `localhost`) so the autoscale health probe can reach it. Port 5000 matches what Replit's proxy expects.
+Local dev for the hosted app:
+
+```bash
+npm install
+npm run dev
+```
+
+## Runtime environment
+
+Set these in Lovable, not in source control:
+
+- `SUPABASE_URL`
+- `SUPABASE_PUBLISHABLE_KEY`
+- `SUPABASE_SERVICE_ROLE_KEY` for admin-only server functions and seeding
+- `LOVABLE_API_KEY` for Advisor chat
 
 ## Key files
 
-- `backend/app/main.py` — SPA static mounts and catch-all route at the bottom
-- `package.json` (root) — minimal, satisfies deployer auto-detection
-- `.replit [deployment]` — build/run commands and `deploymentTarget = "autoscale"`
+- `.lovable/project.json` — Lovable project template
+- `vite.config.ts` — Lovable/TanStack build config
+- `package.json` — root app scripts and dependencies
+- `src/routes/__root.tsx` — app shell
+- `src/routes/api/chat.ts` — Advisor API route
+- `src/lib/atlas.functions.ts` — public KB server functions
+- `src/lib/seed.functions.ts` — admin seeding from `content/`
 
 ## What NOT to do
 
-- Don't use `localhost` in the run command — health probe can't reach it.
-- Don't omit the root `package.json` — the deployer's "Installing packages" step will fail with `package.json: open package.json: no such file or directory`.
-- Don't put `StaticFiles(directory=dist, html=True)` at `/` before the router — it captures API routes. Mount assets at `/assets` and use a `/{full_path:path}` catch-all instead.
+- Do not add host-specific deployment files for another platform unless that platform is explicitly
+  being used.
+- Do not make `frontend/` the production app path by accident; Lovable builds `src/`.
+- Do not put service-role secrets in `.env` or client-visible `VITE_*` variables.

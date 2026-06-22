@@ -106,7 +106,7 @@ function AdvisorPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#070b16] text-white">
+    <div className="flex min-h-screen flex-col bg-background text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col px-6 py-8">
         <header className="mb-4">

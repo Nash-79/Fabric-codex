@@ -22,7 +22,7 @@ export const Route = createFileRoute("/author")({
 
 function AuthorPage() {
   return (
-    <div className="min-h-screen bg-[#070b16] text-white">
+    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <main className="mx-auto max-w-3xl px-6 py-10">
         <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">

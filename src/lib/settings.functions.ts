@@ -7,39 +7,6 @@ type AppRole = "admin" | "editor" | "user";
 type ClaimAction = "verify" | "reject" | "promote" | "dismiss";
 type QueueAction = "claim" | "complete" | "fail" | "requeue" | "dismiss";
 
-function backendBaseUrl() {
-  return (
-    process.env.FABRIC_ATLAS_API_URL ??
-    process.env.BACKEND_URL ??
-    process.env.VITE_FABRIC_ATLAS_API_URL ??
-    "http://localhost:8000"
-  ).replace(/\/$/, "");
-}
-
-async function backendJson<T>(
-  path: string,
-  init: RequestInit & { json?: unknown } = {},
-): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (init.json !== undefined) headers.set("Content-Type", "application/json");
-  const response = await fetch(`${backendBaseUrl()}${path}`, {
-    ...init,
-    headers,
-    body: init.json !== undefined ? JSON.stringify(init.json) : init.body,
-  });
-  if (!response.ok) {
-    let detail = await response.text();
-    try {
-      const parsed = JSON.parse(detail);
-      detail = typeof parsed.detail === "string" ? parsed.detail : JSON.stringify(parsed.detail);
-    } catch {
-      // keep plain text detail
-    }
-    throw new Error(detail || `Backend request failed (${response.status})`);
-  }
-  return (await response.json()) as T;
-}
-
 async function publicClient() {
   const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL!;
   const key = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
@@ -59,6 +26,10 @@ async function requireAdmin(context: any) {
 async function adminClient() {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   return supabaseAdmin as any;
+}
+
+async function adminServices() {
+  return import("@/lib/atlas-admin.services.server");
 }
 
 async function recordAudit(
@@ -454,7 +425,9 @@ export const mutateClaim = createServerFn({ method: "POST" })
   .inputValidator((d: { claimId: string; action: ClaimAction }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
-    await backendJson(`/claims/${data.claimId}/${data.action}`, { method: "POST" });
+    const sb = await adminClient();
+    const { mutateClaimStatus } = await adminServices();
+    await mutateClaimStatus(sb, data.claimId, data.action);
     await recordAudit(context.userId, `claim.${data.action}`, "claim", data.claimId);
     return { ok: true };
   });
@@ -468,14 +441,13 @@ export const supersedeClaim = createServerFn({ method: "POST" })
     await requireAdmin(context);
     const text = data.text.trim();
     if (!text) throw new Error("Claim text is required.");
-    const created = await backendJson<any>(`/claims/${data.claimId}/supersede`, {
-      method: "POST",
-      json: {
-        new_text: text,
-        depth: data.depth,
-        type: data.type,
-        tags: data.tags ?? [],
-      },
+    const sb = await adminClient();
+    const { supersedeClaim } = await adminServices();
+    const created = await supersedeClaim(sb, data.claimId, {
+      text,
+      depth: data.depth,
+      type: data.type,
+      tags: data.tags ?? [],
     });
     await recordAudit(context.userId, "claim.superseded", "claim", created.id, {
       supersedes_id: data.claimId,
@@ -523,18 +495,18 @@ export const saveBlogVersion = createServerFn({ method: "POST" })
       prior = existing;
     }
 
-    const created = await backendJson<any>("/blogs", {
-      method: "POST",
-      json: {
-        topic_id: data.topic_slug ?? prior?.topic_slug,
-        slug: data.slug,
-        title: data.title,
-        summary: data.summary ?? "",
-        body_md: data.body_md,
-        cited_source_ids: data.cited_source_ids,
-        tags: data.tags ?? [],
-        depth_levels: data.depth_levels ?? [],
-      },
+    const { saveBlogVersion: saveBlogVersionRecord } = await adminServices();
+    const created = await saveBlogVersionRecord(sb, {
+      existingId: data.existingId,
+      topic_slug: data.topic_slug ?? prior?.topic_slug,
+      slug: data.slug,
+      title: data.title,
+      summary: data.summary ?? "",
+      body_md: data.body_md,
+      status: data.status ?? "draft",
+      cited_source_ids: data.cited_source_ids,
+      tags: data.tags ?? [],
+      depth_levels: data.depth_levels ?? [],
     });
 
     await recordAudit(
@@ -557,15 +529,11 @@ export const mutateQueueItem = createServerFn({ method: "POST" })
   )
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
-    const body =
-      data.action === "complete"
-        ? { source_id: data.sourceId }
-        : data.action === "fail"
-          ? { error: data.error ?? "" }
-          : undefined;
-    await backendJson(`/queue/${data.itemId}/${data.action}`, {
-      method: "POST",
-      ...(body ? { json: body } : {}),
+    const sb = await adminClient();
+    const { mutateQueueItem: mutateQueueItemRecord } = await adminServices();
+    await mutateQueueItemRecord(sb, data.itemId, data.action, {
+      sourceId: data.sourceId,
+      error: data.error,
     });
     await recordAudit(context.userId, `queue.${data.action}`, "queue_item", data.itemId);
     return { ok: true };
@@ -590,11 +558,9 @@ export const getDiagramCoverage = createServerFn({ method: "GET" })
   // Supabase context (same as validateContent). Runtime + build are correct.
   .handler(async ({ context }): Promise<DiagramCoverageResult> => {
     await requireAdmin(context);
-    const coverage = await backendJson<DiagramCoverageRow[]>("/coverage/diagrams");
-    const pending = await backendJson<Array<Record<string, unknown>>>(
-      "/queue?kind=diagram&status=queued",
-    );
-    return { coverage, pending };
+    const sb = await adminClient();
+    const { getDiagramCoverage: getDiagramCoverageRecord } = await adminServices();
+    return getDiagramCoverageRecord(sb);
   });
 
 export const commissionDiagram = createServerFn({ method: "POST" })
@@ -602,13 +568,12 @@ export const commissionDiagram = createServerFn({ method: "POST" })
   .inputValidator((d: { targetSlug: string; title?: string; scheduledAt?: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
-    await backendJson("/queue/diagram", {
-      method: "POST",
-      json: {
-        target_slug: data.targetSlug,
-        title: data.title ?? "",
-        scheduled_at: data.scheduledAt ?? "",
-      },
+    const sb = await adminClient();
+    const { commissionDiagram: commissionDiagramRecord } = await adminServices();
+    await commissionDiagramRecord(sb, {
+      targetSlug: data.targetSlug,
+      title: data.title,
+      scheduledAt: data.scheduledAt,
     });
     await recordAudit(
       context.userId,
@@ -663,10 +628,9 @@ export const validateContent = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
-    const result = await backendJson<JsonValue>(`/${data.kind}s/${data.id}/validate`, {
-      method: "POST",
-      json: {},
-    });
+    const sb = await adminClient();
+    const { validateContent: validateContentRecord } = await adminServices();
+    const result = (await validateContentRecord(sb, data)) as JsonValue;
     await recordAudit(context.userId, `${data.kind}.validation_run`, data.kind, data.id);
     return { ok: true as const, result };
   });

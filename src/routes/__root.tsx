@@ -72,42 +72,31 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   );
 }
 
+const description =
+  "Source-grounded Microsoft Fabric knowledge and architecture guidance with cited claims, diagrams, and validation.";
+
 export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
+      { title: "Fabric Atlas" },
       {
         name: "description",
-        content:
-          "Fabric Atlas provides governed knowledge for Microsoft Fabric, enabling a grounded architecture.",
+        content: description,
       },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
+      { name: "author", content: "Fabric Atlas" },
+      { property: "og:title", content: "Fabric Atlas" },
       {
         property: "og:description",
-        content:
-          "Fabric Atlas provides governed knowledge for Microsoft Fabric, enabling a grounded architecture.",
+        content: description,
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
-      { name: "twitter:title", content: "Lovable App" },
+      { name: "twitter:title", content: "Fabric Atlas" },
       {
         name: "twitter:description",
-        content:
-          "Fabric Atlas provides governed knowledge for Microsoft Fabric, enabling a grounded architecture.",
-      },
-      {
-        property: "og:image",
-        content:
-          "https://storage.googleapis.com/gpt-engineer-file-uploads/c12qzGse13VtBISSoPW02bBAO3W2/social-images/social-1781562470843-Social_Image.webp",
-      },
-      {
-        name: "twitter:image",
-        content:
-          "https://storage.googleapis.com/gpt-engineer-file-uploads/c12qzGse13VtBISSoPW02bBAO3W2/social-images/social-1781562470843-Social_Image.webp",
+        content: description,
       },
     ],
     links: [
@@ -125,8 +114,14 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{var t=localStorage.getItem('fa.theme')||localStorage.getItem('fa-theme')||'light';document.documentElement.classList.toggle('dark',t==='dark');document.documentElement.dataset.theme=t;}catch(e){document.documentElement.dataset.theme='light'}",
+          }}
+        />
         <HeadContent />
       </head>
       <body>

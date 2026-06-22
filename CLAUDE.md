@@ -14,8 +14,8 @@ capability; coverage gaps are visible per capability and depth. Build around it.
 
 ## Deliberate non-goals (read before "improving" the design)
 
-- **No agent mesh.** Do not build 40 microservice "agents". An agent here is *retrieval
-  scoped to capabilities + a focused prompt*, nothing more. One generation model with good
+- **No agent mesh.** Do not build 40 microservice "agents". An agent here is _retrieval
+  scoped to capabilities + a focused prompt_, nothing more. One generation model with good
   retrieval and one validation pass delivers ~90% of the value. Add a new agent only when a
   concrete need forces it.
 - **No mega-prompt.** Keep each agent narrow and single-purpose.
@@ -25,8 +25,9 @@ capability; coverage gaps are visible per capability and depth. Build around it.
 ## Repo layout
 
 ```
-backend/            FastAPI + SQLModel mapping onto the unified Supabase schema (plural
-                    tables, uuid PKs). Claim versioning + validation pass live here.
+backend/            Local/legacy FastAPI + SQLModel mapping onto the unified Supabase schema
+                    (plural tables, uuid PKs). Useful for authoring/import workflows; not the
+                    Lovable production host.
   app/models.py     maps to capabilities/topics/topic_capabilities/sources/claims/claimevents/
                     blogs/blog_sources/designs/design_sources/validation_runs/issues/
                     queue_items/assets. Versioning = slug + supersedes_id chains.
@@ -36,9 +37,10 @@ backend/            FastAPI + SQLModel mapping onto the unified Supabase schema 
   app/search.py     Postgres per-table GIN tsvector search (LIKE fallback on SQLite test DB)
   app/llm.py        Anthropic wrapper + structured-output helpers (graceful w/o key)
 supabase/migrations/  the canonical KB schema (Lovable-owned) + the backend-unify migration
-src/                TanStack Start app — reads the same Supabase tables directly (RLS).
-frontend/           React + Vite SPA. src/views/ per page, src/components/, React Router.
-                    Portal routes: /topics (tree), /blog/<slug> (reader), /search, /help.
+src/                Lovable-hosted TanStack Start app — reads Supabase directly and exposes
+                    production server functions/API routes.
+frontend/           Legacy React + Vite SPA retained for reference/local comparison only; do
+                    not treat it as the production deployment path.
 .claude/agents/     Subagents (curator, architect, validator, drift, learning, coverage,
                     diagram, advisor, blog-author, docs-author)
 .claude/commands/   Slash commands that drive the agents
@@ -93,13 +95,14 @@ uvicorn app.main:app --reload
 
 **Postgres (Supabase) is the store.** The canonical schema is the Supabase migration
 `supabase/migrations/*_fabric_atlas_kb.sql` (apply with `supabase db push` or run the SQL);
-set `DATABASE_URL` to the Supabase pooler URL with the `+psycopg` driver. The backend
-connects as the service role and owns all writes (versioning/validation); `anon`/`authenticated`
-get read-only SELECT on the public KB surface. SQLite is retired (the only remaining use is the
-in-memory test DB). Full-text search uses a Postgres `tsvector` index (`search_doc` table),
-not FTS5.
+set `DATABASE_URL` to the Supabase pooler URL with the `+psycopg` driver when running the local
+FastAPI tooling. In Lovable production, `src/` uses TanStack server functions plus the Supabase
+service role for admin mutations and validation. SQLite is retired (the only remaining use is the
+in-memory test DB). Full-text search uses Supabase/Postgres `tsvector` indexes through the
+`search_atlas` RPC.
 
-**Migrate / re-import (re-runnable):**
+**Local migration / re-import (re-runnable):**
+
 ```bash
 python scripts/migrate_to_supabase.py --base http://localhost:8000   # replay content/ + rebuild search
 python scripts/replay_verified_status.py                            # ONCE: restore curation status from old SQLite
@@ -143,7 +146,7 @@ fallback plus the scoped claim context, citation legend, and advisor system prom
 - **fabric-advisor** — expert Q&A grounded only in KB claims, cited; refuses where the KB is silent.
 - **blog-author** — composes the cited portal article for a topic from VERIFIED claims only;
   refuses thin coverage, labels inference, commissions original diagrams.
-- **docs-author** — self-documentation: keeps content/help/*.md matching the actual code;
+- **docs-author** — self-documentation: keeps content/help/\*.md matching the actual code;
   never documents features that don't exist.
 
 Prefer explicit invocation, e.g. `Use the knowledge-curator subagent on docs/sources/direct-lake.md`.
@@ -166,7 +169,7 @@ at chosen intervals from the Settings UI. This reuses the `queue_items` lifecycl
 `kind='diagram'`, `target_slug`, and `scheduled_at` (a future timestamp hides the item until it is
 due). The server only schedules — `/commission-diagrams` drains the due queue with the
 **diagram-author**, which authors an original SVG, mirrors it to `public/diagrams/`, and registers
-it as a generated asset (flipping the topic from *gap* to *covered* in the coverage table).
+it as a generated asset (flipping the topic from _gap_ to _covered_ in the coverage table).
 
 ## Conventions
 

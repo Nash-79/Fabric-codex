@@ -22,7 +22,7 @@ function FavoritesPage() {
   });
 
   return (
-    <div className="min-h-screen bg-[#070b16] text-white">
+    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <div className="mx-auto max-w-3xl px-6 py-10">
         <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Favorites</h1>

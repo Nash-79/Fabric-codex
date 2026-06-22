@@ -29,7 +29,7 @@ export const Route = createFileRoute("/blog/$slug")({
     }
   },
   errorComponent: ({ error, reset }) => (
-    <div className="min-h-screen bg-[#070b16] p-10 text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <p className="mt-6 text-rose-300">{error.message}</p>
       <button className="mt-3 underline" onClick={reset}>
@@ -38,7 +38,7 @@ export const Route = createFileRoute("/blog/$slug")({
     </div>
   ),
   notFoundComponent: () => (
-    <div className="min-h-screen bg-[#070b16] p-10 text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <p className="mt-6">Article not found.</p>
       <Link to="/topics" className="mt-3 inline-block underline">
@@ -91,7 +91,7 @@ function BlogPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#070b16] text-white">
+    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <div className="sticky top-14 z-20 h-1 bg-white/5">
         <div className="h-full bg-teal-300" style={{ width: `${progress}%` }} />

@@ -149,7 +149,7 @@ function diagramRows() {
 }
 
 function citations(keys: string[]) {
-  const sources = new Map(sourceRows().map((source) => [source.source_key, source]));
+  const sources = new Map(sourcesMemo().map((source) => [source.source_key, source]));
   return keys.map((key, i) => ({
     label: `S${i + 1}`,
     source: sources.get(key) ?? {
@@ -181,53 +181,96 @@ function helpRows() {
     .sort((a, b) => a.sort_order - b.sort_order);
 }
 
+let memoTopics: ReturnType<typeof topicRows> | undefined;
+let memoSources: ReturnType<typeof sourceRows> | undefined;
+let memoCapabilities: ReturnType<typeof capabilityRows> | undefined;
+let memoBlogs: ReturnType<typeof blogRows> | undefined;
+let memoDesigns: ReturnType<typeof designRows> | undefined;
+let memoDiagrams: ReturnType<typeof diagramRows> | undefined;
+let memoHelp: ReturnType<typeof helpRows> | undefined;
+let memoClaims: ReturnType<typeof claimsRows> | undefined;
+
+function claimsRows() {
+  return sourcesMemo().flatMap((source) =>
+    (source.claims ?? []).map((claim: any, index: number) => ({
+      id: `${source.slug}-${index}`,
+      text: claim.text ?? "",
+      depth: claim.depth ?? 2,
+      type: claim.type ?? "fact",
+      tags: claim.tags ?? [],
+      capability_id: claim.capability_id ?? "",
+      active: true,
+      sources: {
+        slug: source.slug,
+        url: source.url,
+        title: source.title,
+        tier: source.tier,
+      },
+    })),
+  );
+}
+
+function topicsMemo() {
+  return (memoTopics ??= topicRows());
+}
+
+function sourcesMemo() {
+  return (memoSources ??= sourceRows());
+}
+
+function capabilitiesMemo() {
+  return (memoCapabilities ??= capabilityRows());
+}
+
+function blogsMemo() {
+  return (memoBlogs ??= blogRows());
+}
+
+function designsMemo() {
+  return (memoDesigns ??= designRows());
+}
+
+function diagramsMemo() {
+  return (memoDiagrams ??= diagramRows());
+}
+
+function helpMemo() {
+  return (memoHelp ??= helpRows());
+}
+
+function claimsMemo() {
+  return (memoClaims ??= claimsRows());
+}
+
 export const bundledContent = {
-  topics: topicRows,
-  capabilities: capabilityRows,
-  sources: sourceRows,
-  blogs: blogRows,
-  designs: designRows,
-  diagrams: diagramRows,
-  help: helpRows,
-  claims() {
-    return sourceRows().flatMap((source) =>
-      (source.claims ?? []).map((claim: any, index: number) => ({
-        id: `${source.slug}-${index}`,
-        text: claim.text ?? "",
-        depth: claim.depth ?? 2,
-        type: claim.type ?? "fact",
-        tags: claim.tags ?? [],
-        capability_id: claim.capability_id ?? "",
-        active: true,
-        sources: {
-          slug: source.slug,
-          url: source.url,
-          title: source.title,
-          tier: source.tier,
-        },
-      })),
-    );
-  },
+  topics: topicsMemo,
+  capabilities: capabilitiesMemo,
+  sources: sourcesMemo,
+  blogs: blogsMemo,
+  designs: designsMemo,
+  diagrams: diagramsMemo,
+  help: helpMemo,
+  claims: claimsMemo,
   topic(slug: string) {
-    const topic = topicRows().find((row) => row.slug === slug);
+    const topic = topicsMemo().find((row) => row.slug === slug);
     if (!topic) return null;
-    const capabilities = capabilityRows().filter((capability) =>
+    const capabilities = capabilitiesMemo().filter((capability) =>
       topic.capability_ids.includes(capability.id),
     );
     return {
       topic,
-      children: topicRows().filter((row) => row.parent_slug === slug),
+      children: topicsMemo().filter((row) => row.parent_slug === slug),
       capabilities,
-      blogs: blogRows().filter((blog) => blog.topic_slug === slug),
+      blogs: blogsMemo().filter((blog) => blog.topic_slug === slug),
     };
   },
   blog(slug: string) {
-    const blog = blogRows().find((row) => row.slug === slug);
+    const blog = blogsMemo().find((row) => row.slug === slug);
     if (!blog) return null;
     return { blog, citations: citations(blog.cited_source_keys) };
   },
   design(slug: string) {
-    const design = designRows().find((row) => row.slug === slug);
+    const design = designsMemo().find((row) => row.slug === slug);
     if (!design) return null;
     return { design, citations: citations(design.cited_source_keys) };
   },

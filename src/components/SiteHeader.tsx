@@ -42,7 +42,7 @@ export function SiteHeader() {
   }, []);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/5 bg-[#070b16]/85 backdrop-blur">
+    <header className="sticky top-0 z-30 border-b border-white/5 bg-background/85 dark:bg-[#070b16]/85 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-4 px-6">
         <Link
           to="/"

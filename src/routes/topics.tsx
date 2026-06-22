@@ -18,7 +18,7 @@ export const Route = createFileRoute("/topics")({
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(topicsQO),
   errorComponent: ({ error, reset }) => (
-    <div className="min-h-screen bg-[#070b16] p-10 text-white">
+    <div className="min-h-screen bg-background p-10 text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <p className="mt-6 text-rose-300">Could not load topics. {error.message}</p>
       <button className="mt-3 underline" onClick={reset}>
@@ -50,7 +50,7 @@ function TopicsPage() {
   }, [topics]);
 
   return (
-    <div className="min-h-screen bg-[#070b16] text-white">
+    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <div className="mx-auto max-w-7xl px-6 py-10">
         <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
@@ -90,7 +90,7 @@ function TopicsPage() {
           ))}
           {roots.length === 0 && (
             <div className="col-span-full rounded-xl border border-dashed border-white/15 p-12 text-center text-white/55">
-              No topics yet. An admin can seed the content from the{" "}
+              No topics yet. An admin can bootstrap bundled content from the{" "}
               <Link to="/settings" className="text-teal-300 underline-offset-4 hover:underline">
                 settings page
               </Link>

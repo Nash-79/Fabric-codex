@@ -192,7 +192,7 @@ function SettingsPage() {
 
 function Shell({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#070b16] text-white">
+    <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">
       <SiteHeader />
       <main className="mx-auto max-w-7xl px-4 py-8 md:px-6">{children}</main>
     </div>

@@ -1,12 +1,12 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
-// In-app convenience seed (admin-triggered) that replays the bundled content/ files straight into
-// Supabase for no-backend deploys. NOTE: the CANONICAL, version-aware path is the Python backend —
+// In-app bootstrap (admin-triggered) that replays the bundled content/ files straight into
+// Supabase for no-backend deploys. NOTE: the local/legacy version-aware path is the Python backend —
 // `python scripts/import_content.py --base <supabase-backed server>` — which owns claim versioning,
-// drift/merge (supersedes_id chains) and the raw `document` snapshot. This seed is deliberately a
-// thin, idempotent UPSERT replay: it must never blanket-delete versioned rows or reset curated
-// status. Keep it dumb; do real versioning through the backend.
+// drift/merge (supersedes_id chains) and the raw `document` snapshot. This bootstrap is deliberately
+// a thin UPSERT replay for empty environments or explicit resets: it must never silently reset
+// curated status.
 
 // Bundle the content/ JSON and markdown at build time.
 const topicsJson = import.meta.glob("/content/topics.json", { eager: true }) as Record<
@@ -60,7 +60,8 @@ const CAPABILITY_NAMES: Record<string, { name: string; accent: string }> = {
 
 export const seedFromContent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
+  .inputValidator((d: { forceBootstrap?: boolean } | undefined) => d ?? {})
+  .handler(async ({ context, data }) => {
     const { data: isAdmin } = await context.supabase.rpc("has_role", {
       _user_id: context.userId,
       _role: "admin",
@@ -69,10 +70,33 @@ export const seedFromContent = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    const { count: activeClaimCount, error: countError } = await supabaseAdmin
+      .from("claims")
+      .select("id", { count: "exact", head: true })
+      .eq("active", true);
+    if (countError) throw new Error(countError.message);
+    if ((activeClaimCount ?? 0) > 0 && !data.forceBootstrap) {
+      throw new Error(
+        "Bundled-content bootstrap refused because active claims already exist. This bootstrap refreshes source claims by replacement; use the version-aware import path or pass forceBootstrap only for a deliberate reset.",
+      );
+    }
+
     const topicsArr: any[] = Object.values(topicsJson)[0]?.default ?? [];
     const sources: any[] = Object.values(sourceJsons).map((m) => m.default);
     const blogs: any[] = Object.values(blogJsons).map((m) => m.default);
     const diagrams: any[] = Object.values(diagramAssets)[0]?.default ?? [];
+    const summary = {
+      forceBootstrap: !!data.forceBootstrap,
+      existingActiveClaims: activeClaimCount ?? 0,
+      sourceClaimsDeleted: 0,
+      claimsInserted: 0,
+      sourceRowsUpserted: 0,
+      blogRowsUpserted: 0,
+      designRowsUpserted: 0,
+      topicRowsUpserted: 0,
+      diagramRowsUpserted: 0,
+      helpRowsUpserted: 0,
+    };
 
     // 1) Capabilities (derived from topics + claims)
     const capIds = new Set<string>();
@@ -103,6 +127,7 @@ export const seedFromContent = createServerFn({ method: "POST" })
         },
         { onConflict: "slug" },
       );
+      summary.topicRowsUpserted++;
     }
 
     // 3) Topic ↔ Capability links
@@ -140,8 +165,13 @@ export const seedFromContent = createServerFn({ method: "POST" })
         .single();
       if (error) throw new Error(`source ${slug}: ${error.message}`);
       slugById.set(slug, ins.id);
-      // Replace just this source's claims so re-seeding doesn't accumulate duplicates.
-      await supabaseAdmin.from("claims").delete().eq("source_id", ins.id);
+      // Replace just this source's claims so forced bootstrap doesn't accumulate duplicates.
+      summary.sourceRowsUpserted++;
+      const { count: deleted } = await supabaseAdmin
+        .from("claims")
+        .delete({ count: "exact" })
+        .eq("source_id", ins.id);
+      summary.sourceClaimsDeleted += deleted ?? 0;
       const claimRows = (s.claims ?? [])
         .filter((c: any) => c.capability_id && capIds.has(c.capability_id))
         .map((c: any) => ({
@@ -152,7 +182,10 @@ export const seedFromContent = createServerFn({ method: "POST" })
           type: c.type ?? "fact",
           tags: c.tags ?? [],
         }));
-      if (claimRows.length) await supabaseAdmin.from("claims").insert(claimRows);
+      if (claimRows.length) {
+        await supabaseAdmin.from("claims").insert(claimRows);
+        summary.claimsInserted += claimRows.length;
+      }
     }
 
     // 5) Blogs + citations (upsert by slug; refresh that blog's citation legend).
@@ -173,6 +206,7 @@ export const seedFromContent = createServerFn({ method: "POST" })
         .select("id")
         .single();
       if (error) throw new Error(`blog ${b.slug}: ${error.message}`);
+      summary.blogRowsUpserted++;
       await supabaseAdmin.from("blog_sources").delete().eq("blog_id", ins.id);
       const keys: string[] = b.cited_source_keys ?? [];
       const bsRows = keys
@@ -205,6 +239,7 @@ export const seedFromContent = createServerFn({ method: "POST" })
         .single();
       if (error) throw new Error(`design ${slug}: ${error.message}`);
       designCount++;
+      summary.designRowsUpserted++;
       await supabaseAdmin.from("design_sources").delete().eq("design_id", ins.id);
       const keys: string[] = d.cited_source_keys ?? [];
       const dsRows = keys
@@ -233,8 +268,10 @@ export const seedFromContent = createServerFn({ method: "POST" })
         topic_slug: null,
       };
     });
-    if (diagRows.length)
+    if (diagRows.length) {
       await supabaseAdmin.from("diagrams").upsert(diagRows, { onConflict: "slug" });
+      summary.diagramRowsUpserted = diagRows.length;
+    }
 
     // 7) Help docs
     await supabaseAdmin.from("help_docs").delete().neq("slug", "__never__");
@@ -251,11 +288,15 @@ export const seedFromContent = createServerFn({ method: "POST" })
         sort_order: order,
       };
     });
-    if (helpRows.length)
+    if (helpRows.length) {
       await supabaseAdmin.from("help_docs").upsert(helpRows, { onConflict: "slug" });
+      summary.helpRowsUpserted = helpRows.length;
+    }
 
     return {
       ok: true,
+      mode: "bundled-content-bootstrap",
+      summary,
       counts: {
         topics: topicsArr.length,
         capabilities: capRows.length,
