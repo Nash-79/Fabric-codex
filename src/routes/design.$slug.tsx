@@ -63,7 +63,7 @@ function DesignPage() {
   const { data } = useSuspenseQuery(designQO(slug));
   const { design, citations } = data;
 
-  const renderedBody = design.body_md.replace(/\[S(\d+)\]/g, (_m, n) => `[S${n}](#src-${n})`);
+  const renderedBody = design.body_md.replace(/\[S(\d+)\]/g, (_m: string, n: string) => `[S${n}](#src-${n})`);
 
   return (
     <div className="min-h-screen bg-background text-foreground dark:bg-[#070b16] dark:text-white">

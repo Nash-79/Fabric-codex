@@ -58,7 +58,7 @@ function BlogPage() {
   // Replace [S1] / [S1][S2] inline citations with clickable superscripts.
   const renderedBody = blog.body_md.replace(
     /\[S(\d+)\]/g,
-    (_m, n) => ` <sup id="cite-${n}"><a href="#src-${n}" class="cite">[S${n}]</a></sup>`,
+    (_m: string, n: string) => ` <sup id="cite-${n}"><a href="#src-${n}" class="cite">[S${n}]</a></sup>`,
   );
   const headings = useMemo(
     () =>
