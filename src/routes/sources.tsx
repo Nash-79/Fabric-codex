@@ -44,7 +44,7 @@ function SourcesPage() {
       return (
         s.title.toLowerCase().includes(term) ||
         s.summary.toLowerCase().includes(term) ||
-        s.tags?.some((t) => t.toLowerCase().includes(term))
+        s.tags?.some((t: string) => t.toLowerCase().includes(term))
       );
     });
   }, [sources, q, tier]);
