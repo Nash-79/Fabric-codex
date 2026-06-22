@@ -657,9 +657,6 @@ export const submitSourceReview = createServerFn({ method: "POST" })
 export const validateContent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: { kind: "blog" | "design"; id: string }) => d)
-  // @ts-expect-error TanStack ServerFn hits a type-instantiation depth limit here
-  // when the middleware injects the fully-typed Supabase context. Runtime is correct
-  // and the production build is unaffected; the directive self-heals if TanStack fixes it.
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };

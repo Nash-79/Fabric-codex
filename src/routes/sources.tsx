@@ -44,7 +44,7 @@ function SourcesPage() {
       return (
         s.title.toLowerCase().includes(term) ||
         s.summary.toLowerCase().includes(term) ||
-        s.tags?.some((t) => t.toLowerCase().includes(term))
+        s.tags?.some((t: string) => t.toLowerCase().includes(term))
       );
     });
   }, [sources, q, tier]);
@@ -102,7 +102,7 @@ function SourcesPage() {
               {s.summary && <p className="mt-1.5 text-xs text-white/55">{s.summary}</p>}
               {s.tags?.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1">
-                  {s.tags.slice(0, 8).map((t) => (
+                  {s.tags.slice(0, 8).map((t: string) => (
                     <span
                       key={t}
                       className="rounded border border-white/10 bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-white/55"
