@@ -989,6 +989,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      search_atlas: {
+        Args: { max_results?: number; term: string }
+        Returns: {
+          kind: string
+          payload: Json
+          rank: number
+        }[]
+      }
     }
     Enums: {
       app_role: "admin" | "editor" | "user"
