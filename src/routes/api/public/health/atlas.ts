@@ -87,12 +87,15 @@ export const Route = createFileRoute("/api/public/health/atlas")({
               last_signature: lastSig,
             },
             counts: {
-              claims: claimsRes.count ?? 0,
-              sources: sourcesRes.count ?? 0,
-              blogs: blogsRes.count ?? 0,
-              topics: topicsRes.count ?? 0,
-              diagrams: diagramsRes.count ?? 0,
+              claims: Number(counts.claims ?? 0),
+              sources: Number(counts.sources ?? 0),
+              blogs: Number(counts.blogs ?? 0),
+              topics: Number(counts.topics ?? 0),
+              diagrams: Number(counts.diagrams ?? 0),
+              designs: Number(counts.designs ?? 0),
+              help_docs: Number(counts.help_docs ?? 0),
             },
+
             search_atlas: {
               rpc_ok: rpcOk,
               rpc_error: rpcError,
