@@ -22,6 +22,7 @@ import { Route as AdvisorRouteImport } from './routes/advisor'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TopicsSlugRouteImport } from './routes/topics.$slug'
+import { Route as RegistryIdRouteImport } from './routes/registry.$id'
 import { Route as DesignSlugRouteImport } from './routes/design.$slug'
 import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
@@ -93,6 +94,11 @@ const TopicsSlugRoute = TopicsSlugRouteImport.update({
   path: '/$slug',
   getParentRoute: () => TopicsRoute,
 } as any)
+const RegistryIdRoute = RegistryIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => RegistryRoute,
+} as any)
 const DesignSlugRoute = DesignSlugRouteImport.update({
   id: '/design/$slug',
   path: '/design/$slug',
@@ -132,7 +138,7 @@ export interface FileRoutesByFullPath {
   '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
   '/learn': typeof LearnRoute
-  '/registry': typeof RegistryRoute
+  '/registry': typeof RegistryRouteWithChildren
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
   '/topics': typeof TopicsRouteWithChildren
@@ -142,6 +148,7 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/design/$slug': typeof DesignSlugRoute
+  '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
 }
 export interface FileRoutesByTo {
@@ -152,7 +159,7 @@ export interface FileRoutesByTo {
   '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
   '/learn': typeof LearnRoute
-  '/registry': typeof RegistryRoute
+  '/registry': typeof RegistryRouteWithChildren
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
   '/topics': typeof TopicsRouteWithChildren
@@ -162,6 +169,7 @@ export interface FileRoutesByTo {
   '/api/chat': typeof ApiChatRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/design/$slug': typeof DesignSlugRoute
+  '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
 }
 export interface FileRoutesById {
@@ -174,7 +182,7 @@ export interface FileRoutesById {
   '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
   '/learn': typeof LearnRoute
-  '/registry': typeof RegistryRoute
+  '/registry': typeof RegistryRouteWithChildren
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
   '/topics': typeof TopicsRouteWithChildren
@@ -184,6 +192,7 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRoute
   '/blog/$slug': typeof BlogSlugRoute
   '/design/$slug': typeof DesignSlugRoute
+  '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
 }
 export interface FileRouteTypes {
@@ -206,6 +215,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/blog/$slug'
     | '/design/$slug'
+    | '/registry/$id'
     | '/topics/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -226,6 +236,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/blog/$slug'
     | '/design/$slug'
+    | '/registry/$id'
     | '/topics/$slug'
   id:
     | '__root__'
@@ -247,6 +258,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/blog/$slug'
     | '/design/$slug'
+    | '/registry/$id'
     | '/topics/$slug'
   fileRoutesById: FileRoutesById
 }
@@ -259,7 +271,7 @@ export interface RootRouteChildren {
   DesignsRoute: typeof DesignsRoute
   HelpRoute: typeof HelpRoute
   LearnRoute: typeof LearnRoute
-  RegistryRoute: typeof RegistryRoute
+  RegistryRoute: typeof RegistryRouteWithChildren
   SearchRoute: typeof SearchRoute
   SourcesRoute: typeof SourcesRoute
   TopicsRoute: typeof TopicsRouteWithChildren
@@ -361,6 +373,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TopicsSlugRouteImport
       parentRoute: typeof TopicsRoute
     }
+    '/registry/$id': {
+      id: '/registry/$id'
+      path: '/$id'
+      fullPath: '/registry/$id'
+      preLoaderRoute: typeof RegistryIdRouteImport
+      parentRoute: typeof RegistryRoute
+    }
     '/design/$slug': {
       id: '/design/$slug'
       path: '/design/$slug'
@@ -421,6 +440,18 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
 const AuthenticatedRouteRouteWithChildren =
   AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
+interface RegistryRouteChildren {
+  RegistryIdRoute: typeof RegistryIdRoute
+}
+
+const RegistryRouteChildren: RegistryRouteChildren = {
+  RegistryIdRoute: RegistryIdRoute,
+}
+
+const RegistryRouteWithChildren = RegistryRoute._addFileChildren(
+  RegistryRouteChildren,
+)
+
 interface TopicsRouteChildren {
   TopicsSlugRoute: typeof TopicsSlugRoute
 }
@@ -441,7 +472,7 @@ const rootRouteChildren: RootRouteChildren = {
   DesignsRoute: DesignsRoute,
   HelpRoute: HelpRoute,
   LearnRoute: LearnRoute,
-  RegistryRoute: RegistryRoute,
+  RegistryRoute: RegistryRouteWithChildren,
   SearchRoute: SearchRoute,
   SourcesRoute: SourcesRoute,
   TopicsRoute: TopicsRouteWithChildren,

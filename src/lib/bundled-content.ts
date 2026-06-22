@@ -92,6 +92,8 @@ function capabilityRows() {
     name: CAPABILITY_NAMES[id]?.name ?? id,
     description: CAPABILITY_NAMES[id]?.description ?? "",
     accent: CAPABILITY_NAMES[id]?.accent ?? "teal",
+    maturity: "ga" as const,
+    released_at: null,
   }));
 }
 

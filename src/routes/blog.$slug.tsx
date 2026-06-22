@@ -1,11 +1,11 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { getBlog } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
-import { TierBadge } from "@/components/Badges";
+import { TierBadge, MaturityBadge } from "@/components/Badges";
 import { PrintButton } from "@/components/PrintButton";
 import { readingTime } from "@/lib/reading-time";
 
@@ -53,7 +53,20 @@ function BlogPage() {
   const { slug } = Route.useParams();
   const { data } = useSuspenseQuery(blogQO(slug));
   const { blog, citations } = data;
+  const capabilities = (data as any).capabilities ?? [];
+  const diagramMeta = (data as any).diagrams ?? [];
+  const hasPreview = capabilities.some((c: any) => c?.maturity === "preview");
   const [progress, setProgress] = useState(0);
+
+  // Caption lookup for embedded diagrams, keyed by the file basename.
+  const captionByFile = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const d of diagramMeta) {
+      const base = (d.path ?? "").split("/").pop();
+      if (base && d.caption) map.set(base, d.caption);
+    }
+    return map;
+  }, [diagramMeta]);
 
   // Replace [S1] / [S1][S2] inline citations with clickable superscripts.
   const renderedBody = blog.body_md.replace(
@@ -141,6 +154,15 @@ function BlogPage() {
             <span>{citations.length} sources</span>
             <span>·</span>
             <span>{diagrams.length} diagrams</span>
+            {hasPreview && (
+              <>
+                <span>·</span>
+                <span className="inline-flex items-center gap-1">
+                  <MaturityBadge maturity="preview" />
+                  covers preview features
+                </span>
+              </>
+            )}
           </div>
           <p className="mt-4 text-lg leading-relaxed text-muted-foreground">{blog.summary}</p>
 
@@ -187,6 +209,28 @@ function BlogPage() {
                     <a href={href} {...rest}>
                       {children}
                     </a>
+                  );
+                },
+                blockquote: ({ children }) => <Callout>{children}</Callout>,
+                img: ({ src, alt }) => {
+                  const base =
+                    String(src ?? "")
+                      .split("/")
+                      .pop() ?? "";
+                  const caption = captionByFile.get(base) || alt;
+                  return (
+                    <figure className="my-6">
+                      <img
+                        src={src as string}
+                        alt={alt ?? ""}
+                        className="rounded-xl border border-border"
+                      />
+                      {caption && (
+                        <figcaption className="mt-2 text-center text-xs text-muted-foreground">
+                          {caption}
+                        </figcaption>
+                      )}
+                    </figure>
                   );
                 },
               }}
@@ -236,6 +280,69 @@ function BlogPage() {
       </div>
     </div>
   );
+}
+
+const calloutStyles: Record<string, { cls: string; label: string }> = {
+  NOTE: { cls: "border-teal-500/30 bg-teal-500/10 text-teal-100", label: "Note" },
+  TIP: { cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-100", label: "Tip" },
+  WARNING: { cls: "border-amber-500/30 bg-amber-500/10 text-amber-100", label: "Warning" },
+  IMPORTANT: { cls: "border-indigo-500/30 bg-indigo-500/10 text-indigo-100", label: "Important" },
+  INFERENCE: {
+    cls: "border-violet-500/30 bg-violet-500/10 text-violet-100",
+    label: "Inference (not a sourced fact)",
+  },
+};
+
+// Render GitHub-style `> [!NOTE]` blockquotes as labeled callout cards. The [!INFERENCE] kind
+// directly serves the domain rule that generated text must label its own inferences vs facts.
+function Callout({ children }: { children: ReactNode }) {
+  const text = extractText(children);
+  const match = text.match(/^\s*\[!(NOTE|TIP|WARNING|IMPORTANT|INFERENCE)\]\s*/i);
+  if (!match) {
+    return (
+      <blockquote className="border-l-2 border-border pl-4 italic text-muted-foreground">
+        {children}
+      </blockquote>
+    );
+  }
+  const kind = match[1].toUpperCase();
+  const style = calloutStyles[kind] ?? calloutStyles.NOTE;
+  return (
+    <div className={`not-prose my-5 rounded-lg border p-4 text-sm leading-relaxed ${style.cls}`}>
+      <div className="mb-1 text-xs font-semibold uppercase tracking-wide">{style.label}</div>
+      <div className="[&_p]:m-0">{stripMarker(children, match[0])}</div>
+    </div>
+  );
+}
+
+function extractText(node: ReactNode): string {
+  if (typeof node === "string") return node;
+  if (Array.isArray(node)) return node.map(extractText).join("");
+  if (node && typeof node === "object" && "props" in (node as any))
+    return extractText((node as any).props?.children);
+  return "";
+}
+
+// Remove the leading [!TYPE] marker text from the rendered children.
+function stripMarker(node: ReactNode, marker: string): ReactNode {
+  let removed = false;
+  const walk = (n: ReactNode): ReactNode => {
+    if (removed) return n;
+    if (typeof n === "string") {
+      if (n.includes(marker.trim())) {
+        removed = true;
+        return n.replace(marker, "").replace(marker.trim(), "");
+      }
+      return n;
+    }
+    if (Array.isArray(n)) return n.map(walk);
+    if (n && typeof n === "object" && "props" in (n as any)) {
+      const el = n as ReactElement<any>;
+      return { ...el, props: { ...el.props, children: walk(el.props?.children) } };
+    }
+    return n;
+  };
+  return walk(node);
 }
 
 function Info({ label, value }: { label: string; value: string }) {

@@ -1,20 +1,42 @@
 import { Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { FabricMark } from "./FabricMark";
 import { ThemeToggle } from "./ThemeToggle";
 
-const NAV: ReadonlyArray<{ to: string; label: string; exact?: boolean }> = [
+// Navigation is organised by user intent, not as a flat list:
+//  • Primary  — the two entry points most visits start from.
+//  • Knowledge — the source-grounded knowledge base (what the atlas knows).
+//  • Build     — the interactive tools that produce or query knowledge.
+// Help/Favorites/Settings live in the right-hand utility cluster.
+type NavLink = { to: string; label: string; hint?: string; exact?: boolean };
+
+const PRIMARY: ReadonlyArray<NavLink> = [
   { to: "/", label: "Overview", exact: true },
-  { to: "/topics", label: "Topics" },
-  { to: "/search", label: "Search" },
-  { to: "/registry", label: "Registry" },
-  { to: "/sources", label: "Sources" },
-  { to: "/designs", label: "Designs" },
-  { to: "/learn", label: "Learn" },
-  { to: "/help", label: "Help" },
-  { to: "/author", label: "Author" },
+  { to: "/topics", label: "Topics", hint: "Browse Fabric by topic" },
+];
+
+const KNOWLEDGE: ReadonlyArray<NavLink> = [
+  { to: "/registry", label: "Capability Registry", hint: "The spine — coverage per capability" },
+  { to: "/sources", label: "Sources", hint: "Graded, cited source library" },
+  { to: "/learn", label: "Learn", hint: "Tiered lessons (Beginner→Expert)" },
+  { to: "/designs", label: "Designs", hint: "Cited solution architectures" },
+];
+
+const BUILD: ReadonlyArray<NavLink> = [
+  { to: "/advisor", label: "Advisor", hint: "Ask a source-grounded question" },
+  { to: "/search", label: "Search", hint: "Search across the knowledge base" },
+  { to: "/author", label: "Author", hint: "Compose & contribute content" },
 ];
 
 export function SiteHeader() {
@@ -55,17 +77,11 @@ export function SiteHeader() {
           </span>
         </Link>
         <nav className="hidden flex-1 items-center justify-center gap-0.5 md:flex">
-          {NAV.map((n) => (
-            <Link
-              key={n.to}
-              to={n.to as "/"}
-              className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
-              activeProps={{ className: "bg-accent text-foreground" }}
-              activeOptions={{ exact: n.exact ?? false }}
-            >
-              {n.label}
-            </Link>
+          {PRIMARY.map((n) => (
+            <NavItem key={n.to} link={n} />
           ))}
+          <NavGroup label="Knowledge" links={KNOWLEDGE} />
+          <NavGroup label="Build" links={BUILD} />
         </nav>
         <div className="flex shrink-0 items-center gap-2">
           <ThemeToggle />
@@ -74,6 +90,12 @@ export function SiteHeader() {
             className="hidden rounded-md border border-teal-400/30 bg-teal-500/10 px-3 py-1.5 text-xs font-medium text-teal-200 hover:bg-teal-500/20 md:inline-block"
           >
             Advisor
+          </Link>
+          <Link
+            to="/help"
+            className="hidden text-xs text-muted-foreground hover:text-foreground md:inline"
+          >
+            Help
           </Link>
           {signedIn ? (
             <>
@@ -92,6 +114,7 @@ export function SiteHeader() {
                 </Link>
               )}
               <button
+                type="button"
                 onClick={() => supabase.auth.signOut()}
                 className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent"
               >
@@ -109,5 +132,43 @@ export function SiteHeader() {
         </div>
       </div>
     </header>
+  );
+}
+
+function NavItem({ link }: { link: NavLink }) {
+  return (
+    <Link
+      to={link.to as "/"}
+      className="rounded-md px-2.5 py-1.5 text-sm text-muted-foreground transition hover:bg-accent hover:text-foreground"
+      activeProps={{ className: "bg-accent text-foreground" }}
+      activeOptions={{ exact: link.exact ?? false }}
+    >
+      {link.label}
+    </Link>
+  );
+}
+
+function NavGroup({ label, links }: { label: string; links: ReadonlyArray<NavLink> }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground outline-none transition hover:bg-accent hover:text-foreground data-[state=open]:bg-accent data-[state=open]:text-foreground">
+        {label}
+        <ChevronDown className="h-3.5 w-3.5" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-64">
+        <DropdownMenuLabel className="text-xs uppercase tracking-wide text-muted-foreground">
+          {label}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {links.map((n) => (
+          <DropdownMenuItem key={n.to} asChild>
+            <Link to={n.to as "/"} className="flex cursor-pointer flex-col items-start gap-0.5">
+              <span className="text-sm text-foreground">{n.label}</span>
+              {n.hint && <span className="text-xs text-muted-foreground">{n.hint}</span>}
+            </Link>
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

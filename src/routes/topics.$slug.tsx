@@ -2,12 +2,14 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { getTopic } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
+import { MaturityBadge } from "@/components/Badges";
 import { accent } from "@/lib/fabric-theme";
 
 type TopicCapability = {
   id: string;
   name: string;
   accent: string;
+  maturity?: string | null;
 };
 
 type TopicBlog = {
@@ -76,13 +78,13 @@ function TopicPage() {
               return (
                 <Link
                   key={c.id}
-                  to="/registry"
-                  className={`rounded-full border px-2.5 py-1 text-xs font-medium ${a.chip}`}
+                  to="/registry/$id"
+                  params={{ id: c.id }}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${a.chip}`}
                 >
-                  <span
-                    className={`mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle ${a.dot}`}
-                  />
+                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${a.dot}`} />
                   {c.name}
+                  {c.maturity === "preview" && <MaturityBadge maturity="preview" />}
                 </Link>
               );
             })}

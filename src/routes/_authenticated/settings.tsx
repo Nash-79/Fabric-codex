@@ -20,6 +20,7 @@ import {
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
+import { getRegistryCoverage } from "@/lib/atlas.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -101,7 +102,12 @@ function SettingsPage() {
   const overviewFn = useServerFn(getSettingsOverview);
   const cmsFn = useServerFn(getCmsData);
   const queryClient = useQueryClient();
-  const overview = useQuery({ queryKey: ["settings-overview"], queryFn: () => overviewFn() });
+  const overview = useQuery({
+    queryKey: ["settings-overview"],
+    queryFn: () => overviewFn(),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  });
   const cms = useQuery({
     queryKey: ["settings-cms"],
     queryFn: () => cmsFn(),
@@ -134,15 +140,27 @@ function SettingsPage() {
           </div>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Settings</h1>
         </div>
-        <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
-          {Object.entries(overview.data?.stats ?? {})
-            .slice(0, 4)
-            .map(([key, value]) => (
-              <div key={key} className="rounded-md border border-border bg-card px-3 py-2">
-                <div className="text-muted-foreground">{key}</div>
-                <div className="text-lg font-semibold">{value as number}</div>
-              </div>
-            ))}
+        <div className="flex items-center gap-3">
+          <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
+            {Object.entries(overview.data?.stats ?? {})
+              .slice(0, 4)
+              .map(([key, value]) => (
+                <div key={key} className="rounded-md border border-border bg-card px-3 py-2">
+                  <div className="text-muted-foreground">{key}</div>
+                  <div className="text-lg font-semibold">{value as number}</div>
+                </div>
+              ))}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 border-border bg-card text-foreground"
+            onClick={refresh}
+            disabled={overview.isFetching}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${overview.isFetching ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
         </div>
       </div>
 
@@ -184,8 +202,10 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="logs" className="mt-0">
             <LogsPanel
-              data={overview.data?.audit ?? cms.data?.audit ?? []}
+              audit={overview.data?.audit ?? cms.data?.audit ?? []}
+              claimLog={overview.data?.claimLog ?? []}
               loading={overview.isLoading}
+              updatedAt={overview.dataUpdatedAt}
             />
           </TabsContent>
           <TabsContent value="system" className="mt-0">
@@ -541,7 +561,7 @@ function ContentPanel({
               title="Capabilities"
               rows={data?.capabilities ?? []}
               label={(c) => c.name}
-              meta={(c) => c.id}
+              meta={(c) => `${c.id} · ${c.maturity ?? "ga"}`}
               onEdit={(item) => setEdit({ kind: "capability", item })}
             />
             <CompactList
@@ -681,6 +701,7 @@ function ContentEditor({
             name: active.name,
             description: active.description,
             accent: active.accent,
+            maturity: active.maturity ?? "ga",
           },
         });
       if (edit.kind === "help")
@@ -794,6 +815,21 @@ function ContentEditor({
               value={Array.isArray(active.tags) ? active.tags.join(", ") : (active.tags ?? "")}
               onChange={(v) => set("tags", v)}
             />
+          )}
+          {edit.kind === "capability" && (
+            <div>
+              <Label className="text-muted-foreground">Maturity</Label>
+              <Select value={active.maturity ?? "ga"} onValueChange={(v) => set("maturity", v)}>
+                <SelectTrigger className="mt-1 border-border bg-card text-foreground">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="preview">Preview</SelectItem>
+                  <SelectItem value="ga">GA</SelectItem>
+                  <SelectItem value="deprecated">Deprecated</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           )}
         </div>
         <Button onClick={() => save.mutate()} disabled={save.isPending}>
@@ -1185,7 +1221,14 @@ function QueuePanel({
                   >
                     {q.title || q.url}
                   </a>
-                  <div className="text-xs text-muted-foreground">{q.notes || q.note}</div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    {/^discovered via/i.test(q.notes || q.note || "") && (
+                      <Badge className="border-teal-400/30 bg-teal-500/10 text-[10px] text-teal-200">
+                        discovered
+                      </Badge>
+                    )}
+                    <span>{q.notes || q.note}</span>
+                  </div>
                 </TableCell>
                 <TableCell>{statusBadge(q.status)}</TableCell>
                 <TableCell>T{q.tier}</TableCell>
@@ -1323,31 +1366,153 @@ function QueueSubmitForm({ onDone }: { onDone: () => void }) {
   );
 }
 
-function LogsPanel({ data, loading }: { data: any[]; loading: boolean }) {
+type LogEntry = {
+  id: string;
+  ts: string;
+  stream: "admin" | "claim";
+  action: string;
+  target: string;
+  actor: string;
+  detail?: string;
+};
+
+function relativeTime(iso: string) {
+  const then = new Date(iso).getTime();
+  const diff = Date.now() - then;
+  if (Number.isNaN(then)) return "—";
+  const s = Math.round(diff / 1000);
+  if (s < 60) return `${s}s ago`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.round(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+function actionTone(action: string) {
+  if (/verif|approv|complet|publish|subscrib|active|created|promote/.test(action))
+    return "border-emerald-400/30 bg-emerald-500/10 text-emerald-200";
+  if (/reject|fail|suspend|delete|unsubscrib|revoke|dismiss|deprecat/.test(action))
+    return "border-rose-400/30 bg-rose-500/10 text-rose-200";
+  if (/pending|queue|paus|expire|review|commission|supersede/.test(action))
+    return "border-amber-400/30 bg-amber-500/10 text-amber-200";
+  return "border-border bg-card text-muted-foreground";
+}
+
+function LogsPanel({
+  audit,
+  claimLog,
+  loading,
+  updatedAt,
+}: {
+  audit: any[];
+  claimLog: any[];
+  loading: boolean;
+  updatedAt?: number;
+}) {
+  const [stream, setStream] = useState<"all" | "admin" | "claim">("all");
+  const [q, setQ] = useState("");
+
+  const entries: LogEntry[] = useMemo(() => {
+    const a: LogEntry[] = (audit ?? []).map((e) => ({
+      id: `a-${e.id}`,
+      ts: e.created_at,
+      stream: "admin",
+      action: e.action,
+      target: [e.target_type, e.target_id].filter(Boolean).join(":"),
+      actor: e.actor_email ?? e.actor_id ?? "system",
+    }));
+    const c: LogEntry[] = (claimLog ?? []).map((e) => ({
+      id: `c-${e.id}`,
+      ts: e.actioned_at,
+      stream: "claim",
+      action: `claim.${e.action}`,
+      target: `${e.capability_id} (${e.prev_status}→${e.new_status})`,
+      actor: "curation",
+      detail: e.text_snippet,
+    }));
+    return [...a, ...c].sort((x, y) => new Date(y.ts).getTime() - new Date(x.ts).getTime());
+  }, [audit, claimLog]);
+
+  const filtered = entries.filter((e) => {
+    if (stream !== "all" && e.stream !== stream) return false;
+    const term = q.trim().toLowerCase();
+    if (
+      term &&
+      !`${e.action} ${e.target} ${e.actor} ${e.detail ?? ""}`.toLowerCase().includes(term)
+    )
+      return false;
+    return true;
+  });
+
   return (
-    <Panel title="Admin audit log">
+    <Panel
+      title="Activity log"
+      action={
+        <div className="flex flex-wrap items-center gap-2">
+          {updatedAt ? (
+            <span className="text-[11px] text-muted-foreground">
+              updated {relativeTime(new Date(updatedAt).toISOString())}
+            </span>
+          ) : null}
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Filter…"
+            className="h-8 w-40 border-border bg-card text-foreground"
+          />
+          <div className="flex gap-1 rounded-md border border-border bg-card p-1">
+            {(["all", "admin", "claim"] as const).map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStream(s)}
+                className={`rounded px-2 py-1 text-xs capitalize ${
+                  stream === s
+                    ? "bg-accent text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+      }
+    >
       {loading ? (
         <Empty text="Loading logs..." />
+      ) : filtered.length === 0 ? (
+        <Empty text="No matching activity." />
       ) : (
         <div className="divide-y divide-border rounded-md border border-border">
-          {data.map((event) => (
+          {filtered.slice(0, 150).map((e) => (
             <div
-              key={event.id}
-              className="grid gap-1 px-3 py-2 text-sm md:grid-cols-[180px_1fr_180px]"
+              key={e.id}
+              className="grid items-center gap-2 px-3 py-2 text-sm md:grid-cols-[96px_1fr_140px]"
             >
-              <div className="text-muted-foreground">
-                {new Date(event.created_at).toLocaleString()}
+              <div
+                className="text-xs text-muted-foreground"
+                title={new Date(e.ts).toLocaleString()}
+              >
+                {relativeTime(e.ts)}
               </div>
-              <div>
-                <span className="font-medium">{event.action}</span>
-                <span className="ml-2 text-muted-foreground">
-                  {event.target_type}:{event.target_id}
+              <div className="min-w-0">
+                <span
+                  className={`rounded-sm border px-1.5 py-0.5 text-[11px] font-medium ${actionTone(
+                    e.action,
+                  )}`}
+                >
+                  {e.action}
                 </span>
+                <span className="ml-2 text-muted-foreground">{e.target}</span>
+                {e.detail && (
+                  <div className="mt-0.5 truncate text-xs text-muted-foreground/80">{e.detail}</div>
+                )}
               </div>
-              <div className="truncate text-xs text-muted-foreground">{event.actor_id}</div>
+              <div className="truncate text-right text-xs text-muted-foreground">{e.actor}</div>
             </div>
           ))}
-          {data.length === 0 && <Empty text="No audit events yet." />}
         </div>
       )}
     </Panel>
@@ -1355,6 +1520,21 @@ function LogsPanel({ data, loading }: { data: any[]; loading: boolean }) {
 }
 
 function SystemPanel({ stats, loading }: { stats: Record<string, number>; loading: boolean }) {
+  const coverageFn = useServerFn(getRegistryCoverage);
+  const cov = useQuery({ queryKey: ["registry-coverage"], queryFn: () => coverageFn() });
+  const rows = (cov.data ?? []) as Array<{
+    maturity: string;
+    verified_count: number;
+    claim_count: number;
+  }>;
+  const preview = rows.filter((r) => (r.maturity ?? "ga") === "preview").length;
+  const ga = rows.filter((r) => (r.maturity ?? "ga") === "ga").length;
+  const deprecated = rows.filter((r) => r.maturity === "deprecated").length;
+  const verified = rows.reduce((n, r) => n + r.verified_count, 0);
+  const totalClaims = rows.reduce((n, r) => n + r.claim_count, 0);
+  const pending = Math.max(0, totalClaims - verified);
+  const verifiedPct = totalClaims ? Math.round((verified / totalClaims) * 100) : 0;
+
   return (
     <Panel title="System">
       {loading ? (
@@ -1371,6 +1551,49 @@ function SystemPanel({ stats, loading }: { stats: Record<string, number>; loadin
                 <div className="mt-2 text-2xl font-semibold">{value}</div>
               </div>
             ))}
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="rounded-md border border-border bg-card p-4">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Capability maturity
+              </div>
+              <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                <span
+                  className="bg-amber-400/70"
+                  style={{ width: `${pct(preview, rows.length)}%` }}
+                />
+                <span className="bg-emerald-400/70" style={{ width: `${pct(ga, rows.length)}%` }} />
+                <span
+                  className="bg-zinc-500/70"
+                  style={{ width: `${pct(deprecated, rows.length)}%` }}
+                />
+              </div>
+              <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                <span>
+                  <span className="text-amber-300">●</span> Preview {preview}
+                </span>
+                <span>
+                  <span className="text-emerald-300">●</span> GA {ga}
+                </span>
+                <span>
+                  <span className="text-zinc-400">●</span> Deprecated {deprecated}
+                </span>
+              </div>
+            </div>
+            <div className="rounded-md border border-border bg-card p-4">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                Claim verification
+              </div>
+              <div className="mt-3 flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                <span className="bg-emerald-400/70" style={{ width: `${verifiedPct}%` }} />
+              </div>
+              <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                <span className="text-foreground font-medium">{verifiedPct}% verified</span>
+                <span>{verified} verified</span>
+                <span>{pending} pending</span>
+              </div>
+            </div>
           </div>
           <div className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
             <div className="font-medium text-foreground">Content source of truth</div>
@@ -1489,6 +1712,10 @@ function Empty({ text }: { text: string }) {
       {text}
     </div>
   );
+}
+
+function pct(n: number, total: number) {
+  return total ? Math.round((n / total) * 100) : 0;
 }
 
 function splitTags(value: unknown) {

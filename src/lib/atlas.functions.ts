@@ -32,7 +32,9 @@ export const listTopics = createServerFn({ method: "GET" }).handler(async () => 
 export const listCapabilities = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const sb = await admin();
-    const { data, error } = await sb.from("capabilities").select("id,name,description,accent");
+    const { data, error } = await sb
+      .from("capabilities")
+      .select("id,name,description,accent,maturity,released_at");
     if (error) throw new Error(error.message);
     return data?.length ? data : bundledContent.capabilities();
   } catch {
@@ -55,7 +57,7 @@ export const getTopic = createServerFn({ method: "GET" })
             .order("sort_order"),
           sb
             .from("topic_capabilities")
-            .select("capability_id, capabilities(id,name,description,accent)")
+            .select("capability_id, capabilities(id,name,description,accent,maturity)")
             .eq("topic_slug", data.slug),
           sb
             .from("blogs")
@@ -92,14 +94,27 @@ export const getBlog = createServerFn({ method: "GET" })
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (blog) {
-        const { data: cites } = await sb
-          .from("blog_sources")
-          .select("label,position,sources(id,slug,url,title,tier,tags,summary)")
-          .eq("blog_id", blog.id)
-          .order("position");
+        const [{ data: cites }, { data: caps }, { data: diagrams }] = await Promise.all([
+          sb
+            .from("blog_sources")
+            .select("label,position,sources(id,slug,url,title,tier,tags,summary)")
+            .eq("blog_id", blog.id)
+            .order("position"),
+          blog.topic_slug
+            ? sb
+                .from("topic_capabilities")
+                .select("capabilities(id,name,maturity)")
+                .eq("topic_slug", blog.topic_slug)
+            : Promise.resolve({ data: [] as any[] }),
+          blog.topic_slug
+            ? sb.from("diagrams").select("slug,path,caption,kind").eq("topic_slug", blog.topic_slug)
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
         return {
           blog,
           citations: (cites ?? []).map((c: any) => ({ label: c.label, source: c.sources })),
+          capabilities: (caps ?? []).map((c: any) => c.capabilities).filter(Boolean),
+          diagrams: diagrams ?? [],
         };
       }
     } catch {
@@ -238,6 +253,117 @@ export const listClaimCountsByCapability = createServerFn({ method: "GET" }).han
     return acc;
   }, {});
 });
+
+export type RegistryCoverageRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  accent: string;
+  maturity: string;
+  claim_count: number;
+  verified_count: number;
+  depth_coverage: Record<1 | 2 | 3 | 4 | 5, number>;
+  blog_count: number;
+  diagram_count: number;
+};
+
+// Live coverage for the registry dashboard: per capability, how much grounded knowledge,
+// how deep, and whether it has published reading + diagrams. One read of the public KB tables;
+// aggregation happens in-process (small tables, public RLS).
+export const getRegistryCoverage = createServerFn({ method: "GET" }).handler(
+  async (): Promise<RegistryCoverageRow[]> => {
+    const emptyDepth = () =>
+      ({ 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 }) as Record<1 | 2 | 3 | 4 | 5, number>;
+    try {
+      const sb = await admin();
+      const [
+        { data: caps, error: capErr },
+        { data: claims },
+        { data: topicCaps },
+        { data: blogs },
+        { data: diagrams },
+      ] = await Promise.all([
+        sb.from("capabilities").select("id,name,description,accent,maturity"),
+        sb.from("claims").select("capability_id,depth,status").eq("active", true),
+        sb.from("topic_capabilities").select("topic_slug,capability_id"),
+        sb.from("blogs").select("topic_slug").eq("status", "published"),
+        sb.from("diagrams").select("topic_slug"),
+      ]);
+      if (capErr) throw new Error(capErr.message);
+      if (!caps?.length) throw new Error("No capabilities");
+
+      // capability_id -> set of topic_slugs, so blogs/diagrams (keyed by topic) roll up to caps.
+      const capTopics = new Map<string, Set<string>>();
+      for (const tc of topicCaps ?? []) {
+        if (!tc.topic_slug) continue;
+        const set = capTopics.get(tc.capability_id) ?? new Set<string>();
+        set.add(tc.topic_slug);
+        capTopics.set(tc.capability_id, set);
+      }
+      const blogsByTopic = new Map<string, number>();
+      for (const b of blogs ?? [])
+        if (b.topic_slug) blogsByTopic.set(b.topic_slug, (blogsByTopic.get(b.topic_slug) ?? 0) + 1);
+      const diagramsByTopic = new Map<string, number>();
+      for (const d of diagrams ?? [])
+        if (d.topic_slug)
+          diagramsByTopic.set(d.topic_slug, (diagramsByTopic.get(d.topic_slug) ?? 0) + 1);
+
+      return caps.map((c: any) => {
+        const capClaims = (claims ?? []).filter((cl) => cl.capability_id === c.id);
+        const depth_coverage = emptyDepth();
+        for (const cl of capClaims) {
+          const d = cl.depth as 1 | 2 | 3 | 4 | 5;
+          if (d >= 1 && d <= 5) depth_coverage[d] += 1;
+        }
+        const topics = capTopics.get(c.id) ?? new Set<string>();
+        let blog_count = 0;
+        let diagram_count = 0;
+        for (const slug of topics) {
+          blog_count += blogsByTopic.get(slug) ?? 0;
+          diagram_count += diagramsByTopic.get(slug) ?? 0;
+        }
+        return {
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          accent: c.accent,
+          maturity: c.maturity ?? "ga",
+          claim_count: capClaims.length,
+          verified_count: capClaims.filter((cl) => cl.status === "verified").length,
+          depth_coverage,
+          blog_count,
+          diagram_count,
+        };
+      });
+    } catch {
+      // Fall through to bundled content — no live coverage, but the page still renders.
+      const counts = bundledContent.claims().reduce<Record<string, any[]>>((acc, claim) => {
+        (acc[claim.capability_id] ??= []).push(claim);
+        return acc;
+      }, {});
+      return bundledContent.capabilities().map((c: any) => {
+        const capClaims = counts[c.id] ?? [];
+        const depth_coverage = emptyDepth();
+        for (const cl of capClaims) {
+          const d = cl.depth as 1 | 2 | 3 | 4 | 5;
+          if (d >= 1 && d <= 5) depth_coverage[d] += 1;
+        }
+        return {
+          id: c.id,
+          name: c.name,
+          description: c.description ?? null,
+          accent: c.accent ?? "teal",
+          maturity: c.maturity ?? "ga",
+          claim_count: capClaims.length,
+          verified_count: 0,
+          depth_coverage,
+          blog_count: 0,
+          diagram_count: 0,
+        };
+      });
+    }
+  },
+);
 
 export const listSources = createServerFn({ method: "GET" }).handler(async () => {
   try {

@@ -45,6 +45,12 @@ author original diagrams, then POST **structured results** to the backend and wr
 files under `content/`. The server (`LLM_MODE=local`, the default) makes no LLM calls. Publish with
 `python scripts/import_content.py`.
 
+**Sources from sources (suggest, never auto-ingest).** While ingesting, enqueue the handful of
+high-trust links (tier ≤ 3 by domain) the source genuinely relied on as new `kind=source` queue
+items whose `note` starts `discovered via <parent-slug>` (dedup against existing sources + open
+queue items). They land as `pending` for human approval in Settings → Queue — do not ingest them
+in the same run.
+
 ## Tags and images
 
 - Tag sources/claims/designs with topical hashtags (MicrosoftFabric, DataEngineering, PySpark,

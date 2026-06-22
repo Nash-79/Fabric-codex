@@ -16,6 +16,10 @@ Process the ingestion queue: $ARGUMENTS
       `content/sources/<slug>.json` and POSTs `/sources/ingest`.
    c. On success: `curl -s -X POST http://localhost:8000/queue/<id>/complete -H "Content-Type: application/json" -d '{"source_id": "<id from ingest response>"}'`
    d. On failure: `curl -s -X POST http://localhost:8000/queue/<id>/fail -H "Content-Type: application/json" -d '{"error": "<short reason>"}'` and continue.
+   e. **Sources from sources:** the curator may enqueue a handful of high-trust (tier ≤ 3) links it
+      relied on as new `kind=source` items with `note` starting `discovered via …`. These land back
+      in the queue as `pending` for **human approval** — do NOT auto-claim/ingest them in the same
+      run. Report them in the summary; a human approves by re-running ingest on the queue later.
 3. **File queue (fallback — offline/manual use):** read `content/queue.md`. For each line under
    `## Queued` (skip `#` comments and blanks), run the knowledge-curator the same way. After a
    successful ingest, move the line to `## Done`, appending `-> content/sources/<slug>.json`.

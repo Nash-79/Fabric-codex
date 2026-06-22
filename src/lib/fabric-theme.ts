@@ -65,3 +65,20 @@ export const depthMeta = {
   4: { label: "L4 · Performance", cls: "bg-amber-500/10 text-amber-300 border-amber-500/20" },
   5: { label: "L5 · Internals", cls: "bg-rose-500/10 text-rose-300 border-rose-500/20" },
 } as const;
+
+export const maturityMeta = {
+  preview: {
+    label: "Preview",
+    cls: "bg-amber-500/15 text-amber-300 border-amber-500/30",
+  },
+  ga: {
+    label: "GA",
+    cls: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
+  },
+  deprecated: {
+    label: "Deprecated",
+    cls: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30 line-through",
+  },
+} as const;
+
+export type Maturity = keyof typeof maturityMeta;

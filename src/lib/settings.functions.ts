@@ -67,6 +67,7 @@ export const getSettingsOverview = createServerFn({ method: "GET" })
       { data: roles },
       { data: invitations },
       { data: audit },
+      { data: claimLog },
       stats,
     ] = await Promise.all([
       sb.auth.admin.listUsers({ page: 1, perPage: 200 }),
@@ -78,6 +79,7 @@ export const getSettingsOverview = createServerFn({ method: "GET" })
         .select("*")
         .order("created_at", { ascending: false })
         .limit(100),
+      sb.from("claimevents").select("*").order("actioned_at", { ascending: false }).limit(100),
       adminStats(publicSb),
     ]);
 
@@ -99,10 +101,18 @@ export const getSettingsOverview = createServerFn({ method: "GET" })
       roles: roleMap.get(user.id) ?? [],
     }));
 
+    // Resolve actor UUIDs to emails so the Logs tab reads like activity, not raw ids.
+    const emailById = new Map((usersPage.data?.users ?? []).map((u: any) => [u.id, u.email]));
+    const auditWithActor = (audit ?? []).map((e: any) => ({
+      ...e,
+      actor_email: emailById.get(e.actor_id) ?? null,
+    }));
+
     return {
       users,
       invitations: invitations ?? [],
-      audit: audit ?? [],
+      audit: auditWithActor,
+      claimLog: claimLog ?? [],
       stats,
     };
   });
@@ -324,9 +334,15 @@ export const updateSourceMetadata = createServerFn({ method: "POST" })
 
 export const updateCapability = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string; name: string; description?: string; accent?: string }) => d)
+  .inputValidator(
+    (d: { id: string; name: string; description?: string; accent?: string; maturity?: string }) =>
+      d,
+  )
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
+    if (data.maturity && !["preview", "ga", "deprecated"].includes(data.maturity)) {
+      throw new Error("Maturity must be preview, ga, or deprecated.");
+    }
     const sb = await adminClient();
     const { error } = await sb
       .from("capabilities")
@@ -334,10 +350,13 @@ export const updateCapability = createServerFn({ method: "POST" })
         name: data.name,
         description: data.description ?? "",
         accent: data.accent ?? "teal",
+        ...(data.maturity ? { maturity: data.maturity } : {}),
       })
       .eq("id", data.id);
     if (error) throw new Error(error.message);
-    await recordAudit(context.userId, "capability.updated", "capability", data.id);
+    await recordAudit(context.userId, "capability.updated", "capability", data.id, {
+      maturity: data.maturity,
+    });
     return { ok: true };
   });
 

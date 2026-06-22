@@ -41,6 +41,22 @@ Depth: 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 inter
    curl -s -X POST http://localhost:8000/sources/ingest \
      -H "Content-Type: application/json" --data @content/sources/<slug>.json
    ```
+8. **Sources from sources (suggest, never auto-ingest).** While extracting, note the outbound
+   links you actually *relied on* — the high-trust docs/blogs/repos this source cites for the facts
+   you captured. For each, score a tier from its domain (learn.microsoft.com=1,
+   blog.fabric.microsoft.com / *.microsoft.com blog=2, github.com/microsoft=3; ignore tier ≥4 and
+   anything off-topic). For each **tier ≤ 3** link that is **not already an approved source and not
+   already in the queue**, enqueue it as a new `kind=source` item for a human to approve — do NOT
+   ingest it yourself:
+   ```bash
+   curl -s -X POST http://localhost:8000/queue \
+     -H "Content-Type: application/json" \
+     -d '{"url":"<discovered-url>","title":"<title>","tier":<1-3>,"kind":"source",
+          "tags":["MicrosoftFabric"],"note":"discovered via <parent-slug>"}'
+   ```
+   The `note` MUST start with `discovered via ` — Settings → Queue badges these so the human knows
+   the provenance. Dedup first (skip URLs already in `sources` or an open queue item). Keep it to a
+   handful of genuinely high-value links; do not dump every hyperlink on the page.
 
 ## Hard rules
 - No source, no claim. Never invent product limits, quotas, pricing, or roadmap items.
@@ -51,4 +67,5 @@ Depth: 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 inter
 
 ## Output
 A claims table (capability, depth, type, tags), the asset list (referenced vs generated), the
-content file path, and the backend response (source id + counts).
+content file path, the backend response (source id + counts), and a short list of any
+sources-from-sources you enqueued for human approval (url + tier + why it matters).
