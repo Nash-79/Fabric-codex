@@ -667,12 +667,15 @@ export type Database = {
           created_at: string
           error: string
           id: string
+          kind: string
           note: string | null
           notes: string
           result_source_id: string | null
+          scheduled_at: string | null
           status: string
           submitted_by: string | null
           tags: string[]
+          target_slug: string | null
           tier: number
           title: string
           updated_at: string
@@ -683,12 +686,15 @@ export type Database = {
           created_at?: string
           error?: string
           id?: string
+          kind?: string
           note?: string | null
           notes?: string
           result_source_id?: string | null
+          scheduled_at?: string | null
           status?: string
           submitted_by?: string | null
           tags?: string[]
+          target_slug?: string | null
           tier?: number
           title?: string
           updated_at?: string
@@ -699,12 +705,15 @@ export type Database = {
           created_at?: string
           error?: string
           id?: string
+          kind?: string
           note?: string | null
           notes?: string
           result_source_id?: string | null
+          scheduled_at?: string | null
           status?: string
           submitted_by?: string | null
           tags?: string[]
+          target_slug?: string | null
           tier?: number
           title?: string
           updated_at?: string
