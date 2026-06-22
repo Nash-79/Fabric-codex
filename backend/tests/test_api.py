@@ -341,7 +341,9 @@ def test_document_snapshot_persisted(client):
 
 
 def test_commission_diagram_enqueues_and_filters_by_kind(client):
-    r = client.post("/queue/diagram", json={"target_slug": "onelake", "title": "OneLake diagram"})
+    r = client.post(
+        "/queue/diagram", json={"target_slug": "onelake", "title": "OneLake diagram"}
+    )
     assert r.status_code == 200
     item = r.json()
     assert item["kind"] == "diagram" and item["target_slug"] == "onelake"
@@ -351,7 +353,10 @@ def test_commission_diagram_enqueues_and_filters_by_kind(client):
     sources = client.get("/queue", params={"kind": "source"}).json()
     assert sources == []
     # Duplicate open commission for the same target is rejected.
-    assert client.post("/queue/diagram", json={"target_slug": "onelake"}).status_code == 409
+    assert (
+        client.post("/queue/diagram", json={"target_slug": "onelake"}).status_code
+        == 409
+    )
 
 
 def test_commission_diagram_future_schedule_hidden_by_due_only(client):
@@ -369,7 +374,13 @@ def test_diagram_coverage_reports_gaps(client):
     cov = client.get("/coverage/diagrams").json()
     assert isinstance(cov, list)
     for row in cov:
-        assert {"slug", "name", "diagram_count", "has_diagram", "commission_open"} <= set(row)
+        assert {
+            "slug",
+            "name",
+            "diagram_count",
+            "has_diagram",
+            "commission_open",
+        } <= set(row)
 
 
 def test_validation_statuses(client):

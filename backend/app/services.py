@@ -1366,7 +1366,8 @@ def list_queue(
     due_only: bool = False,
 ) -> list[dict]:
     """List queue items. kind filters source|diagram; due_only hides items whose
-    scheduled_at is still in the future (so a 'commission in 1 week' item is not yet claimable)."""
+    scheduled_at is still in the future (so a 'commission in 1 week' item is not yet claimable).
+    """
     stmt = select(QueueItem).order_by(QueueItem.created_at.desc())
     if status:
         stmt = stmt.where(QueueItem.status == status)
@@ -1401,7 +1402,8 @@ def commission_diagram(
 ) -> dict:
     """Enqueue a diagram-commission task for a topic/capability. The local diagram-author
     agent drains kind='diagram' items, writes the SVG, posts the asset, and marks it ingested.
-    scheduled_at lets the user commission diagrams at intervals (now / +1 week / +1 month)."""
+    scheduled_at lets the user commission diagrams at intervals (now / +1 week / +1 month).
+    """
     target_slug = (target_slug or "").strip()
     if not target_slug:
         raise ValueError("target_slug (a topic or capability) is required.")
@@ -1437,15 +1439,16 @@ def diagram_coverage(session: Session) -> list[dict]:
     topic's capabilities), plus any open commission. Drives the Settings 'Diagrams' gap table.
 
     Diagrams are generated Assets tagged by capability_id; a topic maps to capabilities via
-    topic_capabilities, so a topic's diagram count is the assets across its capabilities."""
+    topic_capabilities, so a topic's diagram count is the assets across its capabilities.
+    """
     topics = session.exec(select(Topic).order_by(Topic.sort_order)).all()
     # capability_id -> number of generated diagram assets.
     diagrams_by_cap: dict[str, int] = {}
-    for a in session.exec(
-        select(Asset).where(Asset.kind == "generated")
-    ).all():
+    for a in session.exec(select(Asset).where(Asset.kind == "generated")).all():
         if a.capability_id:
-            diagrams_by_cap[a.capability_id] = diagrams_by_cap.get(a.capability_id, 0) + 1
+            diagrams_by_cap[a.capability_id] = (
+                diagrams_by_cap.get(a.capability_id, 0) + 1
+            )
     # topic_slug -> set of capability_ids.
     caps_by_topic: dict[str, set[str]] = {}
     for tc in session.exec(select(TopicCapability)).all():
