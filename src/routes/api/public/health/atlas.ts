@@ -19,20 +19,19 @@ export const Route = createFileRoute("/api/public/health/atlas")({
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
         const { computeContentSignature } = await import("@/lib/seed-content.server");
 
-        const [lastRunRes, claimsRes, sourcesRes, blogsRes, topicsRes, diagramsRes] =
-          await Promise.all([
-            supabaseAdmin
-              .from("seed_runs")
-              .select("id, ran_at, trigger, content_signature, skipped, duration_ms, error, claim_count, source_count")
-              .order("ran_at", { ascending: false })
-              .limit(1)
-              .maybeSingle(),
-            supabaseAdmin.from("claims").select("id", { count: "exact", head: true }).eq("active", true),
-            supabaseAdmin.from("sources").select("id", { count: "exact", head: true }).eq("active", true),
-            supabaseAdmin.from("blogs").select("id", { count: "exact", head: true }).eq("active", true),
-            supabaseAdmin.from("topics").select("id", { count: "exact", head: true }).eq("active", true),
-            supabaseAdmin.from("diagrams").select("id", { count: "exact", head: true }),
-          ]);
+        const [lastRunRes, countsRes] = await Promise.all([
+          supabaseAdmin
+            .from("seed_runs")
+            .select(
+              "id, ran_at, trigger, content_signature, skipped, duration_ms, error, claim_count, source_count",
+            )
+            .order("ran_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          supabaseAdmin.rpc("atlas_health_counts"),
+        ]);
+        const counts = (countsRes.data ?? {}) as Record<string, number>;
+
 
         // Quick smoke test: search_atlas RPC must respond.
         let rpcOk = false;
