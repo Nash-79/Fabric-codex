@@ -729,6 +729,54 @@ export type Database = {
           },
         ]
       }
+      rss_subscriptions: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          default_tags: string[]
+          default_tier: number
+          error_count: number
+          feed_url: string
+          id: string
+          last_error: string
+          last_polled_at: string | null
+          last_seen_guid: string | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          default_tags?: string[]
+          default_tier?: number
+          error_count?: number
+          feed_url: string
+          id?: string
+          last_error?: string
+          last_polled_at?: string | null
+          last_seen_guid?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          default_tags?: string[]
+          default_tier?: number
+          error_count?: number
+          feed_url?: string
+          id?: string
+          last_error?: string
+          last_polled_at?: string | null
+          last_seen_guid?: string | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sources: {
         Row: {
           active: boolean
