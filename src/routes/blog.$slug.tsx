@@ -64,7 +64,10 @@ function BlogPage() {
     () =>
       [...blog.body_md.matchAll(/^##\s+(.+)$/gm)].map((match) => ({
         title: match[1],
-        id: match[1].toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""),
+        id: match[1]
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, ""),
       })),
     [blog.body_md],
   );
@@ -146,44 +149,47 @@ function BlogPage() {
             <Info label="Format" value="Source-grounded article" />
           </div>
 
-        <div className="prose prose-invert mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:tracking-tight prose-a:text-teal-300 prose-img:rounded-xl prose-img:border prose-img:border-white/10">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            urlTransform={(url) =>
-              url.startsWith("/content/diagrams/")
-                ? url.replace("/content/diagrams/", "/diagrams/")
-                : url
-            }
-            components={{
-              h2: ({ children, ...rest }) => {
-                const text = String(children);
-                const id = text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-                return (
-                  <h2 id={id} {...rest}>
-                    {children}
-                  </h2>
-                );
-              },
-              sup: ({ children, ...rest }) => <sup {...rest}>{children}</sup>,
-              a: ({ href, children, ...rest }) => {
-                if (href?.startsWith("#src-")) {
+          <div className="prose prose-invert mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:tracking-tight prose-a:text-teal-300 prose-img:rounded-xl prose-img:border prose-img:border-white/10">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              urlTransform={(url) =>
+                url.startsWith("/content/diagrams/")
+                  ? url.replace("/content/diagrams/", "/diagrams/")
+                  : url
+              }
+              components={{
+                h2: ({ children, ...rest }) => {
+                  const text = String(children);
+                  const id = text
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-|-$/g, "");
                   return (
-                    <a href={href} className="text-teal-300 no-underline hover:underline">
+                    <h2 id={id} {...rest}>
+                      {children}
+                    </h2>
+                  );
+                },
+                sup: ({ children, ...rest }) => <sup {...rest}>{children}</sup>,
+                a: ({ href, children, ...rest }) => {
+                  if (href?.startsWith("#src-")) {
+                    return (
+                      <a href={href} className="text-teal-300 no-underline hover:underline">
+                        {children}
+                      </a>
+                    );
+                  }
+                  return (
+                    <a href={href} {...rest}>
                       {children}
                     </a>
                   );
-                }
-                return (
-                  <a href={href} {...rest}>
-                    {children}
-                  </a>
-                );
-              },
-            }}
-          >
-            {renderedBody}
-          </ReactMarkdown>
-        </div>
+                },
+              }}
+            >
+              {renderedBody}
+            </ReactMarkdown>
+          </div>
         </article>
 
         <aside className="print-sources">

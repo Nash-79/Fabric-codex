@@ -27,7 +27,10 @@ const helpMd = import.meta.glob("/content/help/*.md", {
 }) as Record<string, string>;
 
 function fileStem(path: string) {
-  return path.split("/").pop()!.replace(/\.[^.]+$/, "");
+  return path
+    .split("/")
+    .pop()!
+    .replace(/\.[^.]+$/, "");
 }
 
 function slugify(value: string) {

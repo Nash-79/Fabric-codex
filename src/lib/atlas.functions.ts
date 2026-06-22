@@ -69,7 +69,7 @@ export const getTopic = createServerFn({ method: "GET" })
           topic,
           children: children ?? [],
           capabilities: (caps ?? []).map((c: any) => c.capabilities).filter(Boolean),
-          blogs: blogs?.length ? blogs : bundledContent.topic(data.slug)?.blogs ?? [],
+          blogs: blogs?.length ? blogs : (bundledContent.topic(data.slug)?.blogs ?? []),
         };
       }
     } catch {

@@ -1430,9 +1430,7 @@ function DiagramsPanel() {
     has_diagram: boolean;
     commission_open: boolean;
   };
-  const result = cov.data as
-    | { coverage: CovRow[]; pending: unknown[] }
-    | undefined;
+  const result = cov.data as { coverage: CovRow[]; pending: unknown[] } | undefined;
   const rows: CovRow[] = result?.coverage ?? [];
   const pending = result?.pending ?? [];
 
@@ -1460,8 +1458,9 @@ function DiagramsPanel() {
         <>
           <p className="mb-3 text-xs text-white/45">
             Commissioning enqueues a <code className="text-teal-300">kind=diagram</code> task. The
-            local diagram-author agent drains it (<code className="text-teal-300">/commission-diagrams</code>),
-            writes an original SVG, and posts it as a generated asset — the server never calls an LLM.
+            local diagram-author agent drains it (
+            <code className="text-teal-300">/commission-diagrams</code>), writes an original SVG,
+            and posts it as a generated asset — the server never calls an LLM.
           </p>
           <Table className="text-white">
             <TableHeader>
@@ -1487,9 +1486,7 @@ function DiagramsPanel() {
                         covered
                       </Badge>
                     ) : (
-                      <Badge className="border-rose-400/30 bg-rose-500/10 text-rose-200">
-                        gap
-                      </Badge>
+                      <Badge className="border-rose-400/30 bg-rose-500/10 text-rose-200">gap</Badge>
                     )}
                   </TableCell>
                   <TableCell className="text-right">

@@ -102,8 +102,15 @@ def validate(base: str, expect_sources: int, expect_blogs: int) -> Report:
     # 2. Versioning (slug + supersedes_id model): one active row per slug for sources/blogs;
     #    no two active claims share a supersedes chain (an active claim's supersedes_id must
     #    point only at an inactive predecessor).
+    def row_key(row, key):
+        if key in row:
+            return row[key]
+        if key == "slug" and "source_key" in row:
+            return row["source_key"]
+        return None
+
     def dup_keys(rows, key):
-        c = Counter(row[key] for row in rows)
+        c = Counter(row_key(row, key) for row in rows if row_key(row, key))
         return [k for k, n in c.items() if n > 1]
 
     active_claims = [c for c in claims if c.get("active")]
@@ -119,11 +126,14 @@ def validate(base: str, expect_sources: int, expect_blogs: int) -> Report:
             )
     # An active claim must not be superseded by another *active* claim.
     active_ids = {c["id"] for c in active_claims}
-    superseded_by_active = [c["id"] for c in active_claims
-                            if c.get("supersedes_id") in active_ids]
+    superseded_by_active = [
+        c["id"] for c in active_claims if c.get("supersedes_id") in active_ids
+    ]
     if superseded_by_active:
-        r.fail(f"Versioning invariant violated: {len(superseded_by_active)} active claim(s) "
-               f"supersede another active claim (e.g. {superseded_by_active[:3]}).")
+        r.fail(
+            f"Versioning invariant violated: {len(superseded_by_active)} active claim(s) "
+            f"supersede another active claim (e.g. {superseded_by_active[:3]})."
+        )
 
     # 3. Referential integrity.
     source_ids = {s["id"] for s in sources}
