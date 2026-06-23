@@ -4,35 +4,47 @@ argument-hint: [optional extra urls to enqueue first]
 ---
 Process the ingestion queue: $ARGUMENTS
 
-1. If arguments contain URLs, enqueue them on the server first:
-   `curl -s -X POST http://localhost:8000/queue -H "Content-Type: application/json" -d '{"url": "<url>", "tier": <n>}'`
-   (a 409 means it is already queued or already in the KB — report and skip).
+The `localhost:8000` backend is retired. The queue lives in Supabase (`queue_items`); you **read**
+it with the anon key but you **cannot mutate it** (claim/complete/fail) or write sources — those
+are server-side admin actions. So this skill produces `content/sources/*.json` files; an admin then
+publishes each in **Settings → Publish** and marks the queue items done in **Settings → Queue**.
+
+Set up keyless reads once:
+
+```bash
+source .env 2>/dev/null || true
+SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+```
+
+1. If `$ARGUMENTS` contains URLs to add to the queue, you can't write them yourself — list them and
+   tell the user to add them via **Settings → Queue** (or the URL submit box) before re-running.
 2. **Server queue (primary — URLs submitted via the frontend):**
-   `curl -s "http://localhost:8000/queue?status=queued"`. For each item, in order:
-   a. Claim it: `curl -s -X POST http://localhost:8000/queue/<id>/claim` (skip on 409 — someone
-      else took it).
-   b. Use the **knowledge-curator** subagent on the item's `url` with its `tier`; pass the
-      submitter's `notes` and `tags` as context. The curator writes
-      `content/sources/<slug>.json` and POSTs `/sources/ingest`.
-   c. On success: `curl -s -X POST http://localhost:8000/queue/<id>/complete -H "Content-Type: application/json" -d '{"source_id": "<id from ingest response>"}'`
-   d. On failure: `curl -s -X POST http://localhost:8000/queue/<id>/fail -H "Content-Type: application/json" -d '{"error": "<short reason>"}'` and continue.
-   e. **Sources from sources:** the curator may enqueue a handful of high-trust (tier ≤ 3) links it
-      relied on as new `kind=source` items with `note` starting `discovered via …`. These land back
-      in the queue as `pending` for **human approval** — do NOT auto-claim/ingest them in the same
-      run. Report them in the summary; a human approves by re-running ingest on the queue later.
+   `curl -s "$SB/queue_items?status=eq.queued&kind=eq.source&select=id,url,title,tier,tags,notes&order=created_at" -H "$H1" -H "$H2"`.
+   For each item, in order:
+   a. Use the **knowledge-curator** subagent on the item's `url` with its `tier`; pass the
+      submitter's `notes` and `tags` as context. The curator writes `content/sources/<slug>.json`
+      (metadata + `claims`). It does **not** post anywhere.
+   b. Track which `queue_items.id` maps to which `content/sources/<slug>.json` so the human can
+      complete the right items after publishing. You do not claim/complete/fail — report the mapping.
+   c. **Sources from sources:** the curator reports a handful of high-trust (tier ≤ 3) links it
+      relied on. These need a human to add them to the queue — surface them in the summary; do NOT
+      try to ingest them in the same run.
 3. **File queue (fallback — offline/manual use):** read `content/queue.md`. For each line under
    `## Queued` (skip `#` comments and blanks), run the knowledge-curator the same way. After a
-   successful ingest, move the line to `## Done`, appending `-> content/sources/<slug>.json`.
-   Leave failed lines in Queued with a trailing `# FAILED: <reason>` comment.
-4. Process everything sequentially so cross-source dedup sees earlier results; the backend flags
-   near-duplicate claims from other sources as `status=duplicate` — report them, do not fight them.
-5. **Validate the result.** After all items are processed, rebuild the search index and run the
-   migration validator so the newly-ingested content is checked before it is trusted:
-   `curl -s -X POST http://localhost:8000/search/rebuild` then use the **migration-validator**
-   subagent (or run `python scripts/validate_migration.py`). Report any FAIL lines and do not
-   declare the batch clean if it fails. New sources land as `pending` claims, so the verified
-   count not rising is expected — a versioning or referential-integrity failure is not.
-6. Finish with a summary table: source, tier, claims added, duplicates flagged, assets — and
-   remind that claims await human verification (Sources tab → "Verify N pending", or
-   Registry → "Verify all pending"), and that new `content/sources/*.json` files should be
-   committed to git (the DB queue itself is user intent, not knowledge — it is never committed).
+   successful extraction, move the line to `## Done`, appending `-> content/sources/<slug>.json`.
+   Leave failed lines in Queued with a trailing `# FAILED: <reason>` comment. (You own this file,
+   so you may edit it — unlike the Supabase queue.)
+4. Process everything sequentially so you can dedupe by hand against earlier results in the same
+   run. Near-duplicate claims across sources are flagged `status=duplicate` **server-side at publish
+   time** — do not try to set that yourself.
+5. **Validate after publishing.** The deterministic migration validator runs against Supabase, so it
+   is meaningful only **after** the admin has published the new files. Once published, run the
+   **migration-validator** subagent (it reads Supabase) to confirm KB invariants hold. New sources
+   land as `pending` claims, so the verified count not rising is expected — a versioning or
+   referential-integrity failure is not.
+6. Finish with a summary table: source, tier, claims extracted, assets, and the `queue_items.id` it
+   came from — plus the next steps for the human: **Settings → Publish** each
+   `content/sources/<slug>.json` (Source + claims), then **Settings → Queue** to complete those
+   items, then **Settings → Claims → "Verify all"** to verify. Remind that new
+   `content/sources/*.json` files should be committed to git (the Supabase queue is user intent, not
+   knowledge — it is never committed).

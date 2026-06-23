@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Rss,
   ShieldCheck,
+  Upload,
   UserCog,
   X,
 } from "lucide-react";
@@ -56,11 +57,14 @@ import {
   getDiagramCoverage,
   getSettingsOverview,
   inviteUser,
+  bulkVerifyClaims,
   mutateClaim,
   mutateQueueItem,
+  publishFromFile,
   addRssSubscription,
   deleteRssSubscription,
   listRssSubscriptions,
+  pollRssFeeds,
   saveBlogVersion,
   setRssSubscriptionStatus,
   setUserRoles,
@@ -92,6 +96,7 @@ const nav = [
   { id: "claims", label: "Claims", icon: ListChecks },
   { id: "blogs", label: "Blogs", icon: BookOpen },
   { id: "queue", label: "Queue", icon: FileText },
+  { id: "publish", label: "Publish", icon: Upload },
   { id: "diagrams", label: "Diagrams", icon: ImageIcon },
   { id: "rss", label: "RSS Feeds", icon: Rss },
   { id: "logs", label: "Logs", icon: Activity },
@@ -193,6 +198,9 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="queue" className="mt-0">
             <QueuePanel data={cms.data} onDone={refresh} loading={cms.isLoading} />
+          </TabsContent>
+          <TabsContent value="publish" className="mt-0">
+            <PublishPanel onDone={refresh} />
           </TabsContent>
           <TabsContent value="diagrams" className="mt-0">
             <DiagramsPanel />
@@ -851,6 +859,7 @@ function ClaimsPanel({
 }) {
   const actionFn = useServerFn(mutateClaim);
   const supersedeFn = useServerFn(supersedeClaim);
+  const bulkVerifyFn = useServerFn(bulkVerifyClaims);
   const [filter, setFilter] = useState("pending");
   const [edit, setEdit] = useState<any>(null);
   const [newText, setNewText] = useState("");
@@ -858,6 +867,17 @@ function ClaimsPanel({
     () => (data?.claims ?? []).filter((c: any) => filter === "all" || c.status === filter),
     [data, filter],
   );
+  // Capabilities that still have pending+active claims — the bulk-verify targets.
+  const pendingCaps = useMemo(() => {
+    const caps = new Map<string, number>();
+    for (const c of data?.claims ?? []) {
+      if (c.status === "pending" && c.active !== false && c.capability_id) {
+        caps.set(c.capability_id, (caps.get(c.capability_id) ?? 0) + 1);
+      }
+    }
+    return [...caps.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [data]);
+  const [bulkCap, setBulkCap] = useState("");
   const mutate = useMutation({
     mutationFn: (task: Promise<unknown>) => task,
     onSuccess: () => {
@@ -868,23 +888,58 @@ function ClaimsPanel({
     },
     onError: (err) => toast.error((err as Error).message),
   });
+  const bulkVerify = useMutation({
+    mutationFn: (capabilityId: string) => bulkVerifyFn({ data: { capabilityId } }),
+    onSuccess: (res) => {
+      const { verified = 0 } = (res ?? {}) as { verified?: number };
+      toast.success(`Verified ${verified} pending claim(s).`);
+      setBulkCap("");
+      onDone();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
   return (
     <>
       <Panel
         title="Claims"
         action={
-          <Select value={filter} onValueChange={setFilter}>
-            <SelectTrigger className="h-8 w-36 border-border bg-card text-foreground">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {["pending", "verified", "duplicate", "rejected", "superseded", "all"].map((s) => (
-                <SelectItem key={s} value={s}>
-                  {s}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            {pendingCaps.length > 0 && (
+              <>
+                <Select value={bulkCap} onValueChange={setBulkCap}>
+                  <SelectTrigger className="h-8 w-52 border-border bg-card text-foreground">
+                    <SelectValue placeholder="Verify all pending in…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {pendingCaps.map(([cap, n]) => (
+                      <SelectItem key={cap} value={cap}>
+                        {cap} ({n})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  onClick={() => bulkCap && bulkVerify.mutate(bulkCap)}
+                  disabled={!bulkCap || bulkVerify.isPending}
+                >
+                  {bulkVerify.isPending ? "Verifying…" : "Verify all"}
+                </Button>
+              </>
+            )}
+            <Select value={filter} onValueChange={setFilter}>
+              <SelectTrigger className="h-8 w-36 border-border bg-card text-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {["pending", "verified", "duplicate", "rejected", "superseded", "all"].map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         }
       >
         {loading ? (
@@ -1850,6 +1905,77 @@ function DiagramsPanel() {
   );
 }
 
+function PublishPanel({ onDone }: { onDone: () => void }) {
+  const publishFn = useServerFn(publishFromFile);
+  const [kind, setKind] = useState<"source" | "blog" | "design">("source");
+  const [json, setJson] = useState("");
+
+  const publish = useMutation({
+    mutationFn: () => {
+      let payload: unknown;
+      try {
+        payload = JSON.parse(json);
+      } catch {
+        throw new Error("That isn't valid JSON — paste the full content/*.json file.");
+      }
+      return publishFn({ data: { kind, payload } });
+    },
+    onSuccess: (res) => {
+      const r = (res as { result?: Record<string, unknown> })?.result ?? {};
+      const slug = (r.slug as string) ?? "";
+      const extra =
+        kind === "source"
+          ? `${r.claimsInserted ?? 0} claim(s) inserted (pending)`
+          : `${r.citedSources ?? 0} cited source(s)`;
+      toast.success(`Published ${kind} "${slug}". ${extra}.`);
+      setJson("");
+      onDone();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  return (
+    <Panel title="Publish from files">
+      <p className="mb-3 text-xs text-muted-foreground">
+        Laptop agents author content keylessly and write{" "}
+        <code className="text-teal-300">content/sources/*.json</code>,{" "}
+        <code className="text-teal-300">content/blogs/*.json</code>, and{" "}
+        <code className="text-teal-300">content/designs/*.json</code> to git. The server can't read
+        your laptop, so paste the file an agent wrote here to replay it into the knowledge base. Re-
+        publishing a source keeps its <span className="text-foreground">verified</span> claims and
+        only refreshes the pending ones — publishing never un-verifies human review.
+      </p>
+
+      <div className="mb-3 flex items-center gap-2">
+        <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
+          <SelectTrigger className="h-8 w-40 border-border bg-card text-foreground">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="source">Source (+ claims)</SelectItem>
+            <SelectItem value="blog">Blog article</SelectItem>
+            <SelectItem value="design">Design</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button
+          size="sm"
+          onClick={() => publish.mutate()}
+          disabled={!json.trim() || publish.isPending}
+        >
+          {publish.isPending ? "Publishing…" : "Publish"}
+        </Button>
+      </div>
+
+      <Textarea
+        value={json}
+        onChange={(e) => setJson(e.target.value)}
+        placeholder={`Paste the content/${kind === "blog" ? "blogs" : kind === "design" ? "designs" : "sources"}/<slug>.json the agent wrote…`}
+        className="min-h-[320px] border-border bg-card font-mono text-xs text-foreground"
+      />
+    </Panel>
+  );
+}
+
 type RssRow = {
   id: string;
   feed_url: string;
@@ -1866,6 +1992,7 @@ function RssPanel() {
   const addFn = useServerFn(addRssSubscription);
   const statusFn = useServerFn(setRssSubscriptionStatus);
   const deleteFn = useServerFn(deleteRssSubscription);
+  const pollFn = useServerFn(pollRssFeeds);
   const queryClient = useQueryClient();
 
   const subs = useQuery({ queryKey: ["rss-subscriptions"], queryFn: () => listFn() });
@@ -1890,7 +2017,7 @@ function RssPanel() {
         },
       }),
     onSuccess: () => {
-      toast.success("Subscribed. Run /poll-rss-feeds to queue new posts.");
+      toast.success("Subscribed. Use Poll now to queue new posts.");
       setFeedUrl("");
       setTitle("");
       setTags("");
@@ -1916,19 +2043,51 @@ function RssPanel() {
     onError: (err) => toast.error((err as Error).message),
   });
 
+  const poll = useMutation({
+    mutationFn: (feedId?: string) => pollFn({ data: feedId ? { feedId } : {} }),
+    onSuccess: (res) => {
+      const { results = [], totalQueued = 0 } = (res ?? {}) as {
+        results?: Array<{ feed: string; error: string | null }>;
+        totalQueued?: number;
+      };
+      const failed = results.filter((r) => r.error).length;
+      if (failed > 0) {
+        toast.warning(
+          `Polled ${results.length} feed(s): ${totalQueued} queued, ${failed} failed. Run /ingest-batch to extract claims.`,
+        );
+      } else {
+        toast.success(
+          `Polled ${results.length} feed(s): ${totalQueued} new item(s) queued. Run /ingest-batch to extract claims.`,
+        );
+      }
+      invalidate();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
   const rows = (subs.data as { subscriptions: RssRow[] } | undefined)?.subscriptions ?? [];
+  const activeCount = rows.filter((r) => r.status === "active").length;
 
   return (
     <Panel title="RSS feed subscriptions">
-      <p className="mb-3 text-xs text-muted-foreground">
-        Subscribe to a blog's RSS/Atom feed (e.g. the Fabric Updates Blog). The local{" "}
-        <code className="text-teal-300">/poll-rss-feeds</code> agent fetches each active feed,
-        dedupes new entries against existing sources and the queue, and adds them as{" "}
-        <code className="text-teal-300">kind=source</code> items — then{" "}
-        <code className="text-teal-300">/ingest-batch</code> extracts cited claims. The server
-        stores subscriptions; it never polls on its own. Schedule polling with{" "}
-        <code className="text-teal-300">/loop 6h /poll-rss-feeds</code> if you want it hands-off.
-      </p>
+      <div className="mb-3 flex items-start justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          Subscribe to a blog's RSS/Atom feed (e.g. the Fabric Updates Blog). Polling fetches each
+          active feed, dedupes new entries against existing sources and the queue, and adds them as{" "}
+          <code className="text-teal-300">kind=source</code> items — then{" "}
+          <code className="text-teal-300">/ingest-batch</code> extracts cited claims. Use{" "}
+          <span className="text-foreground">Poll now</span> to run all active feeds, or poll a
+          single feed from its row.
+        </p>
+        <Button
+          size="sm"
+          onClick={() => poll.mutate(undefined)}
+          disabled={poll.isPending || activeCount === 0}
+          className="shrink-0"
+        >
+          {poll.isPending ? "Polling…" : "Poll now"}
+        </Button>
+      </div>
 
       <div className="mb-4 grid gap-2 rounded-md border border-border bg-card p-4 md:grid-cols-2">
         <Input
@@ -2023,6 +2182,17 @@ function RssPanel() {
                 </TableCell>
                 <TableCell>
                   <div className="flex justify-end gap-1">
+                    {r.status === "active" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 border-border bg-card text-foreground"
+                        onClick={() => poll.mutate(r.id)}
+                        disabled={poll.isPending}
+                      >
+                        Poll
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"

@@ -14,11 +14,14 @@ over the same claims that power architectures and lessons — never a separate o
    lakehouse, warehouse, polaris, direct-lake, semantic-model, power-bi, data-factory,
    dataflow-gen2, spark, rti, eventhouse-kql, sql-database, mirroring, fabric-data-agent,
    fabric-iq, graphql-api, purview, capacity).
-2. Retrieve scoped grounding per capability — do not pull the whole KB:
+2. Retrieve scoped grounding per capability — do not pull the whole KB. Read directly from
+   Supabase with the anon key (no `localhost:8000` backend):
    ```bash
-   curl -s "http://localhost:8000/claims?capability=<id>&status=verified"
+   source .env 2>/dev/null || true
+   SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+   curl -s "$SB/claims?capability_id=eq.<id>&status=eq.verified&active=eq.true&select=id,text,depth,type,tags,source_id,sources(slug,title,tier,url)" -H "$H1" -H "$H2"
    ```
-   Use tag filters (`&tag=DirectLake`) to narrow further. If verified claims are thin,
+   Use tag filters (`&tags=cs.{DirectLake}`) to narrow further. If verified claims are thin,
    you may ALSO read pending claims, but anything grounded on a pending claim must be
    flagged "(pending verification)".
 3. Build a source legend: map each distinct source id to [S1], [S2]… and cite inline.

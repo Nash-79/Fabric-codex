@@ -451,6 +451,30 @@ export const mutateClaim = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const bulkVerifyClaims = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { capabilityId?: string; topicSlug?: string }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    if (!data.capabilityId && !data.topicSlug) {
+      throw new Error("Provide a capability or a topic to verify.");
+    }
+    const sb = await adminClient();
+    const { bulkVerifyClaims: bulkVerifyClaimsRecord } = await adminServices();
+    const result = await bulkVerifyClaimsRecord(sb, {
+      capabilityId: data.capabilityId,
+      topicSlug: data.topicSlug,
+    });
+    await recordAudit(
+      context.userId,
+      "claims.bulk_verified",
+      data.topicSlug ? "topic" : "capability",
+      data.topicSlug ?? data.capabilityId ?? "",
+      { verified: result.verified },
+    );
+    return { ok: true as const, ...result };
+  });
+
 export const supersedeClaim = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
@@ -791,6 +815,226 @@ export const deleteRssSubscription = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
     await recordAudit(context.userId, "rss.unsubscribed", "rss_subscription", data.id);
     return { ok: true as const };
+  });
+
+// --- RSS polling -----------------------------------------------------------
+// Fetch each active feed, dedupe new entries against existing sources + the open
+// queue, and enqueue them as kind=source items. Runs on the server (Lovable host)
+// so it can use supabaseAdmin — local agents/scripts can't reach the sealed DB.
+// This replaces the legacy /poll-rss-feeds agent that needed a local FastAPI + psql.
+
+type RssEntry = { link: string; title: string; guid: string; published: string };
+
+function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .trim();
+}
+
+function tagText(block: string, tag: string): string {
+  const m = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
+  return m ? decodeXmlEntities(m[1]) : "";
+}
+
+// Atom links are attributes (<link href="..."/>), RSS links are element text.
+function entryLink(block: string): string {
+  const text = tagText(block, "link");
+  if (text) return text;
+  const href = block.match(/<link[^>]*\bhref=["']([^"']+)["'][^>]*\/?>/i);
+  return href ? decodeXmlEntities(href[1]) : "";
+}
+
+function parseFeed(xml: string): RssEntry[] {
+  const entries: RssEntry[] = [];
+  // RSS <item> and Atom <entry>, in document order.
+  const blocks = xml.match(/<(item|entry)\b[\s\S]*?<\/(item|entry)>/gi) ?? [];
+  for (const block of blocks) {
+    const link = entryLink(block);
+    const guid = tagText(block, "guid") || tagText(block, "id") || link;
+    const title = tagText(block, "title");
+    const published =
+      tagText(block, "pubDate") || tagText(block, "published") || tagText(block, "updated");
+    if (link || guid) entries.push({ link: link || guid, title, guid: guid || link, published });
+  }
+  return entries;
+}
+
+const FIRST_POLL_CAP = 25;
+
+export const pollRssFeeds = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { feedId?: string } | undefined) => d ?? {})
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+
+    let query = sb
+      .from("rss_subscriptions")
+      .select("id,feed_url,title,default_tier,default_tags,last_seen_guid,last_polled_at,status")
+      .eq("status", "active")
+      .order("created_at", { ascending: true });
+    if (data.feedId) query = query.eq("id", data.feedId);
+    const { data: feeds, error: feedError } = await query;
+    if (feedError) throw new Error(feedError.message);
+
+    const nowIso = new Date().toISOString();
+    const results: Array<{
+      feed: string;
+      found: number;
+      queued: number;
+      skipped: number;
+      capped: boolean;
+      error: string | null;
+    }> = [];
+
+    for (const feed of feeds ?? []) {
+      const label = feed.title || feed.feed_url;
+      try {
+        const res = await fetch(feed.feed_url, {
+          headers: {
+            accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
+          },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const xml = await res.text();
+        // Document order is newest-first for most feeds; reverse so we process oldest→newest
+        // and land last_seen_guid on the most recent entry.
+        const all = parseFeed(xml).reverse();
+
+        const firstPoll = !feed.last_seen_guid;
+        let entries = all;
+        let capped = false;
+        if (firstPoll && all.length > FIRST_POLL_CAP) {
+          entries = all.slice(all.length - FIRST_POLL_CAP);
+          capped = true;
+        } else if (!firstPoll) {
+          // Everything strictly after the last-seen guid (by position in the feed).
+          const seenIdx = all.findIndex((e) => e.guid === feed.last_seen_guid);
+          entries = seenIdx >= 0 ? all.slice(seenIdx + 1) : all;
+        }
+
+        let queued = 0;
+        let skipped = 0;
+        for (const entry of entries) {
+          const url = entry.link;
+          if (!url) continue;
+          // Dedupe against approved sources and open queue items (mirrors submitSourceUrl).
+          const { data: existingSource } = await sb
+            .from("sources")
+            .select("slug")
+            .eq("url", url)
+            .maybeSingle();
+          if (existingSource) {
+            skipped++;
+            continue;
+          }
+          const { data: openItem } = await sb
+            .from("queue_items")
+            .select("id")
+            .eq("url", url)
+            .in("status", ["queued", "claimed"])
+            .maybeSingle();
+          if (openItem) {
+            skipped++;
+            continue;
+          }
+          const note = `via RSS: ${label}`;
+          const { error: insertError } = await sb.from("queue_items").insert({
+            url,
+            title: entry.title?.trim() ?? "",
+            tier: feed.default_tier,
+            tags: feed.default_tags ?? [],
+            kind: "source",
+            note,
+            notes: note,
+            submitted_by: context.userId,
+            status: "queued",
+          });
+          if (insertError) {
+            // Unique-violation = raced into an existing item; count as a skip, not a failure.
+            if ((insertError as { code?: string }).code === "23505") skipped++;
+            else throw new Error(insertError.message);
+          } else {
+            queued++;
+          }
+        }
+
+        const newestGuid = all.length ? all[all.length - 1].guid : feed.last_seen_guid;
+        await sb
+          .from("rss_subscriptions")
+          .update({
+            last_polled_at: nowIso,
+            last_seen_guid: newestGuid,
+            error_count: 0,
+            last_error: "",
+          })
+          .eq("id", feed.id);
+
+        results.push({ feed: label, found: entries.length, queued, skipped, capped, error: null });
+      } catch (err) {
+        const reason = (err as Error).message.slice(0, 200);
+        // Don't advance last_seen_guid on failure; bump the error counter.
+        const { data: cur } = await sb
+          .from("rss_subscriptions")
+          .select("error_count")
+          .eq("id", feed.id)
+          .maybeSingle();
+        await sb
+          .from("rss_subscriptions")
+          .update({
+            last_polled_at: nowIso,
+            error_count: (cur?.error_count ?? 0) + 1,
+            last_error: reason,
+          })
+          .eq("id", feed.id);
+        results.push({
+          feed: label,
+          found: 0,
+          queued: 0,
+          skipped: 0,
+          capped: false,
+          error: reason,
+        });
+      }
+    }
+
+    const totalQueued = results.reduce((n, r) => n + r.queued, 0);
+    await recordAudit(context.userId, "rss.polled", "rss_subscription", data.feedId ?? "all", {
+      feeds: results.length,
+      queued: totalQueued,
+    });
+    return { ok: true as const, results, totalQueued };
+  });
+
+// Publish a single agent-authored content/*.json payload (pasted by an admin in Settings) into
+// the KB. Laptop agents write files keylessly; this server-side step (service role) persists them.
+export const publishFromFile = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: { kind: "source" | "blog" | "design"; payload: unknown }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    if (!["source", "blog", "design"].includes(data.kind)) {
+      throw new Error("kind must be source, blog, or design.");
+    }
+    if (!data.payload || typeof data.payload !== "object") {
+      throw new Error("payload must be the parsed content JSON object.");
+    }
+    const sb = await adminClient();
+    const { publishFromFile: publishFromFileRecord } =
+      await import("@/lib/atlas-publish.services.server");
+    const result = await publishFromFileRecord(sb, data.kind, data.payload);
+    await recordAudit(
+      context.userId,
+      `${data.kind}.published_from_file`,
+      data.kind,
+      (result as { slug?: string }).slug ?? "",
+    );
+    return { ok: true as const, result };
   });
 
 export const validateContent = createServerFn({ method: "POST" })

@@ -14,12 +14,15 @@ knowledge base, not a parallel content set. Every lesson is grounded in approved
 - Expert → L4 (performance) + L5 (internals)
 
 ## Method
-1. Pull the grounding claims for the capability and level:
+1. Pull the grounding claims for the capability and level. Read directly from Supabase with the
+   anon key (no `localhost:8000` backend):
    ```bash
-   curl -s "http://localhost:8000/claims?capability=<id>&status=verified"
+   source .env 2>/dev/null || true
+   SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+   curl -s "$SB/claims?capability_id=eq.<id>&status=eq.verified&active=eq.true&select=id,text,depth,type,source_id,sources(slug,title,tier,summary,takeaways)" -H "$H1" -H "$H2"
    ```
    Filter to the depths for the requested level.
-   You may also read `/sources` for source summaries and takeaways to organize the lesson, but
+   You may also read `$SB/sources?select=slug,title,summary,takeaways` for orientation, but
    source metadata is orientation only. Product facts in the lesson must still come from verified
    claims.
 2. If there are no claims at that depth, do not invent content. Report the gap and recommend

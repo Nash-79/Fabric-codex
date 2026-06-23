@@ -51,6 +51,47 @@ export async function mutateClaimStatus(sb: SupabaseAdmin, claimId: string, acti
   return updated;
 }
 
+// Verify every active, pending claim for a capability or a topic in one human-triggered action.
+// The replay path is dead (the old SQLite is empty), so curation status is restored by re-review;
+// this just makes "review a topic, accept the good ones" a single click instead of N. It only ever
+// touches active+pending claims — already-verified/rejected/superseded claims are left untouched.
+export async function bulkVerifyClaims(
+  sb: SupabaseAdmin,
+  target: { capabilityId?: string; topicSlug?: string },
+) {
+  let capabilityIds: string[] = [];
+  if (target.capabilityId) {
+    capabilityIds = [target.capabilityId];
+  } else if (target.topicSlug) {
+    const { data: links, error } = await sb
+      .from("topic_capabilities")
+      .select("capability_id")
+      .eq("topic_slug", target.topicSlug);
+    if (error) throw new Error(error.message);
+    capabilityIds = (links ?? []).map((l: any) => l.capability_id);
+    if (!capabilityIds.length) {
+      return { verified: 0, capabilities: 0, message: "No capabilities mapped to this topic." };
+    }
+  } else {
+    throw new Error("Provide a capabilityId or a topicSlug.");
+  }
+
+  const { data: pending, error: claimsError } = await sb
+    .from("claims")
+    .select("id")
+    .in("capability_id", capabilityIds)
+    .eq("status", "pending")
+    .eq("active", true);
+  if (claimsError) throw new Error(claimsError.message);
+
+  let verified = 0;
+  for (const claim of pending ?? []) {
+    await mutateClaimStatus(sb, claim.id, "verify");
+    verified++;
+  }
+  return { verified, capabilities: capabilityIds.length };
+}
+
 export async function supersedeClaim(
   sb: SupabaseAdmin,
   claimId: string,

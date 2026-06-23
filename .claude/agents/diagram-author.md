@@ -16,22 +16,30 @@ decision tree, component internals, capability map, security model, migration ma
 before/after).
 
 ## Method
-1. Read the relevant claims for grounding:
-   `curl -s "http://localhost:8000/claims?capability=<id>"` (or fetch the design).
+1. Read the relevant claims for grounding from Supabase with the anon key (no `localhost:8000`):
+   ```bash
+   source .env 2>/dev/null || true
+   SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+   curl -s "$SB/claims?capability_id=eq.<id>&active=eq.true&select=id,text,depth,type" -H "$H1" -H "$H2"
+   ```
    The diagram must reflect facts that exist in the knowledge base — do not draw invented limits.
 2. Author the diagram:
    - **Mermaid** for flows/decision trees/sequence — save `content/diagrams/<slug>.mmd`.
    - **SVG** for richer infographics — save `content/diagrams/<slug>.svg`. Keep it self-contained,
      readable at small sizes, and free of any copied logos or trademarked marks.
-3. Register it as a generated asset (attach to a capability, source, or design as appropriate):
-   ```bash
-   curl -s -X POST http://localhost:8000/assets -H "Content-Type: application/json" -d '{
-     "kind":"generated","path":"content/diagrams/<slug>.svg","caption":"<what it shows>",
-     "capability_id":"<id>","design_id":"<optional>","source_id":"<optional>"}'
+   - Mirror the SVG to `public/diagrams/<slug>.svg` so the app can serve it (blogs embed
+     `/diagrams/<slug>.svg`).
+3. Register it by appending an entry to the git-tracked manifest `content/diagrams/assets.json`
+   (you have no Supabase write access — the manifest is replayed into Supabase at publish time by
+   the in-app **bootstrap** / `scripts/import_content.py`). Append an object:
+   ```json
+   {"kind":"generated","path":"content/diagrams/<slug>.svg","caption":"<what it shows>",
+    "capability_id":"<id>","claim_id":"<optional>","source_id":"<optional>","design_id":"<optional>"}
    ```
-   Prefer attaching `claim_id` when the diagram illustrates one claim, `source_id` when it
-   explains one source, and `capability_id` for broad capability diagrams. Include a grounding
-   note in the output listing the claim ids or source id used.
+   Prefer `claim_id` when the diagram illustrates one claim, `source_id` when it explains one
+   source, and `capability_id` for broad capability diagrams. Include a grounding note in the output
+   listing the claim ids or source id used. Tell the user the diagram registers into Supabase on the
+   next content bootstrap/publish.
 
 ## Rules
 - Original work only. No traced or copied source images, no third-party logos/IP.
@@ -40,5 +48,6 @@ before/after).
   infographics where layout carries meaning.
 
 ## Output
-The saved file path(s), the registered asset id, and a one-line note on which claims the diagram
-is grounded in.
+The saved file path(s) (`content/diagrams/` + mirrored `public/diagrams/`), the manifest entry
+appended to `content/diagrams/assets.json`, and a one-line note on which claims the diagram is
+grounded in. Remind that the asset registers into Supabase on the next bootstrap/publish.

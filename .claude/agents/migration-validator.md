@@ -12,45 +12,57 @@ import or ingest so a bad migration or a broken new source is caught immediately
 
 ## Method
 
-1. Run the deterministic checker against the running backend (which is pointed at Supabase):
-   ```bash
-   python scripts/validate_migration.py --base http://localhost:8000
-   ```
-   For a post-full-migration run, pin the expected counts so a partial import is caught:
-   ```bash
-   python scripts/validate_migration.py --expect-sources 40 --expect-blogs 17
-   ```
+Read Supabase directly with the anon key (public read; no `localhost:8000` backend). Assert the
+invariants with REST count queries — use `Prefer: count=exact` + a HEAD request to read totals
+from the `content-range` header.
+```bash
+source .env 2>/dev/null || true
+SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+count() { curl -s -I "$SB/$1" -H "$H1" -H "$H2" -H "Prefer: count=exact" | tr -d '\r' | sed -n 's/.*content-range: .*\///ip'; }
+```
 
-2. The script asserts, via the public REST API only:
-   - **Non-empty KB** — sources, topics, blogs, and verified claims all > 0. Zero verified
-     claims usually means `scripts/replay_verified_status.py` was not run after a clean import.
-   - **Versioning invariant** — exactly one *active* row per `claim_key` / `source_key` /
-     `blog_key`. More than one active version is the single most important thing to catch:
-     it means a supersede went wrong.
-   - **Referential integrity** — every active claim's `source_id` resolves; every blog's
-     `cited_source_ids` resolve to active sources.
-   - **Embedded diagrams** — every `content/diagrams/*` path referenced in a blog body exists
-     on disk (mirrors the backend's critical-issue check).
-   - **Capability/parent integrity** — every topic `capability_id` is in the registry
-     (`backend/app/llm.py` `CAPABILITY_IDS`); every `parent_id` resolves.
-   - **Search + coverage** — the tsvector index is populated and `/coverage` returns claims.
+Assert, against Supabase:
+1. **Non-empty KB** — sources, topics, blogs all > 0:
+   `count "sources?select=id"`, `count "topics?select=id"`, `count "blogs?select=id&active=eq.true"`.
+   Verified claims **may legitimately be 0** right after an import (publishing lands claims as
+   `pending`); a 0 here means "run Settings → Claims → Verify all", not a corruption. Report it as a
+   warning, not a hard fail.
+2. **Versioning invariant** — at most one *active* row per family. Check no source slug has >1
+   active row, and no blog slug has >1 active row:
+   ```bash
+   curl -s "$SB/sources?active=eq.true&select=slug" -H "$H1" -H "$H2" | python -c "import sys,json,collections;d=json.load(sys.stdin);dup={k:v for k,v in collections.Counter(x['slug'] for x in d).items() if v>1};print('DUP sources',dup) if dup else print('OK sources unique')"
+   curl -s "$SB/blogs?active=eq.true&select=slug" -H "$H1" -H "$H2" | python -c "import sys,json,collections;d=json.load(sys.stdin);dup={k:v for k,v in collections.Counter(x['slug'] for x in d).items() if v>1};print('DUP blogs',dup) if dup else print('OK blogs unique')"
+   ```
+   More than one active version is the single most important thing to catch — a supersede went wrong.
+3. **Referential integrity** — every active claim's `source_id` resolves to a source; every
+   `blog_sources.source_id` resolves to an active source. Spot-check by selecting the embedded
+   relation and flagging nulls:
+   `curl -s "$SB/claims?active=eq.true&select=id,sources(id)" -H "$H1" -H "$H2"` — any row with
+   `sources:null` is an orphan.
+4. **Embedded diagrams** — for each blog `body_md`, every referenced `/diagrams/*` (or
+   `content/diagrams/*`) path must exist on disk (`public/diagrams/` mirror). Read blog bodies via
+   REST, grep the paths, and `test -f` each. A missing embed is the backend's critical issue.
+5. **Capability integrity** — every `topic_capabilities.capability_id` and every active
+   `claims.capability_id` is in the registry (`backend/app/llm.py` `CAPABILITY_IDS`).
 
-3. Read the output. The script exits **0** when all invariants hold (warnings allowed) and
-   **non-zero** on any failure.
+These are read-only assertions you compute and report — you do not (and cannot) mutate Supabase.
 
 ## Reporting
 
 - On success: report the per-table summary and the warning count. State plainly that the KB
   passed and is safe to serve / share.
-- On failure: list each `FAIL` line, and for the common ones say what to do:
-  - *no verified claims* → run `python scripts/replay_verified_status.py` (first migration only).
-  - *>1 active version* → inspect that `claim_key`/`blog_key` history (`GET /claims/<key>/history`,
-    `GET /blogs/<slug>/history`); a supersede left two rows active.
-  - *missing diagram* → commission it with the **diagram-author** subagent or remove the embed;
-    the blog cannot reach `ready_to_share` until fixed.
+- On failure: list each failing assertion, and for the common ones say what to do:
+  - *no verified claims* → not a failure right after import; verify in **Settings → Claims →
+    "Verify all"** (claims publish as `pending`). Report as a warning.
+  - *>1 active version* → inspect that source/blog slug's rows in **Settings → Content/Blogs**; a
+    supersede or a bad re-publish left two rows active — deactivate the stale one.
+  - *missing diagram* → commission it with the **diagram-author** subagent (it writes the SVG +
+    `content/diagrams/assets.json` entry; the admin registers it), or remove the embed; the blog
+    cannot reach `ready_to_share` until fixed.
   - *unknown capability* → fix the topic's `capability_ids` in `content/topics.json` (must be a
-    registry id) and re-import.
-  - *search empty* → `curl -s -X POST http://localhost:8000/search/rebuild`.
+    registry id) and re-publish/bootstrap.
+  - *orphan claim/blog citation* → the cited source isn't an active row; re-publish the source
+    first (**Settings → Publish → Source**), then the blog.
 
-Never declare the migration good when the script failed. You report the truth, including the
-exact failing lines.
+Never declare the migration good when an assertion failed. You report the truth, including the
+exact failing checks.

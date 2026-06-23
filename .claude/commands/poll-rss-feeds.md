@@ -1,13 +1,24 @@
 ---
-description: Poll every active RSS subscription, dedupe, and enqueue new posts as kind=source items for ingestion (local agent — the server never polls).
-argument-hint: [optional feed-url to poll just that one]
+description: (Moved server-side) RSS polling now runs in the app — Settings → RSS Feeds → "Poll now". This local agent is retired.
+argument-hint: (none)
 ---
 Poll the RSS subscriptions and queue new posts: $ARGUMENTS
 
-Subscriptions live in the Supabase `rss_subscriptions` table (managed from Settings → RSS Feeds).
-The server only stores them — **this agent does the fetching**. New entries are enqueued through the
-backend `POST /queue`, which dedupes against existing sources and open queue items, so they then flow
-through `/ingest-batch` unchanged.
+> **This skill is retired.** RSS polling moved **server-side** because it is deterministic (fetch +
+> dedupe + enqueue, no LLM) and the `rss_subscriptions` / `queue_items` tables live in the
+> Lovable-managed Supabase project, whose admin credentials are sealed and **not** reachable from a
+> local agent. The work this skill used to do is now the `pollRssFeeds` server function.
+
+**To poll feeds:** open **Settings → RSS Feeds** and click **Poll now** (all active feeds) or the
+per-row **Poll** button. The server fetches each feed, dedupes new entries against existing sources
+and open queue items, enqueues them as `kind=source` items, and records poll state
+(`last_polled_at`, `last_seen_guid`, error counters) — exactly what this agent used to do, but with
+the admin rights it needs. Schedule it hands-off from the app rather than `/loop`.
+
+**Then run `/ingest-batch`** to extract cited claims from the newly-queued sources.
+
+Everything below is the **historical** local-agent procedure, kept for reference only. Do not run
+it — there is no `localhost:8000` backend and the direct Postgres connection it needs is sealed.
 
 Use the direct Postgres connection for reads/writes (it bypasses the admin-only RLS):
 `DATABASE_URL` is in `backend/.env`. Run SQL with `psql "$DATABASE_URL" -c "…"` (or the `+psycopg`

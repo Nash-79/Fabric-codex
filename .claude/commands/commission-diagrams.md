@@ -3,30 +3,34 @@ description: Drain the diagram-commission queue — author an original diagram f
 argument-hint: (none)
 ---
 Fulfil the diagram commissions enqueued from the Settings → Diagrams tab. The server only
-schedules; YOU (the diagram-author) generate the diagrams locally — no server-side LLM.
+schedules; YOU (the diagram-author) generate the diagrams locally — no server-side LLM. There is no
+`localhost:8000` backend: you **read** the queue with the anon key but cannot mutate it or register
+assets (those are admin/server-side). You produce the files; the human completes the queue items and
+registers the diagrams in Settings.
+
+Set up keyless reads once:
+
+```bash
+source .env 2>/dev/null || true
+SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+```
 
 For each **due** commission:
 
-1. List due diagram tasks:
-   `curl -s "http://localhost:8000/queue?kind=diagram&status=queued&due_only=true"`
-   (Items with a future `scheduled_at` are intentionally hidden until their interval elapses.)
+1. List due diagram tasks (a future `scheduled_at` is intentionally hidden until its interval
+   elapses, so filter to due-or-null):
+   `curl -s "$SB/queue_items?kind=eq.diagram&status=eq.queued&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,target_slug,note,scheduled_at" -H "$H1" -H "$H2"`
 
-2. For each item, `claim` it:
-   `curl -s -X POST http://localhost:8000/queue/<id>/claim`
+2. Use the **diagram-author** subagent on the item's `target_slug` (a topic or capability): fetch
+   the relevant verified claims for grounding, author an ORIGINAL Mermaid/SVG diagram (never a copy,
+   no third-party logos), save it under `content/diagrams/`, mirror it to `public/diagrams/`, and
+   append the asset entry to `content/diagrams/assets.json` (its `capability_id` is what makes the
+   topic show "covered" once registered).
 
-3. Use the **diagram-author** subagent on the item's `target_slug` (a topic or capability):
-   fetch the relevant verified claims for grounding, author an ORIGINAL Mermaid/SVG diagram
-   (never a copy, no third-party logos), save it under `content/diagrams/`, and mirror it to
-   `public/diagrams/` so the reader can serve it.
+3. Track which `queue_items.id` you fulfilled and report the mapping — you cannot claim/complete the
+   queue items yourself.
 
-4. Register it as a generated asset (this is what makes the topic show as "covered"):
-   `curl -s -X POST http://localhost:8000/assets -H 'Content-Type: application/json' -d '{
-      "kind":"generated","path":"content/diagrams/<slug>.svg",
-      "caption":"<caption>","capability_id":"<the target capability>" }'`
-
-5. Mark the queue item done:
-   `curl -s -X POST http://localhost:8000/queue/<id>/complete -H 'Content-Type: application/json' -d '{}'`
-   (or `/fail` with an error note if you could not author it).
-
-Then commit the new `content/diagrams/*` files. The Settings → Diagrams coverage table will show the
-topic flip from **gap/commissioned** to **covered** once the generated asset is registered.
+Then commit the new `content/diagrams/*` files and the updated `content/diagrams/assets.json`. To
+make the diagrams live and flip the coverage table from **gap/commissioned** to **covered**, the
+admin registers the new assets (in-app content bootstrap / `scripts/import_content.py`) and marks
+the fulfilled commission items done in **Settings → Diagrams / Queue**.
