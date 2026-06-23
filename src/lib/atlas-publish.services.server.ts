@@ -315,15 +315,65 @@ export async function publishDesign(sb: SupabaseAdmin, payload: DesignPayload) {
   return { designId: design.id, slug, citedSources: rows.length };
 }
 
+type DiagramPayload = {
+  // Accept either a single diagram object or the assets.json manifest array.
+  slug?: string;
+  path?: string;
+  caption?: string;
+  kind?: string;
+  topic_slug?: string | null;
+  capability_id?: string | null;
+};
+
+// Derive the registered slug + served path the way seed.functions / import_content do: the slug is
+// the filename without extension, and the served path is /diagrams/<slug>.svg (mirrored to public/).
+function diagramRow(entry: DiagramPayload) {
+  const rawPath = entry.path ?? "";
+  const slug =
+    entry.slug ??
+    rawPath
+      .split("/")
+      .pop()!
+      .replace(/\.(svg|mmd)$/i, "");
+  if (!slug) throw new Error("Diagram entry needs a slug or a path.");
+  return {
+    slug,
+    path: `/diagrams/${slug}.svg`,
+    caption: entry.caption ?? "",
+    kind: entry.kind && entry.kind !== "generated" ? entry.kind : "architecture",
+    topic_slug: entry.topic_slug ?? null,
+  };
+}
+
+// Register one diagram (or a manifest array) into the `diagrams` table by upsert on slug — the
+// non-destructive equivalent of the seed bootstrap's delete-all-then-reinsert, so it never wipes
+// the other 17 registered diagrams. This is what makes the blog's embedded-diagram validation pass:
+// validateContent looks up each embedded /diagrams/<slug> against this table.
+export async function publishDiagram(
+  sb: SupabaseAdmin,
+  payload: DiagramPayload | DiagramPayload[],
+) {
+  const entries = Array.isArray(payload) ? payload : [payload];
+  const generated = entries.filter(
+    (e) => (e.kind ?? "generated") === "generated" || e.path || e.slug,
+  );
+  const rows = generated.map(diagramRow);
+  if (!rows.length) throw new Error("No diagram entries to register.");
+  const { error } = await sb.from("diagrams").upsert(rows, { onConflict: "slug" });
+  if (error) throw new Error(`diagrams: ${error.message}`);
+  return { registered: rows.length, slugs: rows.map((r) => r.slug) };
+}
+
 // Dispatch a pasted payload by kind. The agent files don't always carry an explicit "kind",
 // so callers pass it from the chosen UI tab.
 export async function publishFromFile(
   sb: SupabaseAdmin,
-  kind: "source" | "blog" | "design",
+  kind: "source" | "blog" | "design" | "diagram",
   payload: any,
 ) {
   if (kind === "source") return { kind, ...(await publishSource(sb, payload)) };
   if (kind === "blog") return { kind, ...(await publishBlog(sb, payload)) };
   if (kind === "design") return { kind, ...(await publishDesign(sb, payload)) };
+  if (kind === "diagram") return { kind, ...(await publishDiagram(sb, payload)) };
   throw new Error(`Unknown publish kind: ${kind}`);
 }

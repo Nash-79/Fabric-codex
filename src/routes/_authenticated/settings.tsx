@@ -1907,7 +1907,7 @@ function DiagramsPanel() {
 
 function PublishPanel({ onDone }: { onDone: () => void }) {
   const publishFn = useServerFn(publishFromFile);
-  const [kind, setKind] = useState<"source" | "blog" | "design">("source");
+  const [kind, setKind] = useState<"source" | "blog" | "design" | "diagram">("source");
   const [json, setJson] = useState("");
 
   const publish = useMutation({
@@ -1923,11 +1923,13 @@ function PublishPanel({ onDone }: { onDone: () => void }) {
     onSuccess: (res) => {
       const r = (res as { result?: Record<string, unknown> })?.result ?? {};
       const slug = (r.slug as string) ?? "";
-      const extra =
-        kind === "source"
-          ? `${r.claimsInserted ?? 0} claim(s) inserted (pending)`
-          : `${r.citedSources ?? 0} cited source(s)`;
-      toast.success(`Published ${kind} "${slug}". ${extra}.`);
+      let extra: string;
+      if (kind === "source") extra = `${r.claimsInserted ?? 0} claim(s) inserted (pending)`;
+      else if (kind === "diagram")
+        extra = `${r.registered ?? 0} diagram(s) registered: ${(r.slugs as string[])?.join(", ") ?? ""}`;
+      else extra = `${r.citedSources ?? 0} cited source(s)`;
+      const label = kind === "diagram" ? "diagram(s)" : `${kind} "${slug}"`;
+      toast.success(`Published ${label}. ${extra}.`);
       setJson("");
       onDone();
     },
@@ -1939,11 +1941,15 @@ function PublishPanel({ onDone }: { onDone: () => void }) {
       <p className="mb-3 text-xs text-muted-foreground">
         Laptop agents author content keylessly and write{" "}
         <code className="text-teal-300">content/sources/*.json</code>,{" "}
-        <code className="text-teal-300">content/blogs/*.json</code>, and{" "}
-        <code className="text-teal-300">content/designs/*.json</code> to git. The server can't read
-        your laptop, so paste the file an agent wrote here to replay it into the knowledge base. Re-
-        publishing a source keeps its <span className="text-foreground">verified</span> claims and
-        only refreshes the pending ones — publishing never un-verifies human review.
+        <code className="text-teal-300">content/blogs/*.json</code>,{" "}
+        <code className="text-teal-300">content/designs/*.json</code>, and diagram entries to git.
+        The server can't read your laptop, so paste the file an agent wrote here to replay it into
+        the knowledge base. Re-publishing a source keeps its{" "}
+        <span className="text-foreground">verified</span> claims and only refreshes the pending ones
+        — publishing never un-verifies human review. For a blog whose embedded diagram is new,
+        publish the <span className="text-foreground">Diagram(s)</span> first (paste{" "}
+        <code className="text-teal-300">content/diagrams/assets.json</code>) so the blog's
+        embedded-diagram validation passes.
       </p>
 
       <div className="mb-3 flex items-center gap-2">
@@ -1955,6 +1961,7 @@ function PublishPanel({ onDone }: { onDone: () => void }) {
             <SelectItem value="source">Source (+ claims)</SelectItem>
             <SelectItem value="blog">Blog article</SelectItem>
             <SelectItem value="design">Design</SelectItem>
+            <SelectItem value="diagram">Diagram(s) / assets.json</SelectItem>
           </SelectContent>
         </Select>
         <Button
@@ -1969,7 +1976,11 @@ function PublishPanel({ onDone }: { onDone: () => void }) {
       <Textarea
         value={json}
         onChange={(e) => setJson(e.target.value)}
-        placeholder={`Paste the content/${kind === "blog" ? "blogs" : kind === "design" ? "designs" : "sources"}/<slug>.json the agent wrote…`}
+        placeholder={
+          kind === "diagram"
+            ? "Paste a diagram entry or the whole content/diagrams/assets.json array…"
+            : `Paste the content/${kind === "blog" ? "blogs" : kind === "design" ? "designs" : "sources"}/<slug>.json the agent wrote…`
+        }
         className="min-h-[320px] border-border bg-card font-mono text-xs text-foreground"
       />
     </Panel>

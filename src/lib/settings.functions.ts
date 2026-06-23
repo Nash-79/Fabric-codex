@@ -1015,14 +1015,14 @@ export const pollRssFeeds = createServerFn({ method: "POST" })
 // the KB. Laptop agents write files keylessly; this server-side step (service role) persists them.
 export const publishFromFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { kind: "source" | "blog" | "design"; payload: unknown }) => d)
+  .inputValidator((d: { kind: "source" | "blog" | "design" | "diagram"; payload: unknown }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
-    if (!["source", "blog", "design"].includes(data.kind)) {
-      throw new Error("kind must be source, blog, or design.");
+    if (!["source", "blog", "design", "diagram"].includes(data.kind)) {
+      throw new Error("kind must be source, blog, design, or diagram.");
     }
     if (!data.payload || typeof data.payload !== "object") {
-      throw new Error("payload must be the parsed content JSON object.");
+      throw new Error("payload must be the parsed content JSON (object or array).");
     }
     const sb = await adminClient();
     const { publishFromFile: publishFromFileRecord } =
