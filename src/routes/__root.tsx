@@ -34,12 +34,90 @@ function NotFoundComponent() {
   );
 }
 
+function SupabaseEnvErrorView({ missing }: { missing: string[] }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-12">
+      <div className="w-full max-w-xl rounded-xl border border-border bg-card p-8 shadow-sm">
+        <div className="mb-2 inline-block rounded bg-amber-100 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:bg-amber-900/40 dark:text-amber-200">
+          Backend not configured
+        </div>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          Authentication can't start
+        </h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          This deployment is missing required backend environment variables, so sign-in can't load.
+        </p>
+
+        <div className="mt-4 rounded-lg border border-amber-300/60 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
+          <div className="text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-200">
+            Missing variable{missing.length > 1 ? "s" : ""}
+          </div>
+          <ul className="mt-1 list-disc pl-5 text-sm text-amber-900 dark:text-amber-100">
+            {missing.map((v) => (
+              <li key={v}>
+                <code className="rounded bg-black/10 px-1.5 py-0.5 text-[12.5px] dark:bg-white/10">
+                  {v}
+                </code>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-foreground/90">
+          <li>
+            In the Lovable editor, open <strong>Cloud</strong> and confirm the backend is
+            connected.
+          </li>
+          <li>
+            Click <strong>Publish &rarr; Update</strong> to rebuild with the latest variables.
+          </li>
+          <li>Wait ~1 minute for the deploy, then hard-refresh this page (Ctrl/Cmd+Shift+R).</li>
+        </ol>
+
+        <p className="mt-4 text-xs text-muted-foreground">
+          The variables exist in the project, but the currently published bundle was built before
+          they were available. Re-publishing inlines them into the new client bundle.
+        </p>
+
+        <div className="mt-6 flex flex-wrap gap-2">
+          <button
+            onClick={() => location.reload()}
+            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+          >
+            Try again
+          </button>
+          <a
+            href="/"
+            className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-foreground hover:bg-accent"
+          >
+            Go home
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function detectSupabaseEnv(error: Error): string[] | null {
+  if (!/Missing Supabase environment variable/i.test(error.message)) return null;
+  const after = error.message.split(":")[1] ?? "";
+  const missing = after
+    .split(/[,.]/)[0]
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => /^[A-Z_]+$/.test(s));
+  return missing.length ? missing : ["SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"];
+}
+
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
+  const supaMissing = detectSupabaseEnv(error);
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
+
+  if (supaMissing) return <SupabaseEnvErrorView missing={supaMissing} />;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
