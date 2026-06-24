@@ -42,7 +42,7 @@ async function buildErrorResponse(error: unknown): Promise<Response> {
       console.error("Failed to render dev error page", e);
     }
   }
-  return new Response(renderErrorPage(), {
+  return new Response(renderErrorPage(error), {
     status: 500,
     headers: { "content-type": "text/html; charset=utf-8" },
   });
