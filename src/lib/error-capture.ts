@@ -1,11 +1,29 @@
-// Captures the original Error out-of-band so server.ts can recover the stack
-// when h3 has already swallowed the throw into a generic 500 Response.
+// Captures the original Error + request info out-of-band so server.ts can
+// recover diagnostic detail when h3 has already swallowed the throw into a
+// generic 500 Response.
 
 let lastCapturedError: { error: unknown; at: number } | undefined;
+let lastCapturedRequest:
+  | { method: string; url: string; pathname: string; at: number }
+  | undefined;
 const TTL_MS = 5_000;
 
 function record(error: unknown) {
   lastCapturedError = { error, at: Date.now() };
+}
+
+export function recordRequest(request: Request) {
+  try {
+    const url = new URL(request.url);
+    lastCapturedRequest = {
+      method: request.method,
+      url: request.url,
+      pathname: url.pathname,
+      at: Date.now(),
+    };
+  } catch {
+    /* ignore */
+  }
 }
 
 if (typeof globalThis.addEventListener === "function") {
@@ -24,4 +42,13 @@ export function consumeLastCapturedError(): unknown {
   const { error } = lastCapturedError;
   lastCapturedError = undefined;
   return error;
+}
+
+export function peekLastCapturedRequest() {
+  if (!lastCapturedRequest) return undefined;
+  if (Date.now() - lastCapturedRequest.at > TTL_MS) {
+    lastCapturedRequest = undefined;
+    return undefined;
+  }
+  return lastCapturedRequest;
 }
