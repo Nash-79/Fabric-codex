@@ -147,7 +147,7 @@ export function renderDevErrorPage(opts: {
   <div class="actions" style="margin:16px 0 4px">
     <button class="primary" onclick="location.reload()">Reload</button>
     <a href="/">Go home</a>
-    <a href="/__dev/logs" target="_blank">Open log viewer</a>
+    <a href="/dev/logs" target="_blank">Open log viewer</a>
   </div>
 
   <h2>Request</h2>
