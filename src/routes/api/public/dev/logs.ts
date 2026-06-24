@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { filterLogs, groupByDay, readLogs, type LogLevel } from "@/lib/dev-logs.server";
 
-export const Route = createFileRoute("/api/public/__dev/logs")({
+export const Route = createFileRoute("/api/public/dev/logs")({
   server: {
     handlers: {
       GET: async ({ request }) => {

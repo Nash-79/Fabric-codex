@@ -20,7 +20,7 @@ type LogsResponse = {
   entries: LogEntry[];
 };
 
-export const Route = createFileRoute("/__dev/logs")({
+export const Route = createFileRoute("/dev/logs")({
   head: () => ({ meta: [{ title: "Dev logs — Fabric Atlas" }] }),
   component: LogViewer,
 });
@@ -62,7 +62,7 @@ function LogViewer() {
       params.set("limit", "1000");
       setLoading(true);
       try {
-        const res = await fetch(`/api/public/__dev/logs?${params}`);
+        const res = await fetch(`/api/public/dev/logs?${params}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as LogsResponse;
         setData(json);
