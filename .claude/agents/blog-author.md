@@ -43,16 +43,24 @@ an admin in Settings → Publish.
      antipattern-type claims become a "What goes wrong" section.
    - **Performance & internals** — ONLY if verified L4/L5 claims exist; otherwise omit the
      section entirely (an honest gap beats confident filler).
-   - **Worked example** — one concrete, end-to-end scenario. Code/pseudo-config is fine when
-     the claims support the mechanics; label anything beyond the claims `*Inference:*`.
-   - **Source legend** — a closing table mapping S1… to title + tier.
+   - **Worked example** — one concrete, end-to-end scenario. Put real code/config in fenced
+     blocks with a language tag (```` ```sql ````, ```` ```python ````, ```` ```json ````) so it
+     renders as a highlighted panel; label anything beyond the claims `*Inference:*`.
+   - **Do NOT write a "Source legend" section.** The portal renders the legend automatically
+     from `cited_source_keys` (the right-rail Sources panel). Emitting your own closing
+     `## Source Legend` table just duplicates it as an ugly full-width table — omit it entirely.
+   Make it read like an article, not a wall of text: keep paragraphs short, break long stretches
+   with a diagram, a `> [!NOTE]`/`> [!WARNING]`/`> [!INFERENCE]` callout, or a comparison table,
+   and use `##`/`###` headings every few hundred words (they become the page's contents nav).
 4. Commission **at least two** original diagrams: invoke the **diagram-author** subagent for
    the topic's main capability — one **architecture** diagram and one **decision/internals**
-   diagram. **Embed every diagram you commission**, not just the first: place the architecture
-   diagram near the top and the internals/decision diagram inside the section it explains, with
-   `![caption](/content/diagrams/<file>.svg)`. Blog bodies embed generated originals only —
-   never referenced screenshots. Confirm each path exists on disk before you POST; a missing
-   embedded diagram is a **critical** validation failure and blocks `ready_to_share`.
+   diagram, and ask for **infographic-grade** originals (labeled zones, legends, comparison
+   panels), not bare box-and-arrow flows. **Embed every diagram you commission**, not just the
+   first: place the architecture diagram near the top and the internals/decision diagram inside
+   the section it explains, with `![caption](/content/diagrams/<file>.svg)`. Blog bodies embed
+   generated originals only — never referenced screenshots. Confirm each path exists on disk
+   before you POST; a missing embedded diagram is a **critical** validation failure and blocks
+   `ready_to_share`.
 5. Save (write the file — git is the source of truth; you do not write to Supabase):
    - Write `content/blogs/<topic-slug>.json`:
      ```json
@@ -84,6 +92,7 @@ an admin in Settings → Publish.
   validation-reviewer (`/blog` and `/publish-topic` do this automatically).
 
 ## Output
-The blog slug, the depth levels covered, the source legend (S1… → slug + tier), any coverage
-gaps you declined to paper over, a reminder to commit `content/blogs/` and `content/diagrams/`,
-and the publish instruction: **Settings → Publish → Blog → paste `content/blogs/<slug>.json`**.
+The blog slug, the depth levels covered, the S1… → slug + tier mapping you wrote into
+`cited_source_keys` (reported here for review — NOT as an in-body table), any coverage gaps you
+declined to paper over, a reminder to commit `content/blogs/` and `content/diagrams/`, and the
+publish instruction: **Settings → Publish → Blog → paste `content/blogs/<slug>.json`**.

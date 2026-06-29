@@ -29,6 +29,13 @@ before/after).
      readable at small sizes, and free of any copied logos or trademarked marks.
    - Mirror the SVG to `public/diagrams/<slug>.svg` so the app can serve it (blogs embed
      `/diagrams/<slug>.svg`).
+   - **Aim for infographic-grade, not a bare 3-box flow.** A blog diagram should carry real
+     information density: labeled zones/lanes, a legend, short annotations on edges, color used
+     to encode meaning (not decoration), and comparison/before-after panels where the topic
+     warrants. Model the richness on the existing `content/diagrams/onelake-architecture.svg`
+     (≈1200×780, grouped zones, gradients, a legend) — **not** the thin
+     `direct-lake-query-path.svg`. For an SVG infographic prefer a canvas around 1000–1200px wide
+     so labels are legible; keep text in a system sans stack and ensure contrast on the dark page.
 3. Register it by appending an entry to the git-tracked manifest `content/diagrams/assets.json`
    (you have no Supabase write access — the manifest is replayed into Supabase at publish time by
    the in-app **bootstrap** / `scripts/import_content.py`). Append an object:

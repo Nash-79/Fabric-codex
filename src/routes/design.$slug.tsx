@@ -2,11 +2,13 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import { getDesign } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { TierBadge } from "@/components/Badges";
 import { PrintButton } from "@/components/PrintButton";
 import { readingTime } from "@/lib/reading-time";
+import { markdownPanels } from "@/components/MarkdownPanels";
 
 type Citation = {
   label: string;
@@ -84,15 +86,17 @@ function DesignPage() {
           <p className="mt-3 text-lg leading-relaxed text-muted-foreground">{design.summary}</p>
         )}
 
-        <div className="prose prose-invert mt-8 max-w-none prose-headings:tracking-tight prose-a:text-teal-300 prose-img:rounded-xl prose-img:border prose-img:border-border">
+        <div className="prose prose-invert prose-lg mt-8 max-w-none prose-headings:font-semibold prose-headings:tracking-tight prose-h2:mt-12 prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-2xl prose-h3:mt-8 prose-h3:text-xl prose-p:leading-relaxed prose-a:text-teal-300 prose-strong:text-foreground prose-li:marker:text-teal-400 prose-img:rounded-xl prose-img:border prose-img:border-border">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
+            rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
             urlTransform={(url) =>
               url.startsWith("/content/diagrams/")
                 ? url.replace("/content/diagrams/", "/diagrams/")
                 : url
             }
             components={{
+              ...markdownPanels,
               a: ({ href, children, ...rest }) => {
                 if (href?.startsWith("#src-")) {
                   return (

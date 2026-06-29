@@ -3,11 +3,13 @@ import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import rehypeHighlight from "rehype-highlight";
 import { getBlog } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { TierBadge, MaturityBadge } from "@/components/Badges";
 import { PrintButton } from "@/components/PrintButton";
 import { readingTime } from "@/lib/reading-time";
+import { markdownPanels } from "@/components/MarkdownPanels";
 
 const blogQO = (slug: string) =>
   queryOptions({ queryKey: ["blog", slug], queryFn: () => getBlog({ data: { slug } }) });
@@ -175,15 +177,17 @@ function BlogPage() {
             <Info label="Format" value="Source-grounded article" />
           </div>
 
-          <div className="prose prose-invert mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:tracking-tight prose-a:text-teal-300 prose-img:rounded-xl prose-img:border prose-img:border-border">
+          <div className="prose prose-invert prose-lg mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-h2:mt-12 prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-2xl prose-h3:mt-8 prose-h3:text-xl prose-p:leading-relaxed prose-a:text-teal-300 prose-strong:text-foreground prose-li:marker:text-teal-400 prose-img:rounded-xl prose-img:border prose-img:border-border">
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
+              rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
               urlTransform={(url) =>
                 url.startsWith("/content/diagrams/")
                   ? url.replace("/content/diagrams/", "/diagrams/")
                   : url
               }
               components={{
+                ...markdownPanels,
                 h2: ({ children, ...rest }) => {
                   const text = String(children);
                   const id = text
