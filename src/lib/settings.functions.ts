@@ -286,7 +286,8 @@ export const getCmsData = createServerFn({ method: "GET" })
     }
     const withCitations = (items: any[]) =>
       items.map((item) => ({ ...item, cited_source_ids: citationMap.get(item.id) ?? [] }));
-    const byKind = (kind: string) => withCitations((contentItems ?? []).filter((i: any) => i.kind === kind));
+    const byKind = (kind: string) =>
+      withCitations((contentItems ?? []).filter((i: any) => i.kind === kind));
     return {
       sources: sources ?? [],
       claims: claims ?? [],
@@ -1026,8 +1027,10 @@ export const pollRssFeeds = createServerFn({ method: "POST" })
 export const publishFromFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (d: { kind: "source" | "blog" | "article" | "design" | "lesson" | "diagram"; payload: unknown }) =>
-      d,
+    (d: {
+      kind: "source" | "blog" | "article" | "design" | "lesson" | "diagram";
+      payload: unknown;
+    }) => d,
   )
   .handler(async ({ context, data }) => {
     await requireAdmin(context);

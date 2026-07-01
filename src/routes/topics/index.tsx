@@ -58,50 +58,50 @@ function TopicsPage() {
           <TopicTree topics={topics} />
         </div>
         <div className="mx-auto w-full max-w-7xl">
-        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
-          Knowledge map
-        </div>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">Topics</h1>
-        <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Microsoft Fabric organised by capability area. Pick a topic to read its cited article and
-          source claims.
-        </p>
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
+            Knowledge map
+          </div>
+          <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">Topics</h1>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
+            Microsoft Fabric organised by capability area. Pick a topic to read its cited article
+            and source claims.
+          </p>
 
-        <div className="mt-10 grid gap-6 md:grid-cols-2">
-          {roots.map((root) => (
-            <section key={root.slug} className="rounded-2xl border border-border bg-card p-5">
-              <h2 className="text-lg font-semibold text-foreground">{root.name}</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{root.description}</p>
-              <ul className="mt-4 space-y-1.5">
-                {(byParent.get(root.slug) ?? []).map((child) => (
-                  <li key={child.slug}>
-                    <Link
-                      to="/topics/$slug"
-                      params={{ slug: child.slug }}
-                      className="group flex items-baseline justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-accent"
-                    >
-                      <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
-                        {child.name}
-                      </span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {child.description}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
-          {roots.length === 0 && (
-            <div className="col-span-full rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground">
-              No topics yet. An admin can bootstrap bundled content from the{" "}
-              <Link to="/settings" className="text-teal-300 underline-offset-4 hover:underline">
-                settings page
-              </Link>
-              .
-            </div>
-          )}
-        </div>
+          <div className="mt-10 grid gap-6 md:grid-cols-2">
+            {roots.map((root) => (
+              <section key={root.slug} className="rounded-2xl border border-border bg-card p-5">
+                <h2 className="text-lg font-semibold text-foreground">{root.name}</h2>
+                <p className="mt-1 text-sm text-muted-foreground">{root.description}</p>
+                <ul className="mt-4 space-y-1.5">
+                  {(byParent.get(root.slug) ?? []).map((child) => (
+                    <li key={child.slug}>
+                      <Link
+                        to="/topics/$slug"
+                        params={{ slug: child.slug }}
+                        className="group flex items-baseline justify-between gap-3 rounded-md px-2 py-1.5 hover:bg-accent"
+                      >
+                        <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
+                          {child.name}
+                        </span>
+                        <span className="truncate text-xs text-muted-foreground">
+                          {child.description}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            {roots.length === 0 && (
+              <div className="col-span-full rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground">
+                No topics yet. An admin can bootstrap bundled content from the{" "}
+                <Link to="/settings" className="text-teal-300 underline-offset-4 hover:underline">
+                  settings page
+                </Link>
+                .
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

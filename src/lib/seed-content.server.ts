@@ -115,14 +115,14 @@ export async function runContentSeed(supabaseAdmin: SupabaseClient): Promise<See
     description: "",
   }));
   if (capRows.length) {
-    const { error } = await supabaseAdmin.from("capabilities").upsert(capRows, { onConflict: "id" });
+    const { error } = await supabaseAdmin
+      .from("capabilities")
+      .upsert(capRows, { onConflict: "id" });
     if (error) throw new Error(`capabilities: ${error.message}`);
   }
 
   // 2) Topics
-  const ordered = [...topicsArr].sort(
-    (a, b) => (a.parent_slug ? 1 : 0) - (b.parent_slug ? 1 : 0),
-  );
+  const ordered = [...topicsArr].sort((a, b) => (a.parent_slug ? 1 : 0) - (b.parent_slug ? 1 : 0));
   for (const t of ordered) {
     const { error } = await supabaseAdmin.from("topics").upsert(
       {

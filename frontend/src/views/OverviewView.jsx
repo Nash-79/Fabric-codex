@@ -53,37 +53,84 @@ export default function OverviewView({ onOpenCapability, offline = false }) {
 
   useEffect(() => {
     if (offline) return;
-    api("/coverage").then(setCoverage).catch(() => {});
-    api("/sources").then(setSources).catch(() => {});
-    api("/claims?capability=fabric-platform").then(setClaims).catch(() => {});
-    api("/assets?capability=fabric-platform").then((as) => {
-      const gen = as.find((a) => a.kind === "generated" && a.path);
-      if (gen) setDiagram("/" + gen.path.replace(/^\//, ""));
-    }).catch(() => {});
+    api("/coverage")
+      .then(setCoverage)
+      .catch(() => {});
+    api("/sources")
+      .then(setSources)
+      .catch(() => {});
+    api("/claims?capability=fabric-platform")
+      .then(setClaims)
+      .catch(() => {});
+    api("/assets?capability=fabric-platform")
+      .then((as) => {
+        const gen = as.find((a) => a.kind === "generated" && a.path);
+        if (gen) setDiagram("/" + gen.path.replace(/^\//, ""));
+      })
+      .catch(() => {});
   }, [offline]);
 
-  const totalClaims = Object.values(coverage).reduce((a, g) => a + Object.values(g).reduce((x, y) => x + y, 0), 0);
-  const coveredCaps = Object.keys(coverage).filter((k) => Object.values(coverage[k]).some((n) => n > 0)).length;
+  const totalClaims = Object.values(coverage).reduce(
+    (a, g) => a + Object.values(g).reduce((x, y) => x + y, 0),
+    0,
+  );
+  const coveredCaps = Object.keys(coverage).filter((k) =>
+    Object.values(coverage[k]).some((n) => n > 0),
+  ).length;
   const activeSources = sources.filter((s) => s.active).length;
 
   return (
     <div>
       {/* hero */}
-      <div style={{ borderRadius: 10, padding: "26px 28px", color: "#E9FFF8", marginBottom: 18, background: `linear-gradient(110deg, ${c.heroFrom} 0%, ${c.heroVia} 55%, ${c.heroTo} 100%)`, boxShadow: c.shadow }}>
-        <div style={{ fontSize: 12, fontFamily: mono, letterSpacing: 1.2, textTransform: "uppercase", opacity: 0.75, marginBottom: 6 }}>The big picture</div>
+      <div
+        style={{
+          borderRadius: 10,
+          padding: "26px 28px",
+          color: "#E9FFF8",
+          marginBottom: 18,
+          background: `linear-gradient(110deg, ${c.heroFrom} 0%, ${c.heroVia} 55%, ${c.heroTo} 100%)`,
+          boxShadow: c.shadow,
+        }}
+      >
+        <div
+          style={{
+            fontSize: 12,
+            fontFamily: mono,
+            letterSpacing: 1.2,
+            textTransform: "uppercase",
+            opacity: 0.75,
+            marginBottom: 6,
+          }}
+        >
+          The big picture
+        </div>
         <div style={{ fontSize: 26, fontWeight: 650, lineHeight: 1.2, maxWidth: 720 }}>
           Microsoft Fabric, mapped: every capability, source-graded and versioned.
         </div>
-        <div style={{ fontSize: 14, lineHeight: 1.65, maxWidth: 760, marginTop: 10, opacity: 0.92 }}>
+        <div
+          style={{ fontSize: 14, lineHeight: 1.65, maxWidth: 760, marginTop: 10, opacity: 0.92 }}
+        >
           Fabric Atlas is a governed knowledge base over the Microsoft Fabric platform. Approved
           sources become atomic, cited claims; claims power architectures and lessons; everything
-          generated is validated against what it cites. This page is the overarching view —
-          start here, then drill into a capability.
+          generated is validated against what it cites. This page is the overarching view — start
+          here, then drill into a capability.
         </div>
         {!offline && (
           <div style={{ display: "flex", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
-            {[[totalClaims, "claims"], [coveredCaps + "/" + CAPABILITIES.length, "capabilities covered"], [activeSources, "active sources"]].map(([n, l]) => (
-              <div key={l} style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.25)", borderRadius: 6, padding: "6px 14px" }}>
+            {[
+              [totalClaims, "claims"],
+              [coveredCaps + "/" + CAPABILITIES.length, "capabilities covered"],
+              [activeSources, "active sources"],
+            ].map(([n, l]) => (
+              <div
+                key={l}
+                style={{
+                  background: "rgba(255,255,255,0.1)",
+                  border: "1px solid rgba(255,255,255,0.25)",
+                  borderRadius: 6,
+                  padding: "6px 14px",
+                }}
+              >
                 <span style={{ fontSize: 18, fontWeight: 650 }}>{n}</span>
                 <span style={{ fontSize: 12, opacity: 0.8, marginLeft: 7 }}>{l}</span>
               </div>
@@ -93,32 +140,92 @@ export default function OverviewView({ onOpenCapability, offline = false }) {
       </div>
 
       {/* platform diagram — original, authored in-repo */}
-      <div style={{ border: "1px solid " + c.line, borderRadius: 10, background: c.panel, padding: 18, marginBottom: 18, boxShadow: c.shadow }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
+      <div
+        style={{
+          border: "1px solid " + c.line,
+          borderRadius: 10,
+          background: c.panel,
+          padding: 18,
+          marginBottom: 18,
+          boxShadow: c.shadow,
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "baseline",
+            flexWrap: "wrap",
+            gap: 8,
+            marginBottom: 10,
+          }}
+        >
           <span style={{ fontWeight: 600, fontSize: 14 }}>The platform at a glance</span>
           <Chip color={c.green}>original diagram</Chip>
         </div>
-        <img src={diagram} alt="Microsoft Fabric platform overview — workloads over OneLake, governed by Purview, metered by capacities"
-          style={{ width: "100%", borderRadius: 6, background: c.diagramBg, border: "1px solid " + c.lineSoft }}
-          onError={(e) => { e.target.closest("div").style.display = "none"; }} />
+        <img
+          src={diagram}
+          alt="Microsoft Fabric platform overview — workloads over OneLake, governed by Purview, metered by capacities"
+          style={{
+            width: "100%",
+            borderRadius: 6,
+            background: c.diagramBg,
+            border: "1px solid " + c.lineSoft,
+          }}
+          onError={(e) => {
+            e.target.closest("div").style.display = "none";
+          }}
+        />
       </div>
 
       {/* how it fits together */}
       <div style={{ fontWeight: 600, fontSize: 14, margin: "4px 0 4px" }}>How it fits together</div>
       <div style={{ color: c.faint, fontSize: 12, marginBottom: 10 }}>
-        Orientation text, written for this atlas — specifics live in the cited claims per capability.
+        Orientation text, written for this atlas — specifics live in the cited claims per
+        capability.
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(330px, 1fr))", gap: 12, marginBottom: 22 }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fill, minmax(330px, 1fr))",
+          gap: 12,
+          marginBottom: 22,
+        }}
+      >
         {FABRIC_STORY.map((s) => (
-          <div key={s.title} style={{ border: "1px solid " + c.line, borderRadius: 10, background: c.panel, padding: "14px 16px", boxShadow: c.shadow }}>
-            <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6, color: c.accentText }}>{s.title}</div>
+          <div
+            key={s.title}
+            style={{
+              border: "1px solid " + c.line,
+              borderRadius: 10,
+              background: c.panel,
+              padding: "14px 16px",
+              boxShadow: c.shadow,
+            }}
+          >
+            <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 6, color: c.accentText }}>
+              {s.title}
+            </div>
             <div style={{ fontSize: 13, lineHeight: 1.6, color: c.text }}>{s.body}</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
               {s.caps.map((id) => {
                 const cap = CAPABILITIES.find((x) => x.id === id);
                 if (!cap) return null;
                 return (
-                  <button key={id} onClick={() => onOpenCapability(id)} style={{ cursor: "pointer", fontFamily: mono, fontSize: 11, color: c.accentText, background: c.accentSoft, border: "1px solid " + c.accentDim, borderRadius: 12, padding: "2px 9px" }}>
+                  <button
+                    key={id}
+                    onClick={() => onOpenCapability(id)}
+                    style={{
+                      cursor: "pointer",
+                      fontFamily: mono,
+                      fontSize: 11,
+                      color: c.accentText,
+                      background: c.accentSoft,
+                      border: "1px solid " + c.accentDim,
+                      borderRadius: 12,
+                      padding: "2px 9px",
+                    }}
+                  >
                     {cap.name} →
                   </button>
                 );
@@ -130,16 +237,40 @@ export default function OverviewView({ onOpenCapability, offline = false }) {
 
       {/* platform-level claims */}
       {!offline && (
-        <div style={{ border: "1px solid " + c.line, borderRadius: 10, background: c.panel, boxShadow: c.shadow }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", borderBottom: "1px solid " + c.line, flexWrap: "wrap", gap: 8 }}>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>What the atlas asserts about the platform</span>
-            <Btn small onClick={() => onOpenCapability("fabric-platform")}>Open in Registry</Btn>
+        <div
+          style={{
+            border: "1px solid " + c.line,
+            borderRadius: 10,
+            background: c.panel,
+            boxShadow: c.shadow,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "12px 16px",
+              borderBottom: "1px solid " + c.line,
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            <span style={{ fontWeight: 600, fontSize: 14 }}>
+              What the atlas asserts about the platform
+            </span>
+            <Btn small onClick={() => onOpenCapability("fabric-platform")}>
+              Open in Registry
+            </Btn>
           </div>
           {claims.length === 0 ? (
             <div style={{ padding: 16, color: c.muted, fontSize: 13 }}>
               No platform-level claims yet — ingest an overview source, e.g.{" "}
-              <Code>/ingest https://learn.microsoft.com/fabric/fundamentals/microsoft-fabric-overview tier=1</Code>,
-              then publish with <Code>python scripts/import_content.py</Code>.
+              <Code>
+                /ingest https://learn.microsoft.com/fabric/fundamentals/microsoft-fabric-overview
+                tier=1
+              </Code>
+              , then publish with <Code>python scripts/import_content.py</Code>.
             </div>
           ) : (
             DEPTHS.map((d) => {
@@ -147,12 +278,33 @@ export default function OverviewView({ onOpenCapability, offline = false }) {
               if (!rows.length) return null;
               return (
                 <div key={d.n} style={{ borderBottom: "1px solid " + c.lineSoft }}>
-                  <div style={{ fontFamily: mono, fontSize: 11, color: c.faint, padding: "10px 16px 0", textTransform: "uppercase", letterSpacing: 0.6 }}>
+                  <div
+                    style={{
+                      fontFamily: mono,
+                      fontSize: 11,
+                      color: c.faint,
+                      padding: "10px 16px 0",
+                      textTransform: "uppercase",
+                      letterSpacing: 0.6,
+                    }}
+                  >
                     {d.short} · {d.label}
                   </div>
                   {rows.map((cl) => (
-                    <div key={cl.id} style={{ padding: "9px 16px", display: "flex", gap: 10, alignItems: "baseline" }}>
-                      {cl.status === "verified" ? <Chip color={c.green}>✓</Chip> : <Chip color={c.amber}>pending</Chip>}
+                    <div
+                      key={cl.id}
+                      style={{
+                        padding: "9px 16px",
+                        display: "flex",
+                        gap: 10,
+                        alignItems: "baseline",
+                      }}
+                    >
+                      {cl.status === "verified" ? (
+                        <Chip color={c.green}>✓</Chip>
+                      ) : (
+                        <Chip color={c.amber}>pending</Chip>
+                      )}
                       <span style={{ fontSize: 13, lineHeight: 1.55 }}>{cl.text}</span>
                     </div>
                   ))}

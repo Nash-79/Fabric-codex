@@ -24,7 +24,15 @@ New server route `src/routes/api/public/__dev/logs.ts` (dev-only guard) that rea
 …and normalizes each line into a structured record:
 
 ```json
-{ "ts": "2026-06-24T07:08:45Z", "day": "2026-06-24", "level": "warn|error|info", "source": "vite-client|vite-ssr|stdout|stderr", "message": "...", "file": "src/...", "raw": "..." }
+{
+  "ts": "2026-06-24T07:08:45Z",
+  "day": "2026-06-24",
+  "level": "warn|error|info",
+  "source": "vite-client|vite-ssr|stdout|stderr",
+  "message": "...",
+  "file": "src/...",
+  "raw": "..."
+}
 ```
 
 Parser handles the `H:MM:SS AM [vite] (client) warning: <file>:<l>:<c> <msg>` shape plus plain stdout/stderr lines. Supports query params: `?day=YYYY-MM-DD&level=error,warn&q=substring&limit=500`.

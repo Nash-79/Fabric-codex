@@ -2,6 +2,7 @@
 description: Compose the cited knowledge-base article for a topic from verified claims, then validate it (local, no API).
 argument-hint: <topic-slug>
 ---
+
 Author and validate the article for topic: $ARGUMENTS
 
 The KB is read directly from Supabase with the anon key (no `localhost:8000` backend). Authoring

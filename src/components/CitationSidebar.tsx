@@ -25,7 +25,11 @@ export function CitationSidebar({ citations }: { citations: Citation[] }) {
         {citations.map((c, i) => {
           const n = i + 1;
           return (
-            <li key={c.label} id={`src-${n}`} className="rounded-md border border-border bg-card p-3">
+            <li
+              key={c.label}
+              id={`src-${n}`}
+              className="rounded-md border border-border bg-card p-3"
+            >
               <div className="flex flex-col gap-2">
                 <a
                   href={c.source?.url}

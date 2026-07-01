@@ -29,15 +29,6 @@ export function ContentHero({
 }) {
   return (
     <div className="relative -mx-6 px-6 pb-2 pt-2 sm:-mx-8 sm:px-8">
-      <div
-        className="pointer-events-none absolute inset-0 -z-10"
-        style={{
-          background:
-            "radial-gradient(60% 50% at 20% 0%, color-mix(in oklch, var(--primary) 12%, transparent), transparent 70%)",
-        }}
-        aria-hidden="true"
-      />
-
       <div className="flex items-center gap-2">
         <KindBadge kind={item.kind} />
         {item.tags?.length ? (

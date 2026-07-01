@@ -65,8 +65,7 @@ function SupabaseEnvErrorView({ missing }: { missing: string[] }) {
 
         <ol className="mt-4 list-decimal space-y-1 pl-5 text-sm text-foreground/90">
           <li>
-            In the Lovable editor, open <strong>Cloud</strong> and confirm the backend is
-            connected.
+            In the Lovable editor, open <strong>Cloud</strong> and confirm the backend is connected.
           </li>
           <li>
             Click <strong>Publish &rarr; Update</strong> to rebuild with the latest variables.

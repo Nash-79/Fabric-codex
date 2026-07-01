@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-export const MOBILE = 640;  // px — single source of truth for the mobile breakpoint
+export const MOBILE = 640; // px — single source of truth for the mobile breakpoint
 
 export function useWindowWidth() {
   const [w, setW] = useState(() => (typeof window !== "undefined" ? window.innerWidth : 1200));

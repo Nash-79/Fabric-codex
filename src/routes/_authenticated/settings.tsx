@@ -1915,7 +1915,9 @@ const PUBLISH_DIR: Record<string, string> = {
 
 function PublishPanel({ onDone }: { onDone: () => void }) {
   const publishFn = useServerFn(publishFromFile);
-  const [kind, setKind] = useState<"source" | "article" | "design" | "lesson" | "diagram">("source");
+  const [kind, setKind] = useState<"source" | "article" | "design" | "lesson" | "diagram">(
+    "source",
+  );
   const [json, setJson] = useState("");
 
   const publish = useMutation({

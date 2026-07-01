@@ -21,7 +21,7 @@ const contentItemQO = (kind: string, slug: string) =>
 
 const topicsQO = queryOptions({ queryKey: ["topics"], queryFn: () => listTopics() });
 
-export const Route = createFileRoute("/content/$kind/$slug")({
+export const Route = createFileRoute("/blogs/$kind/$slug")({
   head: ({ loaderData }: { loaderData?: Awaited<ReturnType<typeof getContentItem>> }) => ({
     meta: [
       { title: loaderData ? `${loaderData.item.title} — Fabric Atlas` : "Content — Fabric Atlas" },
@@ -55,8 +55,8 @@ export const Route = createFileRoute("/content/$kind/$slug")({
     <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
       <p className="mt-6">Content not found.</p>
-      <Link to="/content" className="mt-3 inline-block underline">
-        Back to content
+      <Link to="/blogs" className="mt-3 inline-block underline">
+        Back to blogs
       </Link>
     </div>
   ),
@@ -105,8 +105,8 @@ function ContentItemPage() {
         <div className="mx-auto grid w-full max-w-6xl gap-8 lg:grid-cols-[220px_minmax(0,760px)_300px]">
           <aside className="hidden lg:block">
             <div className="sticky top-20 space-y-4">
-              <Link to="/content" className="text-xs text-muted-foreground hover:text-foreground">
-                ← All content
+              <Link to="/blogs" className="text-xs text-muted-foreground hover:text-foreground">
+                ← All blogs
               </Link>
               <ContentTocSidebar headings={headings} />
             </div>
@@ -115,10 +115,10 @@ function ContentItemPage() {
           <article>
             <div className="flex items-center justify-between gap-3">
               <Link
-                to="/content"
+                to="/blogs"
                 className="text-xs text-muted-foreground hover:text-foreground lg:hidden"
               >
-                ← All content
+                ← All blogs
               </Link>
               <PrintButton />
             </div>

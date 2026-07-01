@@ -10,7 +10,9 @@ export async function api(path, opts = {}) {
       detail = body.detail || detail;
       // Structured 409 details (e.g. queue duplicates) carry a message field.
       if (detail && typeof detail === "object") detail = detail.message || JSON.stringify(detail);
-    } catch { /* noop */ }
+    } catch {
+      /* noop */
+    }
     throw new Error(detail);
   }
   return res.json();

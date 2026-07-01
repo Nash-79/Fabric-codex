@@ -24,7 +24,8 @@ export const Route = createFileRoute("/api/public/hooks/seed-content")({
 
         const started = Date.now();
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { runContentSeed, computeContentSignature } = await import("@/lib/seed-content.server");
+        const { runContentSeed, computeContentSignature } =
+          await import("@/lib/seed-content.server");
         const signature = computeContentSignature();
 
         // Skip when the bundled content fingerprint matches the last successful run.

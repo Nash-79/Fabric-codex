@@ -23,7 +23,7 @@ export function DiagramLightbox({
           className="relative block w-full cursor-zoom-in overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-black/20 transition hover:border-teal-500/40 hover:shadow-teal-500/10"
         >
           <img src={src} alt={alt} className="w-full" loading="lazy" />
-          <span className="absolute right-3 top-3 flex items-center gap-1 rounded-md border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground opacity-0 backdrop-blur transition group-hover:opacity-100">
+          <span className="absolute right-3 top-3 flex items-center gap-1 rounded-md border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground opacity-0 transition group-hover:opacity-100">
             <ZoomIn className="h-3.5 w-3.5" /> Click to zoom
           </span>
         </button>
@@ -58,7 +58,7 @@ export function DiagramLightbox({
             </TransformComponent>
           </TransformWrapper>
           {caption && (
-            <div className="absolute bottom-0 left-0 right-0 bg-background/90 px-6 py-3 text-center text-sm text-muted-foreground backdrop-blur">
+            <div className="absolute bottom-0 left-0 right-0 bg-background/90 px-6 py-3 text-center text-sm text-muted-foreground">
               {caption}
             </div>
           )}

@@ -11,11 +11,13 @@ concept in your own original diagram instead. You output diagram-as-code (Mermai
 which is high quality, diffable, and license-clean. You do not generate photorealistic raster art.
 
 ## Inputs
+
 A subject: a capability id, a claim, or a design id, and the diagram type (architecture flow,
 decision tree, component internals, capability map, security model, migration map, anti-pattern
 before/after).
 
 ## Method
+
 1. Read the relevant claims for grounding from Supabase with the anon key (no `localhost:8000`):
    ```bash
    source .env 2>/dev/null || true
@@ -40,8 +42,15 @@ before/after).
    (you have no Supabase write access — the manifest is replayed into Supabase at publish time by
    the in-app **bootstrap** / `scripts/import_content.py`). Append an object:
    ```json
-   {"kind":"generated","path":"content/diagrams/<slug>.svg","caption":"<what it shows>",
-    "capability_id":"<id>","claim_id":"<optional>","source_id":"<optional>","design_id":"<optional>"}
+   {
+     "kind": "generated",
+     "path": "content/diagrams/<slug>.svg",
+     "caption": "<what it shows>",
+     "capability_id": "<id>",
+     "claim_id": "<optional>",
+     "source_id": "<optional>",
+     "design_id": "<optional>"
+   }
    ```
    Prefer `claim_id` when the diagram illustrates one claim, `source_id` when it explains one
    source, and `capability_id` for broad capability diagrams. Include a grounding note in the output
@@ -49,12 +58,14 @@ before/after).
    next content bootstrap/publish.
 
 ## Rules
+
 - Original work only. No traced or copied source images, no third-party logos/IP.
 - The diagram's content must be traceable to knowledge-base claims; note which claims it visualises.
 - Prefer Mermaid for anything that is fundamentally a graph/flow; reserve hand-built SVG for
   infographics where layout carries meaning.
 
 ## Output
+
 The saved file path(s) (`content/diagrams/` + mirrored `public/diagrams/`), the manifest entry
 appended to `content/diagrams/assets.json`, and a one-line note on which claims the diagram is
 grounded in. Remind that the asset registers into Supabase on the next bootstrap/publish.

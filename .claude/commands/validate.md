@@ -2,6 +2,7 @@
 description: Validate a saved design — reason locally, post findings, get confidence (no API).
 argument-hint: <design-id>
 ---
+
 Use the **validation-reviewer** subagent on design `$ARGUMENTS` (a slug). Fetch the design — the
 draft `content/designs/<slug>.json` before publish, or the published row from Supabase (anon key) —
 and the grounding claims from Supabase, then reason locally about grounding / coverage /

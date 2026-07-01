@@ -2,6 +2,7 @@
 description: Author a cited Fabric solution architecture from verified claims (local, no API).
 argument-hint: <scenario description>
 ---
+
 Use the **solution-architect** subagent to design for: $ARGUMENTS
 
 Ask for any missing key constraints once, fetch verified claims directly from Supabase with the

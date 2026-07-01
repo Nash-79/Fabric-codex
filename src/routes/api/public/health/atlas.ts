@@ -5,12 +5,7 @@
 
 import { createFileRoute } from "@tanstack/react-router";
 
-const EXPECTED_INDEXES = [
-  "claims_fts_idx",
-  "blogs_fts_idx",
-  "sources_fts_idx",
-  "topics_fts_idx",
-];
+const EXPECTED_INDEXES = ["claims_fts_idx", "blogs_fts_idx", "sources_fts_idx", "topics_fts_idx"];
 
 export const Route = createFileRoute("/api/public/health/atlas")({
   server: {
@@ -32,12 +27,14 @@ export const Route = createFileRoute("/api/public/health/atlas")({
         ]);
         const counts = (countsRes.data ?? {}) as Record<string, number>;
 
-
         // Quick smoke test: search_atlas RPC must respond.
         let rpcOk = false;
         let rpcError: string | null = null;
         try {
-          const { error } = await supabaseAdmin.rpc("search_atlas", { term: "atlas", max_results: 1 });
+          const { error } = await supabaseAdmin.rpc("search_atlas", {
+            term: "atlas",
+            max_results: 1,
+          });
           rpcOk = !error;
           rpcError = error?.message ?? null;
         } catch (e: any) {
@@ -66,11 +63,8 @@ export const Route = createFileRoute("/api/public/health/atlas")({
           ? Math.round((Date.now() - new Date(lastSeedAt).getTime()) / 1000)
           : null;
 
-        const status = !rpcOk || !indexesReady || !lastSeedAt
-          ? "degraded"
-          : seedUpToDate
-          ? "healthy"
-          : "stale";
+        const status =
+          !rpcOk || !indexesReady || !lastSeedAt ? "degraded" : seedUpToDate ? "healthy" : "stale";
 
         return Response.json(
           {

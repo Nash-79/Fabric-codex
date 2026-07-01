@@ -25,16 +25,24 @@ import { useNavigate } from "react-router-dom";
 const VIEW = { w: 1200, h: 760 };
 
 const PALETTE = {
-  ink: "#063D3B", muted: "#3F6259", faint: "#616161", grey: "#8A8886",
-  work: { fill: "#EAF7F2", stroke: "#9AD2C5", label: "#063D3B", sub: "#3F6259" },     // workloads
-  serve: { fill: "#FFFFFF", stroke: "#9AD2C5", label: "#063D3B", sub: "#3F6259" },    // consumption
-  lake: { fill: "rgba(255,255,255,0.14)", stroke: "rgba(255,255,255,0.45)", label: "#FFFFFF", sub: "#D9F5EE" },
+  ink: "#063D3B",
+  muted: "#3F6259",
+  faint: "#616161",
+  grey: "#8A8886",
+  work: { fill: "#EAF7F2", stroke: "#9AD2C5", label: "#063D3B", sub: "#3F6259" }, // workloads
+  serve: { fill: "#FFFFFF", stroke: "#9AD2C5", label: "#063D3B", sub: "#3F6259" }, // consumption
+  lake: {
+    fill: "rgba(255,255,255,0.14)",
+    stroke: "rgba(255,255,255,0.45)",
+    label: "#FFFFFF",
+    sub: "#D9F5EE",
+  },
 };
 
 // Background bands (drawn first, behind everything).
 const BANDS = [
-  { x: 40, y: 78, w: 1120, h: 74, rx: 10, gradient: "ig-plat" },    // Platform & Governance
-  { x: 40, y: 470, w: 1120, h: 120, rx: 10, gradient: "ig-lake" },  // Storage & OneLake
+  { x: 40, y: 78, w: 1120, h: 74, rx: 10, gradient: "ig-plat" }, // Platform & Governance
+  { x: 40, y: 470, w: 1120, h: 120, rx: 10, gradient: "ig-lake" }, // Storage & OneLake
 ];
 
 // Flow arrows: { x1,y1,x2,y2, color }.
@@ -49,84 +57,330 @@ const ARROWS = [
 // header.onBand=true → heading sits on a coloured band, so it renders white.
 const SECTIONS = [
   {
-    slug: "platform", num: 1, label: "Platform & Governance",
+    slug: "platform",
+    num: 1,
+    label: "Platform & Governance",
     desc: "What Fabric is, how capacities meter compute, and how Purview governs the estate.",
     header: { x: 60, y: 104, size: 14, onBand: true },
     nodes: [
-      { slug: "fabric-overview", label: "Fabric overview", sub: "workloads · items · OneLake", desc: "The SaaS analytics platform: workloads, items, workspaces, and OneLake as the common store.", x: 520, y: 92, w: 196, h: 46, variant: "lake" },
-      { slug: "capacity", label: "Capacity & cost", sub: "CUs · smoothing · bursting", desc: "Capacity units, smoothing, bursting and throttling — how compute is metered and billed.", x: 726, y: 92, w: 196, h: 46, variant: "lake" },
-      { slug: "governance", label: "Governance & Purview", sub: "domains · labels · lineage", desc: "Workspaces, domains, endorsement, sensitivity labels, and the Purview hub.", x: 932, y: 92, w: 208, h: 46, variant: "lake" },
+      {
+        slug: "fabric-overview",
+        label: "Fabric overview",
+        sub: "workloads · items · OneLake",
+        desc: "The SaaS analytics platform: workloads, items, workspaces, and OneLake as the common store.",
+        x: 520,
+        y: 92,
+        w: 196,
+        h: 46,
+        variant: "lake",
+      },
+      {
+        slug: "capacity",
+        label: "Capacity & cost",
+        sub: "CUs · smoothing · bursting",
+        desc: "Capacity units, smoothing, bursting and throttling — how compute is metered and billed.",
+        x: 726,
+        y: 92,
+        w: 196,
+        h: 46,
+        variant: "lake",
+      },
+      {
+        slug: "governance",
+        label: "Governance & Purview",
+        sub: "domains · labels · lineage",
+        desc: "Workspaces, domains, endorsement, sensitivity labels, and the Purview hub.",
+        x: 932,
+        y: 92,
+        w: 208,
+        h: 46,
+        variant: "lake",
+      },
     ],
   },
   {
-    slug: "engineering", num: 3, label: "Data Engineering & Integration",
+    slug: "engineering",
+    num: 3,
+    label: "Data Engineering & Integration",
     desc: "Moving and shaping data: Spark notebooks, pipelines, and Dataflow Gen2.",
     header: { x: 58, y: 182 },
     nodes: [
-      { slug: "spark", label: "Spark", sub: "notebooks · pools", desc: "Notebooks, Spark job definitions, and the runtime that powers engineering workloads.", x: 40, y: 194, w: 150, h: 50 },
-      { slug: "data-factory", label: "Data Factory", sub: "pipelines · copy", desc: "Pipelines and copy activities for orchestrated data movement.", x: 198, y: 194, w: 150, h: 50 },
-      { slug: "dataflow-gen2", label: "Dataflow Gen2", sub: "Power Query ETL", desc: "Low-code Power Query transformation into OneLake destinations.", x: 356, y: 194, w: 150, h: 50 },
+      {
+        slug: "spark",
+        label: "Spark",
+        sub: "notebooks · pools",
+        desc: "Notebooks, Spark job definitions, and the runtime that powers engineering workloads.",
+        x: 40,
+        y: 194,
+        w: 150,
+        h: 50,
+      },
+      {
+        slug: "data-factory",
+        label: "Data Factory",
+        sub: "pipelines · copy",
+        desc: "Pipelines and copy activities for orchestrated data movement.",
+        x: 198,
+        y: 194,
+        w: 150,
+        h: 50,
+      },
+      {
+        slug: "dataflow-gen2",
+        label: "Dataflow Gen2",
+        sub: "Power Query ETL",
+        desc: "Low-code Power Query transformation into OneLake destinations.",
+        x: 356,
+        y: 194,
+        w: 150,
+        h: 50,
+      },
     ],
   },
   {
-    slug: "warehousing", num: 4, label: "Warehousing & SQL",
+    slug: "warehousing",
+    num: 4,
+    label: "Warehousing & SQL",
     desc: "T-SQL over the lake: the Warehouse, the Polaris engine, and SQL database in Fabric.",
     header: { x: 538, y: 182 },
     nodes: [
-      { slug: "warehouse", label: "Warehouse", sub: "T-SQL over the lake", desc: "The T-SQL data warehouse over OneLake — caching, statistics, performance.", x: 520, y: 194, w: 150, h: 50 },
-      { slug: "polaris", label: "Polaris engine", sub: "distributed query", desc: "The distributed query engine internals behind Warehouse and SQL endpoints.", x: 678, y: 194, w: 150, h: 50 },
-      { slug: "sql-database", label: "SQL Database", sub: "operational + mirror", desc: "Operational SQL inside Fabric, mirrored to OneLake for analytics (translytical).", x: 836, y: 194, w: 150, h: 50 },
+      {
+        slug: "warehouse",
+        label: "Warehouse",
+        sub: "T-SQL over the lake",
+        desc: "The T-SQL data warehouse over OneLake — caching, statistics, performance.",
+        x: 520,
+        y: 194,
+        w: 150,
+        h: 50,
+      },
+      {
+        slug: "polaris",
+        label: "Polaris engine",
+        sub: "distributed query",
+        desc: "The distributed query engine internals behind Warehouse and SQL endpoints.",
+        x: 678,
+        y: 194,
+        w: 150,
+        h: 50,
+      },
+      {
+        slug: "sql-database",
+        label: "SQL Database",
+        sub: "operational + mirror",
+        desc: "Operational SQL inside Fabric, mirrored to OneLake for analytics (translytical).",
+        x: 836,
+        y: 194,
+        w: 150,
+        h: 50,
+      },
     ],
   },
   {
-    slug: "real-time", num: 6, label: "Real-Time Intelligence",
+    slug: "real-time",
+    num: 6,
+    label: "Real-Time Intelligence",
     desc: "Streams, Eventhouses, and KQL — analytics on data in motion.",
     header: { x: 58, y: 278 },
     nodes: [
-      { slug: "rti", label: "RTI · Eventstreams", sub: "Real-Time hub · Activator", desc: "Eventstreams, the Real-Time hub, and acting on streaming data.", x: 40, y: 290, w: 228, h: 50 },
-      { slug: "eventhouse-kql", label: "Eventhouse / KQL", sub: "telemetry · time series", desc: "KQL databases and Eventhouses for high-volume telemetry and time series.", x: 276, y: 290, w: 230, h: 50 },
+      {
+        slug: "rti",
+        label: "RTI · Eventstreams",
+        sub: "Real-Time hub · Activator",
+        desc: "Eventstreams, the Real-Time hub, and acting on streaming data.",
+        x: 40,
+        y: 290,
+        w: 228,
+        h: 50,
+      },
+      {
+        slug: "eventhouse-kql",
+        label: "Eventhouse / KQL",
+        sub: "telemetry · time series",
+        desc: "KQL databases and Eventhouses for high-volume telemetry and time series.",
+        x: 276,
+        y: 290,
+        w: 230,
+        h: 50,
+      },
     ],
   },
   {
-    slug: "bi", num: 5, label: "BI & Semantic Models",
+    slug: "bi",
+    num: 5,
+    label: "BI & Semantic Models",
     desc: "From Delta tables to reports: Direct Lake, semantic models, and Power BI.",
     header: { x: 538, y: 278 },
     nodes: [
-      { slug: "direct-lake", label: "Direct Lake", sub: "no import", desc: "Loads Delta columns straight from OneLake — no import, no DirectQuery round trip.", x: 520, y: 290, w: 148, h: 50, variant: "serve" },
-      { slug: "semantic-model", label: "Semantic model", sub: "storage modes", desc: "Storage modes, modelling, and how semantic models serve every report.", x: 676, y: 290, w: 150, h: 50, variant: "serve" },
-      { slug: "power-bi", label: "Power BI", sub: "reports · apps", desc: "Reports, apps, and consumption over governed semantic models.", x: 834, y: 290, w: 152, h: 50, variant: "serve" },
+      {
+        slug: "direct-lake",
+        label: "Direct Lake",
+        sub: "no import",
+        desc: "Loads Delta columns straight from OneLake — no import, no DirectQuery round trip.",
+        x: 520,
+        y: 290,
+        w: 148,
+        h: 50,
+        variant: "serve",
+      },
+      {
+        slug: "semantic-model",
+        label: "Semantic model",
+        sub: "storage modes",
+        desc: "Storage modes, modelling, and how semantic models serve every report.",
+        x: 676,
+        y: 290,
+        w: 150,
+        h: 50,
+        variant: "serve",
+      },
+      {
+        slug: "power-bi",
+        label: "Power BI",
+        sub: "reports · apps",
+        desc: "Reports, apps, and consumption over governed semantic models.",
+        x: 834,
+        y: 290,
+        w: 152,
+        h: 50,
+        variant: "serve",
+      },
     ],
   },
   {
-    slug: "ai-apis", num: 7, label: "AI & APIs",
+    slug: "ai-apis",
+    num: 7,
+    label: "AI & APIs",
     desc: "Conversational AI over your estate and programmatic access: data agents, Fabric IQ, GraphQL.",
     header: { x: 58, y: 372 },
     nodes: [
-      { slug: "fabric-data-agent", label: "Fabric Data Agent", sub: "grounded conversational AI", desc: "Grounds conversational AI in lakehouses, warehouses, KQL databases, and semantic models.", x: 40, y: 384, w: 206, h: 50, variant: "serve" },
-      { slug: "fabric-iq", label: "Fabric IQ", sub: "ontology layer", desc: "The ontology layer that gives data business meaning.", x: 254, y: 384, w: 150, h: 50, variant: "serve" },
-      { slug: "graphql-api", label: "API for GraphQL", sub: "app access", desc: "Exposes Fabric data to applications through GraphQL endpoints.", x: 412, y: 384, w: 172, h: 50, variant: "serve" },
+      {
+        slug: "fabric-data-agent",
+        label: "Fabric Data Agent",
+        sub: "grounded conversational AI",
+        desc: "Grounds conversational AI in lakehouses, warehouses, KQL databases, and semantic models.",
+        x: 40,
+        y: 384,
+        w: 206,
+        h: 50,
+        variant: "serve",
+      },
+      {
+        slug: "fabric-iq",
+        label: "Fabric IQ",
+        sub: "ontology layer",
+        desc: "The ontology layer that gives data business meaning.",
+        x: 254,
+        y: 384,
+        w: 150,
+        h: 50,
+        variant: "serve",
+      },
+      {
+        slug: "graphql-api",
+        label: "API for GraphQL",
+        sub: "app access",
+        desc: "Exposes Fabric data to applications through GraphQL endpoints.",
+        x: 412,
+        y: 384,
+        w: 172,
+        h: 50,
+        variant: "serve",
+      },
     ],
   },
   {
-    slug: "storage", num: 2, label: "Storage & OneLake",
+    slug: "storage",
+    num: 2,
+    label: "Storage & OneLake",
     desc: "One logical lake in open Delta-Parquet format over a single copy of data.",
     header: { x: 60, y: 502, size: 15, onBand: true },
     nodes: [
-      { slug: "onelake", label: "OneLake", sub: "shortcuts · open format", desc: "The tenant-wide data lake: shortcuts, open format, one copy of data for every engine.", x: 60, y: 536, w: 220, h: 40, variant: "lake" },
-      { slug: "lakehouse", label: "Lakehouse", sub: "Delta tables + files", desc: "Delta tables plus files — the engineering-first item over OneLake.", x: 296, y: 536, w: 220, h: 40, variant: "lake" },
-      { slug: "mirroring", label: "Mirroring", sub: "near-real-time replication", desc: "Near-real-time replication of external databases into OneLake without pipelines.", x: 532, y: 536, w: 220, h: 40, variant: "lake" },
+      {
+        slug: "onelake",
+        label: "OneLake",
+        sub: "shortcuts · open format",
+        desc: "The tenant-wide data lake: shortcuts, open format, one copy of data for every engine.",
+        x: 60,
+        y: 536,
+        w: 220,
+        h: 40,
+        variant: "lake",
+      },
+      {
+        slug: "lakehouse",
+        label: "Lakehouse",
+        sub: "Delta tables + files",
+        desc: "Delta tables plus files — the engineering-first item over OneLake.",
+        x: 296,
+        y: 536,
+        w: 220,
+        h: 40,
+        variant: "lake",
+      },
+      {
+        slug: "mirroring",
+        label: "Mirroring",
+        sub: "near-real-time replication",
+        desc: "Near-real-time replication of external databases into OneLake without pipelines.",
+        x: 532,
+        y: 536,
+        w: 220,
+        h: 40,
+        variant: "lake",
+      },
     ],
   },
 ];
 
 // Free-standing caption text (not clickable).
 const CAPTIONS = [
-  { x: 40, y: 40, size: 20, weight: 650, fill: PALETTE.ink, text: "Microsoft Fabric — the whole platform, mapped" },
-  { x: 40, y: 61, size: 11.5, fill: PALETTE.faint, text: "Hover a tile to see what it is; click to open its topic. Governance spans everything · OneLake is the foundation · data flows up from storage to BI and AI." },
-  { x: 60, y: 523, size: 11, fill: "#D9F5EE", text: "One logical data lake in open Delta-Parquet format — one copy of data, every engine reads and writes it." },
-  { x: 1138, y: 560, size: 10.5, fill: "#D9F5EE", anchor: "end", text: "Shortcuts & mirroring bring external data in without copies." },
-  { x: 40, y: 632, size: 11, fill: PALETTE.grey, spacing: 1.1, text: "READ BOTTOM-UP: OneLake stores once · engineering & warehousing shape and query · BI & AI serve · platform governs it all." },
-  { x: 1160, y: 744, size: 9.5, fill: PALETTE.grey, anchor: "end", text: "Fabric Atlas — original interactive diagram, June 2026. Not a Microsoft asset; palette from the official Fabric icon." },
+  {
+    x: 40,
+    y: 40,
+    size: 20,
+    weight: 650,
+    fill: PALETTE.ink,
+    text: "Microsoft Fabric — the whole platform, mapped",
+  },
+  {
+    x: 40,
+    y: 61,
+    size: 11.5,
+    fill: PALETTE.faint,
+    text: "Hover a tile to see what it is; click to open its topic. Governance spans everything · OneLake is the foundation · data flows up from storage to BI and AI.",
+  },
+  {
+    x: 60,
+    y: 523,
+    size: 11,
+    fill: "#D9F5EE",
+    text: "One logical data lake in open Delta-Parquet format — one copy of data, every engine reads and writes it.",
+  },
+  {
+    x: 1138,
+    y: 560,
+    size: 10.5,
+    fill: "#D9F5EE",
+    anchor: "end",
+    text: "Shortcuts & mirroring bring external data in without copies.",
+  },
+  {
+    x: 40,
+    y: 632,
+    size: 11,
+    fill: PALETTE.grey,
+    spacing: 1.1,
+    text: "READ BOTTOM-UP: OneLake stores once · engineering & warehousing shape and query · BI & AI serve · platform governs it all.",
+  },
+  {
+    x: 1160,
+    y: 744,
+    size: 9.5,
+    fill: PALETTE.grey,
+    anchor: "end",
+    text: "Fabric Atlas — original interactive diagram, June 2026. Not a Microsoft asset; palette from the official Fabric icon.",
+  },
 ];
 
 let _styleDone = false;
@@ -155,7 +409,10 @@ function wrap(text, max = 38) {
   for (const word of words) {
     if (!line) line = word;
     else if ((line + " " + word).length <= max) line += " " + word;
-    else { lines.push(line); line = word; }
+    else {
+      lines.push(line);
+      line = word;
+    }
   }
   if (line) lines.push(line);
   return lines;
@@ -170,13 +427,17 @@ function Tooltip({ anchor }) {
   const cx = anchor.x + (anchor.w || 220) / 2;
   let tx = Math.max(10, Math.min(cx - tw / 2, VIEW.w - tw - 10));
   let ty = anchor.y - th - 12;
-  if (ty < 10) ty = anchor.y + (anchor.h || 24) + 12;   // flip below if no room above
+  if (ty < 10) ty = anchor.y + (anchor.h || 24) + 12; // flip below if no room above
   return (
     <g className="fa-ig-tip">
       <rect x={tx} y={ty} width={tw} height={th} rx="8" fill="#063D3B" opacity="0.96" />
-      <text x={tx + 14} y={ty + 22} fontSize="13" fontWeight="700" fill="#FFFFFF">{anchor.label}</text>
+      <text x={tx + 14} y={ty + 22} fontSize="13" fontWeight="700" fill="#FFFFFF">
+        {anchor.label}
+      </text>
       {lines.map((ln, i) => (
-        <text key={i} x={tx + 14} y={ty + 40 + i * 15} fontSize="11" fill="#D9F5EE">{ln}</text>
+        <text key={i} x={tx + 14} y={ty + 40 + i * 15} fontSize="11" fill="#D9F5EE">
+          {ln}
+        </text>
       ))}
     </g>
   );
@@ -184,16 +445,20 @@ function Tooltip({ anchor }) {
 
 export default function FabricInfographic() {
   const navigate = useNavigate();
-  const [hovered, setHovered] = useState(null);   // the node or section currently explained
+  const [hovered, setHovered] = useState(null); // the node or section currently explained
   ensureStyle();
 
   // One interaction binding for every clickable region: route on click/Enter,
   // and raise the explanation tooltip on hover/focus.
   const bind = (item, slug) => ({
-    role: "link", tabIndex: 0,
+    role: "link",
+    tabIndex: 0,
     onClick: () => navigate(`/topics/${slug}`),
     onKeyDown: (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); navigate(`/topics/${slug}`); }
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        navigate(`/topics/${slug}`);
+      }
     },
     onMouseEnter: () => setHovered(item),
     onMouseLeave: () => setHovered((h) => (h === item ? null : h)),
@@ -206,12 +471,38 @@ export default function FabricInfographic() {
     return (
       <g className="fa-ig-node" {...bind(n, n.slug)}>
         <title>{`Open topic: ${n.label}`}</title>
-        <rect className="card" x={n.x} y={n.y} width={n.w} height={n.h} rx="7"
-          fill={p.fill} stroke={p.stroke} strokeWidth="1.2" />
-        <text x={n.x + n.w / 2} y={n.sub ? n.y + n.h / 2 - 4 : n.y + n.h / 2 + 4}
-          textAnchor="middle" fontSize="12" fontWeight="600" fill={p.label}>{n.label}</text>
-        {n.sub && <text x={n.x + n.w / 2} y={n.y + n.h / 2 + 13} textAnchor="middle"
-          fontSize="9.5" fill={p.sub}>{n.sub}</text>}
+        <rect
+          className="card"
+          x={n.x}
+          y={n.y}
+          width={n.w}
+          height={n.h}
+          rx="7"
+          fill={p.fill}
+          stroke={p.stroke}
+          strokeWidth="1.2"
+        />
+        <text
+          x={n.x + n.w / 2}
+          y={n.sub ? n.y + n.h / 2 - 4 : n.y + n.h / 2 + 4}
+          textAnchor="middle"
+          fontSize="12"
+          fontWeight="600"
+          fill={p.label}
+        >
+          {n.label}
+        </text>
+        {n.sub && (
+          <text
+            x={n.x + n.w / 2}
+            y={n.y + n.h / 2 + 13}
+            textAnchor="middle"
+            fontSize="9.5"
+            fill={p.sub}
+          >
+            {n.sub}
+          </text>
+        )}
       </g>
     );
   };
@@ -223,47 +514,101 @@ export default function FabricInfographic() {
     return (
       <g className="fa-ig-sec" {...bind(anchor, s.slug)}>
         <title>{`Open section: ${s.label}`}</title>
-        <text className="sec" x={h.x} y={h.y} fontSize={h.size || 12.5} fontWeight="700"
-          fill={h.onBand ? "#FFFFFF" : PALETTE.grey}>{`${s.num} · ${s.label} →`}</text>
+        <text
+          className="sec"
+          x={h.x}
+          y={h.y}
+          fontSize={h.size || 12.5}
+          fontWeight="700"
+          fill={h.onBand ? "#FFFFFF" : PALETTE.grey}
+        >{`${s.num} · ${s.label} →`}</text>
       </g>
     );
   };
 
   return (
-    <svg viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} width="100%"
+    <svg
+      viewBox={`0 0 ${VIEW.w} ${VIEW.h}`}
+      width="100%"
       fontFamily="Segoe UI, -apple-system, sans-serif"
-      style={{ display: "block", borderRadius: 6, background: "#FFFFFF", border: "1px solid #E1DFDD" }}
-      role="group" aria-label="Interactive Microsoft Fabric map — hover a component to read about it, click to open its topic">
+      style={{
+        display: "block",
+        borderRadius: 6,
+        background: "#FFFFFF",
+        border: "1px solid #E1DFDD",
+      }}
+      role="group"
+      aria-label="Interactive Microsoft Fabric map — hover a component to read about it, click to open its topic"
+    >
       <defs>
         <linearGradient id="ig-lake" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#0B5E50" /><stop offset="0.55" stopColor="#117865" /><stop offset="1" stopColor="#2AAC94" />
+          <stop offset="0" stopColor="#0B5E50" />
+          <stop offset="0.55" stopColor="#117865" />
+          <stop offset="1" stopColor="#2AAC94" />
         </linearGradient>
         <linearGradient id="ig-plat" x1="0" y1="0" x2="1" y2="0">
-          <stop offset="0" stopColor="#0E6961" /><stop offset="1" stopColor="#1E8C78" />
+          <stop offset="0" stopColor="#0E6961" />
+          <stop offset="1" stopColor="#1E8C78" />
         </linearGradient>
-        <marker id="ig-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <marker
+          id="ig-arr"
+          viewBox="0 0 10 10"
+          refX="8"
+          refY="5"
+          markerWidth="7"
+          markerHeight="7"
+          orient="auto-start-reverse"
+        >
           <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94" />
         </marker>
       </defs>
 
       {BANDS.map((b, i) => (
-        <rect key={`band-${i}`} x={b.x} y={b.y} width={b.w} height={b.h} rx={b.rx} fill={`url(#${b.gradient})`} />
+        <rect
+          key={`band-${i}`}
+          x={b.x}
+          y={b.y}
+          width={b.w}
+          height={b.h}
+          rx={b.rx}
+          fill={`url(#${b.gradient})`}
+        />
       ))}
 
       {ARROWS.map((a, i) => (
-        <line key={`arr-${i}`} x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2}
-          stroke={a.color} strokeWidth="1.7" markerEnd="url(#ig-arr)" />
+        <line
+          key={`arr-${i}`}
+          x1={a.x1}
+          y1={a.y1}
+          x2={a.x2}
+          y2={a.y2}
+          stroke={a.color}
+          strokeWidth="1.7"
+          markerEnd="url(#ig-arr)"
+        />
       ))}
 
       {CAPTIONS.map((t, i) => (
-        <text key={`cap-${i}`} x={t.x} y={t.y} fontSize={t.size} fontWeight={t.weight || 400}
-          fill={t.fill} textAnchor={t.anchor || "start"} letterSpacing={t.spacing || 0}>{t.text}</text>
+        <text
+          key={`cap-${i}`}
+          x={t.x}
+          y={t.y}
+          fontSize={t.size}
+          fontWeight={t.weight || 400}
+          fill={t.fill}
+          textAnchor={t.anchor || "start"}
+          letterSpacing={t.spacing || 0}
+        >
+          {t.text}
+        </text>
       ))}
 
       {SECTIONS.map((s) => (
         <React.Fragment key={s.slug}>
           <SectionHeader s={s} />
-          {s.nodes.map((n) => <Node key={n.slug} n={n} />)}
+          {s.nodes.map((n) => (
+            <Node key={n.slug} n={n} />
+          ))}
         </React.Fragment>
       ))}
 

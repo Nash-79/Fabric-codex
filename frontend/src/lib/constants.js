@@ -24,14 +24,27 @@ export const CAPABILITIES = [
 ];
 
 export const DEPTHS = [
-  { n: 1, short: "L1", label: "Conceptual" }, { n: 2, short: "L2", label: "Practitioner" },
-  { n: 3, short: "L3", label: "Architect" }, { n: 4, short: "L4", label: "Performance" },
+  { n: 1, short: "L1", label: "Conceptual" },
+  { n: 2, short: "L2", label: "Practitioner" },
+  { n: 3, short: "L3", label: "Architect" },
+  { n: 4, short: "L4", label: "Performance" },
   { n: 5, short: "L5", label: "Internals" },
 ];
 
-export const TIER_COLORS = { 1: c.tier1, 2: c.tier2, 3: c.tier3, 4: c.tier4, 5: c.tier5, 6: c.tier6 };
+export const TIER_COLORS = {
+  1: c.tier1,
+  2: c.tier2,
+  3: c.tier3,
+  4: c.tier4,
+  5: c.tier5,
+  6: c.tier6,
+};
 export const TIER_LABELS = {
-  1: "Microsoft Learn", 2: "Fabric product blog", 3: "Microsoft GitHub / papers",
-  4: "MVP / community", 5: "Vendor", 6: "Unknown",
+  1: "Microsoft Learn",
+  2: "Fabric product blog",
+  3: "Microsoft GitHub / papers",
+  4: "MVP / community",
+  5: "Vendor",
+  6: "Unknown",
 };
 export const SEV_COLORS = { critical: c.red, warning: c.amber, info: c.muted };

@@ -13,6 +13,7 @@ import {
   listDiagrams,
   listSources,
   listTopics,
+  listContentItems,
 } from "@/lib/atlas.functions";
 import { accent } from "@/lib/fabric-theme";
 
@@ -30,6 +31,10 @@ const claimCountsQO = queryOptions({
 const diagramsQO = queryOptions({
   queryKey: ["home-diagrams"],
   queryFn: () => listDiagrams(),
+});
+const contentItemsQO = queryOptions({
+  queryKey: ["home-content-items"],
+  queryFn: () => listContentItems({ data: {} }),
 });
 const claimsQO = (
   capabilityId: string,
@@ -95,6 +100,7 @@ export const Route = createFileRoute("/")({
       context.queryClient.ensureQueryData(capabilitiesQO),
       context.queryClient.ensureQueryData(claimCountsQO),
       context.queryClient.ensureQueryData(diagramsQO),
+      context.queryClient.ensureQueryData(contentItemsQO),
       context.queryClient.ensureQueryData(claimsQO("direct-lake")),
     ]),
   component: Landing,
@@ -108,8 +114,17 @@ function Landing() {
     { data: capabilities },
     { data: claimCounts },
     { data: diagrams },
+    { data: contentItems },
   ] = useSuspenseQueries({
-    queries: [topicsQO, blogsQO, sourcesQO, capabilitiesQO, claimCountsQO, diagramsQO],
+    queries: [
+      topicsQO,
+      blogsQO,
+      sourcesQO,
+      capabilitiesQO,
+      claimCountsQO,
+      diagramsQO,
+      contentItemsQO,
+    ],
   });
   const [selectedCapability, setSelectedCapability] = useState("direct-lake");
   const [depth, setDepth] = useState<number | "all">("all");
@@ -122,7 +137,14 @@ function Landing() {
   const selectedTopic =
     childTopics.find((topic: any) => topic.capability_ids?.includes(selectedCapability)) ??
     childTopics.find((topic) => topic.slug === selectedCapability);
-  const selectedBlogs = blogs.filter((blog) => blog.topic_slug === selectedTopic?.slug);
+  const feedItems = useMemo(
+    () => (contentItems ?? []).filter((item: any) => item.kind !== "lesson"),
+    [contentItems],
+  );
+  const selectedFeed = useMemo(
+    () => feedItems.filter((item: any) => item.topic_slug === selectedTopic?.slug),
+    [feedItems, selectedTopic],
+  );
 
   const visibleClaims = claims;
 
@@ -349,16 +371,16 @@ function Landing() {
                 Article hub
               </div>
               <div className="mt-3 space-y-3">
-                {(selectedBlogs.length ? selectedBlogs : blogs.slice(0, 5)).map((blog) => (
+                {(selectedFeed.length ? selectedFeed : feedItems.slice(0, 5)).map((item) => (
                   <Link
-                    key={blog.slug}
-                    to="/blog/$slug"
-                    params={{ slug: blog.slug }}
+                    key={`${item.kind}-${item.slug}`}
+                    to="/blogs/$kind/$slug"
+                    params={{ kind: item.kind, slug: item.slug }}
                     className="block rounded-md border border-border bg-card p-3 hover:bg-accent"
                   >
-                    <div className="text-sm font-semibold text-foreground">{blog.title}</div>
+                    <div className="text-sm font-semibold text-foreground">{item.title}</div>
                     <div className="mt-1 line-clamp-3 text-xs leading-relaxed text-muted-foreground">
-                      {blog.summary}
+                      {item.summary}
                     </div>
                   </Link>
                 ))}
@@ -385,6 +407,7 @@ function Landing() {
                   <Link
                     key={prompt}
                     to="/advisor"
+                    search={{ prompt }}
                     className="block rounded-md border border-border bg-card p-3 text-muted-foreground hover:bg-accent hover:text-foreground"
                   >
                     {prompt}

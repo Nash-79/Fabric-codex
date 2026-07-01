@@ -94,7 +94,7 @@ function uniqBy<T>(rows: T[], key: (row: T) => string | null | undefined, limit:
 }
 
 function contentPath(item: ContentRow) {
-  return `/content/${item.kind}/${item.slug}`;
+  return `/blogs/${item.kind}/${item.slug}`;
 }
 
 function topicPath(topic: TopicRow) {

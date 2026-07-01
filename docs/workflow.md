@@ -9,10 +9,10 @@ calls. This avoids metered API costs and keeps no API key on the server.
 Both agents read the files already in this repo and run on your existing subscriptions, not the
 metered API:
 
-| Tool | Reads | Powered by | Install |
-|------|-------|-----------|---------|
+| Tool                                | Reads                                               | Powered by                                                  | Install                                                                                                                             |
+| ----------------------------------- | --------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | **Claude Code (VS Code extension)** | `CLAUDE.md`, `.claude/agents/`, `.claude/commands/` | Claude **Pro/Max** subscription (sign in with your account) | Open the integrated terminal, run `claude` — the extension auto-installs; or install "Claude Code for VS Code" from the Marketplace |
-| **Codex (VS Code extension)** | `AGENTS.md`, `~/.codex/prompts/` | ChatGPT/**Codex** subscription | Install the Codex extension; copy prompts once per `.codex/README.md` |
+| **Codex (VS Code extension)**       | `AGENTS.md`, `~/.codex/prompts/`                    | ChatGPT/**Codex** subscription                              | Install the Codex extension; copy prompts once per `.codex/README.md`                                                               |
 
 The extensions share history with their CLIs, give inline diff review, and can run the subagents.
 A metered Anthropic/OpenAI API key is **not** required for any of the authoring work.

@@ -2,6 +2,7 @@
 description: End-to-end publish chain for one topic — coverage check, human verify gate, diagram, cited article, validation, docs sync. No server-side orchestration; this is the local agent chain.
 argument-hint: <topic-slug>
 ---
+
 Publish topic: $ARGUMENTS
 
 Run the chain below **in order, stopping at the human gates** — this command orchestrates
@@ -19,8 +20,8 @@ existing agents; it adds no new machinery.
    article is illustrated end to end:
    a. an **architecture** diagram — the workload's components, data flow, and place in Fabric;
    b. a **decision / internals** diagram — query path, engine internals, or a comparison
-      (e.g. Import vs DirectQuery vs Direct Lake for BI topics; hot vs cold path for RTI;
-      V-Order vs plain Parquet for engineering). Register both as generated assets.
+   (e.g. Import vs DirectQuery vs Direct Lake for BI topics; hot vs cold path for RTI;
+   V-Order vs plain Parquet for engineering). Register both as generated assets.
    Verify each `.svg`/`.mmd` exists on disk before moving on — an article that embeds a missing
    diagram fails validation as a **critical** issue and can never reach `ready_to_share`.
 4. **Article.** Use the **blog-author** subagent on `$ARGUMENTS`. It must embed **every**

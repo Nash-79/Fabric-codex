@@ -2,6 +2,7 @@
 description: Write a grounded, cited lesson for a capability at a chosen level (local, no API).
 argument-hint: <capability-id> <Beginner|Intermediate|Expert>
 ---
+
 Use the **learning-author** subagent for: $ARGUMENTS. Map level to depths (Beginner=L1-L2,
 Intermediate=L3, Expert=L4-L5), pull verified claims from Supabase with the anon key (no
 `localhost:8000` backend — see the learning-author agent for the `$SB`/header recipe), and write

@@ -86,7 +86,7 @@ function LearnPage() {
                   {lessons.map((l: any) => (
                     <Link
                       key={l.id}
-                      to="/content/$kind/$slug"
+                      to="/blogs/$kind/$slug"
                       params={{ kind: "lesson", slug: l.slug }}
                       className="block rounded-xl border border-border bg-card p-4 transition hover:bg-accent"
                     >

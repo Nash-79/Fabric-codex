@@ -48,10 +48,7 @@ function LogViewer() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [loading, setLoading] = useState(false);
 
-  const activeLevels = useMemo(
-    () => LEVELS.filter((l) => enabledLevels[l]),
-    [enabledLevels],
-  );
+  const activeLevels = useMemo(() => LEVELS.filter((l) => enabledLevels[l]), [enabledLevels]);
 
   const fetchLogs = useMemo(
     () => async () => {
@@ -172,9 +169,7 @@ function LogViewer() {
               {LEVELS.map((lvl) => (
                 <button
                   key={lvl}
-                  onClick={() =>
-                    setEnabledLevels((s) => ({ ...s, [lvl]: !s[lvl] }))
-                  }
+                  onClick={() => setEnabledLevels((s) => ({ ...s, [lvl]: !s[lvl] }))}
                   className={`rounded-sm border px-2 py-1 text-xs font-medium uppercase ${
                     enabledLevels[lvl]
                       ? LEVEL_STYLES[lvl]
@@ -216,9 +211,7 @@ function LogViewer() {
                 <li key={e.id}>
                   <details className="group">
                     <summary className="flex cursor-pointer items-center gap-3 px-3 py-2 text-xs hover:bg-accent">
-                      <span className="font-mono tabular-nums text-muted-foreground">
-                        {e.time}
-                      </span>
+                      <span className="font-mono tabular-nums text-muted-foreground">{e.time}</span>
                       <span
                         className={`rounded-sm border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${LEVEL_STYLES[e.level]}`}
                       >
@@ -252,9 +245,7 @@ function LogViewer() {
                         </pre>
                         <button
                           className="mt-1 rounded-sm border border-border bg-card px-2 py-0.5 text-[11px]"
-                          onClick={() =>
-                            navigator.clipboard?.writeText(JSON.stringify(e, null, 2))
-                          }
+                          onClick={() => navigator.clipboard?.writeText(JSON.stringify(e, null, 2))}
                         >
                           Copy JSON
                         </button>

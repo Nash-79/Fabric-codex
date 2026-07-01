@@ -11,17 +11,20 @@ data and write it to the repo as `content/sources/<slug>.json`; an admin then pu
 into Supabase via **Settings → Publish** (you have no Supabase write access — keyless reads only).
 
 ## Inputs
+
 A source (URL / local file / pasted text) and optionally a trust tier (1–6). If no tier, infer
 from the domain (learn.microsoft.com=1, blog.fabric.microsoft.com=2, github.com/microsoft=3,
 MVP/community=4, vendor=5, else 6) and state the assumption.
 
 ## Capability ids
+
 fabric-platform (the overarching platform itself), onelake, lakehouse, warehouse, polaris,
 direct-lake, semantic-model, power-bi, data-factory, dataflow-gen2, spark, rti, eventhouse-kql,
 sql-database, mirroring, fabric-data-agent, fabric-iq, graphql-api, purview, capacity.
 Depth: 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 internals.
 
 ## Method
+
 1. Read the source (Read for files, WebFetch for a URL; if you cannot fetch, ask for pasted text).
 2. Write reader metadata for the source: `summary`, `audience`, `why_it_matters`, and 3-5
    `takeaways`. This is original orientation text only — do not copy the article's prose,
@@ -46,7 +49,7 @@ Depth: 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 inter
    claims as **pending**. Re-publishing keeps already-verified claims and only refreshes pending
    ones, so a re-ingest never un-verifies human review.
 8. **Sources from sources (suggest, never auto-ingest).** While extracting, note the outbound
-   links you actually *relied on* — the high-trust docs/blogs/repos this source cites for the facts
+   links you actually _relied on_ — the high-trust docs/blogs/repos this source cites for the facts
    you captured. For each, score a tier from its domain (learn.microsoft.com=1,
    blog.fabric.microsoft.com / *.microsoft.com blog=2, github.com/microsoft=3; ignore tier ≥4 and
    anything off-topic). You cannot write to the queue yourself. Instead, **report** each
@@ -63,6 +66,7 @@ Depth: 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 inter
    every hyperlink on the page.
 
 ## Hard rules
+
 - No source, no claim. Never invent product limits, quotas, pricing, or roadmap items.
 - Reader metadata must be original paraphrase. It may explain why the source matters, but it must
   not introduce product facts that are absent from the extracted claims.
@@ -70,6 +74,7 @@ Depth: 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 inter
 - Do not mark claims verified — that is the human review step in the Registry.
 
 ## Output
+
 A claims table (capability, depth, type, tags), the asset list (referenced vs generated), the
 content file path, the publish instruction (**Settings → Publish → Source (+ claims) → paste
 `content/sources/<slug>.json`**), and a short list of any sources-from-sources to add to the queue

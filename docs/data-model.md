@@ -38,9 +38,9 @@ claimevents (audit)     queue_items (frontend → agent ingestion)
   score in `designs.confidence`.
 - **topics** — keyed by `slug` (text PK); adjacency via `parent_slug`. Not versioned.
 - **blogs** — a cited long-form article per topic (`topic_slug`). Versioned via `supersedes_id`
-  + `active` (republishing supersedes the prior version; the prior row's slug is suffixed
-  `@vN` to free the UNIQUE slug). Stricter than designs: every cited source must back ≥1
-  verified active claim.
+  - `active` (republishing supersedes the prior version; the prior row's slug is suffixed
+    `@vN` to free the UNIQUE slug). Stricter than designs: every cited source must back ≥1
+    verified active claim.
 - **claimevents** — append-only audit trail of human curation actions on claims.
 - **queue_items** — work awaiting a local agent. State machine:
   `queued → claimed → ingested | failed (→ queued via requeue)`, or `queued → dismissed`.
@@ -62,14 +62,14 @@ chain** (no `claim_key` family column):
 
 State transitions:
 
-| Event                               | What happens                                                        |
-|-------------------------------------|---------------------------------------------------------------------|
-| New claim ingested                  | v1, `status=pending`, `active=true`                                 |
-| New claim near-duplicates an active claim from **another** source | stored `status=duplicate`, `active=false` — flagged for human merge/dismiss, excluded from retrieval and coverage |
-| Human approves in Registry          | `status=verified` (`POST /claims/{id}/verify`; batch: `POST /claims/verify-bulk` with `source_id` or `claim_ids` — only active+pending claims flip, the rest are reported as skipped) |
-| Source revised, claim text changed  | new version, `supersedes_id`→old, old `superseded`+`active=false`   |
-| Source revised, claim gone          | old `deprecated` + `active=false`                                   |
-| Source revised, claim same          | unchanged; repointed to the new `Source` revision for freshness     |
+| Event                                                             | What happens                                                                                                                                                                          |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| New claim ingested                                                | v1, `status=pending`, `active=true`                                                                                                                                                   |
+| New claim near-duplicates an active claim from **another** source | stored `status=duplicate`, `active=false` — flagged for human merge/dismiss, excluded from retrieval and coverage                                                                     |
+| Human approves in Registry                                        | `status=verified` (`POST /claims/{id}/verify`; batch: `POST /claims/verify-bulk` with `source_id` or `claim_ids` — only active+pending claims flip, the rest are reported as skipped) |
+| Source revised, claim text changed                                | new version, `supersedes_id`→old, old `superseded`+`active=false`                                                                                                                     |
+| Source revised, claim gone                                        | old `deprecated` + `active=false`                                                                                                                                                     |
+| Source revised, claim same                                        | unchanged; repointed to the new `Source` revision for freshness                                                                                                                       |
 
 Only **active** claims can be verified — verifying a superseded/deprecated row is rejected
 (HTTP 409). Duplicates are queried with `GET /claims?include_inactive=true&status=duplicate`.
@@ -156,12 +156,12 @@ different claim ordering silently mis-attributes citations). Unknown source ids 
 
 **Source reader metadata** is stored on `Source`:
 
-| field | purpose |
-|------|---------|
-| `summary` | Original short explanation of what the source contributes. |
-| `audience` | Who should read the source. |
+| field            | purpose                                                                   |
+| ---------------- | ------------------------------------------------------------------------- |
+| `summary`        | Original short explanation of what the source contributes.                |
+| `audience`       | Who should read the source.                                               |
 | `why_it_matters` | Original note on why the source matters architecturally or operationally. |
-| `takeaways_json` | JSON list of 3-5 original takeaways. |
+| `takeaways_json` | JSON list of 3-5 original takeaways.                                      |
 
 These fields exist to make blogs/docs easier to inspect. They must remain paraphrased and
 must not store copied article paragraphs, tables, or structure.
@@ -173,10 +173,10 @@ ingest. Query with `GET /claims?tag=PySpark` and `GET /tags` (returns counts).
 
 **Asset** rows attach images/diagrams to a source, claim, or design:
 
-| kind | fields | rule |
-|------|--------|------|
+| kind         | fields                                          | rule                                                                                                                                                                   |
+| ------------ | ----------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `referenced` | `url`, `caption`, `attribution`, `license_note` | An external (e.g. blog/Learn) image. Stored by **reference with attribution only — never re-hosted**. The backend forces an attribution placeholder if one is missing. |
-| `generated` | `path`, `caption`, `capability_id` | An **original** Mermaid/SVG diagram authored by the diagram-author agent and committed under `content/diagrams/`. |
+| `generated`  | `path`, `caption`, `capability_id`              | An **original** Mermaid/SVG diagram authored by the diagram-author agent and committed under `content/diagrams/`.                                                      |
 
 Assets can attach to a source, claim, design, or (v0.4) blog via `blog_id`. Blog bodies embed
 only `generated` originals — referenced screenshots stay on source cards with attribution.

@@ -15,6 +15,7 @@ import or ingest so a bad migration or a broken new source is caught immediately
 Read Supabase directly with the anon key (public read; no `localhost:8000` backend). Assert the
 invariants with REST count queries — use `Prefer: count=exact` + a HEAD request to read totals
 from the `content-range` header.
+
 ```bash
 source .env 2>/dev/null || true
 SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
@@ -24,12 +25,13 @@ count() { curl -s -I "$SB/$1" -H "$H1" -H "$H2" -H "Prefer: count=exact" | tr -d
 Assert, against Supabase (`content_items` unifies what used to be separate blogs/designs/lessons
 tables, `kind IN ('article','design','lesson')`; `content_item_sources` replaces
 `blog_sources`/`design_sources`):
+
 1. **Non-empty KB** — sources, topics, articles all > 0:
    `count "sources?select=id"`, `count "topics?select=id"`, `count "content_items?select=id&kind=eq.article&active=eq.true"`.
    Verified claims **may legitimately be 0** right after an import (publishing lands claims as
    `pending`); a 0 here means "run Settings → Claims → Verify all", not a corruption. Report it as a
    warning, not a hard fail.
-2. **Versioning invariant** — at most one *active* row per family. Check no source slug has >1
+2. **Versioning invariant** — at most one _active_ row per family. Check no source slug has >1
    active row, and no article slug has >1 active row:
    ```bash
    curl -s "$SB/sources?active=eq.true&select=slug" -H "$H1" -H "$H2" | python -c "import sys,json,collections;d=json.load(sys.stdin);dup={k:v for k,v in collections.Counter(x['slug'] for x in d).items() if v>1};print('DUP sources',dup) if dup else print('OK sources unique')"
@@ -54,16 +56,16 @@ These are read-only assertions you compute and report — you do not (and cannot
 - On success: report the per-table summary and the warning count. State plainly that the KB
   passed and is safe to serve / share.
 - On failure: list each failing assertion, and for the common ones say what to do:
-  - *no verified claims* → not a failure right after import; verify in **Settings → Claims →
+  - _no verified claims_ → not a failure right after import; verify in **Settings → Claims →
     "Verify all"** (claims publish as `pending`). Report as a warning.
-  - *>1 active version* → inspect that source/article slug's rows in **Settings → Content**; a
+  - _>1 active version_ → inspect that source/article slug's rows in **Settings → Content**; a
     supersede or a bad re-publish left two rows active — deactivate the stale one.
-  - *missing diagram* → commission it with the **diagram-author** subagent (it writes the SVG +
+  - _missing diagram_ → commission it with the **diagram-author** subagent (it writes the SVG +
     `content/diagrams/assets.json` entry; the admin registers it), or remove the embed; the article
     cannot reach `ready_to_share` until fixed.
-  - *unknown capability* → fix the topic's `capability_ids` in `content/topics.json` (must be a
+  - _unknown capability_ → fix the topic's `capability_ids` in `content/topics.json` (must be a
     registry id) and re-publish/bootstrap.
-  - *orphan claim/article citation* → the cited source isn't an active row; re-publish the source
+  - _orphan claim/article citation_ → the cited source isn't an active row; re-publish the source
     first (**Settings → Publish → Source**), then the article.
 
 Never declare the migration good when an assertion failed. You report the truth, including the

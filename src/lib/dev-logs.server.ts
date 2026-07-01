@@ -15,9 +15,7 @@ export type LogEntry = {
   raw: string;
 };
 
-const LOG_PATHS = [
-  "/tmp/dev-server-logs/dev-server.log",
-];
+const LOG_PATHS = ["/tmp/dev-server-logs/dev-server.log"];
 
 function detectLevel(line: string): LogLevel {
   const l = line.toLowerCase();
@@ -37,13 +35,19 @@ function detectSource(line: string): string {
 }
 
 // Parse `H:MM:SS AM` or `HH:MM:SS` prefix into ISO using today's date.
-function parseTimestamp(line: string, fallbackDay: string): { ts: string; day: string; time: string } {
+function parseTimestamp(
+  line: string,
+  fallbackDay: string,
+): { ts: string; day: string; time: string } {
   const m = line.match(/(\d{1,2}:\d{2}:\d{2})(?:\s*([AP]M))?/i);
   if (!m) {
     const ts = new Date().toISOString();
     return { ts, day: ts.slice(0, 10), time: ts.slice(11, 19) };
   }
-  let [hh, mm, ss] = m[1].split(":").map(Number);
+  const parts = m[1].split(":").map(Number);
+  let hh = parts[0];
+  const mm = parts[1];
+  const ss = parts[2];
   const ampm = m[2]?.toUpperCase();
   if (ampm === "PM" && hh < 12) hh += 12;
   if (ampm === "AM" && hh === 12) hh = 0;

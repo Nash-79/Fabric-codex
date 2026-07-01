@@ -115,7 +115,7 @@ function TopicPage() {
                 {items.map((item) => (
                   <li key={`${item.kind}-${item.slug}`}>
                     <Link
-                      to="/content/$kind/$slug"
+                      to="/blogs/$kind/$slug"
                       params={{ kind: item.kind, slug: item.slug }}
                       className="block rounded-xl border border-border bg-card p-4 hover:bg-accent"
                     >

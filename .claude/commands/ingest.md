@@ -2,6 +2,7 @@
 description: Ingest an approved Fabric source into the knowledge base (local extraction, no API).
 argument-hint: <url-or-file-path> [tier=<1-6>]
 ---
+
 Use the **knowledge-curator** subagent to ingest: $ARGUMENTS
 
 You extract the claims yourself locally (no server-side API). Read the source, produce original

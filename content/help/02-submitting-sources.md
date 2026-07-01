@@ -7,14 +7,14 @@ knowledge-curator agent to pick up.
 
 ## Trust tiers
 
-| Tier | Meaning |
-| ---- | ------- |
-| T1 | Microsoft Learn (official docs) |
-| T2 | Fabric product blog |
-| T3 | Microsoft GitHub / samples |
-| T4 | MVP / community |
-| T5 | Vendor |
-| T6 | Unknown |
+| Tier | Meaning                         |
+| ---- | ------------------------------- |
+| T1   | Microsoft Learn (official docs) |
+| T2   | Fabric product blog             |
+| T3   | Microsoft GitHub / samples      |
+| T4   | MVP / community                 |
+| T5   | Vendor                          |
+| T6   | Unknown                         |
 
 Lower numbers are more trusted. Pick honestly — the tier travels with every claim the source
 produces and shows on every citation and on the Sources page.

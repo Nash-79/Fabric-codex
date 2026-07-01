@@ -22,6 +22,7 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TopicsIndexRouteImport } from './routes/topics/index'
 import { Route as ContentIndexRouteImport } from './routes/content/index'
+import { Route as BlogsIndexRouteImport } from './routes/blogs/index'
 import { Route as TopicsSlugRouteImport } from './routes/topics/$slug'
 import { Route as RegistryIdRouteImport } from './routes/registry.$id'
 import { Route as DevLogsRouteImport } from './routes/dev.logs'
@@ -32,6 +33,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedFavoritesRouteImport } from './routes/_authenticated/favorites'
 import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
 import { Route as ContentKindSlugRouteImport } from './routes/content/$kind.$slug'
+import { Route as BlogsKindSlugRouteImport } from './routes/blogs/$kind.$slug'
 import { Route as ApiPublicHooksSeedContentRouteImport } from './routes/api/public/hooks/seed-content'
 import { Route as ApiPublicHealthAtlasRouteImport } from './routes/api/public/health/atlas'
 import { Route as ApiPublicDevLogsRouteImport } from './routes/api/public/dev/logs'
@@ -100,6 +102,11 @@ const ContentIndexRoute = ContentIndexRouteImport.update({
   path: '/content/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BlogsIndexRoute = BlogsIndexRouteImport.update({
+  id: '/blogs/',
+  path: '/blogs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TopicsSlugRoute = TopicsSlugRouteImport.update({
   id: '/topics/$slug',
   path: '/topics/$slug',
@@ -150,6 +157,11 @@ const ContentKindSlugRoute = ContentKindSlugRouteImport.update({
   path: '/content/$kind/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BlogsKindSlugRoute = BlogsKindSlugRouteImport.update({
+  id: '/blogs/$kind/$slug',
+  path: '/blogs/$kind/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksSeedContentRoute =
   ApiPublicHooksSeedContentRouteImport.update({
     id: '/api/public/hooks/seed-content',
@@ -187,8 +199,10 @@ export interface FileRoutesByFullPath {
   '/dev/logs': typeof DevLogsRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
+  '/blogs/': typeof BlogsIndexRoute
   '/content/': typeof ContentIndexRoute
   '/topics/': typeof TopicsIndexRoute
+  '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/content/$kind/$slug': typeof ContentKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
@@ -214,8 +228,10 @@ export interface FileRoutesByTo {
   '/dev/logs': typeof DevLogsRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
+  '/blogs': typeof BlogsIndexRoute
   '/content': typeof ContentIndexRoute
   '/topics': typeof TopicsIndexRoute
+  '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/content/$kind/$slug': typeof ContentKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
@@ -243,8 +259,10 @@ export interface FileRoutesById {
   '/dev/logs': typeof DevLogsRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
+  '/blogs/': typeof BlogsIndexRoute
   '/content/': typeof ContentIndexRoute
   '/topics/': typeof TopicsIndexRoute
+  '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/content/$kind/$slug': typeof ContentKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
@@ -272,8 +290,10 @@ export interface FileRouteTypes {
     | '/dev/logs'
     | '/registry/$id'
     | '/topics/$slug'
+    | '/blogs/'
     | '/content/'
     | '/topics/'
+    | '/blogs/$kind/$slug'
     | '/content/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
@@ -299,8 +319,10 @@ export interface FileRouteTypes {
     | '/dev/logs'
     | '/registry/$id'
     | '/topics/$slug'
+    | '/blogs'
     | '/content'
     | '/topics'
+    | '/blogs/$kind/$slug'
     | '/content/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
@@ -327,8 +349,10 @@ export interface FileRouteTypes {
     | '/dev/logs'
     | '/registry/$id'
     | '/topics/$slug'
+    | '/blogs/'
     | '/content/'
     | '/topics/'
+    | '/blogs/$kind/$slug'
     | '/content/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
@@ -352,8 +376,10 @@ export interface RootRouteChildren {
   DesignSlugRoute: typeof DesignSlugRoute
   DevLogsRoute: typeof DevLogsRoute
   TopicsSlugRoute: typeof TopicsSlugRoute
+  BlogsIndexRoute: typeof BlogsIndexRoute
   ContentIndexRoute: typeof ContentIndexRoute
   TopicsIndexRoute: typeof TopicsIndexRoute
+  BlogsKindSlugRoute: typeof BlogsKindSlugRoute
   ContentKindSlugRoute: typeof ContentKindSlugRoute
   ApiPublicDevLogsRoute: typeof ApiPublicDevLogsRoute
   ApiPublicHealthAtlasRoute: typeof ApiPublicHealthAtlasRoute
@@ -453,6 +479,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContentIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/blogs/': {
+      id: '/blogs/'
+      path: '/blogs'
+      fullPath: '/blogs/'
+      preLoaderRoute: typeof BlogsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/topics/$slug': {
       id: '/topics/$slug'
       path: '/topics/$slug'
@@ -523,6 +556,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContentKindSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/blogs/$kind/$slug': {
+      id: '/blogs/$kind/$slug'
+      path: '/blogs/$kind/$slug'
+      fullPath: '/blogs/$kind/$slug'
+      preLoaderRoute: typeof BlogsKindSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/seed-content': {
       id: '/api/public/hooks/seed-content'
       path: '/api/public/hooks/seed-content'
@@ -591,8 +631,10 @@ const rootRouteChildren: RootRouteChildren = {
   DesignSlugRoute: DesignSlugRoute,
   DevLogsRoute: DevLogsRoute,
   TopicsSlugRoute: TopicsSlugRoute,
+  BlogsIndexRoute: BlogsIndexRoute,
   ContentIndexRoute: ContentIndexRoute,
   TopicsIndexRoute: TopicsIndexRoute,
+  BlogsKindSlugRoute: BlogsKindSlugRoute,
   ContentKindSlugRoute: ContentKindSlugRoute,
   ApiPublicDevLogsRoute: ApiPublicDevLogsRoute,
   ApiPublicHealthAtlasRoute: ApiPublicHealthAtlasRoute,
@@ -601,3 +643,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

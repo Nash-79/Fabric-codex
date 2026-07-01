@@ -82,7 +82,7 @@ Articles, designs, and lessons are authored by agents in the IDE, never by the s
   validation.
 
 If a topic has too few verified claims, these agents **refuse and report the gap** instead of
-writing filler — queue more sources for it (see *Submitting sources*), verify them, and run
+writing filler — queue more sources for it (see _Submitting sources_), verify them, and run
 the command again. Whatever the agent writes still has to be pasted into **Settings →
 Publish** by an admin before it goes live; that step is what actually creates the new
 version.

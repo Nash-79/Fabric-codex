@@ -1,6 +1,7 @@
 import { Check, Copy, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { Link } from "@tanstack/react-router";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import type { AdvisorMessage as AdvisorMessageType } from "@/lib/advisor-types";
@@ -87,16 +88,25 @@ export function AdvisorMessage({
                       {children}
                     </blockquote>
                   ),
-                  a: ({ href, children, ...rest }) => (
-                    <a
-                      href={href}
-                      target={href?.startsWith("http") ? "_blank" : undefined}
-                      rel={href?.startsWith("http") ? "noreferrer" : undefined}
-                      {...rest}
-                    >
-                      {children}
-                    </a>
-                  ),
+                  a: ({ href, children, ...rest }) => {
+                    const isInternal =
+                      href && (href.startsWith("/") || href.startsWith(window.location.origin));
+                    if (isInternal) {
+                      const path = href.startsWith(window.location.origin)
+                        ? href.slice(window.location.origin.length)
+                        : href;
+                      return (
+                        <Link to={path as any} {...rest}>
+                          {children}
+                        </Link>
+                      );
+                    }
+                    return (
+                      <a href={href} target="_blank" rel="noreferrer" {...rest}>
+                        {children}
+                      </a>
+                    );
+                  },
                 }}
               >
                 {text || "…"}

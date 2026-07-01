@@ -2,6 +2,7 @@
 description: Create an original Mermaid/SVG diagram for a capability or design (no copied images).
 argument-hint: <capability-id|design-id> [type=architecture|decision-tree|internals|map]
 ---
+
 Use the **diagram-author** subagent for: $ARGUMENTS. Fetch the relevant claims/design for grounding
 from Supabase with the anon key (no `localhost:8000` backend — see the diagram-author agent for the
 recipe), author an ORIGINAL diagram (Mermaid for flows/trees, SVG for infographics) — never a copy

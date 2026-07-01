@@ -25,24 +25,24 @@ uvicorn app.main:app --reload
 
 ## API map
 
-| Method | Path                              | Purpose                                          |
-|--------|-----------------------------------|--------------------------------------------------|
-| POST   | /sources/ingest                   | Ingest a source (local: pre-built `claims`+`assets`+`tags`+reader metadata) |
-| GET    | /sources                          | List source revisions with tags and reader metadata |
-| POST   | /sources/{source_key}/drift       | Re-ingest (pre-built `claims`), diff, supersede  |
-| GET    | /claims?capability=&status=&tag=  | List active claims (filterable, incl. by tag)    |
-| GET    | /claims/{claim_key}/history       | Full version chain for a claim                   |
-| POST   | /claims/{claim_id}/verify         | Approve a pending claim                          |
-| GET    | /tags                             | Tag counts across active claims                  |
-| GET    | /coverage                         | Claim counts per capability × depth              |
-| POST   | /assets                           | Register an asset (referenced or generated)      |
-| GET    | /assets?source=&design=&capability= | List assets                                    |
-| POST   | /designs                          | Persist an agent-authored design (local mode)    |
-| POST   | /designs/generate                 | Generate server-side (LLM_MODE=api only)         |
-| GET    | /designs, /designs/{id}           | List / fetch designs (with tags + assets)        |
-| POST   | /designs/{id}/validate            | Validation pass (local: accepts agent `issues`)  |
-| GET    | /designs/{id}/validations         | Past validation runs + issues                    |
-| POST   | /lessons/generate                 | Lesson generation (LLM_MODE=api only)            |
+| Method | Path                                | Purpose                                                                     |
+| ------ | ----------------------------------- | --------------------------------------------------------------------------- |
+| POST   | /sources/ingest                     | Ingest a source (local: pre-built `claims`+`assets`+`tags`+reader metadata) |
+| GET    | /sources                            | List source revisions with tags and reader metadata                         |
+| POST   | /sources/{source_key}/drift         | Re-ingest (pre-built `claims`), diff, supersede                             |
+| GET    | /claims?capability=&status=&tag=    | List active claims (filterable, incl. by tag)                               |
+| GET    | /claims/{claim_key}/history         | Full version chain for a claim                                              |
+| POST   | /claims/{claim_id}/verify           | Approve a pending claim                                                     |
+| GET    | /tags                               | Tag counts across active claims                                             |
+| GET    | /coverage                           | Claim counts per capability × depth                                         |
+| POST   | /assets                             | Register an asset (referenced or generated)                                 |
+| GET    | /assets?source=&design=&capability= | List assets                                                                 |
+| POST   | /designs                            | Persist an agent-authored design (local mode)                               |
+| POST   | /designs/generate                   | Generate server-side (LLM_MODE=api only)                                    |
+| GET    | /designs, /designs/{id}             | List / fetch designs (with tags + assets)                                   |
+| POST   | /designs/{id}/validate              | Validation pass (local: accepts agent `issues`)                             |
+| GET    | /designs/{id}/validations           | Past validation runs + issues                                               |
+| POST   | /lessons/generate                   | Lesson generation (LLM_MODE=api only)                                       |
 
 ## Tests
 

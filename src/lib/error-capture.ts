@@ -3,9 +3,7 @@
 // generic 500 Response.
 
 let lastCapturedError: { error: unknown; at: number } | undefined;
-let lastCapturedRequest:
-  | { method: string; url: string; pathname: string; at: number }
-  | undefined;
+let lastCapturedRequest: { method: string; url: string; pathname: string; at: number } | undefined;
 const TTL_MS = 5_000;
 
 function record(error: unknown) {

@@ -43,29 +43,38 @@ Or author the file by hand — the shape is one JSON file **per source**
   "takeaways": ["A concise original takeaway."],
   "tags": ["MicrosoftFabric", "OneLake"],
   "claims": [
-    { "capability_id": "onelake", "text": "One atomic fact in your own words.",
-      "depth": 3, "type": "fact", "tags": ["OneLake"] }
+    {
+      "capability_id": "onelake",
+      "text": "One atomic fact in your own words.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["OneLake"]
+    }
   ],
   "assets": [
-    { "kind": "referenced", "url": "https://...png", "caption": "...",
+    {
+      "kind": "referenced",
+      "url": "https://...png",
+      "caption": "...",
       "attribution": "Microsoft Learn (© Microsoft)",
       "license_note": "External image; linked with attribution, not re-hosted.",
-      "capability_id": "onelake" }
+      "capability_id": "onelake"
+    }
   ]
 }
 ```
 
 Field rules (enforced or silently dropped by the backend — `import_content.py` warns first):
 
-| Field | Rule |
-|---|---|
-| `capability_id` | must be in the registry (`backend/app/llm.py` `CAPABILITY_IDS`) — unknown ids are **dropped** |
-| `depth` | 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 internals |
-| `type` | `fact` \| `pattern` \| `antipattern` \| `internal` |
-| `tier` | 1 MS Learn · 2 Fabric blog · 3 MS GitHub/papers · 4 MVP/community · 5 vendor · 6 unknown |
-| `summary` / `audience` / `why_it_matters` | original reader metadata only; do not copy article prose |
-| `takeaways` | 3-5 original, concise takeaways; no copied bullets from the source |
-| `assets[].kind` | `referenced` (external image: url + attribution, never re-hosted) or `generated` (original SVG/Mermaid in `content/diagrams/`) |
+| Field                                     | Rule                                                                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `capability_id`                           | must be in the registry (`backend/app/llm.py` `CAPABILITY_IDS`) — unknown ids are **dropped**                                  |
+| `depth`                                   | 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 internals                                                      |
+| `type`                                    | `fact` \| `pattern` \| `antipattern` \| `internal`                                                                             |
+| `tier`                                    | 1 MS Learn · 2 Fabric blog · 3 MS GitHub/papers · 4 MVP/community · 5 vendor · 6 unknown                                       |
+| `summary` / `audience` / `why_it_matters` | original reader metadata only; do not copy article prose                                                                       |
+| `takeaways`                               | 3-5 original, concise takeaways; no copied bullets from the source                                                             |
+| `assets[].kind`                           | `referenced` (external image: url + attribution, never re-hosted) or `generated` (original SVG/Mermaid in `content/diagrams/`) |
 
 Re-running the import on an existing source is safe — the backend treats it as a drift
 check (versions changed claims, deprecates removed ones, flags citing designs). If claim
@@ -125,8 +134,8 @@ that path to the proxy list in `frontend/vite.config.js`.
 
 Agents are markdown prompts in `.claude/agents/` (Claude Code) and `.codex/prompts/`
 (Codex), wired to slash commands in `.claude/commands/`. Before adding one, re-read the
-non-goals in `CLAUDE.md`: an agent here is *retrieval scoped to capabilities + a focused
-prompt* — no agent mesh, no mega-prompt. Add a new agent only when a concrete need forces
+non-goals in `CLAUDE.md`: an agent here is _retrieval scoped to capabilities + a focused
+prompt_ — no agent mesh, no mega-prompt. Add a new agent only when a concrete need forces
 it; copy the structure of an existing one (inputs → method → hard rules → output).
 
 Agents POST through the local backend (`http://localhost:8000`) via curl, never direct
@@ -166,7 +175,7 @@ on servers — they should never need an API key.
 
 `/advise <question>` runs the **fabric-advisor** agent: an expert Q&A view over the same
 knowledge base. It retrieves claims scoped to the capabilities the question touches, answers
-with `[Sn]` citations and a source legend, labels its own reasoning *(inference)*, and — when
+with `[Sn]` citations and a source legend, labels its own reasoning _(inference)_, and — when
 the KB has no coverage — says so and recommends what to `/ingest` instead of guessing.
 
 The same grounded answer is available as an endpoint: `POST /advisor/chat` ({message,

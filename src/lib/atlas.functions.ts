@@ -390,7 +390,11 @@ export const getRegistryCoverage = createServerFn({ method: "GET" }).handler(
         sb.from("capabilities").select("id,name,description,accent,maturity"),
         sb.from("claims").select("capability_id,depth,status").eq("active", true),
         sb.from("topic_capabilities").select("topic_slug,capability_id"),
-        sb.from("content_items").select("topic_slug").eq("kind", "article").eq("status", "published"),
+        sb
+          .from("content_items")
+          .select("topic_slug")
+          .eq("kind", "article")
+          .eq("status", "published"),
         sb.from("diagrams").select("topic_slug"),
       ]);
       if (capErr) throw new Error(capErr.message);
@@ -573,8 +577,10 @@ export const listMyFavorites = createServerFn({ method: "GET" })
 export const toggleFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
-    (d: { itemType: "blog" | "article" | "design" | "lesson" | "topic" | "source" | "claim"; itemKey: string }) =>
-      d,
+    (d: {
+      itemType: "blog" | "article" | "design" | "lesson" | "topic" | "source" | "claim";
+      itemKey: string;
+    }) => d,
   )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;

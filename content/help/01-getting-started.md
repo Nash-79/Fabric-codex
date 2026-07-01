@@ -9,7 +9,7 @@ generated piece is validated against what it cites.
 
 - **Overview** — the big picture: platform story, coverage stats, platform-level claims.
 - **Topics** — the reading portal: a topic tree where each topic gathers the articles,
-  designs, and lessons written about it. Start here if you want to *learn* Fabric.
+  designs, and lessons written about it. Start here if you want to _learn_ Fabric.
 - **Content** — every article, design, and lesson in one filterable list (filter by kind or
   topic), and the detail page for each.
 - **Capability Registry** — the spine: every tracked capability with its live claim, depth,
@@ -21,7 +21,7 @@ generated piece is validated against what it cites.
 - **Author** — how the local, git-tracked authoring workflow works, for contributors.
 - **Help** — these pages.
 - **Favorites** and **Settings** — Favorites is for any signed-in user; Settings is
-  admin-only (see *Admin settings*).
+  admin-only (see _Admin settings_).
 
 ## The trust model in one screen
 

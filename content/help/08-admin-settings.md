@@ -20,7 +20,7 @@ knowledge.
 
 - Source rows have a **Review** action that queues the source for a drift/re-ingest pass —
   it lands back in the Queue tab.
-- Design rows have a **Validate** action (see *Validation and trust*) but their body text is
+- Design rows have a **Validate** action (see _Validation and trust_) but their body text is
   still authored in `content/designs/` and republished, not edited here.
 
 Claim text is never edited from the Content tab — that happens in **Claims**.
@@ -30,7 +30,7 @@ Claim text is never edited from the Content tab — that happens in **Claims**.
 The full claim moderation workbench: filter by status, **Verify**/**Reject**/**Promote**
 individual claims, **Supersede** to create a new pending version of a claim's text, and
 **Verify all pending in…** to batch-verify every pending claim in one capability. See
-*Curation loop* for the full behavior.
+_Curation loop_ for the full behavior.
 
 ## Articles
 
@@ -42,7 +42,7 @@ mutates the existing row). A version cannot be saved without at least one cited 
 ## Queue
 
 **Queue a source URL** submits a new URL with a trust tier, tags, and a note — this is the
-admin-side form described in *Submitting sources*. The table below lists every queue item
+admin-side form described in _Submitting sources_. The table below lists every queue item
 with its status and per-row actions: **claim**, **complete** (needs a resulting source id),
 **fail** (needs a note), **requeue**, and **dismiss**.
 

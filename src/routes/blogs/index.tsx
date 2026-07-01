@@ -6,16 +6,15 @@ import { KindBadge } from "@/components/KindBadge";
 import { listContentItems, listTopics } from "@/lib/atlas.functions";
 
 type Kind = "article" | "design" | "lesson";
-const KIND_FILTERS: { id: Kind | "all"; label: string }[] = [
+const KIND_FILTERS: { id: "article" | "lesson" | "all"; label: string }[] = [
   { id: "all", label: "All" },
   { id: "article", label: "Articles" },
-  { id: "design", label: "Designs" },
   { id: "lesson", label: "Lessons" },
 ];
 
 type ContentSearch = { kind?: Kind };
 
-export const Route = createFileRoute("/content/")({
+export const Route = createFileRoute("/blogs/")({
   validateSearch: (search: Record<string, unknown>): ContentSearch => ({
     kind:
       search.kind === "article" || search.kind === "design" || search.kind === "lesson"
@@ -24,7 +23,7 @@ export const Route = createFileRoute("/content/")({
   }),
   head: () => ({
     meta: [
-      { title: "Content — Fabric Atlas" },
+      { title: "Blogs — Fabric Atlas" },
       {
         name: "description",
         content: "All cited Microsoft Fabric articles, designs, and lessons in one place.",
@@ -41,11 +40,10 @@ function ContentListPage() {
 
   const { data: topics } = useQuery({ queryKey: ["topics"], queryFn: () => listTopics() });
   const { data, isLoading, error } = useQuery({
-    queryKey: ["content-items", kind, topicSlug],
+    queryKey: ["content-items", topicSlug],
     queryFn: () =>
       listContentItems({
         data: {
-          kind: kind === "all" ? undefined : kind,
           topicSlug: topicSlug || undefined,
         },
       }),
@@ -56,6 +54,15 @@ function ContentListPage() {
     return (slug: string | null) => (slug ? (map.get(slug) ?? slug) : null);
   }, [topics]);
 
+  const filteredItems = useMemo(() => {
+    if (!data) return [];
+    return data.filter((item: any) => {
+      if (kind === "all") return true;
+      if (kind === "article") return item.kind === "article" || item.kind === "design";
+      return item.kind === kind;
+    });
+  }, [data, kind]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
@@ -63,10 +70,10 @@ function ContentListPage() {
         <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
           Reading &amp; reference
         </div>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Content</h1>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Blogs</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Articles, solution designs, and lessons — all grounded in verified claims, all in one
-          list. Filter by kind or topic.
+          Articles, solution architectures, and lessons — all grounded in verified claims, all in
+          one list. Filter by kind or topic.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -77,7 +84,7 @@ function ContentListPage() {
                 type="button"
                 onClick={() => setKind(f.id)}
                 className={`rounded px-2.5 py-1 text-xs font-medium transition ${
-                  kind === f.id
+                  kind === f.id || (f.id === "article" && kind === "design")
                     ? "bg-accent text-foreground"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
@@ -103,17 +110,17 @@ function ContentListPage() {
         <div className="mt-8 space-y-3">
           {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
           {error && <div className="text-sm text-rose-300">{(error as Error).message}</div>}
-          {!isLoading && (data ?? []).length === 0 && (
-            <div className="rounded-2xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+          {!isLoading && filteredItems.length === 0 && (
+            <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
               No content matches these filters yet.
             </div>
           )}
-          {(data ?? []).map((item: any) => (
+          {filteredItems.map((item: any) => (
             <Link
               key={`${item.kind}-${item.slug}`}
-              to="/content/$kind/$slug"
+              to="/blogs/$kind/$slug"
               params={{ kind: item.kind, slug: item.slug }}
-              className="block rounded-2xl border border-border bg-card p-5 transition hover:border-border hover:bg-accent"
+              className="block rounded-lg border border-border bg-card p-5 transition hover:border-border hover:bg-accent"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">

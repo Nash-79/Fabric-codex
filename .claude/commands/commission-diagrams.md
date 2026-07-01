@@ -2,6 +2,7 @@
 description: Drain the diagram-commission queue — author an original diagram for each due topic.
 argument-hint: (none)
 ---
+
 Fulfil the diagram commissions enqueued from the Settings → Diagrams tab. The server only
 schedules; YOU (the diagram-author) generate the diagrams locally — no server-side LLM. There is no
 `localhost:8000` backend: you **read** the queue with the anon key but cannot mutate it or register

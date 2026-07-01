@@ -2,11 +2,42 @@ import React from "react";
 import { c, BRAND, sans, mono } from "../theme.js";
 
 export const Chip = ({ children, color = c.muted, bg = "transparent" }) => (
-  <span style={{ fontFamily: mono, fontSize: 11, color, background: bg, border: "1px solid " + (bg === "transparent" ? c.line : "transparent"), borderRadius: 4, padding: "1px 6px", whiteSpace: "nowrap" }}>{children}</span>
+  <span
+    style={{
+      fontFamily: mono,
+      fontSize: 11,
+      color,
+      background: bg,
+      border: "1px solid " + (bg === "transparent" ? c.line : "transparent"),
+      borderRadius: 4,
+      padding: "1px 6px",
+      whiteSpace: "nowrap",
+    }}
+  >
+    {children}
+  </span>
 );
 
 export const Btn = ({ children, onClick, primary, small, disabled }) => (
-  <button onClick={onClick} disabled={disabled} style={{ fontFamily: sans, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, color: primary ? c.onAccent : c.text, background: primary ? c.accent : c.panel, border: "1px solid " + (primary ? c.accent : c.line), borderRadius: 4, padding: small ? "5px 12px" : "8px 16px", boxShadow: c.shadow }}>{children}</button>
+  <button
+    onClick={onClick}
+    disabled={disabled}
+    style={{
+      fontFamily: sans,
+      fontSize: small ? 12 : 13,
+      fontWeight: 600,
+      cursor: disabled ? "not-allowed" : "pointer",
+      opacity: disabled ? 0.45 : 1,
+      color: primary ? c.onAccent : c.text,
+      background: primary ? c.accent : c.panel,
+      border: "1px solid " + (primary ? c.accent : c.line),
+      borderRadius: 4,
+      padding: small ? "5px 12px" : "8px 16px",
+      boxShadow: c.shadow,
+    }}
+  >
+    {children}
+  </button>
 );
 
 let _cdStyleDone = false;
@@ -22,20 +53,75 @@ export const CountdownBtn = ({ children, onClick, primary, small, disabled, coun
   ensureCountdownStyle();
   return (
     <div style={{ position: "relative", display: "inline-block" }}>
-      <button onClick={onClick} disabled={disabled} style={{ fontFamily: sans, fontSize: small ? 12 : 13, fontWeight: 600, cursor: disabled ? "not-allowed" : "pointer", opacity: disabled ? 0.45 : 1, color: primary ? c.onAccent : c.text, background: primary ? c.accent : c.panel, border: "1px solid " + (primary ? c.accent : c.line), borderRadius: 4, padding: small ? "5px 12px" : "8px 16px", boxShadow: c.shadow, display: "block" }}>{children}</button>
+      <button
+        onClick={onClick}
+        disabled={disabled}
+        style={{
+          fontFamily: sans,
+          fontSize: small ? 12 : 13,
+          fontWeight: 600,
+          cursor: disabled ? "not-allowed" : "pointer",
+          opacity: disabled ? 0.45 : 1,
+          color: primary ? c.onAccent : c.text,
+          background: primary ? c.accent : c.panel,
+          border: "1px solid " + (primary ? c.accent : c.line),
+          borderRadius: 4,
+          padding: small ? "5px 12px" : "8px 16px",
+          boxShadow: c.shadow,
+          display: "block",
+        }}
+      >
+        {children}
+      </button>
       {countdown && (
-        <div key={String(countdown)} style={{ position: "absolute", bottom: 0, left: 0, height: 3, borderRadius: "0 0 4px 4px", background: primary ? "rgba(255,255,255,0.65)" : c.accent, animation: "cd-shrink 3s linear forwards", pointerEvents: "none" }} />
+        <div
+          key={String(countdown)}
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            height: 3,
+            borderRadius: "0 0 4px 4px",
+            background: primary ? "rgba(255,255,255,0.65)" : c.accent,
+            animation: "cd-shrink 3s linear forwards",
+            pointerEvents: "none",
+          }}
+        />
       )}
     </div>
   );
 };
 
 export const Empty = ({ children }) => (
-  <div style={{ border: "1px dashed " + c.line, borderRadius: 8, padding: 24, textAlign: "center", color: c.muted, fontSize: 13, lineHeight: 1.6, background: c.panel }}>{children}</div>
+  <div
+    style={{
+      border: "1px dashed " + c.line,
+      borderRadius: 8,
+      padding: 24,
+      textAlign: "center",
+      color: c.muted,
+      fontSize: 13,
+      lineHeight: 1.6,
+      background: c.panel,
+    }}
+  >
+    {children}
+  </div>
 );
 
 export const Code = ({ children }) => (
-  <code style={{ fontFamily: mono, fontSize: 12, color: c.accentText, background: c.accentSoft, borderRadius: 4, padding: "1px 5px" }}>{children}</code>
+  <code
+    style={{
+      fontFamily: mono,
+      fontSize: 12,
+      color: c.accentText,
+      background: c.accentSoft,
+      borderRadius: 4,
+      padding: "1px 5px",
+    }}
+  >
+    {children}
+  </code>
 );
 
 /* Original Fabric Atlas mark — woven layers in the Fabric brand ramp.

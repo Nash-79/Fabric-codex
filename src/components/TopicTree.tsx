@@ -130,7 +130,9 @@ function TreeItem({
     <div>
       <div
         className={`flex items-center gap-1 rounded px-1.5 py-1 text-xs ${
-          isActive ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+          isActive
+            ? "bg-accent text-foreground"
+            : "text-muted-foreground hover:bg-accent hover:text-foreground"
         }`}
         style={{ paddingLeft: expanded ? 6 + depth * 12 : 6 }}
       >

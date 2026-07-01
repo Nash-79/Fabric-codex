@@ -2,6 +2,7 @@
 description: Re-check a source for changes, version affected claims, flag impacted designs.
 argument-hint: <source-key>
 ---
+
 Use the **source-drift-analyst** subagent on source `$ARGUMENTS` (a source slug). Read the current
 source content, re-extract the claims yourself, then diff them **locally** against the source's
 active claims read from Supabase with the anon key (no `localhost:8000` backend — see the agent for
