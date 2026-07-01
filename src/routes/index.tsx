@@ -371,11 +371,11 @@ function Landing() {
                 Article hub
               </div>
               <div className="mt-3 space-y-3">
-                {(selectedFeed.length ? selectedFeed : feedItems.slice(0, 5)).map((item) => (
+                {(selectedFeed.length ? selectedFeed : feedItems.slice(0, 5)).map((item: any) => (
                   <Link
-                    key={`${item.kind}-${item.slug}`}
+                    key={`${item.kind ?? "article"}-${item.slug}`}
                     to="/blogs/$kind/$slug"
-                    params={{ kind: item.kind, slug: item.slug }}
+                    params={{ kind: (item.kind ?? "article") as string, slug: item.slug }}
                     className="block rounded-md border border-border bg-card p-3 hover:bg-accent"
                   >
                     <div className="text-sm font-semibold text-foreground">{item.title}</div>
