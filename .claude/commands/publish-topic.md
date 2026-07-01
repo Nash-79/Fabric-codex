@@ -25,8 +25,12 @@ existing agents; it adds no new machinery.
    Verify each `.svg`/`.mmd` exists on disk before moving on — an article that embeds a missing
    diagram fails validation as a **critical** issue and can never reach `ready_to_share`.
 4. **Article.** Use the **blog-author** subagent on `$ARGUMENTS`. It must embed **every**
-   commissioned diagram (architecture near the top, internals inside the relevant section),
-   not just the first, then write the article file for publish.
+   commissioned diagram (architecture near the top, the decision/internals diagram inside
+   `### How it works internally` under `## Internals`), not just the first. The article must
+   carry a mandatory `## Internals` section with all three sub-headings (`Architecture &
+   design`, `How it works internally`, `Performance characteristics`) — grounded where L4/L5
+   claims exist, otherwise a labeled `*Coming soon*` placeholder plus a `content/queue.md`
+   entry (never a silently omitted section). Then write the article file for publish.
 5. **Validate.** Use the **validation-reviewer** subagent over the new article; it reasons about
    grounding/coverage/antipattern locally, and its findings feed the `validateContent` server
    action an admin runs from **Settings → Publish** after publishing. If critical issues surface,

@@ -1,0 +1,112 @@
+{
+  "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/hyperscale-architecture?view=azuresql",
+  "title": "Hyperscale distributed functions architecture - Azure SQL Database",
+  "tier": 1,
+  "summary": "Microsoft Learn's architecture reference for Hyperscale, the distributed engine design that underlies both Azure SQL Database Hyperscale and SQL database in Microsoft Fabric (the doc's moniker range explicitly includes fabricsql). It breaks the engine into four cooperating component types — compute nodes, page servers, a log service, and Azure Storage — and explains how they separate query processing from durable storage so each can scale independently.",
+  "audience": "Architects and performance engineers who need to reason about why SQL database in Fabric scales, backs up, and adds read replicas the way it does, rather than just how to use it day to day.",
+  "why_it_matters": "The existing sql-database-fabric-overview source covers the Fabric-facing surface (OneLake replication, analytics endpoint, security, tuning) at L1-L3, but says nothing about the engine internals that make those capabilities possible or performant. This source fills that L4/L5 gap: it explains the storage/compute separation, replica topology, and durability mechanics that determine scaling limits, restore speed, and read-scale-out behavior for SQL database in Fabric.",
+  "takeaways": [
+    "Microsoft explicitly documents SQL database in Fabric as sharing the Hyperscale distributed-functions architecture — this is not an inferred similarity, it is the same moniker-scoped article.",
+    "Compute and storage scale independently because the relational engine (compute nodes) is architecturally separated from durable page storage (page servers + Azure Storage).",
+    "Read scale-out and HA are cheap to add because replicas share the same underlying storage rather than requiring a data copy.",
+    "Backups and restores are snapshot-based against storage, so restore time does not grow with database size.",
+    "The log service is the propagation backbone: it is what lets page servers and secondary compute replicas stay current without the primary doing the fan-out itself."
+  ],
+  "tags": ["MicrosoftFabric", "SQLDatabase", "Hyperscale", "AzureSQL", "StorageArchitecture", "Replication"],
+  "claims": [
+    {
+      "capability_id": "sql-database",
+      "text": "SQL database in Microsoft Fabric is built on the Hyperscale distributed-functions architecture: Microsoft Learn's Hyperscale architecture reference is versioned to explicitly cover SQL database in Fabric alongside Azure SQL Database, Managed Instance, and SQL Server on Azure VMs, confirming this is the same underlying engine design rather than a separate implementation.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "SQLDatabase", "Hyperscale", "AzureSQL"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "Hyperscale departs from traditional monolithic database engines by architecturally separating the relational query-processing engine from long-term data storage and durability, which is what allows storage capacity to scale out smoothly up to 128 TB for a single database.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["SQLDatabase", "Hyperscale", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "The engine is composed of four cooperating component types — compute nodes, page servers, a log service, and Azure Storage — all communicating over Azure's redundant network infrastructure, rather than a single process handling query, log, and storage duties together.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["SQLDatabase", "Hyperscale", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "Compute nodes run the same relational/language/query/transaction-processing engine used across other Azure SQL Database tiers, and each maintains a local SSD-based cache called RBPEX (Resilient Buffer Pool Extension) that is sized to the compute tier and minimizes round-trips to remote page servers for hot data pages.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["SQLDatabase", "Hyperscale", "RBPEX", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "The compute topology consists of exactly one primary node handling read-write transactions, up to four on-demand high-availability secondary replicas that act as hot standbys and can offload read workloads, up to 30 named replicas for OLTP read-scale-out and HTAP scenarios (each of which can itself have up to 4 HA replicas), and an optional geo-secondary in another Azure region for disaster recovery.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["SQLDatabase", "Hyperscale", "Replication", "HTAP"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "High-availability and named replicas share the same underlying storage components as the primary, so spinning up a new replica requires no data-copy step; only a geo-secondary replica maintains separate storage components, since it exists specifically for regional data protection and redundancy.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["SQLDatabase", "Hyperscale", "Replication", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "Page servers form a scaled-out storage tier where each page server owns a subset of the database's pages (up to 128 GB of data per page server), keeps a local SSD cache of those pages, serves them to compute nodes on demand, and stays current by replaying transaction log records forwarded from the log service; each page server also has its own redundant replica.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["SQLDatabase", "Hyperscale", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "The log service is the propagation backbone of Hyperscale: it accepts transaction log records from the primary compute node and fans them out both to page servers, which apply the changes to their owned pages, and to secondary compute replicas, which replay only the changes already resident in their buffer pool or RBPEX cache — then persists the log records to Azure Storage, which is treated as virtually infinite and removes the need for frequent log truncation.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["SQLDatabase", "Hyperscale", "Replication", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "Because log growth causes such as missed log backups or slow replication to secondaries are architecturally eliminated by the log service's continuous fan-out and durable persistence to Azure Storage, Hyperscale databases avoid a common source of storage pressure seen in traditional engines.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["SQLDatabase", "Hyperscale", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "Backups are implemented as storage snapshots of data files rather than traditional full/differential/log backup chains, so restore operations are fast regardless of overall database size and a database can be restored to any point in time within its backup retention period.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["SQLDatabase", "Hyperscale", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "The architectural separation of compute and storage means the two dimensions scale independently of each other, which is the structural reason SQL database in Fabric can grow storage or add read compute without impacting the primary OLTP engine's write path.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["MicrosoftFabric", "SQLDatabase", "Hyperscale", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "This Hyperscale-derived separation of the transactional compute engine from durable storage is architecturally consistent with SQL database in Fabric's separate replication path that mirrors data changes into Delta Parquet in OneLake, since the underlying engine is already designed to propagate changes to consumers other than the primary compute node without disrupting it.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MicrosoftFabric", "SQLDatabase", "Hyperscale", "OneLake", "Replication"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-sql/database/media/service-tier-hyperscale/hyperscale-architecture.png",
+      "caption": "Hyperscale functional architecture diagram showing the compute tier (primary and secondary compute nodes, each with RBPEX data cache), the log service communicating with both compute nodes and page servers, and the page server tier with its own RBPEX cache.",
+      "attribution": "Microsoft Learn — Hyperscale distributed functions architecture, Azure SQL Database (c) Microsoft",
+      "license_note": "External image; linked with attribution only, not re-hosted.",
+      "capability_id": "sql-database"
+    }
+  ]
+}

@@ -29,6 +29,16 @@ over the same claims that power architectures and lessons — never a separate o
 4. Answer. Structure for the question, not a template — but for "walk me through" requests
    give numbered steps, each step citing the claims it relies on; for trade-off questions
    ("X vs Y") give a comparison and a recommendation with the constraints that would flip it.
+5. **"How does X work internally?" / "why" / architecture-of questions.** These are depth
+   L4/L5 questions. Every published article has a standard `## Internals` section
+   (`### Architecture & design`, `### How it works internally`, `### Performance
+   characteristics` — see `blog-author.md`) — check whether one exists for the relevant topic
+   and point the user to it (`GET /content_items?kind=eq.article&topic_slug=eq.<slug>`) rather
+   than re-deriving the same depth from raw claims. If the article's Internals section is a
+   `*Coming soon*` placeholder for the sub-area the user is asking about, say so explicitly —
+   don't quietly answer at L2/L3 depth and let the user think it was a complete internals
+   answer. Name the specific gap and that it's tracked in `content/queue.md`, same as any
+   other capability/depth gap.
 
 ## Hard rules
 

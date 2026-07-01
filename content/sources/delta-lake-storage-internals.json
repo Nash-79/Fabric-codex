@@ -1,0 +1,93 @@
+{
+  "url": "https://www.vldb.org/pvldb/vol13/p3411-armbrust.pdf",
+  "title": "Delta Lake: High-Performance ACID Table Storage over Cloud Object Stores (Armbrust et al., PVLDB 13(12), 2020)",
+  "tier": 3,
+  "tags": ["MicrosoftFabric", "OneLake", "DeltaLake", "TransactionLog", "ACID", "StorageArchitecture"],
+  "claims": [
+    {
+      "capability_id": "onelake",
+      "text": "OneLake's Delta-format tables store data as immutable Parquet objects plus a write-ahead transaction log in a _delta_log subfolder; the log, not a directory listing, is the single source of truth for which Parquet objects currently belong to the table, which is what lets OneLake give ADLS Gen2-style storage ACID table semantics on top of plain object storage.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DeltaLake", "TransactionLog", "ACID", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Each commit to a Delta table in OneLake is a zero-padded, sequentially numbered JSON file in _delta_log (e.g. 000003.json) holding an array of actions: add and remove record which Parquet objects entered or left the table, metaData and protocol record schema/config and format-version changes, commitInfo carries audit/provenance data, and an application-defined txn action lets writers such as streaming engines track exactly-once progress.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DeltaLake", "TransactionLog", "JSONActions", "SchemaEvolution"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "OneLake's Delta tables achieve write serializability through optimistic concurrency rather than locking: a writer stages new Parquet objects independently, then atomically creates the single next-numbered log JSON file; only one writer can win that specific commit number, so a losing writer detects the collision immediately, rereads the latest table state, and retries rather than blocking behind a lock held by another writer.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["OptimisticConcurrency", "DeltaLake", "TransactionLog"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "The atomic 'only one writer wins this commit number' guarantee underlying Delta table concurrency is implemented differently per storage backend since object stores vary in native atomicity: stores with atomic put-if-absent use that directly, filesystem-style stores (including ADLS Gen2, which OneLake is built on) use an atomic rename that fails if the target name already exists, and stores lacking either primitive need an external lightweight coordination service to serialize commit-number assignment.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["OptimisticConcurrency", "ADLSGen2", "DeltaLake", "StorageArchitecture"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Delta table readers achieve snapshot isolation by pinning their read to whatever the newest fully-committed log record ID is at the moment they start: they reconstruct table state as of that version and never observe files added or removed by commits that land afterward, so concurrent writers never produce a dirty or partial read for a query already in flight.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["SnapshotIsolation", "DeltaLake", "TransactionLog"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Because every add and remove action in the log stays immutable and versioned, OneLake's Delta tables support time travel: a client can reconstruct any earlier table state by replaying the log only up to an older commit ID, which is also how accidental overwrites can be corrected by merging a table against one of its own prior versions instead of restoring from a separate backup.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["DeltaLake", "TimeTravel", "TransactionLog"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "To keep metadata reads fast as a Delta table accumulates history, OneLake's underlying Delta engine periodically compacts the log into a Parquet checkpoint (every 10 commits by default) that folds in every still-relevant add/remove/metadata action and drops superseded ones, so readers reconstruct current state from the latest checkpoint plus a handful of trailing JSON commits instead of replaying the log from commit zero.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["Checkpointing", "DeltaLake", "TransactionLog", "Performance"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Checkpoint compaction is safe to skip or fail: since checkpoint writing and the pointer file that records the newest checkpoint ID are both best-effort and separate from the atomic commit itself, a client that crashes mid-checkpoint leaves the table's actual data and log entirely uncorrupted, and other readers simply fall back to an older checkpoint or the raw commit files.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["Checkpointing", "DeltaLake", "FaultTolerance"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "OneLake's Delta storage layer avoids the metadata bottleneck that plain object-store data lakes hit at scale (S3-style LIST calls capping out around 1,000 keys per request and taking tens to hundreds of milliseconds each) by parallelizing both file-listing and column-statistics collection across a Spark cluster rather than serializing them on a single driver, which is what keeps 'find the files relevant to my query' fast even as object counts grow into the hundreds of millions.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Performance", "MetadataOperations", "Spark", "DeltaLake"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Because Delta engine metadata scans go through the transaction log/checkpoint rather than listing and re-reading Parquet footers directly from the object store, table discovery stays roughly two orders of magnitude faster at large partition counts than a raw Parquet-on-object-store layout: a benchmark table with 1,000,000 partitions took over an hour for non-Delta engines but 108 seconds for the Delta-backed engine (17 seconds with the log cached on SSD).",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Performance", "Benchmark", "MetadataOperations", "DeltaLake"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Writers into OneLake's Delta tables record per-column min/max value statistics (and null counts) for each Parquet object directly in that object's add action in the log or checkpoint, so query engines can perform data skipping: they consult the log's stored statistics to exclude whole Parquet objects whose value range cannot satisfy a filter predicate, before issuing any I/O against those objects.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["DataSkipping", "PredicatePushdown", "DeltaLake", "Performance"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Data-skipping effectiveness from stored min/max statistics depends heavily on physical data layout, not just the presence of statistics: sorting or partitioning by a single column makes skipping strong for predicates on that column but ineffective on others, since every object's min/max range collapses toward the whole table's range for unsorted columns, which is the underlying motivation for layout-optimization techniques like Z-ordering across multiple columns.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["DataSkipping", "DataLayout", "DeltaLake", "Performance"]
+    }
+  ],
+  "assets": []
+}

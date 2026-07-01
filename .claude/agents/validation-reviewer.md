@@ -40,6 +40,15 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
      are a copyright guardrail breach; flag as antipattern, severity warning or critical
      by extent. Unlabelled inference (synthesis not marked `*Inference:*`) is a grounding
      warning.
+   - **Internals section, articles only.** Confirm `## Internals` exists with all three
+     required sub-headings (`### Architecture & design`, `### How it works internally`,
+     `### Performance characteristics`). Missing the section or a sub-heading entirely is a
+     **warning** (structural, not grounding — the blog-author's job is to never omit it, so
+     a miss here is a process bug worth surfacing). A `*Coming soon*` placeholder sub-heading
+     is expected and **not an issue by itself** — it's the documented honest-gap behavior —
+     but flag **info** if a placeholder has no matching `# internals gap: <slug> / ...` line
+     in `content/queue.md` (the gap isn't tracked, so it'll silently rot). Never treat a
+     placeholder as blocking `ready_to_share`.
      Each issue: `{"validator":"...","severity":"critical|warning|info","message":"...","ref":"..."}`.
 3. **Report** your findings as the issue list — you have no Supabase write access, so you do not
    post them. The deterministic **citation** + **freshness** checks (articles also get an embedded-

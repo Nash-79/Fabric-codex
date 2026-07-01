@@ -173,6 +173,29 @@ due). The server only schedules — `/commission-diagrams` drains the due queue 
 **diagram-author**, which authors an original SVG, mirrors it to `public/diagrams/`, and registers
 it as a generated asset (flipping the topic from _gap_ to _covered_ in the coverage table).
 
+**Every article carries a mandatory `## Internals` section — never omitted, only placeholdered.**
+Body content is a single markdown blob (`content_items.body_md`); the reading-view ToC is derived
+client-side by regex over `##`/`###` headings (`src/components/ContentTocSidebar.tsx`), so the
+heading text below is a hard, exact-match convention, not a schema field:
+
+- Fixed sub-headings, in order: `### Architecture & design`, `### How it works internally`,
+  `### Performance characteristics`. The blog-author (`.claude/agents/blog-author.md`) writes all
+  three every time.
+- Grounded where verified L4/L5 claims exist (engine internals, execution/query paths, benchmarks —
+  Polaris, Spark, SQL engine, OneLake, Direct Lake, NDP/GPU-accelerated query processing, etc. are
+  the expected home for this depth). Otherwise a labeled `*Coming soon*` placeholder — never a
+  silently omitted section and never invented detail.
+- Every placeholder gets a matching `# internals gap: <slug> / <sub-heading> — ...` line in
+  `content/queue.md` so it routes into ingestion, not just a dangling TODO in prose.
+- **Non-blocking.** `validation-reviewer` flags a missing section/sub-heading as a warning and an
+  untracked placeholder as info, but a placeholder itself never blocks `ready_to_share` — thin L4/L5
+  coverage should not gate publishing good L1–L3 content.
+- `coverage-auditor` scans published articles for placeholder text and reports them as a ranked
+  depth gap, same track as any other L4/L5 gap.
+- `fabric-advisor` checks an article's `## Internals` before answering "how does X work
+  internally" questions, and says explicitly when it's pointing at a placeholder rather than
+  answering from grounded depth.
+
 ## Conventions
 
 - Python: type hints, `ruff`/`black` clean, no bare excepts. Tests in `backend/tests`.

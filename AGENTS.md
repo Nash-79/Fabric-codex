@@ -67,6 +67,13 @@ in the same run.
   article embeds **every** one of them. Each embedded `content/diagrams/*` path must exist on
   disk before the article is published; the validation pass flags a missing embedded diagram as
   a **critical** issue, blocking `ready_to_share`.
+- **`## Internals` is mandatory on every article** (kept in sync with `CLAUDE.md`): fixed
+  sub-headings `### Architecture & design`, `### How it works internally`,
+  `### Performance characteristics` — grounded in verified L4/L5 claims where they exist
+  (engine internals: Polaris, Spark, SQL engine, OneLake, Direct Lake, GPU/NDP-accelerated
+  query processing), else a labeled `*Coming soon*` placeholder plus a matching
+  `content/queue.md` entry. Never silently omitted, never fabricated; placeholders are
+  **non-blocking** for `ready_to_share`.
 
 ## Scope discipline
 

@@ -1,0 +1,112 @@
+{
+  "url": "https://www.microsoft.com/en-us/research/publication/coddspeed-hardware-accelerated-query-processing-in-microsoft-fabric/",
+  "title": "CoddSpeed: Hardware Accelerated Query Processing in Microsoft Fabric (SIGMOD 2026 Industrial Track, Best Paper)",
+  "tier": 3,
+  "summary": "A Microsoft Research team (Interlandi, Bruno, Haynes, Curino, Sen, and collaborators) describes CoddSpeed, a multi-year effort to bring hardware-accelerated query execution into Microsoft Fabric's Data Warehouse engine. It builds on the team's earlier Tensor Query Processor (TQP) research, which recasts relational operators as tensor-runtime operations, and packages that idea behind two production abstraction layers so the warehouse can target GPUs today and other accelerators (FPGA/ASIC) later without rewriting the query surface. The paper won Best Paper at SIGMOD 2026's Industrial Track.",
+  "audience": "Fabric Data Warehouse engine internals readers, performance engineers, and architects evaluating why identical SQL can run dramatically faster on accelerator-backed compute without any query changes.",
+  "why_it_matters": "This is the first public, peer-reviewed account of why the Fabric Data Warehouse can suddenly get order-of-magnitude faster on the same SQL text: the engine is quietly routing eligible query fragments to GPU-backed tensor execution behind the scenes. It fills the deepest end of the warehouse knowledge gap — not just 'warehouse is fast' but the specific internals (CAL/DAL layering, tensor-operator translation, hardware-independent design) that explain the performance envelope and why it's expected to keep improving as new accelerator hardware arrives.",
+  "takeaways": [
+    "Fabric Data Warehouse now includes a hardware-accelerated execution path (CoddSpeed) that runs eligible query fragments on GPUs, transparently to existing SQL — no query rewrites required.",
+    "The accelerated path descends from Microsoft Research's Tensor Query Processor (TQP) work, which expresses relational operators as tensor computations executed on a tensor runtime (PyTorch).",
+    "Production architecture is split into two abstraction layers: a coprocessor routing layer and a data movement/caching layer, deliberately designed for 'hardware independence' so the same warehouse engine can target future accelerators beyond GPUs.",
+    "Reported gains are large but workload-dependent: up to roughly 30x on TPC-H at 1TB scale, with the CPU-vs-accelerated gap generally described as more than an order of magnitude across production and benchmark scenarios.",
+    "At the SQL-endpoint level, reported end-to-end speedups scale with concurrency (roughly 3x/6x/7x at 1/16/64 concurrent users versus comparable cloud warehouses), suggesting the accelerated path pays off increasingly as concurrent load rises."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Warehouse",
+    "GPU",
+    "CoddSpeed",
+    "TQP",
+    "QueryProcessing",
+    "NativeExecution",
+    "SIGMOD"
+  ],
+  "claims": [
+    {
+      "capability_id": "warehouse",
+      "text": "CoddSpeed is a hardware-accelerated query execution capability now built into Microsoft Fabric's Data Warehouse engine, developed by a Microsoft Research and product engineering team and published as a SIGMOD 2026 Industrial Track paper that won Best Paper.",
+      "depth": 1,
+      "type": "fact",
+      "tags": ["CoddSpeed", "MicrosoftFabric", "Warehouse", "SIGMOD"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The accelerated execution path runs transparently under existing SQL: queries do not need to be rewritten or specially hinted to benefit from GPU execution, since the engine decides internally which query fragments are eligible for acceleration.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["CoddSpeed", "TransparentExecution", "Warehouse"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "CoddSpeed's execution engine descends from the Tensor Query Processor (TQP) research lineage, which reformulates relational operators such as filter/select, join, group-by, and order-by as operations executable on a tensor computation runtime rather than as traditional row- or column-oriented CPU operators.",
+      "depth": 3,
+      "type": "internal",
+      "tags": ["TQP", "TensorRuntime", "RelationalOperators", "Architecture"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The tensor-computation approach targets PyTorch as its execution runtime, treating it as a hardware-abstraction layer: because PyTorch already supports diverse accelerators, expressing relational operators as tensor operations lets the same operator implementations run without hardware-specific rewrites.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["TQP", "PyTorch", "TensorRuntime", "HardwareAbstraction"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The production architecture is organized around two abstraction layers: a coprocessor abstraction layer that routes eligible query fragments to accelerator hardware, and a data abstraction layer that unifies caching and data movement across CPU and GPU memory so accelerated and non-accelerated operators can be mixed within one query plan.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["CAL", "DAL", "Architecture", "DataMovement"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The system is explicitly designed for 'hardware independence': the abstraction layering exists so the warehouse can target GPUs today and extend to other accelerator classes such as FPGAs or ASICs later, without redesigning the query engine or its SQL-facing behavior.",
+      "depth": 5,
+      "type": "fact",
+      "tags": ["HardwareIndependence", "Architecture", "Roadmap"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The paper reports the accelerated path outperforming the equivalent CPU-only execution by more than an order of magnitude across a mix of production and benchmark scenarios, framing this as a general characteristic of eligible workloads rather than an isolated best case.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Performance", "Benchmark", "GPU"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "On the TPC-H benchmark at 1TB scale, the accelerated engine achieves up to roughly a 30x speedup over the non-accelerated baseline.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Performance", "TPCH", "Benchmark", "GPU"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "End-to-end query latency improvements at the SQL endpoint scale with concurrency: reported speedups versus a comparable cloud data warehouse are roughly 3x at 1 concurrent user, 6x at 16 concurrent users, and 7x at 64 concurrent users, indicating the accelerated path's advantage grows rather than shrinks under concurrent load.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Performance", "Concurrency", "Benchmark", "GPU"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Data movement between CPU and GPU stages is called out as a first-class architectural concern, with the paper noting the use of high-bandwidth interconnects (such as NVLink and InfiniBand) to keep cross-device and cross-node data transfer from becoming the bottleneck that erodes accelerator gains.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["DataMovement", "Networking", "DAL", "Performance"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The predecessor TQP research reported successfully executing the full TPC-H benchmark suite on tensor-runtime execution, and separately reported up to roughly 9x speedups on hybrid queries that combine machine-learning model inference with SQL operators — evidence for the operator-translation approach prior to its productization in Fabric.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["TQP", "TPCH", "MLIntegration", "ResearchLineage"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://www.microsoft.com/en-us/research/publication/coddspeed-hardware-accelerated-query-processing-in-microsoft-fabric/",
+      "caption": "CoddSpeed publication page, Microsoft Research — SIGMOD 2026 Industrial Track (Best Paper)",
+      "attribution": "Microsoft Research"
+    }
+  ]
+}
