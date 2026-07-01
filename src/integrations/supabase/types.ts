@@ -102,6 +102,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "assets_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_blog_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "assets_claim_id_fkey"
             columns: ["claim_id"]
             isOneToOne: false
@@ -112,7 +133,28 @@ export type Database = {
             foreignKeyName: "assets_design_id_fkey"
             columns: ["design_id"]
             isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
             referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assets_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
             referencedColumns: ["id"]
           },
           {
@@ -124,7 +166,7 @@ export type Database = {
           },
         ]
       }
-      blog_sources: {
+      blog_sources_legacy: {
         Row: {
           blog_id: string
           label: string
@@ -148,7 +190,7 @@ export type Database = {
             foreignKeyName: "blog_sources_blog_id_fkey"
             columns: ["blog_id"]
             isOneToOne: false
-            referencedRelation: "blogs"
+            referencedRelation: "blogs_legacy"
             referencedColumns: ["id"]
           },
           {
@@ -160,7 +202,7 @@ export type Database = {
           },
         ]
       }
-      blogs: {
+      blogs_legacy: {
         Row: {
           active: boolean
           body_md: string
@@ -226,7 +268,7 @@ export type Database = {
             foreignKeyName: "blogs_supersedes_id_fkey"
             columns: ["supersedes_id"]
             isOneToOne: false
-            referencedRelation: "blogs"
+            referencedRelation: "blogs_legacy"
             referencedColumns: ["id"]
           },
           {
@@ -403,7 +445,28 @@ export type Database = {
             foreignKeyName: "content_item_sources_content_item_id_fkey"
             columns: ["content_item_id"]
             isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
             referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
             referencedColumns: ["id"]
           },
           {
@@ -503,7 +566,28 @@ export type Database = {
             foreignKeyName: "content_items_supersedes_id_fkey"
             columns: ["supersedes_id"]
             isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
             referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
             referencedColumns: ["id"]
           },
           {
@@ -515,7 +599,7 @@ export type Database = {
           },
         ]
       }
-      design_sources: {
+      design_sources_legacy: {
         Row: {
           design_id: string
           label: string
@@ -539,7 +623,7 @@ export type Database = {
             foreignKeyName: "design_sources_design_id_fkey"
             columns: ["design_id"]
             isOneToOne: false
-            referencedRelation: "designs"
+            referencedRelation: "designs_legacy"
             referencedColumns: ["id"]
           },
           {
@@ -551,7 +635,7 @@ export type Database = {
           },
         ]
       }
-      designs: {
+      designs_legacy: {
         Row: {
           body_md: string
           confidence: number | null
@@ -723,7 +807,7 @@ export type Database = {
           },
         ]
       }
-      lessons: {
+      lessons_legacy: {
         Row: {
           body_md: string
           capability_id: string | null
@@ -1179,14 +1263,318 @@ export type Database = {
             foreignKeyName: "validation_runs_design_id_fkey"
             columns: ["design_id"]
             isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "validation_runs_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "validation_runs_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
             referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "validation_runs_design_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
             referencedColumns: ["id"]
           },
         ]
       }
     }
     Views: {
-      [_ in never]: never
+      blog_sources: {
+        Row: {
+          blog_id: string | null
+          label: string | null
+          position: number | null
+          source_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["blog_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      blogs: {
+        Row: {
+          active: boolean | null
+          body_md: string | null
+          content_hash: string | null
+          created_at: string | null
+          depth_levels: number[] | null
+          document: Json | null
+          id: string | null
+          ready_to_share: boolean | null
+          slug: string | null
+          status: string | null
+          summary: string | null
+          supersedes_id: string | null
+          tags: string[] | null
+          title: string | null
+          topic_slug: string | null
+          updated_at: string | null
+          validation_confidence: number | null
+          version: number | null
+        }
+        Insert: {
+          active?: boolean | null
+          body_md?: string | null
+          content_hash?: string | null
+          created_at?: string | null
+          depth_levels?: number[] | null
+          document?: Json | null
+          id?: string | null
+          ready_to_share?: boolean | null
+          slug?: string | null
+          status?: string | null
+          summary?: string | null
+          supersedes_id?: string | null
+          tags?: string[] | null
+          title?: string | null
+          topic_slug?: string | null
+          updated_at?: string | null
+          validation_confidence?: number | null
+          version?: number | null
+        }
+        Update: {
+          active?: boolean | null
+          body_md?: string | null
+          content_hash?: string | null
+          created_at?: string | null
+          depth_levels?: number[] | null
+          document?: Json | null
+          id?: string | null
+          ready_to_share?: boolean | null
+          slug?: string | null
+          status?: string | null
+          summary?: string | null
+          supersedes_id?: string | null
+          tags?: string[] | null
+          title?: string | null
+          topic_slug?: string | null
+          updated_at?: string | null
+          validation_confidence?: number | null
+          version?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_items_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_topic_slug_fkey"
+            columns: ["topic_slug"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
+      design_sources: {
+        Row: {
+          design_id: string | null
+          label: string | null
+          position: number | null
+          source_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["design_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      designs: {
+        Row: {
+          body_md: string | null
+          confidence: number | null
+          constraints: Json | null
+          content_hash: string | null
+          created_at: string | null
+          document: Json | null
+          id: string | null
+          ready_to_share: boolean | null
+          scenario: string | null
+          slug: string | null
+          status: string | null
+          summary: string | null
+          tags: string[] | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          body_md?: string | null
+          confidence?: number | null
+          constraints?: Json | null
+          content_hash?: string | null
+          created_at?: string | null
+          document?: Json | null
+          id?: string | null
+          ready_to_share?: boolean | null
+          scenario?: string | null
+          slug?: string | null
+          status?: string | null
+          summary?: string | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          body_md?: string | null
+          confidence?: number | null
+          constraints?: Json | null
+          content_hash?: string | null
+          created_at?: string | null
+          document?: Json | null
+          id?: string | null
+          ready_to_share?: boolean | null
+          scenario?: string | null
+          slug?: string | null
+          status?: string | null
+          summary?: string | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      lessons: {
+        Row: {
+          body_md: string | null
+          capability_id: string | null
+          created_at: string | null
+          depth: string | null
+          id: string | null
+          slug: string | null
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          body_md?: string | null
+          capability_id?: string | null
+          created_at?: string | null
+          depth?: never
+          id?: string | null
+          slug?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          body_md?: string | null
+          capability_id?: string | null
+          created_at?: string | null
+          depth?: never
+          id?: string | null
+          slug?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_items_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "capabilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       admin_approve_user: {
