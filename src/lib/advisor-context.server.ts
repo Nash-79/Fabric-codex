@@ -364,7 +364,7 @@ export async function advisorRetrieveContext(term: string): Promise<AdvisorRetri
       url: diagram.path,
       kind: "diagram" as const,
       ref: diagram.kind,
-      summary: diagram.topic_slug || diagram.capability_id || null,
+      summary: diagram.topic_slug || null,
     })),
   ].slice(0, 32);
 
