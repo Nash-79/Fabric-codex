@@ -147,19 +147,19 @@ function ContentItemPage() {
           </aside>
 
           <article>
-            <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <Link
                 to="/blogs"
                 className="text-xs text-muted-foreground hover:text-foreground lg:hidden"
               >
                 ← All blogs
               </Link>
-              <div className="flex items-center gap-3 ml-auto">
+              <div className="ml-auto flex flex-wrap items-center gap-2">
                 {citations.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setCitationsOpen(!citationsOpen)}
-                    className="no-print inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground"
+                    className="no-print inline-flex min-h-10 items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground"
                   >
                     <BookOpen className="h-3.5 w-3.5" />
                     <span>{citationsOpen ? "Hide Sources" : `Sources (${citations.length})`}</span>
