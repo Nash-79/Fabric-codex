@@ -201,7 +201,7 @@ function AdvisorPage() {
 
   const [modelId, setModelId] = useState<string>(() => loadModel());
   const [input, setInput] = useState(search.prompt ?? "");
-  const [sourcesOpen, setSourcesOpen] = useState(true);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.innerWidth >= 1024;
@@ -282,6 +282,7 @@ function AdvisorPage() {
   const lastAssistant = [...messages].reverse().find((message) => message.role === "assistant");
   const lastAssistantId = lastAssistant?.id;
   const sourceMetadata = lastAssistant?.metadata;
+  const sources = sourceMetadata?.sources ?? [];
   const statusText =
     status === "submitted"
       ? "Retrieving sources"
@@ -289,11 +290,19 @@ function AdvisorPage() {
         ? "Writing answer"
         : "Ready";
 
+  // Autohide sources panel when empty, or auto-open on desktop when sources become available
+  useEffect(() => {
+    if (sources.length === 0) {
+      setSourcesOpen(false);
+    } else if (typeof window !== "undefined" && window.innerWidth >= 1024) {
+      setSourcesOpen(true);
+    }
+  }, [sources.length]);
+
   async function submit(text = input) {
     const trimmed = text.trim();
     if (!trimmed || isLoading) return;
     setInput("");
-    setSourcesOpen(true);
 
     let currentId = activeThreadId;
     if (!currentId || currentId === "new") {
@@ -402,10 +411,10 @@ function AdvisorPage() {
 
         {/* Left Collapsible History Sidebar */}
         <aside
-          className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 lg:static lg:z-0 lg:h-[calc(100vh-3.5rem)] ${
+          className={`fixed inset-y-0 left-0 z-40 flex flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-300 ease-in-out lg:static lg:h-[calc(100vh-3.5rem)] ${
             sidebarOpen
-              ? "translate-x-0"
-              : "-translate-x-full lg:w-0 lg:border-r-0 lg:translate-x-0"
+              ? "w-64 translate-x-0 opacity-100"
+              : "w-0 -translate-x-full opacity-0 pointer-events-none overflow-hidden border-r-0"
           }`}
         >
           <div className="flex h-14 items-center justify-between px-3 border-b border-sidebar-border/40 shrink-0">
@@ -476,197 +485,198 @@ function AdvisorPage() {
         </aside>
 
         {/* Main Content Area */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <main className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_360px] overflow-hidden">
-            <section
-              className="flex min-w-0 flex-col h-full bg-background"
-              aria-label="Fabric Atlas Advisor chat"
-            >
-              <div className="border-b border-border bg-background shrink-0">
-                <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4 md:px-6">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-primary">
-                        <Bot className="h-4 w-4" />
-                        Grounded Advisor
-                      </div>
-                      <h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">
-                        Ask Fabric Atlas
-                      </h1>
-                      <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                        Answers retrieve verified claims plus related blogs, designs, lessons,
-                        sources, topics, capabilities, and diagrams. Unsupported facts are refused
-                        rather than guessed.
-                      </p>
+        <main
+          className={`grid min-h-0 flex-1 h-full overflow-hidden transition-all duration-300 ${
+            sourcesOpen && sources.length > 0 ? "lg:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1"
+          }`}
+        >
+          <section
+            className="flex min-w-0 flex-col h-full max-h-full overflow-hidden bg-background"
+            aria-label="Fabric Atlas Advisor chat"
+          >
+            <div className="border-b border-border bg-background shrink-0">
+              <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4 md:px-6">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-primary">
+                      <Bot className="h-4 w-4" />
+                      Grounded Advisor
                     </div>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                      {!sidebarOpen && (
-                        <button
-                          type="button"
-                          onClick={() => setSidebarOpen(true)}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
-                          aria-label="Open chat history"
-                        >
-                          <PanelLeftOpen className="h-3.5 w-3.5" />
-                          History
-                        </button>
-                      )}
-                      <label className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground">Model</span>
-                        <select
-                          value={modelId}
-                          onChange={(event) => setModelId(event.target.value)}
-                          className="max-w-56 bg-transparent text-xs text-foreground focus:outline-none"
-                          aria-label="Advisor model"
-                        >
-                          {ADVISOR_MODELS.map((model) => (
-                            <option key={model.id} value={model.id} className="bg-card">
-                              {model.label} — {model.hint}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground">
-                        <span
-                          className={`inline-block h-2 w-2 rounded-full ${TIER_DOT[activeModel.tier]}`}
-                          aria-hidden="true"
-                        />
-                        {TIER_LABEL[activeModel.tier]}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => setSourcesOpen((open) => !open)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
-                        aria-label="Toggle sources panel"
-                      >
-                        <PanelRightOpen className="h-3.5 w-3.5" />
-                        Sources
-                      </button>
-                      {messages.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={clearConversation}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
-                          aria-label="Clear conversation"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          Clear
-                        </button>
-                      )}
-                    </div>
+                    <h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">
+                      Ask Fabric Atlas
+                    </h1>
+                    <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
+                      Answers retrieve verified claims plus related blogs, designs, lessons,
+                      sources, topics, capabilities, and diagrams. Unsupported facts are refused
+                      rather than guessed.
+                    </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                    <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1">
-                      <Database className="h-3.5 w-3.5" />
-                      RAG over all Atlas content
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!sidebarOpen && (
+                      <button
+                        type="button"
+                        onClick={() => setSidebarOpen(true)}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
+                        aria-label="Open chat history"
+                      >
+                        <PanelLeftOpen className="h-3.5 w-3.5" />
+                        History
+                      </button>
+                    )}
+                    <label className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">Model</span>
+                      <select
+                        value={modelId}
+                        onChange={(event) => setModelId(event.target.value)}
+                        className="max-w-56 bg-transparent text-xs text-foreground focus:outline-none"
+                        aria-label="Advisor model"
+                      >
+                        {ADVISOR_MODELS.map((model) => (
+                          <option key={model.id} value={model.id} className="bg-card">
+                            {model.label} — {model.hint}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground">
+                      <span
+                        className={`inline-block h-2 w-2 rounded-full ${TIER_DOT[activeModel.tier]}`}
+                        aria-hidden="true"
+                      />
+                      {TIER_LABEL[activeModel.tier]}
                     </span>
-                    <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      {statusText}
-                      {isLoading && (
-                        <span className="ml-1 inline-flex gap-0.5 motion-reduce:hidden">
-                          <span className="h-1 w-1 animate-pulse rounded-full bg-primary" />
-                          <span className="h-1 w-1 animate-pulse rounded-full bg-primary [animation-delay:120ms]" />
-                          <span className="h-1 w-1 animate-pulse rounded-full bg-primary [animation-delay:240ms]" />
-                        </span>
-                      )}
-                    </span>
-                    {sourceMetadata?.contextSummary && (
-                      <span className="rounded-md border border-border bg-card px-2 py-1">
-                        {sourceMetadata.contextSummary}
-                      </span>
+                    <button
+                      type="button"
+                      onClick={() => setSourcesOpen((open) => !open)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
+                      aria-label="Toggle sources panel"
+                    >
+                      <PanelRightOpen className="h-3.5 w-3.5" />
+                      Sources
+                    </button>
+                    {messages.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearConversation}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
+                        aria-label="Clear conversation"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        Clear
+                      </button>
                     )}
                   </div>
                 </div>
-              </div>
 
-              <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-background">
-                <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6">
-                  {messages.length === 0 ? (
-                    <div className="py-8">
-                      <div className="max-w-2xl">
-                        <h2 className="text-lg font-semibold text-foreground">
-                          Start with a grounded question
-                        </h2>
-                        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                          Ask for a plain-language explanation, a design review, a comparison, or
-                          code. The Advisor will cite approved claims and show the retrieved
-                          context.
-                        </p>
-                      </div>
-                      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                        {STARTERS.map((starter) => (
-                          <AdvisorPromptCard
-                            key={starter.title}
-                            title={starter.title}
-                            prompt={starter.prompt}
-                            onSelect={(prompt) => {
-                              setInput(prompt);
-                              submit(prompt);
-                            }}
-                          />
-                        ))}
-                      </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1">
+                    <Database className="h-3.5 w-3.5" />
+                    RAG over all Atlas content
+                  </span>
+                  <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    {statusText}
+                    {isLoading && (
+                      <span className="ml-1 inline-flex gap-0.5 motion-reduce:hidden">
+                        <span className="h-1 w-1 animate-pulse rounded-full bg-primary" />
+                        <span className="h-1 w-1 animate-pulse rounded-full bg-primary [animation-delay:120ms]" />
+                        <span className="h-1 w-1 animate-pulse rounded-full bg-primary [animation-delay:240ms]" />
+                      </span>
+                    )}
+                  </span>
+                  {sourceMetadata?.contextSummary && (
+                    <span className="rounded-md border border-border bg-card px-2 py-1">
+                      {sourceMetadata.contextSummary}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-background">
+              <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6">
+                {messages.length === 0 ? (
+                  <div className="py-8">
+                    <div className="max-w-2xl">
+                      <h2 className="text-lg font-semibold text-foreground">
+                        Start with a grounded question
+                      </h2>
+                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                        Ask for a plain-language explanation, a design review, a comparison, or
+                        code. The Advisor will cite approved claims and show the retrieved context.
+                      </p>
                     </div>
-                  ) : (
-                    <div className="space-y-5">
-                      {messages.map((message) => (
-                        <AdvisorMessage
-                          key={message.id}
-                          message={message}
-                          isLastAssistant={message.id === lastAssistantId}
-                          onRetry={() => regenerate()}
+                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                      {STARTERS.map((starter) => (
+                        <AdvisorPromptCard
+                          key={starter.title}
+                          title={starter.title}
+                          prompt={starter.prompt}
+                          onSelect={(prompt) => {
+                            setInput(prompt);
+                            submit(prompt);
+                          }}
                         />
                       ))}
-                      {status === "submitted" && (
-                        <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-                          Retrieving verified claims, blogs, designs, lessons, sources, topics, and
-                          diagrams...
-                        </div>
-                      )}
-                      {error && (
-                        <div
-                          className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-700 dark:text-rose-200"
-                          role="alert"
-                        >
-                          {error.message}
-                        </div>
-                      )}
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : (
+                  <div className="space-y-5">
+                    {messages.map((message) => (
+                      <AdvisorMessage
+                        key={message.id}
+                        message={message}
+                        isLastAssistant={message.id === lastAssistantId}
+                        onRetry={() => regenerate()}
+                      />
+                    ))}
+                    {status === "submitted" && (
+                      <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
+                        Retrieving verified claims, blogs, designs, lessons, sources, topics, and
+                        diagrams...
+                      </div>
+                    )}
+                    {error && (
+                      <div
+                        className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-700 dark:text-rose-200"
+                        role="alert"
+                      >
+                        {error.message}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
+            </div>
 
-              <div className="border-t border-border bg-background/95 p-4 shrink-0">
-                <div className="mx-auto w-full max-w-5xl">
-                  <AdvisorComposer
-                    value={input}
-                    onChange={setInput}
-                    onSubmit={() => submit()}
-                    onStop={stop}
-                    busy={isLoading}
-                    disabled={isLoading}
-                  />
-                  {lastAssistant && (
-                    <div className="mt-2 text-xs text-muted-foreground">
-                      Last answer: {advisorMessageText(lastAssistant).length.toLocaleString()}{" "}
-                      chars. Use Copy or Retry on the response toolbar.
-                    </div>
-                  )}
-                </div>
+            <div className="border-t border-border bg-background/95 p-4 shrink-0">
+              <div className="mx-auto w-full max-w-5xl">
+                <AdvisorComposer
+                  value={input}
+                  onChange={setInput}
+                  onSubmit={() => submit()}
+                  onStop={stop}
+                  busy={isLoading}
+                  disabled={isLoading}
+                />
+                {lastAssistant && (
+                  <div className="mt-2 text-xs text-muted-foreground">
+                    Last answer: {advisorMessageText(lastAssistant).length.toLocaleString()} chars.
+                    Use Copy or Retry on the response toolbar.
+                  </div>
+                )}
               </div>
-            </section>
+            </div>
+          </section>
 
-            <AdvisorSourcePanel
-              open={sourcesOpen}
-              onOpenChange={setSourcesOpen}
-              sources={sourceMetadata?.sources ?? []}
-              summary={sourceMetadata?.contextSummary}
-            />
-          </main>
-        </div>
+          <AdvisorSourcePanel
+            open={sourcesOpen && sources.length > 0}
+            onOpenChange={setSourcesOpen}
+            sources={sources}
+            summary={sourceMetadata?.contextSummary}
+          />
+        </main>
       </div>
     </div>
   );

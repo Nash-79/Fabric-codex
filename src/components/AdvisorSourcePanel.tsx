@@ -30,12 +30,14 @@ export function AdvisorSourcePanel({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  if (!open) return null;
+
   return (
     <aside
-      className={`border-l border-border bg-card/60 lg:block ${open ? "block" : "hidden"}`}
+      className="border-l border-border bg-card/60 w-full lg:w-[360px] h-full overflow-hidden shrink-0 flex flex-col"
       aria-label="Advisor sources and retrieved context"
     >
-      <div className="sticky top-14 max-h-[calc(100vh-3.5rem)] overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-4">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-sm font-semibold text-foreground">Sources & context</h2>
@@ -46,7 +48,7 @@ export function AdvisorSourcePanel({
           <button
             type="button"
             onClick={() => onOpenChange(false)}
-            className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring lg:hidden"
+            className="rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             Close
           </button>
