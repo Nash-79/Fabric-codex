@@ -22,7 +22,7 @@ import { ThemeToggle } from "./ThemeToggle";
 type NavLink = { to: string; label: string; hint?: string; exact?: boolean };
 
 const PRIMARY: ReadonlyArray<NavLink> = [
-  { to: "/", label: "Overview", exact: true },
+  { to: "/", label: "Home", exact: true },
   { to: "/topics", label: "Topics", hint: "Browse Fabric by topic" },
 ];
 
@@ -30,7 +30,7 @@ const KNOWLEDGE: ReadonlyArray<NavLink> = [
   { to: "/registry", label: "Capability Registry", hint: "The spine — coverage per capability" },
   { to: "/sources", label: "Sources", hint: "Graded, cited source library" },
   { to: "/learn", label: "Learn", hint: "Tiered lessons (Beginner→Expert)" },
-  { to: "/designs", label: "Designs", hint: "Cited solution architectures" },
+  { to: "/blogs", label: "Blog", hint: "Cited solution architectures, lessons and articles" },
 ];
 
 const BUILD: ReadonlyArray<NavLink> = [
