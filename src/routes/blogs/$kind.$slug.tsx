@@ -9,6 +9,7 @@ import { ContentHero } from "@/components/ContentHero";
 import { ContentTocSidebar, useTocHeadings } from "@/components/ContentTocSidebar";
 import { CitationSidebar } from "@/components/CitationSidebar";
 import { TopicTree } from "@/components/TopicTree";
+import { BookOpen } from "lucide-react";
 
 const KINDS = new Set(["article", "design", "lesson"]);
 
@@ -76,6 +77,7 @@ function ContentItemPage() {
     ...(item.body_md ?? "").matchAll(/!\[[^\]]*\]\((\/content\/diagrams\/[^)\s]+)\)/g),
   ].length;
   const [progress, setProgress] = useState(0);
+  const [citationsOpen, setCitationsOpen] = useState(false);
 
   useEffect(() => {
     function updateProgress() {
@@ -91,6 +93,34 @@ function ContentItemPage() {
     };
   }, []);
 
+  useEffect(() => {
+    function handleCiteClick(e: MouseEvent) {
+      const target = e.target as HTMLElement;
+      const anchor = target.closest("a");
+      if (anchor && anchor.getAttribute("href")?.startsWith("#src-")) {
+        e.preventDefault();
+        setCitationsOpen(true);
+        const targetId = anchor.getAttribute("href")?.substring(1);
+        if (targetId) {
+          setTimeout(() => {
+            const el = document.getElementById(targetId);
+            if (el) {
+              el.scrollIntoView({ behavior: "smooth", block: "center" });
+              el.classList.add("ring-2", "ring-teal-400", "ring-offset-2", "ring-offset-background", "duration-500", "transition-all");
+              setTimeout(() => {
+                el.classList.remove("ring-2", "ring-teal-400", "ring-offset-2", "ring-offset-background");
+              }, 2500);
+            }
+          }, 150);
+        }
+      }
+    }
+    document.addEventListener("click", handleCiteClick);
+    return () => {
+      document.removeEventListener("click", handleCiteClick);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
@@ -102,7 +132,11 @@ function ContentItemPage() {
           <TopicTree topics={topics} activeSlug={item.topic_slug ?? undefined} />
         </div>
 
-        <div className="mx-auto grid w-full max-w-6xl gap-8 lg:grid-cols-[220px_minmax(0,760px)_300px]">
+        <div className={`mx-auto grid w-full gap-8 transition-all duration-300 ${
+          citationsOpen 
+            ? "max-w-7xl lg:grid-cols-[220px_1fr_300px]" 
+            : "max-w-5xl lg:grid-cols-[220px_1fr]"
+        }`}>
           <aside className="hidden lg:block">
             <div className="sticky top-20 space-y-4">
               <Link to="/blogs" className="text-xs text-muted-foreground hover:text-foreground">
@@ -113,14 +147,26 @@ function ContentItemPage() {
           </aside>
 
           <article>
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3 mb-4">
               <Link
                 to="/blogs"
                 className="text-xs text-muted-foreground hover:text-foreground lg:hidden"
               >
                 ← All blogs
               </Link>
-              <PrintButton />
+              <div className="flex items-center gap-3 ml-auto">
+                {citations.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setCitationsOpen(!citationsOpen)}
+                    className="no-print inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" />
+                    <span>{citationsOpen ? "Hide Sources" : `Sources (${citations.length})`}</span>
+                  </button>
+                )}
+                <PrintButton />
+              </div>
             </div>
             <ContentHero
               item={item}
@@ -132,7 +178,7 @@ function ContentItemPage() {
             <ContentItemArticle bodyMd={item.body_md ?? ""} diagramMeta={diagramMeta} />
           </article>
 
-          <aside className="print-sources">
+          <aside className={`print-sources ${citationsOpen ? "block" : "hidden print:block"}`}>
             <div className="sticky top-20">
               <CitationSidebar citations={citations} />
             </div>
