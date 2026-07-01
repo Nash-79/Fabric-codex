@@ -290,13 +290,13 @@ function Landing() {
                   </div>
                   <h2 className="mt-1 text-lg font-semibold">Source-grounded facts</h2>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex w-full flex-wrap gap-2 md:w-auto">
                   <select
                     value={depth}
                     onChange={(event) =>
                       setDepth(event.target.value === "all" ? "all" : Number(event.target.value))
                     }
-                    className="rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground"
+                    className="min-h-10 flex-1 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground md:flex-none"
                   >
                     <option value="all">All depths</option>
                     {[1, 2, 3, 4, 5].map((d) => (
@@ -310,7 +310,7 @@ function Landing() {
                     onChange={(event) =>
                       setTier(event.target.value === "all" ? "all" : Number(event.target.value))
                     }
-                    className="rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground"
+                    className="min-h-10 flex-1 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground md:flex-none"
                   >
                     <option value="all">All tiers</option>
                     {[1, 2, 3, 4, 5, 6].map((t) => (
@@ -319,13 +319,13 @@ function Landing() {
                       </option>
                     ))}
                   </select>
-                  <div className="relative">
-                    <Search className="pointer-events-none absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                  <div className="relative w-full md:w-44">
+                    <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                     <input
                       value={query}
                       onChange={(event) => setQuery(event.target.value)}
                       placeholder="Filter claims"
-                      className="w-44 rounded-md border border-border bg-card py-1.5 pl-7 pr-2 text-xs text-foreground placeholder:text-muted-foreground"
+                      className="min-h-10 w-full rounded-md border border-border bg-card py-1.5 pl-7 pr-2 text-xs text-foreground placeholder:text-muted-foreground"
                     />
                   </div>
                 </div>
