@@ -56,7 +56,6 @@ type DiagramRow = {
   caption?: string | null;
   kind?: string | null;
   topic_slug?: string | null;
-  capability_id?: string | null;
 };
 
 export type AdvisorRetrievedContext = {
