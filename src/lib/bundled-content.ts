@@ -8,7 +8,7 @@ const sourceJsons = import.meta.glob("/content/sources/*.json", { eager: true })
   string,
   { default: any }
 >;
-const blogJsons = import.meta.glob("/content/blogs/*.json", { eager: true }) as Record<
+const blogJsons = import.meta.glob("/content/articles/*.json", { eager: true }) as Record<
   string,
   { default: any }
 >;

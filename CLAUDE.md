@@ -42,7 +42,7 @@ src/                Lovable-hosted TanStack Start app — reads Supabase directl
 frontend/           Legacy React + Vite SPA retained for reference/local comparison only; do
                     not treat it as the production deployment path.
 .claude/agents/     Subagents (curator, architect, validator, drift, learning, coverage,
-                    diagram, advisor, blog-author, docs-author)
+                    diagram, advisor, blog-author, content-orchestrator, docs-author)
 .claude/commands/   Slash commands that drive the agents
 content/            Git-tracked authored content: sources/, diagrams/, designs/, lessons/,
                     blogs/, help/, topics.json (seed tree), queue.md (offline queue)
@@ -146,23 +146,25 @@ fallback plus the scoped claim context, citation legend, and advisor system prom
 - **fabric-advisor** — expert Q&A grounded only in KB claims, cited; refuses where the KB is silent.
 - **blog-author** — composes the cited portal article for a topic from VERIFIED claims only;
   refuses thin coverage, labels inference, commissions original diagrams.
+- **content-orchestrator** — reads queue, RSS poll state, pending/duplicate claims, topic/blog
+  coverage, diagrams, and local drafts; dedupes and returns a ranked human-gated workplan.
 - **docs-author** — self-documentation: keeps content/help/\*.md matching the actual code;
   never documents features that don't exist.
 
 Prefer explicit invocation, e.g. `Use the knowledge-curator subagent on docs/sources/direct-lake.md`.
-`/publish-topic <slug>` chains agents for one topic: coverage check → human verify gate →
-diagram → article → validation → docs sync. URLs submitted via the frontend land in the
-server's ingestion queue (`POST /queue`); `/ingest-batch` consumes it, with content/queue.md
-as the offline fallback.
+`/orchestrate-content [focus]` gives the cross-queue editorial plan; `/publish-topic <slug>`
+chains agents for one topic: coverage check → human verify gate → diagram → article → validation
+→ docs sync. URLs submitted via the frontend land in the server's ingestion queue; `/ingest-batch`
+reads it, with content/queue.md as the offline fallback.
 
 **Diagram coverage is enforced, not optional** (mirror these in `AGENTS.md` for Codex):
 
 - `/publish-topic` commissions **≥2** original diagrams before the blog-author runs — an
   architecture diagram and a decision/internals diagram.
 - The blog-author embeds **every** commissioned diagram, not just the first.
-- Every embedded `content/diagrams/*` path must exist on disk before `POST /blogs`. The
-  backend validation pass treats a missing embedded diagram as a **critical** issue, so the
-  blog cannot reach `ready_to_share` until it is fixed.
+- Every embedded `content/diagrams/*` path must exist on disk before the article is published.
+  The validation pass treats a missing embedded diagram as a **critical** issue, so the
+  article cannot reach `ready_to_share` until it is fixed.
 
 **Diagram commission queue (Settings → Diagrams).** Admins can commission more diagrams per topic
 at chosen intervals from the Settings UI. This reuses the `queue_items` lifecycle with
@@ -177,3 +179,7 @@ it as a generated asset (flipping the topic from _gap_ to _covered_ in the cover
 - API calls from agents go through the local backend (`http://localhost:8000`) via curl, not
   direct DB writes — the backend owns versioning and validation invariants.
 - When you change `models.py`, update `docs/data-model.md` in the same commit.
+- When a content-type or endpoint rename lands (e.g. blog→article), grep
+  `.claude/agents/`, `.claude/commands/`, `AGENTS.md`, and `docs/*.md` for the old term in the
+  same change — don't defer prompt/doc updates to a follow-up, or agent instructions silently
+  drift out of sync with what they actually query.

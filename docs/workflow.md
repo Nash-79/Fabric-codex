@@ -20,14 +20,45 @@ A metered Anthropic/OpenAI API key is **not** required for any of the authoring 
 ## The loop
 
 ```
- 1. Curate    /ingest <source>      curator extracts claims + tags + image refs ─▶ content/sources/*.json ─▶ POST /sources/ingest
- 2. Visualise /diagram <capability> diagram-author draws an ORIGINAL svg/mmd     ─▶ content/diagrams/*    ─▶ POST /assets
- 3. Verify    (Registry UI / POST /claims/{id}/verify)  human approves pending claims
- 4. Design    /design <scenario>    architect writes cited markdown              ─▶ content/designs/*.md  ─▶ POST /designs
- 5. Validate  /validate <id>        reviewer reasons locally, posts issues; server adds citation+freshness ─▶ confidence
- 6. Teach     /lesson <cap> <level> learning-author writes a tiered lesson        ─▶ content/lessons/*.md
- 7. Maintain  /drift <source-key>   drift analyst re-extracts, supersedes, flags affected designs
+ 0. Plan      /orchestrate-content  reads queue/RSS/claims/blogs, dedupes, ranks next actions
+ 1. Curate    /ingest <source>      curator extracts claims + tags + image refs ─▶ content/sources/*.json
+ 2. Visualise /diagram <capability> diagram-author draws an ORIGINAL svg/mmd     ─▶ content/diagrams/*
+ 3. Verify    Settings → Claims     human approves pending claims
+ 4. Blog      /blog <topic>         author writes a rich cited article           ─▶ content/articles/*.json
+ 5. Design    /design <scenario>    architect writes cited markdown/json         ─▶ content/designs/*
+ 6. Validate  /validate <id>        reviewer reasons locally; server adds deterministic checks after publish
+ 7. Teach     /lesson <cap> <level> learning-author writes a tiered lesson        ─▶ content/lessons/*.md
+ 8. Maintain  /drift <source-key>   drift analyst re-extracts, supersedes, flags affected content
 ```
+
+The orchestrator is deliberately a human-in-the-loop planning layer. It reads unclaimed and
+claimed queue items, pending and duplicate claims, RSS poll state, existing blogs, local drafts,
+and diagram coverage. It suggests new articles only when a topic is not already covered; existing
+articles are routed as enrichments only when new verified claims, deeper coverage, missing
+diagrams, drift, or validation gaps justify a revision. Each article candidate gets a lightweight
+self-evaluation for grounding, novelty, richness, depth, diagrams, and the next human gate before
+any authoring command runs.
+
+Claude call path:
+
+```text
+/orchestrate-content [topic-or-capability]
+/ingest-batch
+/blog <topic-slug>
+/commission-diagrams
+```
+
+Codex call path:
+
+```text
+/prompts:fa-orchestrate FOCUS=<topic-or-capability>
+/prompts:fa-ingest SOURCE=<url> TIER=<1-6>
+/prompts:fa-blog TOPIC=<topic-slug>
+/prompts:fa-diagram CAPABILITY=<capability-id>
+```
+
+For the latest RSS entries, first run **Settings → RSS Feeds → Poll now**, then rerun the
+orchestrator so it plans against the newly queued links.
 
 ## Publish
 

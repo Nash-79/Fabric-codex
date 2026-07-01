@@ -1,37 +1,88 @@
 # Admin settings
 
-The **Settings** area is visible only to approved admins. It is for operational maintenance:
-users, source review, content metadata, claim moderation, article versions, validation, queue
-work, and audit logs.
+The **Settings** area is visible only to approved admins (the nav's Settings link only
+appears once a signed-in user's admin role is confirmed). It is organized into tabs:
 
 ## Users
 
-Admins can invite users by email, approve them, assign roles, suspend access, and revoke or
-expire pending invitations. A signed-in user must have `profiles.status = approved` before they
-can enter authenticated areas or call trusted server functions.
-
-Roles live in `user_roles`; approval state lives on `profiles`. Every role and approval change
-writes an admin audit event.
+Invite a user by email and starting role. Newly signed-up users appear with a status badge;
+the checkmark action approves them (a user must be `approved` before they can use any
+authenticated area). **Editor** and **Admin** buttons set roles; the X button suspends a
+user. Pending invitations are listed separately and can be revoked or expired from there.
 
 ## Content
 
-The Content tab edits metadata for sources, topics, capabilities, Help pages, and diagrams.
-Source rows also have a **Review** action that queues the source for drift or re-ingest work.
+Edits metadata for **Sources**, **Topics**, **Capabilities**, **Help docs**, and **Diagrams**,
+plus lists (read-only summary, linking to their own workflows) for **Designs**. Each list's
+**Edit** button opens a dialog for that item's metadata fields (title, summary, description,
+tags, etc.) — this is a direct, in-place edit, appropriate because it's metadata, not
+knowledge.
 
-Claim text is never edited in place. Use **Supersede** to create a new pending claim version;
-the old row becomes inactive history. Use **Verify**, **Reject**, **Promote**, or **Dismiss**
-for moderation.
+- Source rows have a **Review** action that queues the source for a drift/re-ingest pass —
+  it lands back in the Queue tab.
+- Design rows have a **Validate** action (see *Validation and trust*) but their body text is
+  still authored in `content/designs/` and republished, not edited here.
 
-Articles are also append-only. **Edit as new version** creates a draft version and preserves
-citations by default. A version cannot be created without at least one cited source.
+Claim text is never edited from the Content tab — that happens in **Claims**.
 
-## Validation and queue
+## Claims
 
-Use **Validate** on articles and designs to run the deterministic validation pass. Queue items
-can be claimed, completed with a resulting source id, failed with a note, requeued, or dismissed.
+The full claim moderation workbench: filter by status, **Verify**/**Reject**/**Promote**
+individual claims, **Supersede** to create a new pending version of a claim's text, and
+**Verify all pending in…** to batch-verify every pending claim in one capability. See
+*Curation loop* for the full behavior.
+
+## Articles
+
+A table of published articles with **Validate** (runs the deterministic checks and updates
+the confidence/ready-to-share flag) and **Edit as new version** (opens a dialog to change
+title, summary, body, and cited sources; saving creates a new published version — it never
+mutates the existing row). A version cannot be saved without at least one cited source.
+
+## Queue
+
+**Queue a source URL** submits a new URL with a trust tier, tags, and a note — this is the
+admin-side form described in *Submitting sources*. The table below lists every queue item
+with its status and per-row actions: **claim**, **complete** (needs a resulting source id),
+**fail** (needs a note), **requeue**, and **dismiss**.
+
+## Publish
+
+Paste an agent-authored JSON file here to replay it into the knowledge base. Choose the kind
+— **Source (+ claims)**, **Article**, **Design**, **Lesson**, or **Diagram(s) / assets.json**
+— and paste the corresponding `content/*.json` file. Re-publishing a source keeps its
+verified claims and only refreshes the pending ones. Publishing an article, design, or
+lesson **always creates a new version**; the previous version is archived, never overwritten.
+For an article with a new embedded diagram, publish the diagram(s) first so the article's
+embedded-diagram check passes.
+
+## Diagrams
+
+Lists registered diagrams with an **Edit** action for caption/kind/topic metadata, and lets
+an admin **commission** additional diagrams for a topic at a chosen future time — this adds
+an item to the same queue mechanism the ingestion queue uses, tagged for diagram work. A
+laptop agent later drains due commissions with `/commission-diagrams`.
+
+## RSS Feeds
+
+Add, pause, or delete RSS subscriptions used to discover new source URLs automatically, and
+manually trigger a poll. Discovered URLs land in the Queue tab tagged "discovered."
+
+## Logs
+
+A combined, filterable activity stream: admin actions (user approvals, role changes, topic
+and source edits, publishes) and the claim status log (previous → new status) together,
+searchable and filterable to one stream or the other.
+
+## System
+
+Read-only KPI dashboard: platform stats plus a live breakdown of capability maturity
+(preview/GA/deprecated) and claim verification percentage, pulled from the same coverage data
+that powers the Capability Registry page.
 
 ## Source of truth
 
-`content/` remains the canonical authoring and export format. If Settings changes DB content
-that should survive a fresh environment, export it back to `content/` before treating it as
-source-controlled truth. Use `python scripts/import_content.py --dry-run` before publishing.
+`content/` remains the canonical, git-tracked authoring format. Settings edits happen
+directly against the database; if a change should survive a fresh environment (a new topic,
+an edited Help page, a re-parented topic), mirror it back into the matching `content/` file
+before considering it durable.

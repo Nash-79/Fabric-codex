@@ -1,8 +1,10 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
-import { getTopic } from "@/lib/atlas.functions";
+import { getTopic, listTopics } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { MaturityBadge } from "@/components/Badges";
+import { KindBadge } from "@/components/KindBadge";
+import { TopicTree } from "@/components/TopicTree";
 import { accent } from "@/lib/fabric-theme";
 
 type TopicCapability = {
@@ -12,7 +14,8 @@ type TopicCapability = {
   maturity?: string | null;
 };
 
-type TopicBlog = {
+type TopicContentItem = {
+  kind: string;
   slug: string;
   title: string;
   summary: string;
@@ -20,6 +23,8 @@ type TopicBlog = {
 
 const topicQO = (slug: string) =>
   queryOptions({ queryKey: ["topic", slug], queryFn: () => getTopic({ data: { slug } }) });
+
+const topicsQO = queryOptions({ queryKey: ["topics"], queryFn: () => listTopics() });
 
 export const Route = createFileRoute("/topics/$slug")({
   head: ({ loaderData }: { loaderData?: Awaited<ReturnType<typeof getTopic>> }) => ({
@@ -30,7 +35,11 @@ export const Route = createFileRoute("/topics/$slug")({
   }),
   loader: async ({ context, params }) => {
     try {
-      return await context.queryClient.ensureQueryData(topicQO(params.slug));
+      const [topic] = await Promise.all([
+        context.queryClient.ensureQueryData(topicQO(params.slug)),
+        context.queryClient.ensureQueryData(topicsQO),
+      ]);
+      return topic;
     } catch {
       throw notFound();
     }
@@ -59,80 +68,92 @@ export const Route = createFileRoute("/topics/$slug")({
 function TopicPage() {
   const { slug } = Route.useParams();
   const { data } = useSuspenseQuery(topicQO(slug));
-  const { topic, children, capabilities, blogs } = data;
+  const { data: topics } = useSuspenseQuery(topicsQO);
+  const { topic, children, capabilities } = data;
+  const items = ((data as any).items ?? data.blogs ?? []) as TopicContentItem[];
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
-      <div className="mx-auto max-w-4xl px-6 py-12">
-        <Link to="/topics" className="text-xs text-muted-foreground hover:text-foreground">
-          ← All topics
-        </Link>
-        <h1 className="mt-3 text-4xl font-semibold tracking-tight">{topic.name}</h1>
-        <p className="mt-3 text-lg leading-relaxed text-muted-foreground">{topic.description}</p>
+      <div className="mx-auto flex max-w-[1400px] gap-6 px-6 py-12">
+        <div className="hidden lg:block">
+          <TopicTree topics={topics} activeSlug={topic.slug} />
+        </div>
+        <div className="mx-auto w-full max-w-4xl">
+          <Link to="/topics" className="text-xs text-muted-foreground hover:text-foreground">
+            ← All topics
+          </Link>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight">{topic.name}</h1>
+          <p className="mt-3 text-lg leading-relaxed text-muted-foreground">{topic.description}</p>
 
-        {capabilities.length > 0 && (
-          <div className="mt-6 flex flex-wrap gap-1.5">
-            {(capabilities as TopicCapability[]).map((c) => {
-              const a = accent(c.accent);
-              return (
-                <Link
-                  key={c.id}
-                  to="/registry/$id"
-                  params={{ id: c.id }}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${a.chip}`}
-                >
-                  <span className={`inline-block h-1.5 w-1.5 rounded-full ${a.dot}`} />
-                  {c.name}
-                  {c.maturity === "preview" && <MaturityBadge maturity="preview" />}
-                </Link>
-              );
-            })}
-          </div>
-        )}
-
-        {blogs.length > 0 && (
-          <section className="mt-10">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Articles
-            </h2>
-            <ul className="mt-3 space-y-2">
-              {(blogs as TopicBlog[]).map((b) => (
-                <li key={b.slug}>
+          {capabilities.length > 0 && (
+            <div className="mt-6 flex flex-wrap gap-1.5">
+              {(capabilities as TopicCapability[]).map((c) => {
+                const a = accent(c.accent);
+                return (
                   <Link
-                    to="/blog/$slug"
-                    params={{ slug: b.slug }}
-                    className="block rounded-xl border border-border bg-card p-4 hover:bg-accent"
+                    key={c.id}
+                    to="/registry/$id"
+                    params={{ id: c.id }}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${a.chip}`}
                   >
-                    <div className="font-medium text-foreground">{b.title}</div>
-                    <div className="mt-1 text-sm text-muted-foreground">{b.summary}</div>
+                    <span className={`inline-block h-1.5 w-1.5 rounded-full ${a.dot}`} />
+                    {c.name}
+                    {c.maturity === "preview" && <MaturityBadge maturity="preview" />}
                   </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+                );
+              })}
+            </div>
+          )}
 
-        {children.length > 0 && (
-          <section className="mt-10">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-              Subtopics
-            </h2>
-            <ul className="mt-3 space-y-1.5">
-              {children.map((c) => (
-                <li key={c.slug}>
-                  <Link
-                    to="/topics/$slug"
-                    params={{ slug: c.slug }}
-                    className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
-                  >
-                    {c.name} — <span className="text-muted-foreground">{c.description}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
+          {items.length > 0 && (
+            <section className="mt-10">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Content
+              </h2>
+              <ul className="mt-3 space-y-2">
+                {items.map((item) => (
+                  <li key={`${item.kind}-${item.slug}`}>
+                    <Link
+                      to="/content/$kind/$slug"
+                      params={{ kind: item.kind, slug: item.slug }}
+                      className="block rounded-xl border border-border bg-card p-4 hover:bg-accent"
+                    >
+                      <div className="flex items-center gap-2">
+                        <KindBadge kind={item.kind} />
+                        <div className="font-medium text-foreground">{item.title}</div>
+                      </div>
+                      {item.summary && (
+                        <div className="mt-1 text-sm text-muted-foreground">{item.summary}</div>
+                      )}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          {children.length > 0 && (
+            <section className="mt-10">
+              <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
+                Subtopics
+              </h2>
+              <ul className="mt-3 space-y-1.5">
+                {children.map((c) => (
+                  <li key={c.slug}>
+                    <Link
+                      to="/topics/$slug"
+                      params={{ slug: c.slug }}
+                      className="block rounded-md px-2 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+                    >
+                      {c.name} — <span className="text-muted-foreground">{c.description}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
       </div>
     </div>
   );

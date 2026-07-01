@@ -11,9 +11,17 @@ type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
 };
 
+const isDev = typeof process !== "undefined" && process.env.NODE_ENV !== "production";
+
 let serverEntryPromise: Promise<ServerEntry> | undefined;
 
 async function getServerEntry(): Promise<ServerEntry> {
+  if (isDev) {
+    return import("@tanstack/react-start/server-entry").then(
+      (m) => (m.default ?? m) as ServerEntry,
+    );
+  }
+
   if (!serverEntryPromise) {
     serverEntryPromise = import("@tanstack/react-start/server-entry").then(
       (m) => (m.default ?? m) as ServerEntry,
@@ -21,8 +29,6 @@ async function getServerEntry(): Promise<ServerEntry> {
   }
   return serverEntryPromise;
 }
-
-const isDev = typeof process !== "undefined" && process.env.NODE_ENV !== "production";
 
 async function buildErrorResponse(error: unknown): Promise<Response> {
   if (isDev) {

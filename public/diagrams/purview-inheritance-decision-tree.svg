@@ -1,0 +1,254 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 900" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Decision/internals diagram: how permissions and sensitivity labels
+       RESOLVE at query/open time by walking tenant -> domain -> workspace -> item,
+       and how a label is determined for a given item (manual / default / inherited /
+       programmatic), distinct in form and content from governance-layers.svg
+       (which is a static layered architecture panel, not a decision walk).
+       Grounded in purview claims: 3-tier hierarchy (740e375c), domains (ac42e84c),
+       sensitivity labels + inheritance/persistence (47e34db6), Purview-powered
+       inheritance + cross-tenant enforcement (c506c4c7), data-level security scope
+       limits (1a1e775e), endorsement (a73ca657), DLP scan-on-upload (bd8ab690). -->
+  <defs>
+    <linearGradient id="hdrGrad2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4B2E83"/>
+      <stop offset="0.6" stop-color="#6B3FA0"/>
+      <stop offset="1" stop-color="#9A6FD1"/>
+    </linearGradient>
+    <marker id="arrP" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#6B3FA0"/>
+    </marker>
+    <marker id="arrY" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B8860B"/>
+    </marker>
+    <marker id="arrG" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0B6E4F"/>
+    </marker>
+  </defs>
+
+  <rect width="1180" height="900" fill="#FFFFFF"/>
+
+  <!-- Header -->
+  <rect x="0" y="0" width="1180" height="58" fill="url(#hdrGrad2)"/>
+  <text x="28" y="25" font-size="17" font-weight="700" fill="#FFFFFF">Permission &amp; Sensitivity-Label Inheritance — Decision Walk</text>
+  <text x="28" y="44" font-size="11" fill="#E8DCFB">How access and label resolve at open/query time across tenant → domain → workspace → item boundaries</text>
+
+  <!-- Legend -->
+  <rect x="900" y="70" width="252" height="98" rx="6" fill="#FAFAFA" stroke="#DDD"/>
+  <text x="914" y="86" font-size="10" font-weight="700" fill="#333">LEGEND</text>
+  <line x1="914" y1="98" x2="944" y2="98" stroke="#6B3FA0" stroke-width="2" marker-end="url(#arrP)"/>
+  <text x="950" y="102" font-size="9" fill="#333">scope resolution step</text>
+  <line x1="914" y1="114" x2="944" y2="114" stroke="#B8860B" stroke-width="2" marker-end="url(#arrY)"/>
+  <text x="950" y="118" font-size="9" fill="#333">label-source branch</text>
+  <line x1="914" y1="130" x2="944" y2="130" stroke="#0B6E4F" stroke-width="2" marker-end="url(#arrG)"/>
+  <text x="950" y="134" font-size="9" fill="#333">enforced outcome</text>
+  <rect x="914" y="142" width="14" height="10" rx="2" fill="#FFF3D6" stroke="#B8860B"/>
+  <text x="933" y="151" font-size="9" fill="#333">decision point (diamond)</text>
+  <rect x="914" y="156" width="14" height="10" rx="2" fill="#E8F6EF" stroke="#0B6E4F"/>
+  <text x="933" y="165" font-size="9" fill="#333">terminal / enforced state</text>
+
+  <!-- ═══════════ LANE HEADERS ═══════════ -->
+  <text x="180" y="86" text-anchor="middle" font-size="10" font-weight="700" letter-spacing="1" fill="#4B2E83">TENANT</text>
+  <text x="420" y="86" text-anchor="middle" font-size="10" font-weight="700" letter-spacing="1" fill="#4B2E83">DOMAIN</text>
+  <text x="660" y="86" text-anchor="middle" font-size="10" font-weight="700" letter-spacing="1" fill="#4B2E83">WORKSPACE</text>
+  <!-- lane separators -->
+  <line x1="300" y1="76" x2="300" y2="860" stroke="#EDE7F6" stroke-width="1.5"/>
+  <line x1="540" y1="76" x2="540" y2="860" stroke="#EDE7F6" stroke-width="1.5"/>
+  <line x1="780" y1="76" x2="780" y2="860" stroke="#EDE7F6" stroke-width="1.5"/>
+  <rect x="20" y="76" width="280" height="784" fill="#FBF9FF"/>
+  <rect x="300" y="76" width="240" height="784" fill="#FEFDFB"/>
+  <rect x="540" y="76" width="240" height="784" fill="#FBF9FF"/>
+  <rect x="780" y="76" width="378" height="784" fill="#FEFDFB"/>
+  <text x="960" y="86" text-anchor="middle" font-size="10" font-weight="700" letter-spacing="1" fill="#4B2E83">ITEM (LABEL RESOLUTION)</text>
+
+  <!-- ═══════════ STEP 1: Tenant scope check ═══════════ -->
+  <rect x="40" y="200" width="240" height="60" rx="8" fill="#2D1B4E"/>
+  <text x="160" y="224" text-anchor="middle" font-size="12" font-weight="700" fill="#FFFFFF">User requests access to item</text>
+  <text x="160" y="242" text-anchor="middle" font-size="9" fill="#D8C7F5">Tenant admin defaults apply first</text>
+
+  <line x1="160" y1="260" x2="160" y2="290" stroke="#6B3FA0" stroke-width="1.6" marker-end="url(#arrP)"/>
+
+  <!-- Diamond: is setting delegated to domain? -->
+  <polygon points="160,292 250,332 160,372 70,332" fill="#FFF3D6" stroke="#B8860B" stroke-width="1.4"/>
+  <text x="160" y="325" text-anchor="middle" font-size="10" font-weight="600" fill="#5C3A00">Setting delegated</text>
+  <text x="160" y="339" text-anchor="middle" font-size="10" font-weight="600" fill="#5C3A00">to domain admin?</text>
+
+  <!-- No branch: stays tenant default -->
+  <line x1="70" y1="332" x2="40" y2="332" stroke="#6B3FA0" stroke-width="1.4"/>
+  <line x1="40" y1="332" x2="40" y2="470" stroke="#6B3FA0" stroke-width="1.4"/>
+  <text x="34" y="400" font-size="9" fill="#7A5AA8" transform="rotate(-90 34 400)">NO — tenant default holds</text>
+
+  <!-- Yes branch: cross to domain lane -->
+  <line x1="250" y1="332" x2="320" y2="332" stroke="#6B3FA0" stroke-width="1.6" marker-end="url(#arrP)"/>
+  <text x="285" y="325" text-anchor="middle" font-size="9" fill="#7A5AA8">YES</text>
+
+  <!-- Tenant-level compliance strip -->
+  <rect x="40" y="470" width="240" height="66" rx="8" fill="#EDE7F6" stroke="#B39DDB"/>
+  <text x="160" y="490" text-anchor="middle" font-size="10" font-weight="700" fill="#2D1B4E">Tenant-wide floor applies</text>
+  <text x="160" y="506" text-anchor="middle" font-size="9" fill="#4B2E83">Compliance certs (HIPAA BAA, ISO 27001/</text>
+  <text x="160" y="519" text-anchor="middle" font-size="9" fill="#4B2E83">27017/27018/27701) scope the platform</text>
+  <line x1="160" y1="470" x2="160" y2="372" stroke="#B39DDB" stroke-width="1.2" stroke-dasharray="3 2"/>
+
+  <!-- Domain hint box -->
+  <rect x="40" y="556" width="240" height="70" rx="8" fill="#F3EEFC" stroke="#C9B6EE"/>
+  <text x="160" y="576" text-anchor="middle" font-size="10" font-weight="700" fill="#2D1B4E">Advanced-license gate</text>
+  <text x="160" y="593" text-anchor="middle" font-size="9" fill="#4B2E83">Purview Info Protection, Purview DLP,</text>
+  <text x="160" y="608" text-anchor="middle" font-size="9" fill="#4B2E83">cross-org governance need add-on license</text>
+
+  <!-- ═══════════ STEP 2: Domain lane ═══════════ -->
+  <rect x="330" y="292" width="180" height="60" rx="8" fill="#117865"/>
+  <text x="420" y="316" text-anchor="middle" font-size="11" font-weight="700" fill="#FFFFFF">Domain admin override</text>
+  <text x="420" y="333" text-anchor="middle" font-size="9" fill="#D9F5EE">applies per business area</text>
+
+  <line x1="420" y1="352" x2="420" y2="382" stroke="#0B6E4F" stroke-width="1.6" marker-end="url(#arrG)"/>
+
+  <!-- Diamond: subdomain? -->
+  <polygon points="420,384 505,420 420,456 335,420" fill="#FFF3D6" stroke="#B8860B" stroke-width="1.4"/>
+  <text x="420" y="415" text-anchor="middle" font-size="10" font-weight="600" fill="#5C3A00">Item in a</text>
+  <text x="420" y="429" text-anchor="middle" font-size="10" font-weight="600" fill="#5C3A00">subdomain?</text>
+
+  <text x="420" y="475" text-anchor="middle" font-size="9" fill="#3F6259">YES → nearest subdomain settings win</text>
+  <text x="420" y="490" text-anchor="middle" font-size="9" fill="#3F6259">NO → parent domain settings apply</text>
+
+  <line x1="420" y1="456" x2="420" y2="510" stroke="#0B6E4F" stroke-width="1.4"/>
+
+  <rect x="330" y="512" width="180" height="60" rx="8" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="420" y="532" text-anchor="middle" font-size="10" font-weight="700" fill="#063D3B">Domain-filtered</text>
+  <text x="420" y="548" text-anchor="middle" font-size="9" fill="#3F6259">visibility in OneLake Catalog</text>
+  <text x="420" y="561" text-anchor="middle" font-size="9" fill="#3F6259">(browse without knowing workspace)</text>
+
+  <line x1="510" y1="322" x2="565" y2="322" stroke="#0B6E4F" stroke-width="1.6" marker-end="url(#arrG)"/>
+
+  <!-- ═══════════ STEP 3: Workspace lane ═══════════ -->
+  <rect x="580" y="292" width="180" height="60" rx="8" fill="#2AAC94"/>
+  <text x="670" y="316" text-anchor="middle" font-size="11" font-weight="700" fill="#063D3B">Workspace role check</text>
+  <text x="670" y="333" text-anchor="middle" font-size="9" fill="#0B5E50">Admin / Member / Contributor / Viewer</text>
+
+  <line x1="670" y1="352" x2="670" y2="382" stroke="#0B6E4F" stroke-width="1.6" marker-end="url(#arrG)"/>
+
+  <!-- Diamond: item type supports data-level security? -->
+  <polygon points="670,384 775,424 670,464 565,424" fill="#FFF3D6" stroke="#B8860B" stroke-width="1.4"/>
+  <text x="670" y="410" text-anchor="middle" font-size="9" font-weight="600" fill="#5C3A00">Item is SQL endpoint /</text>
+  <text x="670" y="423" text-anchor="middle" font-size="9" font-weight="600" fill="#5C3A00">Warehouse / Direct Lake /</text>
+  <text x="670" y="436" text-anchor="middle" font-size="9" font-weight="600" fill="#5C3A00">KQL DB?</text>
+
+  <!-- YES: RLS/CLS/TLS available -->
+  <line x1="670" y1="464" x2="670" y2="500" stroke="#0B6E4F" stroke-width="1.6" marker-end="url(#arrG)"/>
+  <rect x="580" y="502" width="180" height="72" rx="8" fill="#E8F6EF" stroke="#0B6E4F" stroke-width="1.3"/>
+  <text x="670" y="522" text-anchor="middle" font-size="10" font-weight="700" fill="#063D3B">RLS / CLS / TLS available</text>
+  <text x="670" y="538" text-anchor="middle" font-size="9" fill="#0B6E4F">Row-, column-, table-level rules</text>
+  <text x="670" y="553" text-anchor="middle" font-size="9" fill="#0B6E4F">layer on top of workspace role —</text>
+  <text x="670" y="567" text-anchor="middle" font-size="9" fill="#0B6E4F">finer grain than role alone</text>
+
+  <!-- NO: role-only -->
+  <line x1="565" y1="424" x2="440" y2="424" stroke="#B8860B" stroke-width="1.3" stroke-dasharray="4 2"/>
+  <text x="500" y="420" text-anchor="middle" font-size="8" fill="#8A6D00">other item type</text>
+  <rect x="580" y="594" width="180" height="52" rx="8" fill="#FBEFEF" stroke="#D48A8A"/>
+  <text x="670" y="613" text-anchor="middle" font-size="10" font-weight="700" fill="#7A2020">Role-only access</text>
+  <text x="670" y="629" text-anchor="middle" font-size="9" fill="#7A2020">No item-level row/column filter today</text>
+  <line x1="670" y1="464" x2="670" y2="594" stroke="#B8860B" stroke-width="1.1" stroke-dasharray="2 2" transform="translate(70,0)"/>
+
+  <line x1="760" y1="322" x2="805" y2="322" stroke="#0B6E4F" stroke-width="1.6" marker-end="url(#arrG)"/>
+
+  <!-- ═══════════ STEP 4: Item lane — label resolution ═══════════ -->
+  <rect x="820" y="120" width="330" height="46" rx="8" fill="#2D1B4E"/>
+  <text x="985" y="148" text-anchor="middle" font-size="11" font-weight="700" fill="#FFFFFF">Item opened — what label does it carry?</text>
+
+  <line x1="985" y1="166" x2="985" y2="196" stroke="#6B3FA0" stroke-width="1.6" marker-end="url(#arrP)"/>
+
+  <!-- Diamond: does item already have an explicit label? -->
+  <polygon points="985,198 1080,238 985,278 890,238" fill="#FFF3D6" stroke="#B8860B" stroke-width="1.4"/>
+  <text x="985" y="230" text-anchor="middle" font-size="9" font-weight="600" fill="#5C3A00">Item has an explicit</text>
+  <text x="985" y="244" text-anchor="middle" font-size="9" font-weight="600" fill="#5C3A00">label already?</text>
+
+  <!-- YES -->
+  <line x1="985" y1="278" x2="985" y2="308" stroke="#B8860B" stroke-width="1.4" marker-end="url(#arrY)"/>
+  <rect x="905" y="310" width="160" height="46" rx="7" fill="#FFF8EC" stroke="#E8A020"/>
+  <text x="985" y="328" text-anchor="middle" font-size="9" font-weight="700" fill="#5C3A00">Manual label</text>
+  <text x="985" y="343" text-anchor="middle" font-size="8" fill="#7A4A00">applied by owner — wins outright</text>
+
+  <!-- NO branch: check source item -->
+  <line x1="890" y1="238" x2="820" y2="238" stroke="#B8860B" stroke-width="1.3" stroke-dasharray="4 2"/>
+  <text x="855" y="234" text-anchor="middle" font-size="8" fill="#8A6D00">no</text>
+  <line x1="820" y1="238" x2="820" y2="380" stroke="#B8860B" stroke-width="1.3" stroke-dasharray="4 2"/>
+  <line x1="820" y1="380" x2="900" y2="380" stroke="#B8860B" stroke-width="1.3" stroke-dasharray="4 2" marker-end="url(#arrY)"/>
+
+  <!-- Diamond 2: upstream source item labeled? -->
+  <polygon points="985,362 1080,398 985,434 890,398" fill="#FFF3D6" stroke="#B8860B" stroke-width="1.4"/>
+  <text x="985" y="392" text-anchor="middle" font-size="9" font-weight="600" fill="#5C3A00">Upstream source</text>
+  <text x="985" y="406" text-anchor="middle" font-size="9" font-weight="600" fill="#5C3A00">item is labeled?</text>
+
+  <!-- YES -> inheritance -->
+  <line x1="985" y1="434" x2="985" y2="464" stroke="#B8860B" stroke-width="1.4" marker-end="url(#arrY)"/>
+  <rect x="905" y="466" width="160" height="52" rx="7" fill="#FFF8EC" stroke="#E8A020"/>
+  <text x="985" y="483" text-anchor="middle" font-size="9" font-weight="700" fill="#5C3A00">Label inheritance</text>
+  <text x="985" y="497" text-anchor="middle" font-size="8" fill="#7A4A00">propagates from source to</text>
+  <text x="985" y="509" text-anchor="middle" font-size="8" fill="#7A4A00">downstream item automatically</text>
+
+  <!-- NO -> default labeling check -->
+  <line x1="890" y1="398" x2="820" y2="398" stroke="#B8860B" stroke-width="1.3" stroke-dasharray="4 2"/>
+  <text x="855" y="394" text-anchor="middle" font-size="8" fill="#8A6D00">no</text>
+  <line x1="820" y1="398" x2="820" y2="540" stroke="#B8860B" stroke-width="1.3" stroke-dasharray="4 2"/>
+  <line x1="820" y1="540" x2="900" y2="540" stroke="#B8860B" stroke-width="1.3" stroke-dasharray="4 2" marker-end="url(#arrY)"/>
+
+  <!-- Diamond 3: tenant default label configured? -->
+  <polygon points="985,522 1080,558 985,594 890,558" fill="#FFF3D6" stroke="#B8860B" stroke-width="1.4"/>
+  <text x="985" y="552" text-anchor="middle" font-size="9" font-weight="600" fill="#5C3A00">Tenant default</text>
+  <text x="985" y="566" text-anchor="middle" font-size="9" font-weight="600" fill="#5C3A00">label configured?</text>
+
+  <line x1="985" y1="594" x2="985" y2="624" stroke="#B8860B" stroke-width="1.4" marker-end="url(#arrY)"/>
+  <rect x="905" y="626" width="160" height="46" rx="7" fill="#FFF8EC" stroke="#E8A020"/>
+  <text x="985" y="644" text-anchor="middle" font-size="9" font-weight="700" fill="#5C3A00">Default labeling</text>
+  <text x="985" y="659" text-anchor="middle" font-size="8" fill="#7A4A00">applied automatically at creation</text>
+
+  <line x1="890" y1="558" x2="820" y2="558" stroke="#B8860B" stroke-width="1.3" stroke-dasharray="4 2"/>
+  <text x="855" y="554" text-anchor="middle" font-size="8" fill="#8A6D00">no</text>
+  <line x1="820" y1="558" x2="820" y2="700" stroke="#B8860B" stroke-width="1.3" stroke-dasharray="4 2"/>
+  <line x1="820" y1="700" x2="900" y2="700" stroke="#B8860B" stroke-width="1.3" stroke-dasharray="4 2" marker-end="url(#arrY)"/>
+
+  <rect x="905" y="678" width="160" height="46" rx="7" fill="#F3F2F1" stroke="#B0ADA8"/>
+  <text x="985" y="696" text-anchor="middle" font-size="9" font-weight="700" fill="#424242">Programmatic label</text>
+  <text x="985" y="711" text-anchor="middle" font-size="8" fill="#5A5654">or left unlabeled by pipeline/API</text>
+
+  <!-- Converge to enforcement -->
+  <line x1="985" y1="356" x2="985" y2="356" stroke="none"/>
+  <line x1="985" y1="356" x2="1120" y2="356" stroke="#B8860B" stroke-width="1.1" stroke-dasharray="2 2"/>
+
+  <!-- Final enforced-state box, all branches converge here -->
+  <rect x="820" y="746" width="330" height="98" rx="9" fill="#E8F6EF" stroke="#0B6E4F" stroke-width="1.6"/>
+  <text x="985" y="768" text-anchor="middle" font-size="11" font-weight="700" fill="#063D3B">Resolved label + permission enforced</text>
+  <text x="985" y="786" text-anchor="middle" font-size="9" fill="#0B6E4F">Persists through export (Excel, file download,</text>
+  <text x="985" y="800" text-anchor="middle" font-size="9" fill="#0B6E4F">Power BI report). Stays enforced even when the</text>
+  <text x="985" y="814" text-anchor="middle" font-size="9" fill="#0B6E4F">item is shared across a tenant boundary.</text>
+  <text x="985" y="831" text-anchor="middle" font-size="9" font-weight="600" fill="#B8860B">DLP still scans on upload regardless of label source.</text>
+
+  <line x1="985" y1="356" x2="985" y2="746" stroke="#0B6E4F" stroke-width="1.3" stroke-dasharray="1 0" marker-end="none" opacity="0"/>
+  <!-- visible convergence connectors -->
+  <line x1="1065" y1="333" x2="1120" y2="333" stroke="#B8860B" stroke-width="1.1"/>
+  <line x1="1120" y1="333" x2="1120" y2="795" stroke="#B8860B" stroke-width="1.1"/>
+  <line x1="1120" y1="489" x2="1120" y2="489" stroke="none"/>
+  <line x1="1065" y1="489" x2="1140" y2="489" stroke="#B8860B" stroke-width="1.1"/>
+  <line x1="1140" y1="489" x2="1140" y2="795" stroke="#B8860B" stroke-width="1.1"/>
+  <line x1="1065" y1="649" x2="1155" y2="649" stroke="#B8860B" stroke-width="1.1"/>
+  <line x1="1155" y1="649" x2="1155" y2="795" stroke="#B8860B" stroke-width="1.1"/>
+  <line x1="1065" y1="701" x2="1165" y2="701" stroke="#B8860B" stroke-width="1.1"/>
+  <line x1="1165" y1="701" x2="1165" y2="795" stroke="#B8860B" stroke-width="1.1"/>
+  <line x1="1120" y1="795" x2="1150" y2="795" stroke="#0B6E4F" stroke-width="1.3" marker-end="url(#arrG)"/>
+  <line x1="1140" y1="795" x2="1150" y2="795" stroke="#0B6E4F" stroke-width="1.3"/>
+  <line x1="1155" y1="795" x2="1150" y2="795" stroke="#0B6E4F" stroke-width="1.3"/>
+  <line x1="1165" y1="795" x2="1150" y2="795" stroke="#0B6E4F" stroke-width="1.3"/>
+
+  <!-- Endorsement side-note connecting to catalog visibility -->
+  <rect x="820" y="200" width="0" height="0" fill="none"/>
+  <rect x="20" y="746" width="500" height="98" rx="9" fill="#F3EEFC" stroke="#B39DDB"/>
+  <text x="270" y="768" text-anchor="middle" font-size="11" font-weight="700" fill="#2D1B4E">Endorsement is orthogonal to inheritance</text>
+  <text x="270" y="786" text-anchor="middle" font-size="9" fill="#4B2E83">Promoted (self-applied by owner) and Certified (org-applied,</text>
+  <text x="270" y="800" text-anchor="middle" font-size="9" fill="#4B2E83">meets defined quality bar) are trust signals layered on top of —</text>
+  <text x="270" y="814" text-anchor="middle" font-size="9" fill="#4B2E83">not a substitute for — the label/permission walk at left.</text>
+  <text x="270" y="831" text-anchor="middle" font-size="9" font-weight="600" fill="#6B3FA0">Endorsed items surface first in OneLake Catalog search.</text>
+
+  <line x1="520" y1="795" x2="800" y2="795" stroke="#B39DDB" stroke-width="1.3" stroke-dasharray="4 2" marker-end="url(#arrP)"/>
+
+  <!-- Footnote -->
+  <text x="1152" y="888" text-anchor="end" font-size="9" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset. Companion to governance-layers.svg.</text>
+</svg>

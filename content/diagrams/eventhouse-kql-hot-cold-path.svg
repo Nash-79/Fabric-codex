@@ -1,0 +1,225 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 800" width="1100" height="800"
+     font-family="Segoe UI, Arial, sans-serif" font-size="12">
+  <defs>
+    <linearGradient id="bgGrad2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a1f26"/>
+      <stop offset="100%" stop-color="#12161c"/>
+    </linearGradient>
+    <linearGradient id="hotPathGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff8a50"/>
+      <stop offset="100%" stop-color="#e64a19"/>
+    </linearGradient>
+    <linearGradient id="coldPathGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4fc3f7"/>
+      <stop offset="100%" stop-color="#0288d1"/>
+    </linearGradient>
+    <linearGradient id="decisionGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ab47bc"/>
+      <stop offset="100%" stop-color="#7b1fa2"/>
+    </linearGradient>
+    <linearGradient id="throttleGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#ffca28"/>
+      <stop offset="50%" stop-color="#ff7043"/>
+      <stop offset="100%" stop-color="#d32f2f"/>
+    </linearGradient>
+    <filter id="shadow2" x="-8%" y="-8%" width="120%" height="130%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#00000055"/>
+    </filter>
+    <marker id="arrHot" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L9,3.5 L0,7 Z" fill="#ff8a50"/>
+    </marker>
+    <marker id="arrCold" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L9,3.5 L0,7 Z" fill="#4fc3f7"/>
+    </marker>
+    <marker id="arrNeutral" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L9,3.5 L0,7 Z" fill="#9aa7b0"/>
+    </marker>
+    <marker id="arrPurple" markerWidth="9" markerHeight="9" refX="7" refY="3.5" orient="auto">
+      <path d="M0,0 L9,3.5 L0,7 Z" fill="#ab47bc"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="800" fill="url(#bgGrad2)" rx="10"/>
+
+  <!-- Title -->
+  <text x="550" y="34" text-anchor="middle" font-size="19" font-weight="700" fill="#f5f5f5">Eventhouse / KQL — Hot Path vs Cold Path Internals</text>
+  <text x="550" y="53" text-anchor="middle" font-size="11.5" fill="#9aa7b0">Ingestion decision routing · caching &amp; retention policies · update-policy transforms · throttling ladder</text>
+
+  <!-- ═══ INGESTION DECISION NODE ═══ -->
+  <g id="ingest-decision">
+    <path d="M550,72 L620,112 L550,152 L480,112 Z" fill="url(#decisionGrad)" filter="url(#shadow2)"/>
+    <text x="550" y="105" text-anchor="middle" font-size="10.5" font-weight="700" fill="white">Record arrives</text>
+    <text x="550" y="120" text-anchor="middle" font-size="9.5" fill="#f3e5f5">indexed by</text>
+    <text x="550" y="133" text-anchor="middle" font-size="9.5" fill="#f3e5f5">arrival time</text>
+  </g>
+
+  <!-- Split arrows -->
+  <line x1="500" y1="128" x2="330" y2="188" stroke="#ff8a50" stroke-width="2.2" marker-end="url(#arrHot)"/>
+  <line x1="600" y1="128" x2="790" y2="188" stroke="#4fc3f7" stroke-width="2.2" marker-end="url(#arrCold)"/>
+  <text x="400" y="165" text-anchor="middle" font-size="9.5" fill="#ffab91" font-style="italic">within caching-policy window</text>
+  <text x="720" y="165" text-anchor="middle" font-size="9.5" fill="#81d4fa" font-style="italic">every record, always</text>
+
+  <!-- ═══ HOT PATH LANE ═══ -->
+  <g id="hot-lane">
+    <rect x="60" y="182" width="450" height="420" rx="10" fill="none" stroke="#ff8a50" stroke-width="2" stroke-dasharray="7,4"/>
+    <rect x="60" y="182" width="450" height="34" rx="10" fill="url(#hotPathGrad)"/>
+    <rect x="60" y="204" width="450" height="12" fill="url(#hotPathGrad)"/>
+    <text x="285" y="205" text-anchor="middle" font-size="13" font-weight="700" fill="white">HOT PATH — Premium Cache Tier</text>
+
+    <!-- Caching policy box -->
+    <rect x="76" y="226" width="418" height="58" rx="7" fill="#3d2418" filter="url(#shadow2)"/>
+    <text x="285" y="244" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ffccbc">Caching Policy</text>
+    <text x="285" y="259" text-anchor="middle" font-size="9.5" fill="#ffab91">Governs how long data stays in premium-tier cache</text>
+    <text x="285" y="273" text-anchor="middle" font-size="9" fill="#ff8a65">Shorter window = lower premium spend, same total history</text>
+
+    <!-- Update policy transform box -->
+    <rect x="76" y="292" width="418" height="76" rx="7" fill="#4a2a1a" filter="url(#shadow2)"/>
+    <text x="285" y="311" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ffe0b2">Update Policy Transform (optional)</text>
+    <text x="285" y="326" text-anchor="middle" font-size="9.5" fill="#ffcc80">Trigger table → transform function → target table,</text>
+    <text x="285" y="339" text-anchor="middle" font-size="9.5" fill="#ffcc80">executed automatically as new rows land in the cache</text>
+    <text x="285" y="354" text-anchor="middle" font-size="9" fill="#ffb74d">Feeds materialized views for pre-aggregated hot reads</text>
+    <text x="285" y="366" text-anchor="middle" font-size="9" fill="#ff8a65">Runs inside the hot path — before data ages to retention</text>
+
+    <!-- Materialized view -->
+    <rect x="76" y="378" width="200" height="56" rx="7" fill="#5d3a1e" filter="url(#shadow2)"/>
+    <text x="176" y="397" text-anchor="middle" font-size="10" font-weight="700" fill="#ffe0b2">Materialized View</text>
+    <text x="176" y="411" text-anchor="middle" font-size="9" fill="#ffcc80">Continuously updated</text>
+    <text x="176" y="424" text-anchor="middle" font-size="9" fill="#ffab91">aggregate snapshot</text>
+
+    <!-- Live query -->
+    <rect x="294" y="378" width="200" height="56" rx="7" fill="#5d3a1e" filter="url(#shadow2)"/>
+    <text x="394" y="397" text-anchor="middle" font-size="10" font-weight="700" fill="#ffe0b2">Sub-second Query</text>
+    <text x="394" y="411" text-anchor="middle" font-size="9" fill="#ffcc80">Native KQL against</text>
+    <text x="394" y="424" text-anchor="middle" font-size="9" fill="#ffab91">hot cache rows</text>
+
+    <line x1="176" y1="378" x2="240" y2="368" stroke="#ff8a50" stroke-width="1.6" marker-end="url(#arrHot)"/>
+    <line x1="394" y1="378" x2="330" y2="368" stroke="#ff8a50" stroke-width="1.6" marker-end="url(#arrHot)"/>
+
+    <!-- Anomaly detection -->
+    <rect x="76" y="444" width="418" height="52" rx="7" fill="#3d2418" filter="url(#shadow2)"/>
+    <text x="285" y="463" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ffe0b2">Native Anomaly Detection</text>
+    <text x="285" y="478" text-anchor="middle" font-size="9.5" fill="#ffab91">Evaluates live time-series in place — no copy or export</text>
+    <text x="285" y="489" text-anchor="middle" font-size="8.5" fill="#ff8a65">Direct pivot from dashboard alert to live KQL investigation</text>
+
+    <!-- Aging arrow to cold -->
+    <line x1="494" y1="470" x2="700" y2="470" stroke="#ffca28" stroke-width="2" marker-end="url(#arrHot)" stroke-dasharray="4,3"/>
+    <text x="595" y="462" text-anchor="middle" font-size="9" fill="#ffca28" font-style="italic">ages out of cache</text>
+
+    <!-- Cold-start latency -->
+    <rect x="76" y="504" width="418" height="52" rx="7" fill="#3d2418" filter="url(#shadow2)"/>
+    <text x="285" y="523" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ffe0b2">Cold-Start Latency</text>
+    <text x="285" y="538" text-anchor="middle" font-size="9.5" fill="#ffab91">Compute node ready in 5–10 s after idle — autoscaled</text>
+    <text x="285" y="549" text-anchor="middle" font-size="8.5" fill="#ff8a65">Design latency-sensitive pipelines around this warm-up</text>
+
+    <!-- Throttle decision -->
+    <rect x="76" y="564" width="418" height="30" rx="6" fill="#5d2b1a"/>
+    <text x="285" y="584" text-anchor="middle" font-size="9.5" font-weight="600" fill="#ffcc80">Query demand &gt; capacity? → see throttling ladder below</text>
+  </g>
+
+  <!-- ═══ COLD PATH LANE ═══ -->
+  <g id="cold-lane">
+    <rect x="590" y="182" width="450" height="420" rx="10" fill="none" stroke="#4fc3f7" stroke-width="2" stroke-dasharray="7,4"/>
+    <rect x="590" y="182" width="450" height="34" rx="10" fill="url(#coldPathGrad)"/>
+    <rect x="590" y="204" width="450" height="12" fill="url(#coldPathGrad)"/>
+    <text x="815" y="205" text-anchor="middle" font-size="13" font-weight="700" fill="white">COLD PATH — Standard Retention Tier</text>
+
+    <!-- Retention policy box -->
+    <rect x="606" y="226" width="418" height="58" rx="7" fill="#0d2b38" filter="url(#shadow2)"/>
+    <text x="815" y="244" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b3e5fc">Retention Policy</text>
+    <text x="815" y="259" text-anchor="middle" font-size="9.5" fill="#81d4fa">Governs the full queryable history window</text>
+    <text x="815" y="273" text-anchor="middle" font-size="9" fill="#4fc3f7">ADLS-hot-equivalent billing; higher latency than cache reads</text>
+
+    <!-- Decision: OneLake availability -->
+    <g id="onelake-decision">
+      <path d="M815,296 L880,326 L815,356 L750,326 Z" fill="url(#decisionGrad)" filter="url(#shadow2)"/>
+      <text x="815" y="322" text-anchor="middle" font-size="9.5" font-weight="700" fill="white">OneLake</text>
+      <text x="815" y="335" text-anchor="middle" font-size="9.5" font-weight="700" fill="white">availability</text>
+      <text x="815" y="347" text-anchor="middle" font-size="8.5" fill="#f3e5f5">on for table/DB?</text>
+    </g>
+
+    <!-- Yes branch: OneLake mirror -->
+    <line x1="750" y1="326" x2="668" y2="378" stroke="#4fc3f7" stroke-width="1.8" marker-end="url(#arrCold)"/>
+    <text x="700" y="365" text-anchor="middle" font-size="8.5" fill="#4fc3f7">yes</text>
+    <rect x="606" y="378" width="200" height="70" rx="7" fill="#0d3b4d" filter="url(#shadow2)"/>
+    <text x="706" y="396" text-anchor="middle" font-size="10" font-weight="700" fill="#b3e5fc">Adaptive Batching</text>
+    <text x="706" y="410" text-anchor="middle" font-size="8.5" fill="#81d4fa">Target 200–256 MB Parquet</text>
+    <text x="706" y="423" text-anchor="middle" font-size="8.5" fill="#81d4fa">Default delay: up to 3 h</text>
+    <text x="706" y="436" text-anchor="middle" font-size="8.5" fill="#4fc3f7">Min 5 min — risks small files</text>
+
+    <!-- No branch: query direct from standard tier -->
+    <line x1="880" y1="326" x2="962" y2="378" stroke="#9aa7b0" stroke-width="1.8" marker-end="url(#arrNeutral)"/>
+    <text x="930" y="365" text-anchor="middle" font-size="8.5" fill="#9aa7b0">no</text>
+    <rect x="824" y="378" width="200" height="70" rx="7" fill="#1a2530" filter="url(#shadow2)"/>
+    <text x="924" y="396" text-anchor="middle" font-size="10" font-weight="700" fill="#cfd8dc">KQL-Only Retrieval</text>
+    <text x="924" y="410" text-anchor="middle" font-size="8.5" fill="#9aa7b0">Queried via native KQL /</text>
+    <text x="924" y="423" text-anchor="middle" font-size="8.5" fill="#9aa7b0">T-SQL endpoint only</text>
+    <text x="924" y="436" text-anchor="middle" font-size="8.5" fill="#78909c">Not exposed to other engines</text>
+
+    <!-- Delta consumers -->
+    <rect x="606" y="460" width="418" height="58" rx="7" fill="#0d2b38" filter="url(#shadow2)"/>
+    <text x="815" y="478" text-anchor="middle" font-size="10.5" font-weight="700" fill="#b3e5fc">Delta Lake Consumers (no data copy, no extra charge)</text>
+    <text x="815" y="493" text-anchor="middle" font-size="9" fill="#81d4fa">Power BI Direct Lake · Warehouse · Lakehouse · Spark notebooks</text>
+    <text x="815" y="507" text-anchor="middle" font-size="8.5" fill="#4fc3f7">Retention policy soft-deletes the OneLake copy in lockstep</text>
+    <line x1="706" y1="448" x2="770" y2="460" stroke="#4fc3f7" stroke-width="1.6" marker-end="url(#arrCold)"/>
+
+    <!-- DDL restriction warning -->
+    <rect x="606" y="528" width="418" height="52" rx="7" fill="#4a1414" filter="url(#shadow2)"/>
+    <text x="815" y="547" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ffcdd2">While OneLake Availability Is Active</text>
+    <text x="815" y="562" text-anchor="middle" font-size="9" fill="#ef9a9a">Rename table · change column type · row-level security ·</text>
+    <text x="815" y="573" text-anchor="middle" font-size="8.5" fill="#ef5350">delete/purge rows — all blocked. Re-enable ⇒ full backfill</text>
+
+    <!-- Shortcut external table -->
+    <rect x="606" y="588" width="418" height="30" rx="6" fill="#0d3b4d"/>
+    <text x="815" y="608" text-anchor="middle" font-size="9.5" fill="#81d4fa">Shortcut into KQL DB → external_table() function, not native</text>
+  </g>
+
+  <!-- ═══ THROTTLING DECISION LADDER (shared, capacity-driven) ═══ -->
+  <g id="throttle-ladder">
+    <rect x="60" y="622" width="980" height="130" rx="10" fill="#20161a" filter="url(#shadow2)" stroke="#ffca28" stroke-width="1.5"/>
+    <text x="550" y="645" text-anchor="middle" font-size="12.5" font-weight="700" fill="#ffd54f">Capacity Pressure Decision Ladder — applies across both paths</text>
+    <text x="550" y="660" text-anchor="middle" font-size="9.5" fill="#bdbdbd">When query demand exceeds available capacity, the engine escalates through three stages:</text>
+
+    <rect x="82" y="672" width="290" height="66" rx="7" fill="#4a3b12"/>
+    <text x="227" y="691" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ffe082">1 · Proactive</text>
+    <text x="227" y="706" text-anchor="middle" font-size="9" fill="#ffecb3">Queries slowed</text>
+    <text x="227" y="719" text-anchor="middle" font-size="9" fill="#a5d6a7">Ingestion unaffected</text>
+    <text x="227" y="732" text-anchor="middle" font-size="8.5" fill="#c5e1a5">No data risk</text>
+
+    <path d="M372,705 L400,705 M392,697 L400,705 L392,713" stroke="#ff7043" stroke-width="2" fill="none"/>
+
+    <rect x="406" y="672" width="290" height="66" rx="7" fill="#4a2a12"/>
+    <text x="551" y="691" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ffab40">2 · Reactive</text>
+    <text x="551" y="706" text-anchor="middle" font-size="9" fill="#ffcc80">Queries paused</text>
+    <text x="551" y="719" text-anchor="middle" font-size="9" fill="#ffcc80">Ingestion paused</text>
+    <text x="551" y="732" text-anchor="middle" font-size="8.5" fill="#c5e1a5">No data lost</text>
+
+    <path d="M696,705 L724,705 M716,697 L724,705 L716,713" stroke="#e53935" stroke-width="2" fill="none"/>
+
+    <rect x="730" y="672" width="290" height="66" rx="7" fill="#4a1414"/>
+    <text x="875" y="691" text-anchor="middle" font-size="10.5" font-weight="700" fill="#ff8a80">3 · Extreme-reactive</text>
+    <text x="875" y="706" text-anchor="middle" font-size="9" fill="#ef9a9a">Ingestion + queries paused</text>
+    <text x="875" y="719" text-anchor="middle" font-size="9" fill="#ef9a9a">Holding period, then</text>
+    <text x="875" y="732" text-anchor="middle" font-size="8.5" fill="#ff5252">risk of data loss</text>
+
+    <rect x="82" y="672" width="938" height="8" fill="url(#throttleGrad)" opacity="0.5" rx="4"/>
+  </g>
+
+  <!-- Legend -->
+  <g id="legend2" transform="translate(60,762)">
+    <rect width="980" height="30" rx="6" fill="#0f1318" opacity="0.9"/>
+    <path d="M14,15 L26,10 L14,20 L2,10 Z" fill="url(#decisionGrad)"/>
+    <text x="34" y="19" font-size="9" fill="#cfd8dc">Decision point</text>
+    <line x1="130" y1="15" x2="158" y2="15" stroke="#ff8a50" stroke-width="2" marker-end="url(#arrHot)"/>
+    <text x="166" y="19" font-size="9" fill="#cfd8dc">Hot-path flow</text>
+    <line x1="260" y1="15" x2="288" y2="15" stroke="#4fc3f7" stroke-width="2" marker-end="url(#arrCold)"/>
+    <text x="296" y="19" font-size="9" fill="#cfd8dc">Cold-path flow</text>
+    <line x1="400" y1="15" x2="428" y2="15" stroke="#ffca28" stroke-width="2" stroke-dasharray="4,3" marker-end="url(#arrHot)"/>
+    <text x="436" y="19" font-size="9" fill="#cfd8dc">Data aging / lifecycle transition</text>
+    <rect x="600" y="9" width="14" height="12" rx="2" fill="#4a1414"/>
+    <text x="620" y="19" font-size="9" fill="#cfd8dc">Restriction / risk</text>
+    <rect x="740" y="9" width="14" height="12" rx="2" fill="#4a3b12"/>
+    <text x="760" y="19" font-size="9" fill="#cfd8dc">Escalation stage</text>
+  </g>
+
+  <text x="550" y="794" text-anchor="middle" font-size="9" fill="#78909c">Original diagram — Fabric Atlas. Not affiliated with or endorsed by Microsoft Corporation.</text>
+</svg>

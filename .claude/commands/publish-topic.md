@@ -21,15 +21,17 @@ existing agents; it adds no new machinery.
    b. a **decision / internals** diagram — query path, engine internals, or a comparison
       (e.g. Import vs DirectQuery vs Direct Lake for BI topics; hot vs cold path for RTI;
       V-Order vs plain Parquet for engineering). Register both as generated assets.
-   Verify each `.svg`/`.mmd` exists on disk before moving on — a blog that embeds a missing
+   Verify each `.svg`/`.mmd` exists on disk before moving on — an article that embeds a missing
    diagram fails validation as a **critical** issue and can never reach `ready_to_share`.
 4. **Article.** Use the **blog-author** subagent on `$ARGUMENTS`. It must embed **every**
    commissioned diagram (architecture near the top, internals inside the relevant section),
-   not just the first, then POST the blog.
-5. **Validate.** Use the **validation-reviewer** subagent over the new blog; it POSTs issues
-   to `/blogs/<id>/validate`. If critical issues surface, report them — do not rewrite the
-   article yourself; rerun the blog-author with the findings instead.
+   not just the first, then write the article file for publish.
+5. **Validate.** Use the **validation-reviewer** subagent over the new article; it reasons about
+   grounding/coverage/antipattern locally, and its findings feed the `validateContent` server
+   action an admin runs from **Settings → Publish** after publishing. If critical issues surface,
+   report them — do not rewrite the article yourself; rerun the blog-author with the findings
+   instead.
 6. **Docs sync.** Use the **docs-author** subagent so the Help section reflects any new
    surface this work introduced.
-7. Finish with: blog slug + confidence + ready_to_share, files written, and the git commit
-   reminder (`content/blogs/`, `content/diagrams/`, `content/help/`).
+7. Finish with: article slug + confidence + ready_to_share, files written, and the git commit
+   reminder (`content/articles/`, `content/diagrams/`, `content/help/`).

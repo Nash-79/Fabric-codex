@@ -32,14 +32,22 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
    `content/designs/<slug>.json` shaped:
    ```json
    {"slug":"...","title":"...","summary":"...","body_md":"<the markdown>",
+    "topic_slug":"<the primary topic this design belongs to, e.g. lakehouse>",
     "scenario":"...","tags":["MicrosoftFabric","..."],
     "cited_source_keys":["<source slug>", "..."]}
    ```
    `cited_source_keys` are source `slug`s ordered to match S1, S2, … (resolved → ids at publish).
+   Always include `topic_slug` when the design maps cleanly to one topic (check
+   `content/topics.json` or `GET /topics` for valid slugs) — designs now show up on their topic's
+   page alongside articles and lessons, so an unset `topic_slug` means the design stays
+   undiscoverable from topic browsing (findable only via the global `/content` list). Leave it out
+   only when the design genuinely spans multiple topics with no clear primary one.
 3. If a diagram would help, hand off to the **diagram-author** agent to produce an original
    architecture diagram (a generated asset) — do not copy any source image.
 4. **Publishing is a human step.** Tell the user to open **Settings → Publish**, choose **Design**,
-   and paste `content/designs/<slug>.json`. You have no Supabase write access (the service-role key
+   and paste `content/designs/<slug>.json` — the server persists it into `content_items`
+   (kind=`design`) and always creates a **new version** on re-publish (the prior version is
+   archived, never overwritten in place). You have no Supabase write access (the service-role key
    is sealed in Lovable Cloud); do not POST to Supabase or any `localhost` backend.
 
 ## Rules

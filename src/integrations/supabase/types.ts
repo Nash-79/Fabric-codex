@@ -379,6 +379,142 @@ export type Database = {
           },
         ]
       }
+      content_item_sources: {
+        Row: {
+          content_item_id: string
+          label: string
+          position: number
+          source_id: string
+        }
+        Insert: {
+          content_item_id: string
+          label: string
+          position?: number
+          source_id: string
+        }
+        Update: {
+          content_item_id?: string
+          label?: string
+          position?: number
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_item_sources_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_item_sources_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_items: {
+        Row: {
+          active: boolean
+          body_md: string
+          capability_id: string | null
+          confidence: number | null
+          constraints: Json
+          content_hash: string
+          created_at: string
+          depth_levels: number[]
+          document: Json
+          id: string
+          kind: string
+          ready_to_share: boolean
+          scenario: string
+          slug: string
+          status: string
+          summary: string
+          supersedes_id: string | null
+          tags: string[]
+          title: string
+          topic_slug: string | null
+          updated_at: string
+          validation_confidence: number | null
+          version: number
+        }
+        Insert: {
+          active?: boolean
+          body_md?: string
+          capability_id?: string | null
+          confidence?: number | null
+          constraints?: Json
+          content_hash?: string
+          created_at?: string
+          depth_levels?: number[]
+          document?: Json
+          id?: string
+          kind: string
+          ready_to_share?: boolean
+          scenario?: string
+          slug: string
+          status?: string
+          summary?: string
+          supersedes_id?: string | null
+          tags?: string[]
+          title: string
+          topic_slug?: string | null
+          updated_at?: string
+          validation_confidence?: number | null
+          version?: number
+        }
+        Update: {
+          active?: boolean
+          body_md?: string
+          capability_id?: string | null
+          confidence?: number | null
+          constraints?: Json
+          content_hash?: string
+          created_at?: string
+          depth_levels?: number[]
+          document?: Json
+          id?: string
+          kind?: string
+          ready_to_share?: boolean
+          scenario?: string
+          slug?: string
+          status?: string
+          summary?: string
+          supersedes_id?: string | null
+          tags?: string[]
+          title?: string
+          topic_slug?: string | null
+          updated_at?: string
+          validation_confidence?: number | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_items_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "capabilities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_supersedes_id_fkey"
+            columns: ["supersedes_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_items_topic_slug_fkey"
+            columns: ["topic_slug"]
+            isOneToOne: false
+            referencedRelation: "topics"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       design_sources: {
         Row: {
           design_id: string

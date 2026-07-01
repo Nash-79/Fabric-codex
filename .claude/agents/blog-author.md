@@ -51,18 +51,25 @@ an admin in Settings → Publish.
      `## Source Legend` table just duplicates it as an ugly full-width table — omit it entirely.
    Make it read like an article, not a wall of text: keep paragraphs short, break long stretches
    with a diagram, a `> [!NOTE]`/`> [!WARNING]`/`> [!INFERENCE]` callout, or a comparison table,
-   and use `##`/`###` headings every few hundred words (they become the page's contents nav).
-4. Commission **at least two** original diagrams: invoke the **diagram-author** subagent for
-   the topic's main capability — one **architecture** diagram and one **decision/internals**
-   diagram, and ask for **infographic-grade** originals (labeled zones, legends, comparison
-   panels), not bare box-and-arrow flows. **Embed every diagram you commission**, not just the
-   first: place the architecture diagram near the top and the internals/decision diagram inside
-   the section it explains, with `![caption](/content/diagrams/<file>.svg)`. Blog bodies embed
-   generated originals only — never referenced screenshots. Confirm each path exists on disk
-   before you POST; a missing embedded diagram is a **critical** validation failure and blocks
-   `ready_to_share`.
+   and use `##`/`###` headings every few hundred words (they become the page's contents nav). For
+   a single striking, directly-cited sentence worth pulling out visually (not a labeled callout),
+   use `> [!QUOTE]` — it renders as a large centered pull-quote, not a note card. Use sparingly,
+   at most once or twice per article, and only for a genuinely quotable line, not routine prose.
+4. **Reuse before commissioning.** Query `content/diagrams/assets.json` for diagrams already
+   registered under the topic's `capability_id` before commissioning anything new — if 2 or more
+   already exist, embed those rather than only adding a net-new one and leaving an existing
+   diagram unembedded. Commission **at least two** original diagrams total: invoke the
+   **diagram-author** subagent for the topic's main capability — one **architecture** diagram and
+   one **decision/internals** diagram, and ask for **infographic-grade** originals (labeled zones,
+   legends, comparison panels), not bare box-and-arrow flows. **Embed every diagram that exists
+   for this topic**, not just the first: place the architecture diagram near the top and the
+   internals/decision diagram inside the section it explains, with
+   `![caption](/diagrams/<file>.svg)` — use the direct `/diagrams/` path, not
+   `/content/diagrams/`. Blog bodies embed generated originals only — never referenced
+   screenshots. Confirm each path exists on disk before you save; a missing embedded diagram is a
+   **critical** validation failure and blocks `ready_to_share`.
 5. Save (write the file — git is the source of truth; you do not write to Supabase):
-   - Write `content/blogs/<topic-slug>.json`:
+   - Write `content/articles/<topic-slug>.json`:
      ```json
      {"topic_slug": "...", "slug": "...", "title": "...", "summary": "...",
       "body_md": "...", "cited_source_keys": ["<source_key>", ...],
@@ -71,9 +78,11 @@ an admin in Settings → Publish.
      `cited_source_keys` are the sources' `slug` values (portable across servers), ordered to
      match S1, S2, … The server resolves these slugs → ids at publish time.
    - **Publishing is a human step.** Tell the user to open **Settings → Publish**, choose
-     **Blog**, and paste this `content/blogs/<slug>.json` — the server (running with admin
-     rights) persists it and rebuilds the citation legend. Re-publishing the same slug upserts
-     that article; never edit a published article's claims in place — supersede the source claims.
+     **Article**, and paste this `content/articles/<slug>.json` — the server (running with admin
+     rights) persists it into `content_items` (kind=`article`) and rebuilds the citation legend.
+     Re-publishing the same slug always creates a **new version** — the prior version is archived
+     (`{slug}@v<N>`, `status=superseded`), never overwritten in place; never edit a published
+     article's claims in place — supersede the source claims instead.
    - You have no Supabase write access by design (the service-role key is sealed in Lovable
      Cloud). Do not attempt to POST to Supabase or any `localhost` backend.
 
@@ -92,7 +101,9 @@ an admin in Settings → Publish.
   validation-reviewer (`/blog` and `/publish-topic` do this automatically).
 
 ## Output
-The blog slug, the depth levels covered, the S1… → slug + tier mapping you wrote into
-`cited_source_keys` (reported here for review — NOT as an in-body table), any coverage gaps you
-declined to paper over, a reminder to commit `content/blogs/` and `content/diagrams/`, and the
-publish instruction: **Settings → Publish → Blog → paste `content/blogs/<slug>.json`**.
+The article slug, the depth levels covered, the S1… → slug + tier mapping you wrote into
+`cited_source_keys` (reported here for review — NOT as an in-body table), the count of
+`![...](/diagrams/...)` references your saved `body_md` actually contains (must be ≥2 — count
+them and state the number explicitly), any coverage gaps you declined to paper over, a reminder
+to commit `content/articles/` and `content/diagrams/`, and the publish instruction:
+**Settings → Publish → Article → paste `content/articles/<slug>.json`**.

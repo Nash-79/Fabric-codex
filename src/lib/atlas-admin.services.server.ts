@@ -134,11 +134,13 @@ export async function supersedeClaim(
   return created;
 }
 
-export async function saveBlogVersion(
+export async function saveContentItemVersion(
   sb: SupabaseAdmin,
   data: {
+    kind: "article" | "design" | "lesson";
     existingId?: string;
     topic_slug?: string | null;
+    capability_id?: string | null;
     slug: string;
     title: string;
     summary?: string;
@@ -156,7 +158,7 @@ export async function saveBlogVersion(
   let prior: any = null;
   if (data.existingId) {
     const { data: row, error } = await sb
-      .from("blogs")
+      .from("content_items")
       .select("*")
       .eq("id", data.existingId)
       .single();
@@ -164,8 +166,9 @@ export async function saveBlogVersion(
     prior = row;
   } else {
     const { data: row } = await sb
-      .from("blogs")
+      .from("content_items")
       .select("*")
+      .eq("kind", data.kind)
       .eq("slug", baseSlug)
       .eq("active", true)
       .maybeSingle();
@@ -175,21 +178,23 @@ export async function saveBlogVersion(
   if (prior?.id) {
     const archivedSlug = `${baseSlug}@v${prior.version ?? 1}`;
     const { error } = await sb
-      .from("blogs")
+      .from("content_items")
       .update({ active: false, status: "superseded", slug: archivedSlug })
       .eq("id", prior.id);
     if (error) throw new Error(error.message);
   }
 
   const { data: created, error: createError } = await sb
-    .from("blogs")
+    .from("content_items")
     .insert({
+      kind: data.kind,
       topic_slug: data.topic_slug ?? prior?.topic_slug ?? null,
+      capability_id: data.capability_id ?? prior?.capability_id ?? null,
       slug: baseSlug,
       title: data.title,
       summary: data.summary ?? "",
       body_md: data.body_md,
-      status: data.status ?? "draft",
+      status: data.status ?? "published",
       tags: data.tags ?? [],
       depth_levels: data.depth_levels ?? [],
       version: prior ? (prior.version ?? 1) + 1 : 1,
@@ -207,15 +212,15 @@ export async function saveBlogVersion(
     })
     .select("*")
     .single();
-  if (createError || !created) throw new Error(createError?.message ?? "Blog save failed.");
+  if (createError || !created) throw new Error(createError?.message ?? `${data.kind} save failed.`);
 
   const rows = data.cited_source_ids.map((sourceId, index) => ({
-    blog_id: created.id,
+    content_item_id: created.id,
     source_id: sourceId,
     label: `S${index + 1}`,
     position: index,
   }));
-  const { error: citeError } = await sb.from("blog_sources").insert(rows);
+  const { error: citeError } = await sb.from("content_item_sources").insert(rows);
   if (citeError) throw new Error(citeError.message);
   return created;
 }
@@ -335,16 +340,21 @@ function markdownLinks(body: string) {
 
 export async function validateContent(
   sb: SupabaseAdmin,
-  data: { kind: "blog" | "design"; id: string },
+  data: { kind: "article" | "design" | "lesson"; id: string },
 ) {
-  const table = data.kind === "blog" ? "blogs" : "designs";
-  const sourceTable = data.kind === "blog" ? "blog_sources" : "design_sources";
-  const idColumn = data.kind === "blog" ? "blog_id" : "design_id";
-  const { data: doc, error } = await sb.from(table).select("*").eq("id", data.id).single();
+  const { data: doc, error } = await sb
+    .from("content_items")
+    .select("*")
+    .eq("id", data.id)
+    .eq("kind", data.kind)
+    .single();
   if (error || !doc) throw new Error(error?.message ?? `${data.kind} not found.`);
 
   const issues: Array<{ severity: string; message: string; validator: string; ref: string }> = [];
-  const { data: citations } = await sb.from(sourceTable).select("source_id").eq(idColumn, data.id);
+  const { data: citations } = await sb
+    .from("content_item_sources")
+    .select("source_id")
+    .eq("content_item_id", data.id);
   if (!(citations ?? []).length) {
     issues.push({
       severity: "critical",
@@ -403,11 +413,10 @@ export async function validateContent(
     if (issueError) throw new Error(issueError.message);
   }
 
-  const patch =
-    data.kind === "blog"
-      ? { validation_confidence: confidence, ready_to_share: critical === 0 }
-      : { confidence, ready_to_share: critical === 0 };
-  const { error: updateError } = await sb.from(table).update(patch).eq("id", data.id);
+  const { error: updateError } = await sb
+    .from("content_items")
+    .update({ validation_confidence: confidence, confidence, ready_to_share: critical === 0 })
+    .eq("id", data.id);
   if (updateError) throw new Error(updateError.message);
 
   return { run, issues, confidence, ready_to_share: critical === 0 };

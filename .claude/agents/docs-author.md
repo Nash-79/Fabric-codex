@@ -19,6 +19,13 @@ right now** — stale or aspirational docs are the documentation equivalent of a
 - `.claude/agents/*.md`, `.claude/commands/*.md`, and `.codex/prompts/*.md` — the real authoring commands and Codex prompt equivalents.
 - `CLAUDE.md`, `docs/data-model.md`, `docs/workflow.md` — the rules and operating model.
 
+While reading `.claude/agents/*.md` and `.claude/commands/*.md` for the Help sync, also watch
+for terminology drift **inside those files themselves** — a stale content-type name (e.g.
+leftover "blog" wording after a blog→article rename) or a table/endpoint reference that no
+longer matches the live schema/API. This is not a Help page — flag it separately in your
+output as agent/command drift so a human can fix the source-of-truth file, distinct from the
+Help pages you actually rewrite.
+
 ## Page set (create missing, update drifted)
 
 - `01-getting-started.md` — what Fabric Atlas is, the pages in the nav, the trust model in
@@ -26,7 +33,7 @@ right now** — stale or aspirational docs are the documentation equivalent of a
 - `02-submitting-sources.md` — the Add-a-source form, trust tiers 1–6, the queue lifecycle,
   what happens after `/ingest-batch`.
 - `03-curation-loop.md` — pending → verified/rejected, duplicates, undo, the audit log.
-- `04-topics-and-blogs.md` — the topic tree, what an article's status/confidence/ready badge
+- `04-topics-and-content.md` — the topic tree, what an article's status/confidence/ready badge
   means, why a needs_review banner appears (drift), version history.
 - `05-search.md` — what is indexed, kind filters, tag filters.
 - `06-validation-and-trust.md` — citations [Sn], deterministic vs agent validators,

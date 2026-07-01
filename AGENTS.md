@@ -19,6 +19,10 @@ sources become versioned, source-graded **claims** (each tagged to a **capabilit
 - Never write to the database directly to mutate claims — go through `app/services.py` so
   versioning and validation invariants hold.
 - When you touch `app/models.py`, update `docs/data-model.md` in the same change.
+- When a content-type or endpoint rename lands (e.g. blog→article), grep
+  `.claude/agents/`, `.claude/commands/`, `CLAUDE.md`, and `docs/*.md` for the old term in the
+  same change — don't defer prompt/doc updates to a follow-up, or agent instructions silently
+  drift out of sync with what they actually query.
 
 ## Domain rules (must hold in all generated code and output)
 
@@ -61,8 +65,8 @@ in the same run.
 - **Diagram coverage is enforced** (kept in sync with `CLAUDE.md`): publishing a topic
   commissions **≥2** original diagrams — one architecture, one decision/internals — and the
   article embeds **every** one of them. Each embedded `content/diagrams/*` path must exist on
-  disk before `POST /blogs`; the validation pass flags a missing embedded diagram as a
-  **critical** issue, blocking `ready_to_share`.
+  disk before the article is published; the validation pass flags a missing embedded diagram as
+  a **critical** issue, blocking `ready_to_share`.
 
 ## Scope discipline
 
@@ -74,8 +78,9 @@ frameworks, message buses, or per-capability services without an explicit instru
 
 Project prompt templates are in `.codex/prompts/`. Codex loads custom prompts from your home
 dir, so copy or symlink them once (see `.codex/README.md`), then invoke as `/prompts:fa-ingest`,
-`/prompts:fa-design`, etc. OpenAI now recommends Skills for reusable prompts; these still work
-and map 1:1 to the Claude Code commands in `.claude/commands/`.
+`/prompts:fa-orchestrate`, `/prompts:fa-blog`, `/prompts:fa-design`, etc. OpenAI now recommends
+Skills for reusable prompts; these still work and map 1:1 to the Claude Code commands in
+`.claude/commands/`.
 
 ## How to run
 

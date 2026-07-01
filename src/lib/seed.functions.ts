@@ -17,7 +17,7 @@ const sourceJsons = import.meta.glob("/content/sources/*.json", { eager: true })
   string,
   { default: any }
 >;
-const blogJsons = import.meta.glob("/content/blogs/*.json", { eager: true }) as Record<
+const blogJsons = import.meta.glob("/content/articles/*.json", { eager: true }) as Record<
   string,
   { default: any }
 >;
@@ -188,69 +188,89 @@ export const seedFromContent = createServerFn({ method: "POST" })
       }
     }
 
-    // 5) Blogs + citations (upsert by slug; refresh that blog's citation legend).
-    for (const b of blogs) {
-      const { data: ins, error } = await supabaseAdmin
-        .from("blogs")
-        .upsert(
-          {
-            slug: b.slug,
-            topic_slug: b.topic_slug ?? null,
-            title: b.title,
-            summary: b.summary ?? "",
-            body_md: b.body_md ?? "",
-            status: "published",
-          },
-          { onConflict: "slug" },
-        )
+    // Upsert-by-(kind,slug) helper. content_items only has a PARTIAL unique index on
+    // (kind, slug) WHERE active, which a plain upsert({onConflict}) call can't target (no WHERE
+    // clause support there) — find the active row manually and update in place, or insert a
+    // fresh v1 row. Full-reset replay, not the versioned single-item publish path.
+    async function upsertContentItem(row: { kind: string; slug: string; [key: string]: unknown }) {
+      const { data: existing } = await supabaseAdmin
+        .from("content_items")
+        .select("id")
+        .eq("kind", row.kind)
+        .eq("slug", row.slug)
+        .eq("active", true)
+        .maybeSingle();
+      if (existing?.id) {
+        const { data: updated, error } = await supabaseAdmin
+          .from("content_items")
+          .update(row as any)
+          .eq("id", existing.id)
+          .select("id")
+          .single();
+        if (error) throw new Error(`${row.kind} ${row.slug}: ${error.message}`);
+        return updated;
+      }
+      const { data: inserted, error } = await supabaseAdmin
+        .from("content_items")
+        .insert({ ...row, version: 1, active: true } as any)
         .select("id")
         .single();
-      if (error) throw new Error(`blog ${b.slug}: ${error.message}`);
+      if (error) throw new Error(`${row.kind} ${row.slug}: ${error.message}`);
+      return inserted;
+    }
+
+    // 5) Articles + citations (kind='article')
+    for (const b of blogs) {
+      const ins = await upsertContentItem({
+        kind: "article",
+        slug: b.slug,
+        topic_slug: b.topic_slug ?? null,
+        title: b.title,
+        summary: b.summary ?? "",
+        body_md: b.body_md ?? "",
+        status: "published",
+      });
       summary.blogRowsUpserted++;
-      await supabaseAdmin.from("blog_sources").delete().eq("blog_id", ins.id);
+      await supabaseAdmin.from("content_item_sources").delete().eq("content_item_id", ins.id);
       const keys: string[] = b.cited_source_keys ?? [];
       const bsRows = keys
         .map((k, i) => {
           const sid = slugById.get(k);
-          return sid ? { blog_id: ins.id, source_id: sid, label: `S${i + 1}`, position: i } : null;
+          return sid
+            ? { content_item_id: ins.id, source_id: sid, label: `S${i + 1}`, position: i }
+            : null;
         })
         .filter(Boolean) as any[];
-      if (bsRows.length) await supabaseAdmin.from("blog_sources").insert(bsRows);
+      if (bsRows.length) await supabaseAdmin.from("content_item_sources").insert(bsRows);
     }
 
-    // 5b) Designs + citations (upsert by slug; mirror blogs). Un-empties the Designer section.
+    // 5b) Designs + citations (kind='design'). Un-empties the Designer section.
     let designCount = 0;
     for (const [path, mod] of Object.entries(designJsons)) {
       const d = (mod as any).default;
       const slug = d.slug ?? path.split("/").pop()!.replace(".json", "");
-      const { data: ins, error } = await supabaseAdmin
-        .from("designs")
-        .upsert(
-          {
-            slug,
-            title: d.title ?? slug,
-            summary: d.summary ?? "",
-            body_md: d.body_md ?? "",
-            status: "published",
-          },
-          { onConflict: "slug" },
-        )
-        .select("id")
-        .single();
-      if (error) throw new Error(`design ${slug}: ${error.message}`);
+      const ins = await upsertContentItem({
+        kind: "design",
+        slug,
+        topic_slug: d.topic_slug ?? null,
+        title: d.title ?? slug,
+        summary: d.summary ?? "",
+        body_md: d.body_md ?? "",
+        status: "published",
+      });
       designCount++;
       summary.designRowsUpserted++;
-      await supabaseAdmin.from("design_sources").delete().eq("design_id", ins.id);
+      await supabaseAdmin.from("content_item_sources").delete().eq("content_item_id", ins.id);
       const keys: string[] = d.cited_source_keys ?? [];
       const dsRows = keys
         .map((k, i) => {
           const sid = slugById.get(k);
           return sid
-            ? { design_id: ins.id, source_id: sid, label: `S${i + 1}`, position: i }
+            ? { content_item_id: ins.id, source_id: sid, label: `S${i + 1}`, position: i }
             : null;
         })
         .filter(Boolean) as any[];
-      if (dsRows.length) await supabaseAdmin.from("design_sources").insert(dsRows);
+      if (dsRows.length) await supabaseAdmin.from("content_item_sources").insert(dsRows);
     }
 
     // 6) Diagrams

@@ -65,7 +65,7 @@ import {
   deleteRssSubscription,
   listRssSubscriptions,
   pollRssFeeds,
-  saveBlogVersion,
+  saveContentItemVersion,
   setRssSubscriptionStatus,
   setUserRoles,
   submitSourceReview,
@@ -94,7 +94,7 @@ const nav = [
   { id: "users", label: "Users", icon: UserCog },
   { id: "content", label: "Content", icon: Database },
   { id: "claims", label: "Claims", icon: ListChecks },
-  { id: "blogs", label: "Blogs", icon: BookOpen },
+  { id: "blogs", label: "Articles", icon: BookOpen },
   { id: "queue", label: "Queue", icon: FileText },
   { id: "publish", label: "Publish", icon: Upload },
   { id: "diagrams", label: "Diagrams", icon: ImageIcon },
@@ -1071,7 +1071,7 @@ function BlogsPanel({
   onDone: () => void;
   loading: boolean;
 }) {
-  const saveFn = useServerFn(saveBlogVersion);
+  const saveFn = useServerFn(saveContentItemVersion);
   const validateFn = useServerFn(validateContent);
   const [edit, setEdit] = useState<any>(null);
   const [draft, setDraft] = useState<any>(null);
@@ -1080,20 +1080,21 @@ function BlogsPanel({
     mutationFn: () =>
       saveFn({
         data: {
+          kind: "article",
           existingId: active.id,
           topic_slug: active.topic_slug,
           slug: active.slug?.replace(/@v\d+$/, ""),
           title: active.title,
           summary: active.summary,
           body_md: active.body_md,
-          status: "draft",
+          status: "published",
           cited_source_ids: active.cited_source_ids ?? [],
           tags: active.tags ?? [],
           depth_levels: active.depth_levels ?? [],
         },
       }),
     onSuccess: () => {
-      toast.success("Blog version created.");
+      toast.success("Article version created.");
       setEdit(null);
       setDraft(null);
       onDone();
@@ -1101,16 +1102,16 @@ function BlogsPanel({
     onError: (err) => toast.error((err as Error).message),
   });
   const validate = useMutation({
-    mutationFn: (id: string) => validateFn({ data: { kind: "blog", id } }),
+    mutationFn: (id: string) => validateFn({ data: { kind: "article", id } }),
     onSuccess: () => {
-      toast.success("Blog validation queued.");
+      toast.success("Article validation queued.");
       onDone();
     },
     onError: (err) => toast.error((err as Error).message),
   });
   return (
     <>
-      <Panel title="Blogs">
+      <Panel title="Articles">
         {loading ? (
           <Empty text="Loading blogs..." />
         ) : (
@@ -1169,9 +1170,9 @@ function BlogsPanel({
       >
         <DialogContent className="max-h-[85vh] overflow-auto border-border bg-popover text-foreground sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Blog version</DialogTitle>
+            <DialogTitle>Article version</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Saving creates a new draft version; it does not mutate the existing article body.
+              Saving creates a new published version; it does not mutate the existing article body.
             </DialogDescription>
           </DialogHeader>
           {active && (
@@ -1905,9 +1906,16 @@ function DiagramsPanel() {
   );
 }
 
+const PUBLISH_DIR: Record<string, string> = {
+  source: "sources",
+  article: "articles",
+  design: "designs",
+  lesson: "lessons",
+};
+
 function PublishPanel({ onDone }: { onDone: () => void }) {
   const publishFn = useServerFn(publishFromFile);
-  const [kind, setKind] = useState<"source" | "blog" | "design" | "diagram">("source");
+  const [kind, setKind] = useState<"source" | "article" | "design" | "lesson" | "diagram">("source");
   const [json, setJson] = useState("");
 
   const publish = useMutation({
@@ -1927,7 +1935,7 @@ function PublishPanel({ onDone }: { onDone: () => void }) {
       if (kind === "source") extra = `${r.claimsInserted ?? 0} claim(s) inserted (pending)`;
       else if (kind === "diagram")
         extra = `${r.registered ?? 0} diagram(s) registered: ${(r.slugs as string[])?.join(", ") ?? ""}`;
-      else extra = `${r.citedSources ?? 0} cited source(s)`;
+      else extra = `${r.citedSources ?? 0} cited source(s), v${r.version ?? 1}`;
       const label = kind === "diagram" ? "diagram(s)" : `${kind} "${slug}"`;
       toast.success(`Published ${label}. ${extra}.`);
       setJson("");
@@ -1941,15 +1949,17 @@ function PublishPanel({ onDone }: { onDone: () => void }) {
       <p className="mb-3 text-xs text-muted-foreground">
         Laptop agents author content keylessly and write{" "}
         <code className="text-teal-300">content/sources/*.json</code>,{" "}
-        <code className="text-teal-300">content/blogs/*.json</code>,{" "}
-        <code className="text-teal-300">content/designs/*.json</code>, and diagram entries to git.
+        <code className="text-teal-300">content/articles/*.json</code>,{" "}
+        <code className="text-teal-300">content/designs/*.json</code>,{" "}
+        <code className="text-teal-300">content/lessons/*.json</code>, and diagram entries to git.
         The server can't read your laptop, so paste the file an agent wrote here to replay it into
         the knowledge base. Re-publishing a source keeps its{" "}
         <span className="text-foreground">verified</span> claims and only refreshes the pending ones
-        — publishing never un-verifies human review. For a blog whose embedded diagram is new,
-        publish the <span className="text-foreground">Diagram(s)</span> first (paste{" "}
-        <code className="text-teal-300">content/diagrams/assets.json</code>) so the blog's
-        embedded-diagram validation passes.
+        — publishing never un-verifies human review. Articles, designs, and lessons always create a
+        new version — the prior version is archived, never overwritten. For an article whose
+        embedded diagram is new, publish the <span className="text-foreground">Diagram(s)</span>{" "}
+        first (paste <code className="text-teal-300">content/diagrams/assets.json</code>) so the
+        article's embedded-diagram validation passes.
       </p>
 
       <div className="mb-3 flex items-center gap-2">
@@ -1959,8 +1969,9 @@ function PublishPanel({ onDone }: { onDone: () => void }) {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="source">Source (+ claims)</SelectItem>
-            <SelectItem value="blog">Blog article</SelectItem>
+            <SelectItem value="article">Article</SelectItem>
             <SelectItem value="design">Design</SelectItem>
+            <SelectItem value="lesson">Lesson</SelectItem>
             <SelectItem value="diagram">Diagram(s) / assets.json</SelectItem>
           </SelectContent>
         </Select>
@@ -1979,7 +1990,7 @@ function PublishPanel({ onDone }: { onDone: () => void }) {
         placeholder={
           kind === "diagram"
             ? "Paste a diagram entry or the whole content/diagrams/assets.json array…"
-            : `Paste the content/${kind === "blog" ? "blogs" : kind === "design" ? "designs" : "sources"}/<slug>.json the agent wrote…`
+            : `Paste the content/${PUBLISH_DIR[kind]}/<slug>.json the agent wrote…`
         }
         className="min-h-[320px] border-border bg-card font-mono text-xs text-foreground"
       />

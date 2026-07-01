@@ -28,7 +28,9 @@ Restart the Codex CLI (and reload the IDE extension) so it picks up the new prom
 In a Codex session, type `/` and choose, or type the name directly:
 
 ```
+/prompts:fa-orchestrate FOCUS=ai-apis
 /prompts:fa-ingest   SOURCE=https://learn.microsoft.com/fabric/...  TIER=1
+/prompts:fa-blog     TOPIC=direct-lake
 /prompts:fa-design   SCENARIO="Governed self-service BI over 5TB finance data, 800 users" LATENCY="near real-time"
 /prompts:fa-validate DESIGN_ID=ab12cd34
 /prompts:fa-drift    SOURCE_KEY=direct-lake-develop
@@ -43,12 +45,16 @@ quote values containing spaces. `$ARGUMENTS` would capture everything if you pre
 
 OpenAI now recommends **Skills** over custom prompts for reusable, optionally repo-shared
 workflows. These prompts still work and map 1:1 to the Claude Code commands in
-`.claude/commands/`. If you later move to Skills, keep the same intents (ingest, design,
-validate, drift, lesson, docs sync, and the publishing helpers) and the same domain rules from
-`AGENTS.md`.
+`.claude/commands/`. If you later move to Skills, keep the same intents (orchestrate, ingest,
+blog, design, validate, drift, lesson, docs sync, and the publishing helpers) and the same domain
+rules from `AGENTS.md`.
 
-## Backend must be running
+## Data access and human gates
 
-All prompts call the local backend at `http://localhost:8000`. Start it first
-(`cd backend && uvicorn app.main:app --reload`). The LLM-backed steps need `ANTHROPIC_API_KEY`;
-the deterministic steps (versioning, citation/freshness validation) run without it.
+Current authoring prompts read Supabase with the publishable/anon key in `.env` and write
+git-tracked files under `content/`. Admin mutations remain app actions: publish files in
+**Settings -> Publish**, verify claims in **Settings -> Claims**, complete queue items in
+**Settings -> Queue**, and poll feeds in **Settings -> RSS Feeds**.
+
+The local FastAPI backend is still useful for backend development and tests, but the Codex content
+authoring loop does not require a metered OpenAI API key or server-side LLM calls.

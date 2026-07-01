@@ -21,27 +21,29 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
 count() { curl -s -I "$SB/$1" -H "$H1" -H "$H2" -H "Prefer: count=exact" | tr -d '\r' | sed -n 's/.*content-range: .*\///ip'; }
 ```
 
-Assert, against Supabase:
-1. **Non-empty KB** — sources, topics, blogs all > 0:
-   `count "sources?select=id"`, `count "topics?select=id"`, `count "blogs?select=id&active=eq.true"`.
+Assert, against Supabase (`content_items` unifies what used to be separate blogs/designs/lessons
+tables, `kind IN ('article','design','lesson')`; `content_item_sources` replaces
+`blog_sources`/`design_sources`):
+1. **Non-empty KB** — sources, topics, articles all > 0:
+   `count "sources?select=id"`, `count "topics?select=id"`, `count "content_items?select=id&kind=eq.article&active=eq.true"`.
    Verified claims **may legitimately be 0** right after an import (publishing lands claims as
    `pending`); a 0 here means "run Settings → Claims → Verify all", not a corruption. Report it as a
    warning, not a hard fail.
 2. **Versioning invariant** — at most one *active* row per family. Check no source slug has >1
-   active row, and no blog slug has >1 active row:
+   active row, and no article slug has >1 active row:
    ```bash
    curl -s "$SB/sources?active=eq.true&select=slug" -H "$H1" -H "$H2" | python -c "import sys,json,collections;d=json.load(sys.stdin);dup={k:v for k,v in collections.Counter(x['slug'] for x in d).items() if v>1};print('DUP sources',dup) if dup else print('OK sources unique')"
-   curl -s "$SB/blogs?active=eq.true&select=slug" -H "$H1" -H "$H2" | python -c "import sys,json,collections;d=json.load(sys.stdin);dup={k:v for k,v in collections.Counter(x['slug'] for x in d).items() if v>1};print('DUP blogs',dup) if dup else print('OK blogs unique')"
+   curl -s "$SB/content_items?kind=eq.article&active=eq.true&select=slug" -H "$H1" -H "$H2" | python -c "import sys,json,collections;d=json.load(sys.stdin);dup={k:v for k,v in collections.Counter(x['slug'] for x in d).items() if v>1};print('DUP articles',dup) if dup else print('OK articles unique')"
    ```
    More than one active version is the single most important thing to catch — a supersede went wrong.
 3. **Referential integrity** — every active claim's `source_id` resolves to a source; every
-   `blog_sources.source_id` resolves to an active source. Spot-check by selecting the embedded
-   relation and flagging nulls:
+   `content_item_sources.source_id` resolves to an active source. Spot-check by selecting the
+   embedded relation and flagging nulls:
    `curl -s "$SB/claims?active=eq.true&select=id,sources(id)" -H "$H1" -H "$H2"` — any row with
    `sources:null` is an orphan.
-4. **Embedded diagrams** — for each blog `body_md`, every referenced `/diagrams/*` (or
-   `content/diagrams/*`) path must exist on disk (`public/diagrams/` mirror). Read blog bodies via
-   REST, grep the paths, and `test -f` each. A missing embed is the backend's critical issue.
+4. **Embedded diagrams** — for each article `body_md`, every referenced `/diagrams/*` (or
+   `content/diagrams/*`) path must exist on disk (`public/diagrams/` mirror). Read article bodies
+   via REST, grep the paths, and `test -f` each. A missing embed is a critical issue.
 5. **Capability integrity** — every `topic_capabilities.capability_id` and every active
    `claims.capability_id` is in the registry (`backend/app/llm.py` `CAPABILITY_IDS`).
 
@@ -54,15 +56,15 @@ These are read-only assertions you compute and report — you do not (and cannot
 - On failure: list each failing assertion, and for the common ones say what to do:
   - *no verified claims* → not a failure right after import; verify in **Settings → Claims →
     "Verify all"** (claims publish as `pending`). Report as a warning.
-  - *>1 active version* → inspect that source/blog slug's rows in **Settings → Content/Blogs**; a
+  - *>1 active version* → inspect that source/article slug's rows in **Settings → Content**; a
     supersede or a bad re-publish left two rows active — deactivate the stale one.
   - *missing diagram* → commission it with the **diagram-author** subagent (it writes the SVG +
-    `content/diagrams/assets.json` entry; the admin registers it), or remove the embed; the blog
+    `content/diagrams/assets.json` entry; the admin registers it), or remove the embed; the article
     cannot reach `ready_to_share` until fixed.
   - *unknown capability* → fix the topic's `capability_ids` in `content/topics.json` (must be a
     registry id) and re-publish/bootstrap.
-  - *orphan claim/blog citation* → the cited source isn't an active row; re-publish the source
-    first (**Settings → Publish → Source**), then the blog.
+  - *orphan claim/article citation* → the cited source isn't an active row; re-publish the source
+    first (**Settings → Publish → Source**), then the article.
 
 Never declare the migration good when an assertion failed. You report the truth, including the
 exact failing checks.

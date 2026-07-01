@@ -1,33 +1,37 @@
 # Curation loop
 
-The **Registry** page is where humans control what the knowledge base asserts.
+Claim moderation happens in **Settings → Claims**, and is admin-only. The public
+**Capability Registry** page shows the same coverage as a read-only dashboard — verified
+counts, depth coverage, gaps — but has no moderation controls of its own.
 
 ## Claim states
 
-- **pending** — freshly extracted, awaiting your judgement.
-- **verified** — you approved it; it can now ground articles, designs, and lessons.
-- **rejected** — you dismissed it (wrong, irrelevant, or unverifiable).
-- **duplicate** — near-identical to an active claim from another source; parked for review.
-- **superseded / deprecated** — replaced or removed when its source changed; kept as history.
+- **pending** — freshly extracted, awaiting review.
+- **verified** — approved; it can now ground articles, designs, and lessons.
+- **rejected** — dismissed (wrong, irrelevant, or unverifiable).
+- **duplicate** — near-identical to an active claim from another source; needs a decision
+  before it can be cited.
+- **superseded** — replaced by a newer version of the same claim; kept as history.
 
 ## Working the queue
 
-Pick a capability card (or a tag) to open its claim list. Each pending claim has
-**Verify** and **Reject** buttons; reject asks for a second click to confirm. When more
-than one pending claim is shown, **Verify all** / **Reject all** batch the action — they
-arm for three seconds first so a stray click does nothing.
+The Claims table in Settings filters by status (pending / verified / duplicate / rejected /
+superseded / all). Each row has row-level actions:
 
-Every action shows an **Undo** toast for five seconds; undo returns the claims to pending.
+- **Verify** — approves a pending claim.
+- **Reject** — dismisses it (or, for a duplicate row, dismisses the duplicate — the button
+  reads Reject either way).
+- **Promote** — only shown on **duplicate** rows; sends the claim back into the normal
+  pending/verify flow because it turned out to be genuinely new information.
+- **Supersede** — opens a dialog to edit the claim text. This does not edit the claim in
+  place: it creates a new **pending** claim version and deactivates the current one.
 
-## Duplicates
-
-When the same fact arrives from a second source, the newer claim is parked as a
-**duplicate** instead of entering the verify queue. Open the duplicates panel to either
-**Promote** it (it really is new information — send it to the verify queue) or
-**Dismiss** it (confirm it duplicates what you already have).
+When a whole capability has a backlog of pending claims, the **Verify all pending in…**
+control at the top of the panel verifies every pending claim for one chosen capability in a
+single action.
 
 ## Audit log
 
-The **Recent actions** panel lists every verify/reject/promote/dismiss with the previous
-and new status, filterable by capability and action type. Claim **History** shows the full
-version chain of any claim — versions are never edited in place.
+**Settings → Logs** shows a combined activity stream: admin actions (source review, topic
+edits, publishes) and the claim-status log (previous status → new status, with a text
+snippet) in one filterable, searchable list. Every claim status change is recorded here.

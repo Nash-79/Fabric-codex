@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 900" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Decision/internals diagram — distinct from rti-flow.svg (which is a linear
+       source-to-action architecture flow). This diagram instead contrasts the HOT
+       (in-flight, sub-second) path against the COLD (stored, queryable) path inside
+       Real-Time Intelligence, plus a routing decision box and a worked timing example.
+       Grounded in claims: a7afa4e0 (Eventstream operators/sources), b5ae3ebc (Eventstream
+       stream-processing operators + derived eventstreams), a66d613f (Activator conditions
+       & actions), 6347cb60 (event-driven trigger, no polling), 946493a7 (notebooks query
+       Eventhouse directly, no data movement), 7a8899af (Map geospatial, KQL refresh
+       interval), 24e391cb/a9563f44 (Real-Time hub as tenant-wide catalog),
+       80a16164 (data agents reasoning over Eventhouse). -->
+  <defs>
+    <linearGradient id="hdr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="0.6" stop-color="#117865"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <linearGradient id="hotBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FCEFE8"/>
+      <stop offset="1" stop-color="#F8DCC9"/>
+    </linearGradient>
+    <linearGradient id="hotHead" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#B84A18"/>
+      <stop offset="1" stop-color="#E0692B"/>
+    </linearGradient>
+    <linearGradient id="coldBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EAF7F2"/>
+      <stop offset="1" stop-color="#CFEBE1"/>
+    </linearGradient>
+    <linearGradient id="coldHead" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <marker id="arrHot" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B84A18"/>
+    </marker>
+    <marker id="arrCold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0B5E50"/>
+    </marker>
+    <marker id="arrGray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8A8886"/>
+    </marker>
+    <filter id="shadow" x="-4%" y="-4%" width="108%" height="108%">
+      <feDropShadow dx="1" dy="2" stdDeviation="3" flood-color="#00000018"/>
+    </filter>
+  </defs>
+
+  <rect width="1180" height="900" fill="#FFFFFF"/>
+
+  <!-- header -->
+  <rect x="0" y="0" width="1180" height="58" fill="url(#hdr)"/>
+  <text x="32" y="30" font-size="20" font-weight="650" fill="#FFFFFF">Real-Time Intelligence — hot path vs. cold path internals</text>
+  <text x="32" y="48" font-size="11" fill="#D9F5EE">Microsoft Fabric · Fabric Atlas original diagram · July 2026 · decision &amp; internals view</text>
+
+  <!-- ═══ ROUTING DECISION BOX ═══ -->
+  <text x="32" y="86" font-size="10" letter-spacing="1.4" fill="#8A8886">ROUTING DECISION — WHERE DOES AN INCOMING EVENT GO?</text>
+  <g filter="url(#shadow)">
+    <rect x="24" y="94" width="1132" height="88" rx="10" fill="#F3F2F1" stroke="#C8C6C4"/>
+    <text x="48" y="118" font-size="12" font-weight="600" fill="#063D3B">An Eventstream operator (filter / dedup / windowed aggregation / content-based routing) evaluates every event and fans it out to one or both destinations simultaneously [claim a7afa4e0, b5ae3ebc]</text>
+    <text x="48" y="140" font-size="10.5" fill="#424242">→ Needs a reaction in seconds, has no need for historical joins, or feeds a live map/dashboard tile?  route to the HOT path (Activator / Map).</text>
+    <text x="48" y="158" font-size="10.5" fill="#424242">→ Needs to be queried later, joined with history, explored ad hoc, or trained against?  route to the COLD path (Eventhouse / KQL database).</text>
+    <text x="48" y="176" font-size="10" fill="#797775" font-style="italic">Both are not mutually exclusive: a derived eventstream commonly feeds BOTH paths from the same source event [claim b5ae3ebc].</text>
+  </g>
+
+  <!-- arrows decision -> two lanes -->
+  <line x1="330" y1="182" x2="330" y2="212" stroke="#B84A18" stroke-width="2" marker-end="url(#arrHot)"/>
+  <line x1="850" y1="182" x2="850" y2="212" stroke="#0B5E50" stroke-width="2" marker-end="url(#arrCold)"/>
+
+  <!-- ═══════════ HOT PATH LANE ═══════════ -->
+  <g filter="url(#shadow)">
+    <rect x="24" y="214" width="612" height="34" rx="8" fill="url(#hotHead)"/>
+    <text x="330" y="237" text-anchor="middle" font-size="14" font-weight="650" fill="#FFFFFF">HOT PATH — in-flight, sub-second reaction</text>
+  </g>
+  <rect x="24" y="248" width="612" height="470" rx="0 0 10 10" fill="url(#hotBg)" stroke="#E0A57D"/>
+
+  <!-- hot step 1: eventstream operators -->
+  <g filter="url(#shadow)">
+    <rect x="46" y="270" width="220" height="82" rx="8" fill="#FFFFFF" stroke="#E0A57D"/>
+    <text x="156" y="292" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7A3410">1 · Eventstream operators</text>
+    <text x="156" y="310" text-anchor="middle" font-size="9.5" fill="#5A3B26">filter · dedup · windowed</text>
+    <text x="156" y="324" text-anchor="middle" font-size="9.5" fill="#5A3B26">aggregation · content-based</text>
+    <text x="156" y="338" text-anchor="middle" font-size="9.5" fill="#5A3B26">routing [a7afa4e0, b5ae3ebc]</text>
+  </g>
+
+  <!-- hot step 2: derived stream to activator -->
+  <line x1="266" y1="311" x2="300" y2="311" stroke="#B84A18" stroke-width="1.6" marker-end="url(#arrHot)"/>
+  <g filter="url(#shadow)">
+    <rect x="302" y="270" width="220" height="82" rx="8" fill="#FFFFFF" stroke="#E0A57D"/>
+    <text x="412" y="292" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7A3410">2 · Derived eventstream</text>
+    <text x="412" y="310" text-anchor="middle" font-size="9.5" fill="#5A3B26">reusable, shareable output</text>
+    <text x="412" y="324" text-anchor="middle" font-size="9.5" fill="#5A3B26">routed directly to Activator,</text>
+    <text x="412" y="338" text-anchor="middle" font-size="9.5" fill="#5A3B26">no storage write required [b5ae3ebc]</text>
+  </g>
+
+  <!-- hot step 3: Activator -->
+  <line x1="412" y1="352" x2="412" y2="382" stroke="#B84A18" stroke-width="1.8" marker-end="url(#arrHot)"/>
+  <g filter="url(#shadow)">
+    <rect x="46" y="384" width="476" height="96" rx="8" fill="#7A3410"/>
+    <text x="284" y="410" text-anchor="middle" font-size="13" font-weight="650" fill="#FFE8D6">3 · Activator — condition engine</text>
+    <text x="284" y="430" text-anchor="middle" font-size="10" fill="#FBD2B0">Threshold · Pattern · KQL-defined conditions [a66d613f]</text>
+    <text x="284" y="448" text-anchor="middle" font-size="10" fill="#FBD2B0">Fires on Real-Time hub, KQL query, or Power BI report data</text>
+    <text x="284" y="466" text-anchor="middle" font-size="9.5" fill="#F5C4A0" font-style="italic">No polling schedule — Fabric/Blob events trigger rules directly [claim 6347cb60]</text>
+  </g>
+
+  <!-- hot step 4: actions fan-out -->
+  <line x1="284" y1="480" x2="284" y2="504" stroke="#B84A18" stroke-width="1.8" marker-end="url(#arrHot)"/>
+  <g>
+    <rect x="46" y="506" width="112" height="56" rx="6" fill="#FFFFFF" stroke="#E0A57D"/>
+    <text x="102" y="528" text-anchor="middle" font-size="9.5" font-weight="600" fill="#7A3410">Notification</text>
+    <text x="102" y="544" text-anchor="middle" font-size="8.5" fill="#5A3B26">Teams / email</text>
+
+    <rect x="166" y="506" width="112" height="56" rx="6" fill="#FFFFFF" stroke="#E0A57D"/>
+    <text x="222" y="524" text-anchor="middle" font-size="9.5" font-weight="600" fill="#7A3410">Pipeline / Spark</text>
+    <text x="222" y="540" text-anchor="middle" font-size="8.5" fill="#5A3B26">job / Dataflow</text>
+    <text x="222" y="552" text-anchor="middle" font-size="8.5" fill="#5A3B26">launch [6347cb60]</text>
+
+    <rect x="286" y="506" width="112" height="56" rx="6" fill="#FFFFFF" stroke="#E0A57D"/>
+    <text x="342" y="524" text-anchor="middle" font-size="9.5" font-weight="600" fill="#7A3410">User Data</text>
+    <text x="342" y="540" text-anchor="middle" font-size="8.5" fill="#5A3B26">Function call</text>
+
+    <rect x="406" y="506" width="112" height="56" rx="6" fill="#FFFFFF" stroke="#E0A57D"/>
+    <text x="462" y="524" text-anchor="middle" font-size="9.5" font-weight="600" fill="#7A3410">Power Automate</text>
+    <text x="462" y="540" text-anchor="middle" font-size="8.5" fill="#5A3B26">workflow trigger</text>
+  </g>
+  <text x="46" y="580" font-size="9.5" fill="#7A3410" font-style="italic">All four action kinds fire from one Activator condition [claim a66d613f].</text>
+
+  <!-- hot: Map live tile -->
+  <g filter="url(#shadow)">
+    <rect x="46" y="596" width="220" height="88" rx="8" fill="#FFFFFF" stroke="#E0A57D"/>
+    <text x="156" y="618" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7A3410">Live Map tile</text>
+    <text x="156" y="636" text-anchor="middle" font-size="9.5" fill="#5A3B26">bubbles · heatmaps · polygons</text>
+    <text x="156" y="650" text-anchor="middle" font-size="9.5" fill="#5A3B26">3D extrusions over Eventhouse</text>
+    <text x="156" y="664" text-anchor="middle" font-size="9.5" fill="#5A3B26">or Lakehouse data [7a8899af]</text>
+    <text x="156" y="678" text-anchor="middle" font-size="9" fill="#7A3410" font-style="italic">configurable KQL refresh interval</text>
+  </g>
+  <line x1="266" y1="640" x2="300" y2="640" stroke="#B84A18" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#arrHot)"/>
+  <g filter="url(#shadow)">
+    <rect x="302" y="596" width="220" height="88" rx="8" fill="#FFFFFF" stroke="#E0A57D"/>
+    <text x="412" y="618" text-anchor="middle" font-size="11.5" font-weight="600" fill="#7A3410">Real-Time hub feed</text>
+    <text x="412" y="636" text-anchor="middle" font-size="9.5" fill="#5A3B26">Activator can also monitor</text>
+    <text x="412" y="650" text-anchor="middle" font-size="9.5" fill="#5A3B26">Real-Time hub streams directly</text>
+    <text x="412" y="664" text-anchor="middle" font-size="9.5" fill="#5A3B26">without an Eventhouse hop</text>
+    <text x="412" y="678" text-anchor="middle" font-size="9" fill="#7A3410" font-style="italic">[24e391cb, a9563f44]</text>
+  </g>
+
+  <!-- hot lane footer band -->
+  <rect x="46" y="694" width="568" height="12" fill="none"/>
+  <g filter="url(#shadow)">
+    <rect x="46" y="696" width="568" height="12" rx="6" fill="#B84A18" fill-opacity="0.001"/>
+  </g>
+
+  <!-- latency / retention band for hot -->
+  <g filter="url(#shadow)">
+    <rect x="46" y="696" width="568" height="10" rx="5" fill="none"/>
+  </g>
+
+  <!-- ═══════════ COLD PATH LANE ═══════════ -->
+  <g filter="url(#shadow)">
+    <rect x="666" y="214" width="490" height="34" rx="8" fill="url(#coldHead)"/>
+    <text x="911" y="237" text-anchor="middle" font-size="14" font-weight="650" fill="#FFFFFF">COLD PATH — stored, queryable, joinable</text>
+  </g>
+  <rect x="666" y="248" width="490" height="470" rx="0 0 10 10" fill="url(#coldBg)" stroke="#9AD2C5"/>
+
+  <!-- cold step 1: eventhouse write -->
+  <g filter="url(#shadow)">
+    <rect x="688" y="270" width="446" height="88" rx="8" fill="#FFFFFF" stroke="#9AD2C5"/>
+    <text x="911" y="292" text-anchor="middle" font-size="11.5" font-weight="600" fill="#063D3B">1 · Eventhouse / KQL database write</text>
+    <text x="911" y="310" text-anchor="middle" font-size="9.5" fill="#3F6259">Eventstream lands filtered/shaped events; supports</text>
+    <text x="911" y="324" text-anchor="middle" font-size="9.5" fill="#3F6259">structured, semi-structured &amp; unstructured data</text>
+    <text x="911" y="338" text-anchor="middle" font-size="9.5" fill="#3F6259">indexed for time-series query patterns</text>
+    <text x="911" y="352" text-anchor="middle" font-size="9" fill="#117865" font-style="italic">mirrored to OneLake as Delta-Parquet (no extra copy)</text>
+  </g>
+
+  <!-- cold step 2: query surfaces -->
+  <line x1="911" y1="358" x2="911" y2="384" stroke="#0B5E50" stroke-width="1.8" marker-end="url(#arrCold)"/>
+  <g filter="url(#shadow)">
+    <rect x="688" y="386" width="446" height="98" rx="8" fill="#0B5E50"/>
+    <text x="911" y="410" text-anchor="middle" font-size="13" font-weight="650" fill="#C8F0E8">2 · Multi-language query surface</text>
+    <text x="911" y="430" text-anchor="middle" font-size="10" fill="#B7E8D9">Fabric notebooks run KQL, T-SQL, Python, or Spark</text>
+    <text x="911" y="446" text-anchor="middle" font-size="10" fill="#B7E8D9">directly over Eventhouse data — no data movement [946493a7]</text>
+    <text x="911" y="464" text-anchor="middle" font-size="9.5" fill="#8FD8C4" font-style="italic">exploration, transformation &amp; ML share one authoring surface</text>
+  </g>
+
+  <!-- cold step 3: consumers -->
+  <line x1="911" y1="484" x2="911" y2="508" stroke="#0B5E50" stroke-width="1.8" marker-end="url(#arrCold)"/>
+  <g>
+    <rect x="688" y="510" width="142" height="72" rx="6" fill="#FFFFFF" stroke="#9AD2C5"/>
+    <text x="759" y="532" text-anchor="middle" font-size="10" font-weight="600" fill="#063D3B">Ad-hoc KQL</text>
+    <text x="759" y="548" text-anchor="middle" font-size="8.5" fill="#3F6259">analyst exploration,</text>
+    <text x="759" y="560" text-anchor="middle" font-size="8.5" fill="#3F6259">historical joins</text>
+
+    <rect x="838" y="510" width="142" height="72" rx="6" fill="#FFFFFF" stroke="#9AD2C5"/>
+    <text x="909" y="532" text-anchor="middle" font-size="10" font-weight="600" fill="#063D3B">ML training</text>
+    <text x="909" y="548" text-anchor="middle" font-size="8.5" fill="#3F6259">Spark/Python notebook</text>
+    <text x="909" y="560" text-anchor="middle" font-size="8.5" fill="#3F6259">against stored history</text>
+
+    <rect x="988" y="510" width="146" height="72" rx="6" fill="#FFFFFF" stroke="#9AD2C5"/>
+    <text x="1061" y="530" text-anchor="middle" font-size="10" font-weight="600" fill="#063D3B">Data agent Q&amp;A</text>
+    <text x="1061" y="546" text-anchor="middle" font-size="8.5" fill="#3F6259">conversational reasoning</text>
+    <text x="1061" y="558" text-anchor="middle" font-size="8.5" fill="#3F6259">over live+historical [80a16164]</text>
+  </g>
+
+  <!-- cold step 4: onelake / downstream -->
+  <line x1="911" y1="582" x2="911" y2="606" stroke="#0B5E50" stroke-width="1.8" marker-end="url(#arrCold)"/>
+  <g filter="url(#shadow)">
+    <rect x="688" y="608" width="446" height="76" rx="8" fill="#FFFFFF" stroke="#9AD2C5"/>
+    <text x="911" y="630" text-anchor="middle" font-size="11.5" font-weight="600" fill="#063D3B">3 · OneLake handoff to BI &amp; downstream workloads</text>
+    <text x="911" y="648" text-anchor="middle" font-size="9.5" fill="#3F6259">Delta-Parquet mirror consumed by Power BI Direct Lake,</text>
+    <text x="911" y="662" text-anchor="middle" font-size="9.5" fill="#3F6259">Lakehouse/Warehouse engines, or Real-Time hub catalog entries</text>
+    <text x="911" y="676" text-anchor="middle" font-size="9" fill="#117865" font-style="italic">[24e391cb, a9563f44]</text>
+  </g>
+
+  <!-- ═══ TIMING / RETENTION COMPARISON STRIP ═══ -->
+  <text x="32" y="722" font-size="10" letter-spacing="1.4" fill="#8A8886">CHARACTERISTICS AT A GLANCE</text>
+  <g filter="url(#shadow)">
+    <rect x="24" y="730" width="1132" height="76" rx="8" fill="#FFFFFF" stroke="#E1DFDD"/>
+    <line x1="620" y1="738" x2="620" y2="798" stroke="#E1DFDD"/>
+    <text x="48" y="752" font-size="10.5" font-weight="600" fill="#7A3410">Hot path</text>
+    <text x="48" y="768" font-size="9.5" fill="#424242">Optimized for: reaction latency, live visualization, event-driven orchestration</text>
+    <text x="48" y="784" font-size="9.5" fill="#424242">State: transient in the eventstream / condition evaluation — not itself a query store</text>
+    <text x="48" y="798" font-size="9.5" fill="#424242">Trigger model: fully event-driven, no polling schedule required [claim 6347cb60]</text>
+
+    <text x="644" y="752" font-size="10.5" font-weight="600" fill="#0B5E50">Cold path</text>
+    <text x="644" y="768" font-size="9.5" fill="#424242">Optimized for: historical query, cross-field joins, model training, audit</text>
+    <text x="644" y="784" font-size="9.5" fill="#424242">State: durable in Eventhouse, queryable via KQL/T-SQL/Python/Spark [946493a7]</text>
+    <text x="644" y="798" font-size="9.5" fill="#424242">Trigger model: pull-based query, or feeds the hot path's KQL-defined conditions</text>
+  </g>
+
+  <!-- ═══ WORKED EXAMPLE STRIP ═══ -->
+  <text x="32" y="828" font-size="10" letter-spacing="1.4" fill="#8A8886">WORKED EXAMPLE — VEHICLE GOES OFFLINE</text>
+  <g filter="url(#shadow)">
+    <rect x="24" y="836" width="1132" height="52" rx="8" fill="#F3F2F1" stroke="#C8C6C4"/>
+    <text x="48" y="858" font-size="10" fill="#424242">Same source event, two destinations: the HOT path evaluates a KQL-defined Activator condition (&quot;no ping &gt; 3 min&quot;) and opens an incident within seconds —</text>
+    <text x="48" y="874" font-size="10" fill="#424242">the COLD path lands the same location pings in Eventhouse so an analyst can later query the vehicle's full route history or retrain a routing model against it.</text>
+  </g>
+
+  <!-- legend (placed in header band, clear of the decision box) -->
+  <g>
+    <rect x="890" y="20" width="10" height="10" fill="#F5A26A" stroke="#FFFFFF" stroke-width="0.5"/>
+    <text x="904" y="29" font-size="9" fill="#FFFFFF">hot-path element</text>
+    <rect x="1010" y="20" width="10" height="10" fill="#8FE8CE" stroke="#FFFFFF" stroke-width="0.5"/>
+    <text x="1024" y="29" font-size="9" fill="#FFFFFF">cold-path element</text>
+  </g>
+
+  <text x="1148" y="895" text-anchor="end" font-size="9.5" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset.</text>
+</svg>

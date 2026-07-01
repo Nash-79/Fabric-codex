@@ -1,0 +1,234 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 900" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Internals/decision diagram, distinct from sql-database-translytical.svg (which is the
+       horizontal translytical architecture). This one is a vertical replication pipeline with
+       decision gates, tracing a single OLTP write down to analytics-endpoint visibility.
+       Grounded in sql-database claims: automatic near-real-time replication to OneLake as
+       Delta/Parquet, auto-created read-only SQL analytics endpoint, translytical read/write
+       split with no write-side contention, Delta tables enabling cross-item T-SQL federation,
+       Entra ID-only auth gate, automatic tuning/index creation on the OLTP side. -->
+  <defs>
+    <linearGradient id="hdrGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="0.6" stop-color="#117865"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <linearGradient id="laneOltp" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#063D3B"/>
+      <stop offset="1" stop-color="#0B5E50"/>
+    </linearGradient>
+    <linearGradient id="laneLake" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#117865"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94"/>
+    </marker>
+    <marker id="arrAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#E8A020"/>
+    </marker>
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0078D4"/>
+    </marker>
+    <marker id="arrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#C4314B"/>
+    </marker>
+  </defs>
+
+  <rect width="1100" height="900" fill="#FFFFFF"/>
+
+  <!-- Header -->
+  <rect x="0" y="0" width="1100" height="58" fill="url(#hdrGrad)"/>
+  <text x="28" y="25" font-size="17" font-weight="700" fill="#FFFFFF">SQL Database in Fabric — Replication Path Internals</text>
+  <text x="28" y="45" font-size="11" fill="#D9F5EE">Tracing one OLTP write from commit to visibility on the read-only SQL analytics endpoint — decision gates and consistency semantics</text>
+
+  <!-- Lane headers -->
+  <text x="150" y="82" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="1" fill="#063D3B">LANE 1 — OLTP ENGINE</text>
+  <text x="550" y="82" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="1" fill="#063D3B">LANE 2 — REPLICATION TO ONELAKE</text>
+  <text x="930" y="82" text-anchor="middle" font-size="11" font-weight="700" letter-spacing="1" fill="#063D3B">LANE 3 — ANALYTICS ENDPOINT</text>
+
+  <!-- Lane background bands -->
+  <rect x="20" y="90" width="320" height="700" rx="10" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <rect x="360" y="90" width="380" height="700" rx="10" fill="#F7FAF9" stroke="#C8E8E0"/>
+  <rect x="760" y="90" width="320" height="700" rx="10" fill="#EAF7F2" stroke="#9AD2C5"/>
+
+  <!-- STEP 1: client write -->
+  <rect x="44" y="108" width="272" height="56" rx="8" fill="#FFFFFF" stroke="#117865"/>
+  <text x="180" y="130" text-anchor="middle" font-size="11" font-weight="700" fill="#063D3B">1. Client issues INSERT/UPDATE/DELETE</text>
+  <text x="180" y="147" text-anchor="middle" font-size="9" fill="#3F6259">Entra ID-authenticated session (no SQL auth)</text>
+  <text x="180" y="159" text-anchor="middle" font-size="9" fill="#3F6259">Read item permission already verified at connect</text>
+
+  <line x1="180" y1="164" x2="180" y2="188" stroke="#E8A020" stroke-width="2" marker-end="url(#arrAmber)"/>
+
+  <!-- Decision diamond: auth gate already passed -->
+  <polygon points="180,192 260,222 180,252 100,222" fill="#FFFFFF" stroke="#E8A020" stroke-width="1.5"/>
+  <text x="180" y="218" text-anchor="middle" font-size="9" font-weight="700" fill="#8A5200">Entra ID</text>
+  <text x="180" y="230" text-anchor="middle" font-size="9" font-weight="700" fill="#8A5200">token valid?</text>
+  <text x="270" y="216" font-size="9" fill="#C4314B">no →</text>
+  <text x="270" y="228" font-size="9" fill="#C4314B">connection</text>
+  <text x="270" y="240" font-size="9" fill="#C4314B">rejected</text>
+
+  <line x1="180" y1="252" x2="180" y2="276" stroke="#2AAC94" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="188" y="268" font-size="9" fill="#117865">yes</text>
+
+  <!-- Step 2: commit to OLTP engine -->
+  <rect x="44" y="280" width="272" height="70" rx="8" fill="url(#laneOltp)"/>
+  <text x="180" y="302" text-anchor="middle" font-size="11" font-weight="700" fill="#25FFD4">2. Committed to OLTP Engine</text>
+  <text x="180" y="318" text-anchor="middle" font-size="9" fill="#D9F5EE">Azure SQL Database engine — transaction durable</text>
+  <text x="180" y="332" text-anchor="middle" font-size="9" fill="#D9F5EE">Automatic tuning may add/adjust indexes here</text>
+  <text x="180" y="344" text-anchor="middle" font-size="9" fill="#9AD2C5">Write is IMMEDIATELY consistent for OLTP readers</text>
+
+  <line x1="180" y1="350" x2="180" y2="374" stroke="#2AAC94" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Step 3: internal log capture -->
+  <rect x="44" y="378" width="272" height="60" rx="8" fill="url(#laneOltp)"/>
+  <text x="180" y="400" text-anchor="middle" font-size="11" font-weight="700" fill="#25FFD4">3. Change captured internally</text>
+  <text x="180" y="416" text-anchor="middle" font-size="9" fill="#D9F5EE">Platform-managed capture feeds the automatic</text>
+  <text x="180" y="429" text-anchor="middle" font-size="9" fill="#D9F5EE">replication pipeline — no user configuration</text>
+
+  <!-- Loop-back annotation: further OLTP writes keep flowing independently -->
+  <path d="M 60 438 C 30 480, 30 560, 60 600" fill="none" stroke="#E8A020" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="14" y="520" font-size="8.5" fill="#8A5200" transform="rotate(-90 14 520)">subsequent writes keep committing — no wait</text>
+
+  <!-- Isolation box: no contention -->
+  <rect x="44" y="620" width="272" height="90" rx="8" fill="#FFFFFF" stroke="#117865" stroke-dasharray="3 3"/>
+  <text x="180" y="642" text-anchor="middle" font-size="11" font-weight="700" fill="#063D3B">Isolation guarantee</text>
+  <text x="180" y="660" text-anchor="middle" font-size="9" fill="#3F6259">Analytical queries against the endpoint</text>
+  <text x="180" y="674" text-anchor="middle" font-size="9" fill="#3F6259">never execute against this engine, so OLTP</text>
+  <text x="180" y="688" text-anchor="middle" font-size="9" fill="#3F6259">throughput is not affected by read load</text>
+  <text x="180" y="703" text-anchor="middle" font-size="9" font-weight="600" fill="#117865">zero write/read contention</text>
+
+  <!-- Arrow from lane 1 to lane 2 -->
+  <line x1="316" y1="408" x2="356" y2="408" stroke="#2AAC94" stroke-width="2.5" marker-end="url(#arr)"/>
+  <text x="336" y="398" text-anchor="middle" font-size="8.5" fill="#117865">async</text>
+
+  <!-- LANE 2: replication pipeline -->
+  <rect x="380" y="108" width="340" height="56" rx="8" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="550" y="130" text-anchor="middle" font-size="11" font-weight="700" fill="#063D3B">4. Automatic replication triggers</text>
+  <text x="550" y="147" text-anchor="middle" font-size="9" fill="#3F6259">Continuous, platform-managed, no schedule to configure</text>
+  <text x="550" y="159" text-anchor="middle" font-size="9" fill="#3F6259">Runs independently of query traffic</text>
+
+  <line x1="550" y1="164" x2="550" y2="188" stroke="#2AAC94" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="380" y="192" width="340" height="64" rx="8" fill="url(#laneLake)"/>
+  <text x="550" y="215" text-anchor="middle" font-size="11" font-weight="700" fill="#FFFFFF">5. Convert row format → Parquet</text>
+  <text x="550" y="232" text-anchor="middle" font-size="9" fill="#EAF7F2">Row-store OLTP pages transcoded to columnar</text>
+  <text x="550" y="245" text-anchor="middle" font-size="9" fill="#EAF7F2">Parquet files for analytical consumption</text>
+
+  <line x1="550" y1="256" x2="550" y2="280" stroke="#2AAC94" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="380" y="284" width="340" height="64" rx="8" fill="url(#laneLake)"/>
+  <text x="550" y="307" text-anchor="middle" font-size="11" font-weight="700" fill="#FFFFFF">6. Commit as Delta table on OneLake</text>
+  <text x="550" y="324" text-anchor="middle" font-size="9" fill="#EAF7F2">Delta transaction log updated — versioned,</text>
+  <text x="550" y="337" text-anchor="middle" font-size="9" fill="#EAF7F2">ACID-compliant table state in OneLake</text>
+
+  <line x1="550" y1="348" x2="550" y2="372" stroke="#2AAC94" stroke-width="2" marker-end="url(#arr)"/>
+
+  <!-- Decision diamond: freshness gate -->
+  <polygon points="550,376 660,420 550,464 440,420" fill="#FFFFFF" stroke="#0078D4" stroke-width="1.5"/>
+  <text x="550" y="405" text-anchor="middle" font-size="9" font-weight="700" fill="#004578">Has the Delta commit</text>
+  <text x="550" y="419" text-anchor="middle" font-size="9" font-weight="700" fill="#004578">landed on OneLake yet?</text>
+  <text x="550" y="433" text-anchor="middle" font-size="9" fill="#004578">(near-real-time, seconds-scale)</text>
+
+  <text x="668" y="410" font-size="9" fill="#C4314B">not yet →</text>
+  <text x="668" y="422" font-size="9" fill="#C4314B">endpoint still serves</text>
+  <text x="668" y="434" font-size="9" fill="#C4314B">prior committed version</text>
+
+  <line x1="550" y1="464" x2="550" y2="490" stroke="#2AAC94" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="558" y="482" font-size="9" fill="#117865">landed</text>
+
+  <!-- OneLake band -->
+  <rect x="380" y="494" width="340" height="76" rx="10" fill="url(#laneLake)"/>
+  <text x="550" y="518" text-anchor="middle" font-size="12" font-weight="700" fill="#FFFFFF">OneLake — Delta / Parquet copy</text>
+  <text x="550" y="536" text-anchor="middle" font-size="9" fill="#EAF7F2">Single physical copy backs Spark, notebooks,</text>
+  <text x="550" y="549" text-anchor="middle" font-size="9" fill="#EAF7F2">Power BI, pipelines, and the analytics endpoint</text>
+  <text x="550" y="562" text-anchor="middle" font-size="9" fill="#D9F5EE">No manual export step required</text>
+
+  <!-- Fan-out note box -->
+  <rect x="380" y="586" width="340" height="124" rx="8" fill="#FFFFFF" stroke="#9AD2C5" stroke-dasharray="3 3"/>
+  <text x="550" y="608" text-anchor="middle" font-size="11" font-weight="700" fill="#063D3B">Federation surface</text>
+  <text x="550" y="626" text-anchor="middle" font-size="9" fill="#3F6259">Because this lands as Delta, any SQL analytics</text>
+  <text x="550" y="639" text-anchor="middle" font-size="9" fill="#3F6259">endpoint can 3-part-name join across it —</text>
+  <text x="550" y="652" text-anchor="middle" font-size="9" fill="#3F6259">warehouses, mirrored DBs, other SQL DBs —</text>
+  <text x="550" y="665" text-anchor="middle" font-size="9" fill="#3F6259">with zero data movement.</text>
+  <line x1="410" y1="678" x2="690" y2="678" stroke="#E1DFDD"/>
+  <text x="550" y="696" text-anchor="middle" font-size="9" font-weight="600" fill="#117865">Same replicated copy also backs vector /</text>
+  <text x="550" y="708" text-anchor="middle" font-size="8.5" fill="#3F6259">RAG reads issued directly against the OLTP engine</text>
+
+  <!-- Arrow from lane 2 to lane 3 -->
+  <line x1="720" y1="530" x2="756" y2="530" stroke="#2AAC94" stroke-width="2.5" marker-end="url(#arr)"/>
+
+  <!-- LANE 3 -->
+  <rect x="774" y="108" width="292" height="60" rx="8" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="920" y="130" text-anchor="middle" font-size="11" font-weight="700" fill="#063D3B">7. Endpoint auto-provisioned</text>
+  <text x="920" y="147" text-anchor="middle" font-size="9" fill="#3F6259">Created automatically alongside the SQL</text>
+  <text x="920" y="160" text-anchor="middle" font-size="9" fill="#3F6259">database — no separate setup step</text>
+
+  <line x1="920" y1="168" x2="920" y2="192" stroke="#0078D4" stroke-width="2" marker-end="url(#arrBlue)"/>
+
+  <rect x="774" y="196" width="292" height="64" rx="8" fill="#0078D4"/>
+  <text x="920" y="219" text-anchor="middle" font-size="11" font-weight="700" fill="#FFFFFF">8. Client issues SELECT</text>
+  <text x="920" y="236" text-anchor="middle" font-size="9" fill="#DCEEFB">Standard T-SQL against the analytics</text>
+  <text x="920" y="249" text-anchor="middle" font-size="9" fill="#DCEEFB">endpoint — read-only surface</text>
+
+  <line x1="920" y1="260" x2="920" y2="284" stroke="#0078D4" stroke-width="2" marker-end="url(#arrBlue)"/>
+
+  <!-- Decision diamond: read served from lake -->
+  <polygon points="920,288 1030,332 920,376 810,332" fill="#FFFFFF" stroke="#0078D4" stroke-width="1.5"/>
+  <text x="920" y="317" text-anchor="middle" font-size="9" font-weight="700" fill="#004578">Query resolves against</text>
+  <text x="920" y="331" text-anchor="middle" font-size="9" font-weight="700" fill="#004578">the OneLake Delta copy —</text>
+  <text x="920" y="345" text-anchor="middle" font-size="9" font-weight="700" fill="#004578">never the OLTP engine</text>
+
+  <line x1="920" y1="376" x2="920" y2="400" stroke="#2AAC94" stroke-width="2" marker-end="url(#arr)"/>
+
+  <rect x="774" y="404" width="292" height="66" rx="8" fill="#EAF7F2" stroke="#117865"/>
+  <text x="920" y="426" text-anchor="middle" font-size="11" font-weight="700" fill="#063D3B">9. Result returned to caller</text>
+  <text x="920" y="443" text-anchor="middle" font-size="9" fill="#3F6259">Reflects most recent replicated commit —</text>
+  <text x="920" y="457" text-anchor="middle" font-size="9" fill="#3F6259">eventually consistent, near-real-time</text>
+
+  <!-- Consistency semantics box -->
+  <rect x="774" y="490" width="292" height="220" rx="8" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="920" y="512" text-anchor="middle" font-size="11" font-weight="700" fill="#063D3B">Consistency semantics</text>
+  <line x1="790" y1="522" x2="1050" y2="522" stroke="#E1DFDD"/>
+
+  <circle cx="798" cy="540" r="4" fill="#E8A020"/>
+  <text x="810" y="544" font-size="9" fill="#424242">OLTP reads: strongly consistent,</text>
+  <text x="810" y="556" font-size="9" fill="#424242">immediate — read your own writes</text>
+
+  <circle cx="798" cy="574" r="4" fill="#0078D4"/>
+  <text x="810" y="578" font-size="9" fill="#424242">Analytics endpoint reads: eventually</text>
+  <text x="810" y="590" font-size="9" fill="#424242">consistent, near-real-time lag</text>
+
+  <circle cx="798" cy="608" r="4" fill="#2AAC94"/>
+  <text x="810" y="612" font-size="9" fill="#424242">No manual sync / export trigger —</text>
+  <text x="810" y="624" font-size="9" fill="#424242">replication is always-on</text>
+
+  <circle cx="798" cy="642" r="4" fill="#C4314B"/>
+  <text x="810" y="646" font-size="9" fill="#424242">Endpoint is read-only: it cannot be</text>
+  <text x="810" y="658" font-size="9" fill="#424242">a write target for the OLTP data</text>
+
+  <line x1="790" y1="672" x2="1050" y2="672" stroke="#E1DFDD"/>
+  <text x="920" y="692" text-anchor="middle" font-size="9" font-weight="600" fill="#117865">Same pattern applies to cross-item</text>
+  <text x="920" y="704" text-anchor="middle" font-size="9" font-weight="600" fill="#117865">federated queries via 3-part naming</text>
+
+  <!-- LEGEND -->
+  <rect x="20" y="812" width="1060" height="72" rx="8" fill="#F3F2F1" stroke="#E1DFDD"/>
+  <text x="40" y="832" font-size="11" font-weight="700" fill="#063D3B">LEGEND</text>
+
+  <line x1="40" y1="850" x2="66" y2="850" stroke="#E8A020" stroke-width="2" marker-end="url(#arrAmber)"/>
+  <text x="72" y="854" font-size="9.5" fill="#424242">Write-path step (OLTP engine)</text>
+
+  <line x1="280" y1="850" x2="306" y2="850" stroke="#2AAC94" stroke-width="2" marker-end="url(#arr)"/>
+  <text x="312" y="854" font-size="9.5" fill="#424242">Automatic replication step (always-on, no config)</text>
+
+  <line x1="610" y1="850" x2="636" y2="850" stroke="#0078D4" stroke-width="2" marker-end="url(#arrBlue)"/>
+  <text x="642" y="854" font-size="9.5" fill="#424242">Read path via analytics endpoint (read-only)</text>
+
+  <polygon points="900,842 918,850 900,858 882,850" fill="#FFFFFF" stroke="#8A8886"/>
+  <text x="928" y="854" font-size="9.5" fill="#424242">Decision / gate</text>
+
+  <line x1="40" y1="868" x2="66" y2="868" stroke="#C4314B" stroke-width="2" marker-end="url(#arrRed)"/>
+  <text x="72" y="872" font-size="9.5" fill="#424242">Rejected / not-yet-visible branch</text>
+
+  <text x="1072" y="878" text-anchor="end" font-size="9" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset.</text>
+</svg>

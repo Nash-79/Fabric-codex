@@ -2,11 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { listTopics } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
+import { TopicTree } from "@/components/TopicTree";
 import { useMemo } from "react";
 
 const topicsQO = queryOptions({ queryKey: ["topics"], queryFn: () => listTopics() });
 
-export const Route = createFileRoute("/topics")({
+export const Route = createFileRoute("/topics/")({
   head: () => ({
     meta: [
       { title: "Topics — Fabric Atlas" },
@@ -52,7 +53,11 @@ function TopicsPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
-      <div className="mx-auto max-w-7xl px-6 py-10">
+      <div className="mx-auto flex max-w-[1600px] gap-6 px-6 py-10">
+        <div className="hidden lg:block">
+          <TopicTree topics={topics} />
+        </div>
+        <div className="mx-auto w-full max-w-7xl">
         <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
           Knowledge map
         </div>
@@ -96,6 +101,7 @@ function TopicsPage() {
               .
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>

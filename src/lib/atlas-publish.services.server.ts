@@ -176,18 +176,6 @@ export async function publishSource(sb: SupabaseAdmin, payload: SourcePayload) {
   };
 }
 
-type BlogPayload = {
-  slug?: string;
-  topic_slug?: string | null;
-  title: string;
-  summary?: string;
-  body_md: string;
-  cited_source_keys?: string[];
-  tags?: string[];
-  depth_levels?: number[];
-  status?: string;
-};
-
 // Resolve cited_source_keys (portable source slugs) → source ids. Reports any that aren't
 // approved sources so the admin re-ingests them rather than publishing a broken citation legend.
 async function resolveCitedSources(sb: SupabaseAdmin, keys: string[]) {
@@ -209,110 +197,114 @@ async function resolveCitedSources(sb: SupabaseAdmin, keys: string[]) {
   return { ids, missing };
 }
 
-export async function publishBlog(sb: SupabaseAdmin, payload: BlogPayload) {
-  if (!payload.title?.trim() || !payload.body_md?.trim()) {
-    throw new Error("Blog title and body are required.");
-  }
-  const keys = payload.cited_source_keys ?? [];
-  if (!keys.length) throw new Error("Blog has no cited_source_keys — refusing to publish.");
-  const slug = (payload.slug ?? "").trim();
-  if (!slug) throw new Error("Blog slug is required.");
+type ContentItemKind = "article" | "design" | "lesson";
 
-  const { ids, missing } = await resolveCitedSources(sb, keys);
-  if (missing.length) {
-    throw new Error(`Cited source key(s) not approved on the server: ${missing.join(", ")}`);
-  }
-
-  // Upsert by slug; rebuild the citation legend (label S1, S2… in cited order).
-  const { data: blog, error } = await sb
-    .from("blogs")
-    .upsert(
-      {
-        slug,
-        topic_slug: payload.topic_slug ?? null,
-        title: payload.title.trim(),
-        summary: payload.summary ?? "",
-        body_md: payload.body_md,
-        status: payload.status ?? "draft",
-        tags: payload.tags ?? [],
-        depth_levels: payload.depth_levels ?? [],
-        document: payload as any,
-      },
-      { onConflict: "slug" },
-    )
-    .select("id")
-    .single();
-  if (error || !blog) throw new Error(`blog ${slug}: ${error?.message ?? "upsert failed"}`);
-
-  await sb.from("blog_sources").delete().eq("blog_id", blog.id);
-  const rows = ids.map((sid, i) => ({
-    blog_id: blog.id,
-    source_id: sid,
-    label: `S${i + 1}`,
-    position: i,
-  }));
-  if (rows.length) {
-    const { error: bsError } = await sb.from("blog_sources").insert(rows);
-    if (bsError) throw new Error(`blog citations for ${slug}: ${bsError.message}`);
-  }
-
-  return { blogId: blog.id, slug, citedSources: rows.length };
-}
-
-type DesignPayload = {
+type ContentItemPayload = {
+  kind: ContentItemKind;
   slug?: string;
+  topic_slug?: string | null;
+  capability_id?: string | null;
   title: string;
   summary?: string;
   body_md: string;
   cited_source_keys?: string[];
   tags?: string[];
+  depth_levels?: number[];
   status?: string;
+  scenario?: string;
+  constraints?: Record<string, unknown>;
 };
 
-export async function publishDesign(sb: SupabaseAdmin, payload: DesignPayload) {
+// Publish a single article/design/lesson. This is the fix for the versioning bug that used to
+// live in publishBlog()/publishDesign(): those did a bare upsert({onConflict:"slug"}), which
+// silently overwrote the active row in place with no version increment and no supersedes_id
+// chain. This function ALWAYS versions — it finds the current active (kind, slug) row, archives
+// it (slug renamed to {slug}@v{version}, active=false, status="superseded"), then inserts a new
+// row with version+1 and supersedes_id pointing back. Never a bare upsert.
+export async function publishContentItem(sb: SupabaseAdmin, payload: ContentItemPayload) {
+  const kindLabel = payload.kind;
   if (!payload.title?.trim() || !payload.body_md?.trim()) {
-    throw new Error("Design title and body are required.");
+    throw new Error(`${kindLabel} title and body are required.`);
   }
   const keys = payload.cited_source_keys ?? [];
-  if (!keys.length) throw new Error("Design has no cited_source_keys — refusing to publish.");
+  if (!keys.length) {
+    throw new Error(`${kindLabel} has no cited_source_keys — refusing to publish.`);
+  }
   const slug = (payload.slug ?? "").trim();
-  if (!slug) throw new Error("Design slug is required.");
+  if (!slug) throw new Error(`${kindLabel} slug is required.`);
 
   const { ids, missing } = await resolveCitedSources(sb, keys);
   if (missing.length) {
     throw new Error(`Cited source key(s) not approved on the server: ${missing.join(", ")}`);
   }
 
-  const { data: design, error } = await sb
-    .from("designs")
-    .upsert(
-      {
-        slug,
-        title: payload.title.trim(),
-        summary: payload.summary ?? "",
-        body_md: payload.body_md,
-        status: payload.status ?? "published",
-        document: payload as any,
-      },
-      { onConflict: "slug" },
-    )
-    .select("id")
-    .single();
-  if (error || !design) throw new Error(`design ${slug}: ${error?.message ?? "upsert failed"}`);
+  const { data: prior } = await sb
+    .from("content_items")
+    .select("*")
+    .eq("kind", payload.kind)
+    .eq("slug", slug)
+    .eq("active", true)
+    .maybeSingle();
 
-  await sb.from("design_sources").delete().eq("design_id", design.id);
+  if (prior?.id) {
+    const archivedSlug = `${slug}@v${prior.version ?? 1}`;
+    const { error: archiveError } = await sb
+      .from("content_items")
+      .update({ active: false, status: "superseded", slug: archivedSlug })
+      .eq("id", prior.id);
+    if (archiveError) throw new Error(archiveError.message);
+  }
+
+  const { data: created, error } = await sb
+    .from("content_items")
+    .insert({
+      kind: payload.kind,
+      slug,
+      topic_slug: payload.topic_slug ?? prior?.topic_slug ?? null,
+      capability_id: payload.capability_id ?? prior?.capability_id ?? null,
+      title: payload.title.trim(),
+      summary: payload.summary ?? "",
+      body_md: payload.body_md,
+      // Default to "published": there is no separate review/promotion UI anywhere in the app —
+      // Settings → Publish is, in practice, the act of going live.
+      status: payload.status ?? "published",
+      tags: payload.tags ?? [],
+      depth_levels: payload.depth_levels ?? [],
+      scenario: payload.scenario ?? "",
+      constraints: payload.constraints ?? {},
+      version: prior ? (prior.version ?? 1) + 1 : 1,
+      supersedes_id: prior?.id ?? null,
+      active: true,
+      ready_to_share: false,
+      validation_confidence: null,
+      document: payload as any,
+    })
+    .select("id,version")
+    .single();
+  if (error || !created) {
+    throw new Error(`${kindLabel} ${slug}: ${error?.message ?? "insert failed"}`);
+  }
+
   const rows = ids.map((sid, i) => ({
-    design_id: design.id,
+    content_item_id: created.id,
     source_id: sid,
     label: `S${i + 1}`,
     position: i,
   }));
   if (rows.length) {
-    const { error: dsError } = await sb.from("design_sources").insert(rows);
-    if (dsError) throw new Error(`design citations for ${slug}: ${dsError.message}`);
+    const { error: citeError } = await sb.from("content_item_sources").insert(rows);
+    if (citeError) {
+      throw new Error(`${kindLabel} citations for ${slug}: ${citeError.message}`);
+    }
   }
 
-  return { designId: design.id, slug, citedSources: rows.length };
+  return {
+    contentItemId: created.id,
+    kind: payload.kind,
+    slug,
+    version: created.version ?? 1,
+    citedSources: rows.length,
+  };
 }
 
 type DiagramPayload = {
@@ -365,15 +357,21 @@ export async function publishDiagram(
 }
 
 // Dispatch a pasted payload by kind. The agent files don't always carry an explicit "kind",
-// so callers pass it from the chosen UI tab.
+// so callers pass it from the chosen UI tab. "blog" is accepted as a legacy alias for "article"
+// for one release, since existing agent-authored content/blogs/*.json and human muscle memory
+// both still say "blog" — the underlying content_items.kind column value is always "article".
 export async function publishFromFile(
   sb: SupabaseAdmin,
-  kind: "source" | "blog" | "design" | "diagram",
+  kind: "source" | "blog" | "article" | "design" | "lesson" | "diagram",
   payload: any,
 ) {
   if (kind === "source") return { kind, ...(await publishSource(sb, payload)) };
-  if (kind === "blog") return { kind, ...(await publishBlog(sb, payload)) };
-  if (kind === "design") return { kind, ...(await publishDesign(sb, payload)) };
   if (kind === "diagram") return { kind, ...(await publishDiagram(sb, payload)) };
+  if (kind === "blog" || kind === "article") {
+    return publishContentItem(sb, { ...payload, kind: "article" });
+  }
+  if (kind === "design" || kind === "lesson") {
+    return publishContentItem(sb, { ...payload, kind });
+  }
   throw new Error(`Unknown publish kind: ${kind}`);
 }

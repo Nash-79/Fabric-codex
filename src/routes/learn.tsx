@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/SiteHeader";
-import { listLessons } from "@/lib/atlas.functions";
+import { listContentItems } from "@/lib/atlas.functions";
 
 export const Route = createFileRoute("/learn")({
   head: () => ({
@@ -22,31 +22,31 @@ export const Route = createFileRoute("/learn")({
   component: LearnPage,
 });
 
-const TIERS: { id: string; label: string; depths: string[]; blurb: string }[] = [
+const TIERS: { id: string; label: string; depths: number[]; blurb: string }[] = [
   {
     id: "beginner",
     label: "Beginner",
-    depths: ["L1", "L2"],
+    depths: [1, 2],
     blurb: "Conceptual and practitioner essentials.",
   },
   {
     id: "intermediate",
     label: "Intermediate",
-    depths: ["L3"],
+    depths: [3],
     blurb: "Architect-level decisions and trade-offs.",
   },
   {
     id: "expert",
     label: "Expert",
-    depths: ["L4", "L5"],
+    depths: [4, 5],
     blurb: "Performance tuning and internals.",
   },
 ];
 
 function LearnPage() {
   const { data, isLoading, error } = useQuery({
-    queryKey: ["lessons"],
-    queryFn: () => listLessons(),
+    queryKey: ["content-items", "lesson"],
+    queryFn: () => listContentItems({ data: { kind: "lesson" } }),
   });
 
   return (
@@ -64,12 +64,16 @@ function LearnPage() {
         <div className="mt-8 space-y-8">
           {error && <div className="text-sm text-rose-300">{(error as Error).message}</div>}
           {TIERS.map((t) => {
-            const lessons = (data ?? []).filter((l) => t.depths.includes(l.depth));
+            const lessons = (data ?? []).filter((l: any) =>
+              (l.depth_levels ?? []).some((d: number) => t.depths.includes(d)),
+            );
             return (
               <section key={t.id}>
                 <div className="flex items-baseline gap-3">
                   <h2 className="text-xl font-semibold text-foreground">{t.label}</h2>
-                  <span className="text-xs text-muted-foreground">{t.depths.join(" · ")}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t.depths.map((d) => `L${d}`).join(" · ")}
+                  </span>
                 </div>
                 <p className="mt-1 text-sm text-muted-foreground">{t.blurb}</p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -79,13 +83,18 @@ function LearnPage() {
                       No lessons yet.
                     </div>
                   )}
-                  {lessons.map((l) => (
-                    <div key={l.id} className="rounded-xl border border-border bg-card p-4">
+                  {lessons.map((l: any) => (
+                    <Link
+                      key={l.id}
+                      to="/content/$kind/$slug"
+                      params={{ kind: "lesson", slug: l.slug }}
+                      className="block rounded-xl border border-border bg-card p-4 transition hover:bg-accent"
+                    >
                       <div className="text-[10px] uppercase tracking-wide text-teal-300/70">
-                        {l.depth}
+                        {(l.depth_levels ?? []).map((d: number) => `L${d}`).join(" · ") || "L1"}
                       </div>
                       <div className="mt-1 text-sm font-medium text-foreground">{l.title}</div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               </section>

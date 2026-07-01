@@ -27,7 +27,7 @@ const readJson = (p) => JSON.parse(readFileSync(p, "utf8"));
 const listJson = (dir) => existsSync(dir) ? readdirSync(dir).filter(f => f.endsWith(".json")).map(f => ({ slug: f.replace(/\.json$/, ""), data: readJson(join(dir, f)) })) : [];
 
 const sources = listJson("content/sources");
-const blogs = listJson("content/blogs").map(b => b.data);
+const blogs = listJson("content/articles").map(b => b.data);
 const designs = listJson("content/designs");
 const topics = existsSync("content/topics.json") ? readJson("content/topics.json") : [];
 const diagrams = existsSync("content/diagrams/assets.json") ? readJson("content/diagrams/assets.json") : [];
@@ -75,29 +75,42 @@ for (const { slug, data: s } of sources) {
 }
 console.log("sources:", sources.length, "claims:", claimCount);
 
-// Blogs
-for (const b of blogs) {
-  const ins = await must(`blog ${b.slug}`, sb.from("blogs").upsert({
-    slug: b.slug, topic_slug: b.topic_slug ?? null, title: b.title,
-    summary: b.summary ?? "", body_md: b.body_md ?? "", status: "published",
-  }, { onConflict: "slug" }).select("id").single());
-  await sb.from("blog_sources").delete().eq("blog_id", ins.id);
-  const keys = b.cited_source_keys ?? [];
-  const rows = keys.map((k, i) => { const sid = slugToId.get(k); return sid ? { blog_id: ins.id, source_id: sid, label: `S${i+1}`, position: i } : null; }).filter(Boolean);
-  if (rows.length) await sb.from("blog_sources").insert(rows);
-}
-console.log("blogs:", blogs.length);
+// Upsert-by-(kind,slug) helper. content_items only has a PARTIAL unique index on (kind, slug)
+// WHERE active, which a plain upsert({onConflict}) call can't target (no WHERE clause support
+// there) — find the active row manually and update in place, or insert a fresh v1 row.
+const upsertContentItem = async (row) => {
+  const { data: existing } = await sb.from("content_items").select("id")
+    .eq("kind", row.kind).eq("slug", row.slug).eq("active", true).maybeSingle();
+  if (existing?.id) {
+    return must(`${row.kind} ${row.slug}`, sb.from("content_items").update(row).eq("id", existing.id).select("id").single());
+  }
+  return must(`${row.kind} ${row.slug}`, sb.from("content_items").insert({ ...row, version: 1, active: true }).select("id").single());
+};
 
-// Designs
+// Articles (kind='article')
+for (const b of blogs) {
+  const ins = await upsertContentItem({
+    kind: "article", slug: b.slug, topic_slug: b.topic_slug ?? null, title: b.title,
+    summary: b.summary ?? "", body_md: b.body_md ?? "", status: "published",
+  });
+  await sb.from("content_item_sources").delete().eq("content_item_id", ins.id);
+  const keys = b.cited_source_keys ?? [];
+  const rows = keys.map((k, i) => { const sid = slugToId.get(k); return sid ? { content_item_id: ins.id, source_id: sid, label: `S${i+1}`, position: i } : null; }).filter(Boolean);
+  if (rows.length) await sb.from("content_item_sources").insert(rows);
+}
+console.log("articles:", blogs.length);
+
+// Designs (kind='design')
 for (const { slug: fileSlug, data: d } of designs) {
   const slug = d.slug ?? fileSlug;
-  const ins = await must(`design ${slug}`, sb.from("designs").upsert({
-    slug, title: d.title ?? slug, summary: d.summary ?? "", body_md: d.body_md ?? "", status: "published",
-  }, { onConflict: "slug" }).select("id").single());
-  await sb.from("design_sources").delete().eq("design_id", ins.id);
+  const ins = await upsertContentItem({
+    kind: "design", slug, topic_slug: d.topic_slug ?? null, title: d.title ?? slug,
+    summary: d.summary ?? "", body_md: d.body_md ?? "", status: "published",
+  });
+  await sb.from("content_item_sources").delete().eq("content_item_id", ins.id);
   const keys = d.cited_source_keys ?? [];
-  const rows = keys.map((k, i) => { const sid = slugToId.get(k); return sid ? { design_id: ins.id, source_id: sid, label: `S${i+1}`, position: i } : null; }).filter(Boolean);
-  if (rows.length) await sb.from("design_sources").insert(rows);
+  const rows = keys.map((k, i) => { const sid = slugToId.get(k); return sid ? { content_item_id: ins.id, source_id: sid, label: `S${i+1}`, position: i } : null; }).filter(Boolean);
+  if (rows.length) await sb.from("content_item_sources").insert(rows);
 }
 console.log("designs:", designs.length);
 

@@ -1,71 +1,88 @@
-# Topics and articles
+# Topics and content
 
-The **Topics** page is the reading portal. Topics form a nested tree (areas → topics →
-sub-topics, any depth); each topic maps to one or more capabilities in the registry and can
-carry one long-form, cited **article**.
+**Topics** is the reading portal. Topics form a nested tree (areas → topics → sub-topics, any
+depth). Each topic can be linked to one or more capabilities in the Capability Registry, and
+each topic gathers whatever **content** — articles, designs, and lessons — has been written
+about it.
 
-## Reading the tree
+## The topic tree
 
-- A **number** next to a topic is how many verified claims back it — the raw material an
-  article is built from.
-- A **dot** means the topic has an article; its colour is the article's status (green
-  validated, amber draft/checked, red needs review).
-- Click a topic to see its description, mapped capabilities (jump straight to the Registry),
-  its article card, and its sub-topics for drilling further.
+A collapsible tree sits on the left of the Topics page, a topic's own page, and every content
+detail page. It starts as a narrow icon rail; hover it (or click the pin icon) to expand it
+into the full topic hierarchy. When you're viewing a topic or a piece of content, the tree
+auto-expands the chain of ancestor topics down to the one you're on, so you always know where
+you are.
 
-## Reading an article
+The main Topics page also shows top-level areas as cards, each listing its sub-topics with a
+short description — a faster way to scan the whole map before drilling in.
 
-Articles open at `Topics → <topic> → Read the article`. What the badges mean:
+## A topic page
 
-- **validated** — a full validation pass ran (grounding, coverage, anti-patterns) on top of
-  the deterministic citation and freshness checks.
-- **checked** — only the deterministic checks ran so far.
-- **draft** — published but not yet validated.
-- **needs review** — a source behind the article changed; a red banner explains this. Treat
-  the article with care until it is re-validated.
-- **confidence** — a score computed from validation findings (critical issues weigh most).
-- **✓ validated & ready** — full pass, no critical issues.
+Open any topic to see its description, the capabilities it's mapped to (each is a link into
+the Capability Registry), a **Content** section, and its subtopics.
 
-Every factual sentence carries an `[Sn]` chip — hover it for the source title and tier, and
-see the **Sources cited** legend at the end of the article. Statements that are the
-author's synthesis rather than verified fact are explicitly labelled *Inference:*.
-Sections only exist where verified claims support them — a topic with no performance
-claims simply has no performance section, by design.
+The **Content** section lists everything published about this topic — articles, designs, and
+lessons together, each tagged with a kind pill (Article / Design / Lesson) so you can tell
+them apart at a glance. Click any row to open it.
+
+## Reading a piece of content
+
+Every article, design, and lesson opens at `/content/<kind>/<slug>` — the same reading layout
+regardless of kind, with the topic tree on the left, a table of contents in the middle-left
+rail, and the citation list on the right.
+
+- The kind pill at the top tells you whether you're reading an **article**, **design**, or
+  **lesson**.
+- Reading time, number of sources, and (if any are embedded) number of diagrams are shown
+  under the title.
+- A **preview** badge appears if the content touches a capability that is still in preview.
+- Every factual sentence carries an `[Sn]` chip — hover it for the source title and tier, and
+  see the citation list on the right for the full legend.
+
+Sections only exist where verified claims support them — a topic with no performance claims
+simply has no performance section in its article, by design.
 
 ## Versions
 
-Articles are never edited in place. Republishing a topic creates a new version and retires
-the old one; the **version history** link at the bottom of an article shows the chain.
+Publishing an article, design, or lesson always creates a **new version** — it never
+overwrites the previous one in place. When an admin republishes a slug from **Settings →
+Publish**, the prior active version is archived (its slug becomes `<slug>@v<N>` and its
+status changes to `superseded`) and the new version becomes active. This applies to all three
+kinds equally.
 
 ## Adding or changing topics
 
-Topics live in two places that stay in sync:
+- **The seed file** — `content/topics.json` in the repo is the authoring source of truth for
+  bootstrapping a fresh environment. Add a node with a unique `slug`, a `name`, an optional
+  `description`, and optionally a `parent_slug` (any nesting depth) and `sort_order`.
+- **Settings → Content → Topics** is where an admin edits a topic live: name, description,
+  parent (re-parenting), sort order, active flag, and tags. This is a metadata edit, not a
+  knowledge change, so it applies immediately — unlike claims and content, topics can be
+  edited in place. If a live edit should survive a fresh environment, mirror it back into
+  `content/topics.json`.
 
-- **The seed file** — `content/topics.json` in the repo is the source of truth. Add a node
-  with a unique `slug`, a `name`, at least one `capability_ids` entry, and optionally a
-  `parent_slug` (any nesting depth) and `order`. Then run
-  `python scripts/import_content.py` — existing slugs are skipped, new ones are created.
-- **The API** — for live curation, `POST /topics` creates a node and `PATCH /topics/<id>`
-  renames, re-describes, re-orders, re-parents, or re-maps capabilities. Topics are
-  curation surface, not knowledge, so they can be edited in place (unlike claims and
-  articles). Mirror any API change back into `content/topics.json` so a fresh server
-  seeds the same tree.
+A topic's link to capabilities is what makes its claims and coverage numbers show up — a
+topic with no mapped capabilities has no claims to draw on, even if its slug is spelled
+correctly everywhere.
 
-Every topic must map to at least one capability from the registry — that mapping is where
-its claims, coverage numbers, and article grounding come from.
+## Generating content for a topic
 
-## Generating an article
+Articles, designs, and lessons are authored by agents in the IDE, never by the server:
 
-Articles are authored by agents in the IDE, never by the server:
+- `/blog <topic-slug>` — the blog-author reads the topic's verified claims and writes a cited
+  article to `content/articles/<slug>.json`.
+- `/design <scenario>` — the solution-architect drafts a cited design to
+  `content/designs/<slug>.md`, expected to set a `topic_slug` so it shows up on the right
+  topic page (older designs published before this existed may show as Uncategorized until an
+  admin re-links them).
+- `/lesson <capability-id> <level>` — the learning-author writes a tiered lesson to
+  `content/lessons/<capability>-<level>.json`.
+- `/publish-topic <topic-slug>` — the full chain for a topic starting cold: a coverage check,
+  a stop for human claim verification, at least two original diagrams, the article, and
+  validation.
 
-- `/blog <topic-slug>` — the blog-author reads the topic's verified claims, writes a cited
-  article (`content/blogs/<slug>.json`), publishes it, and the validation-reviewer
-  immediately checks it. Use this when the topic already has verified coverage.
-- `/publish-topic <topic-slug>` — the full chain: coverage check (suggests sources to
-  queue if the topic is thin), a stop for human claim verification, an original diagram,
-  the article, validation, and a Help-section sync. Use this for a topic starting cold.
-
-If a topic has too few verified claims, the blog-author **refuses and reports the gap**
-instead of writing filler — queue more sources for it (see *Submitting sources*), verify
-them, and run it again. To refresh an existing article after new claims arrive, just run
-`/blog <topic-slug>` again — the new version supersedes the old one with full history.
+If a topic has too few verified claims, these agents **refuse and report the gap** instead of
+writing filler — queue more sources for it (see *Submitting sources*), verify them, and run
+the command again. Whatever the agent writes still has to be pasted into **Settings →
+Publish** by an admin before it goes live; that step is what actually creates the new
+version.

@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-06.
+       Grounded in OneLake claims (capability_id=onelake, verified set, June 2026):
+       shortcut symbolic-link semantics + write-through deletes (8422b0a1, 7240e8f6),
+       internal vs external shortcut identity model (acc39252, 8c896d14),
+       DirectLake-over-SQL / delegated identity caveat (a5b4d561),
+       item permission scopes Write/Read/ReadData/ReadAll (a0d487d9),
+       workspace role data access incl. Viewer exception (f61c2d6f),
+       OneLake security role composition + DefaultReader (fd49e67a, de9c927a),
+       workspace-role-overrides-OneLake-role antipattern (004febef),
+       shortcut documented limits incl. chain depth of 5 (bba7c105),
+       table name antipattern with spaces (3b040f98),
+       shortcut cache mechanics (b4b80877), audit log read-omission gap (92386864),
+       TLS posture (f1c70eed), authorized engine policy model (a815558b). -->
+  <defs>
+    <linearGradient id="secGrad2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#063D3B"/>
+      <stop offset="1" stop-color="#0E6961"/>
+    </linearGradient>
+    <linearGradient id="warnGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8A2E1E"/>
+      <stop offset="1" stop-color="#B5421F"/>
+    </linearGradient>
+    <linearGradient id="okGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94"/>
+    </marker>
+    <marker id="arrGray2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8A8886"/>
+    </marker>
+    <marker id="arrWarn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B5421F"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="860" fill="#FFFFFF"/>
+
+  <text x="40" y="44" font-size="22" font-weight="650" fill="#063D3B">OneLake — Shortcut Identity &amp; Security Decision Internals</text>
+  <text x="40" y="66" font-size="12" fill="#616161">Who is "the caller"? what happens on delete? who can OneLake security roles actually restrict?</text>
+
+  <!-- ═══════════════════════════════════════════════
+       PANEL 1: SHORTCUT IDENTITY DECISION TREE
+       ═══════════════════════════════════════════ -->
+  <text x="40" y="100" font-size="11" letter-spacing="1.5" fill="#8A8886">DECISION 1 — WHOSE IDENTITY IS USED WHEN A SHORTCUT IS READ?</text>
+
+  <rect x="40" y="110" width="1122" height="210" rx="10" fill="#F3F2F1" stroke="#C8C6C4"/>
+
+  <!-- start node -->
+  <rect x="64" y="132" width="190" height="56" rx="8" fill="url(#secGrad2)"/>
+  <text x="159" y="155" text-anchor="middle" font-size="11" font-weight="600" fill="#25FFD4">Query reads through</text>
+  <text x="159" y="172" text-anchor="middle" font-size="11" font-weight="600" fill="#25FFD4">a OneLake shortcut</text>
+
+  <!-- branch line -->
+  <line x1="254" y1="160" x2="300" y2="160" stroke="#8A8886" stroke-width="1.5" marker-end="url(#arrGray2)"/>
+
+  <!-- target type fork -->
+  <rect x="300" y="120" width="180" height="40" rx="6" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="390" y="145" text-anchor="middle" font-size="11" fill="#063D3B">Internal target</text>
+  <text x="390" y="156" text-anchor="middle" font-size="8.5" fill="#797775">(another Fabric item)</text>
+
+  <rect x="300" y="172" width="180" height="40" rx="6" fill="#FFFFFF" stroke="#C8C6C4" stroke-dasharray="4 3"/>
+  <text x="390" y="195" text-anchor="middle" font-size="11" fill="#063D3B">External target</text>
+  <text x="390" y="206" text-anchor="middle" font-size="8.5" fill="#797775">(ADLS / S3 / GCS)</text>
+
+  <line x1="254" y1="160" x2="300" y2="140" stroke="#8A8886" stroke-width="1.2" marker-end="url(#arrGray2)"/>
+  <line x1="254" y1="160" x2="300" y2="192" stroke="#8A8886" stroke-width="1.2" marker-end="url(#arrGray2)"/>
+
+  <!-- internal outcome -->
+  <line x1="480" y1="140" x2="520" y2="140" stroke="#2AAC94" stroke-width="1.5" marker-end="url(#arr2)"/>
+  <rect x="520" y="116" width="290" height="48" rx="7" fill="url(#okGrad)"/>
+  <text x="665" y="136" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Calling user's own identity</text>
+  <text x="665" y="152" text-anchor="middle" font-size="9.5" fill="#E8FBF5">must hold read permission at the target item</text>
+
+  <!-- external outcome: cloud connection -->
+  <line x1="480" y1="192" x2="520" y2="192" stroke="#8A8886" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrGray2)"/>
+  <rect x="520" y="170" width="290" height="48" rx="7" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="665" y="190" text-anchor="middle" font-size="11" font-weight="600" fill="#063D3B">Bound cloud connection's identity</text>
+  <text x="665" y="206" text-anchor="middle" font-size="9.5" fill="#3F6259">connection is a privileged asset, set at creation time</text>
+
+  <!-- delegated identity caveat -->
+  <rect x="840" y="124" width="290" height="160" rx="8" fill="url(#warnGrad)"/>
+  <text x="985" y="148" text-anchor="middle" font-size="11.5" font-weight="650" fill="#FFE9C8">Caveat: delegated identity modes</text>
+  <text x="860" y="170" font-size="10" fill="#FFE9C8">Power BI DirectLake-over-SQL and T-SQL</text>
+  <text x="860" y="184" font-size="10" fill="#FFE9C8">delegated identity mode pass the calling</text>
+  <text x="860" y="198" font-size="10" fill="#FFE9C8">item owner's identity — NOT the end user's.</text>
+  <line x1="860" y1="210" x2="1110" y2="210" stroke="#FFE9C8" stroke-opacity="0.4"/>
+  <text x="860" y="228" font-size="10" font-weight="600" fill="#FFFFFF">Fix: use DirectLake-over-OneLake mode</text>
+  <text x="860" y="242" font-size="10" font-weight="600" fill="#FFFFFF">or T-SQL user-identity mode to restore</text>
+  <text x="860" y="256" font-size="10" font-weight="600" fill="#FFFFFF">per-user identity passthrough.</text>
+  <text x="860" y="275" font-size="9" fill="#FFE9C8" font-style="italic">Easy to misconfigure — verify per engine.</text>
+
+  <!-- ═══════════════════════════════════════════════
+       PANEL 2: DELETE SEMANTICS
+       ═══════════════════════════════════════════ -->
+  <text x="40" y="350" font-size="11" letter-spacing="1.5" fill="#8A8886">DECISION 2 — DELETING THE SHORTCUT vs. DELETING THROUGH THE SHORTCUT</text>
+
+  <rect x="40" y="360" width="546" height="130" rx="9" fill="#EAF7F2" stroke="#117865"/>
+  <text x="60" y="386" font-size="12.5" font-weight="650" fill="#063D3B">Delete the shortcut OBJECT</text>
+  <text x="60" y="406" font-size="10.5" fill="#3F6259">Behaves like removing a symbolic link.</text>
+  <text x="60" y="424" font-size="10.5" fill="#3F6259">The reference disappears from OneLake;</text>
+  <text x="60" y="442" font-size="10.5" fill="#3F6259">the target data is left completely untouched.</text>
+  <text x="60" y="468" font-size="10" font-weight="600" fill="#0B5E50">Safe — non-destructive to source data</text>
+
+  <rect x="616" y="360" width="546" height="130" rx="9" fill="#FBEFEA" stroke="#B5421F"/>
+  <text x="636" y="386" font-size="12.5" font-weight="650" fill="#8A2E1E">Delete a FILE/FOLDER beneath the shortcut path</text>
+  <text x="636" y="406" font-size="10.5" fill="#6B2A1A">Writes through to the target store. If the caller</text>
+  <text x="636" y="424" font-size="10.5" fill="#6B2A1A">has write permission at the target, the delete</text>
+  <text x="636" y="442" font-size="10.5" fill="#6B2A1A">propagates and the source data is actually removed.</text>
+  <text x="636" y="468" font-size="10" font-weight="600" fill="#8A2E1E">Destructive — same blast radius as deleting at source</text>
+
+  <!-- ═══════════════════════════════════════════════
+       PANEL 3: WHO CAN A ONELAKE SECURITY ROLE RESTRICT
+       ═══════════════════════════════════════════ -->
+  <text x="40" y="520" font-size="11" letter-spacing="1.5" fill="#8A8886">DECISION 3 — CAN A ONELAKE SECURITY ROLE RESTRICT THIS USER?</text>
+
+  <rect x="40" y="530" width="1122" height="150" rx="10" fill="#F3F2F1" stroke="#C8C6C4"/>
+
+  <!-- table header -->
+  <text x="64" y="554" font-size="10.5" font-weight="650" fill="#424242">Caller's grant</text>
+  <text x="300" y="554" font-size="10.5" font-weight="650" fill="#424242">Data-plane reach</text>
+  <text x="640" y="554" font-size="10.5" font-weight="650" fill="#424242">Can a OneLake security role narrow it?</text>
+
+  <line x1="64" y1="564" x2="1138" y2="564" stroke="#C8C6C4"/>
+
+  <!-- row: workspace admin/member/contributor -->
+  <rect x="64" y="572" width="220" height="28" rx="5" fill="#FBEFEA"/>
+  <text x="74" y="591" font-size="10" fill="#6B2A1A">Workspace Admin / Member / Contributor</text>
+  <text x="300" y="591" font-size="10" fill="#424242">Read + write ALL item data (control plane implies data plane)</text>
+  <rect x="900" y="572" width="234" height="28" rx="5" fill="#B5421F" fill-opacity="0.12"/>
+  <text x="912" y="591" font-size="10" font-weight="650" fill="#8A2E1E">NO — these roles bypass OneLake security entirely</text>
+
+  <!-- row: viewer -->
+  <rect x="64" y="606" width="220" height="28" rx="5" fill="#EAF7F2"/>
+  <text x="74" y="625" font-size="10" fill="#0B5E50">Workspace Viewer</text>
+  <text x="300" y="625" font-size="10" fill="#424242">No OneLake data access by default</text>
+  <rect x="900" y="606" width="234" height="28" rx="5" fill="#2AAC94" fill-opacity="0.18"/>
+  <text x="912" y="625" font-size="10" font-weight="650" fill="#0B5E50">YES — grant via OneLake security role</text>
+
+  <!-- row: item ReadAll -->
+  <rect x="64" y="640" width="220" height="28" rx="5" fill="#EAF7F2"/>
+  <text x="74" y="659" font-size="10" fill="#0B5E50">Item-share: ReadAll</text>
+  <text x="300" y="659" font-size="10" fill="#424242">DefaultReader role grants full lakehouse namespace</text>
+  <rect x="900" y="640" width="234" height="28" rx="5" fill="#2AAC94" fill-opacity="0.18"/>
+  <text x="912" y="659" font-size="10" font-weight="650" fill="#0B5E50">YES — edit/replace DefaultReader to scope it</text>
+
+  <!-- ═══════════════════════════════════════════════
+       PANEL 4: LIMITS, CACHE, OBSERVABILITY STRIP
+       ═══════════════════════════════════════════ -->
+  <text x="40" y="710" font-size="11" letter-spacing="1.5" fill="#8A8886">OPERATING LIMITS &amp; OBSERVABILITY GAPS TO DESIGN AROUND</text>
+
+  <rect x="40" y="720" width="270" height="110" rx="8" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="58" y="742" font-size="11" font-weight="650" fill="#063D3B">Shortcut structural limits</text>
+  <text x="58" y="760" font-size="10" fill="#424242">100,000 shortcuts per item</text>
+  <text x="58" y="776" font-size="10" fill="#424242">10 shortcuts per OneLake path</text>
+  <text x="58" y="792" font-size="10" fill="#424242">Max chain depth: 5 shortcut-to-shortcut hops</text>
+  <text x="58" y="808" font-size="9.5" fill="#8A2E1E">No %, +, or non-Latin chars in names</text>
+
+  <rect x="326" y="720" width="270" height="110" rx="8" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="344" y="742" font-size="11" font-weight="650" fill="#063D3B">External shortcut cache</text>
+  <text x="344" y="760" font-size="10" fill="#424242">Retention: 1-28 days, resets per access</text>
+  <text x="344" y="776" font-size="10" fill="#424242">Files &gt; 1 GB are never cached</text>
+  <text x="344" y="792" font-size="10" fill="#424242">Newer remote version triggers refresh</text>
+  <text x="344" y="808" font-size="9.5" fill="#797775">Covers GCS, S3, S3-compat, on-prem gateway</text>
+
+  <rect x="612" y="720" width="270" height="110" rx="8" fill="#FBEFEA" stroke="#B5421F"/>
+  <text x="630" y="742" font-size="11" font-weight="650" fill="#8A2E1E">Audit log gap</text>
+  <text x="630" y="760" font-size="10" fill="#6B2A1A">ADLS-style op names (CreateFile etc.)</text>
+  <text x="630" y="776" font-size="10" fill="#6B2A1A">Read requests are NOT logged</text>
+  <text x="630" y="792" font-size="10" fill="#6B2A1A">Requests via Fabric workloads omitted too</text>
+  <text x="630" y="808" font-size="9.5" fill="#8A2E1E">Plan compensating controls for read auditing</text>
+
+  <rect x="898" y="720" width="264" height="110" rx="8" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="916" y="742" font-size="11" font-weight="650" fill="#063D3B">Transport &amp; engine policy</text>
+  <text x="916" y="760" font-size="10" fill="#424242">Inbound: TLS 1.2 min, TLS 1.3 negotiated</text>
+  <text x="916" y="776" font-size="10" fill="#424242">Outbound to customer infra may fall back</text>
+  <text x="916" y="792" font-size="10" fill="#424242">to older TLS, even TLS 1.0, if required</text>
+  <text x="916" y="808" font-size="9.5" fill="#797775">Authorized engines cache policy locally</text>
+
+  <!-- footer -->
+  <text x="1162" y="850" text-anchor="end" font-size="9.5" fill="#8A8886">Fabric Atlas — original diagram, June 2026. Not a Microsoft asset; palette from the official Fabric icon.</text>
+</svg>

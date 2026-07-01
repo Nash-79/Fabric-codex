@@ -47,31 +47,47 @@ export const getTopic = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     try {
       const sb = await admin();
-      const [{ data: topic }, { data: children }, { data: caps }, { data: blogs }] =
-        await Promise.all([
-          sb.from("topics").select("*").eq("slug", data.slug).maybeSingle(),
-          sb
-            .from("topics")
-            .select("slug,name,description,sort_order")
-            .eq("parent_slug", data.slug)
-            .order("sort_order"),
-          sb
-            .from("topic_capabilities")
-            .select("capability_id, capabilities(id,name,description,accent,maturity)")
-            .eq("topic_slug", data.slug),
-          sb
-            .from("blogs")
-            .select("slug,title,summary,updated_at")
-            .eq("topic_slug", data.slug)
-            .eq("status", "published")
-            .order("updated_at", { ascending: false }),
-        ]);
+      const [{ data: topic }, { data: children }, { data: caps }] = await Promise.all([
+        sb.from("topics").select("*").eq("slug", data.slug).maybeSingle(),
+        sb
+          .from("topics")
+          .select("slug,name,description,sort_order")
+          .eq("parent_slug", data.slug)
+          .order("sort_order"),
+        sb
+          .from("topic_capabilities")
+          .select("capability_id, capabilities(id,name,description,accent,maturity)")
+          .eq("topic_slug", data.slug),
+      ]);
       if (topic) {
+        const capabilityIds = (caps ?? []).map((row: any) => row.capability_id);
+        // Articles/designs are topic-scoped directly; lessons are capability-scoped, so "lessons
+        // for this topic" resolves via the topic's mapped capabilities (lessons have always been
+        // organized capability-first, depth-second).
+        const { data: content } = await sb
+          .from("content_items")
+          .select("kind,slug,title,summary,topic_slug,capability_id,depth_levels,updated_at")
+          .eq("status", "published")
+          .eq("active", true)
+          .or(
+            [
+              `topic_slug.eq.${data.slug}`,
+              capabilityIds.length ? `capability_id.in.(${capabilityIds.join(",")})` : "",
+            ]
+              .filter(Boolean)
+              .join(","),
+          )
+          .order("updated_at", { ascending: false });
         return {
           topic,
           children: children ?? [],
           capabilities: (caps ?? []).map((c: any) => c.capabilities).filter(Boolean),
-          blogs: blogs?.length ? blogs : (bundledContent.topic(data.slug)?.blogs ?? []),
+          items: content?.length ? content : [],
+          // Deprecated alias kept for one release so any not-yet-migrated caller of getTopic()
+          // still finds "blogs" — points at the same content, filtered to kind=article.
+          blogs: content?.length
+            ? content.filter((c: any) => c.kind === "article")
+            : (bundledContent.topic(data.slug)?.blogs ?? []),
         };
       }
     } catch {
@@ -82,36 +98,118 @@ export const getTopic = createServerFn({ method: "GET" })
     return fallback;
   });
 
+export const getContentItem = createServerFn({ method: "GET" })
+  .inputValidator((d: { kind: "article" | "design" | "lesson"; slug: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      const sb = await admin();
+      const { data: item, error } = await sb
+        .from("content_items")
+        .select("*")
+        .eq("kind", data.kind)
+        .eq("slug", data.slug)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (item) {
+        const [{ data: cites }, { data: caps }, { data: diagrams }] = await Promise.all([
+          sb
+            .from("content_item_sources")
+            .select("label,position,sources(id,slug,url,title,tier,tags,summary)")
+            .eq("content_item_id", item.id)
+            .order("position"),
+          item.topic_slug
+            ? sb
+                .from("topic_capabilities")
+                .select("capabilities(id,name,maturity)")
+                .eq("topic_slug", item.topic_slug)
+            : Promise.resolve({ data: [] as any[] }),
+          item.topic_slug
+            ? sb.from("diagrams").select("slug,path,caption,kind").eq("topic_slug", item.topic_slug)
+            : Promise.resolve({ data: [] as any[] }),
+        ]);
+        return {
+          item,
+          citations: (cites ?? []).map((c: any) => ({ label: c.label, source: c.sources })),
+          capabilities: (caps ?? []).map((c: any) => c.capabilities).filter(Boolean),
+          diagrams: diagrams ?? [],
+        };
+      }
+    } catch {
+      // Fall through to bundled content (article kind only -- designs/lessons have no bundled fallback).
+    }
+    if (data.kind === "article") {
+      const fallback = bundledContent.blog(data.slug);
+      if (fallback) {
+        return {
+          item: { ...fallback.blog, kind: "article" as const },
+          citations: fallback.citations,
+          capabilities: [] as any[],
+          diagrams: [] as any[],
+        };
+      }
+    }
+    throw new Error(`${data.kind} not found`);
+  });
+
+export const listContentItems = createServerFn({ method: "GET" })
+  .inputValidator(
+    (d: { kind?: "article" | "design" | "lesson"; topicSlug?: string; capabilityId?: string }) => d,
+  )
+  .handler(async ({ data }) => {
+    try {
+      const sb = await admin();
+      let q = sb
+        .from("content_items")
+        .select("id,kind,slug,title,summary,topic_slug,capability_id,depth_levels,tags,updated_at")
+        .eq("status", "published")
+        .eq("active", true)
+        .order("updated_at", { ascending: false });
+      if (data.kind) q = q.eq("kind", data.kind);
+      if (data.topicSlug) q = q.eq("topic_slug", data.topicSlug);
+      if (data.capabilityId) q = q.eq("capability_id", data.capabilityId);
+      const { data: rows, error } = await q;
+      if (error) throw new Error(error.message);
+      if (rows?.length) return rows;
+    } catch {
+      // Fall through to bundled content for articles only.
+    }
+    if (!data.kind || data.kind === "article") return bundledContent.blogs();
+    return [];
+  });
+
+// Deprecated thin wrappers — kept for one release so call sites not yet migrated to
+// getContentItem/listContentItems keep working. New code should call those directly.
 export const getBlog = createServerFn({ method: "GET" })
   .inputValidator((d: { slug: string }) => d)
   .handler(async ({ data }) => {
     try {
       const sb = await admin();
-      const { data: blog, error } = await sb
-        .from("blogs")
+      const { data: item, error } = await sb
+        .from("content_items")
         .select("*")
+        .eq("kind", "article")
         .eq("slug", data.slug)
         .maybeSingle();
       if (error) throw new Error(error.message);
-      if (blog) {
+      if (item) {
         const [{ data: cites }, { data: caps }, { data: diagrams }] = await Promise.all([
           sb
-            .from("blog_sources")
+            .from("content_item_sources")
             .select("label,position,sources(id,slug,url,title,tier,tags,summary)")
-            .eq("blog_id", blog.id)
+            .eq("content_item_id", item.id)
             .order("position"),
-          blog.topic_slug
+          item.topic_slug
             ? sb
                 .from("topic_capabilities")
                 .select("capabilities(id,name,maturity)")
-                .eq("topic_slug", blog.topic_slug)
+                .eq("topic_slug", item.topic_slug)
             : Promise.resolve({ data: [] as any[] }),
-          blog.topic_slug
-            ? sb.from("diagrams").select("slug,path,caption,kind").eq("topic_slug", blog.topic_slug)
+          item.topic_slug
+            ? sb.from("diagrams").select("slug,path,caption,kind").eq("topic_slug", item.topic_slug)
             : Promise.resolve({ data: [] as any[] }),
         ]);
         return {
-          blog,
+          blog: item,
           citations: (cites ?? []).map((c: any) => ({ label: c.label, source: c.sources })),
           capabilities: (caps ?? []).map((c: any) => c.capabilities).filter(Boolean),
           diagrams: diagrams ?? [],
@@ -130,20 +228,21 @@ export const getDesign = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     try {
       const sb = await admin();
-      const { data: design, error } = await sb
-        .from("designs")
+      const { data: item, error } = await sb
+        .from("content_items")
         .select("*")
+        .eq("kind", "design")
         .eq("slug", data.slug)
         .maybeSingle();
       if (error) throw new Error(error.message);
-      if (design) {
+      if (item) {
         const { data: cites } = await sb
-          .from("design_sources")
+          .from("content_item_sources")
           .select("label,position,sources(id,slug,url,title,tier,tags,summary)")
-          .eq("design_id", design.id)
+          .eq("content_item_id", item.id)
           .order("position");
         return {
-          design,
+          design: item,
           citations: (cites ?? []).map((c: any) => ({ label: c.label, source: c.sources })),
         };
       }
@@ -159,9 +258,11 @@ export const listBlogs = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const sb = await admin();
     const { data, error } = await sb
-      .from("blogs")
+      .from("content_items")
       .select("slug,title,summary,topic_slug,updated_at")
+      .eq("kind", "article")
       .eq("status", "published")
+      .eq("active", true)
       .order("updated_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data?.length ? data : bundledContent.blogs();
@@ -174,8 +275,10 @@ export const listDesigns = createServerFn({ method: "GET" }).handler(async () =>
   try {
     const sb = await admin();
     const { data, error } = await sb
-      .from("designs")
-      .select("id,slug,title,summary,status,updated_at")
+      .from("content_items")
+      .select("id,slug,title,summary,status,topic_slug,updated_at")
+      .eq("kind", "design")
+      .eq("active", true)
       .order("updated_at", { ascending: false });
     if (error) throw new Error(error.message);
     return data?.length ? data : bundledContent.designs();
@@ -188,9 +291,10 @@ export const listLessons = createServerFn({ method: "GET" }).handler(async () =>
   try {
     const sb = await admin();
     const { data, error } = await sb
-      .from("lessons")
-      .select("id,slug,title,depth,capability_id")
-      .order("depth")
+      .from("content_items")
+      .select("id,slug,title,depth_levels,capability_id")
+      .eq("kind", "lesson")
+      .eq("active", true)
       .order("title");
     if (error) throw new Error(error.message);
     return data ?? [];
@@ -286,7 +390,7 @@ export const getRegistryCoverage = createServerFn({ method: "GET" }).handler(
         sb.from("capabilities").select("id,name,description,accent,maturity"),
         sb.from("claims").select("capability_id,depth,status").eq("active", true),
         sb.from("topic_capabilities").select("topic_slug,capability_id"),
-        sb.from("blogs").select("topic_slug").eq("status", "published"),
+        sb.from("content_items").select("topic_slug").eq("kind", "article").eq("status", "published"),
         sb.from("diagrams").select("topic_slug"),
       ]);
       if (capErr) throw new Error(capErr.message);
@@ -421,7 +525,10 @@ export const searchAll = createServerFn({ method: "GET" })
         topics: [] as any[],
       };
       for (const row of rows ?? []) {
-        if (row.kind === "blog") result.blogs.push(row.payload);
+        // search_atlas now returns kind = 'article' | 'design' | 'lesson' | 'claim' | 'source' | 'topic'.
+        if (row.kind === "article" || row.kind === "design" || row.kind === "lesson") {
+          result.blogs.push(row.payload);
+        }
         if (row.kind === "claim") result.claims.push(row.payload);
         if (row.kind === "source") result.sources.push(row.payload);
         if (row.kind === "topic") result.topics.push(row.payload);
@@ -465,7 +572,10 @@ export const listMyFavorites = createServerFn({ method: "GET" })
 
 export const toggleFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { itemType: "blog" | "topic" | "source" | "claim"; itemKey: string }) => d)
+  .inputValidator(
+    (d: { itemType: "blog" | "article" | "design" | "lesson" | "topic" | "source" | "claim"; itemKey: string }) =>
+      d,
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: existing } = await supabase
@@ -517,7 +627,6 @@ export const adminStats = createServerFn({ method: "GET" })
       "capabilities",
       "sources",
       "claims",
-      "blogs",
       "diagrams",
       "help_docs",
     ] as const;
@@ -526,5 +635,26 @@ export const adminStats = createServerFn({ method: "GET" })
       const { count } = await sb.from(t).select("*", { count: "exact", head: true });
       counts[t] = count ?? 0;
     }
+    // content_items replaces blogs/designs/lessons as separate counted tables — break it down by
+    // kind so the admin dashboard doesn't lose the per-kind counts it used to show as "blogs".
+    const { count: articleCount } = await sb
+      .from("content_items")
+      .select("*", { count: "exact", head: true })
+      .eq("kind", "article")
+      .eq("active", true);
+    const { count: designCount } = await sb
+      .from("content_items")
+      .select("*", { count: "exact", head: true })
+      .eq("kind", "design")
+      .eq("active", true);
+    const { count: lessonCount } = await sb
+      .from("content_items")
+      .select("*", { count: "exact", head: true })
+      .eq("kind", "lesson")
+      .eq("active", true);
+    counts.blogs = articleCount ?? 0; // deprecated alias kept for one release
+    counts.articles = articleCount ?? 0;
+    counts.designs = designCount ?? 0;
+    counts.lessons = lessonCount ?? 0;
     return counts;
   });

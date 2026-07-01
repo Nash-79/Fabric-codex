@@ -1,0 +1,370 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Polaris Query Execution Internals — Task DAG, Scheduling Decisions, Cache Affinity, Fault Tolerance
+  Original diagram authored by Fabric Atlas diagram-author agent.
+  Distinct from content/diagrams/polaris-engine.svg (which shows the layered system architecture,
+  frontend -> DQP -> compute pool -> OneLake). This diagram goes one level deeper into query
+  execution internals: how a single task DAG is compiled and shaped by enforcers, the two
+  scheduling decision branches Polaris actually takes, the cache-affinity outcome table across
+  scale events, and the task-level fault-tolerance state flow.
+  Grounded in verified claims for capability: polaris
+  Claim IDs visualised:
+    a522d365-98c0-4a76-b956-e415ccfdbc9a (two-phase Cascades: MEMO logical -> distributed cost-based)
+    650d0240-388e-4d57-b30b-6369b8387bcf (data-move enforcers: hash redistribute / broadcast; blocking; define task boundary)
+    6f58f6a0-7605-41cd-ac08-de7147c56391 (task = input cells + template + output cells; plan = DAG of task templates)
+    011eb452-acf2-4248-9c96-4b8152753ef2 (maximal tasks fuse hash-aligned joins; re-encoded to T-SQL; re-optimize with fresh stats)
+    47e9d4f4-d19e-4598-993b-b727e1c0ed4d (DQP schedules at task level over a DAG; intra-query + cross-query concurrency)
+    0026e0d6-dcc4-4625-a85e-f66a302be5d3 (workload graph unions active DAGs; resource demand vector; CPU/mem stretchable, temp disk rigid; FIFO / resource-demand / DAG-root-proximity policies)
+    b92c3d3a-e509-448a-9034-3522cca2b501 (FIFO by default; best-fit placement when idle capacity exists)
+    4ae2fb61-f0f9-4377-a014-ac025dae6fa9 (cache affinity: same cells to same nodes; shrink loses only removed-node caches; grow preserves all)
+    385fd1e0-b50d-4a27-bcbc-6b02895a47b3 (scale-out triggered on pressure; node acquire ~seconds, no SLA; not sub-second for distributed queries)
+    a8744d53-f546-4231-bd6d-38b9fe935024 (online scaling; in-flight queries continue; scale back down when pressure subsides)
+    17a22c2f-08fa-41e3-807c-788732d127c5 (task-level fault tolerance; unhealthy node's ops redistributed)
+    64914a3f-e625-49d1-9354-615d1161ccb1 (hierarchical FSMs: query DAG / task templates / tasks; Ready/Failed/Success, Run/Blocked; task-level retry, escalate only if non-retriable; transitions logged)
+    39309c8c-4f3f-42eb-a7c9-2c9b78c081f9 (Polaris design goals: unify workloads, separate compute from state)
+    841a5817-f4d7-4c71-9ffa-c541a1d8d37e (1 PB / 420 nodes TPC-H; 5,000 sessions / 10 nodes TPC-DS, ~9,000 concurrent tasks)
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 1260" width="1120" height="1260"
+     font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="12">
+
+  <defs>
+    <linearGradient id="hdrGrad2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#0E7C5B"/>
+      <stop offset="100%" stop-color="#13A176"/>
+    </linearGradient>
+    <linearGradient id="dagGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#0E7C5B" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#0E7C5B" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="schedGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#2E4057" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#2E4057" stop-opacity="0.05"/>
+    </linearGradient>
+    <linearGradient id="cacheGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#19C37D" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#19C37D" stop-opacity="0.04"/>
+    </linearGradient>
+    <linearGradient id="ftGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#8B3A9E" stop-opacity="0.14"/>
+      <stop offset="100%" stop-color="#8B3A9E" stop-opacity="0.04"/>
+    </linearGradient>
+    <filter id="cardShadow2" x="-4%" y="-4%" width="108%" height="118%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0E7C5B" flood-opacity="0.15"/>
+    </filter>
+    <marker id="arrT" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#13A176"/>
+    </marker>
+    <marker id="arrS" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#2E4057"/>
+    </marker>
+    <marker id="arrA" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#E8A020"/>
+    </marker>
+    <marker id="arrP" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#8B3A9E"/>
+    </marker>
+    <marker id="arrR" markerWidth="8" markerHeight="8" refX="7" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#C0392B"/>
+    </marker>
+  </defs>
+
+  <rect width="1120" height="1260" rx="12" fill="#F4FBF8"/>
+
+  <!-- Title -->
+  <rect x="0" y="0" width="1120" height="58" rx="12" fill="url(#hdrGrad2)"/>
+  <rect x="0" y="46" width="1120" height="12" fill="url(#hdrGrad2)"/>
+  <text x="560" y="26" text-anchor="middle" fill="white" font-size="18" font-weight="700"
+        letter-spacing="0.4">Polaris — Query Execution Internals</text>
+  <text x="560" y="44" text-anchor="middle" fill="white" font-size="11" opacity="0.9">
+    Task-DAG compilation · scheduling decisions · cache-affinity outcomes · task-level fault tolerance</text>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       SECTION 1 — TASK DAG COMPILATION  (decision flow: how enforcers cut tasks)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <rect x="26" y="72" width="1068" height="248" rx="10" fill="url(#dagGrad)"
+        stroke="#0E7C5B" stroke-width="1.4" filter="url(#cardShadow2)"/>
+  <text x="42" y="94" fill="#0E7C5B" font-size="12" font-weight="700" letter-spacing="1">
+    1 · TASK-DAG COMPILATION — HOW A QUERY BECOMES A DAG OF TASKS</text>
+
+  <!-- Cascades two-phase -->
+  <rect x="44" y="106" width="238" height="96" rx="8" fill="white" stroke="#13A176" stroke-width="1.2"/>
+  <text x="163" y="124" text-anchor="middle" fill="#0E7C5B" font-size="10.5" font-weight="700">Phase 1 · Cascades MEMO</text>
+  <text x="163" y="140" text-anchor="middle" fill="#1E2B38" font-size="9.5">Logical search space</text>
+  <text x="163" y="154" text-anchor="middle" fill="#555" font-size="9">predicate pushdown, join</text>
+  <text x="163" y="166" text-anchor="middle" fill="#555" font-size="9">reorder, subquery unnest</text>
+  <text x="163" y="184" text-anchor="middle" fill="#0E7C5B" font-size="9.5" font-weight="600">no distribution reasoning yet</text>
+
+  <!-- decision diamond: does op need re-distribution? -->
+  <polygon points="360,106 452,154 360,202 268,154" fill="white" stroke="#0E7C5B" stroke-width="1.3"/>
+  <text x="360" y="145" text-anchor="middle" fill="#0E7C5B" font-size="9.5" font-weight="700">inputs already</text>
+  <text x="360" y="158" text-anchor="middle" fill="#0E7C5B" font-size="9.5" font-weight="700">hash-aligned for</text>
+  <text x="360" y="171" text-anchor="middle" fill="#0E7C5B" font-size="9.5" font-weight="700">this operator?</text>
+
+  <!-- YES branch: fuse into task -->
+  <rect x="490" y="108" width="230" height="92" rx="8" fill="white" stroke="#19C37D" stroke-width="1.4"/>
+  <text x="605" y="126" text-anchor="middle" fill="#0E7C5B" font-size="10.5" font-weight="700">YES → fuse into task</text>
+  <text x="605" y="142" text-anchor="middle" fill="#1E2B38" font-size="9.2">Consecutive hash-aligned joins</text>
+  <text x="605" y="155" text-anchor="middle" fill="#1E2B38" font-size="9.2">fused into ONE maximal task</text>
+  <text x="605" y="171" text-anchor="middle" fill="#555" font-size="8.8">fewer blocking sync points →</text>
+  <text x="605" y="184" text-anchor="middle" fill="#555" font-size="8.8">less materialized intermediate data</text>
+
+  <!-- NO branch: insert enforcer -->
+  <rect x="490" y="212" width="230" height="92" rx="8" fill="white" stroke="#E8A020" stroke-width="1.4"/>
+  <text x="605" y="230" text-anchor="middle" fill="#B8760E" font-size="10.5" font-weight="700">NO → insert enforcer</text>
+  <text x="605" y="246" text-anchor="middle" fill="#1E2B38" font-size="9.2">Hash re-distribute (shuffle) or</text>
+  <text x="605" y="259" text-anchor="middle" fill="#1E2B38" font-size="9.2">Broadcast (small side to all nodes)</text>
+  <text x="605" y="275" text-anchor="middle" fill="#555" font-size="8.8">blocking: all output cells persist</text>
+  <text x="605" y="288" text-anchor="middle" fill="#555" font-size="8.8">before downstream task starts</text>
+
+  <!-- Task boundary -->
+  <rect x="756" y="108" width="196" height="196" rx="8" fill="white" stroke="#0E7C5B" stroke-width="1.4"/>
+  <text x="854" y="127" text-anchor="middle" fill="#0E7C5B" font-size="10.5" font-weight="700">Task boundary defined</text>
+  <text x="854" y="145" text-anchor="middle" fill="#1E2B38" font-size="9.2">Enforcer subtree = one task's</text>
+  <text x="854" y="158" text-anchor="middle" fill="#1E2B38" font-size="9.2">input/output boundary</text>
+  <line x1="774" y1="168" x2="934" y2="168" stroke="#EAF6F1" stroke-width="1"/>
+  <text x="854" y="184" text-anchor="middle" fill="#1E2B38" font-size="9.2" font-weight="600">Each task carries:</text>
+  <text x="854" y="199" text-anchor="middle" fill="#555" font-size="9">1. input cell collection</text>
+  <text x="854" y="212" text-anchor="middle" fill="#555" font-size="9">2. task template (compiled op)</text>
+  <text x="854" y="225" text-anchor="middle" fill="#555" font-size="9">3. output cell collection</text>
+  <line x1="774" y1="235" x2="934" y2="235" stroke="#EAF6F1" stroke-width="1"/>
+  <text x="854" y="251" text-anchor="middle" fill="#0E7C5B" font-size="9.2" font-weight="600">Re-encoded to T-SQL,</text>
+  <text x="854" y="265" text-anchor="middle" fill="#0E7C5B" font-size="9.2" font-weight="600">runs natively on SQL Server node</text>
+  <text x="854" y="281" text-anchor="middle" fill="#555" font-size="8.6" font-style="italic">re-optimizes with fresh stats</text>
+  <text x="854" y="294" text-anchor="middle" fill="#555" font-size="8.6" font-style="italic">from completed prior tasks</text>
+
+  <!-- mini DAG icon bottom-left of section -->
+  <rect x="44" y="212" width="238" height="92" rx="8" fill="#0E7C5B" fill-opacity="0.06" stroke="#0E7C5B" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="163" y="228" text-anchor="middle" fill="#0E7C5B" font-size="9.5" font-weight="700">Result: DAG of task templates</text>
+  <circle cx="90" cy="252" r="9" fill="#19C37D"/>
+  <circle cx="150" cy="240" r="9" fill="#19C37D"/>
+  <circle cx="150" cy="268" r="9" fill="#0E7C5B"/>
+  <circle cx="220" cy="252" r="9" fill="#0E7C5B"/>
+  <line x1="99" y1="252" x2="141" y2="243" stroke="#2E4057" stroke-width="1.2"/>
+  <line x1="99" y1="252" x2="141" y2="264" stroke="#2E4057" stroke-width="1.2"/>
+  <line x1="159" y1="240" x2="211" y2="250" stroke="#2E4057" stroke-width="1.2"/>
+  <line x1="159" y1="268" x2="211" y2="255" stroke="#2E4057" stroke-width="1.2"/>
+  <text x="163" y="292" text-anchor="middle" fill="#555" font-size="8.8">edges = dataflow + precedence</text>
+  <text x="163" y="303" text-anchor="middle" fill="#555" font-size="8.8">independent nodes run in parallel</text>
+
+  <!-- arrows section 1 -->
+  <line x1="282" y1="154" x2="266" y2="154" stroke="#0E7C5B" stroke-width="1.5" marker-end="url(#arrS)"/>
+  <line x1="452" y1="140" x2="488" y2="132" stroke="#19C37D" stroke-width="1.6" marker-end="url(#arrT)"/>
+  <line x1="452" y1="168" x2="488" y2="230" stroke="#E8A020" stroke-width="1.6" marker-end="url(#arrA)"/>
+  <text x="466" y="128" fill="#0E7C5B" font-size="8.5" font-weight="600">yes</text>
+  <text x="470" y="200" fill="#B8760E" font-size="8.5" font-weight="600">no</text>
+  <line x1="720" y1="154" x2="754" y2="180" stroke="#0E7C5B" stroke-width="1.5" marker-end="url(#arrS)"/>
+  <line x1="720" y1="258" x2="754" y2="220" stroke="#0E7C5B" stroke-width="1.5" marker-end="url(#arrS)"/>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       SECTION 2 — SCHEDULING DECISIONS (two independent decision branches)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <rect x="26" y="332" width="1068" height="268" rx="10" fill="url(#schedGrad)"
+        stroke="#2E4057" stroke-width="1.4" filter="url(#cardShadow2)"/>
+  <text x="42" y="354" fill="#1E2B38" font-size="12" font-weight="700" letter-spacing="1">
+    2 · SCHEDULING DECISIONS — WORKLOAD GRAPH AT TASK-DISPATCH TIME</text>
+
+  <!-- Workload graph model -->
+  <rect x="44" y="366" width="270" height="118" rx="8" fill="white" stroke="#2E4057" stroke-width="1.2"/>
+  <text x="179" y="384" text-anchor="middle" fill="#1E2B38" font-size="10.5" font-weight="700">Workload Graph (all active queries)</text>
+  <text x="179" y="401" text-anchor="middle" fill="#555" font-size="9.2">Union of every active query's task DAG</text>
+  <text x="179" y="417" text-anchor="middle" fill="#1E2B38" font-size="9.2" font-weight="600">Resource demand vector per task:</text>
+  <rect x="58" y="424" width="80" height="20" rx="4" fill="#EAF6F1" stroke="#13A176" stroke-width="0.8"/>
+  <text x="98" y="438" text-anchor="middle" fill="#0E7C5B" font-size="8.5">CPU (stretch)</text>
+  <rect x="144" y="424" width="80" height="20" rx="4" fill="#EAF6F1" stroke="#13A176" stroke-width="0.8"/>
+  <text x="184" y="438" text-anchor="middle" fill="#0E7C5B" font-size="8.5">Mem (stretch)</text>
+  <rect x="230" y="424" width="72" height="20" rx="4" fill="#FDEDEC" stroke="#C0392B" stroke-width="0.8"/>
+  <text x="266" y="438" text-anchor="middle" fill="#C0392B" font-size="8.5">Temp disk (rigid)</text>
+  <text x="179" y="461" text-anchor="middle" fill="#555" font-size="8.6">Compute nodes modeled as multi-dim</text>
+  <text x="179" y="474" text-anchor="middle" fill="#555" font-size="8.6">resource bins the scheduler packs into</text>
+
+  <!-- decision diamond: idle capacity? -->
+  <polygon points="378,366 470,414 378,462 286,414" fill="white" stroke="#2E4057" stroke-width="1.3"/>
+  <text x="378" y="405" text-anchor="middle" fill="#1E2B38" font-size="9.5" font-weight="700">idle capacity</text>
+  <text x="378" y="418" text-anchor="middle" fill="#1E2B38" font-size="9.5" font-weight="700">available at</text>
+  <text x="378" y="431" text-anchor="middle" fill="#1E2B38" font-size="9.5" font-weight="700">dispatch time?</text>
+
+  <!-- NO -> FIFO -->
+  <rect x="500" y="368" width="200" height="80" rx="8" fill="white" stroke="#2E4057" stroke-width="1.3"/>
+  <text x="600" y="386" text-anchor="middle" fill="#1E2B38" font-size="10.2" font-weight="700">NO → FIFO dispatch</text>
+  <text x="600" y="402" text-anchor="middle" fill="#555" font-size="8.8">Tasks dispatched strictly in</text>
+  <text x="600" y="415" text-anchor="middle" fill="#555" font-size="8.8">arrival order — default policy</text>
+  <text x="600" y="431" text-anchor="middle" fill="#555" font-size="8.8">Simple, predictable ordering</text>
+
+  <!-- YES -> best-fit -->
+  <rect x="500" y="456" width="200" height="80" rx="8" fill="white" stroke="#19C37D" stroke-width="1.4"/>
+  <text x="600" y="474" text-anchor="middle" fill="#0E7C5B" font-size="10.2" font-weight="700">YES → best-fit placement</text>
+  <text x="600" y="490" text-anchor="middle" fill="#555" font-size="8.8">Scheduler switches to pack tasks</text>
+  <text x="600" y="503" text-anchor="middle" fill="#555" font-size="8.8">into spare bins for concurrency</text>
+  <text x="600" y="519" text-anchor="middle" fill="#0E7C5B" font-size="8.8" font-weight="600">improves cross-query throughput</text>
+
+  <!-- sort policies box -->
+  <rect x="726" y="368" width="176" height="168" rx="8" fill="white" stroke="#2E4057" stroke-width="1.2"/>
+  <text x="814" y="386" text-anchor="middle" fill="#1E2B38" font-size="10" font-weight="700">Ordering within the graph</text>
+  <text x="814" y="404" text-anchor="middle" fill="#1E2B38" font-size="9" font-weight="600">1. FIFO by arrival</text>
+  <text x="814" y="422" text-anchor="middle" fill="#1E2B38" font-size="9" font-weight="600">2. Sort by resource demand</text>
+  <text x="814" y="435" text-anchor="middle" fill="#555" font-size="8.3">heavy tasks may defer to avoid</text>
+  <text x="814" y="447" text-anchor="middle" fill="#555" font-size="8.3">blocking lighter ones</text>
+  <text x="814" y="465" text-anchor="middle" fill="#1E2B38" font-size="9" font-weight="600">3. Sort by DAG-root proximity</text>
+  <text x="814" y="478" text-anchor="middle" fill="#555" font-size="8.3">tasks near final output preferred —</text>
+  <text x="814" y="490" text-anchor="middle" fill="#555" font-size="8.3">frees shared resources sooner</text>
+  <line x1="740" y1="502" x2="900" y2="502" stroke="#EAF6F1" stroke-width="1"/>
+  <text x="814" y="518" text-anchor="middle" fill="#0E7C5B" font-size="8.3" font-style="italic">gives intra-query parallelism +</text>
+  <text x="814" y="530" text-anchor="middle" fill="#0E7C5B" font-size="8.3" font-style="italic">cross-query concurrency at once</text>
+
+  <!-- benchmark strip -->
+  <rect x="918" y="368" width="158" height="168" rx="8" fill="#FFF8EC" stroke="#E8A020" stroke-width="1.2"/>
+  <text x="997" y="388" text-anchor="middle" fill="#B8760E" font-size="10" font-weight="700">Published scale</text>
+  <text x="997" y="408" text-anchor="middle" fill="#1E2B38" font-size="9" font-weight="600">1 PB TPC-H</text>
+  <text x="997" y="422" text-anchor="middle" fill="#555" font-size="8.6">420 nodes, all 22</text>
+  <text x="997" y="434" text-anchor="middle" fill="#555" font-size="8.6">queries incl. Q9/Q21</text>
+  <text x="997" y="434" text-anchor="middle" fill="none">.</text>
+  <line x1="932" y1="446" x2="1062" y2="446" stroke="#E8A020" stroke-width="0.7"/>
+  <text x="997" y="464" text-anchor="middle" fill="#1E2B38" font-size="9" font-weight="600">5,000 sessions</text>
+  <text x="997" y="478" text-anchor="middle" fill="#555" font-size="8.6">10 nodes, TPC-DS</text>
+  <text x="997" y="492" text-anchor="middle" fill="#555" font-size="8.6">~550k tasks total</text>
+  <text x="997" y="506" text-anchor="middle" fill="#555" font-size="8.6">~9,000 concurrent</text>
+  <text x="997" y="524" text-anchor="middle" fill="#B8760E" font-size="8.3" font-style="italic">graph scheduler is the</text>
+  <text x="997" y="536" text-anchor="middle" fill="#B8760E" font-size="8.3" font-style="italic">mechanism behind this</text>
+
+  <!-- latency-floor callout -->
+  <rect x="44" y="500" width="270" height="86" rx="8" fill="#FDEDEC" stroke="#C0392B" stroke-width="1.2"/>
+  <text x="179" y="518" text-anchor="middle" fill="#C0392B" font-size="10" font-weight="700">Latency-floor consequence</text>
+  <text x="179" y="535" text-anchor="middle" fill="#1E2B38" font-size="8.8">Resource pressure on the graph triggers</text>
+  <text x="179" y="548" text-anchor="middle" fill="#1E2B38" font-size="8.8">scale-out: nodes acquired in ~seconds,</text>
+  <text x="179" y="561" text-anchor="middle" fill="#1E2B38" font-size="8.8">no SLA on assignment</text>
+  <text x="179" y="577" text-anchor="middle" fill="#C0392B" font-size="8.6" font-weight="600">not built for sub-second distributed queries</text>
+
+  <!-- arrows section 2 -->
+  <line x1="314" y1="414" x2="376" y2="414" stroke="#2E4057" stroke-width="1.5" marker-end="url(#arrS)"/>
+  <line x1="470" y1="398" x2="498" y2="398" stroke="#2E4057" stroke-width="1.6" marker-end="url(#arrS)"/>
+  <line x1="470" y1="428" x2="498" y2="490" stroke="#19C37D" stroke-width="1.6" marker-end="url(#arrT)"/>
+  <text x="480" y="392" fill="#2E4057" font-size="8.5" font-weight="600">no</text>
+  <text x="478" y="470" fill="#0E7C5B" font-size="8.5" font-weight="600">yes</text>
+  <line x1="700" y1="410" x2="724" y2="420" stroke="#2E4057" stroke-width="1.3" marker-end="url(#arrS)"/>
+  <line x1="700" y1="490" x2="724" y2="470" stroke="#2E4057" stroke-width="1.3" marker-end="url(#arrS)"/>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       SECTION 3 — CACHE-AFFINITY OUTCOMES ACROSS TOPOLOGY EVENTS  (table)
+  ═══════════════════════════════════════════════════════════════════ -->
+  <rect x="26" y="612" width="1068" height="228" rx="10" fill="url(#cacheGrad)"
+        stroke="#13A176" stroke-width="1.4" filter="url(#cardShadow2)"/>
+  <text x="42" y="634" fill="#0E7C5B" font-size="12" font-weight="700" letter-spacing="1">
+    3 · CACHE-AFFINITIZED PLACEMENT — OUTCOME BY TOPOLOGY EVENT</text>
+  <text x="42" y="651" fill="#555" font-size="9.5">Same data cells are consistently assigned to the same nodes, so buffer-pool / local-SSD cache state survives most topology changes.</text>
+
+  <!-- table header -->
+  <rect x="44" y="662" width="1032" height="30" rx="4" fill="#0E7C5B"/>
+  <text x="150" y="682" text-anchor="middle" fill="white" font-size="9.5" font-weight="700">EVENT</text>
+  <text x="430" y="682" text-anchor="middle" fill="white" font-size="9.5" font-weight="700">WHAT HAPPENS TO CACHES</text>
+  <text x="820" y="682" text-anchor="middle" fill="white" font-size="9.5" font-weight="700">IN-FLIGHT QUERY IMPACT</text>
+
+  <!-- row 1: scale-out (grow) -->
+  <rect x="44" y="694" width="1032" height="46" fill="white" stroke="#EAF6F1" stroke-width="1"/>
+  <rect x="52" y="702" width="196" height="30" rx="5" fill="#EAF6F1" stroke="#13A176" stroke-width="0.8"/>
+  <text x="150" y="721" text-anchor="middle" fill="#0E7C5B" font-size="9.2" font-weight="600">Scale-out (grow)</text>
+  <text x="430" y="713" text-anchor="middle" fill="#1E2B38" font-size="9">All existing nodes keep their cached cells;</text>
+  <text x="430" y="727" text-anchor="middle" fill="#1E2B38" font-size="9">only the new node(s) start cold and warm up</text>
+  <text x="820" y="721" text-anchor="middle" fill="#0E7C5B" font-size="9" font-weight="600">Online — in-flight processing continues uninterrupted</text>
+
+  <!-- row 2: scale-in (shrink) -->
+  <rect x="44" y="740" width="1032" height="46" fill="white" stroke="#EAF6F1" stroke-width="1"/>
+  <rect x="52" y="748" width="196" height="30" rx="5" fill="#FFF8EC" stroke="#E8A020" stroke-width="0.8"/>
+  <text x="150" y="767" text-anchor="middle" fill="#B8760E" font-size="9.2" font-weight="600">Scale-in (shrink)</text>
+  <text x="430" y="759" text-anchor="middle" fill="#1E2B38" font-size="9">Only the caches of the removed node(s) are lost;</text>
+  <text x="430" y="773" text-anchor="middle" fill="#1E2B38" font-size="9">surviving nodes' cached cells are untouched</text>
+  <text x="820" y="767" text-anchor="middle" fill="#1E2B38" font-size="9" font-weight="600">Compute returned to region once pressure subsides</text>
+
+  <!-- row 3: node failure -->
+  <rect x="44" y="786" width="1032" height="46" fill="white" stroke="#EAF6F1" stroke-width="1"/>
+  <rect x="52" y="794" width="196" height="30" rx="5" fill="#FDEDEC" stroke="#C0392B" stroke-width="0.8"/>
+  <text x="150" y="813" text-anchor="middle" fill="#C0392B" font-size="9.2" font-weight="600">Node becomes unhealthy</text>
+  <text x="430" y="805" text-anchor="middle" fill="#1E2B38" font-size="9">Cache on the unhealthy node is lost, but cells can be</text>
+  <text x="430" y="819" text-anchor="middle" fill="#1E2B38" font-size="9">rebuilt lazily from OneLake — never a source of truth</text>
+  <text x="820" y="813" text-anchor="middle" fill="#C0392B" font-size="9" font-weight="600">Operations redistributed to healthy nodes, not failed</text>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       SECTION 4 — TASK-LEVEL FAULT TOLERANCE STATE FLOW
+  ═══════════════════════════════════════════════════════════════════ -->
+  <rect x="26" y="852" width="1068" height="234" rx="10" fill="url(#ftGrad)"
+        stroke="#8B3A9E" stroke-width="1.4" filter="url(#cardShadow2)"/>
+  <text x="42" y="874" fill="#6E2C7E" font-size="12" font-weight="700" letter-spacing="1">
+    4 · TASK-LEVEL FAULT TOLERANCE — HIERARCHICAL STATE MACHINES</text>
+  <text x="42" y="891" fill="#555" font-size="9.5">Query DAG → Task Templates → Tasks, each its own state machine; failures retry at the lowest level first and escalate only when not retriable.</text>
+
+  <!-- state chain -->
+  <rect x="52" y="906" width="150" height="52" rx="24" fill="white" stroke="#8B3A9E" stroke-width="1.4"/>
+  <text x="127" y="928" text-anchor="middle" fill="#6E2C7E" font-size="10" font-weight="700">Ready</text>
+  <text x="127" y="944" text-anchor="middle" fill="#555" font-size="8">task queued for dispatch</text>
+
+  <line x1="202" y1="932" x2="240" y2="932" stroke="#8B3A9E" stroke-width="1.5" marker-end="url(#arrP)"/>
+
+  <rect x="240" y="906" width="150" height="52" rx="24" fill="white" stroke="#8B3A9E" stroke-width="1.4"/>
+  <text x="315" y="928" text-anchor="middle" fill="#6E2C7E" font-size="10" font-weight="700">Run</text>
+  <text x="315" y="944" text-anchor="middle" fill="#555" font-size="8">T-SQL executing on node</text>
+
+  <line x1="390" y1="932" x2="428" y2="932" stroke="#8B3A9E" stroke-width="1.5" marker-end="url(#arrP)"/>
+
+  <polygon points="480,906 560,932 480,958 400,932" fill="white" stroke="#8B3A9E" stroke-width="1.4" transform="translate(28,0)"/>
+  <text x="508" y="928" text-anchor="middle" fill="#6E2C7E" font-size="9" font-weight="700">node</text>
+  <text x="508" y="940" text-anchor="middle" fill="#6E2C7E" font-size="9" font-weight="700">healthy?</text>
+
+  <!-- success path -->
+  <line x1="588" y1="920" x2="630" y2="906" stroke="#19C37D" stroke-width="1.6" marker-end="url(#arrT)"/>
+  <rect x="630" y="878" width="150" height="46" rx="8" fill="white" stroke="#19C37D" stroke-width="1.4"/>
+  <text x="705" y="896" text-anchor="middle" fill="#0E7C5B" font-size="9.5" font-weight="700">Success</text>
+  <text x="705" y="911" text-anchor="middle" fill="#555" font-size="8">output cells persisted;</text>
+  <text x="705" y="920" text-anchor="middle" fill="none" font-size="1"> </text>
+
+  <!-- unhealthy path -->
+  <line x1="588" y1="944" x2="630" y2="958" stroke="#C0392B" stroke-width="1.6" marker-end="url(#arrR)"/>
+  <rect x="630" y="936" width="150" height="52" rx="8" fill="white" stroke="#C0392B" stroke-width="1.4"/>
+  <text x="705" y="954" text-anchor="middle" fill="#C0392B" font-size="9.5" font-weight="700">Blocked / Failed</text>
+  <text x="705" y="969" text-anchor="middle" fill="#555" font-size="8">node unhealthy — transient?</text>
+  <text x="705" y="980" text-anchor="middle" fill="#555" font-size="8">check retriable</text>
+
+  <!-- retry loop back to Ready -->
+  <path d="M700 992 Q560 1030 127 1000 L127 962" fill="none" stroke="#8B3A9E" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#arrP)"/>
+  <text x="420" y="1024" text-anchor="middle" fill="#6E2C7E" font-size="9" font-weight="600">retriable → task redistributed to healthy node, retried at TASK granularity (query is not restarted)</text>
+
+  <!-- escalation -->
+  <line x1="780" y1="962" x2="830" y2="962" stroke="#C0392B" stroke-width="1.6" marker-end="url(#arrR)"/>
+  <rect x="830" y="936" width="200" height="70" rx="8" fill="#FDEDEC" stroke="#C0392B" stroke-width="1.4"/>
+  <text x="930" y="954" text-anchor="middle" fill="#C0392B" font-size="9.5" font-weight="700">Escalate to parent FSM</text>
+  <text x="930" y="969" text-anchor="middle" fill="#1E2B38" font-size="8.4">only if failure is NOT retriable —</text>
+  <text x="930" y="982" text-anchor="middle" fill="#1E2B38" font-size="8.4">rare path; parent state machine</text>
+  <text x="930" y="995" text-anchor="middle" fill="#1E2B38" font-size="8.4">(task template / query DAG) decides</text>
+
+  <!-- logging note -->
+  <rect x="52" y="1044" width="978" height="30" rx="6" fill="white" stroke="#8B3A9E" stroke-width="1" stroke-dasharray="3 2"/>
+  <text x="541" y="1064" text-anchor="middle" fill="#6E2C7E" font-size="9.2" font-style="italic">
+    Every state transition across all three FSM levels is logged — giving reproducibility and letting a query resume execution rather than restart from scratch.</text>
+
+  <!-- design-goal footer callout -->
+  <rect x="52" y="1088" width="978" height="72" rx="8" fill="white" stroke="#0E7C5B" stroke-width="1.2"/>
+  <text x="541" y="1108" text-anchor="middle" fill="#0E7C5B" font-size="10" font-weight="700">Why this shape: the two Polaris design goals</text>
+  <text x="541" y="1126" text-anchor="middle" fill="#1E2B38" font-size="9">Converge data-warehouse and big-data workloads onto one engine, and fully separate compute from durable state.</text>
+  <text x="541" y="1142" text-anchor="middle" fill="#555" font-size="8.6">Task-level scheduling, enforcer-defined boundaries, cache affinity, and FSM-driven retry are the mechanisms that jointly deliver those two goals —</text>
+  <text x="541" y="1154" text-anchor="middle" fill="#555" font-size="8.6">not independent features. See polaris-engine.svg for how these internals sit inside the full front-end / DQP / compute / storage system.</text>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       LEGEND
+  ═══════════════════════════════════════════════════════════════════ -->
+  <rect x="26" y="1174" width="1068" height="72" rx="10" fill="#1E2B38"/>
+  <text x="42" y="1196" fill="white" font-size="10.5" font-weight="700" letter-spacing="0.5">LEGEND</text>
+
+  <circle cx="54" cy="1216" r="6" fill="#19C37D"/>
+  <text x="66" y="1220" fill="#EAF6F1" font-size="9">Fuse / favorable path (no shuffle, cache warm, task succeeds)</text>
+
+  <circle cx="330" cy="1216" r="6" fill="#E8A020"/>
+  <text x="342" y="1220" fill="#EAF6F1" font-size="9">Enforcer / scale-related event (blocking shuffle, broadcast, scale-out)</text>
+
+  <circle cx="680" cy="1216" r="6" fill="#C0392B"/>
+  <text x="692" y="1220" fill="#EAF6F1" font-size="9">Failure / rigid constraint (node unhealthy, temp-disk cap, latency floor)</text>
+
+  <circle cx="54" cy="1232" r="6" fill="#8B3A9E"/>
+  <text x="66" y="1236" fill="#EAF6F1" font-size="9">Fault-tolerance state machine transition</text>
+
+  <polygon points="330,1226 344,1232 330,1238 316,1232" fill="none" stroke="#EAF6F1" stroke-width="1"/>
+  <text x="352" y="1236" fill="#EAF6F1" font-size="9">Decision point the scheduler/optimizer evaluates at runtime</text>
+
+</svg>

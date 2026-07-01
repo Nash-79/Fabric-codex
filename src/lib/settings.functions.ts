@@ -247,9 +247,8 @@ export const getCmsData = createServerFn({ method: "GET" })
     const [
       { data: sources },
       { data: claims },
-      { data: blogs },
-      { data: blogSources },
-      { data: designs },
+      { data: contentItems },
+      { data: contentItemSources },
       { data: topics },
       { data: capabilities },
       { data: queue },
@@ -263,9 +262,11 @@ export const getCmsData = createServerFn({ method: "GET" })
         .select("*,sources(id,slug,title,tier,url)")
         .order("created_at", { ascending: false })
         .limit(300),
-      sb.from("blogs").select("*").order("updated_at", { ascending: false }).limit(100),
-      sb.from("blog_sources").select("blog_id,source_id,label,position").order("position"),
-      sb.from("designs").select("*").order("updated_at", { ascending: false }).limit(100),
+      sb.from("content_items").select("*").order("updated_at", { ascending: false }).limit(300),
+      sb
+        .from("content_item_sources")
+        .select("content_item_id,source_id,label,position")
+        .order("position"),
       sb.from("topics").select("*").order("sort_order").order("name"),
       sb.from("capabilities").select("*").order("name"),
       sb.from("queue_items").select("*").order("created_at", { ascending: false }).limit(100),
@@ -277,20 +278,24 @@ export const getCmsData = createServerFn({ method: "GET" })
         .order("created_at", { ascending: false })
         .limit(100),
     ]);
-    const blogCitationMap = new Map<string, string[]>();
-    for (const row of blogSources ?? []) {
-      const current = blogCitationMap.get(row.blog_id) ?? [];
+    const citationMap = new Map<string, string[]>();
+    for (const row of contentItemSources ?? []) {
+      const current = citationMap.get(row.content_item_id) ?? [];
       current.push(row.source_id);
-      blogCitationMap.set(row.blog_id, current);
+      citationMap.set(row.content_item_id, current);
     }
+    const withCitations = (items: any[]) =>
+      items.map((item) => ({ ...item, cited_source_ids: citationMap.get(item.id) ?? [] }));
+    const byKind = (kind: string) => withCitations((contentItems ?? []).filter((i: any) => i.kind === kind));
     return {
       sources: sources ?? [],
       claims: claims ?? [],
-      blogs: (blogs ?? []).map((b: any) => ({
-        ...b,
-        cited_source_ids: blogCitationMap.get(b.id) ?? [],
-      })),
-      designs: designs ?? [],
+      // Unified list across all three kinds, for panels that want to filter/sort themselves.
+      contentItems: withCitations(contentItems ?? []),
+      // Deprecated per-kind aliases kept for one release so not-yet-migrated panel code keeps working.
+      blogs: byKind("article"),
+      designs: byKind("design"),
+      lessons: byKind("lesson"),
       topics: topics ?? [],
       capabilities: capabilities ?? [],
       queue: queue ?? [],
@@ -498,12 +503,14 @@ export const supersedeClaim = createServerFn({ method: "POST" })
     return { ok: true, claim: created };
   });
 
-export const saveBlogVersion = createServerFn({ method: "POST" })
+export const saveContentItemVersion = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(
     (d: {
+      kind: "article" | "design" | "lesson";
       existingId?: string;
       topic_slug?: string | null;
+      capability_id?: string | null;
       slug: string;
       title: string;
       summary?: string;
@@ -522,7 +529,7 @@ export const saveBlogVersion = createServerFn({ method: "POST" })
     let prior: any = null;
     if (data.existingId) {
       const { data: existing, error } = await sb
-        .from("blogs")
+        .from("content_items")
         .select("*")
         .eq("id", data.existingId)
         .single();
@@ -530,23 +537,26 @@ export const saveBlogVersion = createServerFn({ method: "POST" })
       prior = existing;
     } else {
       const { data: existing } = await sb
-        .from("blogs")
+        .from("content_items")
         .select("*")
+        .eq("kind", data.kind)
         .eq("slug", data.slug)
         .eq("active", true)
         .maybeSingle();
       prior = existing;
     }
 
-    const { saveBlogVersion: saveBlogVersionRecord } = await adminServices();
-    const created = await saveBlogVersionRecord(sb, {
+    const { saveContentItemVersion: saveContentItemVersionRecord } = await adminServices();
+    const created = await saveContentItemVersionRecord(sb, {
+      kind: data.kind,
       existingId: data.existingId,
       topic_slug: data.topic_slug ?? prior?.topic_slug,
+      capability_id: data.capability_id ?? prior?.capability_id,
       slug: data.slug,
       title: data.title,
       summary: data.summary ?? "",
       body_md: data.body_md,
-      status: data.status ?? "draft",
+      status: data.status ?? "published",
       cited_source_ids: data.cited_source_ids,
       tags: data.tags ?? [],
       depth_levels: data.depth_levels ?? [],
@@ -554,15 +564,15 @@ export const saveBlogVersion = createServerFn({ method: "POST" })
 
     await recordAudit(
       context.userId,
-      prior ? "blog.version_created" : "blog.created",
-      "blog",
+      prior ? `${data.kind}.version_created` : `${data.kind}.created`,
+      data.kind,
       created.id,
       {
         slug: data.slug,
         supersedes_id: prior?.id ?? null,
       },
     );
-    return { ok: true, blog: created };
+    return { ok: true, item: created };
   });
 
 export const mutateQueueItem = createServerFn({ method: "POST" })
@@ -1015,11 +1025,14 @@ export const pollRssFeeds = createServerFn({ method: "POST" })
 // the KB. Laptop agents write files keylessly; this server-side step (service role) persists them.
 export const publishFromFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { kind: "source" | "blog" | "design" | "diagram"; payload: unknown }) => d)
+  .inputValidator(
+    (d: { kind: "source" | "blog" | "article" | "design" | "lesson" | "diagram"; payload: unknown }) =>
+      d,
+  )
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
-    if (!["source", "blog", "design", "diagram"].includes(data.kind)) {
-      throw new Error("kind must be source, blog, design, or diagram.");
+    if (!["source", "blog", "article", "design", "lesson", "diagram"].includes(data.kind)) {
+      throw new Error("kind must be source, article, design, lesson, or diagram.");
     }
     if (!data.payload || typeof data.payload !== "object") {
       throw new Error("payload must be the parsed content JSON (object or array).");
@@ -1039,7 +1052,7 @@ export const publishFromFile = createServerFn({ method: "POST" })
 
 export const validateContent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { kind: "blog" | "design"; id: string }) => d)
+  .inputValidator((d: { kind: "article" | "design" | "lesson"; id: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
