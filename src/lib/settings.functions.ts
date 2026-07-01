@@ -140,7 +140,7 @@ async function adminStats(sb: any) {
 
 export const inviteUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { email: string; role?: AppRole }) => d)
+  .validator((d: { email: string; role?: AppRole }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const email = data.email.trim().toLowerCase();
@@ -166,7 +166,7 @@ export const inviteUser = createServerFn({ method: "POST" })
 
 export const approveUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { userId: string; roles?: AppRole[] }) => d)
+  .validator((d: { userId: string; roles?: AppRole[] }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const roles = uniqueRoles(data.roles);
@@ -194,7 +194,7 @@ export const approveUser = createServerFn({ method: "POST" })
 
 export const setUserRoles = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { userId: string; roles: AppRole[] }) => d)
+  .validator((d: { userId: string; roles: AppRole[] }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const roles = uniqueRoles(data.roles);
@@ -208,7 +208,7 @@ export const setUserRoles = createServerFn({ method: "POST" })
 
 export const suspendUser = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { userId: string }) => d)
+  .validator((d: { userId: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const { error } = await (context.supabase as any).rpc("admin_suspend_user", {
@@ -220,7 +220,7 @@ export const suspendUser = createServerFn({ method: "POST" })
 
 export const updateInvitationStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { invitationId: string; status: "revoked" | "expired" }) => d)
+  .validator((d: { invitationId: string; status: "revoked" | "expired" }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const sb = await adminClient();
@@ -308,7 +308,7 @@ export const getCmsData = createServerFn({ method: "GET" })
 
 export const updateSourceMetadata = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: {
       id: string;
       title: string;
@@ -340,7 +340,7 @@ export const updateSourceMetadata = createServerFn({ method: "POST" })
 
 export const updateCapability = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: { id: string; name: string; description?: string; accent?: string; maturity?: string }) =>
       d,
   )
@@ -368,7 +368,7 @@ export const updateCapability = createServerFn({ method: "POST" })
 
 export const updateTopicMetadata = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: {
       slug: string;
       name: string;
@@ -400,7 +400,7 @@ export const updateTopicMetadata = createServerFn({ method: "POST" })
 
 export const updateHelpDoc = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { slug: string; title: string; body_md: string; sort_order?: number }) => d)
+  .validator((d: { slug: string; title: string; body_md: string; sort_order?: number }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const sb = await adminClient();
@@ -419,7 +419,7 @@ export const updateHelpDoc = createServerFn({ method: "POST" })
 
 export const updateDiagram = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: {
       slug: string;
       caption: string;
@@ -447,7 +447,7 @@ export const updateDiagram = createServerFn({ method: "POST" })
 
 export const mutateClaim = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { claimId: string; action: ClaimAction }) => d)
+  .validator((d: { claimId: string; action: ClaimAction }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const sb = await adminClient();
@@ -459,7 +459,7 @@ export const mutateClaim = createServerFn({ method: "POST" })
 
 export const bulkVerifyClaims = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { capabilityId?: string; topicSlug?: string }) => d)
+  .validator((d: { capabilityId?: string; topicSlug?: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     if (!data.capabilityId && !data.topicSlug) {
@@ -483,7 +483,7 @@ export const bulkVerifyClaims = createServerFn({ method: "POST" })
 
 export const supersedeClaim = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: { claimId: string; text: string; depth?: number; type?: string; tags?: string[] }) => d,
   )
   .handler(async ({ context, data }) => {
@@ -506,7 +506,7 @@ export const supersedeClaim = createServerFn({ method: "POST" })
 
 export const saveContentItemVersion = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: {
       kind: "article" | "design" | "lesson";
       existingId?: string;
@@ -578,7 +578,7 @@ export const saveContentItemVersion = createServerFn({ method: "POST" })
 
 export const mutateQueueItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: { itemId: string; action: QueueAction; sourceId?: string; error?: string }) => d,
   )
   .handler(async ({ context, data }) => {
@@ -619,7 +619,7 @@ export const getDiagramCoverage = createServerFn({ method: "GET" })
 
 export const commissionDiagram = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { targetSlug: string; title?: string; scheduledAt?: string }) => d)
+  .validator((d: { targetSlug: string; title?: string; scheduledAt?: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const sb = await adminClient();
@@ -641,7 +641,7 @@ export const commissionDiagram = createServerFn({ method: "POST" })
 
 export const submitSourceReview = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { sourceId: string; note?: string }) => d)
+  .validator((d: { sourceId: string; note?: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const sb = await adminClient();
@@ -675,7 +675,7 @@ export const submitSourceReview = createServerFn({ method: "POST" })
 
 export const submitSourceUrl = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: { url: string; title?: string; tier?: number; tags?: string[]; note?: string }) => d,
   )
   .handler(async ({ context, data }) => {
@@ -756,7 +756,7 @@ export const listRssSubscriptions = createServerFn({ method: "GET" })
 
 export const addRssSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: { feedUrl: string; title?: string; defaultTier?: number; defaultTags?: string[] }) => d,
   )
   .handler(async ({ context, data }) => {
@@ -800,7 +800,7 @@ export const addRssSubscription = createServerFn({ method: "POST" })
 
 export const setRssSubscriptionStatus = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string; status: "active" | "paused" }) => d)
+  .validator((d: { id: string; status: "active" | "paused" }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     if (data.status !== "active" && data.status !== "paused") {
@@ -818,7 +818,7 @@ export const setRssSubscriptionStatus = createServerFn({ method: "POST" })
 
 export const deleteRssSubscription = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => d)
+  .validator((d: { id: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const sb = await adminClient();
@@ -879,7 +879,7 @@ const FIRST_POLL_CAP = 25;
 
 export const pollRssFeeds = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { feedId?: string } | undefined) => d ?? {})
+  .validator((d: { feedId?: string } | undefined) => d ?? {})
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const sb = await adminClient();
@@ -1026,7 +1026,7 @@ export const pollRssFeeds = createServerFn({ method: "POST" })
 // the KB. Laptop agents write files keylessly; this server-side step (service role) persists them.
 export const publishFromFile = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: {
       kind: "source" | "blog" | "article" | "design" | "lesson" | "diagram";
       payload: unknown;
@@ -1055,7 +1055,7 @@ export const publishFromFile = createServerFn({ method: "POST" })
 
 export const validateContent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { kind: "article" | "design" | "lesson"; id: string }) => d)
+  .validator((d: { kind: "article" | "design" | "lesson"; id: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };

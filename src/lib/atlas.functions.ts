@@ -43,7 +43,7 @@ export const listCapabilities = createServerFn({ method: "GET" }).handler(async 
 });
 
 export const getTopic = createServerFn({ method: "GET" })
-  .inputValidator((d: { slug: string }) => d)
+  .validator((d: { slug: string }) => d)
   .handler(async ({ data }) => {
     try {
       const sb = await admin();
@@ -99,7 +99,7 @@ export const getTopic = createServerFn({ method: "GET" })
   });
 
 export const getContentItem = createServerFn({ method: "GET" })
-  .inputValidator((d: { kind: "article" | "design" | "lesson"; slug: string }) => d)
+  .validator((d: { kind: "article" | "design" | "lesson"; slug: string }) => d)
   .handler(async ({ data }) => {
     try {
       const sb = await admin();
@@ -152,7 +152,7 @@ export const getContentItem = createServerFn({ method: "GET" })
   });
 
 export const listContentItems = createServerFn({ method: "GET" })
-  .inputValidator(
+  .validator(
     (d: { kind?: "article" | "design" | "lesson"; topicSlug?: string; capabilityId?: string }) => d,
   )
   .handler(async ({ data }) => {
@@ -180,7 +180,7 @@ export const listContentItems = createServerFn({ method: "GET" })
 // Deprecated thin wrappers — kept for one release so call sites not yet migrated to
 // getContentItem/listContentItems keep working. New code should call those directly.
 export const getBlog = createServerFn({ method: "GET" })
-  .inputValidator((d: { slug: string }) => d)
+  .validator((d: { slug: string }) => d)
   .handler(async ({ data }) => {
     try {
       const sb = await admin();
@@ -224,7 +224,7 @@ export const getBlog = createServerFn({ method: "GET" })
   });
 
 export const getDesign = createServerFn({ method: "GET" })
-  .inputValidator((d: { slug: string }) => d)
+  .validator((d: { slug: string }) => d)
   .handler(async ({ data }) => {
     try {
       const sb = await admin();
@@ -304,7 +304,7 @@ export const listLessons = createServerFn({ method: "GET" }).handler(async () =>
 });
 
 export const listClaimsByCapability = createServerFn({ method: "GET" })
-  .inputValidator(
+  .validator(
     (d: { capabilityId?: string; limit?: number; depth?: number; tier?: number; q?: string }) => d,
   )
   .handler(async ({ data }) => {
@@ -511,7 +511,7 @@ export const listHelp = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const searchAll = createServerFn({ method: "GET" })
-  .inputValidator((d: { q: string }) => d)
+  .validator((d: { q: string }) => d)
   .handler(async ({ data }) => {
     const term = data.q.trim();
     if (!term) return { blogs: [], claims: [], sources: [], topics: [] };
@@ -576,7 +576,7 @@ export const listMyFavorites = createServerFn({ method: "GET" })
 
 export const toggleFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(
+  .validator(
     (d: {
       itemType: "blog" | "article" | "design" | "lesson" | "topic" | "source" | "claim";
       itemKey: string;

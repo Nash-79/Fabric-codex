@@ -60,7 +60,7 @@ const CAPABILITY_NAMES: Record<string, { name: string; accent: string }> = {
 
 export const seedFromContent = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { forceBootstrap?: boolean } | undefined) => d ?? {})
+  .validator((d: { forceBootstrap?: boolean } | undefined) => d ?? {})
   .handler(async ({ context, data }) => {
     const { data: isAdmin } = await context.supabase.rpc("has_role", {
       _user_id: context.userId,
