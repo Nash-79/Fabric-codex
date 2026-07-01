@@ -293,28 +293,21 @@ export async function advisorRetrieveContext(term: string): Promise<AdvisorRetri
   if (topicSlugs.size) {
     const { data } = await supabaseAdmin
       .from("diagrams")
-      .select("slug,path,caption,kind,topic_slug,capability_id")
+      .select("slug,path,caption,kind,topic_slug")
       .in("topic_slug", [...topicSlugs])
-      .limit(10);
-    diagramRows.push(...((data ?? []) as DiagramRow[]));
-  }
-  if (capabilityIds.size) {
-    const { data } = await supabaseAdmin
-      .from("diagrams")
-      .select("slug,path,caption,kind,topic_slug,capability_id")
-      .in("capability_id", [...capabilityIds])
       .limit(10);
     diagramRows.push(...((data ?? []) as DiagramRow[]));
   }
   if (termWords.length && diagramRows.length < 4) {
     const { data } = await supabaseAdmin
       .from("diagrams")
-      .select("slug,path,caption,kind,topic_slug,capability_id")
+      .select("slug,path,caption,kind,topic_slug")
       .limit(50);
     diagramRows.push(
       ...((data ?? []) as DiagramRow[]).filter((d) => includesTerm(d.caption, termWords)),
     );
   }
+
   const diagrams = uniqBy(diagramRows, (row) => row.slug, 6);
 
   const uiSources: AdvisorContextSource[] = [
