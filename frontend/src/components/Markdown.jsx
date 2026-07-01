@@ -6,9 +6,10 @@ import { c, sans, mono } from "../theme.js";
 /* Full GFM rendering (tables, code, links, nested lists) via react-markdown,
    themed with the same tokens as the rest of the UI. [Sn] citations anywhere
    in text are rendered as chips. */
-export const CiteChip = ({ tag, title }) => (
+export const CiteChip = ({ tag, title, onClick }) => (
   <span
     title={title}
+    onClick={onClick}
     style={{
       fontFamily: mono,
       fontSize: 11,
@@ -18,14 +19,14 @@ export const CiteChip = ({ tag, title }) => (
       borderRadius: 4,
       padding: "0 4px",
       margin: "0 1px",
-      cursor: title ? "help" : "inherit",
+      cursor: onClick || title ? "pointer" : "inherit",
     }}
   >
     {tag}
   </span>
 );
 
-function makeCite(legendByTag) {
+function makeCite(legendByTag, onCiteClick) {
   return function cite(children) {
     return React.Children.map(children, (child) =>
       typeof child === "string"
@@ -34,7 +35,12 @@ function makeCite(legendByTag) {
             const tag = p.slice(1, -1);
             const src = legendByTag?.[tag];
             return (
-              <CiteChip key={i} tag={tag} title={src ? `${src.title} (T${src.tier})` : undefined} />
+              <CiteChip
+                key={i}
+                tag={tag}
+                title={src ? `${src.title} (T${src.tier})` : undefined}
+                onClick={onCiteClick ? () => onCiteClick(tag) : undefined}
+              />
             );
           })
         : child,
@@ -73,8 +79,8 @@ const heading =
     );
   };
 
-function buildComponents(legendByTag) {
-  const cite = makeCite(legendByTag);
+function buildComponents(legendByTag, onCiteClick) {
+  const cite = makeCite(legendByTag, onCiteClick);
   return {
     h1: heading(cite, 16),
     h2: heading(cite, 13, true),
@@ -195,14 +201,12 @@ function buildComponents(legendByTag) {
   };
 }
 
-const defaultComponents = buildComponents(null);
-
 /* legend: optional [{tag:"S1", title, tier}] — when supplied, [Sn] chips show
    the source title on hover. */
-export function Md({ text, legend }) {
+export function Md({ text, legend, onCiteClick }) {
   if (!text) return null;
   const legendByTag = legend ? Object.fromEntries(legend.map((s) => [s.tag, s])) : null;
-  const components = legendByTag ? buildComponents(legendByTag) : defaultComponents;
+  const components = buildComponents(legendByTag, onCiteClick);
   return (
     <div style={{ fontSize: 13 }}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
