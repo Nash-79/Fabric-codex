@@ -7,6 +7,8 @@ import remarkGfm from "remark-gfm";
 import type { AdvisorMessage as AdvisorMessageType } from "@/lib/advisor-types";
 import { AdvisorCodeBlock } from "@/components/AdvisorCodeBlock";
 import { advisorMessageText } from "@/lib/advisor-message";
+import { AdvisorMermaidBlock } from "@/components/AdvisorMermaidBlock";
+import { DiagramLightbox } from "@/components/DiagramLightbox";
 
 export function AdvisorMessage({
   message,
@@ -52,7 +54,37 @@ export function AdvisorMessage({
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
                 components={{
-                  pre: ({ children }) => <AdvisorCodeBlock>{children}</AdvisorCodeBlock>,
+                  pre: ({ children }) => {
+                    const getLang = (node: any): string => {
+                      if (node && typeof node === "object" && "props" in node) {
+                        const cls = String(node.props?.className ?? "");
+                        const match = cls.match(/language-([a-z0-9+#-]+)/i);
+                        if (match) return match[1];
+                      }
+                      if (Array.isArray(node)) {
+                        for (const child of node) {
+                          const l = getLang(child);
+                          if (l) return l;
+                        }
+                      }
+                      return "";
+                    };
+                    const lang = getLang(children);
+                    if (lang === "mermaid") {
+                      const getText = (node: any): string => {
+                        if (node == null || typeof node === "boolean") return "";
+                        if (typeof node === "string" || typeof node === "number")
+                          return String(node);
+                        if (Array.isArray(node)) return node.map(getText).join("");
+                        if (typeof node === "object" && "props" in node) {
+                          return getText(node.props?.children);
+                        }
+                        return "";
+                      };
+                      return <AdvisorMermaidBlock code={getText(children)} />;
+                    }
+                    return <AdvisorCodeBlock>{children}</AdvisorCodeBlock>;
+                  },
                   code: ({ className, children, ...rest }) => {
                     if (className?.includes("language-")) {
                       return (
@@ -95,6 +127,21 @@ export function AdvisorMessage({
                       const path = href.startsWith(window.location.origin)
                         ? href.slice(window.location.origin.length)
                         : href;
+
+                      const match = path.match(/^\/?diagrams\/([^/]+)\.svg$/);
+                      if (match) {
+                        const titleText =
+                          typeof children === "string" ? children : "Architecture Diagram";
+                        return (
+                          <div className="my-4">
+                            <span className="mb-2 block text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Reference Diagram: {titleText}
+                            </span>
+                            <DiagramLightbox src={path} alt={titleText} caption={titleText} />
+                          </div>
+                        );
+                      }
+
                       return (
                         <Link to={path as any} {...rest}>
                           {children}

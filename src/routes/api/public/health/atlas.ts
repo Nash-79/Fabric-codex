@@ -105,11 +105,8 @@ export const Route = createFileRoute("/api/public/health/atlas")({
           ? Math.round((Date.now() - new Date(lastSeedAt).getTime()) / 1000)
           : null;
 
-        const status = !rpcOk || !indexesReady
-          ? "degraded"
-          : lastSeedAt && seedUpToDate
-            ? "healthy"
-            : "stale";
+        const status =
+          !rpcOk || !indexesReady ? "degraded" : lastSeedAt && seedUpToDate ? "healthy" : "stale";
 
         return Response.json(
           {

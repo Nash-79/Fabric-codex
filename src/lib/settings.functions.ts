@@ -578,9 +578,7 @@ export const saveContentItemVersion = createServerFn({ method: "POST" })
 
 export const mutateQueueItem = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator(
-    (d: { itemId: string; action: QueueAction; sourceId?: string; error?: string }) => d,
-  )
+  .validator((d: { itemId: string; action: QueueAction; sourceId?: string; error?: string }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const sb = await adminClient();
