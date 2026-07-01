@@ -2,12 +2,13 @@ import { createFileRoute } from "@tanstack/react-router";
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import { ADVISOR_MODEL_IDS, DEFAULT_ADVISOR_MODEL } from "@/lib/advisor-models";
+import type { AdvisorMessage } from "@/lib/advisor-types";
 
 export const Route = createFileRoute("/api/chat")({
   server: {
     handlers: {
       POST: async ({ request }) => {
-        const body = (await request.json()) as { messages?: UIMessage[]; model?: string };
+        const body = (await request.json()) as { messages?: AdvisorMessage[]; model?: string };
         const messages = body.messages ?? [];
         if (!Array.isArray(messages) || messages.length === 0) {
           return new Response("messages required", { status: 400 });
@@ -27,105 +28,29 @@ export const Route = createFileRoute("/api/chat")({
             .join(" ")
             .trim() ?? "";
 
-        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        const { advisorRetrieveContext, advisorContextToPrompt } =
+          await import("@/lib/advisor-context.server");
+        const retrieval = await advisorRetrieveContext(userText);
+        const contextBlock = advisorContextToPrompt(retrieval);
 
-        // Postgres full-text search across claims/blogs/sources/topics (ranked).
-        // Fall back to ILIKE on claims if FTS finds nothing (e.g. very short queries).
-        const term = userText.slice(0, 500);
-        let claims: any[] = [];
-        const blogs: any[] = [];
-        const sources: any[] = [];
-        const topics: any[] = [];
-
-        if (term) {
-          const { data: hits } = await supabaseAdmin.rpc("search_atlas", {
-            term,
-            max_results: 40,
-          });
-          for (const h of ((hits ?? []) as Array<{ kind: string; payload: any }>)) {
-            if (h.kind === "claim" && claims.length < 16) claims.push(h.payload);
-            else if (h.kind === "blog" && blogs.length < 4) blogs.push(h.payload);
-            else if (h.kind === "source" && sources.length < 6) sources.push(h.payload);
-            else if (h.kind === "topic" && topics.length < 4) topics.push(h.payload);
-          }
-        }
-
-        if (claims.length === 0 && term) {
-          const words = term
-            .toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, " ")
-            .split(/\s+/)
-            .filter((w) => w.length > 3)
-            .slice(0, 6);
-          if (words.length) {
-            const ors = words.map((w) => `text.ilike.%${w}%`).join(",");
-            const { data: fallback } = await supabaseAdmin
-              .from("claims")
-              .select("id,text,depth,capability_id,sources(slug,title,url,tier)")
-              .eq("active", true)
-              .or(ors)
-              .limit(12);
-            claims = (fallback ?? []).map((c: any) => ({
-              id: c.id,
-              text: c.text,
-              depth: c.depth,
-              capability_id: c.capability_id,
-              sources: c.sources,
-            }));
-          }
-        }
-
-        const claimsBlock = claims.length
-          ? claims
-              .map(
-                (c: any, i: number) =>
-                  `[C${i + 1}] (capability=${c.capability_id}, depth=L${c.depth}, tier=T${c.sources?.tier ?? 6}) ${c.text}\n    source: ${c.sources?.title} — ${c.sources?.url}`,
-              )
-              .join("\n\n")
-          : "(no matching claims found in the atlas)";
-        const blogsBlock = blogs.length
-          ? blogs
-              .map(
-                (b: any, i: number) =>
-                  `[B${i + 1}] ${b.title} — /blog/${b.slug}\n    ${b.summary ?? ""}`,
-              )
-              .join("\n\n")
-          : "";
-        const sourcesBlock = sources.length
-          ? sources
-              .map(
-                (s: any, i: number) =>
-                  `[S${i + 1}] (tier=T${s.tier ?? 6}) ${s.title} — ${s.url}`,
-              )
-              .join("\n")
-          : "";
-        const topicsBlock = topics.length
-          ? topics
-              .map((t: any, i: number) => `[T${i + 1}] ${t.name} — /topics/${t.slug}`)
-              .join("\n")
-          : "";
-
-        const contextBlock = [
-          `CLAIMS (atomic, source-grounded — cite as [C#]):\n${claimsBlock}`,
-          blogsBlock && `RELATED PORTAL ARTICLES (link as [B#] when useful):\n${blogsBlock}`,
-          sourcesBlock && `RELATED SOURCES (background):\n${sourcesBlock}`,
-          topicsBlock && `RELATED TOPICS:\n${topicsBlock}`,
-        ]
-          .filter(Boolean)
-          .join("\n\n");
-
-        const system = `You are the Fabric Atlas Advisor — an expert on Microsoft Fabric grounded ONLY in the approved Fabric Atlas knowledge base. The CONTEXT below is retrieved by full-text search over curated, source-graded claims (tiers T1=Microsoft Learn best → T6=unknown) and the portal's published blogs/topics.
+        const system = `You are the Fabric Atlas Advisor — an expert on Microsoft Fabric grounded ONLY in the approved Fabric Atlas knowledge base. The CONTEXT below is retrieved from verified claims, blogs/articles, solution architectures, lessons, sources, topics, capabilities, and diagrams.
 
 Rules (non-negotiable):
 - Cite every factual statement inline with [C1], [C2], etc. matching the claim numbers in CONTEXT.
-- When useful, point readers to related portal articles as [B#] (path /blog/<slug>) or topics as [T#] (path /topics/<slug>).
-- If CLAIMS is empty or insufficient to answer, reply exactly: "The Fabric Atlas is silent on this — no approved claims cover it yet." Suggest 1–2 capabilities or topics worth ingesting next. Do not invent.
+- Use related blogs, architectures, lessons, topics, capabilities, and diagrams to guide structure, navigation, and "what to read next", but do not make uncited factual claims from them unless a verified [C#] claim supports the fact.
+- When useful, point readers to related Atlas content as [R#], topics as [T#], capabilities as [K#], and diagrams as [D#].
+- If VERIFIED CLAIMS is empty or insufficient to answer, say: "The Fabric Atlas is silent on this — no approved claims cover it yet." Then suggest 1–2 capabilities, topics, or source types worth ingesting next. Do not invent the answer.
 - Distinguish verified fact from your own reasoning: prefix inferences with "_Inference:_ ".
 - Never invent Microsoft Fabric product limits, quotas, pricing, SKUs, or roadmap.
 - Prefer higher-tier sources (T1/T2) when claims conflict, and call out the conflict.
-- Be thorough but readable. Use markdown (headings, bullets, **bold**, tables when comparing). Aim for ~250–500 words depending on question complexity; longer is fine for walkthroughs.
-- For "walk me through" / "how do I" questions, give numbered steps, each step citing the claims it relies on.
-- End with a brief "Sources" legend mapping [C#] → source title (already in CONTEXT).
+- Write in an inclusive way: do not assume the reader's role or seniority, expand acronyms on first use, and offer beginner / practitioner / architect / internals framing when helpful.
+- Output structure:
+  1. Start with a short direct answer.
+  2. Add a grounded explanation with citations.
+  3. Include code, SQL, CLI, JSON, or config examples only when useful; format them as fenced code blocks with a language.
+  4. Add caveats, assumptions, and "what to check next" when there are gaps.
+  5. End with "Sources" mapping [C#] to source titles and, when useful, "Related Atlas links" for [R#]/[T#]/[K#]/[D#].
+- Use polished markdown: concise headings, bullets, tables for comparisons, and readable code. Avoid filler.
 
 CONTEXT (retrieved from the Fabric Atlas knowledge base):
 ${contextBlock}`;
@@ -139,7 +64,25 @@ ${contextBlock}`;
           messages: await convertToModelMessages(messages),
         });
 
-        return result.toUIMessageStreamResponse({ originalMessages: messages });
+        return result.toUIMessageStreamResponse({
+          originalMessages: messages as UIMessage[],
+          messageMetadata: ({ part }) => {
+            if (part.type === "start") {
+              return {
+                createdAt: Date.now(),
+                model: modelId,
+                retrievalStatus: retrieval.claims.length ? "retrieved" : "empty",
+                contextSummary: retrieval.summary,
+                sources: retrieval.uiSources,
+              };
+            }
+            if (part.type === "finish") {
+              return {
+                totalTokens: part.totalUsage?.totalTokens,
+              };
+            }
+          },
+        });
       },
     },
   },
