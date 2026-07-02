@@ -28,6 +28,7 @@ const KNOWLEDGE: ReadonlyArray<NavLink> = [
   { to: "/sources", label: "Sources", hint: "Graded, cited source library" },
   { to: "/learn", label: "Learn", hint: "Tiered lessons (Beginner→Expert)" },
   { to: "/blogs", label: "Blog", hint: "Cited solution architectures, lessons and articles" },
+  { to: "/roadmap", label: "Roadmap", hint: "What's coming to Microsoft Fabric" },
 ];
 
 const BUILD: ReadonlyArray<NavLink> = [

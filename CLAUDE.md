@@ -59,18 +59,26 @@ content and runs only deterministic checks. Set `LLM_MODE` in `backend/.env`:
 - `local` (default) — agents extract/generate/diagram and POST structured data. Server needs no key.
 - `api` — server calls the Anthropic API on the fly via `llm.py` (original v0.1 behaviour).
 
-Authoring flow (git is the source of truth):
+Authoring flow (git is the source of truth). The `localhost:8000` FastAPI backend is retired;
+agents read Supabase keylessly (anon key) and write only to git — publishing itself requires the
+sealed service-role key, so it is always a human step in the Lovable app's Settings → Publish tab:
 
 ```
 agent reads source ─▶ writes content/sources/<slug>.json  (claims + tags + image refs)
 agent draws diagram ─▶ writes content/diagrams/<slug>.svg|.mmd  (original, never copied)
-agent designs       ─▶ writes content/designs/<slug>.md
-        │  git commit
+agent designs       ─▶ writes content/articles|designs/<slug>.json
+        │  git commit + push to main (deploy picks up the new content/ files)
         ▼
-publish ─▶ python scripts/import_content.py --base <server>   (replays files into the API)
+publish ─▶ Settings → Publish → "Publish all"  (republishes everything changed since its last
+            publish, sources → diagrams → articles/designs, one click — or paste a single
+            content/*.json for one file before the next deploy)
         ▼
 server serves the knowledge base; deterministic citation/freshness/versioning run server-side
 ```
+
+`content/diagrams/assets.json` entries register by upsert-on-slug — replacing a diagram is just
+overwriting its `.svg`/`.mmd` file with the same filename and re-running Publish (all or that one
+diagram entry); no separate "delete then re-add" step exists or is needed.
 
 ## Tags and images
 

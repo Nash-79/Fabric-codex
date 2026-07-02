@@ -11,6 +11,7 @@ import {
   Image as ImageIcon,
   ListChecks,
   MailPlus,
+  Milestone,
   RefreshCw,
   Rss,
   ShieldCheck,
@@ -21,7 +22,7 @@ import {
 import { useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
-import { getRegistryCoverage } from "@/lib/atlas.functions";
+import { getRegistryCoverage, listRoadmapItems } from "@/lib/atlas.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,10 +61,13 @@ import {
   bulkVerifyClaims,
   mutateClaim,
   mutateQueueItem,
+  publishAllBundled,
   publishFromFile,
   addRssSubscription,
   deleteRssSubscription,
+  getRoadmapSyncStatus,
   listRssSubscriptions,
+  pollFabricRoadmap,
   pollRssFeeds,
   saveContentItemVersion,
   setRssSubscriptionStatus,
@@ -99,6 +103,7 @@ const nav = [
   { id: "publish", label: "Publish", icon: Upload },
   { id: "diagrams", label: "Diagrams", icon: ImageIcon },
   { id: "rss", label: "RSS Feeds", icon: Rss },
+  { id: "roadmap", label: "Roadmap", icon: Milestone },
   { id: "logs", label: "Logs", icon: Activity },
   { id: "system", label: "System", icon: Gauge },
 ] as const;
@@ -207,6 +212,9 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="rss" className="mt-0">
             <RssPanel />
+          </TabsContent>
+          <TabsContent value="roadmap" className="mt-0">
+            <RoadmapPanel />
           </TabsContent>
           <TabsContent value="logs" className="mt-0">
             <LogsPanel
@@ -1913,6 +1921,131 @@ const PUBLISH_DIR: Record<string, string> = {
   lesson: "lessons",
 };
 
+const PUBLISH_ALL_ACTION_STYLE: Record<string, string> = {
+  published: "border-emerald-400/30 bg-emerald-500/10 text-emerald-200",
+  "skipped-unchanged": "border-border bg-transparent text-muted-foreground",
+  blocked: "border-amber-400/30 bg-amber-500/10 text-amber-200",
+  failed: "border-rose-400/30 bg-rose-500/10 text-rose-200",
+};
+
+function PublishAllPanel() {
+  const publishAllFn = useServerFn(publishAllBundled);
+  const [force, setForce] = useState(false);
+
+  const publishAll = useMutation({
+    mutationFn: () => publishAllFn({ data: { force } }),
+    onSuccess: (res) => {
+      const s = (
+        res as { summary?: { published: number; skipped: number; blocked: number; failed: number } }
+      ).summary;
+      if (!s) return;
+      if (s.failed > 0) {
+        toast.error(`Published ${s.published}, ${s.failed} failed — see results below.`);
+      } else if (s.blocked > 0) {
+        toast.warning(`Published ${s.published}, ${s.blocked} blocked — see results below.`);
+      } else {
+        toast.success(`Published ${s.published} item(s), ${s.skipped} already up to date.`);
+      }
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  const summary = (
+    publishAll.data as
+      | {
+          summary?: {
+            items: Array<Record<string, unknown>>;
+            published: number;
+            skipped: number;
+            blocked: number;
+            failed: number;
+          };
+        }
+      | undefined
+  )?.summary;
+
+  return (
+    <Panel title="Publish all bundled content">
+      <p className="mb-3 text-xs text-muted-foreground">
+        Publishes every <code className="text-teal-300">content/sources</code>,{" "}
+        <code className="text-teal-300">content/articles</code>,{" "}
+        <code className="text-teal-300">content/designs</code>, and{" "}
+        <code className="text-teal-300">content/diagrams/assets.json</code> entry bundled into this
+        deploy, in the safe order (sources → diagrams → articles/designs that cite them) — using the
+        same versioned publish path as pasting one file below, so verified claims and version
+        history are preserved exactly the same way. Items unchanged since the last publish are
+        skipped; an article/design blocked on an unpublished source is reported, not
+        force-published. Only sees content committed and{" "}
+        <span className="text-foreground">deployed</span> — new files need a redeploy first.
+      </p>
+
+      <div className="mb-3 flex items-center gap-3">
+        <Button size="sm" onClick={() => publishAll.mutate()} disabled={publishAll.isPending}>
+          {publishAll.isPending ? "Publishing…" : "Publish all"}
+        </Button>
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={force}
+            onChange={(e) => setForce(e.target.checked)}
+            className="h-3.5 w-3.5"
+          />
+          Force (republish even if unchanged)
+        </label>
+      </div>
+
+      {summary && (
+        <>
+          <div className="mb-3 flex flex-wrap gap-2 text-xs">
+            <Badge className="border-emerald-400/30 bg-emerald-500/10 text-emerald-200">
+              {summary.published} published
+            </Badge>
+            <Badge className="border-border bg-transparent text-muted-foreground">
+              {summary.skipped} unchanged
+            </Badge>
+            {summary.blocked > 0 && (
+              <Badge className="border-amber-400/30 bg-amber-500/10 text-amber-200">
+                {summary.blocked} blocked
+              </Badge>
+            )}
+            {summary.failed > 0 && (
+              <Badge className="border-rose-400/30 bg-rose-500/10 text-rose-200">
+                {summary.failed} failed
+              </Badge>
+            )}
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Kind</TableHead>
+                <TableHead>Slug</TableHead>
+                <TableHead>Result</TableHead>
+                <TableHead>Detail</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {summary.items.map((item: any) => (
+                <TableRow key={`${item.kind}-${item.slug}-${item.file}`}>
+                  <TableCell className="text-xs text-muted-foreground">{item.kind}</TableCell>
+                  <TableCell className="font-mono text-xs">{item.slug}</TableCell>
+                  <TableCell>
+                    <Badge className={PUBLISH_ALL_ACTION_STYLE[item.action] ?? ""}>
+                      {item.action}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {item.reason ?? ""}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </>
+      )}
+    </Panel>
+  );
+}
+
 function PublishPanel({ onDone }: { onDone: () => void }) {
   const publishFn = useServerFn(publishFromFile);
   const [kind, setKind] = useState<"source" | "article" | "design" | "lesson" | "diagram">(
@@ -1947,56 +2080,59 @@ function PublishPanel({ onDone }: { onDone: () => void }) {
   });
 
   return (
-    <Panel title="Publish from files">
-      <p className="mb-3 text-xs text-muted-foreground">
-        Laptop agents author content keylessly and write{" "}
-        <code className="text-teal-300">content/sources/*.json</code>,{" "}
-        <code className="text-teal-300">content/articles/*.json</code>,{" "}
-        <code className="text-teal-300">content/designs/*.json</code>,{" "}
-        <code className="text-teal-300">content/lessons/*.json</code>, and diagram entries to git.
-        The server can't read your laptop, so paste the file an agent wrote here to replay it into
-        the knowledge base. Re-publishing a source keeps its{" "}
-        <span className="text-foreground">verified</span> claims and only refreshes the pending ones
-        — publishing never un-verifies human review. Articles, designs, and lessons always create a
-        new version — the prior version is archived, never overwritten. For an article whose
-        embedded diagram is new, publish the <span className="text-foreground">Diagram(s)</span>{" "}
-        first (paste <code className="text-teal-300">content/diagrams/assets.json</code>) so the
-        article's embedded-diagram validation passes.
-      </p>
+    <>
+      <PublishAllPanel />
+      <Panel title="Publish from a single file">
+        <p className="mb-3 text-xs text-muted-foreground">
+          Laptop agents author content keylessly and write{" "}
+          <code className="text-teal-300">content/sources/*.json</code>,{" "}
+          <code className="text-teal-300">content/articles/*.json</code>,{" "}
+          <code className="text-teal-300">content/designs/*.json</code>,{" "}
+          <code className="text-teal-300">content/lessons/*.json</code>, and diagram entries to git.
+          Use this for one file before a redeploy, or for a lesson (not covered by Publish all yet).
+          Re-publishing a source keeps its <span className="text-foreground">verified</span> claims
+          and only refreshes the pending ones — publishing never un-verifies human review. Articles,
+          designs, and lessons always create a new version — the prior version is archived, never
+          overwritten. For an article whose embedded diagram is new, publish the{" "}
+          <span className="text-foreground">Diagram(s)</span> first (paste{" "}
+          <code className="text-teal-300">content/diagrams/assets.json</code>) so the article's
+          embedded-diagram validation passes.
+        </p>
 
-      <div className="mb-3 flex items-center gap-2">
-        <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
-          <SelectTrigger className="h-8 w-40 border-border bg-card text-foreground">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="source">Source (+ claims)</SelectItem>
-            <SelectItem value="article">Article</SelectItem>
-            <SelectItem value="design">Design</SelectItem>
-            <SelectItem value="lesson">Lesson</SelectItem>
-            <SelectItem value="diagram">Diagram(s) / assets.json</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button
-          size="sm"
-          onClick={() => publish.mutate()}
-          disabled={!json.trim() || publish.isPending}
-        >
-          {publish.isPending ? "Publishing…" : "Publish"}
-        </Button>
-      </div>
+        <div className="mb-3 flex items-center gap-2">
+          <Select value={kind} onValueChange={(v) => setKind(v as typeof kind)}>
+            <SelectTrigger className="h-8 w-40 border-border bg-card text-foreground">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="source">Source (+ claims)</SelectItem>
+              <SelectItem value="article">Article</SelectItem>
+              <SelectItem value="design">Design</SelectItem>
+              <SelectItem value="lesson">Lesson</SelectItem>
+              <SelectItem value="diagram">Diagram(s) / assets.json</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            onClick={() => publish.mutate()}
+            disabled={!json.trim() || publish.isPending}
+          >
+            {publish.isPending ? "Publishing…" : "Publish"}
+          </Button>
+        </div>
 
-      <Textarea
-        value={json}
-        onChange={(e) => setJson(e.target.value)}
-        placeholder={
-          kind === "diagram"
-            ? "Paste a diagram entry or the whole content/diagrams/assets.json array…"
-            : `Paste the content/${PUBLISH_DIR[kind]}/<slug>.json the agent wrote…`
-        }
-        className="min-h-[320px] border-border bg-card font-mono text-xs text-foreground"
-      />
-    </Panel>
+        <Textarea
+          value={json}
+          onChange={(e) => setJson(e.target.value)}
+          placeholder={
+            kind === "diagram"
+              ? "Paste a diagram entry or the whole content/diagrams/assets.json array…"
+              : `Paste the content/${PUBLISH_DIR[kind]}/<slug>.json the agent wrote…`
+          }
+          className="min-h-[320px] border-border bg-card font-mono text-xs text-foreground"
+        />
+      </Panel>
+    </>
   );
 }
 
@@ -2236,6 +2372,154 @@ function RssPanel() {
                       Delete
                     </Button>
                   </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </Panel>
+  );
+}
+
+type RoadmapSyncStatus = {
+  status: { last_polled_at: string | null; error_count: number; last_error: string } | null;
+  itemCount: number;
+};
+
+function RoadmapPanel() {
+  const statusFn = useServerFn(getRoadmapSyncStatus);
+  const pollFn = useServerFn(pollFabricRoadmap);
+  const queryClient = useQueryClient();
+
+  const status = useQuery({
+    queryKey: ["roadmap-sync-status"],
+    queryFn: () => statusFn(),
+  });
+  const items = useQuery({
+    queryKey: ["roadmap-items-admin"],
+    queryFn: () => listRoadmapItems(),
+  });
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["roadmap-sync-status"] });
+    queryClient.invalidateQueries({ queryKey: ["roadmap-items-admin"] });
+  };
+
+  const poll = useMutation({
+    mutationFn: () => pollFn(),
+    onSuccess: (res) => {
+      const r = res as {
+        ok: boolean;
+        found: number;
+        created: number;
+        updated: number;
+        error: string | null;
+      };
+      if (r.error) {
+        toast.warning(`Poll failed: ${r.error}`);
+      } else {
+        toast.success(`Synced ${r.found} item(s): ${r.created} new, ${r.updated} updated.`);
+      }
+      invalidate();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  const data = status.data as RoadmapSyncStatus | undefined;
+  const rows = (items.data ?? []) as Array<{
+    id: string;
+    title: string;
+    link: string;
+    status: string;
+    release_type: string;
+    target_release: string;
+    pub_date: string | null;
+  }>;
+
+  return (
+    <Panel
+      title="Fabric roadmap"
+      action={
+        <Button size="sm" onClick={() => poll.mutate()} disabled={poll.isPending}>
+          {poll.isPending ? "Polling…" : "Poll now"}
+        </Button>
+      }
+    >
+      <p className="mb-3 text-xs text-muted-foreground">
+        Synced verbatim from the Microsoft Fabric public roadmap feed (
+        <code className="text-teal-300">fabric-gps.com/rss</code>) — items are mirrored directly,
+        never paraphrased or invented, matching the &ldquo;no source, no claim&rdquo; rule.
+        <span className="text-foreground"> Poll now</span> fetches the 25 most-recently-modified
+        releases and upserts them by guid.
+      </p>
+
+      <div className="mb-4 grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-md border border-border bg-card px-3 py-2">
+          <div className="text-muted-foreground">Items synced</div>
+          <div className="text-lg font-semibold">{data?.itemCount ?? "—"}</div>
+        </div>
+        <div className="rounded-md border border-border bg-card px-3 py-2">
+          <div className="text-muted-foreground">Last polled</div>
+          <div className="text-sm font-semibold">
+            {data?.status?.last_polled_at
+              ? new Date(data.status.last_polled_at).toLocaleString()
+              : "never"}
+          </div>
+        </div>
+        <div className="rounded-md border border-border bg-card px-3 py-2">
+          <div className="text-muted-foreground">Errors</div>
+          <div className="text-sm font-semibold">
+            {data?.status?.error_count ? (
+              <span className="text-rose-300">
+                {data.status.error_count}: {data.status.last_error}
+              </span>
+            ) : (
+              "0"
+            )}
+          </div>
+        </div>
+      </div>
+
+      {items.isLoading ? (
+        <Empty text="Loading roadmap items..." />
+      ) : rows.length === 0 ? (
+        <Empty text="No roadmap items synced yet. Click Poll now." />
+      ) : (
+        <Table className="text-foreground">
+          <TableHeader>
+            <TableRow className="border-border hover:bg-transparent">
+              <TableHead>Title</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Release type</TableHead>
+              <TableHead>Target</TableHead>
+              <TableHead>Published</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.slice(0, 50).map((r) => (
+              <TableRow key={r.id} className="border-border hover:bg-accent">
+                <TableCell>
+                  <a
+                    href={r.link}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-teal-200 hover:underline"
+                  >
+                    {r.title}
+                  </a>
+                </TableCell>
+                <TableCell>
+                  <Badge className="border-border bg-accent text-foreground">
+                    {r.status.replace("_", " ")}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">{r.release_type}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {r.target_release || "—"}
+                </TableCell>
+                <TableCell className="text-xs text-muted-foreground">
+                  {r.pub_date ? new Date(r.pub_date).toLocaleDateString() : "—"}
                 </TableCell>
               </TableRow>
             ))}

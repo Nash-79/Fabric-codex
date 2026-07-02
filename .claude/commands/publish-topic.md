@@ -8,14 +8,25 @@ Publish topic: $ARGUMENTS
 Run the chain below **in order, stopping at the human gates** — this command orchestrates
 existing agents; it adds no new machinery.
 
-1. **Coverage check.** Fetch `GET /topics/$ARGUMENTS` for the mapped capabilities, then use
-   the **coverage-auditor** subagent scoped to them. If coverage is thin (no verified L1/L2,
-   or L3 missing for a practitioner topic), list the recommended sources, enqueue them with
-   `POST /queue`, and **stop here** — tell the user to run `/ingest-batch` and verify, then
-   re-run this command.
-2. **Human verify gate.** If the mapped capabilities have pending claims
-   (`GET /claims?capability=<id>&status=pending`), stop and ask the user to verify them in
-   the Registry first — blogs may only cite sources with verified claims.
+The KB is read directly from Supabase with the anon key (no `localhost:8000` backend). Set up
+keyless reads once:
+
+```bash
+source .env 2>/dev/null || true
+SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+```
+
+1. **Coverage check.** Fetch the topic's mapped capabilities —
+   `curl -s "$SB/topic_capabilities?topic_slug=eq.$ARGUMENTS&select=capability_id" -H "$H1" -H "$H2"`
+   — then use the **coverage-auditor** subagent scoped to them. If coverage is thin (no verified
+   L1/L2, or L3 missing for a practitioner topic), list the recommended sources and **stop here**
+   — tell the user to add them via **Settings → Queue** (or the URL submit box), then run
+   `/ingest-batch` and publish/verify, then re-run this command. You cannot write to the queue
+   yourself.
+2. **Human verify gate.** Check for pending claims on the mapped capabilities —
+   `curl -s "$SB/claims?active=eq.true&status=eq.pending&capability_id=in.(<ids>)&select=id,capability_id,depth,type,source_id" -H "$H1" -H "$H2"`
+   — and if any exist, stop and ask the user to verify them first in **Settings → Claims →
+   "Verify all"** (or per-claim review) — articles may only cite verified claims.
 3. **Diagrams (commission at least two).** Use the **diagram-author** subagent twice so the
    article is illustrated end to end:
    a. an **architecture** diagram — the workload's components, data flow, and place in Fabric;
@@ -38,5 +49,10 @@ existing agents; it adds no new machinery.
    instead.
 6. **Docs sync.** Use the **docs-author** subagent so the Help section reflects any new
    surface this work introduced.
-7. Finish with: article slug + confidence + ready_to_share, files written, and the git commit
-   reminder (`content/articles/`, `content/diagrams/`, `content/help/`).
+7. Finish with a publish checklist, same format as content-orchestrator's: article slug +
+   confidence + ready_to_share, every file written this run, and the git commit reminder
+   (`content/articles/`, `content/diagrams/`, `content/help/`). After committing and the branch
+   deploys, tell the user **Settings → Publish → "Publish all"** will pick up the new article,
+   its diagrams, and any new sources in one click, in the correct order — the per-file
+   `Settings -> Publish -> <kind> -> paste ...` flow is only needed if they want this one article
+   live before the next deploy.

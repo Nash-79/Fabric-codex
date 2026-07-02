@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as RegistryRouteImport } from './routes/registry'
 import { Route as LearnRouteImport } from './routes/learn'
 import { Route as HelpRouteImport } from './routes/help'
@@ -46,6 +47,11 @@ const SourcesRoute = SourcesRouteImport.update({
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RoadmapRoute = RoadmapRouteImport.update({
+  id: '/roadmap',
+  path: '/roadmap',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RegistryRoute = RegistryRouteImport.update({
@@ -188,6 +194,7 @@ export interface FileRoutesByFullPath {
   '/help': typeof HelpRoute
   '/learn': typeof LearnRoute
   '/registry': typeof RegistryRouteWithChildren
+  '/roadmap': typeof RoadmapRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
   '/admin': typeof AuthenticatedAdminRoute
@@ -217,6 +224,7 @@ export interface FileRoutesByTo {
   '/help': typeof HelpRoute
   '/learn': typeof LearnRoute
   '/registry': typeof RegistryRouteWithChildren
+  '/roadmap': typeof RoadmapRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
   '/admin': typeof AuthenticatedAdminRoute
@@ -248,6 +256,7 @@ export interface FileRoutesById {
   '/help': typeof HelpRoute
   '/learn': typeof LearnRoute
   '/registry': typeof RegistryRouteWithChildren
+  '/roadmap': typeof RoadmapRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
   '/_authenticated/admin': typeof AuthenticatedAdminRoute
@@ -279,6 +288,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/learn'
     | '/registry'
+    | '/roadmap'
     | '/search'
     | '/sources'
     | '/admin'
@@ -308,6 +318,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/learn'
     | '/registry'
+    | '/roadmap'
     | '/search'
     | '/sources'
     | '/admin'
@@ -338,6 +349,7 @@ export interface FileRouteTypes {
     | '/help'
     | '/learn'
     | '/registry'
+    | '/roadmap'
     | '/search'
     | '/sources'
     | '/_authenticated/admin'
@@ -369,6 +381,7 @@ export interface RootRouteChildren {
   HelpRoute: typeof HelpRoute
   LearnRoute: typeof LearnRoute
   RegistryRoute: typeof RegistryRouteWithChildren
+  RoadmapRoute: typeof RoadmapRoute
   SearchRoute: typeof SearchRoute
   SourcesRoute: typeof SourcesRoute
   ApiChatRoute: typeof ApiChatRoute
@@ -400,6 +413,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/roadmap': {
+      id: '/roadmap'
+      path: '/roadmap'
+      fullPath: '/roadmap'
+      preLoaderRoute: typeof RoadmapRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/registry': {
@@ -624,6 +644,7 @@ const rootRouteChildren: RootRouteChildren = {
   HelpRoute: HelpRoute,
   LearnRoute: LearnRoute,
   RegistryRoute: RegistryRouteWithChildren,
+  RoadmapRoute: RoadmapRoute,
   SearchRoute: SearchRoute,
   SourcesRoute: SourcesRoute,
   ApiChatRoute: ApiChatRoute,
@@ -643,3 +664,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

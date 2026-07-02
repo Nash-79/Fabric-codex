@@ -488,6 +488,41 @@ export const listSources = createServerFn({ method: "GET" }).handler(async () =>
   }
 });
 
+export type RoadmapItem = {
+  id: string;
+  guid: string;
+  title: string;
+  link: string;
+  status: string;
+  release_type: string;
+  target_release: string;
+  categories: string[];
+  description_html: string;
+  pub_date: string | null;
+  capability_id: string | null;
+};
+
+// Roadmap items are synced verbatim from fabric-gps.com (see settings.functions.ts
+// pollFabricRoadmap) — never routed through the claims/curator pipeline, so there is no
+// bundled-content fallback here; an empty list just means nobody has synced yet.
+export const listRoadmapItems = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const sb = await admin();
+    // roadmap_items isn't in the generated Database type yet (regenerate after applying the
+    // migration); `as any` here matches the same escape hatch used for search_atlas below.
+    const { data, error } = await (sb as any)
+      .from("roadmap_items")
+      .select(
+        "id,guid,title,link,status,release_type,target_release,categories,description_html,pub_date,capability_id",
+      )
+      .order("pub_date", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []) as RoadmapItem[];
+  } catch {
+    return [] as RoadmapItem[];
+  }
+});
+
 export const listDiagrams = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const sb = await admin();

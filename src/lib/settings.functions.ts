@@ -858,6 +858,12 @@ function entryLink(block: string): string {
   return href ? decodeXmlEntities(href[1]) : "";
 }
 
+// Repeated sibling <category> tags — tagText only grabs the first, roadmap items need all.
+function tagTextAll(block: string, tag: string): string[] {
+  const matches = block.matchAll(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "gi"));
+  return [...matches].map((m) => decodeXmlEntities(m[1])).filter(Boolean);
+}
+
 function parseFeed(xml: string): RssEntry[] {
   const entries: RssEntry[] = [];
   // RSS <item> and Atom <entry>, in document order.
@@ -1020,6 +1026,146 @@ export const pollRssFeeds = createServerFn({ method: "POST" })
     return { ok: true as const, results, totalQueued };
   });
 
+// --- Fabric roadmap sync ----------------------------------------------------
+// Syncs public.roadmap_items verbatim from the fixed Microsoft Fabric public roadmap feed.
+// Unlike RSS blog subscriptions, this never routes through the claims/curator pipeline — the
+// feed is already structured (status, release type, target date) and single-sourced, so we
+// mirror it directly. Never paraphrased, never embellished: "never invent roadmap claims."
+
+const FABRIC_ROADMAP_FEED_URL = "https://www.fabric-gps.com/rss";
+
+const ROADMAP_STATUS_CATEGORIES: Record<string, string> = {
+  planned: "planned",
+  "rolling out": "rolling_out",
+  launched: "launched",
+};
+
+function deriveRoadmapStatus(categories: string[]): string {
+  for (const c of categories) {
+    const mapped = ROADMAP_STATUS_CATEGORIES[c.trim().toLowerCase()];
+    if (mapped) return mapped;
+  }
+  return "planned";
+}
+
+function deriveReleaseType(categories: string[]): string {
+  return categories.find((c) => !(c.trim().toLowerCase() in ROADMAP_STATUS_CATEGORIES)) ?? "";
+}
+
+// Pulls "Planned General availability Date: Q4 2026" (or similar) out of the CDATA description.
+function parseTargetRelease(descriptionHtml: string): string {
+  const m = descriptionHtml.match(/Planned[^:<]*Date:<\/strong>\s*([^<]+)/i);
+  return m ? m[1].trim() : "";
+}
+
+export const pollFabricRoadmap = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const nowIso = new Date().toISOString();
+
+    try {
+      const res = await fetch(FABRIC_ROADMAP_FEED_URL, {
+        headers: {
+          accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
+        },
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const xml = await res.text();
+
+      const blocks = xml.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
+      let created = 0;
+      let updated = 0;
+
+      for (const block of blocks) {
+        const link = entryLink(block);
+        const guid = tagText(block, "guid") || link;
+        if (!guid) continue;
+        const title = tagText(block, "title");
+        const pubDateRaw = tagText(block, "pubDate");
+        const pubDate = pubDateRaw ? new Date(pubDateRaw) : null;
+        const categories = tagTextAll(block, "category");
+        const descriptionHtml = tagText(block, "description");
+
+        const row = {
+          guid,
+          title,
+          link,
+          status: deriveRoadmapStatus(categories),
+          release_type: deriveReleaseType(categories),
+          target_release: parseTargetRelease(descriptionHtml),
+          categories,
+          description_html: descriptionHtml,
+          pub_date: pubDate && !Number.isNaN(pubDate.getTime()) ? pubDate.toISOString() : null,
+          last_seen_at: nowIso,
+        };
+
+        const { data: existing } = await sb
+          .from("roadmap_items")
+          .select("id")
+          .eq("guid", guid)
+          .maybeSingle();
+
+        if (existing) {
+          const { error } = await sb.from("roadmap_items").update(row).eq("guid", guid);
+          if (error) throw new Error(error.message);
+          updated++;
+        } else {
+          const { error } = await sb.from("roadmap_items").insert(row);
+          if (error) throw new Error(error.message);
+          created++;
+        }
+      }
+
+      await sb
+        .from("roadmap_sync_state")
+        .update({ last_polled_at: nowIso, error_count: 0, last_error: "" })
+        .eq("id", true);
+
+      await recordAudit(context.userId, "roadmap.polled", "roadmap_sync_state", "", {
+        found: blocks.length,
+        created,
+        updated,
+      });
+      return { ok: true as const, found: blocks.length, created, updated, error: null };
+    } catch (err) {
+      const reason = (err as Error).message.slice(0, 200);
+      const { data: cur } = await sb
+        .from("roadmap_sync_state")
+        .select("error_count")
+        .eq("id", true)
+        .maybeSingle();
+      await sb
+        .from("roadmap_sync_state")
+        .update({
+          last_polled_at: nowIso,
+          error_count: (cur?.error_count ?? 0) + 1,
+          last_error: reason,
+        })
+        .eq("id", true);
+      await recordAudit(context.userId, "roadmap.poll_failed", "roadmap_sync_state", "", {
+        error: reason,
+      });
+      return { ok: false as const, found: 0, created: 0, updated: 0, error: reason };
+    }
+  });
+
+export const getRoadmapSyncStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { data, error } = await sb
+      .from("roadmap_sync_state")
+      .select("last_polled_at,error_count,last_error")
+      .eq("id", true)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    const { count } = await sb.from("roadmap_items").select("id", { count: "exact", head: true });
+    return { status: data ?? null, itemCount: count ?? 0 };
+  });
+
 // Publish a single agent-authored content/*.json payload (pasted by an admin in Settings) into
 // the KB. Laptop agents write files keylessly; this server-side step (service role) persists them.
 export const publishFromFile = createServerFn({ method: "POST" })
@@ -1049,6 +1195,28 @@ export const publishFromFile = createServerFn({ method: "POST" })
       (result as { slug?: string }).slug ?? "",
     );
     return { ok: true as const, result };
+  });
+
+// Publish every content/sources, content/articles, content/designs, and content/diagrams file
+// bundled into this deploy, in dependency order (sources -> diagrams -> articles/designs), via
+// the same versioned publishFromFile path used above. Skips anything unchanged since the last
+// publish unless force=true. This is the one-click alternative to pasting each file by hand.
+export const publishAllBundled = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { force?: boolean } | undefined) => d ?? {})
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { publishAllBundled: publishAllBundledRecord } =
+      await import("@/lib/atlas-publish-all.server");
+    const summary = await publishAllBundledRecord(sb, { force: data.force });
+    await recordAudit(context.userId, "content.published_all", "content", "", {
+      published: summary.published,
+      skipped: summary.skipped,
+      blocked: summary.blocked,
+      failed: summary.failed,
+    });
+    return { ok: true as const, summary };
   });
 
 export const validateContent = createServerFn({ method: "POST" })

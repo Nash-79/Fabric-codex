@@ -108,6 +108,30 @@ files to catch git-tracked drafts that are not yet published.
    - article/design validation: validation-reviewer after draft, server validation after publish;
    - migration/content invariants: migration-validator after publishing sources;
    - help changes: docs-author only if the UI/workflow docs changed.
+8. **Build the publish checklist.** You cannot publish (the service-role key is sealed — no local
+   agent or script can write to Supabase), but you can tell the human exactly what is ready and in
+   what order. There are two independent signals — use both, they catch different things:
+   - **New vs. Supabase:** a content file's slug has no matching **active** row in Supabase
+     (`sources` by slug; `content_items` by slug+kind for articles/designs) -> it has never been
+     published -> **ready to publish (new)**. Note: `sources` has no `updated_at` column — slug
+     presence/absence is the only signal there, do not attempt a freshness comparison on it.
+   - **Locally edited vs. last commit:** run `git status --short content/sources/ content/articles/
+     content/designs/ content/diagrams/` (or `git diff --stat` for the same paths) to find files
+     modified since the last commit. A modified file whose slug **already exists** in Supabase is a
+     **re-publish (update)** candidate, not a no-op — Settings -> Publish always creates a new
+     version on top of the active one, so this is exactly what that flow is for. Do not skip a
+     slug just because Supabase already has a row for it.
+   - For each article/design candidate (new or updated), check its `cited_source_keys` /
+     `content_item_sources` against the sources fetch; if any cited source slug is not yet
+     published -> **blocked on its sources**, not ready.
+   - `content/diagrams/*.svg`/`.mmd` present in `content/diagrams/assets.json` but absent from the
+     `diagrams` fetch -> **ready to register** (bundled with whichever article/design embeds them,
+     not published standalone).
+   - Sequence strictly: **sources -> diagrams -> articles/designs that cite them**, since an
+     article citing an unpublished source or embedding an unregistered diagram fails validation.
+   - Never mark something "ready" if it fails a guardrail from step 5 (no verified claims, missing
+     embedded diagram on disk, pending claims still open) — list it under blocked instead, with the
+     specific blocker.
 
 ## Human gates
 
@@ -138,6 +162,16 @@ Produce a concise orchestration report:
    diagrams, stale RSS, or validation gaps.
 6. **Next commands:** exact Claude commands to run, in order, and any Settings action required
    before the command.
+7. **Publish checklist:** the ordered, ready-to-paste list from step 8 of Method. Lead with:
+   after the branch is deployed, **Settings -> Publish -> "Publish all"** republishes every
+   bundled source/diagram/article/design that changed since its last publish, in the correct
+   order, in one click — this is the default recommendation whenever more than one or two files
+   are ready. Follow with the itemized per-file list (`Settings -> Publish -> <Source|Article|
+   Design> -> paste content/<dir>/<file>.json`) only for cases "Publish all" cannot cover: a
+   single urgent file before the next deploy, or a lesson (not bundled by "Publish all" yet).
+   Mark anything not yet ready as **Blocked** with the one-line reason (e.g. "waiting on
+   content/sources/x.json to publish first", "2 pending claims to verify", "missing diagram
+   content/diagrams/y.svg on disk") instead of listing a Settings action for it.
 
 If the user explicitly asks you to execute the plan, do only the next safe local step and stop at
 the first human gate.
