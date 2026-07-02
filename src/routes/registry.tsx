@@ -36,7 +36,7 @@ function RegistryPage() {
   const [gapsOnly, setGapsOnly] = useState(false);
   const [q, setQ] = useState("");
 
-  const rows = (data ?? []) as RegistryCoverageRow[];
+  const rows = useMemo(() => (data ?? []) as RegistryCoverageRow[], [data]);
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
@@ -142,8 +142,128 @@ function RegistryPage() {
             <CapabilityCard key={r.id} row={r} />
           ))}
         </div>
+
+        {!isLoading && filtered.length > 0 && <DepthHeatmap rows={filtered} />}
       </main>
     </div>
+  );
+}
+
+// Sequential heat steps (one hue, light→dark; dark mode picks its own steps against the dark
+// surface). Text/background pairs are contrast-checked: every ink is ≥ 5.4:1 on its cell.
+const HEAT_BUCKETS = [
+  {
+    max: 0,
+    cls: "bg-muted/40 text-muted-foreground/60",
+    swatch: "bg-muted/40",
+    label: "0",
+  },
+  {
+    max: 2,
+    cls: "bg-teal-100 text-teal-950 dark:bg-teal-950 dark:text-teal-200",
+    swatch: "bg-teal-100 dark:bg-teal-950",
+    label: "1–2",
+  },
+  {
+    max: 5,
+    cls: "bg-teal-300 text-teal-950 dark:bg-teal-800 dark:text-teal-50",
+    swatch: "bg-teal-300 dark:bg-teal-800",
+    label: "3–5",
+  },
+  {
+    max: 9,
+    cls: "bg-teal-500 text-teal-950 dark:bg-teal-500 dark:text-teal-950",
+    swatch: "bg-teal-500",
+    label: "6–9",
+  },
+  {
+    max: Infinity,
+    cls: "bg-teal-700 text-white dark:bg-teal-300 dark:text-teal-950",
+    swatch: "bg-teal-700 dark:bg-teal-300",
+    label: "10+",
+  },
+] as const;
+
+const heatFor = (count: number) => HEAT_BUCKETS.find((b) => count <= b.max)!;
+
+// Depth-coverage matrix: capabilities × L1–L5 as a real table (accessible by construction),
+// cell shade = verified knowledge density. This is the "where is the atlas thin?" infographic —
+// the per-card meters show presence, this shows magnitude across the whole spine at once.
+function DepthHeatmap({ rows }: { rows: RegistryCoverageRow[] }) {
+  const sorted = [...rows].sort((a, b) => b.claim_count - a.claim_count);
+  return (
+    <section className="mt-10">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight">Depth coverage matrix</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Claims per capability and depth level — the darker the cell, the deeper the grounded
+            knowledge.
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+          {HEAT_BUCKETS.map((b) => (
+            <span key={b.label} className="flex items-center gap-1">
+              <span
+                className={`inline-block h-3 w-3 rounded-sm border border-border/60 ${b.swatch}`}
+                aria-hidden="true"
+              />
+              {b.label}
+            </span>
+          ))}
+        </div>
+      </div>
+      <div className="mt-4 overflow-x-auto rounded-lg border border-border">
+        <table className="w-full border-collapse text-sm">
+          <thead className="bg-muted/60">
+            <tr>
+              <th className="px-3 py-2 text-left font-semibold text-foreground">Capability</th>
+              {([1, 2, 3, 4, 5] as const).map((d) => (
+                <th
+                  key={d}
+                  title={depthMeta[d].label}
+                  className="w-16 px-2 py-2 text-center font-semibold text-foreground"
+                >
+                  L{d}
+                </th>
+              ))}
+              <th className="w-20 px-3 py-2 text-right font-semibold text-foreground">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((r) => (
+              <tr key={r.id} className="border-t border-border/60">
+                <td className="px-3 py-1.5">
+                  <Link
+                    to="/registry/$id"
+                    params={{ id: r.id }}
+                    className="text-foreground hover:text-teal-600 hover:underline dark:hover:text-teal-300"
+                  >
+                    {r.name}
+                  </Link>
+                </td>
+                {([1, 2, 3, 4, 5] as const).map((d) => {
+                  const count = r.depth_coverage[d] ?? 0;
+                  return (
+                    <td key={d} className="p-0.5">
+                      <div
+                        title={`${r.name} · ${depthMeta[d].label}: ${count} claim${count === 1 ? "" : "s"}`}
+                        className={`flex h-8 items-center justify-center rounded-sm text-xs font-medium tabular-nums ${heatFor(count).cls}`}
+                      >
+                        {count}
+                      </div>
+                    </td>
+                  );
+                })}
+                <td className="px-3 py-1.5 text-right text-xs tabular-nums text-muted-foreground">
+                  {r.claim_count}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 

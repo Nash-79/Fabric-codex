@@ -6,7 +6,6 @@ import { DepthBadge, TierBadge } from "@/components/Badges";
 import { FabricMark } from "@/components/FabricMark";
 import { SiteHeader } from "@/components/SiteHeader";
 import {
-  listBlogs,
   listCapabilities,
   listClaimCountsByCapability,
   listClaimsByCapability,
@@ -18,7 +17,6 @@ import {
 import { accent } from "@/lib/fabric-theme";
 
 const topicsQO = queryOptions({ queryKey: ["home-topics"], queryFn: () => listTopics() });
-const blogsQO = queryOptions({ queryKey: ["home-blogs"], queryFn: () => listBlogs() });
 const sourcesQO = queryOptions({ queryKey: ["home-sources"], queryFn: () => listSources() });
 const capabilitiesQO = queryOptions({
   queryKey: ["home-capabilities"],
@@ -95,7 +93,6 @@ export const Route = createFileRoute("/")({
   loader: ({ context }) =>
     Promise.all([
       context.queryClient.ensureQueryData(topicsQO),
-      context.queryClient.ensureQueryData(blogsQO),
       context.queryClient.ensureQueryData(sourcesQO),
       context.queryClient.ensureQueryData(capabilitiesQO),
       context.queryClient.ensureQueryData(claimCountsQO),
@@ -109,22 +106,13 @@ export const Route = createFileRoute("/")({
 function Landing() {
   const [
     { data: topics },
-    { data: blogs },
     { data: sources },
     { data: capabilities },
     { data: claimCounts },
     { data: diagrams },
     { data: contentItems },
   ] = useSuspenseQueries({
-    queries: [
-      topicsQO,
-      blogsQO,
-      sourcesQO,
-      capabilitiesQO,
-      claimCountsQO,
-      diagramsQO,
-      contentItemsQO,
-    ],
+    queries: [topicsQO, sourcesQO, capabilitiesQO, claimCountsQO, diagramsQO, contentItemsQO],
   });
   const [selectedCapability, setSelectedCapability] = useState("direct-lake");
   const [depth, setDepth] = useState<number | "all">("all");
@@ -182,7 +170,11 @@ function Landing() {
               </p>
               <div className="mt-6 grid grid-cols-3 gap-2">
                 <Metric icon={Network} label="Topics" value={childTopics.length} />
-                <Metric icon={BookOpen} label="Articles" value={blogs.length} />
+                <Metric
+                  icon={BookOpen}
+                  label="Articles"
+                  value={(contentItems ?? []).filter((i: any) => i.kind === "article").length}
+                />
                 <Metric icon={Database} label="Sources" value={sources.length} />
               </div>
             </div>
@@ -214,6 +206,7 @@ function Landing() {
                     return (
                       <button
                         key={capability.id}
+                        type="button"
                         onClick={() => setSelectedCapability(capability.id)}
                         className={`min-h-24 rounded-md border p-3 text-left transition ${
                           active
@@ -293,6 +286,7 @@ function Landing() {
                 <div className="flex w-full flex-wrap gap-2 md:w-auto">
                   <select
                     value={depth}
+                    aria-label="Filter by depth level"
                     onChange={(event) =>
                       setDepth(event.target.value === "all" ? "all" : Number(event.target.value))
                     }
@@ -307,6 +301,7 @@ function Landing() {
                   </select>
                   <select
                     value={tier}
+                    aria-label="Filter by trust tier"
                     onChange={(event) =>
                       setTier(event.target.value === "all" ? "all" : Number(event.target.value))
                     }
