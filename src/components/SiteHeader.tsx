@@ -27,14 +27,14 @@ const KNOWLEDGE: ReadonlyArray<NavLink> = [
   { to: "/registry", label: "Capability Registry", hint: "The spine — coverage per capability" },
   { to: "/sources", label: "Sources", hint: "Graded, cited source library" },
   { to: "/learn", label: "Learn", hint: "Tiered lessons (Beginner→Expert)" },
-  { to: "/blogs", label: "Blog", hint: "Cited solution architectures, lessons and articles" },
+  { to: "/blogs", label: "Blogs", hint: "Cited articles, architectures, and lessons" },
   { to: "/roadmap", label: "Roadmap", hint: "What's coming to Microsoft Fabric" },
 ];
 
+// Advisor lives in the right-cluster CTA button (and the mobile sheet) — not duplicated here.
 const BUILD: ReadonlyArray<NavLink> = [
-  { to: "/advisor", label: "Advisor", hint: "Ask a source-grounded question" },
   { to: "/search", label: "Search", hint: "Search across the knowledge base" },
-  { to: "/author", label: "Author", hint: "Compose & contribute content" },
+  { to: "/author", label: "Author", hint: "How authoring works" },
 ];
 
 export function SiteHeader() {
@@ -179,6 +179,11 @@ export function SiteHeader() {
               </div>
               <div className="px-2 py-3">
                 <MobileSection links={PRIMARY} />
+                <MobileSection
+                  links={[
+                    { to: "/advisor", label: "Advisor", hint: "Ask a source-grounded question" },
+                  ]}
+                />
                 <MobileGroup label="Knowledge" links={KNOWLEDGE} />
                 <MobileGroup label="Build" links={BUILD} />
                 <div className="mt-4 border-t border-border pt-3 space-y-1 px-2">

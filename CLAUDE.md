@@ -183,7 +183,7 @@ it as a generated asset (flipping the topic from _gap_ to _covered_ in the cover
 
 **Every article carries a mandatory `## Internals` section — never omitted, only placeholdered.**
 Body content is a single markdown blob (`content_items.body_md`); the reading-view ToC is derived
-client-side by regex over `##`/`###` headings (`src/components/ContentTocSidebar.tsx`), so the
+client-side by regex over `##` headings (`src/components/ContentTocSidebar.tsx`), so the
 heading text below is a hard, exact-match convention, not a schema field:
 
 - Fixed sub-headings, in order: `### Architecture & design`, `### How it works internally`,
@@ -207,8 +207,10 @@ heading text below is a hard, exact-match convention, not a schema field:
 ## Conventions
 
 - Python: type hints, `ruff`/`black` clean, no bare excepts. Tests in `backend/tests`.
-- API calls from agents go through the local backend (`http://localhost:8000`) via curl, not
-  direct DB writes — the backend owns versioning and validation invariants.
+- Agents read the KB directly from Supabase with the anon key (public RLS) and write only
+  content/\*.json + content/diagrams/\* to git — never direct DB writes. Publishing happens in
+  the Lovable app (Settings → Publish), whose server functions own the versioning and
+  validation invariants.
 - When you change `models.py`, update `docs/data-model.md` in the same commit.
 - When a content-type or endpoint rename lands (e.g. blog→article), grep
   `.claude/agents/`, `.claude/commands/`, `AGENTS.md`, and `docs/*.md` for the old term in the

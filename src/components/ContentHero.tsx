@@ -22,6 +22,8 @@ export function ContentHero({
     body_md?: string | null;
     depth_levels?: number[] | null;
     tags?: string[] | null;
+    updated_at?: string | null;
+    version?: number | null;
   };
   citationCount: number;
   diagramCount: number;
@@ -50,6 +52,20 @@ export function ContentHero({
       </h1>
 
       <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        {item.updated_at && (
+          <>
+            <time dateTime={item.updated_at}>
+              Updated{" "}
+              {new Date(item.updated_at).toLocaleDateString(undefined, {
+                day: "numeric",
+                month: "long",
+                year: "numeric",
+              })}
+            </time>
+            {(item.version ?? 1) > 1 && <span>(v{item.version})</span>}
+            <span>·</span>
+          </>
+        )}
         <span>{readingTime(item.body_md ?? "")} min read</span>
         <span>·</span>
         <span>{citationCount} sources</span>

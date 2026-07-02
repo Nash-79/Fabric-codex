@@ -37,7 +37,10 @@ function HelpPage() {
         )}
         <div className="mt-8 space-y-12">
           {docs.map((d) => (
-            <article key={d.slug} className="prose prose-invert max-w-none prose-a:text-teal-300">
+            <article
+              key={d.slug}
+              className="prose dark:prose-invert max-w-none prose-a:text-teal-600 dark:prose-a:text-teal-300"
+            >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{d.body_md}</ReactMarkdown>
             </article>
           ))}

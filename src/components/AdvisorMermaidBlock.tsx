@@ -103,7 +103,7 @@ export function AdvisorMermaidBlock({ code }: { code: string }) {
     <div className="not-prose my-4 rounded-lg border border-border bg-card overflow-hidden">
       <div className="flex items-center justify-between border-b border-border bg-muted/50 px-3 py-1.5">
         <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Solution Architecture Diagram
+          Diagram
         </span>
         <button
           type="button"

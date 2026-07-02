@@ -12,12 +12,12 @@ export const Route = createFileRoute("/roadmap")({
       {
         name: "description",
         content:
-          "What's coming to Microsoft Fabric, synced verbatim from the public Fabric roadmap — never invented, never paraphrased.",
+          "What's coming to Microsoft Fabric, synced verbatim from the fabric-gps.com roadmap feed — never invented, never paraphrased.",
       },
       { property: "og:title", content: "Roadmap — Fabric Atlas" },
       {
         property: "og:description",
-        content: "The Microsoft Fabric public roadmap, synced item-for-item.",
+        content: "The Microsoft Fabric public roadmap, synced item-for-item via fabric-gps.com.",
       },
     ],
   }),
@@ -85,8 +85,17 @@ function RoadmapPage() {
         </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Roadmap</h1>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-          Synced verbatim from the Microsoft Fabric public roadmap — every item below mirrors what
-          Microsoft has published, never inferred or embellished.
+          Synced verbatim from{" "}
+          <a
+            href="https://www.fabric-gps.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-teal-600 hover:underline dark:text-teal-300"
+          >
+            fabric-gps.com
+          </a>
+          , a community feed of the Microsoft Fabric public roadmap — every item below mirrors what
+          the feed publishes, never inferred or embellished.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -116,12 +125,8 @@ function RoadmapPage() {
           </select>
         </div>
 
-        {isLoading && (
-          <div className="mt-8 text-sm text-muted-foreground">Loading roadmap…</div>
-        )}
-        {error && (
-          <div className="mt-8 text-sm text-rose-300">{(error as Error).message}</div>
-        )}
+        {isLoading && <div className="mt-8 text-sm text-muted-foreground">Loading roadmap…</div>}
+        {error && <div className="mt-8 text-sm text-rose-300">{(error as Error).message}</div>}
         {!isLoading && items.length === 0 && (
           <div className="mt-8 rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             No roadmap items synced yet.
@@ -160,9 +165,7 @@ function RoadmapPage() {
                               {item.release_type}
                             </span>
                           )}
-                          <h3 className="text-base font-semibold text-foreground">
-                            {item.title}
-                          </h3>
+                          <h3 className="text-base font-semibold text-foreground">{item.title}</h3>
                         </div>
                         {item.target_release && (
                           <span className="shrink-0 text-xs text-muted-foreground">

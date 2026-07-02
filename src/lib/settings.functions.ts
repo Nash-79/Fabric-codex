@@ -118,23 +118,33 @@ export const getSettingsOverview = createServerFn({ method: "GET" })
   });
 
 async function adminStats(sb: any) {
+  // Content lives in content_items (kind = article | design | lesson) — the old `blogs`
+  // table is retired, so counting it here silently reported 0 forever.
   const tables = [
     "topics",
     "capabilities",
     "sources",
     "claims",
-    "blogs",
     "diagrams",
     "help_docs",
     "queue_items",
   ] as const;
+  const kinds = ["article", "design", "lesson"] as const;
   const counts: Record<string, number> = {};
-  await Promise.all(
-    tables.map(async (t) => {
+  await Promise.all([
+    ...tables.map(async (t) => {
       const { count } = await sb.from(t).select("*", { count: "exact", head: true });
       counts[t] = count ?? 0;
     }),
-  );
+    ...kinds.map(async (kind) => {
+      const { count } = await sb
+        .from("content_items")
+        .select("*", { count: "exact", head: true })
+        .eq("kind", kind)
+        .eq("active", true);
+      counts[`${kind}s`] = count ?? 0;
+    }),
+  ]);
   return counts;
 }
 

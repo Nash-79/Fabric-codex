@@ -5,6 +5,7 @@ import { searchAll } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Input } from "@/components/ui/input";
 import { DepthBadge, TierBadge } from "@/components/Badges";
+import { KindBadge } from "@/components/KindBadge";
 
 export const Route = createFileRoute("/search")({
   head: () => ({ meta: [{ title: "Search — Fabric Atlas" }] }),
@@ -67,16 +68,19 @@ function SearchPage() {
                 </Link>
               ))}
             </Section>
-            <Section title={`Articles (${results.blogs.length})`}>
-              {results.blogs.map((b) => (
+            <Section title={`Content (${results.blogs.length})`}>
+              {results.blogs.map((b: any) => (
                 <Link
-                  key={b.slug}
-                  to="/blog/$slug"
-                  params={{ slug: b.slug }}
+                  key={`${b.kind ?? "article"}-${b.slug}`}
+                  to="/blogs/$kind/$slug"
+                  params={{ kind: b.kind ?? "article", slug: b.slug }}
                   className="block rounded-md p-2 hover:bg-accent"
                 >
-                  <div className="text-sm font-medium text-foreground">{b.title}</div>
-                  <div className="text-xs text-muted-foreground">{b.summary}</div>
+                  <div className="flex items-center gap-2">
+                    <KindBadge kind={b.kind ?? "article"} />
+                    <span className="text-sm font-medium text-foreground">{b.title}</span>
+                  </div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">{b.summary}</div>
                 </Link>
               ))}
             </Section>

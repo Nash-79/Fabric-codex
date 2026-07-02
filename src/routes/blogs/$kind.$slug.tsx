@@ -106,9 +106,21 @@ function ContentItemPage() {
             const el = document.getElementById(targetId);
             if (el) {
               el.scrollIntoView({ behavior: "smooth", block: "center" });
-              el.classList.add("ring-2", "ring-teal-400", "ring-offset-2", "ring-offset-background", "duration-500", "transition-all");
+              el.classList.add(
+                "ring-2",
+                "ring-teal-400",
+                "ring-offset-2",
+                "ring-offset-background",
+                "duration-500",
+                "transition-all",
+              );
               setTimeout(() => {
-                el.classList.remove("ring-2", "ring-teal-400", "ring-offset-2", "ring-offset-background");
+                el.classList.remove(
+                  "ring-2",
+                  "ring-teal-400",
+                  "ring-offset-2",
+                  "ring-offset-background",
+                );
               }, 2500);
             }
           }, 150);
@@ -132,11 +144,13 @@ function ContentItemPage() {
           <TopicTree topics={topics} activeSlug={item.topic_slug ?? undefined} />
         </div>
 
-        <div className={`mx-auto grid w-full gap-8 transition-all duration-300 ${
-          citationsOpen 
-            ? "max-w-7xl lg:grid-cols-[220px_1fr_300px]" 
-            : "max-w-5xl lg:grid-cols-[220px_1fr]"
-        }`}>
+        <div
+          className={`mx-auto grid w-full gap-8 transition-all duration-300 ${
+            citationsOpen
+              ? "max-w-7xl lg:grid-cols-[220px_1fr_300px]"
+              : "max-w-5xl lg:grid-cols-[220px_1fr]"
+          }`}
+        >
           <aside className="hidden lg:block">
             <div className="sticky top-20 space-y-4">
               <Link to="/blogs" className="text-xs text-muted-foreground hover:text-foreground">
@@ -175,7 +189,11 @@ function ContentItemPage() {
               hasPreview={hasPreview}
             />
 
-            <ContentItemArticle bodyMd={item.body_md ?? ""} diagramMeta={diagramMeta} />
+            <ContentItemArticle
+              bodyMd={item.body_md ?? ""}
+              diagramMeta={diagramMeta}
+              citations={citations}
+            />
           </article>
 
           <aside className={`print-sources ${citationsOpen ? "block" : "hidden print:block"}`}>

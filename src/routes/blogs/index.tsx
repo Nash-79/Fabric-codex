@@ -63,6 +63,23 @@ function ContentListPage() {
     });
   }, [data, kind]);
 
+  // Chronological reading order: newest first (the server already sorts by updated_at desc),
+  // grouped under month headings so the timeline reads at a glance.
+  const groupedItems = useMemo(() => {
+    const groups: { label: string; items: any[] }[] = [];
+    for (const item of filteredItems) {
+      const d = item.updated_at ? new Date(item.updated_at) : null;
+      const label =
+        d && !Number.isNaN(d.getTime())
+          ? d.toLocaleDateString(undefined, { month: "long", year: "numeric" })
+          : "Undated";
+      const last = groups[groups.length - 1];
+      if (last && last.label === label) last.items.push(item);
+      else groups.push({ label, items: [item] });
+    }
+    return groups;
+  }, [filteredItems]);
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
@@ -96,6 +113,7 @@ function ContentListPage() {
           <select
             value={topicSlug}
             onChange={(e) => setTopicSlug(e.target.value)}
+            aria-label="Filter by topic"
             className="h-8 rounded-md border border-border bg-card px-2 text-xs text-foreground"
           >
             <option value="">All topics</option>
@@ -107,34 +125,63 @@ function ContentListPage() {
           </select>
         </div>
 
-        <div className="mt-8 space-y-3">
+        <div className="mt-8 space-y-8">
           {isLoading && <div className="text-sm text-muted-foreground">Loading…</div>}
-          {error && <div className="text-sm text-rose-300">{(error as Error).message}</div>}
+          {error && (
+            <div className="text-sm text-rose-600 dark:text-rose-300">
+              {(error as Error).message}
+            </div>
+          )}
           {!isLoading && filteredItems.length === 0 && (
             <div className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
               No content matches these filters yet.
             </div>
           )}
-          {filteredItems.map((item: any) => (
-            <Link
-              key={`${item.kind}-${item.slug}`}
-              to="/blogs/$kind/$slug"
-              params={{ kind: item.kind, slug: item.slug }}
-              className="block rounded-lg border border-border bg-card p-5 transition hover:border-border hover:bg-accent"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <KindBadge kind={item.kind} />
-                  <h2 className="text-lg font-semibold text-foreground">{item.title}</h2>
-                </div>
-                {topicName(item.topic_slug) && (
-                  <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {topicName(item.topic_slug)}
-                  </span>
-                )}
+          {groupedItems.map((group) => (
+            <section key={group.label}>
+              <h2 className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                {group.label}
+                <span className="h-px flex-1 bg-border" aria-hidden="true" />
+              </h2>
+              <div className="mt-3 space-y-3">
+                {group.items.map((item: any) => (
+                  <Link
+                    key={`${item.kind}-${item.slug}`}
+                    to="/blogs/$kind/$slug"
+                    params={{ kind: item.kind, slug: item.slug }}
+                    className="block rounded-lg border border-border bg-card p-5 transition hover:border-border hover:bg-accent"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <KindBadge kind={item.kind} />
+                        <h3 className="text-lg font-semibold text-foreground">{item.title}</h3>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        {topicName(item.topic_slug) && (
+                          <span className="rounded-full border border-border px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            {topicName(item.topic_slug)}
+                          </span>
+                        )}
+                        {item.updated_at && (
+                          <time
+                            dateTime={item.updated_at}
+                            className="text-xs text-muted-foreground"
+                          >
+                            {new Date(item.updated_at).toLocaleDateString(undefined, {
+                              day: "numeric",
+                              month: "short",
+                            })}
+                          </time>
+                        )}
+                      </div>
+                    </div>
+                    {item.summary && (
+                      <p className="mt-2 text-sm text-muted-foreground">{item.summary}</p>
+                    )}
+                  </Link>
+                ))}
               </div>
-              {item.summary && <p className="mt-2 text-sm text-muted-foreground">{item.summary}</p>}
-            </Link>
+            </section>
           ))}
         </div>
       </main>

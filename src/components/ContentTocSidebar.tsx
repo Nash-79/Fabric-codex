@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
+import { slugifyHeading, stripMarkdownInline } from "@/lib/heading-utils";
 
 export type TocHeading = { title: string; id: string };
 
 export function useTocHeadings(bodyMd: string): TocHeading[] {
   return useMemo(
     () =>
-      [...bodyMd.matchAll(/^##\s+(.+)$/gm)].map((match) => ({
-        title: match[1],
-        id: match[1]
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-|-$/g, ""),
-      })),
+      [...bodyMd.matchAll(/^##\s+(.+)$/gm)].map((match) => {
+        // Strip inline markdown first so the slug matches the one the article renderer
+        // derives from the rendered DOM text (links/code/emphasis markers don't render).
+        const title = stripMarkdownInline(match[1]);
+        return { title, id: slugifyHeading(title) };
+      }),
     [bodyMd],
   );
 }

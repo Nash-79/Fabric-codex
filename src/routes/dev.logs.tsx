@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 
@@ -22,6 +22,11 @@ type LogsResponse = {
 };
 
 export const Route = createFileRoute("/dev/logs")({
+  // Dev-only tooling: the server fn already returns nothing in production, but the page
+  // itself shouldn't be routable there either.
+  beforeLoad: () => {
+    if (import.meta.env.PROD) throw notFound();
+  },
   head: () => ({ meta: [{ title: "Dev logs — Fabric Atlas" }] }),
   component: LogViewer,
 });

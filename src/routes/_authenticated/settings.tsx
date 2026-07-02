@@ -94,18 +94,40 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 const roleOptions: AppRole[] = ["user", "editor", "admin"];
 
-const nav = [
-  { id: "users", label: "Users", icon: UserCog },
-  { id: "content", label: "Content", icon: Database },
-  { id: "claims", label: "Claims", icon: ListChecks },
-  { id: "blogs", label: "Articles", icon: BookOpen },
-  { id: "queue", label: "Queue", icon: FileText },
-  { id: "publish", label: "Publish", icon: Upload },
-  { id: "diagrams", label: "Diagrams", icon: ImageIcon },
-  { id: "rss", label: "RSS Feeds", icon: Rss },
-  { id: "roadmap", label: "Roadmap", icon: Milestone },
-  { id: "logs", label: "Logs", icon: Activity },
-  { id: "system", label: "System", icon: Gauge },
+// Eleven flat tabs were hard to scan — same panels, now grouped by what they manage:
+// People, the knowledge base, published content, the ingest→publish pipeline, and system.
+const navGroups = [
+  { label: "People", items: [{ id: "users", label: "Users", icon: UserCog }] },
+  {
+    label: "Knowledge",
+    items: [
+      { id: "content", label: "Content", icon: Database },
+      { id: "claims", label: "Claims", icon: ListChecks },
+    ],
+  },
+  {
+    label: "Published",
+    items: [
+      { id: "blogs", label: "Articles", icon: BookOpen },
+      { id: "diagrams", label: "Diagrams", icon: ImageIcon },
+    ],
+  },
+  {
+    label: "Pipeline",
+    items: [
+      { id: "rss", label: "RSS Feeds", icon: Rss },
+      { id: "queue", label: "Queue", icon: FileText },
+      { id: "publish", label: "Publish", icon: Upload },
+      { id: "roadmap", label: "Roadmap", icon: Milestone },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      { id: "logs", label: "Logs", icon: Activity },
+      { id: "system", label: "System", icon: Gauge },
+    ],
+  },
 ] as const;
 
 function SettingsPage() {
@@ -152,14 +174,22 @@ function SettingsPage() {
         </div>
         <div className="flex items-center gap-3">
           <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4">
-            {Object.entries(overview.data?.stats ?? {})
-              .slice(0, 4)
-              .map(([key, value]) => (
-                <div key={key} className="rounded-md border border-border bg-card px-3 py-2">
-                  <div className="text-muted-foreground">{key}</div>
-                  <div className="text-lg font-semibold">{value as number}</div>
+            {/* Stable, meaningful headline metrics — not "whichever four keys came first". */}
+            {(
+              [
+                ["sources", "Sources"],
+                ["claims", "Claims"],
+                ["articles", "Articles"],
+                ["queue_items", "Queue"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key} className="rounded-md border border-border bg-card px-3 py-2">
+                <div className="text-muted-foreground">{label}</div>
+                <div className="text-lg font-semibold">
+                  {(overview.data?.stats as Record<string, number> | undefined)?.[key] ?? "—"}
                 </div>
-              ))}
+              </div>
+            ))}
           </div>
           <Button
             size="sm"
@@ -176,15 +206,22 @@ function SettingsPage() {
 
       <Tabs defaultValue="users" className="mt-7 grid gap-5 md:grid-cols-[180px_minmax(0,1fr)]">
         <TabsList className="flex h-auto flex-row justify-start gap-1 overflow-x-auto rounded-md border border-border bg-card p-1 md:flex-col md:items-stretch md:overflow-visible">
-          {nav.map((item) => (
-            <TabsTrigger
-              key={item.id}
-              value={item.id}
-              className="justify-start gap-2 text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground"
-            >
-              <item.icon className="h-4 w-4" />
-              {item.label}
-            </TabsTrigger>
+          {navGroups.map((group) => (
+            <div key={group.label} className="flex flex-row gap-1 md:flex-col md:items-stretch">
+              <div className="hidden px-2 pb-0.5 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground md:block">
+                {group.label}
+              </div>
+              {group.items.map((item) => (
+                <TabsTrigger
+                  key={item.id}
+                  value={item.id}
+                  className="justify-start gap-2 text-muted-foreground data-[state=active]:bg-accent data-[state=active]:text-foreground"
+                >
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </TabsTrigger>
+              ))}
+            </div>
           ))}
         </TabsList>
 

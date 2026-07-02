@@ -311,9 +311,17 @@ export const listClaimsByCapability = createServerFn({ method: "GET" })
     const limit = Math.min(Math.max(data.limit ?? 500, 1), 500);
     try {
       const sb = await admin();
+      // A tier filter must use an inner join — `.eq("sources.tier", …)` on a plain embed only
+      // nulls the embedded source and still returns every claim row (a silent no-op filter).
+      const sourceJoin = data.tier
+        ? "sources!inner(slug,url,title,tier)"
+        : "sources(slug,url,title,tier)";
       let q = sb
         .from("claims")
-        .select("id,text,depth,type,tags,capability_id,sources(slug,url,title,tier)")
+        // Cast keeps the statically-inferred row type; `!inner` only changes join semantics.
+        .select(
+          `id,text,depth,type,tags,capability_id,${sourceJoin}` as "id,text,depth,type,tags,capability_id,sources(slug,url,title,tier)",
+        )
         .eq("active", true)
         .order("depth");
       if (data.capabilityId) q = q.eq("capability_id", data.capabilityId);
@@ -566,7 +574,9 @@ export const searchAll = createServerFn({ method: "GET" })
       for (const row of rows ?? []) {
         // search_atlas now returns kind = 'article' | 'design' | 'lesson' | 'claim' | 'source' | 'topic'.
         if (row.kind === "article" || row.kind === "design" || row.kind === "lesson") {
-          result.blogs.push(row.payload);
+          // Carry the kind on the payload — the search page needs it to link to
+          // /blogs/$kind/$slug (designs/lessons 404 on the article-only route).
+          result.blogs.push({ ...row.payload, kind: row.kind });
         }
         if (row.kind === "claim") result.claims.push(row.payload);
         if (row.kind === "source") result.sources.push(row.payload);
@@ -581,7 +591,8 @@ export const searchAll = createServerFn({ method: "GET" })
       blogs: bundledContent
         .blogs()
         .filter((blog) => `${blog.title} ${blog.summary} ${blog.body_md}`.toLowerCase().includes(q))
-        .slice(0, 15),
+        .slice(0, 15)
+        .map((blog) => ({ ...blog, kind: "article" as const })),
       claims: bundledContent
         .claims()
         .filter((claim) => `${claim.text} ${claim.capability_id}`.toLowerCase().includes(q))
@@ -671,31 +682,24 @@ export const adminStats = createServerFn({ method: "GET" })
       "diagrams",
       "help_docs",
     ] as const;
+    const kinds = ["article", "design", "lesson"] as const;
     const counts: Record<string, number> = {};
-    for (const t of tables) {
-      const { count } = await sb.from(t).select("*", { count: "exact", head: true });
-      counts[t] = count ?? 0;
-    }
     // content_items replaces blogs/designs/lessons as separate counted tables — break it down by
     // kind so the admin dashboard doesn't lose the per-kind counts it used to show as "blogs".
-    const { count: articleCount } = await sb
-      .from("content_items")
-      .select("*", { count: "exact", head: true })
-      .eq("kind", "article")
-      .eq("active", true);
-    const { count: designCount } = await sb
-      .from("content_items")
-      .select("*", { count: "exact", head: true })
-      .eq("kind", "design")
-      .eq("active", true);
-    const { count: lessonCount } = await sb
-      .from("content_items")
-      .select("*", { count: "exact", head: true })
-      .eq("kind", "lesson")
-      .eq("active", true);
-    counts.blogs = articleCount ?? 0; // deprecated alias kept for one release
-    counts.articles = articleCount ?? 0;
-    counts.designs = designCount ?? 0;
-    counts.lessons = lessonCount ?? 0;
+    await Promise.all([
+      ...tables.map(async (t) => {
+        const { count } = await sb.from(t).select("*", { count: "exact", head: true });
+        counts[t] = count ?? 0;
+      }),
+      ...kinds.map(async (kind) => {
+        const { count } = await sb
+          .from("content_items")
+          .select("*", { count: "exact", head: true })
+          .eq("kind", kind)
+          .eq("active", true);
+        counts[`${kind}s`] = count ?? 0;
+      }),
+    ]);
+    counts.blogs = counts.articles; // deprecated alias kept for one release
     return counts;
   });
