@@ -955,6 +955,92 @@ export type Database = {
           },
         ]
       }
+      roadmap_items: {
+        Row: {
+          capability_id: string | null
+          categories: string[]
+          created_at: string
+          description_html: string
+          first_seen_at: string
+          guid: string
+          id: string
+          last_seen_at: string
+          link: string
+          pub_date: string | null
+          release_type: string
+          status: string
+          target_release: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          capability_id?: string | null
+          categories?: string[]
+          created_at?: string
+          description_html?: string
+          first_seen_at?: string
+          guid: string
+          id?: string
+          last_seen_at?: string
+          link: string
+          pub_date?: string | null
+          release_type?: string
+          status?: string
+          target_release?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          capability_id?: string | null
+          categories?: string[]
+          created_at?: string
+          description_html?: string
+          first_seen_at?: string
+          guid?: string
+          id?: string
+          last_seen_at?: string
+          link?: string
+          pub_date?: string | null
+          release_type?: string
+          status?: string
+          target_release?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "roadmap_items_capability_id_fkey"
+            columns: ["capability_id"]
+            isOneToOne: false
+            referencedRelation: "capabilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      roadmap_sync_state: {
+        Row: {
+          error_count: number
+          id: boolean
+          last_error: string
+          last_polled_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          error_count?: number
+          id?: boolean
+          last_error?: string
+          last_polled_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          error_count?: number
+          id?: boolean
+          last_error?: string
+          last_polled_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       rss_subscriptions: {
         Row: {
           created_at: string
