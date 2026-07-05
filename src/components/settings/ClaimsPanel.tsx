@@ -255,6 +255,29 @@ export function ClaimsPanel({
           </Button>
         </DialogContent>
       </Dialog>
+      <Dialog open={confirmAllOpen} onOpenChange={setConfirmAllOpen}>
+        <DialogContent className="border-border bg-popover text-foreground sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verify every pending claim?</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              This will verify all {totalPending} active, pending claim(s) across every capability.
+              Each transition is logged to the claim-events audit trail and persists across
+              refreshes and redeploys.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmAllOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => bulkVerify.mutate({ scope: "all" })}
+              disabled={bulkVerify.isPending}
+            >
+              {bulkVerify.isPending ? "Verifying…" : `Verify all ${totalPending}`}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
