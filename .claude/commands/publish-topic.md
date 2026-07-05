@@ -39,7 +39,7 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
    commissioned diagram (architecture near the top, the decision/internals diagram inside
    `### How it works internally` under `## Internals`), not just the first. The article must
    carry a mandatory `## Internals` section with all three sub-headings (`Architecture &
-   design`, `How it works internally`, `Performance characteristics`) — grounded where L4/L5
+design`, `How it works internally`, `Performance characteristics`) — grounded where L4/L5
    claims exist, otherwise a labeled `*Coming soon*` placeholder plus a `content/queue.md`
    entry (never a silently omitted section). Then write the article file for publish.
 5. **Validate.** Use the **validation-reviewer** subagent over the new article; it reasons about

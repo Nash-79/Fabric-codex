@@ -77,7 +77,7 @@ an admin in Settings → Publish.
    - `### Performance characteristics` — what verified benchmarks, complexity, or scaling
      claims exist (L4/L5). Never invent numbers; a claim with a number and no source is not
      usable here.
-   For each sub-heading, one of two things is true:
+     For each sub-heading, one of two things is true:
    - **Grounded:** you have verified L4/L5 claims for it → write it in prose, cited, same bar
      as the rest of the article.
    - **Thin:** no verified L4/L5 claims exist for it → write exactly one short paragraph in
@@ -92,14 +92,14 @@ an admin in Settings → Publish.
      e.g. `# internals gap: <topic-slug> / <sub-heading> — <url or search description> tier=<n>`.
      If you cannot name a specific candidate URL, write the queue line as a search task instead
      of skipping it: `# internals gap: <topic-slug> / <sub-heading> — NEEDS SOURCE: <one-line
-     description of what to find>`. Never fabricate detail to avoid a placeholder — a labeled
+description of what to find>`. Never fabricate detail to avoid a placeholder — a labeled
      gap is honest; invented internals are not.
-   Do not add extra `###` sub-headings under Internals beyond these three unless the topic
-   structurally needs a fourth (e.g. a comparison table of engines) — keep the three-heading
-   shape recognizable across the whole portal.
+     Do not add extra `###` sub-headings under Internals beyond these three unless the topic
+     structurally needs a fourth (e.g. a comparison table of engines) — keep the three-heading
+     shape recognizable across the whole portal.
 5. **Best practices — details + examples, not a bare list.** Wherever the article states a
    best practice (in "How it works / best practices" or inline elsewhere), give it: (a) the
-   one-line rule, (b) the *why* grounded in a claim, (c) a concrete before/after or
+   one-line rule, (b) the _why_ grounded in a claim, (c) a concrete before/after or
    right/wrong code-or-config example in a fenced block, not prose describing what code would
    do. A bare bullet list of tips without examples is not acceptable output.
 6. **Reuse before commissioning.** Query `content/diagrams/assets.json` for diagrams already

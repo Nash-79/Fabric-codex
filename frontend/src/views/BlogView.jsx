@@ -88,7 +88,10 @@ export default function BlogView() {
           <>
             {" "}
             /{" "}
-            <Link to={`/topics/${topic.slug}`} style={{ color: c.accentText, textDecoration: "none" }}>
+            <Link
+              to={`/topics/${topic.slug}`}
+              style={{ color: c.accentText, textDecoration: "none" }}
+            >
               {topic.name}
             </Link>
           </>
@@ -97,10 +100,18 @@ export default function BlogView() {
 
       {/* Header and Summary Area */}
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, lineHeight: 1.25, margin: "0 0 10px", color: c.text }}>
+        <h1
+          style={{
+            fontSize: 28,
+            fontWeight: 700,
+            lineHeight: 1.25,
+            margin: "0 0 10px",
+            color: c.text,
+          }}
+        >
           {blog.title}
         </h1>
-        
+
         {isMobile && (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
             <Chip color={STATUS_COLORS[blog.status] || c.muted}>{blog.status}</Chip>
@@ -121,7 +132,15 @@ export default function BlogView() {
         )}
 
         {blog.summary && (
-          <p style={{ fontSize: 15, lineHeight: 1.65, color: c.muted, margin: "0 0 14px", maxWidth: 840 }}>
+          <p
+            style={{
+              fontSize: 15,
+              lineHeight: 1.65,
+              color: c.muted,
+              margin: "0 0 14px",
+              maxWidth: 840,
+            }}
+          >
             {blog.summary}
           </p>
         )}
@@ -205,34 +224,58 @@ export default function BlogView() {
                 Article Info
               </div>
               <div style={{ display: "grid", gap: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                >
                   <span style={{ fontSize: 12.5, color: c.muted }}>Status</span>
                   <Chip color={STATUS_COLORS[blog.status] || c.muted}>{blog.status}</Chip>
                 </div>
                 {blog.confidence != null && (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
                     <span style={{ fontSize: 12.5, color: c.muted }}>Confidence</span>
                     <Chip color={c.accentText}>{Math.round(blog.confidence * 100)}%</Chip>
                   </div>
                 )}
                 {blog.ready_to_share && (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
                     <span style={{ fontSize: 12.5, color: c.muted }}>Validation</span>
                     <Chip color={c.green}>✓ validated</Chip>
                   </div>
                 )}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                >
                   <span style={{ fontSize: 12.5, color: c.muted }}>Version</span>
                   <Chip color={c.faint}>v{blog.version}</Chip>
                 </div>
                 {(blog.depth_levels || []).length > 0 && (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
                     <span style={{ fontSize: 12.5, color: c.muted }}>Depth Level</span>
                     <Chip color={c.accentText}>L{blog.depth_levels.join("–L")}</Chip>
                   </div>
                 )}
                 {(blog.tags || []).length > 0 && (
-                  <div style={{ marginTop: 6, borderTop: "1px solid " + c.lineSoft, paddingTop: 10 }}>
+                  <div
+                    style={{ marginTop: 6, borderTop: "1px solid " + c.lineSoft, paddingTop: 10 }}
+                  >
                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                       {blog.tags.map((t) => (
                         <Chip key={t} color={c.accentText}>
@@ -341,7 +384,8 @@ export default function BlogView() {
                   maxHeight: sourcesExpanded ? 1200 : 0,
                   opacity: sourcesExpanded ? 1 : 0,
                   overflow: "hidden",
-                  transition: "max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, margin-top 0.2s ease",
+                  transition:
+                    "max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, margin-top 0.2s ease",
                   marginTop: sourcesExpanded ? 12 : 0,
                 }}
               >
@@ -363,9 +407,18 @@ export default function BlogView() {
                           gap: 6,
                         }}
                       >
-                        <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 6,
+                            alignItems: "center",
+                            flexWrap: "wrap",
+                          }}
+                        >
                           <Chip color={isHighlighted ? c.accent : c.accentText}>{s.tag}</Chip>
-                          <Chip color={TIER_COLORS[s.tier]}>{`T${s.tier} · ${TIER_LABELS[s.tier] || ""}`}</Chip>
+                          <Chip
+                            color={TIER_COLORS[s.tier]}
+                          >{`T${s.tier} · ${TIER_LABELS[s.tier] || ""}`}</Chip>
                           {!s.active && <Chip color={c.red}>superseded</Chip>}
                         </div>
                         {s.url ? (
@@ -384,7 +437,14 @@ export default function BlogView() {
                             {s.title}
                           </a>
                         ) : (
-                          <span style={{ fontSize: 12.5, color: c.text, fontWeight: 500, lineHeight: 1.4 }}>
+                          <span
+                            style={{
+                              fontSize: 12.5,
+                              color: c.text,
+                              fontWeight: 500,
+                              lineHeight: 1.4,
+                            }}
+                          >
                             {s.title}
                           </span>
                         )}
@@ -459,19 +519,26 @@ export default function BlogView() {
                       gap: 4,
                     }}
                   >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
                       <Chip color={h.active ? c.green : c.faint}>v{h.version}</Chip>
                       <span style={{ fontFamily: mono, fontSize: 9, color: c.faint }}>
                         {new Date(h.created_at).toLocaleDateString()}
                       </span>
                     </div>
-                    <span style={{ fontSize: 11.5, color: c.muted, fontWeight: 500 }}>{h.title}</span>
+                    <span style={{ fontSize: 11.5, color: c.muted, fontWeight: 500 }}>
+                      {h.title}
+                    </span>
                   </div>
                 ))}
               </div>
             )}
           </div>
-
         </div>
       </div>
     </div>

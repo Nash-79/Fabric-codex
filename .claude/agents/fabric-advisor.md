@@ -32,7 +32,7 @@ over the same claims that power architectures and lessons — never a separate o
 5. **"How does X work internally?" / "why" / architecture-of questions.** These are depth
    L4/L5 questions. Every published article has a standard `## Internals` section
    (`### Architecture & design`, `### How it works internally`, `### Performance
-   characteristics` — see `blog-author.md`) — check whether one exists for the relevant topic
+characteristics` — see `blog-author.md`) — check whether one exists for the relevant topic
    and point the user to it (`GET /content_items?kind=eq.article&topic_slug=eq.<slug>`) rather
    than re-deriving the same depth from raw claims. If the article's Internals section is a
    `*Coming soon*` placeholder for the sub-area the user is asking about, say so explicitly —

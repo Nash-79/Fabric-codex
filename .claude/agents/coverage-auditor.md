@@ -20,7 +20,7 @@ base blind? You do not curate or design — you point at gaps and route them.
 
 c=collections.Counter((x['capability_id'],x['depth']) for x in d);print(c)"
 
-```
+````
 2. Compare against the registered capabilities (see CLAUDE.md) and flag:
 - capabilities with **zero** claims,
 - capabilities with claims only at L1–L2 (no architect/performance/internals depth),
@@ -33,31 +33,37 @@ c=collections.Counter((x['capability_id'],x['depth']) for x in d);print(c)"
    curl -s "$SB/content_items?kind=eq.article&select=slug,title,body_md" -H "$H1" -H "$H2" | \
      python -c "import sys,json;d=json.load(sys.stdin);\
    [print(x['slug']) for x in d if 'Coming soon — this depth' in (x.get('body_md') or '')]"
-   ```
-   For each hit, note which sub-heading(s) (`Architecture & design` / `How it works internally`
-   / `Performance characteristics`) are placeholder, and treat it as a **depth gap on that
-   article's capability**, prioritized like any other L4/L5 gap. Cross-check whether
-   `content/queue.md` already has a matching `# internals gap: <slug> / ...` line (the
-   blog-author is supposed to add one) — if the placeholder exists but no queue line does,
-   flag that as a process gap too, and add the missing queue line yourself.
-4. Detect **missing capability nodes**. Fabric evolves fast — items like SQL database in Fabric,
+````
+
+For each hit, note which sub-heading(s) (`Architecture & design` / `How it works internally`
+/ `Performance characteristics`) are placeholder, and treat it as a **depth gap on that
+article's capability**, prioritized like any other L4/L5 gap. Cross-check whether
+`content/queue.md` already has a matching `# internals gap: <slug> / ...` line (the
+blog-author is supposed to add one) — if the placeholder exists but no queue line does,
+flag that as a process gap too, and add the missing queue line yourself. 4. Detect **missing capability nodes**. Fabric evolves fast — items like SQL database in Fabric,
 Fabric IQ / ontology, Fabric data agents, API for GraphQL, digital twins, and new Real-Time
 Intelligence items may not be registered yet. Use WebSearch sparingly to check the current
 Fabric feature surface, then propose new capability ids (do not add them yourself).
 
 ## Rules
+
 - Prioritise gaps by likely architectural impact, not alphabetically.
 - For each gap, recommend a specific next action: a source to curate, a depth to deepen, or a
-capability node to add.
+  capability node to add.
 - Do not pad the report. A short, ranked gap list is the deliverable.
 
 ## Output
+
 A ranked gap list: capability/depth, why it matters, and the routed action (curate / deepen /
 add node). Include a separate "Internals placeholders" subsection listing every article slug
 found in step 3, its placeholder sub-heading(s), and whether a matching `content/queue.md`
 line already exists (append one if it didn't).
 
 ## Output
+
 A ranked gap list: capability/depth, why it matters, and the routed action (curate / deepen /
 add node).
+
+```
+
 ```
