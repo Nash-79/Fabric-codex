@@ -22,18 +22,14 @@ import { Route as AdvisorRouteImport } from './routes/advisor'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TopicsIndexRouteImport } from './routes/topics/index'
-import { Route as ContentIndexRouteImport } from './routes/content/index'
 import { Route as BlogsIndexRouteImport } from './routes/blogs/index'
 import { Route as TopicsSlugRouteImport } from './routes/topics/$slug'
 import { Route as RegistryIdRouteImport } from './routes/registry.$id'
 import { Route as DevLogsRouteImport } from './routes/dev.logs'
 import { Route as DesignSlugRouteImport } from './routes/design.$slug'
-import { Route as BlogSlugRouteImport } from './routes/blog.$slug'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedFavoritesRouteImport } from './routes/_authenticated/favorites'
-import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
-import { Route as ContentKindSlugRouteImport } from './routes/content/$kind.$slug'
 import { Route as BlogsKindSlugRouteImport } from './routes/blogs/$kind.$slug'
 import { Route as ApiPublicHooksSeedContentRouteImport } from './routes/api/public/hooks/seed-content'
 import { Route as ApiPublicHealthAtlasRouteImport } from './routes/api/public/health/atlas'
@@ -103,11 +99,6 @@ const TopicsIndexRoute = TopicsIndexRouteImport.update({
   path: '/topics/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ContentIndexRoute = ContentIndexRouteImport.update({
-  id: '/content/',
-  path: '/content/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const BlogsIndexRoute = BlogsIndexRouteImport.update({
   id: '/blogs/',
   path: '/blogs/',
@@ -133,11 +124,6 @@ const DesignSlugRoute = DesignSlugRouteImport.update({
   path: '/design/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const BlogSlugRoute = BlogSlugRouteImport.update({
-  id: '/blog/$slug',
-  path: '/blog/$slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiChatRoute = ApiChatRouteImport.update({
   id: '/api/chat',
   path: '/api/chat',
@@ -152,16 +138,6 @@ const AuthenticatedFavoritesRoute = AuthenticatedFavoritesRouteImport.update({
   id: '/favorites',
   path: '/favorites',
   getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
-  id: '/admin',
-  path: '/admin',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const ContentKindSlugRoute = ContentKindSlugRouteImport.update({
-  id: '/content/$kind/$slug',
-  path: '/content/$kind/$slug',
-  getParentRoute: () => rootRouteImport,
 } as any)
 const BlogsKindSlugRoute = BlogsKindSlugRouteImport.update({
   id: '/blogs/$kind/$slug',
@@ -197,20 +173,16 @@ export interface FileRoutesByFullPath {
   '/roadmap': typeof RoadmapRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
-  '/admin': typeof AuthenticatedAdminRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
-  '/blog/$slug': typeof BlogSlugRoute
   '/design/$slug': typeof DesignSlugRoute
   '/dev/logs': typeof DevLogsRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs/': typeof BlogsIndexRoute
-  '/content/': typeof ContentIndexRoute
   '/topics/': typeof TopicsIndexRoute
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
-  '/content/$kind/$slug': typeof ContentKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
@@ -227,20 +199,16 @@ export interface FileRoutesByTo {
   '/roadmap': typeof RoadmapRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
-  '/admin': typeof AuthenticatedAdminRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
-  '/blog/$slug': typeof BlogSlugRoute
   '/design/$slug': typeof DesignSlugRoute
   '/dev/logs': typeof DevLogsRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs': typeof BlogsIndexRoute
-  '/content': typeof ContentIndexRoute
   '/topics': typeof TopicsIndexRoute
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
-  '/content/$kind/$slug': typeof ContentKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
@@ -259,20 +227,16 @@ export interface FileRoutesById {
   '/roadmap': typeof RoadmapRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
-  '/_authenticated/admin': typeof AuthenticatedAdminRoute
   '/_authenticated/favorites': typeof AuthenticatedFavoritesRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
-  '/blog/$slug': typeof BlogSlugRoute
   '/design/$slug': typeof DesignSlugRoute
   '/dev/logs': typeof DevLogsRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs/': typeof BlogsIndexRoute
-  '/content/': typeof ContentIndexRoute
   '/topics/': typeof TopicsIndexRoute
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
-  '/content/$kind/$slug': typeof ContentKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
@@ -291,20 +255,16 @@ export interface FileRouteTypes {
     | '/roadmap'
     | '/search'
     | '/sources'
-    | '/admin'
     | '/favorites'
     | '/settings'
     | '/api/chat'
-    | '/blog/$slug'
     | '/design/$slug'
     | '/dev/logs'
     | '/registry/$id'
     | '/topics/$slug'
     | '/blogs/'
-    | '/content/'
     | '/topics/'
     | '/blogs/$kind/$slug'
-    | '/content/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
     | '/api/public/hooks/seed-content'
@@ -321,20 +281,16 @@ export interface FileRouteTypes {
     | '/roadmap'
     | '/search'
     | '/sources'
-    | '/admin'
     | '/favorites'
     | '/settings'
     | '/api/chat'
-    | '/blog/$slug'
     | '/design/$slug'
     | '/dev/logs'
     | '/registry/$id'
     | '/topics/$slug'
     | '/blogs'
-    | '/content'
     | '/topics'
     | '/blogs/$kind/$slug'
-    | '/content/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
     | '/api/public/hooks/seed-content'
@@ -352,20 +308,16 @@ export interface FileRouteTypes {
     | '/roadmap'
     | '/search'
     | '/sources'
-    | '/_authenticated/admin'
     | '/_authenticated/favorites'
     | '/_authenticated/settings'
     | '/api/chat'
-    | '/blog/$slug'
     | '/design/$slug'
     | '/dev/logs'
     | '/registry/$id'
     | '/topics/$slug'
     | '/blogs/'
-    | '/content/'
     | '/topics/'
     | '/blogs/$kind/$slug'
-    | '/content/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
     | '/api/public/hooks/seed-content'
@@ -385,15 +337,12 @@ export interface RootRouteChildren {
   SearchRoute: typeof SearchRoute
   SourcesRoute: typeof SourcesRoute
   ApiChatRoute: typeof ApiChatRoute
-  BlogSlugRoute: typeof BlogSlugRoute
   DesignSlugRoute: typeof DesignSlugRoute
   DevLogsRoute: typeof DevLogsRoute
   TopicsSlugRoute: typeof TopicsSlugRoute
   BlogsIndexRoute: typeof BlogsIndexRoute
-  ContentIndexRoute: typeof ContentIndexRoute
   TopicsIndexRoute: typeof TopicsIndexRoute
   BlogsKindSlugRoute: typeof BlogsKindSlugRoute
-  ContentKindSlugRoute: typeof ContentKindSlugRoute
   ApiPublicDevLogsRoute: typeof ApiPublicDevLogsRoute
   ApiPublicHealthAtlasRoute: typeof ApiPublicHealthAtlasRoute
   ApiPublicHooksSeedContentRoute: typeof ApiPublicHooksSeedContentRoute
@@ -492,13 +441,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TopicsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/content/': {
-      id: '/content/'
-      path: '/content'
-      fullPath: '/content/'
-      preLoaderRoute: typeof ContentIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/blogs/': {
       id: '/blogs/'
       path: '/blogs'
@@ -534,13 +476,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DesignSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/blog/$slug': {
-      id: '/blog/$slug'
-      path: '/blog/$slug'
-      fullPath: '/blog/$slug'
-      preLoaderRoute: typeof BlogSlugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/chat': {
       id: '/api/chat'
       path: '/api/chat'
@@ -561,20 +496,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/favorites'
       preLoaderRoute: typeof AuthenticatedFavoritesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/admin': {
-      id: '/_authenticated/admin'
-      path: '/admin'
-      fullPath: '/admin'
-      preLoaderRoute: typeof AuthenticatedAdminRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/content/$kind/$slug': {
-      id: '/content/$kind/$slug'
-      path: '/content/$kind/$slug'
-      fullPath: '/content/$kind/$slug'
-      preLoaderRoute: typeof ContentKindSlugRouteImport
-      parentRoute: typeof rootRouteImport
     }
     '/blogs/$kind/$slug': {
       id: '/blogs/$kind/$slug'
@@ -608,13 +529,11 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
-  AuthenticatedAdminRoute: typeof AuthenticatedAdminRoute
   AuthenticatedFavoritesRoute: typeof AuthenticatedFavoritesRoute
   AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedAdminRoute: AuthenticatedAdminRoute,
   AuthenticatedFavoritesRoute: AuthenticatedFavoritesRoute,
   AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
 }
@@ -648,15 +567,12 @@ const rootRouteChildren: RootRouteChildren = {
   SearchRoute: SearchRoute,
   SourcesRoute: SourcesRoute,
   ApiChatRoute: ApiChatRoute,
-  BlogSlugRoute: BlogSlugRoute,
   DesignSlugRoute: DesignSlugRoute,
   DevLogsRoute: DevLogsRoute,
   TopicsSlugRoute: TopicsSlugRoute,
   BlogsIndexRoute: BlogsIndexRoute,
-  ContentIndexRoute: ContentIndexRoute,
   TopicsIndexRoute: TopicsIndexRoute,
   BlogsKindSlugRoute: BlogsKindSlugRoute,
-  ContentKindSlugRoute: ContentKindSlugRoute,
   ApiPublicDevLogsRoute: ApiPublicDevLogsRoute,
   ApiPublicHealthAtlasRoute: ApiPublicHealthAtlasRoute,
   ApiPublicHooksSeedContentRoute: ApiPublicHooksSeedContentRoute,
@@ -664,3 +580,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

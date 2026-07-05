@@ -44,7 +44,7 @@ function ancestorChain(topics: TopicTreeRow[], slug: string | undefined): Set<st
 
 // Left-nav topic tree — collapsible hover/pin rail. Collapsed by default (narrow icon rail),
 // expands on hover, and can be pinned open via the toggle so it stays open alongside the
-// in-page TOC. Used on /topics and the unified /content/$kind/$slug detail route. Previously
+// in-page TOC. Used on /topics and the unified /blogs/$kind/$slug detail route. Previously
 // there was no tree component at all — topic browsing was a flat grid with a text breadcrumb.
 export function TopicTree({ topics, activeSlug }: { topics: TopicTreeRow[]; activeSlug?: string }) {
   const [pinned, setPinned] = useState(false);
