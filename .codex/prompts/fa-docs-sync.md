@@ -27,7 +27,7 @@ Create missing pages and update only pages that drifted:
 - `01-getting-started.md` — what Fabric Atlas is, the nav, and trust model.
 - `02-submitting-sources.md` — source submission, trust tiers, and queue lifecycle.
 - `03-curation-loop.md` — claim states, duplicates, undo, Settings/Registry moderation, and audit logs.
-- `04-topics-and-blogs.md` — topic tree, article badges, source drift, validation, and version history.
+- `04-topics-and-content.md` — topic tree, article badges, source drift, validation, and version history.
 - `05-search.md` — indexed content, filters, tags, and results.
 - `06-validation-and-trust.md` — citations, validators, confidence, trust tiers, and never-fabricate rules.
 - `07-agent-workflows.md` — Claude agents/commands and Codex prompts for ingest, blog, docs sync, validation, and publishing.

@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Grounded in content/sources/fabric-data-agent-concept.json claims:
+       question routed to source-specific generator (NL2SQL/NL2DAX/NL2KQL/Graph);
+       agent runs under the requesting user's own credentials, least-privilege,
+       read-only; Power BI sources need Read only (not Build), RLS/CLS still apply;
+       Eventhouse KQL databases queried in place, no data movement; four-layer
+       governance precedence gates every step; Purview DLP can block a query or
+       strip sensitive results even when technically permitted; output capped at
+       25x25 rows/cols and generated query is read-only (no create/update/delete),
+       cannot query unstructured files or standalone lakehouse files unless
+       ingested as tables; same-region capacity requirement (antipattern) shown
+       as a failure branch. -->
+  <defs>
+    <marker id="fdoArr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#4C1D95"/>
+    </marker>
+    <marker id="fdoArrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B91C1C"/>
+    </marker>
+    <marker id="fdoArrGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#047857"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="860" fill="#FFFFFF"/>
+
+  <!-- TITLE -->
+  <text x="40" y="40" font-size="22" font-weight="700" fill="#3B2A5A">Fabric Data Agent — request orchestration internals</text>
+  <text x="40" y="61" font-size="12" fill="#616161">What happens between a question landing and an answer returning, including the governance and identity checks along the way</text>
+
+  <!-- LEGEND -->
+  <rect x="820" y="34" width="340" height="30" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+  <circle cx="836" cy="49" r="5" fill="#7C3AED"/>
+  <text x="847" y="53" font-size="9.5" fill="#374151">pipeline step</text>
+  <circle cx="930" cy="49" r="5" fill="#F59E0B"/>
+  <text x="941" y="53" font-size="9.5" fill="#374151">governance gate</text>
+  <circle cx="1040" cy="49" r="5" fill="#B91C1C"/>
+  <text x="1051" y="53" font-size="9.5" fill="#374151">blocked / fails</text>
+
+  <!-- MAIN PIPELINE COLUMN (steps 1-6) -->
+  <!-- Step 1: Question -->
+  <rect x="40" y="80" width="1120" height="58" rx="8" fill="#F5F3FF" stroke="#7C3AED" stroke-width="1.5"/>
+  <circle cx="70" cy="109" r="16" fill="#7C3AED"/>
+  <text x="70" y="114" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">1</text>
+  <text x="100" y="103" font-size="13" font-weight="700" fill="#4C1D95">Question arrives</text>
+  <text x="100" y="120" font-size="10.5" fill="#5B21B6">Natural-language prompt from Fabric chat, Copilot, an Azure AI Foundry orchestrator, or a multi-agent app — carries the caller's identity with it</text>
+
+  <line x1="600" y1="138" x2="600" y2="158" stroke="#4C1D95" stroke-width="2" marker-end="url(#fdoArr)"/>
+
+  <!-- Step 2: Source selection -->
+  <rect x="40" y="162" width="1120" height="58" rx="8" fill="#F5F3FF" stroke="#7C3AED" stroke-width="1.5"/>
+  <circle cx="70" cy="191" r="16" fill="#7C3AED"/>
+  <text x="70" y="196" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">2</text>
+  <text x="100" y="185" font-size="13" font-weight="700" fill="#4C1D95">Source selection</text>
+  <text x="100" y="202" font-size="10.5" fill="#5B21B6">Agent picks the most relevant of its up-to-5 attached sources (lakehouse, warehouse, semantic model, KQL DB, Graph) based on developer instructions and example queries</text>
+
+  <line x1="600" y1="220" x2="600" y2="240" stroke="#4C1D95" stroke-width="2" marker-end="url(#fdoArr)"/>
+
+  <!-- Step 3: Governance gate -->
+  <rect x="40" y="244" width="1120" height="74" rx="8" fill="#FEF3C7" stroke="#F59E0B" stroke-width="1.5"/>
+  <circle cx="70" cy="281" r="16" fill="#F59E0B"/>
+  <text x="70" y="286" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">3</text>
+  <text x="100" y="266" font-size="13" font-weight="700" fill="#92400E">Governance precedence check</text>
+  <text x="100" y="283" font-size="10.5" fill="#78350F">Org policy → workspace/role settings → developer instructions → this end-user prompt, evaluated in that order; higher layers can narrow or override what happens next</text>
+  <text x="100" y="299" font-size="10.5" fill="#78350F">Purview DLP / access-restriction policies are evaluated here too — they can block the query outright even if the agent is otherwise permitted to read the source</text>
+  <path d="M 990,270 L 1000,255 L 1010,270 Z" fill="#B91C1C"/>
+  <line x1="1000" y1="261" x2="1000" y2="266" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="1000" cy="269" r="0.9" fill="#FFFFFF"/>
+  <text x="1020" y="267" font-size="9.5" font-weight="600" fill="#92400E">may block or</text>
+  <text x="1020" y="280" font-size="9.5" font-weight="600" fill="#92400E">strip results</text>
+
+  <line x1="600" y1="318" x2="600" y2="338" stroke="#4C1D95" stroke-width="2" marker-end="url(#fdoArr)"/>
+
+  <!-- Step 4: Schema + instructions grounding -->
+  <rect x="40" y="342" width="1120" height="58" rx="8" fill="#F5F3FF" stroke="#7C3AED" stroke-width="1.5"/>
+  <circle cx="70" cy="371" r="16" fill="#7C3AED"/>
+  <text x="70" y="376" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">4</text>
+  <text x="100" y="365" font-size="13" font-weight="700" fill="#4C1D95">Schema + instructions grounding</text>
+  <text x="100" y="382" font-size="10.5" fill="#5B21B6">Agent reads the selected source's schema and the developer's instructions/example queries to ground how it will phrase the generated query</text>
+
+  <line x1="600" y1="400" x2="600" y2="420" stroke="#4C1D95" stroke-width="2" marker-end="url(#fdoArr)"/>
+
+  <!-- Step 5: Query generation -->
+  <rect x="40" y="424" width="1120" height="58" rx="8" fill="#ECFDF5" stroke="#34D399" stroke-width="1.5"/>
+  <circle cx="70" cy="453" r="16" fill="#059669"/>
+  <text x="70" y="458" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">5</text>
+  <text x="100" y="447" font-size="13" font-weight="700" fill="#047857">Query generation — read-only</text>
+  <text x="100" y="464" font-size="10.5" fill="#065F46">Source-specific generator emits SQL (lakehouse/warehouse), DAX (semantic model), KQL (Eventhouse), or a Graph query — never create/update/delete</text>
+
+  <line x1="600" y1="482" x2="600" y2="502" stroke="#4C1D95" stroke-width="2" marker-end="url(#fdoArr)"/>
+
+  <!-- Step 6: Execution under caller identity -->
+  <rect x="40" y="506" width="1120" height="74" rx="8" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+  <circle cx="70" cy="543" r="16" fill="#2563EB"/>
+  <text x="70" y="548" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">6</text>
+  <text x="100" y="528" font-size="13" font-weight="700" fill="#1D4ED8">Execution — under the caller's own identity</text>
+  <text x="100" y="545" font-size="10.5" fill="#1E40AF">Executes with the requesting user's credentials and permissions, so results never exceed what that user could already see; RLS/CLS on semantic models still applies</text>
+  <text x="100" y="561" font-size="10.5" fill="#1E40AF">Read on a Power BI semantic model is enough — Build is not required. Eventhouse KQL databases are queried in place, with no data movement</text>
+
+  <line x1="600" y1="580" x2="600" y2="600" stroke="#4C1D95" stroke-width="2" marker-end="url(#fdoArr)"/>
+
+  <!-- Step 7: Answer with transparency -->
+  <rect x="40" y="604" width="1120" height="58" rx="8" fill="#F5F3FF" stroke="#7C3AED" stroke-width="1.5"/>
+  <circle cx="70" cy="633" r="16" fill="#7C3AED"/>
+  <text x="70" y="638" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">7</text>
+  <text x="100" y="627" font-size="13" font-weight="700" fill="#4C1D95">Answer returned with query transparency</text>
+  <text x="100" y="644" font-size="10.5" fill="#5B21B6">Result set plus the generated SQL/DAX/KQL is surfaced back to the caller, capped at 25 rows × 25 columns per response — including follow-up turns in the same session</text>
+
+  <!-- ═══════════════════════════ FAILURE / LIMIT BRANCHES ═══════════════════════════ -->
+  <text x="40" y="694" font-size="11" letter-spacing="1.5" fill="#8A8886">BRANCHES THAT STOP OR SHRINK THE ANSWER (grounded in known antipatterns)</text>
+  <rect x="40" y="702" width="1120" height="130" rx="9" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.5"/>
+
+  <!-- Branch A: region mismatch -->
+  <rect x="60" y="716" width="345" height="100" rx="7" fill="#FFFFFF" stroke="#EF4444"/>
+  <path d="M 82,738 L 92,720 L 102,738 Z" fill="#DC2626"/>
+  <line x1="92" y1="726" x2="92" y2="732" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="92" cy="735" r="0.9" fill="#FFFFFF"/>
+  <text x="112" y="732" font-size="11.5" font-weight="700" fill="#991B1B">Region mismatch → query fails</text>
+  <text x="80" y="752" font-size="9.7" fill="#7F1D1D">If the agent's workspace capacity and the</text>
+  <text x="80" y="766" font-size="9.7" fill="#7F1D1D">data source's workspace capacity sit in</text>
+  <text x="80" y="780" font-size="9.7" fill="#7F1D1D">different regions, execution cannot proceed —</text>
+  <text x="80" y="794" font-size="9.7" fill="#7F1D1D">a lakehouse and agent capacity must be</text>
+  <text x="80" y="808" font-size="9.7" fill="#7F1D1D">co-located to succeed at step 6.</text>
+
+  <!-- Branch B: unsupported content -->
+  <rect x="428" y="716" width="345" height="100" rx="7" fill="#FFFFFF" stroke="#EF4444"/>
+  <path d="M 450,738 L 460,720 L 470,738 Z" fill="#DC2626"/>
+  <line x1="460" y1="726" x2="460" y2="732" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="460" cy="735" r="0.9" fill="#FFFFFF"/>
+  <text x="480" y="732" font-size="11.5" font-weight="700" fill="#991B1B">Unsupported content → no query generated</text>
+  <text x="448" y="752" font-size="9.7" fill="#7F1D1D">Standalone unstructured files (PDF, DOCX,</text>
+  <text x="448" y="766" font-size="9.7" fill="#7F1D1D">TXT) and lakehouse files that were never</text>
+  <text x="448" y="780" font-size="9.7" fill="#7F1D1D">ingested/exposed as tables are outside the</text>
+  <text x="448" y="794" font-size="9.7" fill="#7F1D1D">agent's reach — step 2 cannot select a</text>
+  <text x="448" y="808" font-size="9.7" fill="#7F1D1D">generator for content it can't see as a table.</text>
+
+  <!-- Branch C: DLP block -->
+  <rect x="796" y="716" width="344" height="100" rx="7" fill="#FFFFFF" stroke="#EF4444"/>
+  <path d="M 818,738 L 828,720 L 838,738 Z" fill="#DC2626"/>
+  <line x1="828" y1="726" x2="828" y2="732" stroke="#FFFFFF" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="828" cy="735" r="0.9" fill="#FFFFFF"/>
+  <text x="848" y="732" font-size="11.5" font-weight="700" fill="#991B1B">Purview DLP → blocked or redacted</text>
+  <text x="816" y="752" font-size="9.7" fill="#7F1D1D">Even when the agent is technically permitted</text>
+  <text x="816" y="766" font-size="9.7" fill="#7F1D1D">to read a source, a DLP or access-restriction</text>
+  <text x="816" y="780" font-size="9.7" fill="#7F1D1D">policy evaluated at step 3 can stop the query</text>
+  <text x="816" y="794" font-size="9.7" fill="#7F1D1D">from running, or strip sensitive values out of</text>
+  <text x="816" y="808" font-size="9.7" fill="#7F1D1D">the answer before it reaches the caller.</text>
+
+  <!-- ═══════════════════════════ OUTPUT SHAPE STRIP ═══════════════════════════ -->
+  <rect x="40" y="844" width="0" height="0"/>
+  <text x="1160" y="852" text-anchor="end" font-size="9.5" fill="#94A3B8">Fabric Atlas — original diagram, July 2026. Grounded in Microsoft Learn concept-data-agent claims.</text>
+</svg>

@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 720" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Grounded in content/sources/api-graphql-overview.json claims:
+       - portal setup configures access permissions before the endpoint is queryable (claim 4)
+       - auto-generated schema/resolvers, no custom backend code (claim 1)
+       - single query requests only needed fields, traverses relationships, one round trip,
+         avoids over-fetch/N+1 (claim 2)
+       - fan-out across multiple sources; 1:1, 1:many, many:many relationships (claim 5)
+       - resolvers push execution down to the source's own SQL analytics endpoint —
+         Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases (claim 3)
+       - additive schema evolution / field deprecation instead of versioned endpoints (claim 6)
+       - interactive portal editor: results pane, parameterized query/mutation, Intellisense (claim 7)
+       - built-in performance monitoring dashboard with request logging (claim 8)
+       - MCP path lets AI agents reach Fabric data through the same GraphQL endpoint (claim 9) -->
+  <defs>
+    <linearGradient id="hdrGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="0.6" stop-color="#117865"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94"/>
+    </marker>
+    <marker id="arrPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8E5BC4"/>
+    </marker>
+    <marker id="arrAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#E8A020"/>
+    </marker>
+    <marker id="arrGray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8A8886"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1160" height="720" fill="#FFFFFF"/>
+
+  <!-- Header band -->
+  <rect x="0" y="0" width="1160" height="58" fill="url(#hdrGrad)"/>
+  <text x="28" y="25" font-size="17" font-weight="700" fill="#FFFFFF">Fabric API for GraphQL — Life of a Request</text>
+  <text x="28" y="45" font-size="11" fill="#D9F5EE">From client query to typed JSON response — auth, validation, pushdown execution, and response, step by step</text>
+
+  <!-- ═══════════════════════════════════════════════
+       STAGE STRIP (5 stages, left to right)
+  ════════════════════════════════════════════════ -->
+
+  <!-- Stage 1: Client query -->
+  <rect x="28" y="80" width="204" height="150" rx="10" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="130" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">1 · Client query</text>
+  <text x="42" y="126" font-size="9.5" fill="#3F6259">App, integration service, portal</text>
+  <text x="42" y="140" font-size="9.5" fill="#3F6259">editor, or AI agent (via MCP)</text>
+  <text x="42" y="140" font-size="9.5" fill="#3F6259"> </text>
+  <text x="42" y="160" font-size="9.5" fill="#3F6259">sends a query naming only the</text>
+  <text x="42" y="174" font-size="9.5" fill="#3F6259">fields and relationships it needs</text>
+  <rect x="42" y="184" width="176" height="34" rx="5" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="130" y="205" text-anchor="middle" font-size="9" fill="#3F6259">one round trip, no over-fetch</text>
+
+  <!-- Stage 2: Auth / permissions -->
+  <rect x="252" y="80" width="204" height="150" rx="10" fill="#FFF6E5" stroke="#E8A020"/>
+  <text x="354" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#7A4E00">2 · Endpoint auth</text>
+  <text x="266" y="126" font-size="9.5" fill="#7A4E00">Request is checked against the</text>
+  <text x="266" y="140" font-size="9.5" fill="#7A4E00">access permissions configured</text>
+  <text x="266" y="154" font-size="9.5" fill="#7A4E00">for the GraphQL item during setup</text>
+  <rect x="266" y="164" width="176" height="52" rx="5" fill="#FFFFFF" stroke="#E8A020"/>
+  <text x="354" y="182" text-anchor="middle" font-size="9" font-weight="600" fill="#7A4E00">identity + permission gate</text>
+  <text x="354" y="197" text-anchor="middle" font-size="9" fill="#7A4E00">denied → no schema/data</text>
+  <text x="354" y="211" text-anchor="middle" font-size="9" fill="#7A4E00">access beyond this point</text>
+
+  <!-- Stage 3: Parse & validate -->
+  <rect x="476" y="80" width="204" height="150" rx="10" fill="#F3EBFB" stroke="#C7A8E8"/>
+  <text x="578" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#3D1E5C">3 · Parse &amp; validate</text>
+  <text x="490" y="126" font-size="9.5" fill="#5B2C86">Query is checked against the</text>
+  <text x="490" y="140" font-size="9.5" fill="#5B2C86">auto-generated schema — fields,</text>
+  <text x="490" y="154" font-size="9.5" fill="#5B2C86">types, and modeled relationships</text>
+  <rect x="490" y="164" width="176" height="52" rx="5" fill="#FFFFFF" stroke="#C7A8E8"/>
+  <text x="578" y="182" text-anchor="middle" font-size="9" font-weight="600" fill="#3D1E5C">invalid field/type</text>
+  <text x="578" y="197" text-anchor="middle" font-size="9" fill="#3D1E5C">rejected before</text>
+  <text x="578" y="211" text-anchor="middle" font-size="9" fill="#3D1E5C">touching any source</text>
+
+  <!-- Stage 4: Resolver pushdown -->
+  <rect x="700" y="80" width="228" height="150" rx="10" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="814" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">4 · Resolver pushdown</text>
+  <text x="714" y="126" font-size="9.5" fill="#3F6259">Resolvers translate the query into</text>
+  <text x="714" y="140" font-size="9.5" fill="#3F6259">source queries, executed by the</text>
+  <text x="714" y="154" font-size="9.5" fill="#3F6259">source's own SQL analytics endpoint</text>
+  <rect x="714" y="164" width="200" height="52" rx="5" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="814" y="180" text-anchor="middle" font-size="9" fill="#3F6259">Warehouse · SQL DB · Lakehouse ·</text>
+  <text x="814" y="193" text-anchor="middle" font-size="9" fill="#3F6259">Azure SQL DB · mirrored databases</text>
+  <text x="814" y="207" text-anchor="middle" font-size="9" fill="#3F6259">fan-out across multiple sources if needed</text>
+
+  <!-- Stage 5: Typed JSON response -->
+  <rect x="948" y="80" width="184" height="150" rx="10" fill="#063D3B"/>
+  <text x="1040" y="104" text-anchor="middle" font-size="12" font-weight="700" fill="#25FFD4">5 · Typed JSON</text>
+  <text x="962" y="126" font-size="9.5" fill="#D9F5EE">Resolver results are</text>
+  <text x="962" y="140" font-size="9.5" fill="#D9F5EE">assembled into one</text>
+  <text x="962" y="154" font-size="9.5" fill="#D9F5EE">typed JSON payload</text>
+  <rect x="962" y="164" width="156" height="52" rx="5" fill="#0B5E50"/>
+  <text x="1040" y="182" text-anchor="middle" font-size="9" fill="#9AD2C5">shape matches exactly</text>
+  <text x="1040" y="197" text-anchor="middle" font-size="9" fill="#9AD2C5">what the query asked —</text>
+  <text x="1040" y="211" text-anchor="middle" font-size="9" fill="#9AD2C5">no unused fields returned</text>
+
+  <!-- flow arrows -->
+  <g stroke="#2AAC94" stroke-width="2.2">
+    <line x1="232" y1="155" x2="250" y2="155" marker-end="url(#arr)"/>
+    <line x1="456" y1="155" x2="474" y2="155" marker-end="url(#arr)"/>
+    <line x1="680" y1="155" x2="698" y2="155" marker-end="url(#arr)"/>
+    <line x1="928" y1="155" x2="946" y2="155" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- denial branch from stage 2 -->
+  <path d="M354 230 L354 258 L130 258 L130 232" fill="none" stroke="#E8A020" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#arrAmber)"/>
+  <text x="242" y="252" text-anchor="middle" font-size="9" font-weight="600" fill="#7A4E00">access denied → request rejected, no data returned</text>
+
+  <!-- ═══════════════════════════════════════════════
+       SCHEMA EVOLUTION STRIP
+  ════════════════════════════════════════════════ -->
+  <text x="28" y="300" font-size="11" letter-spacing="1.2" fill="#8A8886">SCHEMA EVOLUTION — how stage 3 stays compatible over time</text>
+
+  <rect x="28" y="308" width="536" height="88" rx="9" fill="#F3F2F1" stroke="#E1DFDD"/>
+  <text x="44" y="330" font-size="12" font-weight="700" fill="#063D3B">Additive changes, not versioned endpoints</text>
+  <text x="44" y="350" font-size="10" fill="#424242">New fields/types are added without breaking existing clients, since a client</text>
+  <text x="44" y="366" font-size="10" fill="#424242">only receives the fields it explicitly requests. Fields are deprecated rather</text>
+  <text x="44" y="382" font-size="10" fill="#424242">than replaced — no v1/v2/v3 endpoint proliferation.</text>
+
+  <rect x="580" y="308" width="552" height="88" rx="9" fill="#F3F2F1" stroke="#E1DFDD"/>
+  <text x="596" y="330" font-size="12" font-weight="700" fill="#063D3B">Developer &amp; operations tooling around the flow</text>
+  <text x="596" y="350" font-size="10" fill="#424242">Portal editor: results pane, parameterized query/mutation support, and</text>
+  <text x="596" y="366" font-size="10" fill="#424242">schema-aware Intellisense for building/testing requests before they ship.</text>
+  <text x="596" y="382" font-size="10" fill="#424242">Performance monitoring dashboard with request logging tracks usage over time.</text>
+
+  <!-- ═══════════════════════════════════════════════
+       MUTATION NOTE
+  ════════════════════════════════════════════════ -->
+  <text x="28" y="428" font-size="11" letter-spacing="1.2" fill="#8A8886">WRITE PATH (MUTATIONS)</text>
+  <rect x="28" y="436" width="1104" height="60" rx="9" fill="#FFF6E5" stroke="#E8A020"/>
+  <text x="44" y="458" font-size="10.5" font-weight="600" fill="#7A4E00">Stage 4 branches for mutations</text>
+  <text x="44" y="476" font-size="10" fill="#7A4E00">A mutation follows the same auth → parse/validate path, then resolvers push the write down to the source — mutation support depends on which data source type is attached (coverage today is read/query-oriented for SQL Analytics Endpoint-backed sources).</text>
+
+  <!-- ═══════════════════════════════════════════════
+       AI AGENT (MCP) BRANCH
+  ════════════════════════════════════════════════ -->
+  <text x="28" y="530" font-size="11" letter-spacing="1.2" fill="#8A8886">AGENT-FACING PATH</text>
+  <rect x="28" y="538" width="1104" height="60" rx="9" fill="#F3EBFB" stroke="#C7A8E8"/>
+  <text x="44" y="560" font-size="10.5" font-weight="600" fill="#3D1E5C">Same endpoint, agent-facing entry point</text>
+  <text x="44" y="578" font-size="10" fill="#5B2C86">Microsoft documents connecting AI agents to Fabric data through this GraphQL endpoint via the Model Context Protocol (MCP) — the endpoint is positioned as an agent-facing data access layer in addition to a human application API. Stage 1 client is then an MCP-connected agent, following the identical auth → validate → resolve → JSON path.</text>
+
+  <!-- ═══════════════════════════════════════════════
+       LEGEND
+  ════════════════════════════════════════════════ -->
+  <text x="28" y="632" font-size="11" letter-spacing="1.2" fill="#8A8886">LEGEND</text>
+  <rect x="28" y="640" width="14" height="14" rx="3" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="48" y="651" font-size="9.5" fill="#424242">Client / request stage</text>
+  <rect x="212" y="640" width="14" height="14" rx="3" fill="#FFF6E5" stroke="#E8A020"/>
+  <text x="232" y="651" font-size="9.5" fill="#424242">Auth / permission gate</text>
+  <rect x="396" y="640" width="14" height="14" rx="3" fill="#F3EBFB" stroke="#C7A8E8"/>
+  <text x="416" y="651" font-size="9.5" fill="#424242">Schema / MCP layer</text>
+  <rect x="580" y="640" width="14" height="14" rx="3" fill="#063D3B"/>
+  <text x="600" y="651" font-size="9.5" fill="#424242">Response payload</text>
+  <line x1="740" y1="647" x2="770" y2="647" stroke="#2AAC94" stroke-width="2.2" marker-end="url(#arr)"/>
+  <text x="778" y="651" font-size="9.5" fill="#424242">Success path</text>
+  <line x1="880" y1="647" x2="910" y2="647" stroke="#E8A020" stroke-width="1.6" stroke-dasharray="5 3" marker-end="url(#arrAmber)"/>
+  <text x="918" y="651" font-size="9.5" fill="#424242">Rejection / denial path</text>
+
+  <!-- footnote -->
+  <text x="1132" y="700" text-anchor="end" font-size="9" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset.</text>
+</svg>

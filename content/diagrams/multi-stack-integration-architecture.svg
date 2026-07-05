@@ -1,0 +1,223 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 820" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Multi-stack integration architecture: Fabric/OneLake hub with three integration
+       spokes (virtualize / replicate / copy) reaching external non-Fabric estates,
+       plus outward exposure paths. Grounded ONLY in verified claims:
+       - OneLake shortcuts mount ADLS, Amazon S3, Google Cloud Storage as zero-copy refs (fabric-platform-overview)
+       - shortcuts reference ADLS, Amazon S3, Dataverse; make remote files appear local (onelake-overview)
+       - shortcuts transparent — Spark/SQL/RTI/AS + non-Fabric ADLS-compatible apps query them (onelake-shortcuts)
+       - shortcut caching: GCS/S3/S3-compatible/on-prem gateway, 1-28 day retention, >1GB never cached (onelake-shortcuts)
+       - cross-cloud intelligent caching cuts egress + improves locality (fabric-platform-overview)
+       - Mirroring: fully managed serverless replication into OneLake as Delta Parquet (mirroring-overview)
+       - three mirroring approaches: database / metadata (shortcut) / open (mirroring-overview)
+       - mirroring sources GA/preview: Cosmos DB, Azure SQL DB, Azure SQL MI, PostgreSQL, MySQL(preview),
+         SQL Server, Snowflake, Oracle, SAP, BigQuery(preview), Fabric SQL DB, open; Databricks + Dremio via metadata (mirroring-overview)
+       - pipeline/copy + shortcut routes into lakehouse (lakehouse-overview)
+       - OneLake exposes ADLS Gen2 APIs; Databricks reads/writes OneLake without code changes (onelake-overview)
+       - one-copy Delta Parquet, all engines read each other's output; V-Order Parquet-spec compliant, non-Fabric engines just miss acceleration (fabric-platform-terminology, delta-optimization-and-v-order)
+       - warehouse data published to OneLake Files in Delta, readable by external engines without export (warehouse-overview)
+       - GraphQL API sources incl. mirrored Databricks/Snowflake via SQL analytics endpoints (api-graphql-overview)
+       - authorized engine model: external engines pull policy + effective-access from OneLake APIs (onelake-security)
+       - Purview scanner/Atlas APIs expose metadata + lineage to external tools (governance-compliance-overview) -->
+  <defs>
+    <linearGradient id="hdrGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="0.6" stop-color="#117865"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <linearGradient id="hubGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#117865"/>
+      <stop offset="1" stop-color="#0B5E50"/>
+    </linearGradient>
+    <linearGradient id="mirrorGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5B2C86"/>
+      <stop offset="1" stop-color="#8E5BC4"/>
+    </linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94"/>
+    </marker>
+    <marker id="arrPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8E5BC4"/>
+    </marker>
+    <marker id="arrGray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8A8886"/>
+    </marker>
+    <marker id="arrTwo" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="#117865"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="820" fill="#FFFFFF"/>
+
+  <!-- header -->
+  <rect x="0" y="0" width="1200" height="62" fill="url(#hdrGrad)"/>
+  <text x="30" y="27" font-size="18" font-weight="700" fill="#FFFFFF">Multi-Stack Integration — Fabric / OneLake as the hub</text>
+  <text x="30" y="48" font-size="11" fill="#D9F5EE">Integrate non-Fabric estates in place (shortcuts), replicate (mirroring), or copy (pipelines) — one open Delta Parquet copy every engine can read</text>
+
+  <!-- ═══ LEFT: EXTERNAL ESTATES ═══ -->
+  <text x="30" y="88" font-size="11" letter-spacing="1.2" fill="#8A8886">EXISTING NON-FABRIC ESTATES</text>
+
+  <rect x="30" y="98" width="250" height="52" rx="8" fill="#F3F2F1" stroke="#C8C6C4"/>
+  <text x="155" y="120" text-anchor="middle" font-size="11.5" font-weight="600" fill="#424242">Object storage</text>
+  <text x="155" y="138" text-anchor="middle" font-size="9.5" fill="#616161">ADLS Gen2 · Amazon S3 · Google Cloud Storage</text>
+
+  <rect x="30" y="160" width="250" height="52" rx="8" fill="#F3F2F1" stroke="#C8C6C4"/>
+  <text x="155" y="182" text-anchor="middle" font-size="11.5" font-weight="600" fill="#424242">Operational databases</text>
+  <text x="155" y="200" text-anchor="middle" font-size="9.5" fill="#616161">Azure SQL · SQL Server · PostgreSQL · Oracle · SAP · Cosmos DB</text>
+
+  <rect x="30" y="222" width="250" height="52" rx="8" fill="#F3F2F1" stroke="#C8C6C4"/>
+  <text x="155" y="244" text-anchor="middle" font-size="11.5" font-weight="600" fill="#424242">Analytical stacks</text>
+  <text x="155" y="262" text-anchor="middle" font-size="9.5" fill="#616161">Snowflake · Google BigQuery · Databricks · Dremio</text>
+
+  <rect x="30" y="284" width="250" height="46" rx="8" fill="#F3F2F1" stroke="#C8C6C4"/>
+  <text x="155" y="304" text-anchor="middle" font-size="11.5" font-weight="600" fill="#424242">Business apps</text>
+  <text x="155" y="321" text-anchor="middle" font-size="9.5" fill="#616161">Dataverse · on-prem via data gateway</text>
+
+  <!-- ═══ MIDDLE: THREE INTEGRATION SPOKES ═══ -->
+  <text x="330" y="88" font-size="11" letter-spacing="1.2" fill="#8A8886">INTEGRATION MODE — the "integrate in place vs move" decision</text>
+
+  <!-- Virtualize -->
+  <rect x="330" y="98" width="330" height="70" rx="9" fill="#EAF7F2" stroke="#2AAC94" stroke-width="1.6"/>
+  <text x="350" y="121" font-size="12.5" font-weight="700" fill="#063D3B">Virtualize — OneLake shortcuts (zero-copy)</text>
+  <text x="350" y="139" font-size="9.5" fill="#3F6259">Live reference to ADLS / S3 / GCS / Dataverse; no ETL or</text>
+  <text x="350" y="153" font-size="9.5" fill="#3F6259">migration. Cross-cloud reads served through per-workspace cache.</text>
+
+  <!-- Replicate -->
+  <rect x="330" y="180" width="330" height="70" rx="9" fill="#F3EBFB" stroke="#8E5BC4" stroke-width="1.6"/>
+  <text x="350" y="203" font-size="12.5" font-weight="700" fill="#3D1E5C">Replicate — Fabric Mirroring (managed)</text>
+  <text x="350" y="221" font-size="9.5" fill="#5B2C86">Serverless CDC into OneLake as Delta Parquet. Database mirroring</text>
+  <text x="350" y="235" font-size="9.5" fill="#5B2C86">copies data; metadata mirroring keeps data in place via shortcuts.</text>
+
+  <!-- Copy -->
+  <rect x="330" y="262" width="330" height="68" rx="9" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.4"/>
+  <text x="350" y="285" font-size="12.5" font-weight="700" fill="#063D3B">Copy — Data Factory pipelines / Copy activity</text>
+  <text x="350" y="303" font-size="9.5" fill="#3F6259">Explicit bulk / scheduled load into a lakehouse. Curated,</text>
+  <text x="350" y="317" font-size="9.5" fill="#3F6259">transformed landing when you need to reshape on ingest.</text>
+
+  <!-- arrows external -> spokes -->
+  <g stroke="#8A8886" stroke-width="1.4">
+    <line x1="280" y1="124" x2="326" y2="128" marker-end="url(#arrGray)"/>
+    <line x1="280" y1="186" x2="326" y2="210" marker-end="url(#arrGray)"/>
+    <line x1="280" y1="248" x2="326" y2="292" marker-end="url(#arrGray)"/>
+    <line x1="280" y1="307" x2="326" y2="300" marker-end="url(#arrGray)"/>
+  </g>
+
+  <!-- ═══ RIGHT: THE ONELAKE HUB ═══ -->
+  <rect x="710" y="98" width="460" height="232" rx="12" fill="url(#hubGrad)"/>
+  <text x="732" y="126" font-size="15" font-weight="700" fill="#FFFFFF">OneLake — one tenant-wide logical lake</text>
+  <text x="732" y="145" font-size="10" fill="#D9F5EE">Built on ADLS Gen2 · exposes ADLS Gen2 APIs · one open Delta Parquet copy</text>
+
+  <rect x="732" y="156" width="416" height="46" rx="7" fill="#FFFFFF" fill-opacity="0.14"/>
+  <text x="746" y="176" font-size="11" font-weight="600" fill="#FFFFFF">Lakehouse · Warehouse · SQL database · KQL · mirrored DBs</text>
+  <text x="746" y="192" font-size="9.5" fill="#EAF7F2">All persist tabular data as Delta Parquet regardless of which engine wrote it</text>
+
+  <rect x="732" y="210" width="203" height="52" rx="7" fill="#FFFFFF" fill-opacity="0.14"/>
+  <text x="833" y="230" text-anchor="middle" font-size="10.5" font-weight="600" fill="#FFFFFF">Fabric engines (one copy)</text>
+  <text x="833" y="247" text-anchor="middle" font-size="9" fill="#EAF7F2">T-SQL · Spark · Analysis Services · RTI</text>
+
+  <rect x="945" y="210" width="203" height="52" rx="7" fill="#FFFFFF" fill-opacity="0.14"/>
+  <text x="1046" y="230" text-anchor="middle" font-size="10.5" font-weight="600" fill="#FFFFFF">Governance plane</text>
+  <text x="1046" y="247" text-anchor="middle" font-size="9" fill="#EAF7F2">Purview · OneLake security · sensitivity labels</text>
+
+  <rect x="732" y="270" width="416" height="46" rx="7" fill="#25FFD4" fill-opacity="0.18" stroke="#25FFD4" stroke-opacity="0.5"/>
+  <text x="746" y="290" font-size="10.5" font-weight="600" fill="#FFFFFF">Authorized-engine model</text>
+  <text x="746" y="306" font-size="9.5" fill="#EAF7F2">External engines register, pull policy + effective-access decisions from OneLake APIs</text>
+
+  <!-- spokes -> hub -->
+  <g stroke="#2AAC94" stroke-width="2">
+    <line x1="660" y1="133" x2="706" y2="150" marker-end="url(#arr)"/>
+    <line x1="660" y1="296" x2="706" y2="230" marker-end="url(#arr)"/>
+  </g>
+  <line x1="660" y1="215" x2="706" y2="200" stroke="#8E5BC4" stroke-width="2" marker-end="url(#arrPurple)"/>
+
+  <!-- ═══ INTEROP: EXTERNAL ENGINES READ/WRITE ONELAKE ═══ -->
+  <text x="30" y="372" font-size="11" letter-spacing="1.2" fill="#8A8886">OPEN INTEROP — external engines read (and write) the same OneLake data directly</text>
+
+  <rect x="30" y="382" width="360" height="86" rx="9" fill="#FFFFFF" stroke="#9AD2C5" stroke-width="1.4"/>
+  <text x="50" y="405" font-size="12" font-weight="700" fill="#063D3B">ADLS Gen2-compatible engines</text>
+  <text x="50" y="424" font-size="9.5" fill="#3F6259">OneLake exposes the same ADLS Gen2 APIs/SDKs, so Azure</text>
+  <text x="50" y="438" font-size="9.5" fill="#3F6259">Databricks and other ADLS-aware apps read/write OneLake</text>
+  <text x="50" y="452" font-size="9.5" fill="#3F6259">data without code changes — over the open Delta format.</text>
+
+  <rect x="410" y="382" width="360" height="86" rx="9" fill="#FFFFFF" stroke="#9AD2C5" stroke-width="1.4"/>
+  <text x="430" y="405" font-size="12" font-weight="700" fill="#063D3B">Open Delta Parquet interop</text>
+  <text x="430" y="424" font-size="9.5" fill="#3F6259">Delta Lake is the standard format across all workloads, so</text>
+  <text x="430" y="438" font-size="9.5" fill="#3F6259">engines read each other's output without conversion. V-Order</text>
+  <text x="430" y="452" font-size="9.5" fill="#3F6259">stays Parquet-spec compliant — external engines just miss its read boost.</text>
+
+  <rect x="790" y="382" width="380" height="86" rx="9" fill="#FFFFFF" stroke="#C8C6C4" stroke-width="1.4"/>
+  <text x="810" y="405" font-size="12" font-weight="700" fill="#424242">Tenant-controlled external access</text>
+  <text x="810" y="424" font-size="9.5" fill="#616161">A tenant admin setting governs whether apps running outside</text>
+  <text x="810" y="438" font-size="9.5" fill="#616161">Fabric (custom ADLS clients, OneLake file explorer) reach</text>
+  <text x="810" y="452" font-size="9.5" fill="#616161">OneLake; turning it off still leaves internal workloads working.</text>
+
+  <!-- two-way arrows hub <-> interop -->
+  <line x1="210" y1="378" x2="210" y2="382" stroke="#117865" stroke-width="1.6"/>
+  <path d="M760 330 C 760 358, 590 356, 590 380" fill="none" stroke="#117865" stroke-width="1.6" marker-start="url(#arrTwo)" marker-end="url(#arrTwo)"/>
+
+  <!-- ═══ OUTWARD EXPOSURE ═══ -->
+  <text x="30" y="500" font-size="11" letter-spacing="1.2" fill="#8A8886">EXPOSING FABRIC DATA OUTWARD — to apps, agents, and external catalogs</text>
+
+  <rect x="30" y="510" width="278" height="94" rx="9" fill="#F3EBFB" stroke="#C7A8E8"/>
+  <text x="50" y="533" font-size="12" font-weight="700" fill="#3D1E5C">SQL analytics endpoints</text>
+  <text x="50" y="552" font-size="9.5" fill="#5B2C86">Every lakehouse/warehouse/SQL DB/mirrored</text>
+  <text x="50" y="566" font-size="9.5" fill="#5B2C86">DB auto-provisions a read-only T-SQL surface.</text>
+  <text x="50" y="580" font-size="9.5" fill="#5B2C86">Cross-database queries span mirrored DBs,</text>
+  <text x="50" y="594" font-size="9.5" fill="#5B2C86">warehouses, and lakehouse endpoints.</text>
+
+  <rect x="322" y="510" width="278" height="94" rx="9" fill="#F3EBFB" stroke="#C7A8E8"/>
+  <text x="342" y="533" font-size="12" font-weight="700" fill="#3D1E5C">Fabric API for GraphQL</text>
+  <text x="342" y="552" font-size="9.5" fill="#5B2C86">Auto-generated endpoint over Warehouse, SQL</text>
+  <text x="342" y="566" font-size="9.5" fill="#5B2C86">DB, Lakehouse, and mirrored DBs — including</text>
+  <text x="342" y="580" font-size="9.5" fill="#5B2C86">mirrored Databricks &amp; Snowflake — via their</text>
+  <text x="342" y="594" font-size="9.5" fill="#5B2C86">SQL analytics endpoints. MCP path for agents.</text>
+
+  <rect x="614" y="510" width="278" height="94" rx="9" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="634" y="533" font-size="12" font-weight="700" fill="#063D3B">Cross-tenant data sharing</text>
+  <text x="634" y="552" font-size="9.5" fill="#3F6259">Expose live governed datasets to external</text>
+  <text x="634" y="566" font-size="9.5" fill="#3F6259">Entra tenants without copying — recipients</text>
+  <text x="634" y="580" font-size="9.5" fill="#3F6259">read in place; source-side governance stays</text>
+  <text x="634" y="594" font-size="9.5" fill="#3F6259">in force (read-only shortcut in consumer).</text>
+
+  <rect x="906" y="510" width="264" height="94" rx="9" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="926" y="533" font-size="12" font-weight="700" fill="#063D3B">Purview / Atlas APIs</text>
+  <text x="926" y="552" font-size="9.5" fill="#3F6259">Scanner APIs return item-level metadata;</text>
+  <text x="926" y="566" font-size="9.5" fill="#3F6259">Data Map exposes metadata + lineage via</text>
+  <text x="926" y="580" font-size="9.5" fill="#3F6259">Atlas APIs so external catalogs can index</text>
+  <text x="926" y="594" font-size="9.5" fill="#3F6259">the Fabric estate.</text>
+
+  <!-- hub down to exposure -->
+  <g stroke="#8E5BC4" stroke-width="1.6" stroke-dasharray="5 3">
+    <line x1="940" y1="330" x2="460" y2="508" marker-end="url(#arrPurple)"/>
+  </g>
+
+  <!-- ═══ EGRESS / LATENCY / SECURITY NOTES ═══ -->
+  <rect x="30" y="620" width="562" height="176" rx="9" fill="#F3F2F1" stroke="#E1DFDD"/>
+  <text x="48" y="643" font-size="12" font-weight="700" fill="#063D3B">Egress · latency · caching (verified)</text>
+  <text x="48" y="664" font-size="9.7" fill="#424242">• Cross-cloud shortcut caching: per-workspace, 1–28 day retention,</text>
+  <text x="48" y="678" font-size="9.7" fill="#424242">&#160;&#160;refresh on newer remote version; files &gt;1 GB are never cached.</text>
+  <text x="48" y="694" font-size="9.7" fill="#424242">&#160;&#160;Covers GCS, S3, S3-compatible, and on-prem gateway shortcuts.</text>
+  <text x="48" y="710" font-size="9.7" fill="#424242">• Warehouse/SQL endpoint caching is always-on for any data touched,</text>
+  <text x="48" y="724" font-size="9.7" fill="#424242">&#160;&#160;including shortcuts to non-Azure storage.</text>
+  <text x="48" y="740" font-size="9.7" fill="#424242">• Mirroring propagates changes into OneLake in as little as ~15s;</text>
+  <text x="48" y="754" font-size="9.7" fill="#424242">&#160;&#160;the SQL endpoint adds ~30–60s more — read Delta via Spark for freshest.</text>
+  <text x="48" y="770" font-size="9.7" fill="#424242">• Mirroring storage free up to 1 TB per CU (F64 = 64 TB); replication</text>
+  <text x="48" y="784" font-size="9.7" fill="#424242">&#160;&#160;compute is free — only downstream queries consume capacity.</text>
+
+  <!-- legend -->
+  <rect x="608" y="620" width="562" height="176" rx="9" fill="#F3EBFB" stroke="#C7A8E8"/>
+  <text x="626" y="643" font-size="12" font-weight="700" fill="#3D1E5C">Legend &amp; the decision in one line</text>
+  <rect x="626" y="654" width="14" height="14" rx="3" fill="#EAF7F2" stroke="#2AAC94"/>
+  <text x="647" y="665" font-size="9.5" fill="#424242">Virtualize (shortcut) — integrate in place, zero copy</text>
+  <rect x="626" y="674" width="14" height="14" rx="3" fill="#F3EBFB" stroke="#8E5BC4"/>
+  <text x="647" y="685" font-size="9.5" fill="#424242">Replicate (mirroring) — managed near-real-time copy</text>
+  <rect x="626" y="694" width="14" height="14" rx="3" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="647" y="705" font-size="9.5" fill="#424242">Copy (pipeline) — explicit, transformed landing</text>
+  <rect x="626" y="714" width="14" height="14" rx="3" fill="#F3F2F1" stroke="#C8C6C4"/>
+  <text x="647" y="725" font-size="9.5" fill="#424242">External non-Fabric system</text>
+  <text x="626" y="748" font-size="9.7" fill="#5B2C86">Prefer virtualize when the source stays authoritative and network</text>
+  <text x="626" y="762" font-size="9.7" fill="#5B2C86">reach is fine; replicate when you need a governed near-real-time</text>
+  <text x="626" y="776" font-size="9.7" fill="#5B2C86">local copy; copy when you must reshape or curate on ingest.</text>
+
+  <text x="1170" y="812" text-anchor="end" font-size="9" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset.</text>
+</svg>

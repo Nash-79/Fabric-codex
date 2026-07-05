@@ -17,8 +17,8 @@ domain and state it). YOU extract — the server does no LLM work.
    PySpark, Python, DirectLake, PowerBI, …).
 4. Record source diagrams as referenced assets (url + caption + attribution; never re-host).
    Prefer an original diagram via /prompts:fa-diagram over copying.
-5. Write content/sources/<slug>.json (see content/sources/example-direct-lake.json), then:
-   curl -s -X POST http://localhost:8000/sources/ingest --data @content/sources/<slug>.json
+5. Write content/sources/<slug>.json (see content/sources/example-direct-lake.json) and commit it.
+   There is no server ingest API — a human publishes it via Settings → Publish → "Publish all".
 6. Sources from sources (suggest, never auto-ingest): for the high-trust links this source relied
    on, score a tier by domain (learn.microsoft.com=1, *.microsoft.com blog=2, github.com/microsoft=3).
    For each tier ≤ 3 link not already a source or queued, enqueue it for human approval — do not
