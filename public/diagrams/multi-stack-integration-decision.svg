@@ -1,0 +1,172 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1160 900" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Decision-tree style (distinct from the architecture flow): shortcut vs mirror vs copy.
+       Grounded ONLY in verified claims:
+       - shortcut = zero-copy reference, avoids duplication + ETL (onelake-overview, lakehouse-overview)
+       - shortcuts are read-only references (lakehouse-overview: "live, read-only references")
+       - shortcut caching cross-cloud; >1GB never cached; GCS/S3/on-prem gateway (onelake-shortcuts)
+       - Mirroring = managed serverless CDC into OneLake Delta; ~15s; free replication compute;
+         free storage 1TB/CU; supported sources list (mirroring-overview)
+       - three mirroring modes: database / metadata (shortcut, data in place) / open (mirroring-overview)
+       - mirroring is current-state replica, not DR backup, not append-only stream (bradcoles-fabric-mirroring-before-you-commit, mirroring-overview)
+       - source RLS/CLS/masking NOT carried into mirror — rebuild at Fabric layer (bradcoles-...before-you-commit)
+       - pipeline copy / Copy activity into lakehouse for explicit reshaped landing (lakehouse-overview)
+       - Block Public Internet Access pauses most native mirroring connectors; only Open Mirroring,
+         Cosmos DB, Azure SQL MI, SQL Server 2025 continue (bradcoles-...before-you-commit)
+       - Databricks + Dremio via metadata mirroring; not database mirroring (mirroring-overview) -->
+  <defs>
+    <linearGradient id="hdrGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="0.6" stop-color="#117865"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <linearGradient id="colShort" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2AAC94"/>
+      <stop offset="1" stop-color="#1A9E85"/>
+    </linearGradient>
+    <linearGradient id="colMirror" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8E5BC4"/>
+      <stop offset="1" stop-color="#5B2C86"/>
+    </linearGradient>
+    <linearGradient id="colCopy" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#117865"/>
+      <stop offset="1" stop-color="#063D3B"/>
+    </linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#117865"/>
+    </marker>
+  </defs>
+
+  <rect width="1160" height="900" fill="#FFFFFF"/>
+
+  <!-- header -->
+  <rect x="0" y="0" width="1160" height="64" fill="url(#hdrGrad)"/>
+  <text x="34" y="30" font-size="19" font-weight="650" fill="#FFFFFF">Shortcut vs Mirror vs Copy — the integrate-in-place-or-move decision</text>
+  <text x="34" y="50" font-size="11" fill="#D9F5EE">Fabric Atlas original diagram · decision guide · capabilities: onelake · mirroring</text>
+
+  <!-- STEP 1 -->
+  <text x="34" y="94" font-size="11" letter-spacing="1.4" fill="#8A8886">STEP 1 — DO YOU NEED A LOCAL COPY IN ONELAKE AT ALL?</text>
+  <g transform="translate(430,102)">
+    <rect width="300" height="66" rx="10" fill="#EAF7F2" stroke="#2AAC94" stroke-width="1.6"/>
+    <text x="150" y="28" text-anchor="middle" font-size="12.5" font-weight="700" fill="#063D3B">Is the source itself queryable &amp;</text>
+    <text x="150" y="46" text-anchor="middle" font-size="12.5" font-weight="700" fill="#063D3B">reachable, and stays authoritative?</text>
+    <text x="150" y="60" text-anchor="middle" font-size="9.5" fill="#3F6259">Object store or Fabric-mirrorable engine, network reach OK</text>
+  </g>
+
+  <!-- branch labels -->
+  <text x="250" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#1A9E85">YES — read in place</text>
+  <text x="910" y="192" text-anchor="middle" font-size="11" font-weight="700" fill="#5B2C86">NO — need a governed local Delta copy</text>
+  <g stroke="#117865" stroke-width="1.6" fill="none">
+    <path d="M520 168 C 460 182, 300 184, 250 200" marker-end="url(#arr)"/>
+    <path d="M640 168 C 760 182, 860 184, 910 200" marker-end="url(#arr)"/>
+  </g>
+
+  <!-- STEP 2 -->
+  <text x="34" y="230" font-size="11" letter-spacing="1.4" fill="#8A8886">STEP 2 — PICK THE MODE</text>
+
+  <!-- SHORTCUT column -->
+  <g transform="translate(34,244)">
+    <rect width="330" height="56" rx="10" fill="url(#colShort)"/>
+    <text x="165" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">Virtualize — OneLake shortcut</text>
+    <text x="165" y="44" text-anchor="middle" font-size="10" fill="#EAF7F2">Zero-copy reference · no ETL, no migration</text>
+  </g>
+  <g transform="translate(34,308)">
+    <rect width="330" height="270" rx="9" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.4"/>
+    <text x="16" y="26" font-size="10.5" font-weight="700" fill="#063D3B">Fits when</text>
+    <text x="16" y="44" font-size="9.5" fill="#3F6259">• Source is ADLS, Amazon S3, GCS, or Dataverse</text>
+    <text x="16" y="60" font-size="9.5" fill="#3F6259">• You want no data duplication and no pipeline</text>
+    <text x="16" y="76" font-size="9.5" fill="#3F6259">• Source engine keeps writing; Fabric reads live</text>
+    <text x="16" y="92" font-size="9.5" fill="#3F6259">• Metadata mirroring targets (Databricks, Dremio,</text>
+    <text x="16" y="106" font-size="9.5" fill="#3F6259">&#160;&#160;cross-tenant shares) — data stays in place</text>
+    <text x="16" y="130" font-size="10.5" font-weight="700" fill="#063D3B">Behaviour</text>
+    <text x="16" y="148" font-size="9.5" fill="#3F6259">• Live, read-only reference; looks like a folder</text>
+    <text x="16" y="164" font-size="9.5" fill="#3F6259">• Delta targets auto-register as lakehouse tables</text>
+    <text x="16" y="180" font-size="9.5" fill="#3F6259">• Cross-cloud reads use per-workspace cache</text>
+    <text x="16" y="196" font-size="9.5" fill="#3F6259">&#160;&#160;(1–28 day retention) to cut egress</text>
+    <text x="16" y="220" font-size="10.5" font-weight="700" fill="#A4262C">Watch</text>
+    <text x="16" y="238" font-size="9.5" fill="#78312E">• Files &gt;1 GB are never cached</text>
+    <text x="16" y="252" font-size="9.5" fill="#78312E">• Limits: 100k/item, 10/path, 5-deep chains;</text>
+    <text x="16" y="264" font-size="9.5" fill="#78312E">&#160;&#160;no space/%/+ in names; moving target breaks it</text>
+  </g>
+
+  <!-- MIRROR column -->
+  <g transform="translate(415,244)">
+    <rect width="330" height="56" rx="10" fill="url(#colMirror)"/>
+    <text x="165" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">Replicate — Fabric Mirroring</text>
+    <text x="165" y="44" text-anchor="middle" font-size="10" fill="#EAD9F7">Managed serverless CDC · Delta Parquet in OneLake</text>
+  </g>
+  <g transform="translate(415,308)">
+    <rect width="330" height="270" rx="9" fill="#F3EBFB" stroke="#C7A8E8" stroke-width="1.4"/>
+    <text x="16" y="26" font-size="10.5" font-weight="700" fill="#3D1E5C">Fits when</text>
+    <text x="16" y="44" font-size="9.5" fill="#5B2C86">• Source is a supported DB: Azure SQL/MI, SQL</text>
+    <text x="16" y="60" font-size="9.5" fill="#5B2C86">&#160;&#160;Server, PostgreSQL, MySQL(prev), Cosmos DB,</text>
+    <text x="16" y="76" font-size="9.5" fill="#5B2C86">&#160;&#160;Oracle, SAP, Snowflake, BigQuery(prev)</text>
+    <text x="16" y="92" font-size="9.5" fill="#5B2C86">• You want a near-real-time local replica for</text>
+    <text x="16" y="106" font-size="9.5" fill="#5B2C86">&#160;&#160;analytics without hand-built ETL</text>
+    <text x="16" y="130" font-size="10.5" font-weight="700" fill="#3D1E5C">Behaviour</text>
+    <text x="16" y="148" font-size="9.5" fill="#5B2C86">• Changes land in OneLake in as little as ~15s</text>
+    <text x="16" y="164" font-size="9.5" fill="#5B2C86">• Replication compute is free; storage free to</text>
+    <text x="16" y="180" font-size="9.5" fill="#5B2C86">&#160;&#160;1 TB per CU (F64 = 64 TB)</text>
+    <text x="16" y="196" font-size="9.5" fill="#5B2C86">• Feeds Direct Lake, cross-DB T-SQL, GraphQL</text>
+    <text x="16" y="220" font-size="10.5" font-weight="700" fill="#A4262C">Watch</text>
+    <text x="16" y="238" font-size="9.5" fill="#78312E">• Source RLS/CLS/masking NOT carried over —</text>
+    <text x="16" y="250" font-size="9.5" fill="#78312E">&#160;&#160;rebuild security at the Fabric layer</text>
+    <text x="16" y="264" font-size="9.5" fill="#78312E">• Current-state replica only — not DR, not a stream</text>
+  </g>
+
+  <!-- COPY column -->
+  <g transform="translate(796,244)">
+    <rect width="330" height="56" rx="10" fill="url(#colCopy)"/>
+    <text x="165" y="26" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">Copy — Data Factory pipeline</text>
+    <text x="165" y="44" text-anchor="middle" font-size="10" fill="#D9F5EE">Explicit bulk / scheduled load · reshape on ingest</text>
+  </g>
+  <g transform="translate(796,308)">
+    <rect width="330" height="270" rx="9" fill="#F3F2F1" stroke="#C8C6C4" stroke-width="1.4"/>
+    <text x="16" y="26" font-size="10.5" font-weight="700" fill="#063D3B">Fits when</text>
+    <text x="16" y="44" font-size="9.5" fill="#3F6259">• You must transform, curate, or reshape data</text>
+    <text x="16" y="60" font-size="9.5" fill="#3F6259">&#160;&#160;on the way in (not just mirror it 1:1)</text>
+    <text x="16" y="76" font-size="9.5" fill="#3F6259">• Source is not a shortcut target nor a supported</text>
+    <text x="16" y="90" font-size="9.5" fill="#3F6259">&#160;&#160;mirroring source</text>
+    <text x="16" y="106" font-size="9.5" fill="#3F6259">• One-time migration or scheduled batch loads</text>
+    <text x="16" y="130" font-size="10.5" font-weight="700" fill="#063D3B">Behaviour</text>
+    <text x="16" y="148" font-size="9.5" fill="#3F6259">• Copy activity / pipeline writes Delta into the</text>
+    <text x="16" y="164" font-size="9.5" fill="#3F6259">&#160;&#160;lakehouse; you own scheduling &amp; transforms</text>
+    <text x="16" y="180" font-size="9.5" fill="#3F6259">• Non-Delta formats must be converted to Delta</text>
+    <text x="16" y="194" font-size="9.5" fill="#3F6259">&#160;&#160;to surface through the SQL analytics endpoint</text>
+    <text x="16" y="220" font-size="10.5" font-weight="700" fill="#A4262C">Watch</text>
+    <text x="16" y="238" font-size="9.5" fill="#78312E">• A full second copy — you own freshness lag and</text>
+    <text x="16" y="250" font-size="9.5" fill="#78312E">&#160;&#160;pipeline orchestration/failure handling</text>
+    <text x="16" y="264" font-size="9.5" fill="#78312E">• Prefer shortcut/mirror first to avoid duplication</text>
+  </g>
+
+  <!-- STEP 3: networking gate -->
+  <text x="34" y="618" font-size="11" letter-spacing="1.4" fill="#8A8886">STEP 3 — NETWORK-ISOLATION CHECK (can change the answer)</text>
+  <rect x="34" y="628" width="1092" height="86" rx="9" fill="#FDE7E9" stroke="#F1707B"/>
+  <text x="52" y="652" font-size="12" font-weight="700" fill="#A4262C">If Block Public Internet Access is enabled at the tenant</text>
+  <text x="52" y="672" font-size="10" fill="#78312E">Most native database mirroring connectors pause and stop replicating. Only Open Mirroring, Cosmos DB, Azure SQL Managed Instance,</text>
+  <text x="52" y="688" font-size="10" fill="#78312E">and SQL Server 2025 keep working under that restriction. On-premises data gateways cannot register at all under this setting —</text>
+  <text x="52" y="704" font-size="10" fill="#78312E">the only replacement is a VNet data gateway (requires ExpressRoute or site-to-site VPN). Factor this in before committing to mirroring.</text>
+
+  <!-- BOTTOM: default recommendation -->
+  <rect x="34" y="728" width="540" height="150" rx="9" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="52" y="752" font-size="12" font-weight="700" fill="#063D3B">Default order of preference</text>
+  <text x="52" y="774" font-size="10" fill="#3F6259">1. Shortcut if the source is object storage / Dataverse or a</text>
+  <text x="52" y="788" font-size="10" fill="#3F6259">&#160;&#160;&#160;metadata-mirroring target — integrate in place, zero copy.</text>
+  <text x="52" y="806" font-size="10" fill="#3F6259">2. Mirror if you need a governed near-real-time local replica of</text>
+  <text x="52" y="820" font-size="10" fill="#3F6259">&#160;&#160;&#160;a supported operational/analytical database.</text>
+  <text x="52" y="838" font-size="10" fill="#3F6259">3. Copy only when you must reshape on ingest or the source is</text>
+  <text x="52" y="852" font-size="10" fill="#3F6259">&#160;&#160;&#160;neither a shortcut target nor a mirroring source.</text>
+  <text x="52" y="870" font-size="9.5" fill="#8A8886">Inference — synthesises the verified fit-criteria above into an ordering.</text>
+
+  <rect x="586" y="728" width="540" height="150" rx="9" fill="#F3EBFB" stroke="#C7A8E8"/>
+  <text x="604" y="752" font-size="12" font-weight="700" fill="#3D1E5C">Whichever mode you pick, the copy stays open</text>
+  <text x="604" y="774" font-size="10" fill="#5B2C86">All three land data as open Delta Parquet in OneLake, so downstream</text>
+  <text x="604" y="788" font-size="10" fill="#5B2C86">engines read the same one copy — Fabric T-SQL, Spark, and Analysis</text>
+  <text x="604" y="802" font-size="10" fill="#5B2C86">Services, plus ADLS Gen2-compatible external engines like Databricks.</text>
+  <text x="604" y="822" font-size="10" fill="#5B2C86">Expose it outward through SQL analytics endpoints, the GraphQL API,</text>
+  <text x="604" y="836" font-size="10" fill="#5B2C86">or cross-tenant sharing — governed centrally by Purview and OneLake</text>
+  <text x="604" y="850" font-size="10" fill="#5B2C86">security, which stay in force even across tenant boundaries.</text>
+  <text x="604" y="870" font-size="9.5" fill="#8A8886">All statements above are grounded in verified claims; see the design's source legend.</text>
+
+  <text x="1126" y="894" text-anchor="end" font-size="9" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset.</text>
+</svg>

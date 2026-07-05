@@ -28,6 +28,43 @@ processed lines are moved to the Done section below with the resulting content f
 
 # internals gap: power-bi / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog or benchmark publishing measured VertiPaq query-latency numbers by segment size, Direct Lake cold-vs-hot query latency figures, or on-demand-load column-paging throughput numbers for large-format semantic models tier=1
 
+# internals gap: dataflow-gen2 / all sub-headings — NEEDS SOURCE: a Microsoft engineering blog or deep-dive on Dataflow Gen2 mashup-engine execution, staging/fast-copy internals, or measured refresh throughput tier=1
+
+# internals gap: fabric-overview / all sub-headings — NEEDS SOURCE: a Microsoft engineering blog or conference talk on Fabric control-plane/workspace architecture internals beyond the L1-L2 overview docs tier=1
+
+# internals gap: governance / all sub-headings — NEEDS SOURCE: a Microsoft engineering blog or deep-dive on Purview policy-evaluation/lineage-scanning internals in Fabric tier=1
+
+# internals gap: lakehouse-direct-lake-bi / all sub-headings — NEEDS SOURCE: covered largely by existing direct-lake claims; design predates the Internals convention and needs a grounded rewrite of its Internals section from direct-lake L4/L5 claims tier=1
+
+# internals gap: data-mesh-domains / How it works internally + Performance characteristics — NEEDS SOURCE: Microsoft documentation or engineering blog on domain/workspace metadata internals, cross-domain shortcut resolution, or capacity-isolation behavior at scale tier=1
+
+# internals gap: multi-stack-integration / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog or benchmark on multi-cloud shortcut read latency/egress behavior (S3/GCS shortcut throughput, cache hit behavior) tier=1
+
+# internals gap: streaming-analytics-pattern / How it works internally — NEEDS SOURCE: same gap as rti internals above — Eventstream operator pipeline, checkpointing, and Activator evaluation internals; resolves the streaming-analytics-pattern design placeholder too tier=1
+
+# ---- Suggested sources discovered during 2026-07-05 ingestion (human approval needed — add via Settings → Queue, kind=source) ----
+# discovered via fabric-jumpstart-catalog: https://github.com/microsoft/fabric-jumpstart tier=3 (backing repo: install mechanics, Core/Community standards)
+# discovered via fabric-jumpstart-catalog: https://community.fabric.microsoft.com/t5/Fabric-Updates-Blog/Empowering-admins-and-developers-with-a-Fabric-platform-ready/ba-p/5172252 tier=2 (official Jumpstart launch announcement)
+# discovered via fabric-jumpstart-catalog: https://microsoft.github.io/fabric-cicd/latest/ tier=3 (fabric-cicd deployment engine docs)
+# discovered via fabricdataagent-community-hub: https://learn.microsoft.com/en-us/fabric/data-science/data-agent-configuration-best-practices tier=1 (official configuration best practices)
+# discovered via fabricdataagent-community-hub: https://learn.microsoft.com/en-us/fabric/data-science/data-agent-mcp-server tier=1 (Data Agent MCP server)
+# discovered via fabricdataagent-community-hub: https://community.fabric.microsoft.com/t5/Fabric-Updates-Blog/Data-Agent-Now-Supports-Eventhouse-Functions-Materialized-Views/ba-p/5181801 tier=2 (Eventhouse UDF/MV/shortcut support announcement)
+# discovered via fabricdataagent-community-hub: https://community.fabric.microsoft.com/t5/IQ-Community-Blog/Fabric-Data-Agents-The-Shift-from-Querying-Data-to-Reasoning/ba-p/5139442 tier=2 (IQ community blog: querying → reasoning)
+# discovered via fabricdataagent-community-hub: https://microsoftlearning.github.io/mslearn-fabric/Instructions/Labs/22d-copilot-fabric-data-agents.html tier=3 (official hands-on lab)
+# discovered via fabricdataagent-community-hub: https://github.com/microsoft/fabric-samples/tree/main/docs-samples/data-science/data-agent-sdk tier=3 (official SDK sample notebooks)
+# discovered via fabric-data-agent-create: https://learn.microsoft.com/en-us/fabric/security/workspace-outbound-access-protection-data-agent tier=1 (outbound access protection for data agents)
+# discovered via fabric-data-agent-create: https://learn.microsoft.com/en-us/fabric/data-science/data-agent-tenant-settings tier=1 (data agent tenant settings)
+# discovered via fabric-data-agent-evaluation: https://learn.microsoft.com/en-us/fabric/data-science/fabric-data-agent-sdk tier=1 (Python SDK reference)
+# discovered via fabric-data-agent-create: https://learn.microsoft.com/en-us/fabric/governance/external-data-sharing-overview tier=1 (external data sharing overview)
+
+# ---- Source tracking (2026-07-05) ----
+# fabricdataagent.com has NO RSS feed. Track it two ways:
+# 1. RSS: add https://github.com/pawarbi/fabric-data-agent-website/commits/main.atom (tier 4, tags FabricDataAgent,Community)
+#    in Settings → RSS Feeds — the site is open source, so every content update is a commit on that feed.
+# 2. Drift: the site publishes https://fabricdataagent.com/llms-full.txt (full-content dump; source of
+#    fabricdataagent-community-hub). Re-run `/drift fabricdataagent-community-hub` periodically (e.g. monthly)
+#    to diff its claims. Jumpstart catalog: `/drift fabric-jumpstart-catalog` on the same cadence.
+
 ## Done
 
 # blog INDEX pages — curator picked substantive Fabric posts and
@@ -42,3 +79,11 @@ https://milescole.dev/categories/ tier=4 -> content/sources/milescole-deletion-v
 https://learn.microsoft.com/en-us/fabric/data-science/concept-data-agent tier=1 -> content/sources/fabric-data-agent-concept.json
 https://learn.microsoft.com/en-us/fabric/data-engineering/api-graphql-overview tier=1 -> content/sources/api-graphql-overview.json
 https://learn.microsoft.com/en-us/fabric/fundamentals/fabric-iq-overview tier=1 -> content/sources/fabric-iq-overview.json # NOTE: URL moved to https://learn.microsoft.com/en-us/fabric/iq/overview — ingested from corrected URL
+
+# 2026-07-05 batch — Jumpstart + Fabric Data Agent expansion, awaiting Settings → Publish + Registry verify
+
+https://jumpstart.fabric.microsoft.com/catalog tier=1 -> content/sources/fabric-jumpstart-catalog.json
+https://fabricdataagent.com/ tier=4 -> content/sources/fabricdataagent-community-hub.json # extracted from /llms-full.txt
+https://learn.microsoft.com/en-us/fabric/data-science/how-to-create-data-agent tier=1 -> content/sources/fabric-data-agent-create.json
+https://learn.microsoft.com/en-us/fabric/data-science/evaluate-data-agent tier=1 -> content/sources/fabric-data-agent-evaluation.json
+https://learn.microsoft.com/en-us/fabric/data-science/data-agent-configurations tier=1 -> content/sources/fabric-data-agent-configuration.json

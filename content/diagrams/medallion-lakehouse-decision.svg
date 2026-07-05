@@ -1,0 +1,208 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 900" width="1120" height="900" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Decision guide: choosing the ingestion / transform engine per medallion workload.
+       Funnel (what kind of problem) -> four mechanisms -> scoring grid -> V-Order-per-zone rule.
+       Palette: #063D3B #0B5E50 #117865 #2AAC94 #EAF7F2 -->
+  <defs>
+    <linearGradient id="hdr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/><stop offset="0.6" stop-color="#117865"/><stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <linearGradient id="cA" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#117865"/><stop offset="1" stop-color="#0B5E50"/></linearGradient>
+    <linearGradient id="cB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2AAC94"/><stop offset="1" stop-color="#1A9E85"/></linearGradient>
+    <linearGradient id="cC" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#063D3B"/><stop offset="1" stop-color="#042C2A"/></linearGradient>
+    <linearGradient id="cD" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d5c53"/><stop offset="1" stop-color="#08403a"/></linearGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#117865"/></marker>
+  </defs>
+
+  <rect width="1120" height="900" fill="#FFFFFF"/>
+
+  <rect x="0" y="0" width="1120" height="64" fill="url(#hdr)"/>
+  <text x="36" y="30" font-size="20" font-weight="650" fill="#FFFFFF">Choosing the Ingestion / Transform Engine per Medallion Workload</text>
+  <text x="36" y="50" font-size="11" fill="#D9F5EE">Fabric Atlas original diagram · decision guide · capability: lakehouse · topic: medallion-lakehouse</text>
+
+  <!-- STEP 1 funnel -->
+  <text x="36" y="92" font-size="11" letter-spacing="1.4" fill="#8A8886">STEP 1 — WHAT KIND OF WORK IS THIS?</text>
+  <g>
+    <rect x="36" y="100" width="252" height="70" rx="9" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.4"/>
+    <text x="162" y="124" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">Bulk / recurring movement?</text>
+    <text x="162" y="142" text-anchor="middle" font-size="9.5" fill="#3F6259">One-time migration or high-volume</text>
+    <text x="162" y="156" text-anchor="middle" font-size="9.5" fill="#3F6259">scheduled loads into OneLake.</text>
+
+    <rect x="300" y="100" width="252" height="70" rx="9" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.4"/>
+    <text x="426" y="124" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">Low-code shaping first?</text>
+    <text x="426" y="142" text-anchor="middle" font-size="9.5" fill="#3F6259">Cleansing / standardising before</text>
+    <text x="426" y="156" text-anchor="middle" font-size="9.5" fill="#3F6259">load — business-analyst owned.</text>
+
+    <rect x="564" y="100" width="252" height="70" rx="9" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.4"/>
+    <text x="690" y="124" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">Large-scale / complex transform?</text>
+    <text x="690" y="142" text-anchor="middle" font-size="9.5" fill="#3F6259">Land raw, push transform down to</text>
+    <text x="690" y="156" text-anchor="middle" font-size="9.5" fill="#3F6259">Spark over OneLake (ELT).</text>
+
+    <rect x="828" y="100" width="256" height="70" rx="9" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.4"/>
+    <text x="956" y="124" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">Data already governed elsewhere?</text>
+    <text x="956" y="142" text-anchor="middle" font-size="9.5" fill="#3F6259">Reference in place — no copy,</text>
+    <text x="956" y="156" text-anchor="middle" font-size="9.5" fill="#3F6259">no ETL, no re-ingestion.</text>
+  </g>
+
+  <line x1="162" y1="170" x2="162" y2="200" stroke="#117865" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="426" y1="170" x2="426" y2="200" stroke="#117865" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="690" y1="170" x2="690" y2="200" stroke="#117865" stroke-width="1.6" marker-end="url(#arr)"/>
+  <line x1="956" y1="170" x2="956" y2="200" stroke="#117865" stroke-width="1.6" marker-end="url(#arr)"/>
+
+  <!-- STEP 2 four mechanisms -->
+  <text x="36" y="194" font-size="11" letter-spacing="1.4" fill="#8A8886">STEP 2 — THE MECHANISM THAT FITS</text>
+  <rect x="36" y="204" width="252" height="46" rx="8" fill="url(#cA)"/><text x="162" y="232" text-anchor="middle" font-size="13.5" font-weight="700" fill="#FFFFFF">Pipeline Copy activity</text>
+  <rect x="300" y="204" width="252" height="46" rx="8" fill="url(#cB)"/><text x="426" y="232" text-anchor="middle" font-size="13.5" font-weight="700" fill="#FFFFFF">Dataflow Gen2</text>
+  <rect x="564" y="204" width="252" height="46" rx="8" fill="url(#cC)"/><text x="690" y="232" text-anchor="middle" font-size="13.5" font-weight="700" fill="#FFFFFF">Spark notebook / job</text>
+  <rect x="828" y="204" width="256" height="46" rx="8" fill="url(#cD)"/><text x="956" y="232" text-anchor="middle" font-size="13.5" font-weight="700" fill="#FFFFFF">OneLake shortcut</text>
+
+  <!-- SCORING GRID -->
+  <text x="36" y="286" font-size="11" letter-spacing="1.4" fill="#8A8886">RATED AGAINST FOUR CRITERIA</text>
+
+  <!-- Row 1 primary use -->
+  <g font-size="10.2">
+    <rect x="36" y="298" width="252" height="82" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
+    <text x="52" y="317" font-weight="700" fill="#117865">Best for</text>
+    <text x="52" y="334" fill="#424242">Bronze landing of bulk and</text>
+    <text x="52" y="348" fill="#424242">recurring loads. Microsoft's</text>
+    <text x="52" y="362" fill="#424242">recommended engine for large</text>
+    <text x="52" y="376" fill="#424242">one-time + high-volume ingestion.</text>
+
+    <rect x="300" y="298" width="252" height="82" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
+    <text x="316" y="317" font-weight="700" fill="#117865">Best for</text>
+    <text x="316" y="334" fill="#424242">Analyst-owned cleansing when</text>
+    <text x="316" y="348" fill="#424242">code is undesirable. Recommended</text>
+    <text x="316" y="362" fill="#424242">when data must be shaped before</text>
+    <text x="316" y="376" fill="#424242">it lands (classic ETL).</text>
+
+    <rect x="564" y="298" width="252" height="82" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
+    <text x="580" y="317" font-weight="700" fill="#117865">Best for</text>
+    <text x="580" y="334" fill="#424242">Bronze→Silver→Gold transforms</text>
+    <text x="580" y="348" fill="#424242">and any complex logic. The</text>
+    <text x="580" y="362" fill="#424242">code-first ELT push-down path</text>
+    <text x="580" y="376" fill="#424242">over OneLake.</text>
+
+    <rect x="828" y="298" width="256" height="82" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
+    <text x="844" y="317" font-weight="700" fill="#117865">Best for</text>
+    <text x="844" y="334" fill="#424242">Bronze without a copy: mount</text>
+    <text x="844" y="348" fill="#424242">ADLS / S3 / GCS / other OneLake</text>
+    <text x="844" y="362" fill="#424242">as a zero-copy reference; Delta</text>
+    <text x="844" y="376" fill="#424242">targets auto-register as tables.</text>
+  </g>
+
+  <!-- Row 2 authoring -->
+  <g font-size="10.2">
+    <rect x="36" y="388" width="252" height="76" rx="7" fill="#FFFFFF" stroke="#E1DFDD"/>
+    <text x="52" y="407" font-weight="700" fill="#117865">Authoring</text>
+    <text x="52" y="424" fill="#424242">Low-code pipeline designer;</text>
+    <text x="52" y="438" fill="#424242">serverless, parallelism at three</text>
+    <text x="52" y="452" fill="#424242">levels (ForEach / ITO / threads).</text>
+
+    <rect x="300" y="388" width="252" height="76" rx="7" fill="#FFFFFF" stroke="#E1DFDD"/>
+    <text x="316" y="407" font-weight="700" fill="#117865">Authoring</text>
+    <text x="316" y="424" fill="#424242">Power Query, fully low-code;</text>
+    <text x="316" y="438" fill="#424242">300+ transforms, hundreds of</text>
+    <text x="316" y="452" fill="#424242">connectors; writes to lakehouse.</text>
+
+    <rect x="564" y="388" width="252" height="76" rx="7" fill="#FFFFFF" stroke="#E1DFDD"/>
+    <text x="580" y="407" font-weight="700" fill="#117865">Authoring</text>
+    <text x="580" y="424" fill="#424242">Code-first PySpark / Scala / SQL;</text>
+    <text x="580" y="438" fill="#424242">Spark job definitions for compiled</text>
+    <text x="580" y="452" fill="#424242">production ETL; NEE accelerates it.</text>
+
+    <rect x="828" y="388" width="256" height="76" rx="7" fill="#FFFFFF" stroke="#E1DFDD"/>
+    <text x="844" y="407" font-weight="700" fill="#117865">Authoring</text>
+    <text x="844" y="424" fill="#424242">Portal or OneLake shortcuts REST</text>
+    <text x="844" y="438" fill="#424242">API; behaves like a symbolic link</text>
+    <text x="844" y="452" fill="#424242">— no pipeline or code to run.</text>
+  </g>
+
+  <!-- Row 3 cost/latency -->
+  <g font-size="10.2">
+    <rect x="36" y="472" width="252" height="76" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
+    <text x="52" y="491" font-weight="700" fill="#117865">Cost / latency</text>
+    <text x="52" y="508" fill="#424242">Serverless, cost-effective at</text>
+    <text x="52" y="522" fill="#424242">scale; throughput bounded by the</text>
+    <text x="52" y="536" fill="#424242">min of source, destination, network.</text>
+
+    <rect x="300" y="472" width="252" height="76" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
+    <text x="316" y="491" font-weight="700" fill="#117865">Cost / latency</text>
+    <text x="316" y="508" fill="#424242">Runs on Fabric SQL compute; needs</text>
+    <text x="316" y="522" fill="#424242">a Fabric/PPU capacity. Managed</text>
+    <text x="316" y="536" fill="#424242">staging items provisioned for it.</text>
+
+    <rect x="564" y="472" width="252" height="76" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
+    <text x="580" y="491" font-weight="700" fill="#117865">Cost / latency</text>
+    <text x="580" y="508" fill="#424242">Billed only for active session;</text>
+    <text x="580" y="522" fill="#424242">starter pools start in 5–10 s,</text>
+    <text x="580" y="536" fill="#424242">custom pools add 2–5 min.</text>
+
+    <rect x="828" y="472" width="256" height="76" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
+    <text x="844" y="491" font-weight="700" fill="#117865">Cost / latency</text>
+    <text x="844" y="508" fill="#424242">No compute to move data; cross-</text>
+    <text x="844" y="522" fill="#424242">cloud reads use intelligent caching</text>
+    <text x="844" y="536" fill="#424242">to cut egress and improve locality.</text>
+  </g>
+
+  <!-- Row 4 watch-out -->
+  <g font-size="10.2">
+    <rect x="36" y="556" width="252" height="80" rx="7" fill="#FDF3F2" stroke="#F1B0A8"/>
+    <text x="52" y="575" font-weight="700" fill="#C50F1F">Watch-out</text>
+    <text x="52" y="592" fill="#7A2E27">Tuning ITO / parallelism without</text>
+    <text x="52" y="606" fill="#7A2E27">measuring the real bottleneck</text>
+    <text x="52" y="620" fill="#7A2E27">(source IOPS, network) wastes effort.</text>
+
+    <rect x="300" y="556" width="252" height="80" rx="7" fill="#FDF3F2" stroke="#F1B0A8"/>
+    <text x="316" y="575" font-weight="700" fill="#C50F1F">Watch-out</text>
+    <text x="316" y="592" fill="#7A2E27">Not an orchestrator — pair with a</text>
+    <text x="316" y="606" fill="#7A2E27">pipeline for multi-step chaining;</text>
+    <text x="316" y="620" fill="#7A2E27">steeper cost at very large scale.</text>
+
+    <rect x="564" y="556" width="252" height="80" rx="7" fill="#FDF3F2" stroke="#F1B0A8"/>
+    <text x="580" y="575" font-weight="700" fill="#C50F1F">Watch-out</text>
+    <text x="580" y="592" fill="#7A2E27">Requires code fluency; mind file</text>
+    <text x="580" y="606" fill="#7A2E27">layout (Optimized Write, compaction,</text>
+    <text x="580" y="620" fill="#7A2E27">V-Order) or reads degrade.</text>
+
+    <rect x="828" y="556" width="256" height="80" rx="7" fill="#FDF3F2" stroke="#F1B0A8"/>
+    <text x="844" y="575" font-weight="700" fill="#C50F1F">Watch-out</text>
+    <text x="844" y="592" fill="#7A2E27">Tables shortcuts only at top level;</text>
+    <text x="844" y="606" fill="#7A2E27">moving/renaming the target breaks it;</text>
+    <text x="844" y="620" fill="#7A2E27">deletion-vector tables + Copy misbehave.</text>
+  </g>
+
+  <line x1="36" y1="384" x2="1084" y2="384" stroke="#F3F2F1" stroke-width="1"/>
+  <line x1="36" y1="468" x2="1084" y2="468" stroke="#F3F2F1" stroke-width="1"/>
+  <line x1="36" y1="552" x2="1084" y2="552" stroke="#F3F2F1" stroke-width="1"/>
+
+  <!-- ORCHESTRATION note -->
+  <text x="36" y="672" font-size="11" letter-spacing="1.4" fill="#8A8886">TIE IT TOGETHER — A PIPELINE ORCHESTRATES THE MEDALLION CHAIN</text>
+  <rect x="36" y="682" width="1048" height="52" rx="9" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="560" y="704" text-anchor="middle" font-size="11" font-weight="700" fill="#063D3B">Typical shape: Copy activity (or shortcut) → Bronze · Spark → Silver → Gold · Dataflow Gen2 for source-specific low-code shaping</text>
+  <text x="560" y="722" text-anchor="middle" font-size="9.5" fill="#3F6259">A single pipeline chains Copy, notebooks, Spark job definitions, and dataflows with loops and conditionals — orchestration is the pipeline's job, not the transform engine's.</text>
+
+  <!-- V-ORDER-per-zone rule -->
+  <text x="36" y="762" font-size="11" letter-spacing="1.4" fill="#8A8886">FILE-LAYOUT RULE PER ZONE (SPARK WRITES)</text>
+  <rect x="36" y="772" width="336" height="88" rx="9" fill="#FBEDE0" stroke="#D6A46A"/>
+  <text x="204" y="793" text-anchor="middle" font-size="11.5" font-weight="700" fill="#8a5a1f">BRONZE / SILVER (write-heavy)</text>
+  <text x="204" y="812" text-anchor="middle" font-size="9.8" fill="#6b4315">V-Order OFF (default) — avoid the ~15%</text>
+  <text x="204" y="827" text-anchor="middle" font-size="9.8" fill="#6b4315">write penalty you won't read back.</text>
+  <text x="204" y="845" text-anchor="middle" font-size="9.8" fill="#6b4315">Optimized Write + Auto Compaction on.</text>
+
+  <rect x="392" y="772" width="336" height="88" rx="9" fill="#FBF3D6" stroke="#D6B93A"/>
+  <text x="560" y="793" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7a5c00">GOLD (read-heavy serving)</text>
+  <text x="560" y="812" text-anchor="middle" font-size="9.8" fill="#5c4600">V-Order ON — reads improve significantly;</text>
+  <text x="560" y="827" text-anchor="middle" font-size="9.8" fill="#5c4600">target ~1 GB files for Direct Lake.</text>
+  <text x="560" y="845" text-anchor="middle" font-size="9.8" fill="#5c4600">Scheduled OPTIMIZE keeps files large.</text>
+
+  <rect x="748" y="772" width="336" height="88" rx="9" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="916" y="793" text-anchor="middle" font-size="11.5" font-weight="700" fill="#063D3B">ALWAYS</text>
+  <text x="916" y="812" text-anchor="middle" font-size="9.8" fill="#3F6259">Low-cardinality partitions (~1 GB each);</text>
+  <text x="916" y="827" text-anchor="middle" font-size="9.8" fill="#3F6259">never leave tables un-compacted; split</text>
+  <text x="916" y="845" text-anchor="middle" font-size="9.8" fill="#3F6259">many lakehouses across workspaces.</text>
+
+  <!-- legend -->
+  <rect x="36" y="874" width="14" height="14" rx="3" fill="#F7FDF9" stroke="#9AD2C5"/><text x="56" y="886" font-size="10" fill="#616161">strength / capability</text>
+  <rect x="240" y="874" width="14" height="14" rx="3" fill="#FDF3F2" stroke="#F1B0A8"/><text x="260" y="886" font-size="10" fill="#616161">limitation / watch-out</text>
+  <text x="1084" y="886" text-anchor="end" font-size="9.5" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset.</text>
+</svg>
