@@ -21,9 +21,9 @@ domain and state it). YOU extract — the server does no LLM work.
    There is no server ingest API — a human publishes it via Settings → Publish → "Publish all".
 6. Sources from sources (suggest, never auto-ingest): for the high-trust links this source relied
    on, score a tier by domain (learn.microsoft.com=1, *.microsoft.com blog=2, github.com/microsoft=3).
-   For each tier ≤ 3 link not already a source or queued, enqueue it for human approval — do not
+   For each tier ≤ 3 link not already a source or queued, suggest it for human approval — do not
    ingest it:
    Report high-trust discovered links for the human to add in Settings → Queue with
    `kind=source` and `notes` starting `discovered via <parent-slug>`. Keep it to a few genuine ones.
-   Output the claims table, assets, file path, backend counts, and any discovered sources you
-   enqueued. Never mark claims verified.
+   Output the claims table, assets, file path, exact Settings → Publish action, and any discovered
+   source queue suggestions. Never mark claims verified.
