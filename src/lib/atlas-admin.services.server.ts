@@ -70,10 +70,11 @@ export async function bulkVerifyClaims(
       .select("capability_id")
       .eq("topic_slug", target.topicSlug);
     if (error) throw new Error(error.message);
-    capabilityIds = (links ?? []).map((l: any) => l.capability_id);
-    if (!capabilityIds.length) {
+    const ids = (links ?? []).map((l: any) => l.capability_id);
+    if (!ids.length) {
       return { verified: 0, capabilities: 0, message: "No capabilities mapped to this topic." };
     }
+    capabilityIds = ids;
   } else {
     throw new Error("Provide a capabilityId, topicSlug, or scope: 'all'.");
   }
