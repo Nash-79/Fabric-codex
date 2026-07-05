@@ -58,7 +58,13 @@ export function ClaimsPanel({
     }
     return [...caps.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [data]);
+  const totalPending = useMemo(
+    () =>
+      (data?.claims ?? []).filter((c: any) => c.status === "pending" && c.active !== false).length,
+    [data],
+  );
   const [bulkCap, setBulkCap] = useState("");
+  const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const mutate = useMutation({
     mutationFn: (task: Promise<unknown>) => task,
     onSuccess: () => {
@@ -70,11 +76,12 @@ export function ClaimsPanel({
     onError: (err) => toast.error((err as Error).message),
   });
   const bulkVerify = useMutation({
-    mutationFn: (capabilityId: string) => bulkVerifyFn({ data: { capabilityId } }),
+    mutationFn: (input: { capabilityId?: string; scope?: "all" }) => bulkVerifyFn({ data: input }),
     onSuccess: (res) => {
       const { verified = 0 } = (res ?? {}) as { verified?: number };
       toast.success(`Verified ${verified} pending claim(s).`);
       setBulkCap("");
+      setConfirmAllOpen(false);
       onDone();
     },
     onError: (err) => toast.error((err as Error).message),
