@@ -58,7 +58,13 @@ export function ClaimsPanel({
     }
     return [...caps.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [data]);
+  const totalPending = useMemo(
+    () =>
+      (data?.claims ?? []).filter((c: any) => c.status === "pending" && c.active !== false).length,
+    [data],
+  );
   const [bulkCap, setBulkCap] = useState("");
+  const [confirmAllOpen, setConfirmAllOpen] = useState(false);
   const mutate = useMutation({
     mutationFn: (task: Promise<unknown>) => task,
     onSuccess: () => {
@@ -70,11 +76,12 @@ export function ClaimsPanel({
     onError: (err) => toast.error((err as Error).message),
   });
   const bulkVerify = useMutation({
-    mutationFn: (capabilityId: string) => bulkVerifyFn({ data: { capabilityId } }),
+    mutationFn: (input: { capabilityId?: string; scope?: "all" }) => bulkVerifyFn({ data: input }),
     onSuccess: (res) => {
       const { verified = 0 } = (res ?? {}) as { verified?: number };
       toast.success(`Verified ${verified} pending claim(s).`);
       setBulkCap("");
+      setConfirmAllOpen(false);
       onDone();
     },
     onError: (err) => toast.error((err as Error).message),
@@ -101,12 +108,21 @@ export function ClaimsPanel({
                 </Select>
                 <Button
                   size="sm"
-                  onClick={() => bulkCap && bulkVerify.mutate(bulkCap)}
+                  onClick={() => bulkCap && bulkVerify.mutate({ capabilityId: bulkCap })}
                   disabled={!bulkCap || bulkVerify.isPending}
                 >
                   {bulkVerify.isPending ? "Verifying…" : "Verify all"}
                 </Button>
               </>
+            )}
+            {totalPending > 0 && (
+              <Button
+                size="sm"
+                onClick={() => setConfirmAllOpen(true)}
+                disabled={bulkVerify.isPending}
+              >
+                Verify all {totalPending} pending
+              </Button>
             )}
             <Select value={filter} onValueChange={setFilter}>
               <SelectTrigger className="h-8 w-36 border-border bg-card text-foreground">
@@ -237,6 +253,29 @@ export function ClaimsPanel({
           >
             Create new version
           </Button>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={confirmAllOpen} onOpenChange={setConfirmAllOpen}>
+        <DialogContent className="border-border bg-popover text-foreground sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Verify every pending claim?</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              This will verify all {totalPending} active, pending claim(s) across every capability.
+              Each transition is logged to the claim-events audit trail and persists across
+              refreshes and redeploys.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmAllOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => bulkVerify.mutate({ scope: "all" })}
+              disabled={bulkVerify.isPending}
+            >
+              {bulkVerify.isPending ? "Verifying…" : `Verify all ${totalPending}`}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

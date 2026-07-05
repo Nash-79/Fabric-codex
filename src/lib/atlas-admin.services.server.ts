@@ -57,10 +57,12 @@ export async function mutateClaimStatus(sb: SupabaseAdmin, claimId: string, acti
 // touches active+pending claims — already-verified/rejected/superseded claims are left untouched.
 export async function bulkVerifyClaims(
   sb: SupabaseAdmin,
-  target: { capabilityId?: string; topicSlug?: string },
+  target: { capabilityId?: string; topicSlug?: string; scope?: "all" },
 ) {
-  let capabilityIds: string[] = [];
-  if (target.capabilityId) {
+  let capabilityIds: string[] | null = null;
+  if (target.scope === "all") {
+    capabilityIds = null; // signal: no capability filter, verify globally
+  } else if (target.capabilityId) {
     capabilityIds = [target.capabilityId];
   } else if (target.topicSlug) {
     const { data: links, error } = await sb
@@ -68,20 +70,18 @@ export async function bulkVerifyClaims(
       .select("capability_id")
       .eq("topic_slug", target.topicSlug);
     if (error) throw new Error(error.message);
-    capabilityIds = (links ?? []).map((l: any) => l.capability_id);
-    if (!capabilityIds.length) {
+    const ids = (links ?? []).map((l: any) => l.capability_id);
+    if (!ids.length) {
       return { verified: 0, capabilities: 0, message: "No capabilities mapped to this topic." };
     }
+    capabilityIds = ids;
   } else {
-    throw new Error("Provide a capabilityId or a topicSlug.");
+    throw new Error("Provide a capabilityId, topicSlug, or scope: 'all'.");
   }
 
-  const { data: pending, error: claimsError } = await sb
-    .from("claims")
-    .select("id")
-    .in("capability_id", capabilityIds)
-    .eq("status", "pending")
-    .eq("active", true);
+  let query = sb.from("claims").select("id").eq("status", "pending").eq("active", true);
+  if (capabilityIds) query = query.in("capability_id", capabilityIds);
+  const { data: pending, error: claimsError } = await query;
   if (claimsError) throw new Error(claimsError.message);
 
   let verified = 0;
@@ -89,7 +89,7 @@ export async function bulkVerifyClaims(
     await mutateClaimStatus(sb, claim.id, "verify");
     verified++;
   }
-  return { verified, capabilities: capabilityIds.length };
+  return { verified, capabilities: capabilityIds?.length ?? 0 };
 }
 
 export async function supersedeClaim(

@@ -165,15 +165,29 @@ export const seedFromContent = createServerFn({ method: "POST" })
         .single();
       if (error) throw new Error(`source ${slug}: ${error.message}`);
       slugById.set(slug, ins.id);
-      // Replace just this source's claims so forced bootstrap doesn't accumulate duplicates.
+      // Non-destructive refresh: delete ONLY this source's pending claims so verified /
+      // rejected / superseded curation persists across re-seeds and redeploys.
       summary.sourceRowsUpserted++;
       const { count: deleted } = await supabaseAdmin
         .from("claims")
         .delete({ count: "exact" })
-        .eq("source_id", ins.id);
+        .eq("source_id", ins.id)
+        .eq("status", "pending");
       summary.sourceClaimsDeleted += deleted ?? 0;
+      // Dedup: skip incoming rows whose (capability_id, normalized text) already exist as a
+      // non-pending (curated) claim on this source.
+      const { data: kept } = await supabaseAdmin
+        .from("claims")
+        .select("capability_id, text")
+        .eq("source_id", ins.id)
+        .neq("status", "pending");
+      const norm = (t: string) => (t ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+      const keptKeys = new Set(
+        (kept ?? []).map((c: any) => `${c.capability_id}::${norm(c.text)}`),
+      );
       const claimRows = (s.claims ?? [])
         .filter((c: any) => c.capability_id && capIds.has(c.capability_id))
+        .filter((c: any) => !keptKeys.has(`${c.capability_id}::${norm(c.text)}`))
         .map((c: any) => ({
           source_id: ins.id,
           capability_id: c.capability_id,

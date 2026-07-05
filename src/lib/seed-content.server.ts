@@ -165,9 +165,24 @@ export async function runContentSeed(supabaseAdmin: SupabaseClient): Promise<See
     if (error) throw new Error(`source ${slug}: ${error.message}`);
     slugToId.set(slug, ins.id);
     summary.sourceRowsUpserted++;
-    await supabaseAdmin.from("claims").delete().eq("source_id", ins.id);
+    // Non-destructive refresh: delete ONLY this source's pending claims. Verified / rejected /
+    // superseded rows survive so human curation persists across re-seeds and redeploys.
+    await supabaseAdmin.from("claims").delete().eq("source_id", ins.id).eq("status", "pending");
+    // Dedup: skip incoming rows whose (capability_id, normalized text) already exist as a
+    // non-pending (curated) claim on this source, to avoid a pending duplicate next to a
+    // verified copy.
+    const { data: kept } = await supabaseAdmin
+      .from("claims")
+      .select("capability_id, text")
+      .eq("source_id", ins.id)
+      .neq("status", "pending");
+    const norm = (t: string) => (t ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+    const keptKeys = new Set(
+      (kept ?? []).map((c: any) => `${c.capability_id}::${norm(c.text)}`),
+    );
     const rows = (s.claims ?? [])
       .filter((c: any) => c.capability_id && capIds.has(c.capability_id))
+      .filter((c: any) => !keptKeys.has(`${c.capability_id}::${norm(c.text)}`))
       .map((c: any) => ({
         source_id: ins.id,
         capability_id: c.capability_id,
