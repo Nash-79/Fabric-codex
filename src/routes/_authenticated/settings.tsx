@@ -12,6 +12,7 @@ import {
   Milestone,
   RefreshCw,
   Rss,
+  ShieldCheck,
   Upload,
   UserCog,
   Workflow,
@@ -33,6 +34,7 @@ import { RssPanel } from "@/components/settings/RssPanel";
 import { RoadmapPanel } from "@/components/settings/RoadmapPanel";
 import { LogsPanel } from "@/components/settings/LogsPanel";
 import { SystemPanel } from "@/components/settings/SystemPanel";
+import { MigrationStatusPanel } from "@/components/settings/MigrationStatusPanel";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — Fabric Atlas" }] }),
@@ -72,6 +74,7 @@ const navGroups = [
     items: [
       { id: "logs", label: "Logs", icon: Activity },
       { id: "system", label: "System", icon: Gauge },
+      { id: "migrations", label: "Migrations", icon: ShieldCheck },
     ],
   },
 ] as const;
@@ -218,6 +221,9 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="system" className="mt-0">
             <SystemPanel stats={overview.data?.stats ?? {}} loading={overview.isLoading} />
+          </TabsContent>
+          <TabsContent value="migrations" className="mt-0">
+            <MigrationStatusPanel />
           </TabsContent>
         </div>
       </Tabs>
