@@ -78,7 +78,12 @@ const EXPECTED_RPCS: { name: string; probe: () => Promise<{ ok: boolean; detail?
 ];
 
 // Seed thresholds: minimum row counts for the app to feel populated.
-const SEED_CHECKS: { table: string; min: number; severity: CheckStatus; filter?: (q: any) => any }[] = [
+const SEED_CHECKS: {
+  table: string;
+  min: number;
+  severity: CheckStatus;
+  filter?: (q: any) => any;
+}[] = [
   { table: "capabilities", min: 1, severity: "fail" },
   { table: "topics", min: 1, severity: "fail" },
   { table: "help_docs", min: 1, severity: "warn" },
@@ -203,10 +208,11 @@ export async function getSchemaHealth(): Promise<SchemaHealthReport> {
   }
 
   const recent = listBundledMigrations();
-  const summary = checks.reduce(
-    (acc, c) => ((acc[c.status] += 1), acc),
-    { ok: 0, warn: 0, fail: 0 },
-  );
+  const summary = checks.reduce((acc, c) => ((acc[c.status] += 1), acc), {
+    ok: 0,
+    warn: 0,
+    fail: 0,
+  });
 
   return {
     generatedAt: new Date().toISOString(),

@@ -182,9 +182,7 @@ export const seedFromContent = createServerFn({ method: "POST" })
         .eq("source_id", ins.id)
         .neq("status", "pending");
       const norm = (t: string) => (t ?? "").trim().toLowerCase().replace(/\s+/g, " ");
-      const keptKeys = new Set(
-        (kept ?? []).map((c: any) => `${c.capability_id}::${norm(c.text)}`),
-      );
+      const keptKeys = new Set((kept ?? []).map((c: any) => `${c.capability_id}::${norm(c.text)}`));
       const claimRows = (s.claims ?? [])
         .filter((c: any) => c.capability_id && capIds.has(c.capability_id))
         .filter((c: any) => !keptKeys.has(`${c.capability_id}::${norm(c.text)}`))

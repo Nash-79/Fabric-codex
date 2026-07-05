@@ -49,9 +49,14 @@ author original diagrams, then POST **structured results** to the backend and wr
 files under `content/`. The server (`LLM_MODE=local`, the default) makes no LLM calls. Publish with
 `python scripts/import_content.py`.
 
+Run `node scripts/check-queues.mjs --brief` before local orchestration/ingestion work so the session
+is aware of open queue items, stale feeds, diagram gaps, and commissioned work. The script must
+degrade gracefully when Supabase env vars, the public views, or the external planning file are
+missing.
+
 **Sources from sources (suggest, never auto-ingest).** While ingesting, enqueue the handful of
 high-trust links (tier ≤ 3 by domain) the source genuinely relied on as new `kind=source` queue
-items whose `note` starts `discovered via <parent-slug>` (dedup against existing sources + open
+items whose `notes` starts `discovered via <parent-slug>` (dedup against existing sources + open
 queue items). They land as `pending` for human approval in Settings → Queue — do not ingest them
 in the same run.
 

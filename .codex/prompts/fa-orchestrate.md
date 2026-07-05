@@ -21,20 +21,20 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
 Read:
 
 ```bash
-curl -s "$SB/queue_items?kind=eq.source&status=in.(queued,claimed)&select=id,status,url,title,tier,tags,note,notes,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
-curl -s "$SB/queue_items?kind=eq.diagram&status=in.(queued,claimed)&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,status,target_slug,note,notes,scheduled_at,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
+curl -s "$SB/queue_public?kind=eq.source&status=in.(queued,claimed)&select=id,status,url,title,tier,tags,notes,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
+curl -s "$SB/queue_public?kind=eq.diagram&status=in.(queued,claimed)&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,status,target_slug,notes,scheduled_at,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
 curl -s "$SB/claims?active=eq.true&status=eq.pending&select=id,capability_id,depth,type,tags,source_id,sources(slug,title,tier,url)&order=created_at" -H "$H1" -H "$H2"
 curl -s "$SB/claims?status=eq.duplicate&select=id,capability_id,depth,type,tags,source_id,sources(slug,title,tier,url)&order=created_at" -H "$H1" -H "$H2"
 curl -s "$SB/claims?active=eq.true&status=eq.verified&select=id,capability_id,depth,type,tags,source_id,sources(slug,title,tier,url)" -H "$H1" -H "$H2"
 curl -s "$SB/topics?select=slug,name,parent_slug,description" -H "$H1" -H "$H2"
 curl -s "$SB/topic_capabilities?select=topic_slug,capability_id" -H "$H1" -H "$H2"
-curl -s "$SB/blogs?active=eq.true&select=id,slug,topic_slug,title,status,ready_to_share,validation_confidence,updated_at,depth_levels,tags" -H "$H1" -H "$H2"
-curl -s "$SB/blog_sources?select=blog_id,source_id,sources(slug,title,tier,url)" -H "$H1" -H "$H2"
+curl -s "$SB/content_items?kind=eq.article&active=eq.true&select=id,slug,topic_slug,title,status,ready_to_share,validation_confidence,updated_at,depth_levels,tags" -H "$H1" -H "$H2"
+curl -s "$SB/content_item_sources?select=content_item_id,source_id,sources(slug,title,tier,url)" -H "$H1" -H "$H2"
 curl -s "$SB/diagrams?select=id,path,caption,capability_id,blog_id,design_id,created_at" -H "$H1" -H "$H2"
-curl -s "$SB/rss_subscriptions?status=eq.active&select=id,title,feed_url,last_polled_at,last_seen_guid,error_count,last_error,default_tier,default_tags&order=created_at" -H "$H1" -H "$H2"
+curl -s "$SB/rss_status_public?status=eq.active&select=id,title,feed_url,last_polled_at,last_seen_guid,error_count,last_error,default_tier,default_tags&order=created_at" -H "$H1" -H "$H2"
 ```
 
-Also read `content/topics.json`, `content/queue.md`, and existing `content/blogs/*.json`.
+Also read `content/topics.json`, `content/queue.md`, and existing `content/articles/*.json`.
 
 ## Decisions
 

@@ -2,8 +2,14 @@ import { useMutation } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -20,8 +26,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { mutateQueueItem, submitSourceUrl } from "@/lib/settings.functions";
 import { Empty, Panel, statusBadge } from "@/components/settings/shared";
+
+type QueueAction = "claim" | "complete" | "fail" | "requeue" | "dismiss";
 
 export function QueuePanel({
   data,
@@ -33,36 +42,26 @@ export function QueuePanel({
   loading: boolean;
 }) {
   const actionFn = useServerFn(mutateQueueItem);
-  const [sourceId, setSourceId] = useState("");
-  const [failure, setFailure] = useState("");
+  const [completeItem, setCompleteItem] = useState<any>(null);
+  const [failItem, setFailItem] = useState<any>(null);
   const mutate = useMutation({
     mutationFn: (task: Promise<unknown>) => task,
     onSuccess: () => {
       toast.success("Queue updated.");
+      setCompleteItem(null);
+      setFailItem(null);
       onDone();
     },
     onError: (err) => toast.error((err as Error).message),
   });
+  const runAction = (
+    item: any,
+    action: QueueAction,
+    extra: { sourceId?: string; error?: string } = {},
+  ) => mutate.mutate(actionFn({ data: { itemId: item.id, action, ...extra } }));
+
   return (
-    <Panel
-      title="Source queue"
-      action={
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Input
-            value={sourceId}
-            onChange={(e) => setSourceId(e.target.value)}
-            placeholder="result source id"
-            className="h-8 border-border bg-card text-foreground"
-          />
-          <Input
-            value={failure}
-            onChange={(e) => setFailure(e.target.value)}
-            placeholder="failure note"
-            className="h-8 border-border bg-card text-foreground"
-          />
-        </div>
-      }
-    >
+    <Panel title="Queue">
       <QueueSubmitForm onDone={onDone} />
       {loading ? (
         <Empty text="Loading queue..." />
@@ -70,9 +69,9 @@ export function QueuePanel({
         <Table className="text-foreground">
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
-              <TableHead>URL</TableHead>
+              <TableHead>Work item</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Tier</TableHead>
+              <TableHead>Kind</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -86,44 +85,66 @@ export function QueuePanel({
                     rel="noreferrer"
                     className="text-teal-200 hover:underline"
                   >
-                    {q.title || q.url}
+                    {q.title || q.target_slug || q.url}
                   </a>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    {/^discovered via/i.test(q.notes || q.note || "") && (
-                      <Badge className="border-teal-400/30 bg-teal-500/10 text-[10px] text-teal-200">
-                        discovered
-                      </Badge>
-                    )}
-                    <span>{q.notes || q.note}</span>
-                  </div>
+                  <div className="text-xs text-muted-foreground">{q.notes}</div>
                 </TableCell>
                 <TableCell>{statusBadge(q.status)}</TableCell>
-                <TableCell>T{q.tier}</TableCell>
                 <TableCell>
-                  <div className="flex justify-end gap-1">
-                    {(["claim", "complete", "fail", "requeue", "dismiss"] as const).map((a) => (
-                      <Button
-                        key={a}
-                        size="sm"
-                        variant="outline"
-                        className="h-8 border-border bg-card text-foreground"
-                        onClick={() =>
-                          mutate.mutate(
-                            actionFn({
-                              data: {
-                                itemId: q.id,
-                                action: a,
-                                sourceId: a === "complete" ? sourceId : undefined,
-                                error: a === "fail" ? failure : undefined,
-                              },
-                            }),
-                          )
-                        }
-                        disabled={a === "complete" && !sourceId}
-                      >
-                        {a}
-                      </Button>
-                    ))}
+                  <div className="text-sm">{q.kind ?? "source"}</div>
+                  {q.tier && <div className="text-xs text-muted-foreground">T{q.tier}</div>}
+                </TableCell>
+                <TableCell>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-border bg-card text-foreground"
+                      disabled={mutate.isPending || q.status !== "queued"}
+                      onClick={() => runAction(q, "claim")}
+                    >
+                      claim
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-border bg-card text-foreground"
+                      disabled={mutate.isPending || !["queued", "claimed"].includes(q.status)}
+                      onClick={() =>
+                        q.kind === "source" || !q.kind
+                          ? setCompleteItem(q)
+                          : runAction(q, "complete")
+                      }
+                    >
+                      complete
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-border bg-card text-foreground"
+                      disabled={mutate.isPending || !["queued", "claimed"].includes(q.status)}
+                      onClick={() => setFailItem(q)}
+                    >
+                      fail
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-border bg-card text-foreground"
+                      disabled={mutate.isPending || !["failed", "claimed"].includes(q.status)}
+                      onClick={() => runAction(q, "requeue")}
+                    >
+                      requeue
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-8 border-border bg-card text-foreground"
+                      disabled={mutate.isPending || !["queued", "failed"].includes(q.status)}
+                      onClick={() => runAction(q, "dismiss")}
+                    >
+                      dismiss
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>
@@ -131,7 +152,92 @@ export function QueuePanel({
           </TableBody>
         </Table>
       )}
+      <CompleteDialog
+        item={completeItem}
+        sources={data?.sources ?? []}
+        onOpenChange={(open) => !open && setCompleteItem(null)}
+        onComplete={(sourceId) => completeItem && runAction(completeItem, "complete", { sourceId })}
+      />
+      <FailDialog
+        item={failItem}
+        onOpenChange={(open) => !open && setFailItem(null)}
+        onFail={(error) => failItem && runAction(failItem, "fail", { error })}
+      />
     </Panel>
+  );
+}
+
+function CompleteDialog({
+  item,
+  sources,
+  onOpenChange,
+  onComplete,
+}: {
+  item: any;
+  sources: any[];
+  onOpenChange: (open: boolean) => void;
+  onComplete: (sourceId: string) => void;
+}) {
+  const [sourceId, setSourceId] = useState("");
+  return (
+    <Dialog open={!!item} onOpenChange={onOpenChange}>
+      <DialogContent className="border-border bg-popover text-foreground">
+        <DialogHeader>
+          <DialogTitle>Complete source queue item</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Choose the approved source row created by the local ingestion run.
+          </DialogDescription>
+        </DialogHeader>
+        <Select value={sourceId} onValueChange={setSourceId}>
+          <SelectTrigger className="border-border bg-card text-foreground">
+            <SelectValue placeholder="Result source" />
+          </SelectTrigger>
+          <SelectContent>
+            {sources.map((source) => (
+              <SelectItem key={source.id} value={source.id}>
+                {source.title} ({source.slug})
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button onClick={() => onComplete(sourceId)} disabled={!sourceId}>
+          Complete
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function FailDialog({
+  item,
+  onOpenChange,
+  onFail,
+}: {
+  item: any;
+  onOpenChange: (open: boolean) => void;
+  onFail: (error: string) => void;
+}) {
+  const [error, setError] = useState("");
+  return (
+    <Dialog open={!!item} onOpenChange={onOpenChange}>
+      <DialogContent className="border-border bg-popover text-foreground">
+        <DialogHeader>
+          <DialogTitle>Fail queue item</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Record the reason so the next operator knows what to fix.
+          </DialogDescription>
+        </DialogHeader>
+        <Textarea
+          value={error}
+          onChange={(event) => setError(event.target.value)}
+          rows={5}
+          className="border-border bg-card text-foreground"
+        />
+        <Button onClick={() => onFail(error)} disabled={!error.trim()}>
+          Mark failed
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -185,7 +291,7 @@ function QueueSubmitForm({ onDone }: { onDone: () => void }) {
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://learn.microsoft.com/…"
+          placeholder="https://learn.microsoft.com/..."
           className="h-8 border-border bg-card text-foreground md:col-span-2"
         />
         <Input
@@ -216,7 +322,7 @@ function QueueSubmitForm({ onDone }: { onDone: () => void }) {
         <Input
           value={note}
           onChange={(e) => setNote(e.target.value)}
-          placeholder="Note for the curator (optional)"
+          placeholder="Notes for the curator (optional)"
           className="h-8 border-border bg-card text-foreground"
         />
       </div>

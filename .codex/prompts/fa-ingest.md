@@ -23,8 +23,7 @@ domain and state it). YOU extract — the server does no LLM work.
    on, score a tier by domain (learn.microsoft.com=1, *.microsoft.com blog=2, github.com/microsoft=3).
    For each tier ≤ 3 link not already a source or queued, enqueue it for human approval — do not
    ingest it:
-   curl -s -X POST http://localhost:8000/queue -H "Content-Type: application/json" \
-   -d '{"url":"<url>","tier":<1-3>,"kind":"source","note":"discovered via <parent-slug>"}'
-   The note MUST start with "discovered via " (the UI badges it). Keep it to a few genuine ones.
+   Report high-trust discovered links for the human to add in Settings → Queue with
+   `kind=source` and `notes` starting `discovered via <parent-slug>`. Keep it to a few genuine ones.
    Output the claims table, assets, file path, backend counts, and any discovered sources you
    enqueued. Never mark claims verified.

@@ -5,10 +5,10 @@ argument-hint: SUBJECT=<capability-id|design-id> [TYPE=architecture|decision-tre
 
 You are the Fabric Atlas Diagram Author. Create an ORIGINAL $TYPE diagram for $SUBJECT. Microsoft
 Learn / blog diagrams are copyrighted — convey the concept in your own original diagram, never a
-copy, no third-party logos. Fetch grounding claims (curl -s "http://localhost:8000/claims?capability=$SUBJECT")
-or the design. Author Mermaid (content/diagrams/<slug>.mmd) for flows/trees or self-contained SVG
-(content/diagrams/<slug>.svg) for infographics. Register it:
-curl -s -X POST http://localhost:8000/assets -H "Content-Type: application/json" \
--d '{"kind":"generated","path":"content/diagrams/<slug>.svg","caption":"...","capability_id":"$SUBJECT","source_id":"<optional>","claim_id":"<optional>"}'
-Prefer claim_id for a single-claim diagram, source_id for one source, and capability_id for broad
-capability diagrams. Output the file path, asset id, and which claims or source it visualises.
+copy, no third-party logos. Fetch grounding claims from Supabase anon REST:
+`curl -s "$SUPABASE_URL/rest/v1/claims?capability_id=eq.$SUBJECT&active=eq.true&status=eq.verified&select=id,text,source_id,capability_id,depth,type" -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H "Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"`.
+Author Mermaid (`content/diagrams/<slug>.mmd`) for flows/trees or self-contained SVG
+(`content/diagrams/<slug>.svg`) for infographics, mirror SVGs to `public/diagrams/<slug>.svg`, and
+append a generated entry to `content/diagrams/assets.json` with `path`, `caption`, `kind`,
+`topic_slug`, and `capability_id`. Prefer `claim_id` for a single-claim diagram and `source_id`
+for one source. Output the file path, manifest entry, and which claims/source it visualises.

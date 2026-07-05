@@ -31,10 +31,10 @@ Read this state before planning:
 
 ```bash
 # Open source queue, including unclaimed and already claimed work.
-curl -s "$SB/queue_items?kind=eq.source&status=in.(queued,claimed)&select=id,status,url,title,tier,tags,note,notes,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
+curl -s "$SB/queue_public?kind=eq.source&status=in.(queued,claimed)&select=id,status,url,title,tier,tags,notes,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
 
 # Due diagram commissions.
-curl -s "$SB/queue_items?kind=eq.diagram&status=in.(queued,claimed)&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,status,target_slug,note,notes,scheduled_at,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
+curl -s "$SB/queue_public?kind=eq.diagram&status=in.(queued,claimed)&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,status,target_slug,notes,scheduled_at,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
 
 # Pending and duplicate claims that require human curation.
 curl -s "$SB/claims?active=eq.true&status=eq.pending&select=id,capability_id,depth,type,tags,source_id,sources(slug,title,tier,url)&order=created_at" -H "$H1" -H "$H2"
@@ -50,8 +50,8 @@ curl -s "$SB/topics?select=slug,name,parent_slug,description" -H "$H1" -H "$H2"
 curl -s "$SB/topic_capabilities?select=topic_slug,capability_id" -H "$H1" -H "$H2"
 curl -s "$SB/content_items?kind=eq.article&active=eq.true&select=id,slug,topic_slug,title,status,ready_to_share,validation_confidence,updated_at,depth_levels,tags" -H "$H1" -H "$H2"
 curl -s "$SB/content_item_sources?select=content_item_id,source_id,sources(slug,title,tier,url)" -H "$H1" -H "$H2"
-curl -s "$SB/diagrams?select=id,path,caption,capability_id,blog_id,design_id,created_at" -H "$H1" -H "$H2"
-curl -s "$SB/rss_subscriptions?status=eq.active&select=id,title,feed_url,last_polled_at,last_seen_guid,error_count,last_error,default_tier,default_tags&order=created_at" -H "$H1" -H "$H2"
+curl -s "$SB/diagrams?select=slug,path,caption,kind,topic_slug,capability_id,created_at" -H "$H1" -H "$H2"
+curl -s "$SB/rss_status_public?status=eq.active&select=id,title,feed_url,last_polled_at,last_seen_guid,error_count,last_error,default_tier,default_tags&order=created_at" -H "$H1" -H "$H2"
 ```
 
 Also read `content/topics.json`, `content/queue.md`, and the existing `content/articles/*.json`
@@ -112,11 +112,11 @@ files to catch git-tracked drafts that are not yet published.
    agent or script can write to Supabase), but you can tell the human exactly what is ready and in
    what order. There are two independent signals — use both, they catch different things:
    - **New vs. Supabase:** a content file's slug has no matching **active** row in Supabase
-     (`sources` by slug; `content_items` by slug+kind for articles/designs) -> it has never been
+     (`sources` by slug; `content_items` by slug+kind for articles/designs/lessons) -> it has never been
      published -> **ready to publish (new)**. Note: `sources` has no `updated_at` column — slug
      presence/absence is the only signal there, do not attempt a freshness comparison on it.
    - **Locally edited vs. last commit:** run `git status --short content/sources/ content/articles/
-     content/designs/ content/diagrams/` (or `git diff --stat` for the same paths) to find files
+content/designs/ content/lessons/ content/diagrams/` (or `git diff --stat` for the same paths) to find files
      modified since the last commit. A modified file whose slug **already exists** in Supabase is a
      **re-publish (update)** candidate, not a no-op — Settings -> Publish always creates a new
      version on top of the active one, so this is exactly what that flow is for. Do not skip a
@@ -127,7 +127,7 @@ files to catch git-tracked drafts that are not yet published.
    - `content/diagrams/*.svg`/`.mmd` present in `content/diagrams/assets.json` but absent from the
      `diagrams` fetch -> **ready to register** (bundled with whichever article/design embeds them,
      not published standalone).
-   - Sequence strictly: **sources -> diagrams -> articles/designs that cite them**, since an
+   - Sequence strictly: **sources -> diagrams -> articles/designs/lessons that cite them**, since an
      article citing an unpublished source or embedding an unregistered diagram fails validation.
    - Never mark something "ready" if it fails a guardrail from step 5 (no verified claims, missing
      embedded diagram on disk, pending claims still open) — list it under blocked instead, with the
@@ -164,11 +164,11 @@ Produce a concise orchestration report:
    before the command.
 7. **Publish checklist:** the ordered, ready-to-paste list from step 8 of Method. Lead with:
    after the branch is deployed, **Settings -> Publish -> "Publish all"** republishes every
-   bundled source/diagram/article/design that changed since its last publish, in the correct
+   bundled source/diagram/article/design/lesson that changed since its last publish, in the correct
    order, in one click — this is the default recommendation whenever more than one or two files
    are ready. Follow with the itemized per-file list (`Settings -> Publish -> <Source|Article|
-   Design> -> paste content/<dir>/<file>.json`) only for cases "Publish all" cannot cover: a
-   single urgent file before the next deploy, or a lesson (not bundled by "Publish all" yet).
+Design|Lesson> -> paste content/<dir>/<file>.json`) only for a single urgent file before the
+   next deploy or for testing one payload before bulk publishing.
    Mark anything not yet ready as **Blocked** with the one-line reason (e.g. "waiting on
    content/sources/x.json to publish first", "2 pending claims to verify", "missing diagram
    content/diagrams/y.svg on disk") instead of listing a Settings action for it.

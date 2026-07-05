@@ -5,7 +5,8 @@ argument-hint: [optional extra urls to enqueue first]
 
 Process the ingestion queue: $ARGUMENTS
 
-The `localhost:8000` backend is retired. The queue lives in Supabase (`queue_items`); you **read**
+The `localhost:8000` backend is retired. The queue is exposed to local agents through Supabase
+(`queue_public`); you **read**
 it with the anon key but you **cannot mutate it** (claim/complete/fail) or write sources — those
 are server-side admin actions. So this skill produces `content/sources/*.json` files; an admin then
 publishes each in **Settings → Publish** and marks the queue items done in **Settings → Queue**.
@@ -20,7 +21,7 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
 1. If `$ARGUMENTS` contains URLs to add to the queue, you can't write them yourself — list them and
    tell the user to add them via **Settings → Queue** (or the URL submit box) before re-running.
 2. **Server queue (primary — URLs submitted via the frontend):**
-   `curl -s "$SB/queue_items?status=eq.queued&kind=eq.source&select=id,url,title,tier,tags,notes&order=created_at" -H "$H1" -H "$H2"`.
+   `curl -s "$SB/queue_public?status=eq.queued&kind=eq.source&select=id,url,title,tier,tags,notes&order=created_at" -H "$H1" -H "$H2"`.
    For each item, in order:
    a. Use the **knowledge-curator** subagent on the item's `url` with its `tier`; pass the
    submitter's `notes` and `tags` as context. The curator writes `content/sources/<slug>.json`

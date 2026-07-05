@@ -1,18 +1,32 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ShieldCheck } from "lucide-react";
+import { toast } from "sonner";
 import { getRegistryCoverage } from "@/lib/atlas.functions";
+import { seedFromContent } from "@/lib/seed.functions";
+import { Button } from "@/components/ui/button";
 import { Empty, Panel, pct } from "@/components/settings/shared";
 
 export function SystemPanel({
   stats,
   loading,
+  onDone,
 }: {
   stats: Record<string, number>;
   loading: boolean;
+  onDone?: () => void;
 }) {
   const coverageFn = useServerFn(getRegistryCoverage);
+  const seedFn = useServerFn(seedFromContent);
   const cov = useQuery({ queryKey: ["registry-coverage"], queryFn: () => coverageFn() });
+  const seed = useMutation({
+    mutationFn: () => seedFn({ data: { forceBootstrap: false } }),
+    onSuccess: () => {
+      toast.success("Bundled content bootstrap completed.");
+      onDone?.();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
   const rows = (cov.data ?? []) as Array<{
     maturity: string;
     verified_count: number;
@@ -87,7 +101,19 @@ export function SystemPanel({
             </div>
           </div>
           <div className="rounded-md border border-border bg-card p-4 text-sm text-muted-foreground">
-            <div className="font-medium text-foreground">Content source of truth</div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="font-medium text-foreground">Content source of truth</div>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={seed.isPending}
+                onClick={() => {
+                  if (confirm("Bootstrap bundled content into the backend?")) seed.mutate();
+                }}
+              >
+                {seed.isPending ? "Bootstrapping…" : "Bootstrap bundled content"}
+              </Button>
+            </div>
             <p className="mt-1">
               Settings writes operational metadata and versioned CMS changes to the backend. Export
               DB-edited content back to <code>content/</code> before treating it as

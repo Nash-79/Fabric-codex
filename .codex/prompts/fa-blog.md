@@ -20,7 +20,7 @@ Fetch the topic, mapped capabilities, verified claims, existing active blog, and
 ```bash
 curl -s "$SB/topic_capabilities?topic_slug=eq.$TOPIC&select=capability_id" -H "$H1" -H "$H2"
 curl -s "$SB/claims?status=eq.verified&active=eq.true&select=id,text,depth,type,tags,capability_id,source_id,sources(slug,title,tier,url)" -H "$H1" -H "$H2"
-curl -s "$SB/blogs?topic_slug=eq.$TOPIC&active=eq.true&select=id,slug,title,status,body_md,depth_levels,tags" -H "$H1" -H "$H2"
+curl -s "$SB/content_items?kind=eq.article&topic_slug=eq.$TOPIC&active=eq.true&select=id,slug,title,status,body_md,depth_levels,tags" -H "$H1" -H "$H2"
 curl -s "$SB/diagrams?select=path,caption,capability_id,blog_id,design_id" -H "$H1" -H "$H2"
 ```
 
@@ -43,7 +43,7 @@ curl -s "$SB/diagrams?select=path,caption,capability_id,blog_id,design_id" -H "$
    decision/internals diagram. If fewer than two exist, stop or clearly route to
    `/prompts:fa-diagram` before publishing. Confirm every embedded path exists on disk.
 6. Label synthesis beyond claims as `*Inference:*`.
-7. Save `content/blogs/<topic-slug>.json` with:
+7. Save `content/articles/<topic-slug>.json` with:
 
 ```json
 {
@@ -74,4 +74,4 @@ Before finishing, review your draft for:
 
 Report the file path, whether this is new or enrichment, depth levels covered, S1/S2 source slug
 mapping, embedded diagrams, open coverage gaps, self-review findings, and the human gate:
-**Settings -> Publish -> Blog -> paste `content/blogs/<slug>.json`, then run validate**.
+**Settings -> Publish -> Article -> paste `content/articles/<slug>.json`, then run validate**.

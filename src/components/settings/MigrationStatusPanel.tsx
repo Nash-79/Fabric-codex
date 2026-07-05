@@ -129,15 +129,7 @@ export function MigrationStatusPanel() {
   );
 }
 
-function SummaryTile({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone: CheckStatus;
-}) {
+function SummaryTile({ label, value, tone }: { label: string; value: number; tone: CheckStatus }) {
   return (
     <div className={`rounded-md border p-3 ${statusChip[tone]}`}>
       <div className="text-xs uppercase tracking-wide opacity-80">{label}</div>

@@ -4,7 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { listMyFavorites, toggleFavorite } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 
-type FavoriteItemType = "blog" | "topic" | "source" | "claim";
+type FavoriteItemType =
+  "blog" | "article" | "design" | "lesson" | "topic" | "capability" | "source" | "claim";
 
 export const Route = createFileRoute("/_authenticated/favorites")({
   head: () => ({ meta: [{ title: "Favorites — Fabric Atlas" }] }),

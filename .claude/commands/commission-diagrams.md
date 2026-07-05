@@ -20,13 +20,14 @@ For each **due** commission:
 
 1. List due diagram tasks (a future `scheduled_at` is intentionally hidden until its interval
    elapses, so filter to due-or-null):
-   `curl -s "$SB/queue_items?kind=eq.diagram&status=eq.queued&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,target_slug,note,scheduled_at" -H "$H1" -H "$H2"`
+   `curl -s "$SB/queue_public?kind=eq.diagram&status=eq.queued&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,target_slug,notes,scheduled_at" -H "$H1" -H "$H2"`
 
 2. Use the **diagram-author** subagent on the item's `target_slug` (a topic or capability): fetch
    the relevant verified claims for grounding, author an ORIGINAL Mermaid/SVG diagram (never a copy,
    no third-party logos), save it under `content/diagrams/`, mirror it to `public/diagrams/`, and
-   append the asset entry to `content/diagrams/assets.json` (its `capability_id` is what makes the
-   topic show "covered" once registered).
+   append the asset entry to `content/diagrams/assets.json` with both `topic_slug` and
+   `capability_id` (the `target_slug` from the commission is a topic slug unless the queue notes
+   explicitly say otherwise).
 
 3. Track which `queue_items.id` you fulfilled and report the mapping — you cannot claim/complete the
    queue items yourself.

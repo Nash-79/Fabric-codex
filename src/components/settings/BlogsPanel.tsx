@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Table,
   TableBody,
   TableCell,
@@ -19,7 +26,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { saveContentItemVersion, validateContent } from "@/lib/settings.functions";
+import { commissionWork, saveContentItemVersion, validateContent } from "@/lib/settings.functions";
 import { Area, Empty, Field, Panel, statusBadge } from "@/components/settings/shared";
 
 export function BlogsPanel({
@@ -33,6 +40,8 @@ export function BlogsPanel({
 }) {
   const saveFn = useServerFn(saveContentItemVersion);
   const validateFn = useServerFn(validateContent);
+  const commissionFn = useServerFn(commissionWork);
+  const [kindFilter, setKindFilter] = useState<"article" | "design" | "lesson">("article");
   const [edit, setEdit] = useState<any>(null);
   const [draft, setDraft] = useState<any>(null);
   const active = draft ?? edit;
@@ -40,7 +49,7 @@ export function BlogsPanel({
     mutationFn: () =>
       saveFn({
         data: {
-          kind: "article",
+          kind: active.kind,
           existingId: active.id,
           topic_slug: active.topic_slug,
           slug: active.slug?.replace(/@v\d+$/, ""),
@@ -54,7 +63,7 @@ export function BlogsPanel({
         },
       }),
     onSuccess: () => {
-      toast.success("Article version created.");
+      toast.success(`${active.kind} version created.`);
       setEdit(null);
       setDraft(null);
       onDone();
@@ -62,18 +71,53 @@ export function BlogsPanel({
     onError: (err) => toast.error((err as Error).message),
   });
   const validate = useMutation({
-    mutationFn: (id: string) => validateFn({ data: { kind: "article", id } }),
+    mutationFn: (row: any) => validateFn({ data: { kind: row.kind, id: row.id } }),
     onSuccess: () => {
-      toast.success("Article validation queued.");
+      toast.success("Validation queued.");
       onDone();
     },
     onError: (err) => toast.error((err as Error).message),
   });
+  const commission = useMutation({
+    mutationFn: (targetSlug: string) =>
+      commissionFn({
+        data: { kind: kindFilter, targetSlug, title: `${targetSlug} ${kindFilter}` },
+      }),
+    onSuccess: () => toast.success(`${kindFilter} commissioned.`),
+    onError: (err) => toast.error((err as Error).message),
+  });
   return (
     <>
-      <Panel title="Articles">
+      <Panel
+        title="Content items"
+        action={
+          <div className="flex items-center gap-2">
+            <Select value={kindFilter} onValueChange={(v) => setKindFilter(v as typeof kindFilter)}>
+              <SelectTrigger className="h-8 w-36 border-border bg-card text-foreground">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="article">Articles</SelectItem>
+                <SelectItem value="design">Designs</SelectItem>
+                <SelectItem value="lesson">Lessons</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={commission.isPending}
+              onClick={() => {
+                const targetSlug = prompt(`Target slug for ${kindFilter} commission`);
+                if (targetSlug?.trim()) commission.mutate(targetSlug.trim());
+              }}
+            >
+              Commission
+            </Button>
+          </div>
+        }
+      >
         {loading ? (
-          <Empty text="Loading blogs..." />
+          <Empty text="Loading content..." />
         ) : (
           <Table className="text-foreground">
             <TableHeader>
@@ -85,36 +129,38 @@ export function BlogsPanel({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {(data?.blogs ?? []).map((b: any) => (
-                <TableRow key={b.id} className="border-border hover:bg-accent">
-                  <TableCell>
-                    <div className="font-medium">{b.title}</div>
-                    <div className="text-xs text-muted-foreground">{b.slug}</div>
-                  </TableCell>
-                  <TableCell>{statusBadge(b.status)}</TableCell>
-                  <TableCell>v{b.version}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 border-border bg-card text-foreground"
-                        onClick={() => validate.mutate(b.id)}
-                      >
-                        Validate
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-8 border-border bg-card text-foreground"
-                        onClick={() => setEdit(b)}
-                      >
-                        Edit as new version
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {((data?.contentItems ?? []) as any[])
+                .filter((b: any) => b.kind === kindFilter)
+                .map((b: any) => (
+                  <TableRow key={b.id} className="border-border hover:bg-accent">
+                    <TableCell>
+                      <div className="font-medium">{b.title}</div>
+                      <div className="text-xs text-muted-foreground">{b.slug}</div>
+                    </TableCell>
+                    <TableCell>{statusBadge(b.status)}</TableCell>
+                    <TableCell>v{b.version}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 border-border bg-card text-foreground"
+                          onClick={() => validate.mutate(b)}
+                        >
+                          Validate
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 border-border bg-card text-foreground"
+                          onClick={() => setEdit(b)}
+                        >
+                          Edit as new version
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
             </TableBody>
           </Table>
         )}
@@ -130,9 +176,9 @@ export function BlogsPanel({
       >
         <DialogContent className="max-h-[85vh] overflow-auto border-border bg-popover text-foreground sm:max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Article version</DialogTitle>
+            <DialogTitle>{active?.kind ?? "content"} version</DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              Saving creates a new published version; it does not mutate the existing article body.
+              Saving creates a new published version; it does not mutate the existing body.
             </DialogDescription>
           </DialogHeader>
           {active && (

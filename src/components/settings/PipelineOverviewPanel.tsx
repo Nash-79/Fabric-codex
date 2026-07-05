@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { MoveRight } from "lucide-react";
-import { listRssSubscriptions } from "@/lib/settings.functions";
+import { getSuggestedActions, listRssSubscriptions } from "@/lib/settings.functions";
 import { Empty, Panel } from "@/components/settings/shared";
 import type { RssRow } from "@/components/settings/RssPanel";
 
@@ -18,7 +18,12 @@ export function PipelineOverviewPanel({
   onNavigate: (tab: string) => void;
 }) {
   const listFn = useServerFn(listRssSubscriptions);
+  const suggestedFn = useServerFn(getSuggestedActions);
   const subs = useQuery({ queryKey: ["rss-subscriptions"], queryFn: () => listFn() });
+  const suggested = useQuery({
+    queryKey: ["suggested-actions"],
+    queryFn: () => suggestedFn(),
+  });
 
   if (loading || subs.isLoading) {
     return (
@@ -145,6 +150,44 @@ export function PipelineOverviewPanel({
               </li>
             ))}
           </ul>
+        )}
+      </div>
+
+      <div className="mt-5">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Suggested next actions
+        </div>
+        {suggested.isLoading ? (
+          <p className="mt-2 text-sm text-muted-foreground">Ranking actions…</p>
+        ) : !(suggested.data as any[])?.length ? (
+          <p className="mt-2 text-sm text-muted-foreground">No suggested actions.</p>
+        ) : (
+          <div className="mt-2 space-y-2">
+            {((suggested.data ?? []) as Array<any>).map((action) => (
+              <div
+                key={action.id}
+                className="flex flex-col gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm md:flex-row md:items-center md:justify-between"
+              >
+                <button
+                  type="button"
+                  onClick={() => onNavigate(action.tab)}
+                  className="min-w-0 text-left"
+                >
+                  <div className="truncate font-medium text-foreground">{action.label}</div>
+                  <div className="truncate text-xs text-muted-foreground">{action.detail}</div>
+                </button>
+                {action.command && (
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard?.writeText(action.command)}
+                    className="shrink-0 rounded border border-border bg-background px-2 py-1 font-mono text-xs text-teal-700 hover:bg-accent dark:text-teal-200"
+                  >
+                    {action.command}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </Panel>

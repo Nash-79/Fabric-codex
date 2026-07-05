@@ -9,6 +9,7 @@ import {
   type RegistryCoverageRow,
 } from "@/lib/atlas.functions";
 import { accent } from "@/lib/fabric-theme";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 export const Route = createFileRoute("/registry/$id")({
   head: ({ params }) => ({
@@ -42,10 +43,13 @@ function CapabilityDetailPage() {
           ← Registry
         </Link>
 
-        <div className="mt-3 flex flex-wrap items-center gap-3">
-          <span className={`h-3 w-3 rounded-full ${a.dot}`} />
-          <h1 className="text-3xl font-semibold tracking-tight">{cap?.name ?? id}</h1>
-          <MaturityBadge maturity={cap?.maturity} />
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`h-3 w-3 rounded-full ${a.dot}`} />
+            <h1 className="text-3xl font-semibold tracking-tight">{cap?.name ?? id}</h1>
+            <MaturityBadge maturity={cap?.maturity} />
+          </div>
+          <FavoriteButton itemType="capability" itemKey={id} label="Favorite" />
         </div>
         <p className="mt-2 max-w-2xl text-sm text-muted-foreground">{cap?.description || "—"}</p>
 

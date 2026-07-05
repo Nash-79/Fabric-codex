@@ -79,11 +79,12 @@ function PublishAllPanel() {
         Publishes every <code className="text-teal-300">content/sources</code>,{" "}
         <code className="text-teal-300">content/articles</code>,{" "}
         <code className="text-teal-300">content/designs</code>, and{" "}
+        <code className="text-teal-300">content/lessons</code>, plus{" "}
         <code className="text-teal-300">content/diagrams/assets.json</code> entry bundled into this
-        deploy, in the safe order (sources → diagrams → articles/designs that cite them) — using the
-        same versioned publish path as pasting one file below, so verified claims and version
-        history are preserved exactly the same way. Items unchanged since the last publish are
-        skipped; an article/design blocked on an unpublished source is reported, not
+        deploy, in the safe order (sources → diagrams → articles/designs/lessons that cite them) —
+        using the same versioned publish path as pasting one file below, so verified claims and
+        version history are preserved exactly the same way. Items unchanged since the last publish
+        are skipped; an article/design/lesson blocked on an unpublished source is reported, not
         force-published. Only sees content committed and{" "}
         <span className="text-foreground">deployed</span> — new files need a redeploy first.
       </p>
@@ -198,11 +199,11 @@ export function PublishPanel({ onDone }: { onDone: () => void }) {
           <code className="text-teal-300">content/articles/*.json</code>,{" "}
           <code className="text-teal-300">content/designs/*.json</code>,{" "}
           <code className="text-teal-300">content/lessons/*.json</code>, and diagram entries to git.
-          Use this for one file before a redeploy, or for a lesson (not covered by Publish all yet).
-          Re-publishing a source keeps its <span className="text-foreground">verified</span> claims
-          and only refreshes the pending ones — publishing never un-verifies human review. Articles,
-          designs, and lessons always create a new version — the prior version is archived, never
-          overwritten. For an article whose embedded diagram is new, publish the{" "}
+          Use this for one file before a redeploy. Re-publishing a source keeps its{" "}
+          <span className="text-foreground">verified</span> claims and only refreshes the pending
+          ones — publishing never un-verifies human review. Articles, designs, and lessons always
+          create a new version — the prior version is archived, never overwritten. For an article
+          whose embedded diagram is new, publish the{" "}
           <span className="text-foreground">Diagram(s)</span> first (paste{" "}
           <code className="text-teal-300">content/diagrams/assets.json</code>) so the article's
           embedded-diagram validation passes.

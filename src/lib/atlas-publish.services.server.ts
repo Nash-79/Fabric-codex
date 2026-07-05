@@ -317,9 +317,20 @@ type DiagramPayload = {
   capability_id?: string | null;
 };
 
-// Derive the registered slug + served path the way seed.functions / import_content do: the slug is
-// the filename without extension, and the served path is /diagrams/<slug>.svg (mirrored to public/).
-function diagramRow(entry: DiagramPayload) {
+async function resolveTopicSlug(sb: SupabaseAdmin, entry: DiagramPayload): Promise<string | null> {
+  if (entry.topic_slug) return entry.topic_slug;
+  if (!entry.capability_id) return null;
+  const { data } = await sb
+    .from("topic_capabilities")
+    .select("topic_slug")
+    .eq("capability_id", entry.capability_id)
+    .order("topic_slug")
+    .limit(1)
+    .maybeSingle();
+  return data?.topic_slug ?? null;
+}
+
+async function diagramRow(sb: SupabaseAdmin, entry: DiagramPayload) {
   const rawPath = entry.path ?? "";
   const slug =
     entry.slug ??
@@ -328,12 +339,20 @@ function diagramRow(entry: DiagramPayload) {
       .pop()!
       .replace(/\.(svg|mmd)$/i, "");
   if (!slug) throw new Error("Diagram entry needs a slug or a path.");
+  const { data: existing } = await sb
+    .from("diagrams")
+    .select("path")
+    .eq("slug", slug)
+    .maybeSingle();
+  const existingPath = existing?.path ?? "";
+  const path = /^https?:\/\//i.test(existingPath) ? existingPath : `/diagrams/${slug}.svg`;
   return {
     slug,
-    path: `/diagrams/${slug}.svg`,
+    path,
     caption: entry.caption ?? "",
     kind: entry.kind && entry.kind !== "generated" ? entry.kind : "architecture",
-    topic_slug: entry.topic_slug ?? null,
+    topic_slug: await resolveTopicSlug(sb, entry),
+    capability_id: entry.capability_id ?? null,
   };
 }
 
@@ -349,7 +368,8 @@ export async function publishDiagram(
   const generated = entries.filter(
     (e) => (e.kind ?? "generated") === "generated" || e.path || e.slug,
   );
-  const rows = generated.map(diagramRow);
+  const rows = [];
+  for (const entry of generated) rows.push(await diagramRow(sb, entry));
   if (!rows.length) throw new Error("No diagram entries to register.");
   const { error } = await sb.from("diagrams").upsert(rows, { onConflict: "slug" });
   if (error) throw new Error(`diagrams: ${error.message}`);

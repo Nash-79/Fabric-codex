@@ -24,13 +24,27 @@ const sb = createClient(url, key, {
 });
 
 const EXPECTED_TABLES = [
-  ["admin_audit_events", "fail"], ["capabilities", "fail"], ["claims", "fail"],
-  ["claimevents", "fail"], ["content_item_sources", "fail"], ["content_items", "fail"],
-  ["diagrams", "fail"], ["favorites", "fail"], ["help_docs", "fail"],
-  ["issues", "warn"], ["profiles", "fail"], ["queue_items", "fail"],
-  ["roadmap_items", "fail"], ["roadmap_sync_state", "warn"], ["rss_subscriptions", "warn"],
-  ["sources", "fail"], ["topic_capabilities", "fail"], ["topics", "fail"],
-  ["user_invitations", "warn"], ["user_roles", "fail"], ["validation_runs", "warn"],
+  ["admin_audit_events", "fail"],
+  ["capabilities", "fail"],
+  ["claims", "fail"],
+  ["claimevents", "fail"],
+  ["content_item_sources", "fail"],
+  ["content_items", "fail"],
+  ["diagrams", "fail"],
+  ["favorites", "fail"],
+  ["help_docs", "fail"],
+  ["issues", "warn"],
+  ["profiles", "fail"],
+  ["queue_items", "fail"],
+  ["roadmap_items", "fail"],
+  ["roadmap_sync_state", "warn"],
+  ["rss_subscriptions", "warn"],
+  ["sources", "fail"],
+  ["topic_capabilities", "fail"],
+  ["topics", "fail"],
+  ["user_invitations", "warn"],
+  ["user_roles", "fail"],
+  ["validation_runs", "warn"],
 ];
 
 const EXPECTED_RPCS = [
@@ -92,10 +106,11 @@ try {
   latest = files[0] ?? null;
 } catch {}
 
-const summary = results.reduce(
-  (a, r) => ((a[r.status] = (a[r.status] ?? 0) + 1), a),
-  { ok: 0, warn: 0, fail: 0 },
-);
+const summary = results.reduce((a, r) => ((a[r.status] = (a[r.status] ?? 0) + 1), a), {
+  ok: 0,
+  warn: 0,
+  fail: 0,
+});
 
 console.log(`[verify-schema] latest bundled migration: ${latest ?? "(none)"}`);
 for (const r of results) {

@@ -9,6 +9,7 @@ import { ContentHero } from "@/components/ContentHero";
 import { ContentTocSidebar, useTocHeadings } from "@/components/ContentTocSidebar";
 import { CitationSidebar } from "@/components/CitationSidebar";
 import { TopicTree } from "@/components/TopicTree";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { BookOpen } from "lucide-react";
 
 const KINDS = new Set(["article", "design", "lesson"]);
@@ -179,6 +180,10 @@ function ContentItemPage() {
                     <span>{citationsOpen ? "Hide Sources" : `Sources (${citations.length})`}</span>
                   </button>
                 )}
+                <FavoriteButton
+                  itemType={kind as "article" | "design" | "lesson"}
+                  itemKey={item.slug}
+                />
                 <PrintButton />
               </div>
             </div>

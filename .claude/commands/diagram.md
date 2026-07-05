@@ -9,5 +9,6 @@ recipe), author an ORIGINAL diagram (Mermaid for flows/trees, SVG for infographi
 of any source image, no third-party logos — save it under `content/diagrams/` (and mirror to
 `public/diagrams/`), then register it by appending an entry to `content/diagrams/assets.json`
 (agents have no Supabase write access; the manifest replays into Supabase at the next
-bootstrap/publish). Attach `claim_id` or `source_id` when grounded in a specific claim/source;
-otherwise attach the capability id. Note which claims or source it visualises.
+bootstrap/publish). Manifest entries must include both `topic_slug` and `capability_id`; for a
+commissioned diagram, use the queue `target_slug` as `topic_slug`. Attach `claim_id` or `source_id`
+when grounded in a specific claim/source. Note which claims or source it visualises.

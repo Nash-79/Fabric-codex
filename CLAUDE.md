@@ -63,6 +63,10 @@ Authoring flow (git is the source of truth). The `localhost:8000` FastAPI backen
 agents read Supabase keylessly (anon key) and write only to git — publishing itself requires the
 sealed service-role key, so it is always a human step in the Lovable app's Settings → Publish tab:
 
+Run `node scripts/check-queues.mjs --brief` at session start or before orchestration. It reads the
+public `queue_public` and `rss_status_public` views, prints queue/feed/content gaps, and continues
+quietly if local env vars, the public views, or the external planning file are missing.
+
 ```
 agent reads source ─▶ writes content/sources/<slug>.json  (claims + tags + image refs)
 agent draws diagram ─▶ writes content/diagrams/<slug>.svg|.mmd  (original, never copied)
@@ -70,7 +74,7 @@ agent designs       ─▶ writes content/articles|designs/<slug>.json
         │  git commit + push to main (deploy picks up the new content/ files)
         ▼
 publish ─▶ Settings → Publish → "Publish all"  (republishes everything changed since its last
-            publish, sources → diagrams → articles/designs, one click — or paste a single
+            publish, sources → diagrams → articles/designs/lessons, one click — or paste a single
             content/*.json for one file before the next deploy)
         ▼
 server serves the knowledge base; deterministic citation/freshness/versioning run server-side
@@ -175,9 +179,9 @@ reads it, with content/queue.md as the offline fallback.
   article cannot reach `ready_to_share` until it is fixed.
 
 **Diagram commission queue (Settings → Diagrams).** Admins can commission more diagrams per topic
-at chosen intervals from the Settings UI. This reuses the `queue_items` lifecycle with
-`kind='diagram'`, `target_slug`, and `scheduled_at` (a future timestamp hides the item until it is
-due). The server only schedules — `/commission-diagrams` drains the due queue with the
+at chosen intervals from the Settings UI. This reuses the queue lifecycle exposed locally through
+`queue_public`, with `kind='diagram'`, `target_slug`, and `scheduled_at` (a future timestamp hides
+the item until it is due). The server only schedules — `/commission-diagrams` drains the due queue with the
 **diagram-author**, which authors an original SVG, mirrors it to `public/diagrams/`, and registers
 it as a generated asset (flipping the topic from _gap_ to _covered_ in the coverage table).
 

@@ -12,8 +12,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { listRoadmapItems } from "@/lib/atlas.functions";
-import { getRoadmapSyncStatus, pollFabricRoadmap } from "@/lib/settings.functions";
+import {
+  getRoadmapSyncStatus,
+  pollFabricRoadmap,
+  updateRoadmapItemCapability,
+} from "@/lib/settings.functions";
 import { Empty, Panel } from "@/components/settings/shared";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 type RoadmapSyncStatus = {
   status: { last_polled_at: string | null; error_count: number; last_error: string } | null;
@@ -23,6 +34,7 @@ type RoadmapSyncStatus = {
 export function RoadmapPanel() {
   const statusFn = useServerFn(getRoadmapSyncStatus);
   const pollFn = useServerFn(pollFabricRoadmap);
+  const updateCapabilityFn = useServerFn(updateRoadmapItemCapability);
   const queryClient = useQueryClient();
 
   const status = useQuery({
@@ -58,6 +70,15 @@ export function RoadmapPanel() {
     },
     onError: (err) => toast.error((err as Error).message),
   });
+  const updateCapability = useMutation({
+    mutationFn: (input: { id: string; capabilityId?: string | null }) =>
+      updateCapabilityFn({ data: input }),
+    onSuccess: () => {
+      toast.success("Roadmap capability updated.");
+      invalidate();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
 
   const data = status.data as RoadmapSyncStatus | undefined;
   const rows = (items.data ?? []) as Array<{
@@ -68,7 +89,30 @@ export function RoadmapPanel() {
     release_type: string;
     target_release: string;
     pub_date: string | null;
+    capability_id: string | null;
   }>;
+  const capabilities = [
+    "fabric-platform",
+    "capacity",
+    "purview",
+    "onelake",
+    "lakehouse",
+    "mirroring",
+    "spark",
+    "data-factory",
+    "dataflow-gen2",
+    "warehouse",
+    "polaris",
+    "sql-database",
+    "direct-lake",
+    "semantic-model",
+    "power-bi",
+    "rti",
+    "eventhouse-kql",
+    "fabric-data-agent",
+    "fabric-iq",
+    "graphql-api",
+  ];
 
   return (
     <Panel
@@ -126,6 +170,7 @@ export function RoadmapPanel() {
               <TableHead>Status</TableHead>
               <TableHead>Release type</TableHead>
               <TableHead>Target</TableHead>
+              <TableHead>Capability</TableHead>
               <TableHead>Published</TableHead>
             </TableRow>
           </TableHeader>
@@ -150,6 +195,29 @@ export function RoadmapPanel() {
                 <TableCell className="text-xs text-muted-foreground">{r.release_type}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {r.target_release || "—"}
+                </TableCell>
+                <TableCell>
+                  <Select
+                    value={r.capability_id ?? "none"}
+                    onValueChange={(value) =>
+                      updateCapability.mutate({
+                        id: r.id,
+                        capabilityId: value === "none" ? null : value,
+                      })
+                    }
+                  >
+                    <SelectTrigger className="h-8 w-44 border-border bg-card text-foreground">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unmapped</SelectItem>
+                      {capabilities.map((capability) => (
+                        <SelectItem key={capability} value={capability}>
+                          {capability}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {r.pub_date ? new Date(r.pub_date).toLocaleDateString() : "—"}

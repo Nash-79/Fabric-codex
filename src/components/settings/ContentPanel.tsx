@@ -4,6 +4,7 @@ import { RefreshCw } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +21,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  createHelpDoc,
+  createTopic,
+  deactivateTopic,
+  deleteHelpDoc,
   submitSourceReview,
   updateCapability,
   updateDiagram,
@@ -41,10 +46,13 @@ export function ContentPanel({
 }) {
   const reviewFn = useServerFn(submitSourceReview);
   const validateFn = useServerFn(validateContent);
+  const deactivateTopicFn = useServerFn(deactivateTopic);
+  const deleteHelpFn = useServerFn(deleteHelpDoc);
   const [edit, setEdit] = useState<{
     kind: "source" | "topic" | "capability" | "help" | "diagram";
     item: any;
   } | null>(null);
+  const [createKind, setCreateKind] = useState<"topic" | "help" | null>(null);
   const review = useMutation({
     mutationFn: (sourceId: string) => reviewFn({ data: { sourceId } }),
     onSuccess: () => {
@@ -57,6 +65,14 @@ export function ContentPanel({
     mutationFn: (id: string) => validateFn({ data: { kind: "design", id } }),
     onSuccess: () => {
       toast.success("Design validation queued.");
+      onDone();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+  const rowAction = useMutation({
+    mutationFn: (task: Promise<unknown>) => task,
+    onSuccess: () => {
+      toast.success("Content updated.");
       onDone();
     },
     onError: (err) => toast.error((err as Error).message),
@@ -84,6 +100,14 @@ export function ContentPanel({
                 </div>
               ))}
             </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={() => setCreateKind("topic")}>
+                New topic
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setCreateKind("help")}>
+                New help doc
+              </Button>
+            </div>
             <CompactList
               title="Sources"
               rows={data?.sources ?? []}
@@ -109,6 +133,17 @@ export function ContentPanel({
               label={(t) => t.name}
               meta={(t) => t.slug}
               onEdit={(item) => setEdit({ kind: "topic", item })}
+              extraAction={(item) => (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-border bg-card text-foreground"
+                  disabled={rowAction.isPending || item.active === false}
+                  onClick={() => rowAction.mutate(deactivateTopicFn({ data: { slug: item.slug } }))}
+                >
+                  Deactivate
+                </Button>
+              )}
             />
             <CompactList
               title="Capabilities"
@@ -123,6 +158,21 @@ export function ContentPanel({
               label={(h) => h.title}
               meta={(h) => h.slug}
               onEdit={(item) => setEdit({ kind: "help", item })}
+              extraAction={(item) => (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-8 border-rose-400/30 bg-rose-500/10 text-rose-200"
+                  disabled={rowAction.isPending}
+                  onClick={() => {
+                    if (confirm(`Delete help doc ${item.slug}?`)) {
+                      rowAction.mutate(deleteHelpFn({ data: { slug: item.slug } }));
+                    }
+                  }}
+                >
+                  Delete
+                </Button>
+              )}
             />
             <CompactList
               title="Diagrams"
@@ -153,6 +203,12 @@ export function ContentPanel({
         )}
       </Panel>
       <ContentEditor edit={edit} setEdit={setEdit} onDone={onDone} />
+      <CreateContentDialog
+        kind={createKind}
+        setKind={setCreateKind}
+        capabilities={data?.capabilities ?? []}
+        onDone={onDone}
+      />
     </>
   );
 }
@@ -172,13 +228,28 @@ function CompactList({
   onEdit: (r: any) => void;
   extraAction?: (r: any) => ReactNode;
 }) {
+  const [query, setQuery] = useState("");
+  const [showAll, setShowAll] = useState(false);
+  const filtered = rows.filter((row) => {
+    const term = query.trim().toLowerCase();
+    return !term || `${label(row)} ${meta(row)}`.toLowerCase().includes(term);
+  });
+  const visible = showAll ? filtered : filtered.slice(0, 8);
   return (
     <div>
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {title}
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </div>
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Filter"
+          className="h-8 w-44 border-border bg-card text-foreground"
+        />
       </div>
       <div className="divide-y divide-border rounded-md border border-border">
-        {rows.slice(0, 8).map((row) => (
+        {visible.map((row) => (
           <div
             key={row.id ?? row.slug}
             className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
@@ -201,6 +272,16 @@ function CompactList({
           </div>
         ))}
       </div>
+      {filtered.length > 8 && (
+        <Button
+          size="sm"
+          variant="ghost"
+          className="mt-2"
+          onClick={() => setShowAll((value) => !value)}
+        >
+          {showAll ? "Show fewer" : `Show all (${filtered.length})`}
+        </Button>
+      )}
     </div>
   );
 }
@@ -387,6 +468,131 @@ function ContentEditor({
         </div>
         <Button onClick={() => save.mutate()} disabled={save.isPending}>
           Save changes
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateContentDialog({
+  kind,
+  setKind,
+  capabilities,
+  onDone,
+}: {
+  kind: "topic" | "help" | null;
+  setKind: (kind: "topic" | "help" | null) => void;
+  capabilities: any[];
+  onDone: () => void;
+}) {
+  const createTopicFn = useServerFn(createTopic);
+  const createHelpFn = useServerFn(createHelpDoc);
+  const [draft, setDraft] = useState({
+    slug: "",
+    title: "",
+    description: "",
+    parent_slug: "",
+    sort_order: "0",
+    capability_ids: "",
+    body_md: "",
+  });
+  const create = useMutation({
+    mutationFn: () => {
+      if (kind === "topic") {
+        return createTopicFn({
+          data: {
+            slug: draft.slug,
+            name: draft.title,
+            description: draft.description,
+            parent_slug: draft.parent_slug || null,
+            sort_order: Number(draft.sort_order || 0),
+            capability_ids: draft.capability_ids
+              .split(",")
+              .map((id) => id.trim())
+              .filter(Boolean),
+          },
+        });
+      }
+      return createHelpFn({
+        data: {
+          slug: draft.slug,
+          title: draft.title,
+          body_md: draft.body_md || `# ${draft.title}\n`,
+          sort_order: Number(draft.sort_order || 0),
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success(kind === "topic" ? "Topic created." : "Help doc created.");
+      setKind(null);
+      setDraft({
+        slug: "",
+        title: "",
+        description: "",
+        parent_slug: "",
+        sort_order: "0",
+        capability_ids: "",
+        body_md: "",
+      });
+      onDone();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+  const set = (key: keyof typeof draft, value: string) => setDraft({ ...draft, [key]: value });
+  return (
+    <Dialog open={!!kind} onOpenChange={(open) => !open && setKind(null)}>
+      <DialogContent className="max-h-[85vh] overflow-auto border-border bg-popover text-foreground sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>New {kind === "topic" ? "topic" : "help doc"}</DialogTitle>
+          <DialogDescription className="text-muted-foreground">
+            Create the registry row first; source-controlled content can be backfilled under
+            <code> content/</code>.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <Field label="Slug" value={draft.slug} onChange={(v) => set("slug", v)} />
+          <Field label="Title" value={draft.title} onChange={(v) => set("title", v)} />
+          <Field
+            label="Sort order"
+            type="number"
+            value={draft.sort_order}
+            onChange={(v) => set("sort_order", v)}
+          />
+          {kind === "topic" ? (
+            <>
+              <Area
+                label="Description"
+                value={draft.description}
+                onChange={(v) => set("description", v)}
+              />
+              <Field
+                label="Parent slug"
+                value={draft.parent_slug}
+                onChange={(v) => set("parent_slug", v)}
+              />
+              <Field
+                label="Capability ids"
+                value={draft.capability_ids}
+                onChange={(v) => set("capability_ids", v)}
+              />
+              <div className="text-xs text-muted-foreground">
+                Available capabilities: {capabilities.map((c) => c.id).join(", ")}
+              </div>
+            </>
+          ) : (
+            <Area
+              label="Body"
+              value={draft.body_md}
+              onChange={(v) => set("body_md", v)}
+              rows={10}
+            />
+          )}
+        </div>
+        <Button
+          onClick={() => create.mutate()}
+          disabled={create.isPending || !draft.slug.trim() || !draft.title.trim()}
+        >
+          Create
         </Button>
       </DialogContent>
     </Dialog>

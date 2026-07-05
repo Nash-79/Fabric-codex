@@ -64,7 +64,7 @@ function AuthorPage() {
             <li>
               Commit and push the files, then publish in the app:{" "}
               <strong className="text-foreground">Settings → Publish → "Publish all"</strong>{" "}
-              (sources → diagrams → articles/designs, versioned, one click).
+              (sources → diagrams → articles/designs/lessons, versioned, one click).
             </li>
             <li>
               The server runs deterministic validation: citation, freshness, versioning, diagram

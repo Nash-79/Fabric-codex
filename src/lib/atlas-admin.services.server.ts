@@ -251,7 +251,7 @@ export async function mutateQueueItem(
   if (!selected.from.includes(item.status)) {
     throw new Error(`Queue item is '${item.status}'; expected one of ${selected.from.join(", ")}.`);
   }
-  if (action === "complete" && item.kind !== "diagram" && !data.sourceId) {
+  if (action === "complete" && (item.kind ?? "source") === "source" && !data.sourceId) {
     throw new Error("A source id is required to complete source queue items.");
   }
 
@@ -273,7 +273,7 @@ export async function getDiagramCoverage(sb: SupabaseAdmin) {
       .eq("active", true)
       .order("sort_order")
       .order("name"),
-    sb.from("diagrams").select("slug,topic_slug,path,caption"),
+    sb.from("diagrams").select("slug,topic_slug,path,caption,kind,capability_id"),
     sb
       .from("queue_items")
       .select("*")
@@ -299,7 +299,7 @@ export async function getDiagramCoverage(sb: SupabaseAdmin) {
       commission_open: open.has(topic.slug),
     };
   });
-  return { coverage, pending: queue ?? [] };
+  return { coverage, pending: queue ?? [], diagrams: diagrams ?? [] };
 }
 
 export async function commissionDiagram(
@@ -332,6 +332,219 @@ export async function commissionDiagram(
     .single();
   if (error || !item) throw new Error(error?.message ?? "Diagram commission failed.");
   return item;
+}
+
+export async function commissionWork(
+  sb: SupabaseAdmin,
+  data: {
+    kind: "diagram" | "article" | "design" | "lesson";
+    targetSlug: string;
+    title?: string;
+    brief?: string;
+    scheduledAt?: string;
+  },
+) {
+  const targetSlug = data.targetSlug.trim();
+  if (!targetSlug) throw new Error("Target slug is required.");
+  const { data: existing } = await sb
+    .from("queue_items")
+    .select("id")
+    .eq("kind", data.kind)
+    .eq("target_slug", targetSlug)
+    .in("status", ["queued", "claimed"])
+    .maybeSingle();
+  if (existing) throw new Error(`${data.kind} work is already commissioned for '${targetSlug}'.`);
+
+  const { data: item, error } = await sb
+    .from("queue_items")
+    .insert({
+      kind: data.kind,
+      target_slug: targetSlug,
+      title: data.title ?? `${targetSlug} ${data.kind}`,
+      url: `fabric-atlas://${data.kind}/${targetSlug}`,
+      status: "queued",
+      scheduled_at: data.scheduledAt || null,
+      notes: data.brief || `Commissioned ${data.kind} from Settings.`,
+    })
+    .select("*")
+    .single();
+  if (error || !item) throw new Error(error?.message ?? `${data.kind} commission failed.`);
+  return item;
+}
+
+export async function computeSuggestedActions(sb: SupabaseAdmin) {
+  const now = new Date().toISOString();
+  const [
+    { data: queue },
+    { data: rss },
+    { data: topics },
+    { data: contentItems },
+    { data: claims },
+    { data: validationIssues },
+    { data: diagrams },
+  ] = await Promise.all([
+    sb
+      .from("queue_items")
+      .select("id,kind,title,url,target_slug,status,scheduled_at,created_at,error")
+      .in("status", ["queued", "claimed", "failed"])
+      .order("created_at", { ascending: true }),
+    sb
+      .from("rss_subscriptions")
+      .select("id,title,feed_url,status,last_polled_at,error_count,last_error")
+      .order("created_at", { ascending: true }),
+    sb.from("topics").select("slug,name,active").eq("active", true),
+    sb
+      .from("content_items")
+      .select("id,kind,slug,title,topic_slug,body_md,active,status,ready_to_share")
+      .eq("active", true),
+    sb
+      .from("claims")
+      .select("id,capability_id,status,active")
+      .eq("status", "pending")
+      .eq("active", true),
+    sb
+      .from("issues")
+      .select("id,severity,message,created_at")
+      .eq("severity", "critical")
+      .order("created_at", { ascending: false })
+      .limit(20),
+    sb.from("diagrams").select("slug,path,topic_slug,capability_id"),
+  ]);
+
+  const actions: Array<{
+    id: string;
+    priority: number;
+    label: string;
+    detail: string;
+    tab: string;
+    command?: string;
+  }> = [];
+
+  const dueQueue = (queue ?? []).filter(
+    (q: any) =>
+      ["queued", "claimed"].includes(q.status) &&
+      (!q.scheduled_at || new Date(q.scheduled_at).toISOString() <= now),
+  );
+  const failedQueue = (queue ?? []).filter((q: any) => q.status === "failed");
+  const sourceQueue = dueQueue.filter((q: any) => q.kind === "source");
+  const commissionQueue = dueQueue.filter((q: any) => q.kind !== "source");
+  if (sourceQueue.length) {
+    actions.push({
+      id: "queued-sources",
+      priority: 100,
+      label: `${sourceQueue.length} source(s) ready for ingestion`,
+      detail: sourceQueue[0].title || sourceQueue[0].url,
+      tab: "queue",
+      command: "/ingest-batch",
+    });
+  }
+  if (commissionQueue.length) {
+    const first = commissionQueue[0];
+    const kind = first.kind === "diagram" ? "diagram" : first.kind;
+    actions.push({
+      id: "due-commissions",
+      priority: 95,
+      label: `${commissionQueue.length} commissioned work item(s) due`,
+      detail: first.target_slug || first.title || kind,
+      tab: first.kind === "diagram" ? "diagrams" : "blogs",
+      command:
+        first.kind === "diagram"
+          ? "/commission-diagrams"
+          : `/${kind} ${first.target_slug ?? ""}`.trim(),
+    });
+  }
+  if (failedQueue.length) {
+    actions.push({
+      id: "failed-queue",
+      priority: 90,
+      label: `${failedQueue.length} failed queue item(s)`,
+      detail: failedQueue[0].error || failedQueue[0].title || "Review failure reason",
+      tab: "queue",
+    });
+  }
+
+  const staleCutoff = Date.now() - 24 * 60 * 60 * 1000;
+  const staleFeeds = (rss ?? []).filter(
+    (r: any) =>
+      r.status === "active" &&
+      (!r.last_polled_at || new Date(r.last_polled_at).getTime() < staleCutoff),
+  );
+  const failingFeeds = (rss ?? []).filter((r: any) => (r.error_count ?? 0) > 0);
+  if (staleFeeds.length || failingFeeds.length) {
+    actions.push({
+      id: "rss-attention",
+      priority: 80,
+      label: `${staleFeeds.length} stale / ${failingFeeds.length} failing feed(s)`,
+      detail: failingFeeds[0]?.last_error || staleFeeds[0]?.title || staleFeeds[0]?.feed_url || "",
+      tab: "rss",
+      command: "/poll-rss-feeds",
+    });
+  }
+
+  if ((claims ?? []).length) {
+    actions.push({
+      id: "pending-claims",
+      priority: 75,
+      label: `${claims.length} pending claim(s) need verification`,
+      detail: "Verify, reject, or supersede before content generation.",
+      tab: "claims",
+      command: "/orchestrate-content",
+    });
+  }
+
+  const articleTopics = new Set(
+    (contentItems ?? [])
+      .filter((i: any) => i.kind === "article" && i.status === "published" && i.topic_slug)
+      .map((i: any) => i.topic_slug),
+  );
+  const articleLess = (topics ?? []).filter((t: any) => !articleTopics.has(t.slug));
+  if (articleLess.length) {
+    actions.push({
+      id: "article-less-topics",
+      priority: 60,
+      label: `${articleLess.length} topic(s) have no published article`,
+      detail: articleLess[0].name,
+      tab: "blogs",
+      command: `/blog ${articleLess[0].slug}`,
+    });
+  }
+
+  const internalsPlaceholders = (contentItems ?? []).filter((i: any) =>
+    /\*Coming soon[\s\S]*content\/queue\.md/i.test(i.body_md ?? ""),
+  );
+  if (internalsPlaceholders.length) {
+    actions.push({
+      id: "internals-placeholders",
+      priority: 55,
+      label: `${internalsPlaceholders.length} article/design internals placeholder(s)`,
+      detail: internalsPlaceholders[0].title,
+      tab: "blogs",
+      command: "/orchestrate-content",
+    });
+  }
+
+  if ((validationIssues ?? []).length) {
+    actions.push({
+      id: "validation-critical",
+      priority: 85,
+      label: `${validationIssues.length} critical validation issue(s)`,
+      detail: validationIssues[0].message,
+      tab: "logs",
+    });
+  }
+
+  const storageOverrides = (diagrams ?? []).filter((d: any) => /^https?:\/\//i.test(d.path ?? ""));
+  if (storageOverrides.length) {
+    actions.push({
+      id: "diagram-storage-overrides",
+      priority: 50,
+      label: `${storageOverrides.length} diagram storage override(s) need git backport`,
+      detail: storageOverrides[0].slug,
+      tab: "diagrams",
+    });
+  }
+
+  return actions.sort((a, b) => b.priority - a.priority).slice(0, 12);
 }
 
 function markdownLinks(body: string) {

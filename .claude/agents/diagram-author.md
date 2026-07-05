@@ -46,16 +46,18 @@ before/after).
      "kind": "generated",
      "path": "content/diagrams/<slug>.svg",
      "caption": "<what it shows>",
+     "topic_slug": "<topic slug>",
      "capability_id": "<id>",
      "claim_id": "<optional>",
      "source_id": "<optional>",
      "design_id": "<optional>"
    }
    ```
-   Prefer `claim_id` when the diagram illustrates one claim, `source_id` when it explains one
-   source, and `capability_id` for broad capability diagrams. Include a grounding note in the output
-   listing the claim ids or source id used. Tell the user the diagram registers into Supabase on the
-   next content bootstrap/publish.
+   For commissioned diagrams, copy the queue `target_slug` into `topic_slug`. Prefer `claim_id`
+   when the diagram illustrates one claim, `source_id` when it explains one source, and
+   `capability_id` for broad capability diagrams. Include a grounding note in the output listing
+   the claim ids or source id used. Tell the user the diagram registers into Supabase on the next
+   content bootstrap/publish.
 
 ## Rules
 

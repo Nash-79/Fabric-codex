@@ -33,7 +33,7 @@ async function adminServices() {
 }
 
 async function recordAudit(
-  actorId: string,
+  actorId: string | null,
   action: string,
   targetType = "",
   targetId = "",
@@ -408,6 +408,58 @@ export const updateTopicMetadata = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const createTopic = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (d: {
+      slug: string;
+      name: string;
+      description?: string;
+      parent_slug?: string | null;
+      sort_order?: number;
+      tags?: string[];
+      capability_ids?: string[];
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const slug = data.slug.trim().toLowerCase();
+    if (!slug || !data.name.trim()) throw new Error("Slug and name are required.");
+    const sb = await adminClient();
+    const { error } = await sb.from("topics").insert({
+      slug,
+      name: data.name.trim(),
+      description: data.description ?? "",
+      parent_slug: data.parent_slug ?? null,
+      sort_order: data.sort_order ?? 0,
+      tags: data.tags ?? [],
+      active: true,
+    });
+    if (error) throw new Error(error.message);
+    const links = (data.capability_ids ?? []).map((capability_id) => ({
+      topic_slug: slug,
+      capability_id,
+    }));
+    if (links.length) {
+      const { error: linkError } = await sb.from("topic_capabilities").insert(links);
+      if (linkError) throw new Error(linkError.message);
+    }
+    await recordAudit(context.userId, "topic.created", "topic", slug);
+    return { ok: true as const, slug };
+  });
+
+export const deactivateTopic = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { slug: string }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { error } = await sb.from("topics").update({ active: false }).eq("slug", data.slug);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "topic.deactivated", "topic", data.slug);
+    return { ok: true as const };
+  });
+
 export const updateHelpDoc = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { slug: string; title: string; body_md: string; sort_order?: number }) => d)
@@ -427,6 +479,37 @@ export const updateHelpDoc = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const createHelpDoc = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { slug: string; title: string; body_md?: string; sort_order?: number }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const slug = data.slug.trim().toLowerCase();
+    if (!slug || !data.title.trim()) throw new Error("Slug and title are required.");
+    const sb = await adminClient();
+    const { error } = await sb.from("help_docs").insert({
+      slug,
+      title: data.title.trim(),
+      body_md: data.body_md ?? `# ${data.title.trim()}\n`,
+      sort_order: data.sort_order ?? 0,
+    });
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "help.created", "help_doc", slug);
+    return { ok: true as const, slug };
+  });
+
+export const deleteHelpDoc = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { slug: string }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { error } = await sb.from("help_docs").delete().eq("slug", data.slug);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "help.deleted", "help_doc", data.slug);
+    return { ok: true as const };
+  });
+
 export const updateDiagram = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator(
@@ -435,6 +518,7 @@ export const updateDiagram = createServerFn({ method: "POST" })
       caption: string;
       kind?: string;
       topic_slug?: string | null;
+      capability_id?: string | null;
       path: string;
     }) => d,
   )
@@ -447,12 +531,96 @@ export const updateDiagram = createServerFn({ method: "POST" })
         caption: data.caption,
         kind: data.kind ?? "architecture",
         topic_slug: data.topic_slug ?? null,
+        capability_id: data.capability_id ?? null,
         path: data.path,
       })
       .eq("slug", data.slug);
     if (error) throw new Error(error.message);
     await recordAudit(context.userId, "diagram.updated", "diagram", data.slug);
     return { ok: true };
+  });
+
+function assertSafeSvg(svgText: string) {
+  const text = svgText.trim();
+  if (new TextEncoder().encode(text).length > 512 * 1024) {
+    throw new Error("SVG must be 512KB or smaller.");
+  }
+  if (!/^(<\?xml[\s\S]*?\?>\s*)?<svg[\s>]/i.test(text)) {
+    throw new Error("Only SVG documents are supported.");
+  }
+  if (/<script\b/i.test(text) || /\son[a-z]+\s*=/i.test(text) || /javascript:/i.test(text)) {
+    throw new Error("SVG contains script, event handlers, or javascript: URLs.");
+  }
+  return text;
+}
+
+function cleanDiagramSlug(slug: string) {
+  const cleaned = slug
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!cleaned) throw new Error("Diagram slug is required.");
+  return cleaned;
+}
+
+export const uploadDiagramImage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (d: {
+      slug: string;
+      svgText: string;
+      caption?: string;
+      kind?: string;
+      topicSlug?: string | null;
+      capabilityId?: string | null;
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const slug = cleanDiagramSlug(data.slug);
+    const svgText = assertSafeSvg(data.svgText);
+    const sb = await adminClient();
+    const objectName = `${slug}.svg`;
+    const { error: uploadError } = await sb.storage.from("diagrams").upload(objectName, svgText, {
+      contentType: "image/svg+xml",
+      upsert: true,
+    });
+    if (uploadError) throw new Error(uploadError.message);
+    const { data: publicData } = sb.storage.from("diagrams").getPublicUrl(objectName);
+    const path = publicData.publicUrl;
+    const { error } = await sb.from("diagrams").upsert(
+      {
+        slug,
+        path,
+        caption: data.caption ?? "",
+        kind: data.kind ?? "architecture",
+        topic_slug: data.topicSlug ?? null,
+        capability_id: data.capabilityId ?? null,
+      },
+      { onConflict: "slug" },
+    );
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "diagram.uploaded", "diagram", slug, {
+      path,
+      topic_slug: data.topicSlug ?? null,
+      capability_id: data.capabilityId ?? null,
+    });
+    return { ok: true as const, slug, path };
+  });
+
+export const deleteDiagram = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { slug: string }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const slug = cleanDiagramSlug(data.slug);
+    const sb = await adminClient();
+    await sb.storage.from("diagrams").remove([`${slug}.svg`]);
+    const { error } = await sb.from("diagrams").delete().eq("slug", slug);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "diagram.deleted", "diagram", slug);
+    return { ok: true as const };
   });
 
 export const mutateClaim = createServerFn({ method: "POST" })
@@ -611,6 +779,7 @@ type DiagramCoverageRow = {
 type DiagramCoverageResult = {
   coverage: DiagramCoverageRow[];
   pending: Array<Record<string, unknown>>;
+  diagrams: Array<Record<string, unknown>>;
 };
 
 export const getDiagramCoverage = createServerFn({ method: "GET" })
@@ -622,6 +791,15 @@ export const getDiagramCoverage = createServerFn({ method: "GET" })
     const sb = await adminClient();
     const { getDiagramCoverage: getDiagramCoverageRecord } = await adminServices();
     return getDiagramCoverageRecord(sb);
+  });
+
+export const getSuggestedActions = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { computeSuggestedActions } = await adminServices();
+    return computeSuggestedActions(sb);
   });
 
 export const commissionDiagram = createServerFn({ method: "POST" })
@@ -646,6 +824,28 @@ export const commissionDiagram = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const commissionWork = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (d: {
+      kind: "diagram" | "article" | "design" | "lesson";
+      targetSlug: string;
+      title?: string;
+      brief?: string;
+      scheduledAt?: string;
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { commissionWork: commissionWorkRecord } = await adminServices();
+    await commissionWorkRecord(sb, data);
+    await recordAudit(context.userId, `${data.kind}.commissioned`, data.kind, data.targetSlug, {
+      scheduled_at: data.scheduledAt,
+    });
+    return { ok: true as const };
+  });
+
 export const submitSourceReview = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { sourceId: string; note?: string }) => d)
@@ -666,7 +866,6 @@ export const submitSourceReview = createServerFn({ method: "POST" })
         title: source.title,
         tier: source.tier,
         tags: source.tags ?? [],
-        note,
         notes: note,
         submitted_by: context.userId,
         status: "queued",
@@ -732,7 +931,6 @@ export const submitSourceUrl = createServerFn({ method: "POST" })
         tier,
         tags: data.tags ?? [],
         kind: "source",
-        note,
         notes: note,
         submitted_by: context.userId,
         status: "queued",
@@ -896,143 +1094,13 @@ export const pollRssFeeds = createServerFn({ method: "POST" })
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const sb = await adminClient();
-
-    let query = sb
-      .from("rss_subscriptions")
-      .select("id,feed_url,title,default_tier,default_tags,last_seen_guid,last_polled_at,status")
-      .eq("status", "active")
-      .order("created_at", { ascending: true });
-    if (data.feedId) query = query.eq("id", data.feedId);
-    const { data: feeds, error: feedError } = await query;
-    if (feedError) throw new Error(feedError.message);
-
-    const nowIso = new Date().toISOString();
-    const results: Array<{
-      feed: string;
-      found: number;
-      queued: number;
-      skipped: number;
-      capped: boolean;
-      error: string | null;
-    }> = [];
-
-    for (const feed of feeds ?? []) {
-      const label = feed.title || feed.feed_url;
-      try {
-        const res = await fetch(feed.feed_url, {
-          headers: {
-            accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
-          },
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const xml = await res.text();
-        // Document order is newest-first for most feeds; reverse so we process oldest→newest
-        // and land last_seen_guid on the most recent entry.
-        const all = parseFeed(xml).reverse();
-
-        const firstPoll = !feed.last_seen_guid;
-        let entries = all;
-        let capped = false;
-        if (firstPoll && all.length > FIRST_POLL_CAP) {
-          entries = all.slice(all.length - FIRST_POLL_CAP);
-          capped = true;
-        } else if (!firstPoll) {
-          // Everything strictly after the last-seen guid (by position in the feed).
-          const seenIdx = all.findIndex((e) => e.guid === feed.last_seen_guid);
-          entries = seenIdx >= 0 ? all.slice(seenIdx + 1) : all;
-        }
-
-        let queued = 0;
-        let skipped = 0;
-        for (const entry of entries) {
-          const url = entry.link;
-          if (!url) continue;
-          // Dedupe against approved sources and open queue items (mirrors submitSourceUrl).
-          const { data: existingSource } = await sb
-            .from("sources")
-            .select("slug")
-            .eq("url", url)
-            .maybeSingle();
-          if (existingSource) {
-            skipped++;
-            continue;
-          }
-          const { data: openItem } = await sb
-            .from("queue_items")
-            .select("id")
-            .eq("url", url)
-            .in("status", ["queued", "claimed"])
-            .maybeSingle();
-          if (openItem) {
-            skipped++;
-            continue;
-          }
-          const note = `via RSS: ${label}`;
-          const { error: insertError } = await sb.from("queue_items").insert({
-            url,
-            title: entry.title?.trim() ?? "",
-            tier: feed.default_tier,
-            tags: feed.default_tags ?? [],
-            kind: "source",
-            note,
-            notes: note,
-            submitted_by: context.userId,
-            status: "queued",
-          });
-          if (insertError) {
-            // Unique-violation = raced into an existing item; count as a skip, not a failure.
-            if ((insertError as { code?: string }).code === "23505") skipped++;
-            else throw new Error(insertError.message);
-          } else {
-            queued++;
-          }
-        }
-
-        const newestGuid = all.length ? all[all.length - 1].guid : feed.last_seen_guid;
-        await sb
-          .from("rss_subscriptions")
-          .update({
-            last_polled_at: nowIso,
-            last_seen_guid: newestGuid,
-            error_count: 0,
-            last_error: "",
-          })
-          .eq("id", feed.id);
-
-        results.push({ feed: label, found: entries.length, queued, skipped, capped, error: null });
-      } catch (err) {
-        const reason = (err as Error).message.slice(0, 200);
-        // Don't advance last_seen_guid on failure; bump the error counter.
-        const { data: cur } = await sb
-          .from("rss_subscriptions")
-          .select("error_count")
-          .eq("id", feed.id)
-          .maybeSingle();
-        await sb
-          .from("rss_subscriptions")
-          .update({
-            last_polled_at: nowIso,
-            error_count: (cur?.error_count ?? 0) + 1,
-            last_error: reason,
-          })
-          .eq("id", feed.id);
-        results.push({
-          feed: label,
-          found: 0,
-          queued: 0,
-          skipped: 0,
-          capped: false,
-          error: reason,
-        });
-      }
-    }
-
-    const totalQueued = results.reduce((n, r) => n + r.queued, 0);
+    const { pollRssFeedsCore } = await import("@/lib/rss-poll.server");
+    const result = await pollRssFeedsCore(sb, { feedId: data.feedId, actorId: context.userId });
     await recordAudit(context.userId, "rss.polled", "rss_subscription", data.feedId ?? "all", {
-      feeds: results.length,
-      queued: totalQueued,
+      feeds: result.results.length,
+      queued: result.totalQueued,
     });
-    return { ok: true as const, results, totalQueued };
+    return result;
   });
 
 // --- Fabric roadmap sync ----------------------------------------------------
@@ -1072,92 +1140,20 @@ export const pollFabricRoadmap = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     await requireAdmin(context);
     const sb = await adminClient();
-    const nowIso = new Date().toISOString();
-
-    try {
-      const res = await fetch(FABRIC_ROADMAP_FEED_URL, {
-        headers: {
-          accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
-        },
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const xml = await res.text();
-
-      const blocks = xml.match(/<item\b[\s\S]*?<\/item>/gi) ?? [];
-      let created = 0;
-      let updated = 0;
-
-      for (const block of blocks) {
-        const link = entryLink(block);
-        const guid = tagText(block, "guid") || link;
-        if (!guid) continue;
-        const title = tagText(block, "title");
-        const pubDateRaw = tagText(block, "pubDate");
-        const pubDate = pubDateRaw ? new Date(pubDateRaw) : null;
-        const categories = tagTextAll(block, "category");
-        const descriptionHtml = tagText(block, "description");
-
-        const row = {
-          guid,
-          title,
-          link,
-          status: deriveRoadmapStatus(categories),
-          release_type: deriveReleaseType(categories),
-          target_release: parseTargetRelease(descriptionHtml),
-          categories,
-          description_html: descriptionHtml,
-          pub_date: pubDate && !Number.isNaN(pubDate.getTime()) ? pubDate.toISOString() : null,
-          last_seen_at: nowIso,
-        };
-
-        const { data: existing } = await sb
-          .from("roadmap_items")
-          .select("id")
-          .eq("guid", guid)
-          .maybeSingle();
-
-        if (existing) {
-          const { error } = await sb.from("roadmap_items").update(row).eq("guid", guid);
-          if (error) throw new Error(error.message);
-          updated++;
-        } else {
-          const { error } = await sb.from("roadmap_items").insert(row);
-          if (error) throw new Error(error.message);
-          created++;
-        }
-      }
-
-      await sb
-        .from("roadmap_sync_state")
-        .update({ last_polled_at: nowIso, error_count: 0, last_error: "" })
-        .eq("id", true);
-
+    const { pollFabricRoadmapCore } = await import("@/lib/rss-poll.server");
+    const result = await pollFabricRoadmapCore(sb);
+    if (result.ok) {
       await recordAudit(context.userId, "roadmap.polled", "roadmap_sync_state", "", {
-        found: blocks.length,
-        created,
-        updated,
+        found: result.found,
+        created: result.created,
+        updated: result.updated,
       });
-      return { ok: true as const, found: blocks.length, created, updated, error: null };
-    } catch (err) {
-      const reason = (err as Error).message.slice(0, 200);
-      const { data: cur } = await sb
-        .from("roadmap_sync_state")
-        .select("error_count")
-        .eq("id", true)
-        .maybeSingle();
-      await sb
-        .from("roadmap_sync_state")
-        .update({
-          last_polled_at: nowIso,
-          error_count: (cur?.error_count ?? 0) + 1,
-          last_error: reason,
-        })
-        .eq("id", true);
+    } else {
       await recordAudit(context.userId, "roadmap.poll_failed", "roadmap_sync_state", "", {
-        error: reason,
+        error: result.error,
       });
-      return { ok: false as const, found: 0, created: 0, updated: 0, error: reason };
     }
+    return result;
   });
 
 export const getRoadmapSyncStatus = createServerFn({ method: "GET" })
@@ -1173,6 +1169,23 @@ export const getRoadmapSyncStatus = createServerFn({ method: "GET" })
     if (error) throw new Error(error.message);
     const { count } = await sb.from("roadmap_items").select("id", { count: "exact", head: true });
     return { status: data ?? null, itemCount: count ?? 0 };
+  });
+
+export const updateRoadmapItemCapability = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { id: string; capabilityId?: string | null }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { error } = await sb
+      .from("roadmap_items")
+      .update({ capability_id: data.capabilityId || null })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "roadmap.capability_updated", "roadmap_item", data.id, {
+      capability_id: data.capabilityId || null,
+    });
+    return { ok: true as const };
   });
 
 // Publish a single agent-authored content/*.json payload (pasted by an admin in Settings) into
@@ -1206,10 +1219,10 @@ export const publishFromFile = createServerFn({ method: "POST" })
     return { ok: true as const, result };
   });
 
-// Publish every content/sources, content/articles, content/designs, and content/diagrams file
-// bundled into this deploy, in dependency order (sources -> diagrams -> articles/designs), via
-// the same versioned publishFromFile path used above. Skips anything unchanged since the last
-// publish unless force=true. This is the one-click alternative to pasting each file by hand.
+// Publish every content/sources, content/articles, content/designs, content/lessons, and
+// content/diagrams file bundled into this deploy, in dependency order
+// (sources -> diagrams -> articles/designs/lessons), via the same versioned publishFromFile path
+// used above. Skips anything unchanged since the last publish unless force=true.
 export const publishAllBundled = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { force?: boolean } | undefined) => d ?? {})

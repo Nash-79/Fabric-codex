@@ -5,6 +5,7 @@ import { listSources } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { TierBadge } from "@/components/Badges";
 import { Input } from "@/components/ui/input";
+import { FavoriteButton } from "@/components/FavoriteButton";
 
 const sourcesQO = queryOptions({ queryKey: ["sources"], queryFn: () => listSources() });
 
@@ -97,7 +98,10 @@ function SourcesPage() {
                 >
                   {s.title}
                 </a>
-                <TierBadge tier={s.tier} />
+                <div className="flex shrink-0 items-center gap-2">
+                  <TierBadge tier={s.tier} />
+                  <FavoriteButton itemType="source" itemKey={s.slug} label="Save" />
+                </div>
               </div>
               {s.summary && <p className="mt-1.5 text-xs text-muted-foreground">{s.summary}</p>}
               {s.tags?.length > 0 && (

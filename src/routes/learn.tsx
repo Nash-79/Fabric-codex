@@ -48,6 +48,10 @@ function LearnPage() {
     queryKey: ["content-items", "lesson"],
     queryFn: () => listContentItems({ data: { kind: "lesson" } }),
   });
+  const designs = useQuery({
+    queryKey: ["content-items", "design"],
+    queryFn: () => listContentItems({ data: { kind: "design" } }),
+  });
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -62,6 +66,35 @@ function LearnPage() {
         </p>
 
         <div className="mt-8 space-y-8">
+          <section>
+            <div className="flex items-baseline gap-3">
+              <h2 className="text-xl font-semibold text-foreground">Patterns & designs</h2>
+              <span className="text-xs text-muted-foreground">L3 · L4 · L5</span>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {(designs.data ?? []).map((d: any) => (
+                <Link
+                  key={d.id}
+                  to="/blogs/$kind/$slug"
+                  params={{ kind: "design", slug: d.slug }}
+                  className="block rounded-xl border border-border bg-card p-4 transition hover:bg-accent"
+                >
+                  <div className="text-[10px] uppercase tracking-wide text-teal-300/70">
+                    {(d.depth_levels ?? []).some((depth: number) => depth >= 4)
+                      ? "Internals / performance"
+                      : "Architect pattern"}
+                  </div>
+                  <div className="mt-1 text-sm font-medium text-foreground">{d.title}</div>
+                  {d.summary && <p className="mt-1 text-xs text-muted-foreground">{d.summary}</p>}
+                </Link>
+              ))}
+              {!designs.isLoading && !(designs.data ?? []).length && (
+                <div className="rounded-xl border border-dashed border-border p-4 text-sm text-muted-foreground">
+                  No designs yet.
+                </div>
+              )}
+            </div>
+          </section>
           {error && <div className="text-sm text-rose-300">{(error as Error).message}</div>}
           {TIERS.map((t) => {
             const lessons = (data ?? []).filter((l: any) =>

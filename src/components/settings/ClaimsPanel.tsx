@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -42,12 +43,23 @@ export function ClaimsPanel({
   const supersedeFn = useServerFn(supersedeClaim);
   const bulkVerifyFn = useServerFn(bulkVerifyClaims);
   const [filter, setFilter] = useState("pending");
+  const [query, setQuery] = useState("");
+  const [page, setPage] = useState(0);
   const [edit, setEdit] = useState<any>(null);
   const [newText, setNewText] = useState("");
-  const rows = useMemo(
-    () => (data?.claims ?? []).filter((c: any) => filter === "all" || c.status === filter),
-    [data, filter],
-  );
+  const rows = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    return (data?.claims ?? [])
+      .filter((c: any) => filter === "all" || c.status === filter)
+      .filter(
+        (c: any) =>
+          !term ||
+          `${c.text} ${c.capability_id} ${c.sources?.title ?? ""}`.toLowerCase().includes(term),
+      );
+  }, [data, filter, query]);
+  const pageSize = 50;
+  const maxPage = Math.max(0, Math.ceil(rows.length / pageSize) - 1);
+  const visibleRows = rows.slice(page * pageSize, page * pageSize + pageSize);
   // Capabilities that still have pending+active claims — the bulk-verify targets.
   const pendingCaps = useMemo(() => {
     const caps = new Map<string, number>();
@@ -124,7 +136,22 @@ export function ClaimsPanel({
                 Verify all {totalPending} pending
               </Button>
             )}
-            <Select value={filter} onValueChange={setFilter}>
+            <Input
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(0);
+              }}
+              placeholder="Filter claims"
+              className="h-8 w-48 border-border bg-card text-foreground"
+            />
+            <Select
+              value={filter}
+              onValueChange={(value) => {
+                setFilter(value);
+                setPage(0);
+              }}
+            >
               <SelectTrigger className="h-8 w-36 border-border bg-card text-foreground">
                 <SelectValue />
               </SelectTrigger>
@@ -152,7 +179,7 @@ export function ClaimsPanel({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.slice(0, 120).map((c: any) => (
+              {visibleRows.map((c: any) => (
                 <TableRow key={c.id} className="border-border hover:bg-accent">
                   <TableCell>
                     <div className="max-w-2xl text-sm">{c.text}</div>
@@ -220,6 +247,29 @@ export function ClaimsPanel({
               ))}
             </TableBody>
           </Table>
+        )}
+        {!loading && rows.length > pageSize && (
+          <div className="mt-3 flex items-center justify-end gap-2 text-xs text-muted-foreground">
+            <span>
+              Page {page + 1} of {maxPage + 1} · {rows.length} claim(s)
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+            >
+              Previous
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={page >= maxPage}
+              onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
+            >
+              Next
+            </Button>
+          </div>
         )}
       </Panel>
       <Dialog open={!!edit} onOpenChange={(open) => !open && setEdit(null)}>

@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { MaturityBadge } from "@/components/Badges";
 import { KindBadge } from "@/components/KindBadge";
 import { TopicTree } from "@/components/TopicTree";
+import { FavoriteButton } from "@/components/FavoriteButton";
 import { accent } from "@/lib/fabric-theme";
 
 type TopicCapability = {
@@ -83,7 +84,10 @@ function TopicPage() {
           <Link to="/topics" className="text-xs text-muted-foreground hover:text-foreground">
             ← All topics
           </Link>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight">{topic.name}</h1>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-4xl font-semibold tracking-tight">{topic.name}</h1>
+            <FavoriteButton itemType="topic" itemKey={topic.slug} />
+          </div>
           <p className="mt-3 text-lg leading-relaxed text-muted-foreground">{topic.description}</p>
 
           {capabilities.length > 0 && (

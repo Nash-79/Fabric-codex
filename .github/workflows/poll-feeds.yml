@@ -1,0 +1,34 @@
+name: Poll feeds
+
+on:
+  schedule:
+    - cron: "0 6,18 * * *"
+  workflow_dispatch:
+    inputs:
+      feeds:
+        description: "Poll RSS subscriptions"
+        type: boolean
+        default: true
+      roadmap:
+        description: "Poll Fabric roadmap"
+        type: boolean
+        default: true
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Poll Fabric Atlas feeds
+        env:
+          FABRIC_ATLAS_BASE_URL: ${{ secrets.FABRIC_ATLAS_BASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
+          FEEDS: ${{ github.event.inputs.feeds || 'true' }}
+          ROADMAP: ${{ github.event.inputs.roadmap || 'true' }}
+        run: |
+          test -n "$FABRIC_ATLAS_BASE_URL"
+          test -n "$SUPABASE_PUBLISHABLE_KEY"
+          curl --fail-with-body \
+            -X POST "$FABRIC_ATLAS_BASE_URL/api/public/hooks/poll-feeds" \
+            -H "content-type: application/json" \
+            -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
+            -d "{\"feeds\":$FEEDS,\"roadmap\":$ROADMAP}"

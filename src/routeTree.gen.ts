@@ -32,6 +32,7 @@ import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedFavoritesRouteImport } from './routes/_authenticated/favorites'
 import { Route as BlogsKindSlugRouteImport } from './routes/blogs/$kind.$slug'
 import { Route as ApiPublicHooksSeedContentRouteImport } from './routes/api/public/hooks/seed-content'
+import { Route as ApiPublicHooksPollFeedsRouteImport } from './routes/api/public/hooks/poll-feeds'
 import { Route as ApiPublicHealthAtlasRouteImport } from './routes/api/public/health/atlas'
 import { Route as ApiPublicDevLogsRouteImport } from './routes/api/public/dev/logs'
 
@@ -150,6 +151,11 @@ const ApiPublicHooksSeedContentRoute =
     path: '/api/public/hooks/seed-content',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicHooksPollFeedsRoute = ApiPublicHooksPollFeedsRouteImport.update({
+  id: '/api/public/hooks/poll-feeds',
+  path: '/api/public/hooks/poll-feeds',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHealthAtlasRoute = ApiPublicHealthAtlasRouteImport.update({
   id: '/api/public/health/atlas',
   path: '/api/public/health/atlas',
@@ -185,6 +191,7 @@ export interface FileRoutesByFullPath {
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
+  '/api/public/hooks/poll-feeds': typeof ApiPublicHooksPollFeedsRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
 }
 export interface FileRoutesByTo {
@@ -211,6 +218,7 @@ export interface FileRoutesByTo {
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
+  '/api/public/hooks/poll-feeds': typeof ApiPublicHooksPollFeedsRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
 }
 export interface FileRoutesById {
@@ -239,6 +247,7 @@ export interface FileRoutesById {
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
+  '/api/public/hooks/poll-feeds': typeof ApiPublicHooksPollFeedsRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
 }
 export interface FileRouteTypes {
@@ -267,6 +276,7 @@ export interface FileRouteTypes {
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
+    | '/api/public/hooks/poll-feeds'
     | '/api/public/hooks/seed-content'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -293,6 +303,7 @@ export interface FileRouteTypes {
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
+    | '/api/public/hooks/poll-feeds'
     | '/api/public/hooks/seed-content'
   id:
     | '__root__'
@@ -320,6 +331,7 @@ export interface FileRouteTypes {
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
+    | '/api/public/hooks/poll-feeds'
     | '/api/public/hooks/seed-content'
   fileRoutesById: FileRoutesById
 }
@@ -345,6 +357,7 @@ export interface RootRouteChildren {
   BlogsKindSlugRoute: typeof BlogsKindSlugRoute
   ApiPublicDevLogsRoute: typeof ApiPublicDevLogsRoute
   ApiPublicHealthAtlasRoute: typeof ApiPublicHealthAtlasRoute
+  ApiPublicHooksPollFeedsRoute: typeof ApiPublicHooksPollFeedsRoute
   ApiPublicHooksSeedContentRoute: typeof ApiPublicHooksSeedContentRoute
 }
 
@@ -511,6 +524,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksSeedContentRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/poll-feeds': {
+      id: '/api/public/hooks/poll-feeds'
+      path: '/api/public/hooks/poll-feeds'
+      fullPath: '/api/public/hooks/poll-feeds'
+      preLoaderRoute: typeof ApiPublicHooksPollFeedsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/health/atlas': {
       id: '/api/public/health/atlas'
       path: '/api/public/health/atlas'
@@ -575,8 +595,19 @@ const rootRouteChildren: RootRouteChildren = {
   BlogsKindSlugRoute: BlogsKindSlugRoute,
   ApiPublicDevLogsRoute: ApiPublicDevLogsRoute,
   ApiPublicHealthAtlasRoute: ApiPublicHealthAtlasRoute,
+  ApiPublicHooksPollFeedsRoute: ApiPublicHooksPollFeedsRoute,
   ApiPublicHooksSeedContentRoute: ApiPublicHooksSeedContentRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

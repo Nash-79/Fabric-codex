@@ -1,11 +1,11 @@
 // "Publish all" — the bulk counterpart to the Settings → Publish paste-one-file flow.
 //
-// Bundles content/sources, content/articles, content/designs, and content/diagrams/assets.json
+// Bundles content/sources, content/articles, content/designs, content/lessons, and content/diagrams/assets.json
 // at build time (same import.meta.glob pattern as bundled-content.ts / seed-content.server.ts),
 // diffs each against what's already active in Supabase, and republishes only what changed —
 // through publishFromFile, one call per item, so every guarantee of the single-file flow still
 // holds: sources do a non-destructive claim refresh (verified claims survive), and articles/
-// designs always version (archive old, insert new), never a bare in-place overwrite. This is
+// designs/lessons always version (archive old, insert new), never a bare in-place overwrite. This is
 // deliberately NOT runContentSeed (that helper updates content_items in place with no version
 // bump — fine for bootstrapping an empty environment, wrong for routine republishing).
 //
@@ -35,6 +35,10 @@ const designJsons = import.meta.glob("/content/designs/*.json", { eager: true })
   string,
   { default: any }
 >;
+const lessonJsons = import.meta.glob("/content/lessons/*.json", { eager: true }) as Record<
+  string,
+  { default: any }
+>;
 const diagramAssets = import.meta.glob("/content/diagrams/assets.json", { eager: true }) as Record<
   string,
   { default: any[] }
@@ -60,7 +64,7 @@ function stableJson(value: unknown): string {
 type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
 
 export type PublishAllItemResult = {
-  kind: "source" | "article" | "design" | "diagram";
+  kind: "source" | "article" | "design" | "lesson" | "diagram";
   slug: string;
   file: string;
   action: "published" | "skipped-unchanged" | "blocked" | "failed";
@@ -82,7 +86,7 @@ export async function publishAllBundled(
 ): Promise<PublishAllSummary> {
   const items: PublishAllItemResult[] = [];
 
-  // --- Sources first: articles/designs can't publish until the sources they cite exist. ---
+  // --- Sources first: content items can't publish until the sources they cite exist. ---
   const { data: existingSources } = await sb
     .from("sources")
     .select("slug,document")
@@ -148,9 +152,9 @@ export async function publishAllBundled(
     }
   }
 
-  // --- Articles and designs last: each needs its cited sources (and ideally embedded diagrams) live. ---
+  // --- Content items last: each needs its cited sources (and ideally embedded diagrams) live. ---
   async function publishContentItems(
-    kind: "article" | "design",
+    kind: "article" | "design" | "lesson",
     jsons: Record<string, { default: any }>,
   ) {
     const { data: existingItems } = await sb
@@ -201,6 +205,7 @@ export async function publishAllBundled(
 
   await publishContentItems("article", articleJsons);
   await publishContentItems("design", designJsons);
+  await publishContentItems("lesson", lessonJsons);
 
   return {
     items,

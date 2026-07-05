@@ -44,6 +44,7 @@ const listJson = (dir) =>
 const sources = listJson("content/sources");
 const blogs = listJson("content/articles").map((b) => b.data);
 const designs = listJson("content/designs");
+const lessons = listJson("content/lessons");
 const topics = existsSync("content/topics.json") ? readJson("content/topics.json") : [];
 const diagrams = existsSync("content/diagrams/assets.json")
   ? readJson("content/diagrams/assets.json")
@@ -230,12 +231,41 @@ const diagRows = diagrams.map((d) => {
     path: `/diagrams/${slug}.svg`,
     caption: d.caption ?? "",
     kind: d.kind ?? "architecture",
-    topic_slug: null,
+    topic_slug: d.topic_slug ?? null,
+    capability_id: d.capability_id ?? null,
   };
 });
 if (diagRows.length)
   await must("diagrams", sb.from("diagrams").upsert(diagRows, { onConflict: "slug" }));
 console.log("diagrams:", diagRows.length);
+
+// Lessons (kind='lesson')
+for (const { slug: fileSlug, data: l } of lessons) {
+  const slug = l.slug ?? fileSlug;
+  const ins = await upsertContentItem({
+    kind: "lesson",
+    slug,
+    topic_slug: l.topic_slug ?? null,
+    capability_id: l.capability_id ?? null,
+    title: l.title ?? slug,
+    summary: l.summary ?? "",
+    body_md: l.body_md ?? "",
+    status: "published",
+    depth_levels: l.depth_levels ?? [],
+  });
+  await sb.from("content_item_sources").delete().eq("content_item_id", ins.id);
+  const keys = l.cited_source_keys ?? [];
+  const rows = keys
+    .map((k, i) => {
+      const sid = slugToId.get(k);
+      return sid
+        ? { content_item_id: ins.id, source_id: sid, label: `S${i + 1}`, position: i }
+        : null;
+    })
+    .filter(Boolean);
+  if (rows.length) await sb.from("content_item_sources").insert(rows);
+}
+console.log("lessons:", lessons.length);
 
 // Help
 await sb.from("help_docs").delete().neq("slug", "__never__");

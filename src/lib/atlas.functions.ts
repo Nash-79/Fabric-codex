@@ -624,7 +624,8 @@ export const toggleFavorite = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator(
     (d: {
-      itemType: "blog" | "article" | "design" | "lesson" | "topic" | "source" | "claim";
+      itemType:
+        "blog" | "article" | "design" | "lesson" | "topic" | "capability" | "source" | "claim";
       itemKey: string;
     }) => d,
   )

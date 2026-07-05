@@ -60,7 +60,7 @@ Depth: 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 inter
    source .env 2>/dev/null || true
    SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
    curl -s "$SB/sources?url=eq.<discovered-url>&select=slug" -H "$H1" -H "$H2"        # already a source?
-   curl -s "$SB/queue_items?url=eq.<discovered-url>&status=in.(queued,claimed)&select=id" -H "$H1" -H "$H2"  # already queued?
+   curl -s "$SB/queue_public?url=eq.<discovered-url>&status=in.(queued,claimed)&select=id" -H "$H1" -H "$H2"  # already queued?
    ```
    Skip links already present. Keep it to a handful of genuinely high-value links; do not dump
    every hyperlink on the page.

@@ -220,7 +220,11 @@ function SettingsPage() {
             />
           </TabsContent>
           <TabsContent value="system" className="mt-0">
-            <SystemPanel stats={overview.data?.stats ?? {}} loading={overview.isLoading} />
+            <SystemPanel
+              stats={overview.data?.stats ?? {}}
+              loading={overview.isLoading}
+              onDone={refresh}
+            />
           </TabsContent>
           <TabsContent value="migrations" className="mt-0">
             <MigrationStatusPanel />

@@ -2,7 +2,7 @@ Answer this Microsoft Fabric question as the Fabric Atlas expert adviser, ground
 local knowledge base: $ARGUMENTS
 
 Retrieve scoped claims per relevant capability:
-`curl -s "http://localhost:8000/claims?capability=<id>&status=verified"` (tag filter: `&tag=<t>`).
+`curl -s "$SUPABASE_URL/rest/v1/claims?capability_id=eq.<id>&status=eq.verified&active=eq.true&select=id,text,source_id,capability_id,depth,type" -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H "Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"` (tag filter: `tags.cs.{<t>}`).
 Map each distinct source to [S1], [S2]… and cite every product fact inline; label your own
 reasoning _(inference)_. Never invent limits, quotas, pricing, or roadmap. If the knowledge base
 has no coverage for part of the question, say so and recommend a source to ingest

@@ -83,6 +83,15 @@ export function ContentItemArticle({
     }
     return map;
   }, [diagramMeta]);
+  const srcByFile = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const d of diagramMeta) {
+      const path = d.path ?? "";
+      const base = path.split("/").pop();
+      if (base && /^https?:\/\//i.test(path)) map.set(base, path);
+    }
+    return map;
+  }, [diagramMeta]);
 
   // Replace [S1] / [S1][S2] inline citations with clickable superscripts.
   const renderedBody = bodyMd.replace(
@@ -149,7 +158,8 @@ export function ContentItemArticle({
                 .split("/")
                 .pop() ?? "";
             const caption = captionByFile.get(base) || alt;
-            return <DiagramLightbox src={src as string} alt={alt ?? ""} caption={caption} />;
+            const resolvedSrc = srcByFile.get(base) ?? (src as string);
+            return <DiagramLightbox src={resolvedSrc} alt={alt ?? ""} caption={caption} />;
           },
         }}
       >
