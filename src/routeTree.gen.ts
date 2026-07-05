@@ -13,6 +13,7 @@ import { Route as SourcesRouteImport } from './routes/sources'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as RegistryRouteImport } from './routes/registry'
+import { Route as McpRouteImport } from './routes/mcp'
 import { Route as LearnRouteImport } from './routes/learn'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as DesignsRouteImport } from './routes/designs'
@@ -30,7 +31,10 @@ import { Route as DesignSlugRouteImport } from './routes/design.$slug'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
 import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedFavoritesRouteImport } from './routes/_authenticated/favorites'
+import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } from './routes/[.well-known]/oauth-protected-resource'
+import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as BlogsKindSlugRouteImport } from './routes/blogs/$kind.$slug'
+import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
 import { Route as ApiPublicHooksSeedContentRouteImport } from './routes/api/public/hooks/seed-content'
 import { Route as ApiPublicHooksPollFeedsRouteImport } from './routes/api/public/hooks/poll-feeds'
 import { Route as ApiPublicHealthAtlasRouteImport } from './routes/api/public/health/atlas'
@@ -54,6 +58,11 @@ const RoadmapRoute = RoadmapRouteImport.update({
 const RegistryRoute = RegistryRouteImport.update({
   id: '/registry',
   path: '/registry',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const McpRoute = McpRouteImport.update({
+  id: '/mcp',
+  path: '/mcp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LearnRoute = LearnRouteImport.update({
@@ -140,11 +149,29 @@ const AuthenticatedFavoritesRoute = AuthenticatedFavoritesRouteImport.update({
   path: '/favorites',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const Char91DotwellKnownChar93OauthProtectedResourceRoute =
+  Char91DotwellKnownChar93OauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const Char91DotmcpChar93ListToolsRoute =
+  Char91DotmcpChar93ListToolsRouteImport.update({
+    id: '/.mcp/list-tools',
+    path: '/.mcp/list-tools',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const BlogsKindSlugRoute = BlogsKindSlugRouteImport.update({
   id: '/blogs/$kind/$slug',
   path: '/blogs/$kind/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const Char91DotmcpChar93InvokeToolToolRoute =
+  Char91DotmcpChar93InvokeToolToolRouteImport.update({
+    id: '/.mcp/invoke-tool/$tool',
+    path: '/.mcp/invoke-tool/$tool',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHooksSeedContentRoute =
   ApiPublicHooksSeedContentRouteImport.update({
     id: '/api/public/hooks/seed-content',
@@ -175,10 +202,13 @@ export interface FileRoutesByFullPath {
   '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
   '/learn': typeof LearnRoute
+  '/mcp': typeof McpRoute
   '/registry': typeof RegistryRouteWithChildren
   '/roadmap': typeof RoadmapRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
@@ -188,6 +218,7 @@ export interface FileRoutesByFullPath {
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs/': typeof BlogsIndexRoute
   '/topics/': typeof TopicsIndexRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
@@ -202,10 +233,13 @@ export interface FileRoutesByTo {
   '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
   '/learn': typeof LearnRoute
+  '/mcp': typeof McpRoute
   '/registry': typeof RegistryRouteWithChildren
   '/roadmap': typeof RoadmapRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/favorites': typeof AuthenticatedFavoritesRoute
   '/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
@@ -215,6 +249,7 @@ export interface FileRoutesByTo {
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs': typeof BlogsIndexRoute
   '/topics': typeof TopicsIndexRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
@@ -231,10 +266,13 @@ export interface FileRoutesById {
   '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
   '/learn': typeof LearnRoute
+  '/mcp': typeof McpRoute
   '/registry': typeof RegistryRouteWithChildren
   '/roadmap': typeof RoadmapRoute
   '/search': typeof SearchRoute
   '/sources': typeof SourcesRoute
+  '/.mcp/list-tools': typeof Char91DotmcpChar93ListToolsRoute
+  '/.well-known/oauth-protected-resource': typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   '/_authenticated/favorites': typeof AuthenticatedFavoritesRoute
   '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/api/chat': typeof ApiChatRoute
@@ -244,6 +282,7 @@ export interface FileRoutesById {
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs/': typeof BlogsIndexRoute
   '/topics/': typeof TopicsIndexRoute
+  '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
@@ -260,10 +299,13 @@ export interface FileRouteTypes {
     | '/designs'
     | '/help'
     | '/learn'
+    | '/mcp'
     | '/registry'
     | '/roadmap'
     | '/search'
     | '/sources'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/favorites'
     | '/settings'
     | '/api/chat'
@@ -273,6 +315,7 @@ export interface FileRouteTypes {
     | '/topics/$slug'
     | '/blogs/'
     | '/topics/'
+    | '/.mcp/invoke-tool/$tool'
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
@@ -287,10 +330,13 @@ export interface FileRouteTypes {
     | '/designs'
     | '/help'
     | '/learn'
+    | '/mcp'
     | '/registry'
     | '/roadmap'
     | '/search'
     | '/sources'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/favorites'
     | '/settings'
     | '/api/chat'
@@ -300,6 +346,7 @@ export interface FileRouteTypes {
     | '/topics/$slug'
     | '/blogs'
     | '/topics'
+    | '/.mcp/invoke-tool/$tool'
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
@@ -315,10 +362,13 @@ export interface FileRouteTypes {
     | '/designs'
     | '/help'
     | '/learn'
+    | '/mcp'
     | '/registry'
     | '/roadmap'
     | '/search'
     | '/sources'
+    | '/.mcp/list-tools'
+    | '/.well-known/oauth-protected-resource'
     | '/_authenticated/favorites'
     | '/_authenticated/settings'
     | '/api/chat'
@@ -328,6 +378,7 @@ export interface FileRouteTypes {
     | '/topics/$slug'
     | '/blogs/'
     | '/topics/'
+    | '/.mcp/invoke-tool/$tool'
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
@@ -344,16 +395,20 @@ export interface RootRouteChildren {
   DesignsRoute: typeof DesignsRoute
   HelpRoute: typeof HelpRoute
   LearnRoute: typeof LearnRoute
+  McpRoute: typeof McpRoute
   RegistryRoute: typeof RegistryRouteWithChildren
   RoadmapRoute: typeof RoadmapRoute
   SearchRoute: typeof SearchRoute
   SourcesRoute: typeof SourcesRoute
+  Char91DotmcpChar93ListToolsRoute: typeof Char91DotmcpChar93ListToolsRoute
+  Char91DotwellKnownChar93OauthProtectedResourceRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRoute
   ApiChatRoute: typeof ApiChatRoute
   DesignSlugRoute: typeof DesignSlugRoute
   DevLogsRoute: typeof DevLogsRoute
   TopicsSlugRoute: typeof TopicsSlugRoute
   BlogsIndexRoute: typeof BlogsIndexRoute
   TopicsIndexRoute: typeof TopicsIndexRoute
+  Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   BlogsKindSlugRoute: typeof BlogsKindSlugRoute
   ApiPublicDevLogsRoute: typeof ApiPublicDevLogsRoute
   ApiPublicHealthAtlasRoute: typeof ApiPublicHealthAtlasRoute
@@ -389,6 +444,13 @@ declare module '@tanstack/react-router' {
       path: '/registry'
       fullPath: '/registry'
       preLoaderRoute: typeof RegistryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mcp': {
+      id: '/mcp'
+      path: '/mcp'
+      fullPath: '/mcp'
+      preLoaderRoute: typeof McpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/learn': {
@@ -510,11 +572,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedFavoritesRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof Char91DotwellKnownChar93OauthProtectedResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/list-tools': {
+      id: '/.mcp/list-tools'
+      path: '/.mcp/list-tools'
+      fullPath: '/.mcp/list-tools'
+      preLoaderRoute: typeof Char91DotmcpChar93ListToolsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/blogs/$kind/$slug': {
       id: '/blogs/$kind/$slug'
       path: '/blogs/$kind/$slug'
       fullPath: '/blogs/$kind/$slug'
       preLoaderRoute: typeof BlogsKindSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.mcp/invoke-tool/$tool': {
+      id: '/.mcp/invoke-tool/$tool'
+      path: '/.mcp/invoke-tool/$tool'
+      fullPath: '/.mcp/invoke-tool/$tool'
+      preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/hooks/seed-content': {
@@ -582,16 +665,21 @@ const rootRouteChildren: RootRouteChildren = {
   DesignsRoute: DesignsRoute,
   HelpRoute: HelpRoute,
   LearnRoute: LearnRoute,
+  McpRoute: McpRoute,
   RegistryRoute: RegistryRouteWithChildren,
   RoadmapRoute: RoadmapRoute,
   SearchRoute: SearchRoute,
   SourcesRoute: SourcesRoute,
+  Char91DotmcpChar93ListToolsRoute: Char91DotmcpChar93ListToolsRoute,
+  Char91DotwellKnownChar93OauthProtectedResourceRoute:
+    Char91DotwellKnownChar93OauthProtectedResourceRoute,
   ApiChatRoute: ApiChatRoute,
   DesignSlugRoute: DesignSlugRoute,
   DevLogsRoute: DevLogsRoute,
   TopicsSlugRoute: TopicsSlugRoute,
   BlogsIndexRoute: BlogsIndexRoute,
   TopicsIndexRoute: TopicsIndexRoute,
+  Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   BlogsKindSlugRoute: BlogsKindSlugRoute,
   ApiPublicDevLogsRoute: ApiPublicDevLogsRoute,
   ApiPublicHealthAtlasRoute: ApiPublicHealthAtlasRoute,
