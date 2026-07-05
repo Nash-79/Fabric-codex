@@ -1,62 +1,78 @@
-## Goal
+## Problem (two bugs, one symptom)
 
-Give the app a durable "is the backend actually in the right shape?" signal — checked automatically on startup and in CI, browsable as a Settings page, and extended to cover required seed data.
+Pending claims reappear after refresh / redeploy because the **content re-seed path is destructive**, not because verification failed to persist. And there is no single-click "verify every pending claim" — only per-capability bulk verify.
 
-## Scope
+Reference: prior discussion at https://lovable.dev/projects/c635fb0f-b182-43cf-a5a9-f5020dd068e3?messageId=main%3Aagent%2300000000090459%23ast%3APDFSAFQN
 
-Three connected pieces, all read-only against Supabase (no schema changes required):
+### Bug 1 — Re-seed deletes verified claims
 
-1. **Migration/schema health check** — a single server function that answers: expected tables present? expected RPCs present? expected columns on critical tables? latest applied migration timestamp? Returns a structured report (`ok | warn | fail` per check, plus details).
-2. **Startup + CI gates** — invoke the check on server boot and from a `npm run verify:schema` script wired into CI (`.github/workflows/ci.yml`). Non-zero exit on `fail`; log warnings otherwise. No user-visible crash if it degrades — surface via logs + the status page.
-3. **Data integrity + seed check** — extend the same report with counts and freshness for required default rows: `roadmap_items`, `content_items` (per kind), `capabilities`, `topics`, `help_docs`. Flag empty tables or stale rows (configurable threshold). No auto-seeding — this is a *check*, not a mutation, and seeding is already an explicit admin action.
-4. **Settings → Migration Status page** — new admin-only tab under `/settings` rendering the report: latest migration file/timestamp, per-table row counts, RPC availability, seed status, last-run timestamp, and a Re-run button.
-
-## Files to add / touch
-
-**New**
-- `src/lib/schema-health.server.ts` — pure server helper: expected-tables list, expected-RPC list, expected-columns map, seed thresholds. Uses `supabaseAdmin` (service role — needed to read `supabase_migrations.schema_migrations` and `information_schema`).
-- `src/lib/schema-health.functions.ts` — `getSchemaHealth` server fn (admin-gated via `requireSupabaseAuth` + `has_role('admin')`), dynamic-imports the `.server` helper inside the handler.
-- `src/components/settings/MigrationStatusPanel.tsx` — renders the report with green/amber/red badges, table of checks, list of latest 10 migrations, seed rows summary.
-- `scripts/verify-schema.mjs` — CLI wrapper that runs the same checks (imports the `.server` helper via a small Node entrypoint using `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from env). Exits 1 on `fail`.
-- `.github/workflows/ci.yml` — add `npm run verify:schema` step (skipped when the required secrets are absent, e.g. on external PRs).
-
-**Edited**
-- `src/routes/_authenticated/settings.tsx` — register the new panel as a tab (only visible to admins, matching existing SystemPanel gating).
-- `package.json` — add `"verify:schema": "node scripts/verify-schema.mjs"` script.
-- `src/start.ts` (or the SSR entry that already runs once) — best-effort call to `getSchemaHealth` on first request; log `warn`/`fail` results to server logs. Never blocks the request.
-
-## Expected-shape source of truth
-
-Hand-maintained lists inside `schema-health.server.ts`, seeded from what the repo already relies on:
-
-- **Tables** (from `<supabase-tables>`): `admin_audit_events`, `capabilities`, `claims`, `content_item_sources`, `content_items`, `diagrams`, `favorites`, `help_docs`, `profiles`, `queue_items`, `roadmap_items`, `roadmap_sync_state`, `rss_subscriptions`, `sources`, `topic_capabilities`, `topics`, `user_invitations`, `user_roles`, `validation_runs`, plus the legacy `*_legacy` tables tolerated as `warn` if missing.
-- **RPCs** (from `<db-functions>`): `has_role`, `current_user_has_role`, `atlas_health_counts`, `search_atlas`, `admin_set_user_roles`, `admin_approve_user`, `admin_suspend_user`, `admin_record_event`, `bootstrap_first_admin`, `handle_new_user`, `touch_updated_at`.
-- **Critical columns** — a small map, e.g. `content_items.kind`, `content_items.status`, `queue_items.scheduled_at`, `capabilities.maturity`, `roadmap_items.*`.
-- **Seed thresholds** — `roadmap_items >= 1`, `content_items where kind='article' and active >= 1`, `capabilities >= 1`, `topics >= 1`, `help_docs >= 1`. Missing → `fail`; empty when others populated → `warn`.
-
-## Report shape
+`src/lib/seed-content.server.ts:168` and `src/lib/seed.functions.ts:170-174` both do:
 
 ```ts
-type Check = { id: string; label: string; status: 'ok'|'warn'|'fail'; detail?: string }
-type SchemaHealthReport = {
-  generatedAt: string
-  latestMigration: { version: string; name: string } | null
-  recentMigrations: Array<{ version: string; name: string }>
-  checks: Check[]        // tables, rpcs, columns, seed rows
-  summary: { ok: number; warn: number; fail: number }
-}
+await supabaseAdmin.from("claims").delete().eq("source_id", ins.id); // ALL statuses
+// then insert everything from content/*.json as status='pending'
 ```
+
+The correct pattern already exists in `src/lib/atlas-publish.services.server.ts:146-166` (single-source publish):
+
+```ts
+// delete only pending, then insert fresh pending; verified/rejected/superseded survive
+.delete().eq("source_id", ...).eq("status", "pending")
+```
+
+The cron webhook `/api/public/hooks/seed-content` calls `runContentSeed` on every content-signature change, so any edit to `content/sources/*.json` currently nukes curation for that source. The signature-skip helps but does not fix the root cause.
+
+### Bug 2 — No global bulk verify
+
+`bulkVerifyClaims` in `src/lib/atlas-admin.services.server.ts:58` requires `capabilityId` or `topicSlug`. The Claims panel only exposes a per-capability dropdown. There is no "verify every active pending claim".
+
+## Changes
+
+### 1. Make re-seed preserve curation
+
+Edit both seed paths to mirror the publish path:
+
+- `src/lib/seed-content.server.ts` around line 168 — replace the blanket delete with a pending-only delete, then insert only claims whose `(source_id, capability_id, normalized text)` do NOT already exist as verified/rejected/superseded (so the same text isn't re-inserted as pending alongside a verified copy).
+- `src/lib/seed.functions.ts` around line 170 — same treatment; rename `sourceClaimsDeleted` → `sourcePendingClaimsDeleted` in the summary shape.
+
+Dedup rule (avoids "verified copy + new pending duplicate"): before insert, fetch existing non-pending claims for that `source_id`, key by `(capability_id, trimmed lowercase text)`, and skip any incoming row that matches. This matches the intent of `scripts/replay_verified_status.py` and the `duplicate` status flow.
+
+### 2. Add global bulk verify
+
+- `src/lib/atlas-admin.services.server.ts` — extend `bulkVerifyClaims` to accept `{ scope: "all" }` in addition to `capabilityId` / `topicSlug`. When `scope === "all"`, select every `active=true, status='pending'` claim id and run through `mutateClaimStatus` (keeps the claim-event audit log intact — no shortcut UPDATE).
+- `src/lib/settings.functions.ts` — expose the new input shape through the existing `bulkVerifyClaims` server-fn validator.
+- `src/components/settings/ClaimsPanel.tsx` — add a second button next to the existing per-capability control: **"Verify all N pending"** (N = total pending+active count derived from the same `claims` query already in the panel). Confirm dialog with the count. Disabled when N = 0. Uses the same `useMutation` + toast pattern.
+
+### 3. Persistence end-to-end after fix
+
+Verified claims will survive:
+
+- manual Settings → Publish (already correct)
+- cron `/api/public/hooks/seed-content` re-runs (fixed here)
+- `seedFromContent` server fn from Settings → System (fixed here)
+- redeploy (deploy doesn't touch DB; only cron/seed does)
+
+No migration needed — the `claims.status` column already persists correctly; only the seed writer was wiping it.
 
 ## Non-goals
 
-- No schema migrations, no auto-seed, no writes.
-- No new tables — the check lives entirely in code + existing `supabase_migrations` metadata.
-- No changes to auth flow, RLS, or the existing `atlas_health_counts` RPC (we call it, not replace it).
-- No UI on public routes; status page is admin-only under `_authenticated`.
+- No schema changes, no RLS changes, no new tables.
+- No change to `mutateClaimStatus`, `supersedeClaim`, or the claim-events log.
+- No change to the per-capability bulk verify (kept as-is next to the new button).
+- No auto-verify on ingest — human gate stays.
 
 ## Verification
 
-- `bun run tsgo` clean.
-- Manually load `/settings` as admin, confirm the panel renders with all checks green against the current DB.
-- Run `npm run verify:schema` locally — exits 0.
-- Temporarily rename an expected RPC in the expected-list to a bogus name, confirm the CLI exits 1 and the panel shows a red check; revert.
+1. Seed a fresh source, verify a claim in Settings → Claims.
+2. Edit `content/sources/<slug>.json` summary, POST to `/api/public/hooks/seed-content` with `force: true`. Confirm the verified claim is still `verified` and no duplicate pending row appeared.
+3. Click **Verify all N pending** — all pending+active claims flip to verified, claim-events rows appear, toast shows count.
+4. Refresh the page and redeploy preview — counts persist.
+5. `bun run tsgo` clean.
+
+## Files touched
+
+- `src/lib/seed-content.server.ts` (pending-only delete + dedup skip)
+- `src/lib/seed.functions.ts` (same)
+- `src/lib/atlas-admin.services.server.ts` (`scope: "all"` branch)
+- `src/lib/settings.functions.ts` (validator)
+- `src/components/settings/ClaimsPanel.tsx` (Verify-all button)
