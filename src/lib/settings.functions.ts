@@ -469,25 +469,24 @@ export const mutateClaim = createServerFn({ method: "POST" })
 
 export const bulkVerifyClaims = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((d: { capabilityId?: string; topicSlug?: string }) => d)
+  .validator((d: { capabilityId?: string; topicSlug?: string; scope?: "all" }) => d)
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
-    if (!data.capabilityId && !data.topicSlug) {
-      throw new Error("Provide a capability or a topic to verify.");
+    if (!data.capabilityId && !data.topicSlug && data.scope !== "all") {
+      throw new Error("Provide a capability, a topic, or scope: 'all' to verify.");
     }
     const sb = await adminClient();
     const { bulkVerifyClaims: bulkVerifyClaimsRecord } = await adminServices();
     const result = await bulkVerifyClaimsRecord(sb, {
       capabilityId: data.capabilityId,
       topicSlug: data.topicSlug,
+      scope: data.scope,
     });
-    await recordAudit(
-      context.userId,
-      "claims.bulk_verified",
-      data.topicSlug ? "topic" : "capability",
-      data.topicSlug ?? data.capabilityId ?? "",
-      { verified: result.verified },
-    );
+    const targetType = data.scope === "all" ? "global" : data.topicSlug ? "topic" : "capability";
+    const targetId = data.scope === "all" ? "all" : (data.topicSlug ?? data.capabilityId ?? "");
+    await recordAudit(context.userId, "claims.bulk_verified", targetType, targetId, {
+      verified: result.verified,
+    });
     return { ok: true as const, ...result };
   });
 
