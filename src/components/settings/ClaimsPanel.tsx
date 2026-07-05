@@ -108,12 +108,21 @@ export function ClaimsPanel({
                 </Select>
                 <Button
                   size="sm"
-                  onClick={() => bulkCap && bulkVerify.mutate(bulkCap)}
+                  onClick={() => bulkCap && bulkVerify.mutate({ capabilityId: bulkCap })}
                   disabled={!bulkCap || bulkVerify.isPending}
                 >
                   {bulkVerify.isPending ? "Verifying…" : "Verify all"}
                 </Button>
               </>
+            )}
+            {totalPending > 0 && (
+              <Button
+                size="sm"
+                onClick={() => setConfirmAllOpen(true)}
+                disabled={bulkVerify.isPending}
+              >
+                Verify all {totalPending} pending
+              </Button>
             )}
             <Select value={filter} onValueChange={setFilter}>
               <SelectTrigger className="h-8 w-36 border-border bg-card text-foreground">
