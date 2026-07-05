@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw, CheckCircle2, AlertTriangle, XCircle } from "lucide-react";
@@ -6,7 +7,7 @@ import { Panel, Empty } from "@/components/settings/shared";
 import { getSchemaHealthReport } from "@/lib/schema-health.functions";
 import type { Check, CheckStatus } from "@/lib/schema-health.server";
 
-const statusIcon: Record<CheckStatus, JSX.Element> = {
+const statusIcon: Record<CheckStatus, React.ReactNode> = {
   ok: <CheckCircle2 className="h-4 w-4 text-emerald-400" />,
   warn: <AlertTriangle className="h-4 w-4 text-amber-400" />,
   fail: <XCircle className="h-4 w-4 text-rose-400" />,
