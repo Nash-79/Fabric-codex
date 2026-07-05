@@ -1,61 +1,62 @@
-
 ## Goal
 
-Make Fabric Atlas feel first-class on phones and iPads: a real mobile navigation, auto-hiding chrome, collapsible sections, and layouts that reflow instead of clipping. Keep the current desktop design intact — this is a responsive + polish pass, not a redesign.
+Give the app a durable "is the backend actually in the right shape?" signal — checked automatically on startup and in CI, browsable as a Settings page, and extended to cover required seed data.
 
-## Scope (frontend/presentation only)
+## Scope
 
-Backend, data, server functions, and routes are not touched.
+Three connected pieces, all read-only against Supabase (no schema changes required):
 
-## 1. Site header — real mobile nav
+1. **Migration/schema health check** — a single server function that answers: expected tables present? expected RPCs present? expected columns on critical tables? latest applied migration timestamp? Returns a structured report (`ok | warn | fail` per check, plus details).
+2. **Startup + CI gates** — invoke the check on server boot and from a `npm run verify:schema` script wired into CI (`.github/workflows/ci.yml`). Non-zero exit on `fail`; log warnings otherwise. No user-visible crash if it degrades — surface via logs + the status page.
+3. **Data integrity + seed check** — extend the same report with counts and freshness for required default rows: `roadmap_items`, `content_items` (per kind), `capabilities`, `topics`, `help_docs`. Flag empty tables or stale rows (configurable threshold). No auto-seeding — this is a *check*, not a mutation, and seeding is already an explicit admin action.
+4. **Settings → Migration Status page** — new admin-only tab under `/settings` rendering the report: latest migration file/timestamp, per-table row counts, RPC availability, seed status, last-run timestamp, and a Re-run button.
 
-`src/components/SiteHeader.tsx` today hides the whole nav below `md:` and shows nothing in its place, and stuffs Help / Favorites / Settings / Sign-in on one row that overflows on phones.
+## Files to add / touch
 
-- Add a hamburger button visible below `md:` that opens a `Sheet` (shadcn) sliding in from the right.
-- Inside the sheet: Primary links, then Knowledge group, then Build group (same items as the desktop dropdowns), plus Advisor / Help / Favorites / Settings / Sign in-out at the bottom. Each item is a large 44px touch target.
-- Auto-hide behavior: header stays sticky, but adds a subtle `translate-y-[-100%]` when scrolling down past 80px and returns on scroll up (small `useScrollDirection` hook). Disabled at `md:` and above.
-- Tighten header spacing on small screens (`h-14` stays, gaps `gap-2`, hide the tagline earlier).
-- Close sheet on route change.
+**New**
+- `src/lib/schema-health.server.ts` — pure server helper: expected-tables list, expected-RPC list, expected-columns map, seed thresholds. Uses `supabaseAdmin` (service role — needed to read `supabase_migrations.schema_migrations` and `information_schema`).
+- `src/lib/schema-health.functions.ts` — `getSchemaHealth` server fn (admin-gated via `requireSupabaseAuth` + `has_role('admin')`), dynamic-imports the `.server` helper inside the handler.
+- `src/components/settings/MigrationStatusPanel.tsx` — renders the report with green/amber/red badges, table of checks, list of latest 10 migrations, seed rows summary.
+- `scripts/verify-schema.mjs` — CLI wrapper that runs the same checks (imports the `.server` helper via a small Node entrypoint using `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from env). Exits 1 on `fail`.
+- `.github/workflows/ci.yml` — add `npm run verify:schema` step (skipped when the required secrets are absent, e.g. on external PRs).
 
-## 2. Responsive layout fixes across pages
+**Edited**
+- `src/routes/_authenticated/settings.tsx` — register the new panel as a tab (only visible to admins, matching existing SystemPanel gating).
+- `package.json` — add `"verify:schema": "node scripts/verify-schema.mjs"` script.
+- `src/start.ts` (or the SSR entry that already runs once) — best-effort call to `getSchemaHealth` on first request; log `warn`/`fail` results to server logs. Never blocks the request.
 
-Repeated pattern issues to fix:
+## Expected-shape source of truth
 
-- Home (`src/routes/index.tsx`): hero grid `lg:grid-cols-[360px_1fr]` — add `md:` intermediate; the nested `lg:grid-cols-[1fr_280px]` collapses to one column on tablet. Claim workbench filter row wraps but the search input is fixed `w-44`; make it `w-full sm:w-44`. Wrap the two selects + input in a `flex-wrap` container that becomes full-width on mobile.
-- Blog reader (`src/routes/blogs/$kind.$slug.tsx`): TOC + citations sidebars are hidden below `lg:` which is correct, but the top action bar (Sources / Print) needs `flex-wrap` and the article max width tightened for readability on phones (`prose-sm sm:prose-base`).
-- Registry / Sources / Topics / Search / Designs / Learn / Help / Author: audit each for tables and side-by-side grids; convert any `grid-cols-N` without a `sm:`/`md:` breakpoint to stack on mobile. Add horizontal scroll wrappers (`overflow-x-auto`) around genuine tables.
-- Apply the responsive-header rule from guidelines: any header row with icon + long title + widget uses `grid grid-cols-[minmax(0,1fr)_auto] sm:flex`, add `min-w-0` and `truncate` to titles, `shrink-0` on icons.
+Hand-maintained lists inside `schema-health.server.ts`, seeded from what the repo already relies on:
 
-## 3. Collapsible sections & polish
+- **Tables** (from `<supabase-tables>`): `admin_audit_events`, `capabilities`, `claims`, `content_item_sources`, `content_items`, `diagrams`, `favorites`, `help_docs`, `profiles`, `queue_items`, `roadmap_items`, `roadmap_sync_state`, `rss_subscriptions`, `sources`, `topic_capabilities`, `topics`, `user_invitations`, `user_roles`, `validation_runs`, plus the legacy `*_legacy` tables tolerated as `warn` if missing.
+- **RPCs** (from `<db-functions>`): `has_role`, `current_user_has_role`, `atlas_health_counts`, `search_atlas`, `admin_set_user_roles`, `admin_approve_user`, `admin_suspend_user`, `admin_record_event`, `bootstrap_first_admin`, `handle_new_user`, `touch_updated_at`.
+- **Critical columns** — a small map, e.g. `content_items.kind`, `content_items.status`, `queue_items.scheduled_at`, `capabilities.maturity`, `roadmap_items.*`.
+- **Seed thresholds** — `roadmap_items >= 1`, `content_items where kind='article' and active >= 1`, `capabilities >= 1`, `topics >= 1`, `help_docs >= 1`. Missing → `fail`; empty when others populated → `warn`.
 
-- Home: wrap the "Capability map" grid in a `Collapsible` (shadcn) that starts collapsed on mobile with the selected capability summary always visible — expand to browse.
-- Blog reader: on mobile, add a floating "On this page" button that opens a bottom `Sheet` with the TOC (reusing existing `useTocHeadings`). Same pattern for Sources.
-- Advisor page: composer sticks to bottom on mobile with safe-area padding (`pb-[env(safe-area-inset-bottom)]`), messages list scrolls above it.
-- Add `scroll-mt-20` to headings so anchor jumps clear the sticky header.
-- Increase tap targets: nav links min-height 44px on mobile; select/inputs `h-10` on mobile.
+## Report shape
 
-## 4. Cosmetic polish (tokens only, no color changes)
+```ts
+type Check = { id: string; label: string; status: 'ok'|'warn'|'fail'; detail?: string }
+type SchemaHealthReport = {
+  generatedAt: string
+  latestMigration: { version: string; name: string } | null
+  recentMigrations: Array<{ version: string; name: string }>
+  checks: Check[]        // tables, rpcs, columns, seed rows
+  summary: { ok: number; warn: number; fail: number }
+}
+```
 
-- Consistent card treatment: unify `rounded-md border border-border bg-card` on landing cards with a subtle `shadow-sm hover:shadow-md transition-shadow` and `hover:-translate-y-0.5` on interactive cards.
-- Add `animate-fade-in` to main content on route mount for smoother transitions.
-- Refine focus rings using existing tokens (`focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2`) on all buttons and links in the header/nav.
-- Use `tabular-nums` on numeric metric tiles for cleaner alignment.
+## Non-goals
 
-## 5. Small hook + utilities
-
-Add:
-- `src/hooks/use-scroll-direction.ts` — returns `"up" | "down"` with a threshold.
-- Reuse existing `src/hooks/use-mobile.tsx`.
-
-No new dependencies (`sheet`, `collapsible` are already in shadcn `src/components/ui/`).
+- No schema migrations, no auto-seed, no writes.
+- No new tables — the check lives entirely in code + existing `supabase_migrations` metadata.
+- No changes to auth flow, RLS, or the existing `atlas_health_counts` RPC (we call it, not replace it).
+- No UI on public routes; status page is admin-only under `_authenticated`.
 
 ## Verification
 
-- Run Playwright headless at three viewports (390×844 iPhone, 820×1180 iPad, 1440×900 desktop) against `/`, `/topics`, `/registry`, `/blogs`, one blog article, `/advisor`, `/settings` (signed-out redirect). Screenshot each; confirm no horizontal scroll, header hamburger works, sheets open, TOC accessible on mobile.
-- Sanity-check the build output for the changed routes.
-
-## Out of scope
-
-- Any backend, database, migration, auth, or server-function change.
-- Redesigning color palette or typography.
-- Rebuilding routes / navigation IA.
+- `bun run tsgo` clean.
+- Manually load `/settings` as admin, confirm the panel renders with all checks green against the current DB.
+- Run `npm run verify:schema` locally — exits 0.
+- Temporarily rename an expected RPC in the expected-list to a bogus name, confirm the CLI exits 1 and the panel shows a red check; revert.
