@@ -20,12 +20,27 @@ export function SystemPanel({
   const seedFn = useServerFn(seedFromContent);
   const cov = useQuery({ queryKey: ["registry-coverage"], queryFn: () => coverageFn() });
   const seed = useMutation({
-    mutationFn: () => seedFn({ data: { forceBootstrap: false } }),
+    mutationFn: (force: boolean) => seedFn({ data: { forceBootstrap: force } }),
     onSuccess: () => {
       toast.success("Bundled content bootstrap completed.");
       onDone?.();
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: (err) => {
+      const msg = (err as Error).message ?? "";
+      if (msg.includes("bootstrap refused")) {
+        if (
+          confirm(
+            "Active claims already exist. Force-reset and replay bundled content? This replaces pending claims for each source (curated status is preserved).",
+          )
+        ) {
+          seed.mutate(true);
+          return;
+        }
+        toast.message("Bootstrap cancelled — existing claims kept.");
+        return;
+      }
+      toast.error(msg);
+    },
   });
   const rows = (cov.data ?? []) as Array<{
     maturity: string;
@@ -108,7 +123,7 @@ export function SystemPanel({
                 variant="outline"
                 disabled={seed.isPending}
                 onClick={() => {
-                  if (confirm("Bootstrap bundled content into the backend?")) seed.mutate();
+                  if (confirm("Bootstrap bundled content into the backend?")) seed.mutate(false);
                 }}
               >
                 {seed.isPending ? "Bootstrapping…" : "Bootstrap bundled content"}
