@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 940" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft/community-blog asset). Authored 2026-07.
+       Grounded in: content/sources/delta-optimization-and-v-order.json (V-Order tradeoffs,
+       defaults, precedence, file-level scope); content/sources/milescole-optimized-write-fabric.json
+       (Optimized Write executor shuffling, BinSize defaults, partitioned vs non-partitioned
+       benchmark results, deletion-vector interaction); content/sources/milescole-deletion-vectors.json
+       (merge-on-read mechanics, protocol version bump, benchmark deltas before/after OPTIMIZE);
+       content/sources/milescole-table-compaction.json (Auto Compaction tunables maxFileSize/
+       minFileSize/minNumFiles, benchmark comparison across 5 configurations); and
+       content/lessons/delta-tables-expert.json sections "V-Order: write-time Parquet reshaping",
+       "Deletion vectors: copy-on-write becomes merge-on-read", "Optimized Write and compaction
+       mechanics". -->
+  <defs>
+    <linearGradient id="headGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <linearGradient id="goodGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0E6961"/>
+      <stop offset="1" stop-color="#1A9E85"/>
+    </linearGradient>
+    <linearGradient id="costGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8C1D18"/>
+      <stop offset="1" stop-color="#B3261E"/>
+    </linearGradient>
+    <marker id="arr2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0E6961"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="940" fill="#FFFFFF"/>
+
+  <!-- title -->
+  <text x="40" y="42" font-size="22" font-weight="650" fill="#063D3B">Delta Write Optimization — Which Technique, and What It Costs</text>
+  <text x="40" y="64" font-size="12" fill="#616161">Four techniques operate at different points in the write/read lifecycle. Each buys read or write efficiency at a measured price.</text>
+
+  <!-- ═══════ decision spine ═══════ -->
+  <text x="40" y="94" font-size="11" letter-spacing="1.5" fill="#8A8886">DECISION SPINE — WHAT PROBLEM AM I SOLVING?</text>
+  <rect x="40" y="104" width="1122" height="64" rx="10" fill="url(#headGrad)"/>
+  <text x="64" y="126" font-size="11.5" font-weight="650" fill="#FFFFFF">"Reads are slow" → V-Order      "Writes scatter tiny files" → Optimized Write      "Row-level UPDATE/DELETE/MERGE is expensive" → Deletion Vectors      "Small files already piled up" → Compaction</text>
+  <text x="64" y="146" font-size="10" fill="#C8F0E8">These are not mutually exclusive — a mutation-heavy production table typically runs Optimized Write + Auto Compaction always on, and evaluates V-Order and deletion vectors against its own workload shape.</text>
+  <text x="64" y="160" font-size="9" fill="#9FD9CB">Techniques compose: V-Order is file-level and stacks with Z-Order, compaction, vacuum, and time travel.</text>
+
+  <!-- ═══════ 4 panel grid ═══════ -->
+  <!-- Panel 1: V-Order -->
+  <g>
+    <rect x="40" y="186" width="546" height="270" rx="10" fill="#F7F7F5" stroke="#E1DFDD"/>
+    <rect x="40" y="186" width="546" height="40" rx="10" fill="#0B5E50"/>
+    <rect x="40" y="206" width="546" height="20" fill="#0B5E50"/>
+    <text x="60" y="212" font-size="13" font-weight="650" fill="#FFFFFF">1 · V-Order</text>
+    <text x="490" y="212" font-size="10" fill="#C8F0E8">write-time Parquet reshape</text>
+
+    <text x="60" y="248" font-size="10.5" fill="#424242">Reorders row groups, encoding, and compression at</text>
+    <text x="60" y="264" font-size="10.5" fill="#424242">write time — logical data is unchanged, so query</text>
+    <text x="60" y="280" font-size="10.5" fill="#424242">results are identical. Files stay fully spec-compliant</text>
+    <text x="60" y="296" font-size="10.5" fill="#424242">Parquet; only Fabric engines get the read speed-up.</text>
+
+    <rect x="60" y="312" width="240" height="40" rx="6" fill="url(#goodGrad)"/>
+    <text x="70" y="328" font-size="9.5" font-weight="650" fill="#FFFFFF">BENEFIT</text>
+    <text x="70" y="343" font-size="9.5" fill="#EAF7F2">Reads improve significantly — best for</text>
+    <text x="70" y="356" font-size="8.5" fill="#C8F0E8" opacity="0">.</text>
+
+    <rect x="310" y="312" width="216" height="40" rx="6" fill="url(#costGrad)"/>
+    <text x="320" y="328" font-size="9.5" font-weight="650" fill="#FFFFFF">COST</text>
+    <text x="320" y="343" font-size="12" font-weight="700" fill="#FFFFFF">~15% slower writes</text>
+    <text x="320" y="356" font-size="8.5" fill="#F6D3D0">(Microsoft's stated average)</text>
+
+    <text x="60" y="378" font-size="10" font-weight="650" fill="#063D3B">Use when:</text>
+    <text x="150" y="378" font-size="10" fill="#424242">dashboarding, interactive analytics, repeated scans, Direct Lake tables</text>
+
+    <text x="60" y="396" font-size="10" font-weight="650" fill="#8C1D18">Skip when:</text>
+    <text x="150" y="396" font-size="10" fill="#424242">write-dominated ingestion/transform pipelines — pays the tax with no reader</text>
+
+    <text x="60" y="418" font-size="9.5" fill="#424242">Off by default in new workspaces. Controlled at session, table-property, or</text>
+    <text x="60" y="432" font-size="9.5" fill="#424242">per-write level — session/write settings override the table property.</text>
+    <text x="60" y="448" font-size="8.5" fill="#797775">Direct Lake bonus: better RLE compression speeds transcoding into VertiPaq,</text>
+  </g>
+
+  <!-- Panel 2: Optimized Write -->
+  <g>
+    <rect x="614" y="186" width="546" height="270" rx="10" fill="#F7F7F5" stroke="#E1DFDD"/>
+    <rect x="614" y="186" width="546" height="40" rx="10" fill="#0B5E50"/>
+    <rect x="614" y="206" width="546" height="20" fill="#0B5E50"/>
+    <text x="634" y="212" font-size="13" font-weight="650" fill="#FFFFFF">2 · Optimized Write</text>
+    <text x="1040" y="212" font-size="10" fill="#C8F0E8" text-anchor="end">shuffle before write</text>
+
+    <text x="634" y="248" font-size="10.5" fill="#424242">Shuffles data across executors before writing so each</text>
+    <text x="634" y="264" font-size="10.5" fill="#424242">partition is handled by one executor, producing fewer,</text>
+    <text x="634" y="280" font-size="10.5" fill="#424242">larger files. Target size set by BinSize (default 1 GB;</text>
+    <text x="634" y="296" font-size="10.5" fill="#424242">256 MB general workloads, 128 MB small workloads).</text>
+
+    <rect x="634" y="312" width="240" height="40" rx="6" fill="url(#goodGrad)"/>
+    <text x="644" y="328" font-size="9.5" font-weight="650" fill="#FFFFFF">BENCHMARK — WIN</text>
+    <text x="644" y="343" font-size="10.5" fill="#EAF7F2">1,823 partitions: 6:43 → 53s write,</text>
+    <text x="644" y="356" font-size="9" fill="#C8F0E8">175,008 → 1,823 files, 19x faster queries</text>
+
+    <rect x="884" y="312" width="216" height="40" rx="6" fill="url(#costGrad)"/>
+    <text x="894" y="328" font-size="9.5" font-weight="650" fill="#FFFFFF">BENCHMARK — LOSS</text>
+    <text x="894" y="343" font-size="10" fill="#FFFFFF">non-partitioned: 35% slower</text>
+    <text x="894" y="356" font-size="9" fill="#F6D3D0">writes, 2x slower queries</text>
+
+    <text x="634" y="378" font-size="10" font-weight="650" fill="#063D3B">Use when:</text>
+    <text x="724" y="378" font-size="10" fill="#424242">many partitions, streaming micro-batches feeding the table</text>
+
+    <text x="634" y="396" font-size="10" font-weight="650" fill="#8C1D18">Skip when:</text>
+    <text x="724" y="396" font-size="10" fill="#424242">non-partitioned table where fewer files hurt read parallelism</text>
+
+    <text x="634" y="418" font-size="9.5" fill="#424242">Fragmentation without it costs compression too: ~33% more data</text>
+    <text x="634" y="432" font-size="9.5" fill="#424242">on disk in a partitioned benchmark when disabled.</text>
+    <text x="634" y="448" font-size="8.5" fill="#797775">UPDATE/MERGE + deletion vectors still fragment files even with this on.</text>
+  </g>
+
+  <!-- Panel 3: Deletion Vectors -->
+  <g>
+    <rect x="40" y="474" width="546" height="290" rx="10" fill="#F7F7F5" stroke="#E1DFDD"/>
+    <rect x="40" y="474" width="546" height="40" rx="10" fill="#0B5E50"/>
+    <rect x="40" y="494" width="546" height="20" fill="#0B5E50"/>
+    <text x="60" y="500" font-size="13" font-weight="650" fill="#FFFFFF">3 · Deletion Vectors</text>
+    <text x="490" y="500" font-size="10" fill="#C8F0E8">copy-on-write → merge-on-read</text>
+
+    <text x="60" y="536" font-size="10.5" fill="#424242">Instead of rewriting a whole Parquet file for a changed</text>
+    <text x="60" y="552" font-size="10.5" fill="#424242">record, affected row positions go into a small .bin file</text>
+    <text x="60" y="568" font-size="10.5" fill="#424242">referenced from the add action; rows are filtered out</text>
+    <text x="60" y="584" font-size="10.5" fill="#424242">at query time instead of being physically removed.</text>
+
+    <rect x="60" y="600" width="240" height="54" rx="6" fill="url(#goodGrad)"/>
+    <text x="70" y="616" font-size="9.5" font-weight="650" fill="#FFFFFF">BENEFIT (100M-row benchmark)</text>
+    <text x="70" y="631" font-size="9.5" fill="#EAF7F2">single-row delete ~8x faster,</text>
+    <text x="70" y="644" font-size="9.5" fill="#EAF7F2">33% mass delete ~2.5x faster,</text>
+    <text x="70" y="651" font-size="8" fill="#C8F0E8" opacity="0">.</text>
+
+    <rect x="310" y="600" width="216" height="54" rx="6" fill="url(#costGrad)"/>
+    <text x="320" y="616" font-size="9.5" font-weight="650" fill="#FFFFFF">READ-TIME MERGE COST</text>
+    <text x="320" y="631" font-size="10" fill="#FFFFFF">2.3x slower reads if unmaintained</text>
+    <text x="320" y="646" font-size="9" fill="#F6D3D0">(53% non-append changes, no compaction)</text>
+
+    <text x="60" y="678" font-size="10" font-weight="650" fill="#063D3B">Use when:</text>
+    <text x="150" y="678" font-size="10" fill="#424242">write-heavy pipelines that pair it with a real OPTIMIZE/VACUUM cadence</text>
+
+    <text x="60" y="696" font-size="10" font-weight="650" fill="#8C1D18">Skip when:</text>
+    <text x="150" y="696" font-size="10" fill="#424242">no maintenance cadence exists, or readers can't handle protocol 2.3+</text>
+
+    <text x="60" y="718" font-size="9.5" fill="#424242">Enabling permanently raises minReaderVersion to 3 / minWriterVersion to 7.</text>
+    <text x="60" y="732" font-size="9.5" fill="#424242">After OPTIMIZE, read performance matches copy-on-write exactly.</text>
+    <text x="60" y="748" font-size="8.5" fill="#797775">Caveat: Polars/delta-rs raises DeltaProtocolError; Fabric Copy Activity unsupported.</text>
+  </g>
+
+  <!-- Panel 4: Compaction -->
+  <g>
+    <rect x="614" y="474" width="546" height="290" rx="10" fill="#F7F7F5" stroke="#E1DFDD"/>
+    <rect x="614" y="474" width="546" height="40" rx="10" fill="#0B5E50"/>
+    <rect x="614" y="494" width="546" height="20" fill="#0B5E50"/>
+    <text x="634" y="500" font-size="13" font-weight="650" fill="#FFFFFF">4 · Compaction — OPTIMIZE / Auto Compaction</text>
+
+    <text x="634" y="536" font-size="10.5" fill="#424242">Auto Compaction fires after writes once small-file</text>
+    <text x="634" y="552" font-size="10.5" fill="#424242">count in a partition passes minNumFiles (default 50),</text>
+    <text x="634" y="568" font-size="10.5" fill="#424242">merging files under minFileSize toward maxFileSize</text>
+    <text x="634" y="584" font-size="10.5" fill="#424242">(default 128 MB). Manual OPTIMIZE runs on demand.</text>
+
+    <rect x="634" y="600" width="240" height="54" rx="6" fill="url(#goodGrad)"/>
+    <text x="644" y="616" font-size="9.5" font-weight="650" fill="#FFFFFF">BEST COMBO (200-iter benchmark)</text>
+    <text x="644" y="631" font-size="9.5" fill="#EAF7F2">Auto Compaction + Optimized Write:</text>
+    <text x="644" y="644" font-size="9.5" fill="#EAF7F2">12.77 min total, file-count stdev 14</text>
+
+    <rect x="884" y="600" width="216" height="54" rx="6" fill="url(#costGrad)"/>
+    <text x="894" y="616" font-size="9.5" font-weight="650" fill="#FFFFFF">WORST — NO COMPACTION</text>
+    <text x="894" y="631" font-size="10" fill="#FFFFFF">33.27 min total runtime</text>
+    <text x="894" y="646" font-size="9" fill="#F6D3D0">file-count stdev 864</text>
+
+    <text x="634" y="678" font-size="10" font-weight="650" fill="#063D3B">Use when:</text>
+    <text x="724" y="678" font-size="10" fill="#424242">always-on for tables &lt;1 GB; add scheduled OPTIMIZE above 1 GB</text>
+
+    <text x="634" y="696" font-size="10" font-weight="650" fill="#8C1D18">Watch for:</text>
+    <text x="724" y="696" font-size="10" fill="#424242">a past Fabric runtime bug over-triggered on tables &gt;1 GB (now fixed)</text>
+
+    <text x="634" y="718" font-size="9.5" fill="#424242">Optimized Write alone cut per-iteration files ~16→1, but periodic</text>
+    <text x="634" y="732" font-size="9.5" fill="#424242">compaction is still needed to consolidate into the 500 MB–1 GB range.</text>
+    <text x="634" y="748" font-size="8.5" fill="#797775">Auto-triggered runs are tagged operationParameters.auto=true in the log.</text>
+  </g>
+
+  <!-- legend / grounding -->
+  <rect x="40" y="782" width="1120" height="140" rx="10" fill="#F7F7F5" stroke="#E1DFDD"/>
+  <text x="60" y="806" font-size="11" letter-spacing="1" fill="#8A8886">LEGEND &amp; GROUNDING</text>
+
+  <rect x="60" y="818" width="16" height="16" rx="3" fill="url(#goodGrad)"/>
+  <text x="84" y="831" font-size="9.5" fill="#424242">Measured benefit — from the cited benchmark or vendor-stated figure</text>
+
+  <rect x="420" y="818" width="16" height="16" rx="3" fill="url(#costGrad)"/>
+  <text x="444" y="831" font-size="9.5" fill="#424242">Measured cost / trade-off — the price paid for that benefit</text>
+
+  <text x="60" y="856" font-size="9" fill="#797775">All benchmark figures are from the cited authors' own controlled test environments and are directional, not universal guarantees — treat them as</text>
+  <text x="60" y="870" font-size="9" fill="#797775">evidence of the trade-off's shape, not a promise of identical numbers on your workload.</text>
+  <text x="60" y="890" font-size="9" fill="#797775">Grounded in: content/sources/delta-optimization-and-v-order.json (V-Order) · milescole-optimized-write-fabric.json (Optimized Write) ·</text>
+  <text x="60" y="904" font-size="9" fill="#797775">milescole-deletion-vectors.json (deletion vectors) · milescole-table-compaction.json (Auto Compaction) · and the corresponding sections</text>
+  <text x="60" y="918" font-size="9" fill="#797775">of content/lessons/delta-tables-expert.json.</text>
+</svg>

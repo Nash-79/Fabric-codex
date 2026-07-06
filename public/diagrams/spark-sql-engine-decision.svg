@@ -1,0 +1,215 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 860" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Grounded in spark-sql-fabric.json: %%sql cell runs Spark SQL against the notebook's own
+       Spark session/cluster and attached lakehouse (shared-session fact), not a separate SQL
+       engine — used to characterize the "Spark SQL (notebook)" column's engine + read/write
+       behavior. Grounded in spark-native-execution-engine.json for the NEE performance note on
+       the Spark SQL column (Gluten+Velox vectorized C++ offload, ~4x/6x benchmark, still JVM
+       Spark under the hood). The Lakehouse SQL analytics endpoint (read-only T-SQL over Delta),
+       Warehouse (T-SQL, read/write, Polaris), and KQL (Kusto Query Language, Eventhouse) columns
+       are well-established Fabric platform facts from model knowledge, included for contrast —
+       not sourced from the two Spark claim files above; no invented limits are stated for them. -->
+  <defs>
+    <linearGradient id="hdrGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3D2200"/>
+      <stop offset="1" stop-color="#8C2D04"/>
+    </linearGradient>
+    <linearGradient id="sparkColGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8590C"/>
+      <stop offset="1" stop-color="#F76707"/>
+    </linearGradient>
+    <linearGradient id="lhColGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <linearGradient id="whColGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#08386E"/>
+      <stop offset="1" stop-color="#1C6FC9"/>
+    </linearGradient>
+    <linearGradient id="kqlColGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5A1E5C"/>
+      <stop offset="1" stop-color="#9B3FA0"/>
+    </linearGradient>
+    <marker id="arrDec" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#616161"/>
+    </marker>
+  </defs>
+
+  <rect width="1180" height="860" fill="#FFFFFF"/>
+
+  <text x="40" y="42" font-size="22" font-weight="650" fill="#3D2200">Spark SQL vs SQL Analytics Endpoint vs Warehouse vs KQL — Which Engine?</text>
+  <text x="40" y="64" font-size="12" fill="#616161">Four query surfaces over Fabric data, compared by language, read/write, underlying engine, and typical workload</text>
+
+  <!-- ═══ TOP DECISION QUESTIONS ═══ -->
+  <text x="40" y="92" font-size="11" letter-spacing="1.5" fill="#8A8886">START HERE — ASK IN ORDER</text>
+  <rect x="40" y="100" width="1100" height="66" rx="9" fill="#F3F2F1" stroke="#C8C6C4"/>
+  <text x="60" y="122" font-size="11" font-weight="600" fill="#3D2200">1. Do I need to write/transform data, or only read/query it?</text>
+  <text x="60" y="140" font-size="11" font-weight="600" fill="#3D2200">2. Am I already in a notebook doing PySpark/Scala work, or coming from a BI/T-SQL tool, or working with streaming/time-series/log data?</text>
+  <text x="60" y="158" font-size="10.5" fill="#616161">Read-only + BI tool → SQL analytics endpoint or Warehouse T-SQL.  Notebook + transform → Spark SQL.  Streaming/telemetry/logs → KQL.</text>
+
+  <!-- ═══ COLUMN HEADERS ═══ -->
+  <!-- 4 columns, each 265 wide, starting x=40, gap 10 -->
+  <g>
+    <rect x="40"  y="180" width="265" height="46" rx="8" fill="url(#sparkColGrad)"/>
+    <text x="172" y="208" text-anchor="middle" font-size="13" font-weight="650" fill="#FFFFFF">Spark SQL (notebook)</text>
+
+    <rect x="315" y="180" width="265" height="46" rx="8" fill="url(#lhColGrad)"/>
+    <text x="447" y="200" text-anchor="middle" font-size="13" font-weight="650" fill="#FFFFFF">Lakehouse SQL</text>
+    <text x="447" y="216" text-anchor="middle" font-size="11" fill="#EAF7F2">analytics endpoint</text>
+
+    <rect x="590" y="180" width="265" height="46" rx="8" fill="url(#whColGrad)"/>
+    <text x="722" y="208" text-anchor="middle" font-size="13" font-weight="650" fill="#FFFFFF">Warehouse</text>
+
+    <rect x="865" y="180" width="265" height="46" rx="8" fill="url(#kqlColGrad)"/>
+    <text x="997" y="208" text-anchor="middle" font-size="13" font-weight="650" fill="#FFFFFF">KQL (Eventhouse)</text>
+  </g>
+
+  <!-- ═══ ROW LABELS + CELLS ═══ -->
+  <!-- Row: Language -->
+  <text x="40" y="248" font-size="11" letter-spacing="1" fill="#8A8886">LANGUAGE</text>
+  <g font-size="10.5" fill="#3D2200">
+    <rect x="40"  y="254" width="265" height="54" rx="6" fill="#FCEEE4" stroke="#F0AD7A"/>
+    <text x="56" y="272">Spark SQL (ANSI-ish subset,</text>
+    <text x="56" y="286">HiveQL heritage) inside %%sql</text>
+    <text x="56" y="300">cells, or spark.sql() strings</text>
+
+    <rect x="315" y="254" width="265" height="54" rx="6" fill="#EAF7F2" stroke="#9AD2C5"/>
+    <text x="331" y="272">T-SQL (read-only surface) —</text>
+    <text x="331" y="286">same connection experience</text>
+    <text x="331" y="300">as SQL Server / Azure SQL</text>
+
+    <rect x="590" y="254" width="265" height="54" rx="6" fill="#E7F0FB" stroke="#9DC1EE"/>
+    <text x="606" y="272">Full T-SQL, including DDL/DML</text>
+    <text x="606" y="286">— stored procs, multi-statement</text>
+    <text x="606" y="300">transactions, cross-DB queries</text>
+
+    <rect x="865" y="254" width="265" height="54" rx="6" fill="#F5E7F6" stroke="#CB9BCE"/>
+    <text x="881" y="272">Kusto Query Language (KQL) —</text>
+    <text x="881" y="286">pipe-based, purpose-built for</text>
+    <text x="881" y="300">time-series/log filtering</text>
+  </g>
+
+  <!-- Row: Read/Write -->
+  <text x="40" y="330" font-size="11" letter-spacing="1" fill="#8A8886">READ / WRITE</text>
+  <g font-size="10.5" fill="#3D2200">
+    <rect x="40"  y="336" width="265" height="54" rx="6" fill="#FCEEE4" stroke="#F0AD7A"/>
+    <text x="56" y="357" font-weight="600">Read + write</text>
+    <text x="56" y="373">CREATE/INSERT/MERGE/DELETE</text>
+    <text x="56" y="387">on Delta tables in the lakehouse</text>
+
+    <rect x="315" y="336" width="265" height="54" rx="6" fill="#EAF7F2" stroke="#9AD2C5"/>
+    <text x="331" y="357" font-weight="600">Read-only</text>
+    <text x="331" y="373">Auto-generated view of every</text>
+    <text x="331" y="387">Delta table in the lakehouse</text>
+
+    <rect x="590" y="336" width="265" height="54" rx="6" fill="#E7F0FB" stroke="#9DC1EE"/>
+    <text x="606" y="357" font-weight="600">Read + write</text>
+    <text x="606" y="373">Full transactional DDL/DML,</text>
+    <text x="606" y="387">including cross-item queries</text>
+
+    <rect x="865" y="336" width="265" height="54" rx="6" fill="#F5E7F6" stroke="#CB9BCE"/>
+    <text x="881" y="357" font-weight="600">Append-oriented ingest + read</text>
+    <text x="881" y="373">Optimized for streaming</text>
+    <text x="881" y="387">ingestion, not row-level updates</text>
+  </g>
+
+  <!-- Row: Engine -->
+  <text x="40" y="412" font-size="11" letter-spacing="1" fill="#8A8886">UNDERLYING ENGINE</text>
+  <g font-size="10.5" fill="#3D2200">
+    <rect x="40"  y="418" width="265" height="66" rx="6" fill="#FCEEE4" stroke="#F0AD7A"/>
+    <text x="56" y="437" font-weight="600">Apache Spark cluster</text>
+    <text x="56" y="453">Catalyst plan → physical plan;</text>
+    <text x="56" y="467">Native Execution Engine (Gluten</text>
+    <text x="56" y="481">+Velox) offloads to vectorized</text>
+
+    <rect x="315" y="418" width="265" height="66" rx="6" fill="#EAF7F2" stroke="#9AD2C5"/>
+    <text x="331" y="437" font-weight="600">Distributed SQL query engine</text>
+    <text x="331" y="453">(same query engine family as</text>
+    <text x="331" y="467">Warehouse), reading the same</text>
+    <text x="331" y="481">Delta Parquet files on OneLake</text>
+
+    <rect x="590" y="418" width="265" height="66" rx="6" fill="#E7F0FB" stroke="#9DC1EE"/>
+    <text x="606" y="437" font-weight="600">Polaris distributed SQL engine</text>
+    <text x="606" y="453">MPP compute, independently</text>
+    <text x="606" y="467">scaled from storage; Delta</text>
+    <text x="606" y="481">Parquet as the native format</text>
+
+    <rect x="865" y="418" width="265" height="66" rx="6" fill="#F5E7F6" stroke="#CB9BCE"/>
+    <text x="881" y="437" font-weight="600">Kusto engine</text>
+    <text x="881" y="453">Column-store built for high-</text>
+    <text x="881" y="467">cardinality time-series/log</text>
+    <text x="881" y="481">indexing and fast aggregation</text>
+  </g>
+
+  <!-- Row: Typical workload -->
+  <text x="40" y="506" font-size="11" letter-spacing="1" fill="#8A8886">TYPICAL WORKLOAD</text>
+  <g font-size="10.5" fill="#3D2200">
+    <rect x="40"  y="512" width="265" height="66" rx="6" fill="#FCEEE4" stroke="#F0AD7A"/>
+    <text x="56" y="531">ETL/ELT transforms, feature</text>
+    <text x="56" y="545">engineering, iterative data</text>
+    <text x="56" y="559">science — mixed with PySpark/</text>
+    <text x="56" y="573">Scala cells in the same session</text>
+
+    <rect x="315" y="512" width="265" height="66" rx="6" fill="#EAF7F2" stroke="#9AD2C5"/>
+    <text x="331" y="531">BI tool connections (Power BI,</text>
+    <text x="331" y="545">SSMS-style clients), ad hoc</text>
+    <text x="331" y="559">exploratory queries over</text>
+    <text x="331" y="573">lakehouse tables without ETL</text>
+
+    <rect x="590" y="512" width="265" height="66" rx="6" fill="#E7F0FB" stroke="#9DC1EE"/>
+    <text x="606" y="531">Enterprise DW workloads:</text>
+    <text x="606" y="545">reporting marts, governed</text>
+    <text x="606" y="559">semantic layers, teams already</text>
+    <text x="606" y="573">fluent in T-SQL/stored procs</text>
+
+    <rect x="865" y="512" width="265" height="66" rx="6" fill="#F5E7F6" stroke="#CB9BCE"/>
+    <text x="881" y="531">Telemetry, IoT sensor streams,</text>
+    <text x="881" y="545">application logs, security/</text>
+    <text x="881" y="559">audit event analysis, real-time</text>
+    <text x="881" y="573">dashboards</text>
+  </g>
+
+  <!-- ═══ NOTEBOOK-SPECIFIC CALLOUT ═══ -->
+  <text x="40" y="608" font-size="11" letter-spacing="1.5" fill="#8A8886">SPARK SQL SPECIFICS — FROM INSIDE THE NOTEBOOK</text>
+  <rect x="40" y="616" width="1100" height="80" rx="9" fill="url(#sparkColGrad)"/>
+  <rect x="60" y="628" width="335" height="56" rx="6" fill="#FFFFFF" fill-opacity="0.16"/>
+  <text x="227" y="646" text-anchor="middle" font-size="10.5" font-weight="600" fill="#FFFFFF">Shares the session</text>
+  <text x="227" y="662" text-anchor="middle" font-size="9.5" fill="#FFE3CC">%%sql runs in the same Spark context</text>
+  <text x="227" y="675" text-anchor="middle" font-size="9.5" fill="#FFE3CC">as %%pyspark/%%spark/%%sparkr cells</text>
+
+  <rect x="410" y="628" width="335" height="56" rx="6" fill="#FFFFFF" fill-opacity="0.16"/>
+  <text x="577" y="646" text-anchor="middle" font-size="10.5" font-weight="600" fill="#FFFFFF">Metastore resolution</text>
+  <text x="577" y="662" text-anchor="middle" font-size="9.5" fill="#FFE3CC">Unqualified table names resolve via</text>
+  <text x="577" y="675" text-anchor="middle" font-size="9.5" fill="#FFE3CC">the notebook's pinned default lakehouse</text>
+
+  <rect x="760" y="628" width="360" height="56" rx="6" fill="#FFFFFF" fill-opacity="0.16"/>
+  <text x="940" y="646" text-anchor="middle" font-size="10.5" font-weight="600" fill="#FFFFFF">NEE acceleration, same syntax</text>
+  <text x="940" y="662" text-anchor="middle" font-size="9.5" fill="#FFE3CC">Native Execution Engine can vectorize supported</text>
+  <text x="940" y="675" text-anchor="middle" font-size="9.5" fill="#FFE3CC">operators (~4x TPC-DS) with no query changes</text>
+
+  <!-- ═══ DECISION FLOW SUMMARY ═══ -->
+  <text x="40" y="726" font-size="11" letter-spacing="1.5" fill="#8A8886">QUICK-PICK FLOW</text>
+  <rect x="40" y="734" width="1100" height="100" rx="9" fill="#F3F2F1" stroke="#C8C6C4"/>
+
+  <rect x="60"  y="748" width="245" height="72" rx="7" fill="#FFFFFF" stroke="#F0AD7A"/>
+  <text x="182" y="768" text-anchor="middle" font-size="10.5" font-weight="600" fill="#8C2D04">Transforming data in a notebook?</text>
+  <text x="182" y="786" text-anchor="middle" font-size="10" fill="#424242">→ Spark SQL (%%sql or spark.sql())</text>
+  <text x="182" y="802" text-anchor="middle" font-size="9.5" fill="#797775">mixed with PySpark/Scala cells</text>
+
+  <rect x="325" y="748" width="245" height="72" rx="7" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="447" y="768" text-anchor="middle" font-size="10.5" font-weight="600" fill="#0B5E50">Read-only BI query over a lakehouse?</text>
+  <text x="447" y="786" text-anchor="middle" font-size="10" fill="#424242">→ SQL analytics endpoint</text>
+  <text x="447" y="802" text-anchor="middle" font-size="9.5" fill="#797775">no ETL, T-SQL client tools</text>
+
+  <rect x="590" y="748" width="245" height="72" rx="7" fill="#FFFFFF" stroke="#9DC1EE"/>
+  <text x="712" y="768" text-anchor="middle" font-size="10.5" font-weight="600" fill="#08386E">Governed enterprise DW with writes?</text>
+  <text x="712" y="786" text-anchor="middle" font-size="10" fill="#424242">→ Warehouse (T-SQL)</text>
+  <text x="712" y="802" text-anchor="middle" font-size="9.5" fill="#797775">stored procs, full DML, Polaris</text>
+
+  <rect x="855" y="748" width="245" height="72" rx="7" fill="#FFFFFF" stroke="#CB9BCE"/>
+  <text x="977" y="768" text-anchor="middle" font-size="10.5" font-weight="600" fill="#5A1E5C">Streaming/log/time-series data?</text>
+  <text x="977" y="786" text-anchor="middle" font-size="10" fill="#424242">→ KQL (Eventhouse)</text>
+  <text x="977" y="802" text-anchor="middle" font-size="9.5" fill="#797775">high-cardinality, near real-time</text>
+
+  <text x="1152" y="850" text-anchor="end" font-size="9" fill="#8A8886">Fabric Atlas — original diagram, July 2026. SQL analytics endpoint / Warehouse / KQL columns reflect general Fabric platform architecture (model knowledge).</text>
+</svg>

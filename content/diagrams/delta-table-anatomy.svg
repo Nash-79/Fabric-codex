@@ -1,0 +1,249 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft/Databricks asset). Authored 2026-07.
+       Grounded in claims from source p3411-armbrust-pdf (Delta Lake: High-Performance ACID
+       Table Storage over Cloud Object Stores) as extracted in
+       content/sources/delta-lake-storage-internals.json, and delta-tables-expert lesson
+       "The transaction log is the table" section: immutable Parquet objects + _delta_log
+       write-ahead log as source of truth; numbered JSON commits with add/remove/metaData/
+       protocol/commitInfo/txn actions; optimistic concurrency via atomic rename on ADLS Gen2;
+       snapshot isolation for readers pinned to newest committed version; periodic checkpoint
+       compaction every 10 commits, best-effort and crash-safe. -->
+  <defs>
+    <linearGradient id="tableGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="0.5" stop-color="#117865"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <linearGradient id="logGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EAF7F2"/>
+      <stop offset="1" stop-color="#D2EFE6"/>
+    </linearGradient>
+    <linearGradient id="ckptGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#B98900"/>
+      <stop offset="1" stop-color="#E0A800"/>
+    </linearGradient>
+    <marker id="arrTeal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0E6961"/>
+    </marker>
+    <marker id="arrGray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8A8886"/>
+    </marker>
+    <marker id="arrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B3261E"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="900" fill="#FFFFFF"/>
+
+  <!-- title -->
+  <text x="40" y="42" font-size="22" font-weight="650" fill="#063D3B">Anatomy of a Delta Table on OneLake</text>
+  <text x="40" y="64" font-size="12" fill="#616161">Immutable Parquet data objects + a write-ahead log — the log, not a directory listing, is the source of truth for table state</text>
+
+  <!-- ═══════════════ SECTION 1: PHYSICAL LAYOUT ═══════════════ -->
+  <text x="40" y="96" font-size="11" letter-spacing="1.5" fill="#8A8886">PHYSICAL LAYOUT — ONE TABLE FOLDER ON ONELAKE</text>
+
+  <rect x="40" y="106" width="1122" height="150" rx="10" fill="url(#tableGrad)"/>
+  <text x="64" y="132" font-size="14" font-weight="650" fill="#FFFFFF">/Tables/sales/  (Delta table root)</text>
+
+  <!-- parquet data objects -->
+  <g>
+    <rect x="64" y="146" width="120" height="86" rx="6" fill="#FFFFFF" fill-opacity="0.16"/>
+    <text x="124" y="166" text-anchor="middle" font-size="10.5" font-weight="600" fill="#FFFFFF">part-0001.parquet</text>
+    <text x="124" y="182" text-anchor="middle" font-size="9" fill="#C8F0E8">immutable</text>
+    <text x="124" y="196" text-anchor="middle" font-size="9" fill="#C8F0E8">row-group stats</text>
+    <text x="124" y="210" text-anchor="middle" font-size="9" fill="#C8F0E8">min/max, nulls</text>
+    <text x="124" y="224" text-anchor="middle" font-size="9" fill="#C8F0E8">per column</text>
+  </g>
+  <g>
+    <rect x="196" y="146" width="120" height="86" rx="6" fill="#FFFFFF" fill-opacity="0.16"/>
+    <text x="256" y="166" text-anchor="middle" font-size="10.5" font-weight="600" fill="#FFFFFF">part-0002.parquet</text>
+    <text x="256" y="182" text-anchor="middle" font-size="9" fill="#C8F0E8">immutable</text>
+    <text x="256" y="196" text-anchor="middle" font-size="9" fill="#C8F0E8">never edited</text>
+    <text x="256" y="210" text-anchor="middle" font-size="9" fill="#C8F0E8">in place — only</text>
+    <text x="256" y="224" text-anchor="middle" font-size="9" fill="#C8F0E8">added or removed</text>
+  </g>
+  <g>
+    <rect x="328" y="146" width="120" height="86" rx="6" fill="#FFFFFF" fill-opacity="0.10" stroke="#F3C6C2" stroke-dasharray="4 3"/>
+    <text x="388" y="166" text-anchor="middle" font-size="10.5" font-weight="600" fill="#F3C6C2">part-0003.parquet</text>
+    <text x="388" y="182" text-anchor="middle" font-size="9" fill="#F3C6C2">superseded —</text>
+    <text x="388" y="196" text-anchor="middle" font-size="9" fill="#F3C6C2">removed by a later</text>
+    <text x="388" y="210" text-anchor="middle" font-size="9" fill="#F3C6C2">commit, kept on disk</text>
+    <text x="388" y="224" text-anchor="middle" font-size="9" fill="#F3C6C2">until VACUUM</text>
+  </g>
+  <text x="470" y="192" font-size="20" fill="#C8F0E8">···</text>
+
+  <!-- delta log folder -->
+  <rect x="520" y="146" width="622" height="86" rx="6" fill="#063D3B" fill-opacity="0.55"/>
+  <text x="544" y="166" font-size="11.5" font-weight="650" fill="#25FFD4">_delta_log/  — the write-ahead log = the single source of truth</text>
+  <text x="544" y="184" font-size="10" fill="#C8F0E8">Not a directory listing: engines never trust "what files exist" — only "what the log says belongs to the table."</text>
+  <text x="544" y="202" font-size="10" fill="#C8F0E8">This is what lets ADLS Gen2-style object storage offer ACID table semantics it does not natively have.</text>
+  <text x="544" y="220" font-size="9" fill="#9FD9CB">Source: Delta Lake (Armbrust et al., PVLDB 2020) — see delta-lake-storage-internals claims</text>
+
+  <!-- ═══════════════ SECTION 2: THE COMMIT LOG TIMELINE ═══════════════ -->
+  <text x="40" y="288" font-size="11" letter-spacing="1.5" fill="#8A8886">_delta_log — SEQUENTIALLY NUMBERED JSON COMMITS, PERIODICALLY CHECKPOINTED</text>
+
+  <rect x="40" y="298" width="1122" height="180" rx="10" fill="url(#logGrad)" stroke="#9AD2C5"/>
+
+  <!-- commit 0 -->
+  <g>
+    <rect x="64" y="322" width="130" height="130" rx="7" fill="#FFFFFF" stroke="#0E6961" stroke-width="1.5"/>
+    <text x="129" y="344" text-anchor="middle" font-size="11" font-weight="650" fill="#063D3B">000000.json</text>
+    <text x="129" y="360" text-anchor="middle" font-size="9" fill="#424242">metaData</text>
+    <text x="129" y="374" text-anchor="middle" font-size="9" fill="#424242">protocol</text>
+    <text x="129" y="388" text-anchor="middle" font-size="9" fill="#424242">add ×2</text>
+    <text x="129" y="402" text-anchor="middle" font-size="9" fill="#424242">commitInfo</text>
+    <text x="129" y="422" text-anchor="middle" font-size="8.5" fill="#797775">table created</text>
+    <text x="129" y="436" text-anchor="middle" font-size="8.5" fill="#797775">initial files added</text>
+  </g>
+
+  <!-- commit 1 -->
+  <g>
+    <rect x="216" y="322" width="130" height="130" rx="7" fill="#FFFFFF" stroke="#0E6961" stroke-width="1.5"/>
+    <text x="281" y="344" text-anchor="middle" font-size="11" font-weight="650" fill="#063D3B">000001.json</text>
+    <text x="281" y="360" text-anchor="middle" font-size="9" fill="#424242">add ×1</text>
+    <text x="281" y="374" text-anchor="middle" font-size="9" fill="#424242">commitInfo</text>
+    <text x="281" y="388" text-anchor="middle" font-size="9" fill="#424242">txn (streaming</text>
+    <text x="281" y="400" text-anchor="middle" font-size="9" fill="#424242">app id + version)</text>
+    <text x="281" y="422" text-anchor="middle" font-size="8.5" fill="#797775">append batch</text>
+  </g>
+
+  <!-- commit 2: winning commit -->
+  <g>
+    <rect x="368" y="322" width="130" height="130" rx="7" fill="#0B5E50" stroke="#0E6961" stroke-width="1.5"/>
+    <text x="433" y="344" text-anchor="middle" font-size="11" font-weight="650" fill="#FFFFFF">000002.json</text>
+    <text x="433" y="360" text-anchor="middle" font-size="9" fill="#EAF7F2">add ×1</text>
+    <text x="433" y="374" text-anchor="middle" font-size="9" fill="#EAF7F2">remove ×1</text>
+    <text x="433" y="388" text-anchor="middle" font-size="9" fill="#EAF7F2">commitInfo</text>
+    <text x="433" y="410" text-anchor="middle" font-size="8.5" font-weight="650" fill="#7CF2D6">WINNER</text>
+    <text x="433" y="424" text-anchor="middle" font-size="8" fill="#C8F0E8">atomic rename</text>
+    <text x="433" y="436" text-anchor="middle" font-size="8" fill="#C8F0E8">succeeded first</text>
+  </g>
+
+  <!-- commit 2 loser -->
+  <g>
+    <rect x="368" y="462" width="130" height="0" rx="7" fill="none"/>
+  </g>
+
+  <!-- checkpoint at commit 3 (10th commit conceptually shown compressed) -->
+  <g>
+    <rect x="520" y="322" width="150" height="130" rx="7" fill="url(#ckptGrad)"/>
+    <text x="595" y="344" text-anchor="middle" font-size="11" font-weight="650" fill="#FFFFFF">00000010.checkpoint.parquet</text>
+    <text x="595" y="364" text-anchor="middle" font-size="9" fill="#FFF6DF">folds in every still-</text>
+    <text x="595" y="378" text-anchor="middle" font-size="9" fill="#FFF6DF">relevant add/remove/</text>
+    <text x="595" y="392" text-anchor="middle" font-size="9" fill="#FFF6DF">metaData action;</text>
+    <text x="595" y="406" text-anchor="middle" font-size="9" fill="#FFF6DF">drops superseded ones</text>
+    <text x="595" y="426" text-anchor="middle" font-size="8.5" fill="#FFEFC2">every 10 commits, default</text>
+    <text x="595" y="440" text-anchor="middle" font-size="8.5" fill="#FFEFC2">best-effort · crash-safe</text>
+  </g>
+
+  <!-- commits 11,12 continuing -->
+  <g>
+    <rect x="694" y="322" width="110" height="130" rx="7" fill="#FFFFFF" stroke="#0E6961" stroke-width="1.5"/>
+    <text x="749" y="344" text-anchor="middle" font-size="10.5" font-weight="650" fill="#063D3B">000011.json</text>
+    <text x="749" y="362" text-anchor="middle" font-size="9" fill="#424242">add / remove</text>
+    <text x="749" y="378" text-anchor="middle" font-size="9" fill="#424242">commitInfo</text>
+  </g>
+  <g>
+    <rect x="820" y="322" width="110" height="130" rx="7" fill="#FFFFFF" stroke="#0E6961" stroke-width="1.5"/>
+    <text x="875" y="344" text-anchor="middle" font-size="10.5" font-weight="650" fill="#063D3B">000012.json</text>
+    <text x="875" y="362" text-anchor="middle" font-size="9" fill="#424242">add / remove</text>
+    <text x="875" y="378" text-anchor="middle" font-size="9" fill="#424242">commitInfo</text>
+  </g>
+  <text x="950" y="392" font-size="22" fill="#0E6961">···</text>
+
+  <!-- readers panel -->
+  <rect x="980" y="322" width="162" height="130" rx="7" fill="#FFFFFF" stroke="#9AD2C5"/>
+  <text x="1061" y="344" text-anchor="middle" font-size="10.5" font-weight="650" fill="#063D3B">reconstructing state</text>
+  <text x="1000" y="364" font-size="9" fill="#424242">1. find latest checkpoint</text>
+  <text x="1000" y="380" font-size="9" fill="#424242">2. replay only trailing</text>
+  <text x="1000" y="393" font-size="9" fill="#424242">   JSON commits after it</text>
+  <text x="1000" y="411" font-size="9" fill="#424242">3. never replay from</text>
+  <text x="1000" y="424" font-size="9" fill="#424242">   commit zero</text>
+  <text x="1000" y="442" font-size="8.5" fill="#797775">~100x faster than</text>
+
+  <!-- arrow flow along commits -->
+  <line x1="194" y1="386" x2="212" y2="386" stroke="#0E6961" stroke-width="2" marker-end="url(#arrTeal)"/>
+  <line x1="346" y1="386" x2="364" y2="386" stroke="#0E6961" stroke-width="2" marker-end="url(#arrTeal)"/>
+  <line x1="498" y1="386" x2="516" y2="386" stroke="#0E6961" stroke-width="2" marker-end="url(#arrTeal)"/>
+  <line x1="670" y1="386" x2="690" y2="386" stroke="#0E6961" stroke-width="2" marker-end="url(#arrTeal)"/>
+  <line x1="804" y1="386" x2="816" y2="386" stroke="#0E6961" stroke-width="2" marker-end="url(#arrTeal)"/>
+  <line x1="930" y1="386" x2="976" y2="386" stroke="#0E6961" stroke-width="2" marker-end="url(#arrTeal)"/>
+
+  <!-- ═══════════════ SECTION 3: OPTIMISTIC CONCURRENCY RACE ═══════════════ -->
+  <text x="40" y="510" font-size="11" letter-spacing="1.5" fill="#8A8886">OPTIMISTIC CONCURRENCY — TWO WRITERS RACE FOR ONE COMMIT NUMBER</text>
+
+  <rect x="40" y="520" width="546" height="200" rx="10" fill="#FBF6EC" stroke="#E7C989"/>
+  <text x="60" y="546" font-size="12.5" font-weight="650" fill="#7A4E00">Writer A and Writer B both target 000003.json</text>
+
+  <!-- writer A -->
+  <rect x="60" y="562" width="230" height="56" rx="6" fill="#0B5E50"/>
+  <text x="175" y="582" text-anchor="middle" font-size="10.5" font-weight="600" fill="#FFFFFF">Writer A</text>
+  <text x="175" y="598" text-anchor="middle" font-size="9" fill="#C8F0E8">stages new Parquet objects independently</text>
+  <text x="175" y="611" text-anchor="middle" font-size="9" fill="#C8F0E8">then attempts atomic rename → 000003.json</text>
+
+  <!-- writer B -->
+  <rect x="300" y="562" width="230" height="56" rx="6" fill="#8A8886"/>
+  <text x="415" y="582" text-anchor="middle" font-size="10.5" font-weight="600" fill="#FFFFFF">Writer B</text>
+  <text x="415" y="598" text-anchor="middle" font-size="9" fill="#F1F0EF">stages new Parquet objects independently</text>
+  <text x="415" y="611" text-anchor="middle" font-size="9" fill="#F1F0EF">then attempts atomic rename → 000003.json</text>
+
+  <line x1="175" y1="618" x2="175" y2="642" stroke="#0E6961" stroke-width="2" marker-end="url(#arrTeal)"/>
+  <line x1="415" y1="618" x2="415" y2="642" stroke="#B3261E" stroke-width="2" marker-end="url(#arrRed)"/>
+
+  <rect x="60" y="648" width="230" height="52" rx="6" fill="#0E6961" fill-opacity="0.15" stroke="#0E6961"/>
+  <text x="175" y="668" text-anchor="middle" font-size="10" font-weight="650" fill="#0B5E50">Wins: rename succeeds</text>
+  <text x="175" y="684" text-anchor="middle" font-size="9" fill="#424242">000003.json committed</text>
+
+  <rect x="300" y="648" width="230" height="52" rx="6" fill="#B3261E" fill-opacity="0.10" stroke="#B3261E"/>
+  <text x="415" y="668" text-anchor="middle" font-size="10" font-weight="650" fill="#8C1D18">Loses: rename fails</text>
+  <text x="415" y="684" text-anchor="middle" font-size="9" fill="#424242">rereads state, retries as 000004.json</text>
+
+  <text x="60" y="710" font-size="9" fill="#7A4E00">On OneLake/ADLS Gen2, the atomic primitive is a rename that fails if the target name already exists — no lock is ever held.</text>
+
+  <!-- ═══════════════ SECTION 4: SNAPSHOT ISOLATION ═══════════════ -->
+  <rect x="606" y="520" width="556" height="200" rx="10" fill="#EAF7F2" stroke="#9AD2C5"/>
+  <text x="626" y="546" font-size="12.5" font-weight="650" fill="#063D3B">Readers get snapshot isolation</text>
+  <text x="626" y="566" font-size="10" fill="#424242">A reader pins to the newest fully-committed log record at query start</text>
+  <text x="626" y="582" font-size="10" fill="#424242">and never observes commits that land after that point.</text>
+
+  <!-- timeline -->
+  <line x1="640" y1="620" x2="1140" y2="620" stroke="#8A8886" stroke-width="2"/>
+  <circle cx="680" cy="620" r="5" fill="#0E6961"/>
+  <text x="680" y="642" text-anchor="middle" font-size="8.5" fill="#424242">v0</text>
+  <circle cx="760" cy="620" r="5" fill="#0E6961"/>
+  <text x="760" y="642" text-anchor="middle" font-size="8.5" fill="#424242">v1</text>
+  <circle cx="840" cy="620" r="7" fill="#0B5E50" stroke="#FFFFFF" stroke-width="2"/>
+  <text x="840" y="642" text-anchor="middle" font-size="8.5" font-weight="650" fill="#063D3B">v2 ← reader pins here</text>
+  <circle cx="940" cy="620" r="5" fill="#B98900"/>
+  <text x="940" y="642" text-anchor="middle" font-size="8.5" fill="#424242">v3 (new)</text>
+  <circle cx="1040" cy="620" r="5" fill="#B98900"/>
+  <text x="1040" y="642" text-anchor="middle" font-size="8.5" fill="#424242">v4 (new)</text>
+
+  <rect x="700" y="596" width="280" height="20" rx="4" fill="#0B5E50" fill-opacity="0.12"/>
+  <text x="840" y="610" text-anchor="middle" font-size="8.5" fill="#0B5E50">query's consistent view (v0–v2 only)</text>
+
+  <line x1="840" y1="627" x2="840" y2="670" stroke="#0B5E50" stroke-width="1.5" stroke-dasharray="3 2"/>
+  <text x="626" y="676" font-size="9.5" fill="#424242">v3 and v4 commit concurrently — the in-flight query never sees them.</text>
+  <text x="626" y="694" font-size="9.5" fill="#424242">This is also the basis for time travel: any client can replay the log up to</text>
+  <text x="626" y="710" font-size="9.5" fill="#424242">an older commit ID to reconstruct that exact earlier table state.</text>
+
+  <!-- legend -->
+  <rect x="40" y="742" width="1122" height="120" rx="10" fill="#F7F7F5" stroke="#E1DFDD"/>
+  <text x="60" y="766" font-size="11" letter-spacing="1" fill="#8A8886">LEGEND &amp; GROUNDING</text>
+
+  <rect x="60" y="778" width="16" height="16" rx="3" fill="#FFFFFF" stroke="#0E6961" stroke-width="1.5"/>
+  <text x="84" y="791" font-size="9.5" fill="#424242">JSON commit — one file per version, add/remove/metaData/protocol/commitInfo/txn actions</text>
+
+  <rect x="60" y="800" width="16" height="16" rx="3" fill="url(#ckptGrad)"/>
+  <text x="84" y="813" font-size="9.5" fill="#424242">Parquet checkpoint — compacted log snapshot, written every 10 commits by default, best-effort</text>
+
+  <rect x="480" y="778" width="16" height="16" rx="3" fill="#0B5E50"/>
+  <text x="504" y="791" font-size="9.5" fill="#424242">Winning commit / consistent read range</text>
+
+  <rect x="480" y="800" width="16" height="16" rx="3" fill="none" stroke="#B3261E" stroke-width="1.5"/>
+  <text x="504" y="813" font-size="9.5" fill="#424242">Losing writer — retries with next commit number, never blocks</text>
+
+  <text x="60" y="836" font-size="9" fill="#797775">Grounded in: source p3411-armbrust-pdf (Delta Lake: High-Performance ACID Table Storage over Cloud Object Stores, VLDB 2020) via</text>
+  <text x="60" y="850" font-size="9" fill="#797775">content/sources/delta-lake-storage-internals.json claims — log-as-source-of-truth, commit action types, optimistic concurrency / atomic</text>
+  <text x="60" y="864" font-size="9" fill="#797775">rename, snapshot isolation, checkpoint compaction — and content/lessons/delta-tables-expert.json, "The transaction log is the table."</text>
+</svg>

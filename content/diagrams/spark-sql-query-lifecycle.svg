@@ -1,0 +1,157 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 826" font-family="Segoe UI, -apple-system, sans-serif">
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Grounded in Spark SQL / notebook claims (spark-sql-fabric.json): %%sql cell magic runs
+       against the shared notebook Spark context (claims re: %%pyspark/%%spark/%%sql/%%sparkr,
+       pinned default lakehouse -> Hive metastore resolution). Grounded in Native Execution
+       Engine claims (spark-native-execution-engine.json): Gluten intercepts optimized physical
+       plan -> Substrait -> Velox vectorized C++ execution; automatic per-operator fallback to
+       JVM; AQE/cost-based rewrites/column pruning/predicate pushdown preserved; NEE accelerates
+       Delta reads incl. Z-order/Liquid Clustering; ~4x TPC-DS / up to 6x end-to-end benchmark.
+       Catalyst parse/analyze/optimize and logical->physical planning + AQE are added as
+       well-established Apache Spark facts (model knowledge), not sourced from the two claim
+       files above. -->
+  <defs>
+    <linearGradient id="sparkGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8C2D04"/>
+      <stop offset="1" stop-color="#E8590C"/>
+    </linearGradient>
+    <linearGradient id="catalystGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5A3E00"/>
+      <stop offset="1" stop-color="#B8860B"/>
+    </linearGradient>
+    <linearGradient id="execGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <linearGradient id="lakeGrad2" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#08386E"/>
+      <stop offset="1" stop-color="#1C6FC9"/>
+    </linearGradient>
+    <marker id="arrO" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8C2D04"/>
+    </marker>
+    <marker id="arrGold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8A6100"/>
+    </marker>
+    <marker id="arrTeal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0B5E50"/>
+    </marker>
+    <marker id="arrBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#08386E"/>
+    </marker>
+    <marker id="arrGray2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#8A8886"/>
+    </marker>
+  </defs>
+
+  <rect width="1180" height="826" fill="#FFFFFF"/>
+
+  <text x="40" y="42" font-size="22" font-weight="650" fill="#3D2200">Lifecycle of a Spark SQL Query in a Fabric Notebook</text>
+  <text x="40" y="64" font-size="12" fill="#616161">%%sql / spark.sql() → Catalyst parse &amp; optimize → physical plan + AQE → native or JVM execution → Delta on OneLake</text>
+
+  <!-- STAGE 1: ENTRY -->
+  <text x="40" y="96" font-size="11" letter-spacing="1.5" fill="#8A8886">1 · QUERY ENTRY — SAME SPARK SESSION AS OTHER CELLS</text>
+  <rect x="40" y="106" width="1100" height="90" rx="10" fill="url(#sparkGrad)"/>
+  <text x="64" y="132" font-size="13" font-weight="600" fill="#FFFFFF">A %%sql cell (or spark.sql("...") in a PySpark/Scala cell) submits SQL text to the notebook's Spark context</text>
+  <text x="64" y="152" font-size="10.5" fill="#FFE3CC">Shares the same running Spark session, cluster, and attached lakehouse as %%pyspark / %%spark / %%sparkr cells — not a separate SQL engine</text>
+  <text x="64" y="169" font-size="10.5" fill="#FFE3CC">Unqualified table names resolve against the Hive metastore of the notebook's pinned default lakehouse (cross-workspace lakehouse ⇒ resolution fails)</text>
+  <rect x="900" y="120" width="216" height="62" rx="6" fill="#FFFFFF" fill-opacity="0.16"/>
+  <text x="1008" y="140" text-anchor="middle" font-size="10.5" font-weight="600" fill="#FFFFFF">4 cell languages, 1 session</text>
+  <text x="1008" y="156" text-anchor="middle" font-size="9.5" fill="#FFE3CC">%%pyspark · %%spark · %%sql</text>
+  <text x="1008" y="170" text-anchor="middle" font-size="9.5" fill="#FFE3CC">%%sparkr</text>
+
+  <line x1="590" y1="196" x2="590" y2="216" stroke="#8C2D04" stroke-width="1.8" marker-end="url(#arrO)"/>
+
+  <!-- STAGE 2: CATALYST -->
+  <text x="40" y="234" font-size="11" letter-spacing="1.5" fill="#8A8886">2 · CATALYST — PARSE, ANALYZE, OPTIMIZE (APACHE SPARK CORE)</text>
+  <rect x="40" y="244" width="1100" height="130" rx="10" fill="url(#catalystGrad)"/>
+  <text x="64" y="270" font-size="13" font-weight="600" fill="#FFFFFF">Catalyst optimizer turns SQL text into an optimized logical plan</text>
+
+  <g>
+    <rect x="64" y="282" width="240" height="78" rx="7" fill="#FFFFFF" fill-opacity="0.14"/>
+    <text x="184" y="303" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Parse</text>
+    <text x="184" y="320" text-anchor="middle" font-size="9.5" fill="#F3E3B8">SQL text → unresolved</text>
+    <text x="184" y="334" text-anchor="middle" font-size="9.5" fill="#F3E3B8">logical plan (AST)</text>
+    <text x="184" y="350" text-anchor="middle" font-size="9.5" fill="#F3E3B8">Syntax + basic checks</text>
+
+    <rect x="324" y="282" width="240" height="78" rx="7" fill="#FFFFFF" fill-opacity="0.14"/>
+    <text x="444" y="303" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Analyze</text>
+    <text x="444" y="320" text-anchor="middle" font-size="9.5" fill="#F3E3B8">Resolve table/column refs</text>
+    <text x="444" y="334" text-anchor="middle" font-size="9.5" fill="#F3E3B8">against the pinned</text>
+    <text x="444" y="350" text-anchor="middle" font-size="9.5" fill="#F3E3B8">lakehouse's Hive metastore</text>
+
+    <rect x="584" y="282" width="260" height="78" rx="7" fill="#FFFFFF" fill-opacity="0.14"/>
+    <text x="714" y="303" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Logical optimization</text>
+    <text x="714" y="320" text-anchor="middle" font-size="9.5" fill="#F3E3B8">Predicate pushdown ·</text>
+    <text x="714" y="334" text-anchor="middle" font-size="9.5" fill="#F3E3B8">column pruning ·</text>
+    <text x="714" y="350" text-anchor="middle" font-size="9.5" fill="#F3E3B8">cost-based rewrites</text>
+
+    <rect x="864" y="282" width="252" height="78" rx="7" fill="#FFFFFF" fill-opacity="0.14"/>
+    <text x="990" y="303" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Optimized logical plan</text>
+    <text x="990" y="320" text-anchor="middle" font-size="9.5" fill="#F3E3B8">Engine-agnostic tree,</text>
+    <text x="990" y="334" text-anchor="middle" font-size="9.5" fill="#F3E3B8">handed to the physical</text>
+    <text x="990" y="350" text-anchor="middle" font-size="9.5" fill="#F3E3B8">planner next</text>
+  </g>
+  <g stroke="#8A6100" stroke-width="1.6" marker-end="url(#arrGold)">
+    <line x1="304" y1="321" x2="322" y2="321"/>
+    <line x1="564" y1="321" x2="582" y2="321"/>
+    <line x1="844" y1="321" x2="862" y2="321"/>
+  </g>
+
+  <line x1="590" y1="374" x2="590" y2="394" stroke="#5A3E00" stroke-width="1.8" marker-end="url(#arrGold)"/>
+
+  <!-- STAGE 3: PHYSICAL PLAN + AQE -->
+  <text x="40" y="412" font-size="11" letter-spacing="1.5" fill="#8A8886">3 · PHYSICAL PLANNING — SELECTED STRATEGY + ADAPTIVE QUERY EXECUTION (AQE)</text>
+  <rect x="40" y="422" width="1100" height="100" rx="10" fill="#F3F2F1" stroke="#C8C6C4"/>
+  <rect x="64" y="438" width="330" height="68" rx="7" fill="#FFFFFF" stroke="#B8860B"/>
+  <text x="229" y="459" text-anchor="middle" font-size="11" font-weight="600" fill="#3D2200">Physical plan chosen</text>
+  <text x="229" y="476" text-anchor="middle" font-size="9.5" fill="#424242">Join strategy, shuffle partitions,</text>
+  <text x="229" y="490" text-anchor="middle" font-size="9.5" fill="#424242">exchange placement — an RDD-executable DAG</text>
+
+  <rect x="414" y="438" width="330" height="68" rx="7" fill="#FFFFFF" stroke="#B8860B"/>
+  <text x="579" y="459" text-anchor="middle" font-size="11" font-weight="600" fill="#3D2200">AQE re-plans at runtime</text>
+  <text x="579" y="476" text-anchor="middle" font-size="9.5" fill="#424242">Coalesces shuffle partitions, switches join</text>
+  <text x="579" y="490" text-anchor="middle" font-size="9.5" fill="#424242">strategy, handles skew — using actual stage stats</text>
+
+  <rect x="764" y="438" width="352" height="68" rx="7" fill="#EAF7F2" stroke="#0B5E50"/>
+  <text x="940" y="459" text-anchor="middle" font-size="11" font-weight="600" fill="#063D3B">Preserved regardless of execution path</text>
+  <text x="940" y="476" text-anchor="middle" font-size="9.5" fill="#3F6259">AQE, cost-based rewrites, column pruning, and</text>
+  <text x="940" y="490" text-anchor="middle" font-size="9.5" fill="#3F6259">predicate pushdown still apply under NEE offload</text>
+
+  <line x1="590" y1="522" x2="590" y2="542" stroke="#5A3E00" stroke-width="1.8" marker-end="url(#arrGold)"/>
+
+  <!-- STAGE 4: EXECUTION -->
+  <text x="40" y="560" font-size="11" letter-spacing="1.5" fill="#8A8886">4 · EXECUTION ON EXECUTORS — NATIVE (NEE) PATH OR JVM FALLBACK, PER OPERATOR</text>
+  <rect x="40" y="570" width="1100" height="118" rx="10" fill="url(#execGrad)"/>
+
+  <rect x="64" y="586" width="500" height="88" rx="8" fill="#FFFFFF" fill-opacity="0.14"/>
+  <text x="314" y="606" text-anchor="middle" font-size="12" font-weight="600" fill="#FFFFFF">Native Execution Engine (Gluten + Velox) — supported operators</text>
+  <text x="314" y="623" text-anchor="middle" font-size="9.5" fill="#CFF3E9">Gluten converts the physical plan segment into a Substrait plan;</text>
+  <text x="314" y="637" text-anchor="middle" font-size="9.5" fill="#CFF3E9">Velox runs it as vectorized, SIMD, columnar C++ in place of JVM ops</text>
+  <text x="314" y="654" text-anchor="middle" font-size="9.5" fill="#CFF3E9">Also accelerates Delta reads on Z-ordered / Liquid-Clustered tables</text>
+  <text x="314" y="668" text-anchor="middle" font-size="9.5" fill="#CFF3E9">~4x on 1TB TPC-DS · up to 6x end-to-end · no extra Spark cost</text>
+
+  <rect x="584" y="586" width="230" height="88" rx="8" fill="#FFFFFF" fill-opacity="0.14"/>
+  <text x="699" y="606" text-anchor="middle" font-size="12" font-weight="600" fill="#FFFFFF">JVM fallback</text>
+  <text x="699" y="624" text-anchor="middle" font-size="9.5" fill="#CFF3E9">Unsupported operator,</text>
+  <text x="699" y="638" text-anchor="middle" font-size="9.5" fill="#CFF3E9">expression, type, or feature</text>
+  <text x="699" y="652" text-anchor="middle" font-size="9.5" fill="#CFF3E9">falls back automatically —</text>
+  <text x="699" y="666" text-anchor="middle" font-size="9.5" fill="#CFF3E9">per operator, job still succeeds</text>
+
+  <rect x="834" y="586" width="282" height="88" rx="8" fill="#FFFFFF" fill-opacity="0.14"/>
+  <text x="975" y="606" text-anchor="middle" font-size="12" font-weight="600" fill="#FFFFFF">Verify what ran natively</text>
+  <text x="975" y="624" text-anchor="middle" font-size="9.5" fill="#CFF3E9">Spark UI / df.explain() suffixes:</text>
+  <text x="975" y="638" text-anchor="middle" font-size="9.5" fill="#CFF3E9">*Transformer, *NativeFileScan,</text>
+  <text x="975" y="652" text-anchor="middle" font-size="9.5" fill="#CFF3E9">*VeloxColumnarToRowExec; or the</text>
+  <text x="975" y="666" text-anchor="middle" font-size="9.5" fill="#CFF3E9">Gluten tab (green=native, blue=JVM)</text>
+
+  <line x1="590" y1="688" x2="590" y2="712" stroke="#0B5E50" stroke-width="1.8" marker-end="url(#arrTeal)"/>
+
+  <!-- STAGE 5: ONELAKE -->
+  <text x="40" y="730" font-size="11" letter-spacing="1.5" fill="#8A8886">5 · DELTA TABLE READ / WRITE ON ONELAKE</text>
+  <rect x="40" y="740" width="1100" height="60" rx="9" fill="url(#lakeGrad2)"/>
+  <text x="64" y="763" font-size="12" font-weight="600" fill="#FFFFFF">Delta Parquet tables on OneLake — same physical files whether read via Spark SQL, PySpark, T-SQL, or Direct Lake</text>
+  <text x="64" y="782" font-size="9.5" fill="#CFE1FA">Reads benefit from NEE's parallel Delta snapshot loading; writes commit ACID Delta log entries any Fabric engine can read next</text>
+
+  <text x="1152" y="812" text-anchor="end" font-size="9" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Catalyst/AQE stages reflect standard Apache Spark architecture (model knowledge), not vendor-sourced.</text>
+</svg>
