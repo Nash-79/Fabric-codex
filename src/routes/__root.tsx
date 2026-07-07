@@ -177,7 +177,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#faf9f8" },
       { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#323232" },
+      { name: "application-name", content: "Fabric Atlas" },
+      { name: "apple-mobile-web-app-title", content: "Fabric Atlas" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "mobile-web-app-capable", content: "yes" },
     ],
+
 
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
