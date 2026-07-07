@@ -177,7 +177,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       },
       { name: "theme-color", media: "(prefers-color-scheme: light)", content: "#faf9f8" },
       { name: "theme-color", media: "(prefers-color-scheme: dark)", content: "#323232" },
+      { name: "application-name", content: "Fabric Atlas" },
+      { name: "apple-mobile-web-app-title", content: "Fabric Atlas" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
+      { name: "mobile-web-app-capable", content: "yes" },
     ],
+
 
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -190,7 +196,12 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         rel: "stylesheet",
         href: appCss,
       },
+      { rel: "icon", type: "image/png", sizes: "192x192", href: "/icon-192.png" },
+      { rel: "icon", type: "image/png", sizes: "512x512", href: "/icon-512.png" },
+      { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
+      { rel: "manifest", href: "/manifest.webmanifest" },
     ],
+
   }),
   shellComponent: RootShell,
   component: RootComponent,
