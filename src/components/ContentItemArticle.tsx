@@ -100,6 +100,11 @@ export function ContentItemArticle({
       ` <sup id="cite-${n}"><a href="#src-${n}" class="cite">[S${n}]</a></sup>`,
   );
 
+  // Figure index counter — assigned in document order as ReactMarkdown renders
+  // each <img>. Gives every diagram a stable `id="figure-N"` matching the
+  // TOC sidebar entries.
+  const figCounter = { n: 0 };
+
   return (
     <div className="article-body prose dark:prose-invert prose-lg lg:prose-xl mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-h2:mt-16 prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-2xl prose-h3:mt-10 prose-h3:text-xl prose-p:leading-relaxed prose-a:text-teal-600 dark:prose-a:text-teal-300 prose-strong:text-foreground prose-li:marker:text-teal-500 dark:prose-li:marker:text-teal-400">
       <ReactMarkdown
@@ -169,7 +174,15 @@ export function ContentItemArticle({
                 .pop() ?? "";
             const caption = captionByFile.get(base) || alt;
             const resolvedSrc = srcByFile.get(base) ?? (src as string);
-            return <DiagramLightbox src={resolvedSrc} alt={alt ?? ""} caption={caption} />;
+            figCounter.n += 1;
+            return (
+              <DiagramLightbox
+                src={resolvedSrc}
+                alt={alt ?? ""}
+                caption={caption}
+                figureIndex={figCounter.n}
+              />
+            );
           },
         }}
       >
@@ -178,3 +191,4 @@ export function ContentItemArticle({
     </div>
   );
 }
+
