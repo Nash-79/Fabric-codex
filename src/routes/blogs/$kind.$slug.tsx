@@ -221,6 +221,9 @@ function ContentItemPage() {
           </aside>
         </div>
       </div>
+      {showResume && savedProgress && (
+        <ResumeReadingPill pct={savedProgress.pct} scrollY={savedProgress.scrollY} />
+      )}
     </div>
   );
 }
