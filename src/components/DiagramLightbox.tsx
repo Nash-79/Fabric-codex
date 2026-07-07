@@ -307,29 +307,27 @@ function Toolbar({
 }
 
 
-function ToolbarButton({
-  onClick,
-  label,
-  children,
-}: {
-  onClick: () => void;
-  label: string;
-  children: React.ReactNode;
-}) {
+const ToolbarButton = forwardRef<
+  HTMLButtonElement,
+  { onClick: () => void; label: string; pressed?: boolean; children: React.ReactNode }
+>(function ToolbarButton({ onClick, label, pressed, children }, ref) {
   return (
     <Button
+      ref={ref}
       type="button"
       variant="ghost"
       size="icon"
       onClick={onClick}
       aria-label={label}
+      aria-pressed={pressed}
       title={label}
       className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground"
     >
       {children}
     </Button>
   );
-}
+});
+
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function KeyboardBridge({ onFullscreen, utils }: { onFullscreen: () => void; utils: any }) {
