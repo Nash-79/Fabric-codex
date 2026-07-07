@@ -77,6 +77,7 @@ export function DiagramLightbox({
       <figure
         id={figId}
         className="not-prose article-figure group my-10 scroll-mt-24"
+        style={{ contentVisibility: "auto", containIntrinsicSize: `600px auto` } as React.CSSProperties}
         aria-labelledby={captionText && captionId ? captionId : undefined}
         aria-label={!captionText ? alt || "Diagram" : undefined}
       >
