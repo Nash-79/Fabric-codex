@@ -186,7 +186,7 @@ function LightboxViewer({
         wheel={{ step: 0.15 }}
         pinch={{ step: 5, disabled: false }}
         panning={{ velocityDisabled: false, allowLeftClickPan: true }}
-        velocityAnimation={{ sensitivity: 1, animationTime: 300 }}
+        velocityAnimation={{ sensitivityTouch: 1, animationTime: 300 }}
       >
         {(utils) => (
           <>
