@@ -90,22 +90,31 @@ export function DiagramLightbox({
           className="relative block w-full cursor-zoom-in overflow-hidden rounded-2xl border border-border bg-card shadow-lg shadow-black/20 transition-colors hover:border-teal-500/50 focus-visible:border-teal-500/60"
           style={{ aspectRatio: `${aspectRatio}` }}
         >
-          <img
-            ref={imgRef}
-            src={src}
-            alt={alt}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-contain"
-            onLoad={(e) => {
-              const t = e.currentTarget;
-              if (t.naturalWidth && t.naturalHeight) {
-                const r = t.naturalWidth / t.naturalHeight;
-                ratioCache.set(src, r);
-                if (Math.abs(r - aspectRatio) > 0.01) setRatio(r);
-              }
-            }}
-          />
+          {inView ? (
+            <img
+              ref={imgRef}
+              src={src}
+              alt={alt}
+              loading="lazy"
+              decoding="async"
+              // @ts-expect-error non-standard React prop, valid HTML attribute
+              fetchpriority="low"
+              className="h-full w-full object-contain"
+              onLoad={(e) => {
+                const t = e.currentTarget;
+                if (t.naturalWidth && t.naturalHeight) {
+                  const r = t.naturalWidth / t.naturalHeight;
+                  ratioCache.set(src, r);
+                  if (Math.abs(r - aspectRatio) > 0.01) setRatio(r);
+                }
+              }}
+            />
+          ) : (
+            <div
+              aria-hidden
+              className="h-full w-full animate-pulse bg-muted/50"
+            />
+          )}
           <span
             aria-hidden
             className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-background/85 px-2.5 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur-sm"
