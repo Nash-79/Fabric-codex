@@ -49,6 +49,7 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
       const [item] = await Promise.all([
         context.queryClient.ensureQueryData(contentItemQO(params.kind, params.slug)),
         context.queryClient.ensureQueryData(topicsQO),
+        context.queryClient.ensureQueryData(siblingsQO(params.kind, params.slug)),
       ]);
       return item;
     } catch {
