@@ -2,10 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import {
-  Bot,
   Database,
   PanelRightOpen,
-  Sparkles,
   Trash2,
   Plus,
   PanelLeftClose,
@@ -14,17 +12,25 @@ import {
   MessageSquare,
   History,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdvisorComposer } from "@/components/AdvisorComposer";
 import { AdvisorMessage } from "@/components/AdvisorMessage";
 import { AdvisorPromptCard } from "@/components/AdvisorPromptCard";
 import { AdvisorSourcePanel } from "@/components/AdvisorSourcePanel";
+import { FabricMark } from "@/components/FabricMark";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ADVISOR_MODELS, DEFAULT_ADVISOR_MODEL, ADVISOR_MODEL_IDS } from "@/lib/advisor-models";
 import { advisorMessageText } from "@/lib/advisor-message";
 import type { AdvisorMessage as AdvisorMessageType } from "@/lib/advisor-types";
-import { isToday, isYesterday, subDays } from "date-fns";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import { Shimmer } from "@/components/ai-elements/shimmer";
+import { subDays } from "date-fns";
 import { toast } from "sonner";
+
 
 type AdvisorSearch = { prompt?: string };
 
