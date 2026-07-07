@@ -180,8 +180,15 @@ function ContentItemPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
-      <div className="sticky top-14 z-20 h-1 bg-muted">
-        <div className="h-full bg-teal-300" style={{ width: `${progress}%` }} />
+      <div
+        className="no-print sticky top-14 z-20 h-1 bg-muted"
+        role="presentation"
+        aria-hidden="true"
+      >
+        <div
+          className="h-full origin-left bg-teal-300 will-change-transform"
+          style={{ transform: `scaleX(${progress / 100})`, width: "100%" }}
+        />
       </div>
       <div className="mx-auto flex max-w-[1600px] gap-6 px-6 py-10">
         <div className="hidden lg:block">
