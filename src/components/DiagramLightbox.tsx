@@ -18,14 +18,17 @@ export function DiagramLightbox({
   src,
   alt,
   caption,
+  figureIndex,
 }: {
   src: string;
   alt: string;
   caption?: string;
+  figureIndex?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [ratio, setRatio] = useState<number | null>(() => ratioCache.get(src) ?? null);
   const imgRef = useRef<HTMLImageElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     const img = imgRef.current;
@@ -37,14 +40,25 @@ export function DiagramLightbox({
   }, [src, ratio]);
 
   const aspectRatio = ratio ?? 16 / 9;
+  const figId = figureIndex ? `figure-${figureIndex}` : undefined;
+  const captionId = figId ? `${figId}-caption` : undefined;
+  const describeId = figId ? `${figId}-desc` : undefined;
+  const captionText = caption || alt;
 
   return (
     <>
-      <figure className="not-prose article-figure group my-10">
+      <figure
+        id={figId}
+        className="not-prose article-figure group my-10 scroll-mt-24"
+        aria-labelledby={captionText && captionId ? captionId : undefined}
+        aria-label={!captionText ? alt || "Diagram" : undefined}
+      >
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setOpen(true)}
-          aria-label={`Open diagram: ${alt || caption || "diagram"} in zoom view`}
+          aria-label={`Open diagram${figureIndex ? ` ${figureIndex}` : ""}: ${alt || caption || "diagram"} in zoom view`}
+          aria-haspopup="dialog"
           className="relative block w-full cursor-zoom-in overflow-hidden rounded-2xl border border-border bg-card shadow-lg shadow-black/20 transition-colors hover:border-teal-500/50 focus-visible:border-teal-500/60"
           style={{ aspectRatio: `${aspectRatio}` }}
         >
@@ -64,15 +78,21 @@ export function DiagramLightbox({
               }
             }}
           />
-          <span className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-background/85 px-2.5 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur-sm">
-            <ZoomIn className="h-3.5 w-3.5" aria-hidden />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-background/85 px-2.5 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur-sm"
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Click to zoom · pan</span>
             <span className="sm:hidden">Tap to zoom</span>
           </span>
         </button>
-        {caption && (
-          <figcaption className="mx-auto mt-3 max-w-[62ch] text-center text-sm italic leading-relaxed text-muted-foreground">
-            {caption}
+        {captionText && (
+          <figcaption
+            id={captionId}
+            className="mx-auto mt-3 max-w-[62ch] text-center text-sm italic leading-relaxed text-muted-foreground"
+          >
+            {captionText}
           </figcaption>
         )}
       </figure>
@@ -80,15 +100,31 @@ export function DiagramLightbox({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
           className="h-[94vh] max-h-[94vh] w-[98vw] max-w-[98vw] gap-0 overflow-hidden border-border/60 bg-background p-0 sm:rounded-2xl"
-          onOpenAutoFocus={(e) => e.preventDefault()}
+          aria-describedby={describeId}
         >
-          <DialogTitle className="sr-only">{alt || caption || "Diagram"}</DialogTitle>
-          <LightboxViewer src={src} alt={alt} caption={caption} onClose={() => setOpen(false)} />
+          <DialogTitle className="sr-only">
+            {figureIndex ? `Figure ${figureIndex}: ` : "Diagram: "}
+            {alt || caption || "Diagram"}
+          </DialogTitle>
+          {describeId && (
+            <p id={describeId} className="sr-only">
+              {captionText || alt || "Diagram"}. Use plus and minus to zoom, zero to reset, F for
+              full-screen, and Escape to close. On touch devices, pinch to zoom and drag to pan.
+            </p>
+          )}
+          <LightboxViewer
+            src={src}
+            alt={alt}
+            caption={caption}
+            figureIndex={figureIndex}
+            onClose={() => setOpen(false)}
+          />
         </DialogContent>
       </Dialog>
     </>
   );
 }
+
 
 function LightboxViewer({
   src,
