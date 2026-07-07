@@ -257,6 +257,12 @@ function ContentItemPage() {
               diagramMeta={diagramMeta}
               citations={citations}
             />
+
+            <ArticleSiblingsNav
+              kind={kind as "article" | "design" | "lesson"}
+              prev={siblings.prev}
+              next={siblings.next}
+            />
           </article>
 
           <aside className={`print-sources ${citationsOpen ? "block" : "hidden print:block"}`}>
@@ -266,6 +272,7 @@ function ContentItemPage() {
           </aside>
         </div>
       </div>
+      <MobileTocDrawer headings={headings} />
       {showResume && savedProgress && (
         <ResumeReadingPill pct={savedProgress.pct} scrollY={savedProgress.scrollY} />
       )}
