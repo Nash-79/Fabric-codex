@@ -1,12 +1,14 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { getContentItem, listTopics } from "@/lib/atlas.functions";
+import { getContentItem, getContentSiblings, listTopics } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { PrintButton } from "@/components/PrintButton";
 import { ContentItemArticle } from "@/components/ContentItemArticle";
 import { ContentHero } from "@/components/ContentHero";
 import { ContentTocSidebar, useTocHeadings } from "@/components/ContentTocSidebar";
+import { MobileTocDrawer } from "@/components/MobileTocDrawer";
+import { ArticleSiblingsNav } from "@/components/ArticleSiblingsNav";
 import { CitationSidebar } from "@/components/CitationSidebar";
 import { TopicTree } from "@/components/TopicTree";
 import { FavoriteButton } from "@/components/FavoriteButton";
@@ -21,6 +23,13 @@ const contentItemQO = (kind: string, slug: string) =>
     queryKey: ["content-item", kind, slug],
     queryFn: () =>
       getContentItem({ data: { kind: kind as "article" | "design" | "lesson", slug } }),
+  });
+
+const siblingsQO = (kind: string, slug: string) =>
+  queryOptions({
+    queryKey: ["content-siblings", kind, slug],
+    queryFn: () =>
+      getContentSiblings({ data: { kind: kind as "article" | "design" | "lesson", slug } }),
   });
 
 const topicsQO = queryOptions({ queryKey: ["topics"], queryFn: () => listTopics() });
