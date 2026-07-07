@@ -1,7 +1,14 @@
-import { useState, useRef, useEffect } from "react";
-import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
-import { ZoomIn } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  TransformWrapper,
+  TransformComponent,
+  useControls,
+  useTransformEffect,
+} from "react-zoom-pan-pinch";
+import { Maximize2, Minimize2, Move, Plus, Minus, RotateCcw, X, ZoomIn } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 // Module-level cache of natural aspect ratios so revisiting an image doesn't
 // re-run the reflow after decode.
@@ -29,17 +36,16 @@ export function DiagramLightbox({
     }
   }, [src, ratio]);
 
-  // Reserve vertical space up-front so streaming images don't push text down
-  // as the user scrolls — kills the "shaking" jitter on mobile.
   const aspectRatio = ratio ?? 16 / 9;
 
   return (
     <>
-      <figure className="not-prose article-figure group my-8">
+      <figure className="not-prose article-figure group my-10">
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="relative block w-full cursor-zoom-in overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-black/20 transition-colors hover:border-teal-500/40"
+          aria-label={`Open diagram: ${alt || caption || "diagram"} in zoom view`}
+          className="relative block w-full cursor-zoom-in overflow-hidden rounded-2xl border border-border bg-card shadow-lg shadow-black/20 transition-colors hover:border-teal-500/50 focus-visible:border-teal-500/60"
           style={{ aspectRatio: `${aspectRatio}` }}
         >
           <img
@@ -58,27 +64,93 @@ export function DiagramLightbox({
               }
             }}
           />
-          <span className="pointer-events-none absolute right-3 top-3 flex items-center gap-1 rounded-md border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-            <ZoomIn className="h-3.5 w-3.5" /> Click to zoom
+          <span className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-background/85 px-2.5 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur-sm">
+            <ZoomIn className="h-3.5 w-3.5" aria-hidden />
+            <span className="hidden sm:inline">Click to zoom · pan</span>
+            <span className="sm:hidden">Tap to zoom</span>
           </span>
         </button>
         {caption && (
-          <figcaption className="mt-3 text-center text-sm italic text-muted-foreground">
+          <figcaption className="mx-auto mt-3 max-w-[62ch] text-center text-sm italic leading-relaxed text-muted-foreground">
             {caption}
           </figcaption>
         )}
       </figure>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="h-[92vh] max-h-[92vh] w-[96vw] max-w-[96vw] gap-0 overflow-hidden bg-background p-0 sm:rounded-xl">
+        <DialogContent
+          className="h-[94vh] max-h-[94vh] w-[98vw] max-w-[98vw] gap-0 overflow-hidden border-border/60 bg-background p-0 sm:rounded-2xl"
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
           <DialogTitle className="sr-only">{alt || caption || "Diagram"}</DialogTitle>
-          <TransformWrapper
-            minScale={0.5}
-            maxScale={6}
-            initialScale={1}
-            centerOnInit
-            doubleClick={{ mode: "toggle" }}
-          >
+          <LightboxViewer src={src} alt={alt} caption={caption} onClose={() => setOpen(false)} />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+function LightboxViewer({
+  src,
+  alt,
+  caption,
+  onClose,
+}: {
+  src: string;
+  alt: string;
+  caption?: string;
+  onClose: () => void;
+}) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => document.removeEventListener("fullscreenchange", onFsChange);
+  }, []);
+
+  const toggleFullscreen = useCallback(async () => {
+    const el = rootRef.current;
+    if (!el) return;
+    try {
+      if (!document.fullscreenElement) {
+        await el.requestFullscreen?.();
+      } else {
+        await document.exitFullscreen?.();
+      }
+    } catch {
+      // Fallback: use CSS "cover" via isFullscreen state.
+      setIsFullscreen((v) => !v);
+    }
+  }, []);
+
+  return (
+    <div
+      ref={rootRef}
+      className={cn(
+        "relative flex h-full w-full flex-col bg-background",
+        isFullscreen && !document.fullscreenElement && "fixed inset-0 z-[100]",
+      )}
+    >
+      <TransformWrapper
+        minScale={0.4}
+        maxScale={8}
+        initialScale={1}
+        centerOnInit
+        limitToBounds={false}
+        doubleClick={{ mode: "zoomIn", step: 0.7 }}
+        wheel={{ step: 0.15 }}
+        pinch={{ step: 5 }}
+      >
+        {(utils) => (
+          <>
+            <Toolbar
+              onFullscreen={toggleFullscreen}
+              isFullscreen={isFullscreen || !!document.fullscreenElement}
+              onClose={onClose}
+            />
+            <KeyboardBridge onFullscreen={toggleFullscreen} utils={utils} />
             <TransformComponent
               wrapperStyle={{ width: "100%", height: "100%" }}
               contentStyle={{
@@ -89,16 +161,131 @@ export function DiagramLightbox({
                 justifyContent: "center",
               }}
             >
-              <img src={src} alt={alt} className="max-h-[85vh] w-auto" />
+              <img
+                src={src}
+                alt={alt}
+                className="max-h-[88vh] w-auto select-none"
+                draggable={false}
+              />
             </TransformComponent>
-          </TransformWrapper>
-          {caption && (
-            <div className="absolute bottom-0 left-0 right-0 bg-background/90 px-6 py-3 text-center text-sm text-muted-foreground">
-              {caption}
+            {caption && (
+              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-4">
+                <div className="pointer-events-auto max-w-3xl rounded-xl border border-border/60 bg-background/90 px-4 py-2.5 text-center text-sm text-muted-foreground shadow-md backdrop-blur">
+                  <span className="mr-1.5 text-xs font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-300">
+                    Diagram
+                  </span>
+                  {caption}
+                </div>
+              </div>
+            )}
+            <div
+              className="pointer-events-none absolute bottom-4 left-4 hidden items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur sm:flex"
+              aria-hidden
+            >
+              <Move className="h-3.5 w-3.5" /> Drag to pan · scroll to zoom · double-click to zoom
+              in · <kbd className="rounded bg-muted px-1">0</kbd> reset ·{" "}
+              <kbd className="rounded bg-muted px-1">F</kbd> full-screen
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+          </>
+        )}
+      </TransformWrapper>
+    </div>
   );
+}
+
+function Toolbar({
+  onFullscreen,
+  isFullscreen,
+  onClose,
+}: {
+  onFullscreen: () => void;
+  isFullscreen: boolean;
+  onClose: () => void;
+}) {
+  const { zoomIn, zoomOut, resetTransform } = useControls();
+  const [pct, setPct] = useState(100);
+  useTransformEffect(({ state }) => {
+    setPct(Math.round(state.scale * 100));
+  });
+
+  return (
+    <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full border border-border/60 bg-background/85 p-1 shadow-md backdrop-blur">
+      <span
+        className="min-w-[3.25rem] px-2 text-center font-mono text-xs tabular-nums text-muted-foreground"
+        aria-live="polite"
+        aria-label={`Zoom ${pct}%`}
+      >
+        {pct}%
+      </span>
+      <ToolbarButton onClick={() => zoomOut()} label="Zoom out">
+        <Minus className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton onClick={() => zoomIn()} label="Zoom in">
+        <Plus className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton onClick={() => resetTransform()} label="Reset zoom">
+        <RotateCcw className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton
+        onClick={onFullscreen}
+        label={isFullscreen ? "Exit full-screen" : "Enter full-screen"}
+      >
+        {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+      </ToolbarButton>
+      <span className="mx-0.5 h-6 w-px bg-border" aria-hidden />
+      <ToolbarButton onClick={onClose} label="Close diagram">
+        <X className="h-4 w-4" />
+      </ToolbarButton>
+    </div>
+  );
+}
+
+function ToolbarButton({
+  onClick,
+  label,
+  children,
+}: {
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground"
+    >
+      {children}
+    </Button>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function KeyboardBridge({ onFullscreen, utils }: { onFullscreen: () => void; utils: any }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && ["INPUT", "TEXTAREA"].includes(e.target.tagName))
+        return;
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        utils.zoomIn?.();
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        utils.zoomOut?.();
+      } else if (e.key === "0") {
+        e.preventDefault();
+        utils.resetTransform?.();
+      } else if (e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        onFullscreen();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onFullscreen, utils]);
+  return null;
 }
