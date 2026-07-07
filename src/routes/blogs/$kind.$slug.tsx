@@ -189,7 +189,15 @@ function ContentItemPage() {
                   itemType={kind as "article" | "design" | "lesson"}
                   itemKey={item.slug}
                 />
-                <PrintButton />
+                <PrintButton
+                  getMeta={() => ({
+                    title: item.title,
+                    summary: item.summary,
+                    tags: item.tags,
+                    updatedAt: item.updated_at,
+                    citations,
+                  })}
+                />
               </div>
             </div>
             <ContentHero
