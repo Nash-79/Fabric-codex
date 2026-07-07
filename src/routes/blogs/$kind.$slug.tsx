@@ -79,8 +79,10 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
 
 function ContentItemPage() {
   const { kind, slug } = Route.useParams();
+  const navigate = useNavigate();
   const { data } = useSuspenseQuery(contentItemQO(kind, slug));
   const { data: topics } = useSuspenseQuery(topicsQO);
+  const { data: siblings } = useSuspenseQuery(siblingsQO(kind, slug));
   const { item, citations } = data;
   const capabilities = (data as any).capabilities ?? [];
   const diagramMeta = (data as any).diagrams ?? [];
@@ -94,6 +96,32 @@ function ContentItemPage() {
   const savedProgress = useReadingProgress(kind, slug);
   const showResume =
     savedProgress != null && savedProgress.pct > 10 && savedProgress.pct < 95;
+
+  // [ / ] jumps to previous / next sibling article.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) return;
+      if (t?.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "[" && siblings.prev) {
+        e.preventDefault();
+        navigate({
+          to: "/blogs/$kind/$slug",
+          params: { kind, slug: siblings.prev.slug },
+        });
+      } else if (e.key === "]" && siblings.next) {
+        e.preventDefault();
+        navigate({
+          to: "/blogs/$kind/$slug",
+          params: { kind, slug: siblings.next.slug },
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [siblings, kind, navigate]);
+
 
   useEffect(() => {
     function updateProgress() {
