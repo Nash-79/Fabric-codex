@@ -2,10 +2,8 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import {
-  Bot,
   Database,
   PanelRightOpen,
-  Sparkles,
   Trash2,
   Plus,
   PanelLeftClose,
@@ -14,17 +12,25 @@ import {
   MessageSquare,
   History,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AdvisorComposer } from "@/components/AdvisorComposer";
 import { AdvisorMessage } from "@/components/AdvisorMessage";
 import { AdvisorPromptCard } from "@/components/AdvisorPromptCard";
 import { AdvisorSourcePanel } from "@/components/AdvisorSourcePanel";
+import { FabricMark } from "@/components/FabricMark";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ADVISOR_MODELS, DEFAULT_ADVISOR_MODEL, ADVISOR_MODEL_IDS } from "@/lib/advisor-models";
 import { advisorMessageText } from "@/lib/advisor-message";
 import type { AdvisorMessage as AdvisorMessageType } from "@/lib/advisor-types";
-import { isToday, isYesterday, subDays } from "date-fns";
+import {
+  Conversation,
+  ConversationContent,
+  ConversationScrollButton,
+} from "@/components/ai-elements/conversation";
+import { Shimmer } from "@/components/ai-elements/shimmer";
+import { subDays } from "date-fns";
 import { toast } from "sonner";
+
 
 type AdvisorSearch = { prompt?: string };
 
@@ -139,11 +145,6 @@ function loadThreads(): ChatThread[] {
   }
 }
 
-function prefersReducedMotion() {
-  return (
-    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
 
 function groupThreads(threads: ChatThread[]): [string, ChatThread[]][] {
   const groups: Record<string, ChatThread[]> = {
@@ -207,8 +208,6 @@ function AdvisorPage() {
     return window.innerWidth >= 1024;
   });
 
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
     if (search.prompt) setInput(search.prompt);
   }, [search.prompt]);
@@ -268,14 +267,6 @@ function AdvisorPage() {
     });
   }, [messages, activeThreadId, modelId]);
 
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({
-      top: el.scrollHeight,
-      behavior: prefersReducedMotion() ? "auto" : "smooth",
-    });
-  }, [messages, status]);
 
   const isLoading = status === "submitted" || status === "streaming";
   const activeModel = ADVISOR_MODELS.find((m) => m.id === modelId) ?? ADVISOR_MODELS[1];
@@ -283,12 +274,6 @@ function AdvisorPage() {
   const lastAssistantId = lastAssistant?.id;
   const sourceMetadata = lastAssistant?.metadata;
   const sources = sourceMetadata?.sources ?? [];
-  const statusText =
-    status === "submitted"
-      ? "Retrieving sources"
-      : status === "streaming"
-        ? "Writing answer"
-        : "Ready";
 
   // Autohide sources panel when empty, or auto-open on desktop when sources become available
   useEffect(() => {
@@ -494,177 +479,167 @@ function AdvisorPage() {
             className="flex min-w-0 flex-col h-full max-h-full overflow-hidden bg-background"
             aria-label="Fabric Atlas Advisor chat"
           >
-            <div className="border-b border-border bg-background shrink-0">
-              <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 px-4 py-4 md:px-6">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-primary">
-                      <Bot className="h-4 w-4" />
-                      Grounded Advisor
-                    </div>
-                    <h1 className="mt-1 text-2xl font-semibold tracking-tight md:text-3xl">
-                      Ask Fabric Atlas
-                    </h1>
-                    <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-                      Answers retrieve verified claims plus related blogs, designs, lessons,
-                      sources, topics, capabilities, and diagrams. Unsupported facts are refused
-                      rather than guessed.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {!sidebarOpen && (
-                      <button
-                        type="button"
-                        onClick={() => setSidebarOpen(true)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
-                        aria-label="Open chat history"
-                      >
-                        <PanelLeftOpen className="h-3.5 w-3.5" />
-                        History
-                      </button>
-                    )}
-                    <label className="flex items-center gap-2 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground">Model</span>
-                      <select
-                        value={modelId}
-                        onChange={(event) => setModelId(event.target.value)}
-                        className="max-w-56 bg-transparent text-xs text-foreground focus:outline-none"
-                        aria-label="Advisor model"
-                      >
-                        {ADVISOR_MODELS.map((model) => (
-                          <option key={model.id} value={model.id} className="bg-card">
-                            {model.label} — {model.hint}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground">
-                      <span
-                        className={`inline-block h-2 w-2 rounded-full ${TIER_DOT[activeModel.tier]}`}
-                        aria-hidden="true"
-                      />
-                      {TIER_LABEL[activeModel.tier]}
-                    </span>
+            {/* Compact toolbar */}
+            <div className="border-b border-border bg-background/95 backdrop-blur shrink-0">
+              <div className="mx-auto grid w-full max-w-5xl grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 md:px-6">
+                <div className="flex min-w-0 items-center gap-2">
+                  {!sidebarOpen && (
                     <button
                       type="button"
-                      onClick={() => setSourcesOpen((open) => !open)}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
-                      aria-label="Toggle sources panel"
+                      onClick={() => setSidebarOpen(true)}
+                      className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
+                      aria-label="Open chat history"
+                      title="Chat history"
                     >
-                      <PanelRightOpen className="h-3.5 w-3.5" />
-                      Sources
+                      <PanelLeftOpen className="h-4 w-4" />
                     </button>
-                    {messages.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={clearConversation}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-2.5 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
-                        aria-label="Clear conversation"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Clear
-                      </button>
-                    )}
-                  </div>
+                  )}
+                  <FabricMark className="h-5 w-5 shrink-0" />
+                  <h1 className="truncate text-sm font-semibold tracking-tight text-foreground md:text-base">
+                    Ask Fabric Atlas
+                  </h1>
+                  {isLoading && (
+                    <Shimmer className="hidden text-xs text-muted-foreground sm:inline-block">
+                      {status === "submitted" ? "Retrieving sources…" : "Writing answer…"}
+                    </Shimmer>
+                  )}
                 </div>
-
-                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1">
-                    <Database className="h-3.5 w-3.5" />
-                    RAG over all Atlas content
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1">
-                    <Sparkles className="h-3.5 w-3.5" />
-                    {statusText}
-                    {isLoading && (
-                      <span className="ml-1 inline-flex gap-0.5 motion-reduce:hidden">
-                        <span className="h-1 w-1 animate-pulse rounded-full bg-primary" />
-                        <span className="h-1 w-1 animate-pulse rounded-full bg-primary [animation-delay:120ms]" />
-                        <span className="h-1 w-1 animate-pulse rounded-full bg-primary [animation-delay:240ms]" />
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <label className="hidden items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-xs text-muted-foreground sm:flex">
+                    <span className="sr-only">Model</span>
+                    <span
+                      className={`inline-block h-1.5 w-1.5 rounded-full ${TIER_DOT[activeModel.tier]}`}
+                      aria-hidden="true"
+                      title={TIER_LABEL[activeModel.tier]}
+                    />
+                    <select
+                      value={modelId}
+                      onChange={(event) => setModelId(event.target.value)}
+                      className="max-w-44 bg-transparent text-xs text-foreground focus:outline-none"
+                      aria-label="Advisor model"
+                    >
+                      {ADVISOR_MODELS.map((model) => (
+                        <option key={model.id} value={model.id} className="bg-card">
+                          {model.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSourcesOpen((open) => !open)}
+                    className={`inline-flex h-8 items-center gap-1 rounded-md border px-2 text-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                      sources.length > 0
+                        ? "border-border bg-card text-foreground hover:bg-accent"
+                        : "border-border/50 bg-card/50 text-muted-foreground/60"
+                    }`}
+                    aria-label="Toggle sources panel"
+                    disabled={sources.length === 0}
+                    title={sources.length === 0 ? "No sources yet" : "Toggle sources"}
+                  >
+                    <PanelRightOpen className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Sources</span>
+                    {sources.length > 0 && (
+                      <span className="ml-0.5 rounded-full bg-primary/15 px-1.5 text-[10px] font-medium text-primary">
+                        {sources.length}
                       </span>
                     )}
-                  </span>
-                  {sourceMetadata?.contextSummary && (
-                    <span className="rounded-md border border-border bg-card px-2 py-1">
-                      {sourceMetadata.contextSummary}
-                    </span>
+                  </button>
+                  {messages.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={clearConversation}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring transition-colors"
+                      aria-label="Clear conversation"
+                      title="Clear conversation"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   )}
                 </div>
               </div>
             </div>
 
-            <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto bg-background">
-              <div className="mx-auto w-full max-w-5xl px-4 py-6 md:px-6">
-                {messages.length === 0 ? (
-                  <div className="py-8">
-                    <div className="max-w-2xl">
-                      <h2 className="text-lg font-semibold text-foreground">
-                        Start with a grounded question
-                      </h2>
-                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                        Ask for a plain-language explanation, a design review, a comparison, or
-                        code. The Advisor will cite approved claims and show the retrieved context.
-                      </p>
-                    </div>
-                    <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                      {STARTERS.map((starter) => (
-                        <AdvisorPromptCard
-                          key={starter.title}
-                          title={starter.title}
-                          prompt={starter.prompt}
-                          onSelect={(prompt) => {
-                            setInput(prompt);
-                            submit(prompt);
-                          }}
-                        />
-                      ))}
-                    </div>
+            {/* Transcript */}
+            {messages.length === 0 ? (
+              <div className="flex-1 overflow-y-auto">
+                <div className="mx-auto flex w-full max-w-3xl flex-col items-center gap-6 px-4 py-10 md:px-6 md:py-16">
+                  <div className="flex flex-col items-center gap-3 text-center">
+                    <FabricMark className="h-12 w-12" />
+                    <h2 className="text-xl font-semibold tracking-tight text-foreground md:text-2xl">
+                      Ask Fabric Atlas
+                    </h2>
+                    <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
+                      Grounded answers over verified claims, blogs, designs, lessons, sources,
+                      topics, capabilities, and diagrams. Unsupported facts are refused rather
+                      than guessed.
+                    </p>
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground">
+                      <Database className="h-3 w-3" />
+                      RAG over all Atlas content
+                    </span>
                   </div>
-                ) : (
-                  <div className="space-y-5">
-                    {messages.map((message) => (
-                      <AdvisorMessage
-                        key={message.id}
-                        message={message}
-                        isLastAssistant={message.id === lastAssistantId}
-                        onRetry={() => regenerate()}
+                  <div className="grid w-full gap-3 sm:grid-cols-2">
+                    {STARTERS.map((starter) => (
+                      <AdvisorPromptCard
+                        key={starter.title}
+                        title={starter.title}
+                        prompt={starter.prompt}
+                        onSelect={(prompt) => {
+                          setInput(prompt);
+                          submit(prompt);
+                        }}
                       />
                     ))}
-                    {status === "submitted" && (
-                      <div className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground">
-                        Retrieving verified claims, blogs, designs, lessons, sources, topics, and
-                        diagrams...
-                      </div>
-                    )}
-                    {error && (
-                      <div
-                        className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-700 dark:text-rose-200"
-                        role="alert"
-                      >
-                        {error.message}
-                      </div>
-                    )}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
+            ) : (
+              <Conversation className="min-h-0 flex-1">
+                <ConversationContent className="mx-auto w-full max-w-3xl gap-6 px-4 py-6 md:px-6">
+                  {messages.map((message) => (
+                    <AdvisorMessage
+                      key={message.id}
+                      message={message}
+                      isLastAssistant={message.id === lastAssistantId}
+                      onRetry={() => regenerate()}
+                    />
+                  ))}
+                  {status === "submitted" && (
+                    <Shimmer className="text-sm text-muted-foreground">
+                      Retrieving verified claims and related Atlas content…
+                    </Shimmer>
+                  )}
+                  {error && (
+                    <div
+                      className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-700 dark:text-rose-200"
+                      role="alert"
+                    >
+                      {error.message}
+                    </div>
+                  )}
+                </ConversationContent>
+                <ConversationScrollButton />
+              </Conversation>
+            )}
 
-            <div className="border-t border-border bg-background/95 p-4 shrink-0">
-              <div className="mx-auto w-full max-w-5xl">
+            {/* Composer */}
+            <div className="shrink-0 border-t border-border/60 bg-background/95 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-3 md:px-6">
+              <div className="mx-auto w-full max-w-3xl">
                 <AdvisorComposer
                   value={input}
                   onChange={setInput}
                   onSubmit={() => submit()}
                   onStop={stop}
-                  busy={isLoading}
+                  status={status}
                   disabled={isLoading}
+                  focusKey={activeThreadId ?? "new"}
                 />
-                {lastAssistant && (
-                  <div className="mt-2 text-xs text-muted-foreground">
-                    Last answer: {advisorMessageText(lastAssistant).length.toLocaleString()} chars.
-                    Use Copy or Retry on the response toolbar.
-                  </div>
+                {sourceMetadata?.contextSummary && lastAssistant && (
+                  <p className="mt-1.5 truncate text-[11px] text-muted-foreground">
+                    {sourceMetadata.contextSummary} ·{" "}
+                    {advisorMessageText(lastAssistant).length.toLocaleString()} chars
+                  </p>
                 )}
               </div>
             </div>
@@ -678,6 +653,7 @@ function AdvisorPage() {
           />
         </main>
       </div>
+
     </div>
   );
 }
