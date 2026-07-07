@@ -213,8 +213,6 @@ function AdvisorPage() {
     return window.innerWidth >= 1024;
   });
 
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
     if (search.prompt) setInput(search.prompt);
   }, [search.prompt]);
@@ -274,14 +272,6 @@ function AdvisorPage() {
     });
   }, [messages, activeThreadId, modelId]);
 
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    el.scrollTo({
-      top: el.scrollHeight,
-      behavior: prefersReducedMotion() ? "auto" : "smooth",
-    });
-  }, [messages, status]);
 
   const isLoading = status === "submitted" || status === "streaming";
   const activeModel = ADVISOR_MODELS.find((m) => m.id === modelId) ?? ADVISOR_MODELS[1];
