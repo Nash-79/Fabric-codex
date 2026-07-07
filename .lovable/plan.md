@@ -1,57 +1,48 @@
-## Goal
-A branded launch experience when Fabric Atlas is opened from a home-screen shortcut on iPhone/iPad, Android, and desktop PWA installs — matching the teal icon rather than showing a blank white flash.
+## Goals
 
-## What's already in place
-- `public/manifest.webmanifest` with `background_color: #0d5c5c`, `theme_color: #0d5c5c`, and 192/512 icons. On **Android and desktop Chrome/Edge/Safari-macOS**, this is exactly what the OS uses to compose the splash (teal background + centered maskable icon + app name). No extra work needed for those platforms.
-- Apple touch icon + `apple-mobile-web-app-capable` meta are set. iOS *does* respect those for the home-screen icon, but for the launch/splash screen it uses `apple-touch-startup-image` with strict per-device media queries. Without them, iOS shows a plain white screen for ~1s.
+Ship four follow-ups to the article reading experience:
 
-## What to build (iOS launch images)
+1. Cross-article prev/next navigation between sibling articles
+2. Floating mobile TOC drawer
+3. Reading-progress + PDF export polish
+4. Lazy-render diagrams (viewport / lightbox only)
 
-Generate one branded 2732×2732 source artwork — teal gradient background (#0d5c5c → #14b8a6) with the centered "F" ribbon mark (same as `apple-touch-icon.png`) and "Fabric Atlas" wordmark below.
+## 1. Cross-article prev/next
 
-From that source, produce the standard Apple launch-image PNG set (portrait + landscape) covering all currently supported iPhone/iPad classes. Each PNG is a center-cropped/padded version on the teal background so the icon stays visually centered at every aspect ratio:
+- Add a small server function `getArticleSiblings({ slug })` in `src/lib/articles.functions.ts` (or nearest existing article module) that reads `content_items` where `kind='article'` and `status='published'`, ordered by `published_at desc, slug` (stable), and returns `{ prev: {slug,title} | null, next: {slug,title} | null }` for the given slug. Publishable anon client; no auth.
+- Wire into the article route loader via `queryClient.ensureQueryData` alongside the existing article query so it prefetches during navigation.
+- Render a `<nav aria-label="Article navigation">` footer block at the end of the article with two `<Link>` cards (Prev / Next) using `to="/articles/$slug"` + `params`. Keyboard: extend the existing `J`/`K` shortcut set with `[` / `]` for prev/next article (only when not typing in an input).
+- Skip if the article isn't in the published list (fallback: both null → hide block).
 
-Portrait (device px × device px, 1x device-pixel-ratio applied):
-- 2048×2732 (12.9" iPad Pro)
-- 1668×2388 (11" iPad Pro / iPad Air)
-- 1640×2360 (iPad Air 10.9")
-- 1620×2160 (iPad 10.2")
-- 1536×2048 (iPad Mini / iPad 9.7")
-- 1284×2778 (iPhone 14/15 Pro Max, 12/13 Pro Max)
-- 1170×2532 (iPhone 14/15, 12/13)
-- 1125×2436 (iPhone X/XS/11 Pro)
-- 1242×2688 (iPhone XS Max/11 Pro Max)
-- 828×1792 (iPhone XR/11)
-- 750×1334 (iPhone 8/SE 2nd/3rd gen)
+## 2. Floating mobile TOC drawer
 
-Landscape: matching set (dimensions swapped).
+- Reuse the existing `ContentTocSidebar` data (headings + figures) inside a shadcn `Sheet` (right side).
+- Add a floating action button (bottom-right, `md:hidden`) labeled "Contents" with a list icon; opens the sheet. Includes safe-area padding for iOS.
+- Sheet content: same section list + figure list, active-section highlight, click closes the sheet and scroll-jumps to the target.
+- Desktop unchanged (sidebar still visible from `md:` up).
 
-Files go under `public/splash/` as `apple-splash-{width}x{height}.png`.
+## 3. Reading-progress + PDF export tweaks
 
-## Wiring
+- Reading progress: pin the existing bar under the header on mobile (currently can get clipped); use `position: sticky` with `top: var(--header-height)`, and animate width with `transition-transform` + `translateX` for smoother 60fps updates. Add `aria-hidden`.
+- PDF export: in the print stylesheet (`src/styles.css` `@media print`), hide the TOC sidebar, FAB, prev/next nav, and lightbox controls; force diagrams to render inline at full width; add `@page { margin: 18mm 14mm; }` and a first-page header with article title + source URL via a `.print-header` block rendered only when printing.
 
-Add `apple-touch-startup-image` link tags in `src/routes/__root.tsx` `head().links`, one per size, each with the exact iOS media query (`screen and (device-width: Xpx) and (device-height: Ypx) and (-webkit-device-pixel-ratio: N) and (orientation: portrait|landscape)`). These are the standard queries Apple published — I'll include the full generated set inline.
+## 4. Lazy-render diagrams
 
-Also add `<meta name="apple-mobile-web-app-status-bar-style" content="default">` if it isn't already — it is (`black-translucent`), so leave it. Ensure `apple-mobile-web-app-capable` is `yes` (already set).
+- Wrap each figure in a `LazyDiagram` component that renders a lightweight placeholder (title + skeleton at the image's known aspect ratio, `content-visibility: auto` + `contain-intrinsic-size`) until either:
+  - the figure enters the viewport (`IntersectionObserver`, rootMargin `400px 0px`), or
+  - the user opens the lightbox for that figure (force-load).
+- Once loaded, decode the image with `decoding="async"` `loading="lazy"` `fetchpriority="low"` and keep it mounted.
+- Preserve existing `id="figure-N"` anchors on the placeholder so TOC jumps still work before load.
+- No changes to the lightbox internals; it continues to receive the same src.
 
-## Android / desktop
+## Technical notes
 
-No file changes. Verify current `manifest.webmanifest` already has:
-- `background_color: "#0d5c5c"` — used as splash background
-- `theme_color: "#0d5c5c"` — used as system UI color
-- 512×512 icon with `purpose: "any maskable"` — used for the centered launch mark
-
-All three are present, so Android's splash will render branded automatically.
-
-## Generation approach
-
-Programmatically in one shell step: PIL script reads `public/apple-touch-icon.png` (the existing 180×180 mark), draws each canvas with the teal radial gradient, pastes the icon centered at ~28% of the shorter side, adds the wordmark, and writes all ~22 PNGs to `public/splash/`.
-
-## Files touched
-- `public/splash/apple-splash-*.png` (new, ~22 files)
-- `src/routes/__root.tsx` (add the `apple-touch-startup-image` link entries)
+- New files: `src/lib/articles.functions.ts` (or extend existing article fns), `src/components/MobileTocDrawer.tsx`, `src/components/LazyDiagram.tsx`, `src/components/ArticleSiblingsNav.tsx`.
+- Edits: article route loader + page component, `ContentItemArticle.tsx` (use `LazyDiagram`), `ContentTocSidebar.tsx` (extract shared list into subcomponent for reuse in drawer), `src/styles.css` (print + progress bar).
+- No schema changes. No new secrets. Type-check with `tsgo` after each file group.
 
 ## Out of scope
-- Web-share long screenshots / OG image regeneration
-- Native Capacitor splash configuration (would require the mobile shell path, not asked)
-- Dark-mode splash variants (iOS 17+ supports `(prefers-color-scheme: dark)` media queries but the brand color already reads well in both — can add later if requested)
+
+- Cross-topic navigation (only same published list order).
+- Re-designing the article layout beyond adding the FAB.
+- Changing which diagrams are commissioned or their storage.
