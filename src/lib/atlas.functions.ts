@@ -151,6 +151,35 @@ export const getContentItem = createServerFn({ method: "GET" })
     throw new Error(`${data.kind} not found`);
   });
 
+export const getContentSiblings = createServerFn({ method: "GET" })
+  .validator((d: { kind: "article" | "design" | "lesson"; slug: string }) => d)
+  .handler(async ({ data }) => {
+    try {
+      const sb = await admin();
+      const { data: rows, error } = await sb
+        .from("content_items")
+        .select("kind,slug,title")
+        .eq("kind", data.kind)
+        .eq("status", "published")
+        .eq("active", true)
+        .order("updated_at", { ascending: false })
+        .order("slug", { ascending: true });
+      if (error) throw new Error(error.message);
+      const list = rows ?? [];
+      const idx = list.findIndex((r) => r.slug === data.slug);
+      if (idx === -1) return { prev: null, next: null };
+      return {
+        prev: idx > 0 ? { slug: list[idx - 1].slug, title: list[idx - 1].title } : null,
+        next:
+          idx < list.length - 1
+            ? { slug: list[idx + 1].slug, title: list[idx + 1].title }
+            : null,
+      };
+    } catch {
+      return { prev: null, next: null };
+    }
+  });
+
 export const listContentItems = createServerFn({ method: "GET" })
   .validator(
     (d: { kind?: "article" | "design" | "lesson"; topicSlug?: string; capabilityId?: string }) => d,

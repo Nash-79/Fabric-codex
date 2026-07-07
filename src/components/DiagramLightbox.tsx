@@ -27,6 +27,7 @@ export function DiagramLightbox({
 }) {
   const [open, setOpen] = useState(false);
   const [ratio, setRatio] = useState<number | null>(() => ratioCache.get(src) ?? null);
+  const [inView, setInView] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -39,6 +40,32 @@ export function DiagramLightbox({
     }
   }, [src, ratio]);
 
+  // Defer mounting the <img> until the placeholder scrolls near the viewport,
+  // or the user opens the lightbox for this figure.
+  useEffect(() => {
+    if (inView) return;
+    const el = triggerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setInView(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setInView(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [inView]);
+
+  useEffect(() => {
+    if (open) setInView(true);
+  }, [open]);
+
   const aspectRatio = ratio ?? 16 / 9;
   const figId = figureIndex ? `figure-${figureIndex}` : undefined;
   const captionId = figId ? `${figId}-caption` : undefined;
@@ -50,6 +77,7 @@ export function DiagramLightbox({
       <figure
         id={figId}
         className="not-prose article-figure group my-10 scroll-mt-24"
+        style={{ contentVisibility: "auto", containIntrinsicSize: `600px auto` } as React.CSSProperties}
         aria-labelledby={captionText && captionId ? captionId : undefined}
         aria-label={!captionText ? alt || "Diagram" : undefined}
       >
@@ -62,22 +90,31 @@ export function DiagramLightbox({
           className="relative block w-full cursor-zoom-in overflow-hidden rounded-2xl border border-border bg-card shadow-lg shadow-black/20 transition-colors hover:border-teal-500/50 focus-visible:border-teal-500/60"
           style={{ aspectRatio: `${aspectRatio}` }}
         >
-          <img
-            ref={imgRef}
-            src={src}
-            alt={alt}
-            loading="lazy"
-            decoding="async"
-            className="h-full w-full object-contain"
-            onLoad={(e) => {
-              const t = e.currentTarget;
-              if (t.naturalWidth && t.naturalHeight) {
-                const r = t.naturalWidth / t.naturalHeight;
-                ratioCache.set(src, r);
-                if (Math.abs(r - aspectRatio) > 0.01) setRatio(r);
-              }
-            }}
-          />
+          {inView ? (
+            <img
+              ref={imgRef}
+              src={src}
+              alt={alt}
+              loading="lazy"
+              decoding="async"
+              // @ts-expect-error non-standard React prop, valid HTML attribute
+              fetchpriority="low"
+              className="h-full w-full object-contain"
+              onLoad={(e) => {
+                const t = e.currentTarget;
+                if (t.naturalWidth && t.naturalHeight) {
+                  const r = t.naturalWidth / t.naturalHeight;
+                  ratioCache.set(src, r);
+                  if (Math.abs(r - aspectRatio) > 0.01) setRatio(r);
+                }
+              }}
+            />
+          ) : (
+            <div
+              aria-hidden
+              className="h-full w-full animate-pulse bg-muted/50"
+            />
+          )}
           <span
             aria-hidden
             className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-background/85 px-2.5 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur-sm"

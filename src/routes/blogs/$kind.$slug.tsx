@@ -1,12 +1,14 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { getContentItem, listTopics } from "@/lib/atlas.functions";
+import { getContentItem, getContentSiblings, listTopics } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { PrintButton } from "@/components/PrintButton";
 import { ContentItemArticle } from "@/components/ContentItemArticle";
 import { ContentHero } from "@/components/ContentHero";
 import { ContentTocSidebar, useTocHeadings } from "@/components/ContentTocSidebar";
+import { MobileTocDrawer } from "@/components/MobileTocDrawer";
+import { ArticleSiblingsNav } from "@/components/ArticleSiblingsNav";
 import { CitationSidebar } from "@/components/CitationSidebar";
 import { TopicTree } from "@/components/TopicTree";
 import { FavoriteButton } from "@/components/FavoriteButton";
@@ -21,6 +23,13 @@ const contentItemQO = (kind: string, slug: string) =>
     queryKey: ["content-item", kind, slug],
     queryFn: () =>
       getContentItem({ data: { kind: kind as "article" | "design" | "lesson", slug } }),
+  });
+
+const siblingsQO = (kind: string, slug: string) =>
+  queryOptions({
+    queryKey: ["content-siblings", kind, slug],
+    queryFn: () =>
+      getContentSiblings({ data: { kind: kind as "article" | "design" | "lesson", slug } }),
   });
 
 const topicsQO = queryOptions({ queryKey: ["topics"], queryFn: () => listTopics() });
@@ -40,6 +49,7 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
       const [item] = await Promise.all([
         context.queryClient.ensureQueryData(contentItemQO(params.kind, params.slug)),
         context.queryClient.ensureQueryData(topicsQO),
+        context.queryClient.ensureQueryData(siblingsQO(params.kind, params.slug)),
       ]);
       return item;
     } catch {
@@ -69,8 +79,10 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
 
 function ContentItemPage() {
   const { kind, slug } = Route.useParams();
+  const navigate = useNavigate();
   const { data } = useSuspenseQuery(contentItemQO(kind, slug));
   const { data: topics } = useSuspenseQuery(topicsQO);
+  const { data: siblings } = useSuspenseQuery(siblingsQO(kind, slug));
   const { item, citations } = data;
   const capabilities = (data as any).capabilities ?? [];
   const diagramMeta = (data as any).diagrams ?? [];
@@ -84,6 +96,32 @@ function ContentItemPage() {
   const savedProgress = useReadingProgress(kind, slug);
   const showResume =
     savedProgress != null && savedProgress.pct > 10 && savedProgress.pct < 95;
+
+  // [ / ] jumps to previous / next sibling article.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) return;
+      if (t?.isContentEditable) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === "[" && siblings.prev) {
+        e.preventDefault();
+        navigate({
+          to: "/blogs/$kind/$slug",
+          params: { kind, slug: siblings.prev.slug },
+        });
+      } else if (e.key === "]" && siblings.next) {
+        e.preventDefault();
+        navigate({
+          to: "/blogs/$kind/$slug",
+          params: { kind, slug: siblings.next.slug },
+        });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [siblings, kind, navigate]);
+
 
   useEffect(() => {
     function updateProgress() {
@@ -142,8 +180,15 @@ function ContentItemPage() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
-      <div className="sticky top-14 z-20 h-1 bg-muted">
-        <div className="h-full bg-teal-300" style={{ width: `${progress}%` }} />
+      <div
+        className="no-print sticky top-14 z-20 h-1 bg-muted"
+        role="presentation"
+        aria-hidden="true"
+      >
+        <div
+          className="h-full origin-left bg-teal-300 will-change-transform"
+          style={{ transform: `scaleX(${progress / 100})`, width: "100%" }}
+        />
       </div>
       <div className="mx-auto flex max-w-[1600px] gap-6 px-6 py-10">
         <div className="hidden lg:block">
@@ -212,6 +257,12 @@ function ContentItemPage() {
               diagramMeta={diagramMeta}
               citations={citations}
             />
+
+            <ArticleSiblingsNav
+              kind={kind as "article" | "design" | "lesson"}
+              prev={siblings.prev}
+              next={siblings.next}
+            />
           </article>
 
           <aside className={`print-sources ${citationsOpen ? "block" : "hidden print:block"}`}>
@@ -221,6 +272,7 @@ function ContentItemPage() {
           </aside>
         </div>
       </div>
+      <MobileTocDrawer headings={headings} />
       {showResume && savedProgress && (
         <ResumeReadingPill pct={savedProgress.pct} scrollY={savedProgress.scrollY} />
       )}
