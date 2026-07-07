@@ -11,6 +11,8 @@ import { CitationSidebar } from "@/components/CitationSidebar";
 import { TopicTree } from "@/components/TopicTree";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { BookOpen } from "lucide-react";
+import { useReadingProgress } from "@/lib/use-reading-progress";
+import { ResumeReadingPill } from "@/components/ResumeReadingPill";
 
 const KINDS = new Set(["article", "design", "lesson"]);
 
