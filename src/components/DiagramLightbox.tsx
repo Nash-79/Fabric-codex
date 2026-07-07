@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import { ZoomIn } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+
+// Module-level cache of natural aspect ratios so revisiting an image doesn't
+// re-run the reflow after decode.
+const ratioCache = new Map<string, number>();
 
 export function DiagramLightbox({
   src,
@@ -13,22 +17,53 @@ export function DiagramLightbox({
   caption?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [ratio, setRatio] = useState<number | null>(() => ratioCache.get(src) ?? null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (img && img.complete && img.naturalWidth && !ratio) {
+      const r = img.naturalWidth / img.naturalHeight;
+      ratioCache.set(src, r);
+      setRatio(r);
+    }
+  }, [src, ratio]);
+
+  // Reserve vertical space up-front so streaming images don't push text down
+  // as the user scrolls — kills the "shaking" jitter on mobile.
+  const aspectRatio = ratio ?? 16 / 9;
 
   return (
     <>
-      <figure className="not-prose group my-8">
+      <figure className="not-prose article-figure group my-8">
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="relative block w-full cursor-zoom-in overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-black/20 transition hover:border-teal-500/40 hover:shadow-teal-500/10"
+          className="relative block w-full cursor-zoom-in overflow-hidden rounded-xl border border-border bg-card shadow-lg shadow-black/20 transition-colors hover:border-teal-500/40"
+          style={{ aspectRatio: `${aspectRatio}` }}
         >
-          <img src={src} alt={alt} className="w-full" loading="lazy" />
-          <span className="absolute right-3 top-3 flex items-center gap-1 rounded-md border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground opacity-0 transition group-hover:opacity-100">
+          <img
+            ref={imgRef}
+            src={src}
+            alt={alt}
+            loading="lazy"
+            decoding="async"
+            className="h-full w-full object-contain"
+            onLoad={(e) => {
+              const t = e.currentTarget;
+              if (t.naturalWidth && t.naturalHeight) {
+                const r = t.naturalWidth / t.naturalHeight;
+                ratioCache.set(src, r);
+                if (Math.abs(r - aspectRatio) > 0.01) setRatio(r);
+              }
+            }}
+          />
+          <span className="pointer-events-none absolute right-3 top-3 flex items-center gap-1 rounded-md border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
             <ZoomIn className="h-3.5 w-3.5" /> Click to zoom
           </span>
         </button>
         {caption && (
-          <figcaption className="mt-3 text-center text-sm text-muted-foreground">
+          <figcaption className="mt-3 text-center text-sm italic text-muted-foreground">
             {caption}
           </figcaption>
         )}

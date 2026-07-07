@@ -11,6 +11,8 @@ import { CitationSidebar } from "@/components/CitationSidebar";
 import { TopicTree } from "@/components/TopicTree";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { BookOpen } from "lucide-react";
+import { useReadingProgress } from "@/lib/use-reading-progress";
+import { ResumeReadingPill } from "@/components/ResumeReadingPill";
 
 const KINDS = new Set(["article", "design", "lesson"]);
 
@@ -79,6 +81,9 @@ function ContentItemPage() {
   ].length;
   const [progress, setProgress] = useState(0);
   const [citationsOpen, setCitationsOpen] = useState(false);
+  const savedProgress = useReadingProgress(kind, slug);
+  const showResume =
+    savedProgress != null && savedProgress.pct > 10 && savedProgress.pct < 95;
 
   useEffect(() => {
     function updateProgress() {
@@ -184,7 +189,15 @@ function ContentItemPage() {
                   itemType={kind as "article" | "design" | "lesson"}
                   itemKey={item.slug}
                 />
-                <PrintButton />
+                <PrintButton
+                  getMeta={() => ({
+                    title: item.title,
+                    summary: item.summary,
+                    tags: item.tags,
+                    updatedAt: item.updated_at,
+                    citations,
+                  })}
+                />
               </div>
             </div>
             <ContentHero
@@ -208,6 +221,9 @@ function ContentItemPage() {
           </aside>
         </div>
       </div>
+      {showResume && savedProgress && (
+        <ResumeReadingPill pct={savedProgress.pct} scrollY={savedProgress.scrollY} />
+      )}
     </div>
   );
 }
