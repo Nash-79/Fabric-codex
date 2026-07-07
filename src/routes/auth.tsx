@@ -10,6 +10,9 @@ import { toast } from "sonner";
 import { FabricMark } from "@/components/FabricMark";
 
 export const Route = createFileRoute("/auth")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    next: typeof s.next === "string" && s.next.startsWith("/") ? s.next : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Sign in — Fabric Atlas" },
@@ -26,6 +29,8 @@ const Schema = z.object({ email: z.string().email(), password: z.string().min(8)
 
 function AuthPage() {
   const nav = useNavigate();
+  const { next } = Route.useSearch();
+  const returnTo = next && next.startsWith("/") ? next : null;
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -33,9 +38,12 @@ function AuthPage() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) nav({ to: "/topics" });
+      if (data.session) {
+        if (returnTo) window.location.href = returnTo;
+        else nav({ to: "/topics" });
+      }
     });
-  }, [nav]);
+  }, [nav, returnTo]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,7 +58,11 @@ function AuthPage() {
         const { error } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: {
+            emailRedirectTo: returnTo
+              ? window.location.origin + returnTo
+              : window.location.origin,
+          },
         });
         if (error) throw error;
         toast.success("Account created. Welcome to Fabric Atlas.");
@@ -58,7 +70,8 @@ function AuthPage() {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
-      nav({ to: "/topics" });
+      if (returnTo) window.location.href = returnTo;
+      else nav({ to: "/topics" });
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -69,7 +82,9 @@ function AuthPage() {
   async function google() {
     setLoading(true);
     const result = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin + "/topics",
+      redirect_uri: returnTo
+        ? window.location.origin + returnTo
+        : window.location.origin + "/topics",
     });
     if (result.error) {
       toast.error(result.error.message ?? "Google sign-in failed");
@@ -77,7 +92,8 @@ function AuthPage() {
       return;
     }
     if (result.redirected) return;
-    nav({ to: "/topics" });
+    if (returnTo) window.location.href = returnTo;
+    else nav({ to: "/topics" });
   }
 
   return (
