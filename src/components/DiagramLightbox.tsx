@@ -130,15 +130,18 @@ function LightboxViewer({
   src,
   alt,
   caption,
+  figureIndex,
   onClose,
 }: {
   src: string;
   alt: string;
   caption?: string;
+  figureIndex?: number;
   onClose: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const scaleRef = useRef(1);
 
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -161,12 +164,16 @@ function LightboxViewer({
     }
   }, []);
 
+  const fsActive = isFullscreen || (typeof document !== "undefined" && !!document.fullscreenElement);
+
   return (
     <div
       ref={rootRef}
       className={cn(
         "relative flex h-full w-full flex-col bg-background",
-        isFullscreen && !document.fullscreenElement && "fixed inset-0 z-[100]",
+        "[overscroll-behavior:contain] [touch-action:none]",
+        isFullscreen && typeof document !== "undefined" && !document.fullscreenElement &&
+          "fixed inset-0 z-[100]",
       )}
     >
       <TransformWrapper
@@ -177,18 +184,21 @@ function LightboxViewer({
         limitToBounds={false}
         doubleClick={{ mode: "zoomIn", step: 0.7 }}
         wheel={{ step: 0.15 }}
-        pinch={{ step: 5 }}
+        pinch={{ step: 5, disabled: false }}
+        panning={{ velocityDisabled: false, allowLeftClickPan: true }}
+        velocityAnimation={{ sensitivity: 1, animationTime: 300 }}
       >
         {(utils) => (
           <>
             <Toolbar
               onFullscreen={toggleFullscreen}
-              isFullscreen={isFullscreen || !!document.fullscreenElement}
+              isFullscreen={fsActive}
               onClose={onClose}
+              onScaleChange={(s) => (scaleRef.current = s)}
             />
             <KeyboardBridge onFullscreen={toggleFullscreen} utils={utils} />
             <TransformComponent
-              wrapperStyle={{ width: "100%", height: "100%" }}
+              wrapperStyle={{ width: "100%", height: "100%", touchAction: "none" }}
               contentStyle={{
                 width: "100%",
                 height: "100%",
@@ -205,10 +215,13 @@ function LightboxViewer({
               />
             </TransformComponent>
             {caption && (
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-4">
+              <div
+                className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-4"
+                aria-hidden
+              >
                 <div className="pointer-events-auto max-w-3xl rounded-xl border border-border/60 bg-background/90 px-4 py-2.5 text-center text-sm text-muted-foreground shadow-md backdrop-blur">
                   <span className="mr-1.5 text-xs font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-300">
-                    Diagram
+                    {figureIndex ? `Figure ${figureIndex}` : "Diagram"}
                   </span>
                   {caption}
                 </div>
@@ -216,6 +229,7 @@ function LightboxViewer({
             )}
             <div
               className="pointer-events-none absolute bottom-4 left-4 hidden items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur sm:flex"
+              role="note"
               aria-hidden
             >
               <Move className="h-3.5 w-3.5" /> Drag to pan · scroll to zoom · double-click to zoom
@@ -233,23 +247,38 @@ function Toolbar({
   onFullscreen,
   isFullscreen,
   onClose,
+  onScaleChange,
 }: {
   onFullscreen: () => void;
   isFullscreen: boolean;
   onClose: () => void;
+  onScaleChange?: (s: number) => void;
 }) {
   const { zoomIn, zoomOut, resetTransform } = useControls();
   const [pct, setPct] = useState(100);
+  const resetRef = useRef<HTMLButtonElement | null>(null);
   useTransformEffect(({ state }) => {
     setPct(Math.round(state.scale * 100));
+    onScaleChange?.(state.scale);
   });
 
+  // Land initial focus on Reset so keyboard users can immediately re-center.
+  useEffect(() => {
+    resetRef.current?.focus();
+  }, []);
+
   return (
-    <div className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full border border-border/60 bg-background/85 p-1 shadow-md backdrop-blur">
+    <div
+      role="toolbar"
+      aria-label="Diagram zoom controls"
+      aria-orientation="horizontal"
+      className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full border border-border/60 bg-background/85 p-1 shadow-md backdrop-blur"
+    >
       <span
         className="min-w-[3.25rem] px-2 text-center font-mono text-xs tabular-nums text-muted-foreground"
         aria-live="polite"
-        aria-label={`Zoom ${pct}%`}
+        aria-atomic="true"
+        aria-label={`Zoom level ${pct} percent`}
       >
         {pct}%
       </span>
@@ -259,12 +288,13 @@ function Toolbar({
       <ToolbarButton onClick={() => zoomIn()} label="Zoom in">
         <Plus className="h-4 w-4" />
       </ToolbarButton>
-      <ToolbarButton onClick={() => resetTransform()} label="Reset zoom">
+      <ToolbarButton onClick={() => resetTransform()} label="Reset zoom" ref={resetRef}>
         <RotateCcw className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton
         onClick={onFullscreen}
         label={isFullscreen ? "Exit full-screen" : "Enter full-screen"}
+        pressed={isFullscreen}
       >
         {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
       </ToolbarButton>
@@ -275,6 +305,7 @@ function Toolbar({
     </div>
   );
 }
+
 
 function ToolbarButton({
   onClick,
