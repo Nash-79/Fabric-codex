@@ -279,12 +279,6 @@ function AdvisorPage() {
   const lastAssistantId = lastAssistant?.id;
   const sourceMetadata = lastAssistant?.metadata;
   const sources = sourceMetadata?.sources ?? [];
-  const statusText =
-    status === "submitted"
-      ? "Retrieving sources"
-      : status === "streaming"
-        ? "Writing answer"
-        : "Ready";
 
   // Autohide sources panel when empty, or auto-open on desktop when sources become available
   useEffect(() => {
