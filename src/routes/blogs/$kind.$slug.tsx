@@ -81,6 +81,9 @@ function ContentItemPage() {
   ].length;
   const [progress, setProgress] = useState(0);
   const [citationsOpen, setCitationsOpen] = useState(false);
+  const savedProgress = useReadingProgress(kind, slug);
+  const showResume =
+    savedProgress != null && savedProgress.pct > 10 && savedProgress.pct < 95;
 
   useEffect(() => {
     function updateProgress() {
