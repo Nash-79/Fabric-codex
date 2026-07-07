@@ -145,11 +145,6 @@ function loadThreads(): ChatThread[] {
   }
 }
 
-function prefersReducedMotion() {
-  return (
-    typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches
-  );
-}
 
 function groupThreads(threads: ChatThread[]): [string, ChatThread[]][] {
   const groups: Record<string, ChatThread[]> = {
