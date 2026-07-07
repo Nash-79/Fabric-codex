@@ -1,56 +1,57 @@
 ## Goal
-Make it easy to move around long articles (prev/next section + diagram navigator), harden a11y on the diagram lightbox controls/captions, and make touch pinch/swipe feel native inside the lightbox.
+A branded launch experience when Fabric Atlas is opened from a home-screen shortcut on iPhone/iPad, Android, and desktop PWA installs — matching the teal icon rather than showing a blank white flash.
 
-## 1. Mini TOC with section + diagram jump (`src/components/ContentTocSidebar.tsx`)
+## What's already in place
+- `public/manifest.webmanifest` with `background_color: #0d5c5c`, `theme_color: #0d5c5c`, and 192/512 icons. On **Android and desktop Chrome/Edge/Safari-macOS**, this is exactly what the OS uses to compose the splash (teal background + centered maskable icon + app name). No extra work needed for those platforms.
+- Apple touch icon + `apple-mobile-web-app-capable` meta are set. iOS *does* respect those for the home-screen icon, but for the launch/splash screen it uses `apple-touch-startup-image` with strict per-device media queries. Without them, iOS shows a plain white screen for ~1s.
 
-Extend the existing sidebar to a "reading navigator" that lists both `##` headings and every diagram figure, and adds prev/next section arrows.
+## What to build (iOS launch images)
 
-- Extend `useTocHeadings` output to also return a **`Figure N — caption`** entry per diagram (derive by scanning `bodyMd` for image references, in document order). Each figure gets an id assigned to the `<figure>` in `DiagramLightbox` (`figure-1`, `figure-2`, …) via a small `figureIndexContext` so the sidebar anchor targets exist.
-- Entries render with an icon prefix (heading = `Hash`, figure = `Image` from lucide) and stay keyboard-focusable.
-- Sidebar header adds a "Prev section / Next section" arrow pair that scrolls to the previous/next active anchor. Buttons have `aria-label="Previous section"`/`"Next section"` and disable at bounds. Also wired to keyboard shortcuts `J` (next) and `K` (previous), gated by `!e.target instanceof HTMLInputElement`.
-- Uses `scrollIntoView({ behavior: "smooth", block: "start" })`, respecting `prefers-reduced-motion` (falls back to `auto`).
-- Active detection already exists; extend to also mark the currently-visible figure.
-- Nav is wrapped in `<nav aria-label="Article contents">`.
+Generate one branded 2732×2732 source artwork — teal gradient background (#0d5c5c → #14b8a6) with the centered "F" ribbon mark (same as `apple-touch-icon.png`) and "Fabric Atlas" wordmark below.
 
-## 2. Figure ids in the article (`src/components/ContentItemArticle.tsx`, `src/components/DiagramLightbox.tsx`)
+From that source, produce the standard Apple launch-image PNG set (portrait + landscape) covering all currently supported iPhone/iPad classes. Each PNG is a center-cropped/padded version on the teal background so the icon stays visually centered at every aspect ratio:
 
-- Introduce a simple counter context (`FigureCounterProvider`) placed in `ContentItemArticle`; each `DiagramLightbox` reads its 1-based index and applies `id={"figure-" + index}` on the wrapping `<figure>`. This gives the TOC and prev/next stable anchor targets and preserves the existing CSS `counter-increment: article-figure` numbering.
+Portrait (device px × device px, 1x device-pixel-ratio applied):
+- 2048×2732 (12.9" iPad Pro)
+- 1668×2388 (11" iPad Pro / iPad Air)
+- 1640×2360 (iPad Air 10.9")
+- 1620×2160 (iPad 10.2")
+- 1536×2048 (iPad Mini / iPad 9.7")
+- 1284×2778 (iPhone 14/15 Pro Max, 12/13 Pro Max)
+- 1170×2532 (iPhone 14/15, 12/13)
+- 1125×2436 (iPhone X/XS/11 Pro)
+- 1242×2688 (iPhone XS Max/11 Pro Max)
+- 828×1792 (iPhone XR/11)
+- 750×1334 (iPhone 8/SE 2nd/3rd gen)
 
-## 3. Accessibility for the lightbox (`src/components/DiagramLightbox.tsx`)
+Landscape: matching set (dimensions swapped).
 
-Controls:
-- Toolbar becomes `<div role="toolbar" aria-label="Diagram zoom controls" aria-orientation="horizontal">`.
-- All icon buttons already have `aria-label` — keep them; add `aria-pressed` on the fullscreen toggle to reflect state.
-- The live zoom percentage stays `aria-live="polite"` but with `aria-atomic="true"` and a hidden verbose label ("Zoom level 120 percent"). The visible "120%" text remains for sighted users.
-- On dialog open, focus lands on the "Reset zoom" button (via `onOpenAutoFocus` already implemented — point it at a ref).
-- On dialog close, focus returns to the figure trigger button (Radix handles this by default; ensure the trigger button gets the ref).
-- Keyboard shortcuts get announced via a visually-hidden helper region ("Keyboard shortcuts: plus and minus to zoom, zero to reset, F for full-screen, Escape to close").
+Files go under `public/splash/` as `apple-splash-{width}x{height}.png`.
 
-Captions & screen readers:
-- Inline `<figure>` uses `aria-labelledby` pointing at the caption `<figcaption id="fig-N-caption">` so AT reads it with the image. Fallback to `aria-label={alt}` when no caption is present.
-- Inside the lightbox, the image gets `aria-describedby` referencing a visually-hidden `<p>` that contains the full caption + alt, ensuring screen-reader access even when the visible caption bar is styled decoratively. The DialogTitle stays `sr-only` but now includes "Diagram: <alt>" for a clearer landmark.
-- The pan/scroll hint chip gets `role="note"` and `aria-hidden="true"` (redundant with the announced shortcut list).
+## Wiring
 
-## 4. Touch pinch + swipe pan (`src/components/DiagramLightbox.tsx`)
+Add `apple-touch-startup-image` link tags in `src/routes/__root.tsx` `head().links`, one per size, each with the exact iOS media query (`screen and (device-width: Xpx) and (device-height: Ypx) and (-webkit-device-pixel-ratio: N) and (orientation: portrait|landscape)`). These are the standard queries Apple published — I'll include the full generated set inline.
 
-`react-zoom-pan-pinch` already supports pinch and pan; make it feel right on mobile:
+Also add `<meta name="apple-mobile-web-app-status-bar-style" content="default">` if it isn't already — it is (`black-translucent`), so leave it. Ensure `apple-mobile-web-app-capable` is `yes` (already set).
 
-- Pass `pinch={{ step: 5, disabled: false }}` and `panning={{ velocityDisabled: false, disabled: false, allowLeftClickPan: true, allowMiddleClickPan: false, allowRightClickPan: false }}`.
-- Enable inertia/velocity for post-swipe glide (`velocityAnimation: { sensitivity: 1, animationTime: 300 }`).
-- Add double-tap to zoom in (already `doubleClick: { mode: "zoomIn", step: 0.7 }`) — mobile-friendly.
-- Set `touch-action: none` on the transform wrapper so the browser doesn't hijack pinch as page zoom.
-- Add a `data-touch-fullscreen` class that removes body scroll while the lightbox is open (already handled by Radix Dialog on desktop but reinforce with `overscroll-behavior: contain` on the lightbox root to stop the pull-to-refresh gesture eating swipes).
-- Keep pointer-event drag on desktop (mouse) and touch panning on phones — the library already routes both; the fix is just enabling the settings above and adding `touch-action`.
-- Two-finger swipe when zoomed remains pan; single-finger pan enabled whenever `scale > 1`; when `scale === 1`, a horizontal swipe closes the lightbox (mobile UX affordance). Implement via a small `onPanning` handler that, when scale ≈ 1 and horizontal delta > 80px, calls `onClose()`.
+## Android / desktop
 
-## 5. Files touched
+No file changes. Verify current `manifest.webmanifest` already has:
+- `background_color: "#0d5c5c"` — used as splash background
+- `theme_color: "#0d5c5c"` — used as system UI color
+- 512×512 icon with `purpose: "any maskable"` — used for the centered launch mark
 
-- `src/components/ContentTocSidebar.tsx` — figures in list, prev/next controls, keyboard shortcuts.
-- `src/components/ContentItemArticle.tsx` — `FigureCounterProvider` wrap; pass caption + alt through.
-- `src/components/DiagramLightbox.tsx` — figure id from context, a11y roles/labels/live regions, `aria-labelledby`, touch tuning, swipe-to-close, sr-only shortcut helper.
-- (No route file, no data-layer changes — `##` headings + figures are derived client-side from `body_md`.)
+All three are present, so Android's splash will render branded automatically.
+
+## Generation approach
+
+Programmatically in one shell step: PIL script reads `public/apple-touch-icon.png` (the existing 180×180 mark), draws each canvas with the teal radial gradient, pastes the icon centered at ~28% of the shorter side, adds the wordmark, and writes all ~22 PNGs to `public/splash/`.
+
+## Files touched
+- `public/splash/apple-splash-*.png` (new, ~22 files)
+- `src/routes/__root.tsx` (add the `apple-touch-startup-image` link entries)
 
 ## Out of scope
-- Cross-article prev/next (going from one blog to another) — the current route doesn't preload siblings and that would require a new server query. Can be a follow-up.
-- Reordering the layout / adding a floating mobile TOC drawer.
-- Changes to reading-progress or PDF export.
+- Web-share long screenshots / OG image regeneration
+- Native Capacitor splash configuration (would require the mobile shell path, not asked)
+- Dark-mode splash variants (iOS 17+ supports `(prefers-color-scheme: dark)` media queries but the brand color already reads well in both — can add later if requested)
