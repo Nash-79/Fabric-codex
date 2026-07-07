@@ -101,7 +101,7 @@ export function ContentItemArticle({
   );
 
   return (
-    <div className="prose dark:prose-invert prose-lg lg:prose-xl mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-h2:mt-16 prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-2xl prose-h3:mt-10 prose-h3:text-xl prose-p:leading-relaxed prose-a:text-teal-600 dark:prose-a:text-teal-300 prose-strong:text-foreground prose-li:marker:text-teal-500 dark:prose-li:marker:text-teal-400">
+    <div className="article-body prose dark:prose-invert prose-lg lg:prose-xl mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-h2:mt-16 prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-2xl prose-h3:mt-10 prose-h3:text-xl prose-p:leading-relaxed prose-a:text-teal-600 dark:prose-a:text-teal-300 prose-strong:text-foreground prose-li:marker:text-teal-500 dark:prose-li:marker:text-teal-400">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, [rehypeHighlight, { detect: true, ignoreMissing: true }]]}
@@ -112,8 +112,6 @@ export function ContentItemArticle({
         }
         components={{
           ...markdownPanels,
-          // ```mermaid fences render as live diagrams (zoomable, copyable source) instead of a
-          // syntax-highlighted code panel — same renderer the Advisor uses.
           pre: ({ children }) => {
             if (codeLanguage(children) === "mermaid") {
               return <AdvisorMermaidBlock code={textFromNode(children)} />;
@@ -122,16 +120,28 @@ export function ContentItemArticle({
             return <PanelPre>{children}</PanelPre>;
           },
           h2: ({ children, ...rest }) => {
-            // textFromNode, not String(children): a heading with inline code or a link
-            // stringifies as "[object Object]" and every ToC anchor to it goes dead.
             const id = slugifyHeading(textFromNode(children));
             return (
-              <h2 id={id} {...rest} className="relative pl-4">
+              <h2 id={id} {...rest} className="group relative pl-4">
                 <span
                   className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-teal-400"
                   aria-hidden="true"
                 />
                 {children}
+                <a
+                  href={`#${id}`}
+                  aria-label="Copy link to section"
+                  data-no-print
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const url = `${window.location.origin}${window.location.pathname}#${id}`;
+                    navigator.clipboard?.writeText(url);
+                    history.replaceState(null, "", `#${id}`);
+                  }}
+                  className="no-print ml-2 text-teal-500/40 opacity-0 transition group-hover:opacity-100 hover:text-teal-500"
+                >
+                  #
+                </a>
               </h2>
             );
           },
