@@ -12,6 +12,40 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
+// iOS launch (splash) image link entries. iOS Safari picks the matching file
+// via `media` — CSS-pixel dimensions + device-pixel-ratio + orientation.
+// Set is emitted by scripts/generate-splash (see public/splash/).
+const APPLE_SPLASH: Array<{ w: number; h: number; dw: number; dh: number; dpr: number; o: "portrait" | "landscape" }> = [
+  { w: 2048, h: 2732, dw: 1024, dh: 1366, dpr: 2, o: "portrait" },
+  { w: 2732, h: 2048, dw: 1024, dh: 1366, dpr: 2, o: "landscape" },
+  { w: 1668, h: 2388, dw: 834, dh: 1194, dpr: 2, o: "portrait" },
+  { w: 2388, h: 1668, dw: 834, dh: 1194, dpr: 2, o: "landscape" },
+  { w: 1640, h: 2360, dw: 820, dh: 1180, dpr: 2, o: "portrait" },
+  { w: 2360, h: 1640, dw: 820, dh: 1180, dpr: 2, o: "landscape" },
+  { w: 1620, h: 2160, dw: 810, dh: 1080, dpr: 2, o: "portrait" },
+  { w: 2160, h: 1620, dw: 810, dh: 1080, dpr: 2, o: "landscape" },
+  { w: 1536, h: 2048, dw: 768, dh: 1024, dpr: 2, o: "portrait" },
+  { w: 2048, h: 1536, dw: 768, dh: 1024, dpr: 2, o: "landscape" },
+  { w: 1284, h: 2778, dw: 428, dh: 926, dpr: 3, o: "portrait" },
+  { w: 2778, h: 1284, dw: 428, dh: 926, dpr: 3, o: "landscape" },
+  { w: 1170, h: 2532, dw: 390, dh: 844, dpr: 3, o: "portrait" },
+  { w: 2532, h: 1170, dw: 390, dh: 844, dpr: 3, o: "landscape" },
+  { w: 1125, h: 2436, dw: 375, dh: 812, dpr: 3, o: "portrait" },
+  { w: 2436, h: 1125, dw: 375, dh: 812, dpr: 3, o: "landscape" },
+  { w: 1242, h: 2688, dw: 414, dh: 896, dpr: 3, o: "portrait" },
+  { w: 2688, h: 1242, dw: 414, dh: 896, dpr: 3, o: "landscape" },
+  { w: 828, h: 1792, dw: 414, dh: 896, dpr: 2, o: "portrait" },
+  { w: 1792, h: 828, dw: 414, dh: 896, dpr: 2, o: "landscape" },
+  { w: 750, h: 1334, dw: 375, dh: 667, dpr: 2, o: "portrait" },
+  { w: 1334, h: 750, dw: 375, dh: 667, dpr: 2, o: "landscape" },
+];
+const appleSplashLinks = APPLE_SPLASH.map(({ w, h, dw, dh, dpr, o }) => ({
+  rel: "apple-touch-startup-image",
+  href: `/splash/apple-splash-${w}x${h}.png`,
+  media: `screen and (device-width: ${dw}px) and (device-height: ${dh}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: ${o})`,
+}));
+
+
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
