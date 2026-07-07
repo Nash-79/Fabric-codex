@@ -27,6 +27,7 @@ export function DiagramLightbox({
 }) {
   const [open, setOpen] = useState(false);
   const [ratio, setRatio] = useState<number | null>(() => ratioCache.get(src) ?? null);
+  const [inView, setInView] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
 
@@ -38,6 +39,32 @@ export function DiagramLightbox({
       setRatio(r);
     }
   }, [src, ratio]);
+
+  // Defer mounting the <img> until the placeholder scrolls near the viewport,
+  // or the user opens the lightbox for this figure.
+  useEffect(() => {
+    if (inView) return;
+    const el = triggerRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") {
+      setInView(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setInView(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [inView]);
+
+  useEffect(() => {
+    if (open) setInView(true);
+  }, [open]);
 
   const aspectRatio = ratio ?? 16 / 9;
   const figId = figureIndex ? `figure-${figureIndex}` : undefined;
