@@ -35,6 +35,7 @@ import { Route as Char91DotwellKnownChar93OauthProtectedResourceRouteImport } fr
 import { Route as Char91DotmcpChar93ListToolsRouteImport } from './routes/[.mcp]/list-tools'
 import { Route as BlogsKindSlugRouteImport } from './routes/blogs/$kind.$slug'
 import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[.mcp]/invoke-tool/$tool'
+import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiPublicHooksSeedContentRouteImport } from './routes/api/public/hooks/seed-content'
 import { Route as ApiPublicHooksPollFeedsRouteImport } from './routes/api/public/hooks/poll-feeds'
 import { Route as ApiPublicHealthAtlasRouteImport } from './routes/api/public/health/atlas'
@@ -172,6 +173,11 @@ const Char91DotmcpChar93InvokeToolToolRoute =
     path: '/.mcp/invoke-tool/$tool',
     getParentRoute: () => rootRouteImport,
   } as any)
+const DotlovableOauthConsentRoute = DotlovableOauthConsentRouteImport.update({
+  id: '/.lovable/oauth/consent',
+  path: '/.lovable/oauth/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiPublicHooksSeedContentRoute =
   ApiPublicHooksSeedContentRouteImport.update({
     id: '/api/public/hooks/seed-content',
@@ -218,6 +224,7 @@ export interface FileRoutesByFullPath {
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs/': typeof BlogsIndexRoute
   '/topics/': typeof TopicsIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
@@ -249,6 +256,7 @@ export interface FileRoutesByTo {
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs': typeof BlogsIndexRoute
   '/topics': typeof TopicsIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
@@ -282,6 +290,7 @@ export interface FileRoutesById {
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs/': typeof BlogsIndexRoute
   '/topics/': typeof TopicsIndexRoute
+  '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
@@ -315,6 +324,7 @@ export interface FileRouteTypes {
     | '/topics/$slug'
     | '/blogs/'
     | '/topics/'
+    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
@@ -346,6 +356,7 @@ export interface FileRouteTypes {
     | '/topics/$slug'
     | '/blogs'
     | '/topics'
+    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
@@ -378,6 +389,7 @@ export interface FileRouteTypes {
     | '/topics/$slug'
     | '/blogs/'
     | '/topics/'
+    | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
@@ -408,6 +420,7 @@ export interface RootRouteChildren {
   TopicsSlugRoute: typeof TopicsSlugRoute
   BlogsIndexRoute: typeof BlogsIndexRoute
   TopicsIndexRoute: typeof TopicsIndexRoute
+  DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
   BlogsKindSlugRoute: typeof BlogsKindSlugRoute
   ApiPublicDevLogsRoute: typeof ApiPublicDevLogsRoute
@@ -600,6 +613,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof Char91DotmcpChar93InvokeToolToolRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/.lovable/oauth/consent': {
+      id: '/.lovable/oauth/consent'
+      path: '/.lovable/oauth/consent'
+      fullPath: '/.lovable/oauth/consent'
+      preLoaderRoute: typeof DotlovableOauthConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/hooks/seed-content': {
       id: '/api/public/hooks/seed-content'
       path: '/api/public/hooks/seed-content'
@@ -679,6 +699,7 @@ const rootRouteChildren: RootRouteChildren = {
   TopicsSlugRoute: TopicsSlugRoute,
   BlogsIndexRoute: BlogsIndexRoute,
   TopicsIndexRoute: TopicsIndexRoute,
+  DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,
   BlogsKindSlugRoute: BlogsKindSlugRoute,
   ApiPublicDevLogsRoute: ApiPublicDevLogsRoute,
