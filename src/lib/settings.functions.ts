@@ -1096,10 +1096,24 @@ export const pollRssFeeds = createServerFn({ method: "POST" })
     const sb = await adminClient();
     const { pollRssFeedsCore } = await import("@/lib/rss-poll.server");
     const result = await pollRssFeedsCore(sb, { feedId: data.feedId, actorId: context.userId });
+    const failed = result.results.filter((r) => r.error);
     await recordAudit(context.userId, "rss.polled", "rss_subscription", data.feedId ?? "all", {
       feeds: result.results.length,
       queued: result.totalQueued,
+      failed: failed.length,
+      results: result.results,
     });
+    // Emit a distinct failed event per feed so exceptions (HTTP 403, timeouts, parse errors)
+    // are visible in the Logs tab without expanding the aggregate rss.polled entry.
+    for (const r of failed) {
+      await recordAudit(
+        context.userId,
+        "rss.poll_failed",
+        "rss_subscription",
+        data.feedId ?? "all",
+        { feed: r.feed, error: r.error, found: r.found, queued: r.queued, skipped: r.skipped },
+      );
+    }
     return result;
   });
 
