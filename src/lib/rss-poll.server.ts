@@ -89,10 +89,20 @@ export async function pollRssFeedsCore(
     try {
       const res = await fetch(feed.feed_url, {
         headers: {
-          accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
+          accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,application/rss+xml,application/atom+xml,*/*;q=0.8",
           "accept-language": "en-US,en;q=0.9",
+          "accept-encoding": "gzip, deflate, br",
           "user-agent":
-            "Mozilla/5.0 (compatible; FabricAtlasBot/1.0; +https://fabric-atlas.lovable.app/) AppleWebKit/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "sec-ch-ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+          "sec-ch-ua-mobile": "?0",
+          "sec-ch-ua-platform": '"Windows"',
+          "sec-fetch-dest": "document",
+          "sec-fetch-mode": "navigate",
+          "sec-fetch-site": "none",
+          "sec-fetch-user": "?1",
+          "upgrade-insecure-requests": "1",
         },
         redirect: "follow",
       });
@@ -100,7 +110,13 @@ export async function pollRssFeedsCore(
         const bodySnippet = (await res.text().catch(() => "")).slice(0, 300);
         throw new Error(`HTTP ${res.status} ${res.statusText || ""}${bodySnippet ? ` — ${bodySnippet.replace(/\s+/g, " ")}` : ""}`.trim());
       }
-      const xml = await res.text();
+      const body = await res.text();
+      if (/Just a moment\.\.\.|cf-browser-verification|challenge-platform/i.test(body)) {
+        throw new Error(
+          "Cloudflare bot challenge — feed host requires JS challenge (cf_clearance). Consider a proxy service or contact publisher for an unprotected URL.",
+        );
+      }
+      const xml = body;
       const all = parseFeed(xml).reverse();
 
       const firstPoll = !feed.last_seen_guid;
