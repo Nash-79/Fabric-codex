@@ -89,10 +89,17 @@ export async function pollRssFeedsCore(
     try {
       const res = await fetch(feed.feed_url, {
         headers: {
-          accept: "application/rss+xml, application/atom+xml, application/xml, text/xml",
+          accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
+          "accept-language": "en-US,en;q=0.9",
+          "user-agent":
+            "Mozilla/5.0 (compatible; FabricAtlasBot/1.0; +https://fabric-atlas.lovable.app/) AppleWebKit/537.36",
         },
+        redirect: "follow",
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const bodySnippet = (await res.text().catch(() => "")).slice(0, 300);
+        throw new Error(`HTTP ${res.status} ${res.statusText || ""}${bodySnippet ? ` — ${bodySnippet.replace(/\s+/g, " ")}` : ""}`.trim());
+      }
       const xml = await res.text();
       const all = parseFeed(xml).reverse();
 
