@@ -1097,7 +1097,21 @@ export const testSourceWatcher = createServerFn({ method: "POST" })
     await requireAdmin(context);
     const values = watcherValues(data);
     const { testWatcher } = await import("@/lib/source-watcher.server");
-    return testWatcher({ ...values, last_success_at: null, etag: null, last_modified: null });
+    try {
+      const result = await testWatcher({
+        ...values,
+        last_success_at: null,
+        etag: null,
+        last_modified: null,
+      });
+      return { ok: true as const, ...result };
+    } catch (e) {
+      return {
+        ok: false as const,
+        error: (e as Error).message || "Watcher test failed.",
+        code: (e as { code?: string }).code ?? "http",
+      };
+    }
   });
 
 export const addSourceWatcher = createServerFn({ method: "POST" })
