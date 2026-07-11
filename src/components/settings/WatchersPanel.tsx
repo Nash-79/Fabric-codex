@@ -37,6 +37,17 @@ export type WatcherRow = {
   last_error: string;
 };
 
+const REMEDIATION: Record<string, string> = {
+  blocked:
+    "Site returned an anti-bot challenge. Try setting an alternative URL to a first-party RSS feed (e.g. /feed) or sitemap (/sitemap.xml). Auto-fallback probes these on retry.",
+  robots_denied: "robots.txt disallows this path. Point the watcher at an allowed path or feed.",
+  timeout: "The request timed out. The site may be slow; retry, or use a lighter feed URL.",
+  invalid_content: "Response was invalid or too large. Configure a smaller first-party feed.",
+  parse_failure: "Response didn't match the selected mode. Try mode=auto or switch to rss/sitemap.",
+  http: "HTTP error from the origin. Check the URL is reachable, then retry.",
+};
+const remediation = (code: string | null) => (code ? REMEDIATION[code] ?? null : null);
+
 export function WatchersPanel() {
   const listFn = useServerFn(listSourceWatchers),
     addFn = useServerFn(addSourceWatcher),
