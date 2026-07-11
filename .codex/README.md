@@ -57,6 +57,12 @@ git-tracked files under `content/`. Admin mutations remain app actions: publish 
 **Settings -> Publish**, verify claims in **Settings -> Claims**, complete queue items in
 **Settings -> Queue**, and poll feeds in **Settings -> RSS Feeds**.
 
+Queue and watcher state is private. Configure `FABRIC_ATLAS_AGENT_READ_TOKEN` as a server-only
+secret on the deployed app, then set the same value and `FABRIC_ATLAS_APP_URL` in the local
+uncommitted environment. Agent workflows read the sanitized
+`GET /api/public/hooks/poll-feeds` snapshot; they must
+fail loudly when it is unavailable rather than treating private state as empty.
+
 `EXECUTE=true` keeps ingestion, editorial questions, downstream authoring, and validation in one
 resumable orchestration run. It pauses once for source publication and claim verification, then
 finishes with a consolidated **Publish all** action for generated articles, designs, lessons, and

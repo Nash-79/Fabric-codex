@@ -80,7 +80,10 @@ npm run build
 ```
 
 Set runtime environment variables in Lovable: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY` for admin seeding/functions, and `LOVABLE_API_KEY` for Advisor.
+`SUPABASE_SERVICE_ROLE_KEY` for admin seeding/functions, `LOVABLE_API_KEY` for Advisor, and a
+random `FABRIC_ATLAS_AGENT_READ_TOKEN` for the read-only local-agent snapshot. Local authoring
+machines set the same token plus `FABRIC_ATLAS_APP_URL` (the deployed app origin). Never prefix
+the agent token with `VITE_` or commit it.
 
 The legacy `frontend/` SPA can still be useful as a local reference for prior UI behavior, but it is
 not the hosted application path.

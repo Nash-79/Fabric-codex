@@ -56,6 +56,18 @@ async function rest(base, key, path) {
   return res.json();
 }
 
+async function agentSnapshot(appUrl, token) {
+  if (!appUrl || !token)
+    throw new Error(
+      "Missing FABRIC_ATLAS_APP_URL or FABRIC_ATLAS_AGENT_READ_TOKEN; private watcher state cannot be read safely.",
+    );
+  const res = await fetch(`${appUrl.replace(/\/$/, "")}/api/public/hooks/poll-feeds`, {
+    headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`Agent snapshot returned HTTP ${res.status}.`);
+  return res.json();
+}
+
 function decode(value) {
   return value
     .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
@@ -274,20 +286,21 @@ async function discoverLocal(watcher) {
   throw new Error(`No watcher strategy returned output (${attempts.length} attempts).`);
 }
 
-async function knownUrls(base, key, watcherIds) {
+async function knownUrls(base, key, watcherIds, watcherItems, queueItems) {
   const known = new Set();
   const soak = (rows, field) => {
     for (const row of rows) if (row[field]) known.add(row[field]);
   };
-  const attempts = [
-    ["sources?select=url&limit=10000", "url"],
-    ["queue_public?select=url,status&status=in.(queued,claimed)&limit=10000", "url"],
-  ];
-  for (const id of watcherIds)
-    attempts.push([
-      `source_watcher_items?select=canonical_url&watcher_id=eq.${id}&limit=10000`,
-      "canonical_url",
-    ]);
+  const attempts = [["sources?select=url&limit=10000", "url"]];
+  soak(
+    queueItems.filter((item) => ["queued", "claimed"].includes(item.status)),
+    "url",
+  );
+  const wanted = new Set(watcherIds);
+  soak(
+    watcherItems.filter((item) => wanted.has(item.watcher_id)),
+    "canonical_url",
+  );
   for (const [path, field] of attempts) {
     try {
       soak(await rest(base, key, path), field);
@@ -302,22 +315,22 @@ async function main() {
   loadEnv();
   const base = envValue("SUPABASE_URL", "VITE_SUPABASE_URL");
   const key = envValue("SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_PUBLISHABLE_KEY");
+  const appUrl = envValue("FABRIC_ATLAS_APP_URL");
+  const agentToken = envValue("FABRIC_ATLAS_AGENT_READ_TOKEN");
   if (!base || !key) {
     console.log("Missing SUPABASE_URL/VITE_SUPABASE_URL or publishable key; nothing polled.");
     return;
   }
-  let watchers;
+  let snapshot;
   try {
-    watchers = await rest(base, key, "source_watcher_status_public?select=*&status=eq.active");
+    snapshot = await agentSnapshot(appUrl, agentToken);
   } catch (err) {
-    console.log(`Could not read watchers: ${err.message}`);
+    console.log(`Could not read private watcher state: ${err.message}`);
     return;
   }
+  const watchers = (snapshot.watchers ?? []).filter((watcher) => watcher.status === "active");
   if (!watchers.length) {
-    console.log(
-      "No active watchers visible. If watchers exist in the UI, apply the " +
-        "20260711150000_watcher_public_read_local_poll migration (supabase db push).",
-    );
+    console.log("No active watchers are configured.");
     return;
   }
   const targets = pollAll ? watchers : watchers.filter((w) => (w.error_count ?? 0) > 0);
@@ -331,6 +344,8 @@ async function main() {
     base,
     key,
     targets.map((w) => w.id),
+    snapshot.watcher_items ?? [],
+    snapshot.queue ?? [],
   );
   const additions = [];
 

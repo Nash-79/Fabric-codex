@@ -43,6 +43,18 @@ async function rest(base, key, path) {
   return res.json();
 }
 
+async function agentSnapshot(appUrl, token) {
+  if (!appUrl || !token)
+    throw new Error(
+      "missing FABRIC_ATLAS_APP_URL or FABRIC_ATLAS_AGENT_READ_TOKEN; refusing to treat private workflow state as empty",
+    );
+  const res = await fetch(`${appUrl.replace(/\/$/, "")}/api/public/hooks/poll-feeds`, {
+    headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+  });
+  if (!res.ok) throw new Error(`agent snapshot: HTTP ${res.status}`);
+  return res.json();
+}
+
 function olderThanDay(value) {
   if (!value) return true;
   return Date.now() - new Date(value).getTime() > 24 * 60 * 60 * 1000;
@@ -69,7 +81,7 @@ function textReport(digest) {
     lines.push(`Plan file not found; continuing without it: ${digest.plan.path}`);
   }
   if (digest.error) {
-    lines.push(`Supabase queue check skipped: ${digest.error}`);
+    lines.push(`Queue check unavailable: ${digest.error}`);
     return `${lines.join("\n")}\n`;
   }
   lines.push(
@@ -96,6 +108,8 @@ async function main() {
   loadEnv();
   const url = envValue("SUPABASE_URL", "VITE_SUPABASE_URL");
   const key = envValue("SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_PUBLISHABLE_KEY");
+  const appUrl = envValue("FABRIC_ATLAS_APP_URL");
+  const agentToken = envValue("FABRIC_ATLAS_AGENT_READ_TOKEN");
   const planPath = resolve(defaultPlanPath);
   const digest = {
     plan: { path: planPath, exists: existsSync(planPath) },
@@ -114,9 +128,8 @@ async function main() {
   }
 
   try {
-    const [queue, rss, topics, items, diagrams, claims] = await Promise.all([
-      rest(url, key, "queue_public?select=*&order=created_at.desc"),
-      rest(url, key, "source_watcher_status_public?select=*"),
+    const [snapshot, topics, items, diagrams, claims] = await Promise.all([
+      agentSnapshot(appUrl, agentToken),
       rest(url, key, "topics?select=slug,name,active&active=eq.true"),
       rest(
         url,
@@ -126,6 +139,8 @@ async function main() {
       rest(url, key, "diagrams?select=slug,topic_slug,path,capability_id"),
       rest(url, key, "claims?select=id,status,active&status=eq.pending&active=eq.true"),
     ]);
+    const queue = snapshot.queue ?? [];
+    const rss = snapshot.watchers ?? [];
 
     const openSources = queue.filter(
       (q) => q.kind === "source" && ["queued", "claimed"].includes(q.status),

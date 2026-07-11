@@ -2,10 +2,25 @@
 // publishable key in the apikey/x-api-key header, matching seed-content.ts.
 
 import { createFileRoute } from "@tanstack/react-router";
+import { authorizeAgentRead, getAgentSnapshot } from "@/lib/agent-read.server";
 
 export const Route = createFileRoute("/api/public/hooks/poll-feeds")({
   server: {
     handlers: {
+      GET: async ({ request }) => {
+        if (!authorizeAgentRead(request))
+          return Response.json({ error: "unauthorized" }, { status: 401 });
+        try {
+          return Response.json(await getAgentSnapshot(), {
+            headers: { "cache-control": "no-store" },
+          });
+        } catch (error) {
+          return Response.json(
+            { error: error instanceof Error ? error.message : "Agent snapshot failed." },
+            { status: 503, headers: { "cache-control": "no-store" } },
+          );
+        }
+      },
       POST: async ({ request }) => {
         const expected = process.env.SUPABASE_PUBLISHABLE_KEY;
         const apikey = request.headers.get("apikey") ?? request.headers.get("x-api-key");

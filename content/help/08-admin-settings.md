@@ -94,6 +94,13 @@ and appends new posts to `content/queue.md` for the usual review + `/ingest-batc
 a locally changed winner, but remains read-only; the next authenticated server poll persists that
 mapping.
 
+Queue URLs, watcher configuration, and watcher dedupe history are not anonymously readable.
+Settings and hosted polling use authenticated server access; local agents use the sanitized,
+bearer-token-protected `GET /api/public/hooks/poll-feeds` snapshot. Configure the same
+`FABRIC_ATLAS_AGENT_READ_TOKEN` on the deployed app and local authoring machine, with
+`FABRIC_ATLAS_APP_URL` pointing at the deployed origin. Missing authorization produces a visible
+error rather than zero queue/watcher counts.
+
 ## Logs
 
 A combined, filterable activity stream: admin actions (user approvals, role changes, topic

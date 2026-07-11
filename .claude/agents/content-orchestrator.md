@@ -33,16 +33,14 @@ Set up keyless reads:
 ```bash
 source .env 2>/dev/null || true
 SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+APP="$FABRIC_ATLAS_APP_URL"; AGENT_H="Authorization: Bearer $FABRIC_ATLAS_AGENT_READ_TOKEN"
 ```
 
 Read this state before planning:
 
 ```bash
-# Open source queue, including unclaimed and already claimed work.
-curl -s "$SB/queue_public?kind=eq.source&status=in.(queued,claimed)&select=id,status,url,title,tier,tags,notes,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
-
-# Due diagram commissions.
-curl -s "$SB/queue_public?kind=eq.diagram&status=in.(queued,claimed)&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,status,target_slug,notes,scheduled_at,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
+# Private workflow snapshot: open queue, watchers, and watcher dedupe URLs.
+curl -s "$APP/api/public/hooks/poll-feeds" -H "$AGENT_H"
 
 # Pending and duplicate claims that require human curation.
 curl -s "$SB/claims?active=eq.true&status=eq.pending&select=id,capability_id,depth,type,tags,source_id,sources(slug,title,tier,url)&order=created_at" -H "$H1" -H "$H2"

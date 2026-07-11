@@ -5,9 +5,9 @@ argument-hint: [optional extra urls to enqueue first]
 
 Process the ingestion queue: $ARGUMENTS
 
-The `localhost:8000` backend is retired. The queue is exposed to local agents through Supabase
-(`queue_public`); you **read**
-it with the anon key but you **cannot mutate it** (claim/complete/fail) or write sources — those
+The `localhost:8000` backend is retired. The private queue is exposed through the application’s
+token-protected `GET /api/public/hooks/poll-feeds` snapshot; you **read** it but cannot mutate it
+(claim/complete/fail) or write sources — those
 are server-side admin actions. So this skill produces `content/sources/*.json` files; an admin then
 publishes each in **Settings → Publish** and marks the queue items done in **Settings → Queue**.
 
@@ -16,12 +16,14 @@ Set up keyless reads once:
 ```bash
 source .env 2>/dev/null || true
 SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+APP="$FABRIC_ATLAS_APP_URL"; AGENT_H="Authorization: Bearer $FABRIC_ATLAS_AGENT_READ_TOKEN"
 ```
 
 1. If `$ARGUMENTS` contains URLs to add to the queue, you can't write them yourself — list them and
    tell the user to add them via **Settings → Queue** (or the URL submit box) before re-running.
 2. **Server queue (primary — URLs submitted via the frontend):**
-   `curl -s "$SB/queue_public?status=in.(queued,claimed)&kind=eq.source&select=id,url,title,tier,tags,notes,status&order=created_at" -H "$H1" -H "$H2"`.
+   `curl -s "$APP/api/public/hooks/poll-feeds" -H "$AGENT_H"`, then filter `queue` to
+   `kind=source` and `status=queued|claimed`.
    Include `claimed` items — Settings → Queue "bulk claim" marks items claimed to hand them to
    this local run; they are still open work, not someone else's.
    For each item, in order:

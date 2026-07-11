@@ -4,6 +4,11 @@ Fabric Atlas is local-first. Claude Code and Codex run in the IDE, read approved
 write structured results to `content/` or the backend. The server stores and validates those
 results; it does not invent claims.
 
+Queue and watcher configuration is private workflow state. Local agents read a sanitized snapshot
+from `GET /api/public/hooks/poll-feeds` using `FABRIC_ATLAS_APP_URL` and the server-only
+`FABRIC_ATLAS_AGENT_READ_TOKEN`. If either value is missing or rejected, orchestration stops with
+an explicit configuration error; an inaccessible queue is never interpreted as an empty queue.
+
 ## Claude Code
 
 Claude workflows live in two places:

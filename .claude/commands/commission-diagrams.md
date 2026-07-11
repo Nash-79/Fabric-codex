@@ -14,13 +14,15 @@ Set up keyless reads once:
 ```bash
 source .env 2>/dev/null || true
 SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+APP="$FABRIC_ATLAS_APP_URL"; AGENT_H="Authorization: Bearer $FABRIC_ATLAS_AGENT_READ_TOKEN"
 ```
 
 For each **due** commission:
 
 1. List due diagram tasks (a future `scheduled_at` is intentionally hidden until its interval
    elapses, so filter to due-or-null):
-   `curl -s "$SB/queue_public?kind=eq.diagram&status=eq.queued&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,target_slug,notes,scheduled_at" -H "$H1" -H "$H2"`
+   `curl -s "$APP/api/public/hooks/poll-feeds" -H "$AGENT_H"`, then filter `queue` to due
+   `kind=diagram`, `status=queued` items.
 
 2. Use the **diagram-author** subagent on the item's `target_slug` (a topic or capability): fetch
    the relevant verified claims for grounding, author an ORIGINAL Mermaid/SVG diagram (never a copy,

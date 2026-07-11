@@ -15,7 +15,7 @@ the user asks you to do it.
 When the user asks to execute, do not merely return a list of commands. Keep one orchestration run
 and work through these phases:
 
-1. Drain every open source item from `queue_public` plus `content/queue.md`. Read each source,
+1. Drain every open source item from the token-protected agent snapshot plus `content/queue.md`. Read each source,
    extract and validate its metadata/claims/assets, and write `content/sources/<slug>.json`. Record
    the queue id to file mapping. You cannot mutate the queue, so `claimed` remains an assignment
    signal rather than an action you perform.
@@ -51,13 +51,13 @@ Use Supabase read-only access and git-tracked files. Never mutate Supabase from 
 ```bash
 source .env 2>/dev/null || true
 SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
+APP="$FABRIC_ATLAS_APP_URL"; AGENT_H="Authorization: Bearer $FABRIC_ATLAS_AGENT_READ_TOKEN"
 ```
 
 Read:
 
 ```bash
-curl -s "$SB/queue_public?kind=eq.source&status=in.(queued,claimed)&select=id,status,url,title,tier,tags,notes,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
-curl -s "$SB/queue_public?kind=eq.diagram&status=in.(queued,claimed)&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,status,target_slug,notes,scheduled_at,created_at,claimed_at&order=created_at" -H "$H1" -H "$H2"
+curl -s "$APP/api/public/hooks/poll-feeds" -H "$AGENT_H" # GET: queue + watchers + watcher dedupe state
 curl -s "$SB/claims?active=eq.true&status=eq.pending&select=id,capability_id,depth,type,tags,source_id,sources(slug,title,tier,url)&order=created_at" -H "$H1" -H "$H2"
 curl -s "$SB/claims?status=eq.duplicate&select=id,capability_id,depth,type,tags,source_id,sources(slug,title,tier,url)&order=created_at" -H "$H1" -H "$H2"
 curl -s "$SB/claims?active=eq.true&status=eq.verified&select=id,capability_id,depth,type,tags,source_id,sources(slug,title,tier,url)" -H "$H1" -H "$H2"
