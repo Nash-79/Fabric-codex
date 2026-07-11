@@ -217,9 +217,14 @@ export function WatchersPanel() {
                   )}
                 </div>
                 {r.last_error && (
-                  <p className="mt-1 text-xs text-rose-300">
-                    {r.error_count}× {r.last_error}
-                  </p>
+                  <div className="mt-1 rounded-sm border border-rose-400/30 bg-rose-500/10 p-2 text-xs text-rose-200">
+                    <p>
+                      <span className="font-medium">{r.error_count}× failure:</span> {r.last_error}
+                    </p>
+                    {remediation(r.last_error_code) && (
+                      <p className="mt-1 text-rose-300/80">{remediation(r.last_error_code)}</p>
+                    )}
+                  </div>
                 )}
                 <p className="mt-1 text-xs text-muted-foreground">
                   Last success:{" "}
@@ -230,11 +235,11 @@ export function WatchersPanel() {
                 {r.status === "active" && (
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant={r.last_error ? "default" : "outline"}
                     onClick={() => poll.mutate(r.id)}
                     disabled={poll.isPending}
                   >
-                    Poll
+                    {r.last_error ? "Retry" : "Poll"}
                   </Button>
                 )}
                 <Button size="sm" variant="outline" onClick={() => toggle.mutate(r)}>
