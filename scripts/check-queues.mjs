@@ -165,6 +165,8 @@ async function main() {
     for (const item of openSources.slice(0, 3))
       digest.next.push(`/ingest-batch # ${item.title || item.url}`);
     for (const item of commissions.slice(0, 3)) digest.next.push(commandFor(item));
+    if (failingFeeds.length)
+      digest.next.push("node scripts/poll-watchers.mjs # poll server-blocked watchers locally");
     if (staleFeeds.length || failingFeeds.length)
       digest.next.push("Settings → Watchers → Poll all");
     for (const slug of articleLess.slice(0, 2)) digest.next.push(`/blog ${slug}`);

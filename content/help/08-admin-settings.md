@@ -70,6 +70,13 @@ individual pages. Auto mode detects the best available first-party mechanism. Ne
 meaningfully changed known sources land in the Queue for human-reviewed ingestion; blocked sites
 remain visible with a structured diagnostic instead of bypassing their anti-bot controls.
 
+Some publishers challenge all datacenter traffic (Cloudflare and similar), so server-side polling
+of an otherwise-working feed fails permanently. For those watchers, run
+`node scripts/poll-watchers.mjs` on the authoring machine: it fetches the feed with the same
+honest client identity, dedupes against the knowledge base and open queue, and appends new posts
+to `content/queue.md` for the usual review + `/ingest-batch` flow. It never writes to the
+database.
+
 ## Logs
 
 A combined, filterable activity stream: admin actions (user approvals, role changes, topic

@@ -67,6 +67,12 @@ Run `node scripts/check-queues.mjs --brief` at session start or before orchestra
 public `queue_public` and `rss_status_public` views, prints queue/feed/content gaps, and continues
 quietly if local env vars, the public views, or the external planning file are missing.
 
+When a watcher shows **blocked** in Settings → Watchers (some publishers, e.g. the Khoros-hosted
+`community.fabric.microsoft.com`, challenge all datacenter traffic), run
+`node scripts/poll-watchers.mjs` locally: it polls those feeds from the laptop with an honest
+client identity — no header spoofing, no challenge solving — and appends new posts to
+`content/queue.md` for the usual review + `/ingest-batch` flow. No DB writes.
+
 ```
 agent reads source ─▶ writes content/sources/<slug>.json  (claims + tags + image refs)
 agent draws diagram ─▶ writes content/diagrams/<slug>.svg|.mmd  (original, never copied)

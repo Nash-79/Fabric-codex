@@ -44,7 +44,7 @@ export type WatcherRow = {
 
 const REMEDIATION: Record<string, string> = {
   blocked:
-    "Site returned an anti-bot challenge. Try setting an alternative URL to a first-party RSS feed (e.g. /feed) or sitemap (/sitemap.xml). Auto-fallback probes these on retry.",
+    "Site returned an anti-bot challenge. Try setting an alternative URL to a first-party RSS feed (e.g. /feed) or sitemap (/sitemap.xml) — auto-fallback probes these on retry. If the whole domain challenges server traffic, poll it from your machine instead: node scripts/poll-watchers.mjs routes new posts into content/queue.md.",
   robots_denied: "robots.txt disallows this path. Point the watcher at an allowed path or feed.",
   timeout: "The request timed out. The site may be slow; retry, or use a lighter feed URL.",
   invalid_content: "Response was invalid or too large. Configure a smaller first-party feed.",
