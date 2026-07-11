@@ -1218,6 +1218,7 @@ export type Database = {
           last_attempt_at: string | null
           last_error: string
           last_error_code: string | null
+          last_error_trigger: string | null
           last_modified: string | null
           last_success_at: string | null
           legacy_last_seen_guid: string | null
@@ -1225,6 +1226,7 @@ export type Database = {
           max_pages: number
           mode: string
           status: string
+          suggested_url: string | null
           title: string
           updated_at: string
           url: string
@@ -1244,6 +1246,7 @@ export type Database = {
           last_attempt_at?: string | null
           last_error?: string
           last_error_code?: string | null
+          last_error_trigger?: string | null
           last_modified?: string | null
           last_success_at?: string | null
           legacy_last_seen_guid?: string | null
@@ -1251,6 +1254,7 @@ export type Database = {
           max_pages?: number
           mode?: string
           status?: string
+          suggested_url?: string | null
           title?: string
           updated_at?: string
           url: string
@@ -1270,6 +1274,7 @@ export type Database = {
           last_attempt_at?: string | null
           last_error?: string
           last_error_code?: string | null
+          last_error_trigger?: string | null
           last_modified?: string | null
           last_success_at?: string | null
           legacy_last_seen_guid?: string | null
@@ -1277,6 +1282,7 @@ export type Database = {
           max_pages?: number
           mode?: string
           status?: string
+          suggested_url?: string | null
           title?: string
           updated_at?: string
           url?: string
