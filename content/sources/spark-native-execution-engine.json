@@ -2,15 +2,15 @@
   "url": "https://learn.microsoft.com/en-us/fabric/data-engineering/native-execution-engine-overview",
   "title": "Native execution engine for Fabric Data Engineering",
   "tier": 1,
-  "summary": "Microsoft Learn's reference for Fabric's Spark Native Execution Engine (NEE), an opt-in vectorized C++ execution path that transparently accelerates supported Spark operators without code changes, falling back to the JVM engine for anything it can't handle. Cross-referenced with the Fabric product blog's GA announcement for adoption context and benchmark figures.",
+  "summary": "Microsoft Learn's reference for Fabric's Spark Native Execution Engine (NEE), an opt-in vectorized C++ execution path that transparently accelerates supported Spark operators without code changes, falling back to the JVM engine for anything it can't handle. This revision drops the page's own GA benchmark figures (the current text now says results 'vary by workload') and adds several newly documented edge cases and a Spark-native advisor integration.",
   "audience": "Spark/data engineers and platform architects tuning Fabric notebook or job performance, and anyone debugging numeric-result discrepancies that trace back to native vs JVM execution paths.",
-  "why_it_matters": "NEE changes Spark's execution internals under the hood while looking like a simple toggle, so engineers need to understand both how the offload/fallback mechanism works and where its C++ implementation subtly diverges from JVM Spark semantics (casting, rounding, aggregation intermediate types) before relying on it for numerically sensitive workloads.",
+  "why_it_matters": "NEE changes Spark's execution internals under the hood while looking like a simple toggle, so engineers need to understand both how the offload/fallback mechanism works and where its C++ implementation subtly diverges from JVM Spark semantics (casting, rounding, aggregation intermediate types, ordering) before relying on it for numerically sensitive or ordering-sensitive workloads.",
   "takeaways": [
     "NEE offloads supported Spark SQL operators to a vectorized C++ path (Gluten + Velox) and falls back to JVM Spark automatically and per-operator for anything unsupported — it is not all-or-nothing per query.",
     "Existing Spark optimizations (AQE, cost-based rewrites, column pruning, predicate pushdown) keep working even when some operators run natively and others fall back.",
-    "A handful of documented behavioral quirks (decimal casting, round(), collect_list/collect_set intermediate type, map key dedup) mean NEE is not always bit-for-bit identical to vanilla Spark, which matters for anything depending on exact numeric or ordering results.",
-    "You can verify whether a query actually ran natively via Spark UI operator-name suffixes, df.explain(), the Gluten SQL/DataFrame tab, or the color-coded query execution graph — don't assume acceleration happened just because the flag is on.",
-    "Independent GA benchmarks reported roughly 4x speedup on a 1TB TPC-DS workload and up to 6x on representative end-to-end jobs, at no additional cost over existing Spark billing."
+    "A growing list of documented behavioral quirks (decimal casting, round(), collect_list/collect_set intermediate type and ordering, map key dedup, timezone string parsing) mean NEE is not always bit-for-bit identical to vanilla Spark, which matters for anything depending on exact numeric or ordering results.",
+    "You can verify whether a query actually ran natively via Spark UI operator-name suffixes, df.explain(), the Gluten SQL/DataFrame tab and its color-coded execution graph, or the newer Fabric Spark Advisor's real-time fallback alerts in the notebook cell output.",
+    "The page no longer publishes a fixed benchmark multiplier for NEE speedup, instead stating that gains vary by workload and configuration — treat any specific 4x/6x figures as historical rather than current guidance."
   ],
   "claims": [
     {
@@ -43,24 +43,43 @@
     },
     {
       "capability_id": "spark",
-      "text": "When NEE encounters an operator, expression, data type, or feature it doesn't support, the affected segment of the query automatically falls back to the standard JVM Spark engine rather than failing the job; execution continues correctly but without native acceleration for that portion.",
+      "text": "When NEE encounters an operator, expression, data type, or feature it doesn't support, the affected segment of the query automatically falls back to the standard JVM Spark engine rather than failing the job; execution continues correctly but without native acceleration for that portion. Fabric Spark Advisor now surfaces this fallback behavior in real time during notebook execution, posting an alert directly in the cell output whenever a query segment falls back so engineers can spot unsupported operators or configurations without leaving the notebook.",
       "depth": 5,
       "type": "internal",
-      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Fallback"]
+      "tags": [
+        "MicrosoftFabric",
+        "Spark",
+        "NativeExecutionEngine",
+        "Fallback",
+        "Observability",
+        "SparkAdvisor"
+      ]
     },
     {
       "capability_id": "spark",
-      "text": "As of the current NEE release, structured streaming, ANSI SQL mode, and JSON/XML source formats are not accelerated and always execute on JVM Spark; Python and Scala UDFs and complex types (arrays, maps, structs) are now supported natively, and CSV is now handled through a vectorized native parser rather than falling back.",
+      "text": "As of the current NEE release, structured streaming and ANSI SQL mode always execute on JVM Spark, and JSON/XML source formats are still not accelerated; Python and Scala UDFs and complex types (arrays, maps, structs) are now supported natively, and CSV is now handled through a vectorized native parser rather than falling back.",
       "depth": 4,
       "type": "fact",
-      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Fallback", "Limitations"]
+      "tags": [
+        "MicrosoftFabric",
+        "Spark",
+        "NativeExecutionEngine",
+        "Fallback",
+        "Limitations"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "NEE preserves Fabric Spark's existing query optimizer behaviors — adaptive query execution, cost-based rewrites, column pruning, and predicate pushdown — so these still apply even to queries where some operators are offloaded to the native path and others fall back to the JVM.",
       "depth": 5,
       "type": "internal",
-      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "AQE", "QueryOptimizer"]
+      "tags": [
+        "MicrosoftFabric",
+        "Spark",
+        "NativeExecutionEngine",
+        "AQE",
+        "QueryOptimizer"
+      ]
     },
     {
       "capability_id": "spark",
@@ -81,42 +100,77 @@
       "text": "NEE casting from DECIMAL to FLOAT diverges from vanilla Spark: Spark preserves precision by round-tripping the value through a string conversion, while Velox casts directly from the internal int128_t representation, which can produce different rounding results for the same input.",
       "depth": 5,
       "type": "internal",
-      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Velox", "DataTypes"]
+      "tags": [
+        "MicrosoftFabric",
+        "Spark",
+        "NativeExecutionEngine",
+        "Velox",
+        "DataTypes"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "The round() function can return different results under NEE than under vanilla Spark because Velox implements it using the C++ standard library's std::round rather than replicating Spark's own rounding logic, a source of subtle numeric inconsistency worth testing for before relying on NEE in precision-sensitive pipelines.",
       "depth": 5,
       "type": "internal",
-      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Velox", "Correctness"]
+      "tags": [
+        "MicrosoftFabric",
+        "Spark",
+        "NativeExecutionEngine",
+        "Velox",
+        "Correctness"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "collect_list() and collect_set() use ARRAY as their intermediate aggregation type under NEE, whereas vanilla Spark uses BINARY; this type mismatch can cause query-planning or execution compatibility issues in mixed or migrated workloads that assume Spark's default intermediate representation.",
       "depth": 5,
       "type": "internal",
-      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Velox", "Aggregation"]
+      "tags": [
+        "MicrosoftFabric",
+        "Spark",
+        "NativeExecutionEngine",
+        "Velox",
+        "Aggregation"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "When spark.sql.mapKeyDedupPolicy is set to EXCEPTION, vanilla Spark throws an error on duplicate keys passed to map(), but NEE currently skips this duplicate-key check entirely and silently returns a result keyed on the last-seen value instead of failing.",
       "depth": 5,
       "type": "internal",
-      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Velox", "Correctness"]
+      "tags": [
+        "MicrosoftFabric",
+        "Spark",
+        "NativeExecutionEngine",
+        "Velox",
+        "Correctness"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "NEE can also return collect_list() elements in a different order than vanilla Spark when a query relies on DISTRIBUTE BY plus SORT BY to fix ordering, due to differing shuffle behavior between the two engines. Two further documented edge cases: setting an unrecognized Spark session timezone string causes the job to fail under NEE where vanilla Spark JVM tolerates it, and enabling NEE alongside a managed private endpoint to a storage account requires separately configuring managed private endpoints for both the Blob and DFS sub-resources of that same account, since one endpoint cannot cover both.",
+      "depth": 4,
+      "type": "internal",
+      "tags": [
+        "MicrosoftFabric",
+        "Spark",
+        "NativeExecutionEngine",
+        "Limitations",
+        "Networking"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Whether an operator actually executed on the native path can be confirmed via Spark UI or df.explain() output — native operators carry suffixes like *Transformer, *NativeFileScan, or *VeloxColumnarToRowExec — or via the dedicated 'Gluten SQL / DataFrame' tab and its query execution graph, where green nodes denote native execution and light blue nodes denote JVM fallback.",
       "depth": 2,
       "type": "fact",
-      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Observability"]
-    },
-    {
-      "capability_id": "spark",
-      "text": "Independent GA benchmark results reported by the Fabric product team showed roughly 4x faster query execution on a 1 TB TPC-DS workload versus vanilla Spark, and up to 6x end-to-end improvement on representative big-data jobs and typical aggregation/join queries, with NEE included at no additional cost over standard Spark capacity billing.",
-      "depth": 4,
-      "type": "fact",
-      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Performance", "Benchmark"]
+      "tags": [
+        "MicrosoftFabric",
+        "Spark",
+        "NativeExecutionEngine",
+        "Observability"
+      ]
     }
   ],
   "assets": [

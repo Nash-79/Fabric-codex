@@ -42,6 +42,34 @@ Codex prompt templates live in `.codex/prompts/`. Install them once by following
 Use `FOCUS=<topic-or-capability>` with `/prompts:fa-orchestrate` when you want a narrower plan,
 for example `/prompts:fa-orchestrate FOCUS=ai-apis`.
 
+After verifying claims from a newly published source:
+
+- run `/prompts:fa-blog TOPIC=<topic-slug>` to create a missing article or augment an existing
+  article when the source adds new verified coverage, depth, diagrams, or drift corrections;
+- run `/prompts:fa-design SCENARIO="<workload problem>"` for a solution architecture;
+- run `/prompts:fa-design SCENARIO="Reusable <pattern> data architecture pattern"` when a
+  reusable data architecture pattern is missing, and tag it `DataArchitecture` and
+  `ArchitecturePattern`.
+
+Solution architectures and reusable data architecture patterns both use the governed **Design**
+content type today. Publish them through **Settings → Publish → Design**, then validate before
+sharing.
+
+To run the whole journey as one resumable job, use
+`/prompts:fa-orchestrate EXECUTE=true` (Claude: `/orchestrate-content execute`). The orchestrator:
+
+1. drains open source queue items and writes the extracted source files;
+2. compares the new evidence with existing articles, designs, and diagrams;
+3. asks one compact question round about proposed article creation/augmentation, solution
+   scenarios, and missing reusable data architecture patterns;
+4. pauses while an admin publishes the sources, completes the queue items, and verifies their
+   pending claims;
+5. resumes to author and validate every selected artifact; and
+6. finishes with one dependency-ordered **Settings → Publish → Publish all** release action.
+
+The mid-run source/claim checkpoint is mandatory: newly extracted claims cannot ground an article
+or architecture until they have been published and human-verified.
+
 For latest RSS coverage, poll feeds in Settings first, then rerun the orchestrator. The agents read
 the resulting queue; they do not poll feeds or complete queue items themselves.
 

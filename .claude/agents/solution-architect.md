@@ -67,6 +67,10 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
   Warehouse-first, Fabric-only vs coexistence).
 - If a needed capability has no claims, say so and recommend the knowledge-curator rather than guessing.
 - Tag the design (MicrosoftFabric plus topicals like PowerBI, DataEngineering).
+- Treat reusable data architecture patterns as designs. Include explicit context, forces,
+  decision, consequences, and appropriate/inappropriate-use boundaries; add `DataArchitecture`
+  and `ArchitecturePattern` tags. Enrich/version an existing matching design rather than creating
+  a duplicate pattern.
 
 ## Output
 

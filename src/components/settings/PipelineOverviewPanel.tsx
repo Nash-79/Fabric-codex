@@ -5,9 +5,8 @@ import { getSuggestedActions, listSourceWatchers } from "@/lib/settings.function
 import { Empty, Panel } from "@/components/settings/shared";
 import type { WatcherRow } from "@/components/settings/WatchersPanel";
 
-// How a polled URL becomes a published article, at a glance: feeds → queue → approved
-// sources → claims (pending → verified) → live articles. Counts come from the same CMS
-// payload the other tabs use; clicking a stage jumps to the tab where that work happens.
+// How a discovered URL becomes governed knowledge and then reusable content. Counts come from
+// the same CMS payload the other tabs use; clicking a stage jumps to the relevant human gate.
 export function PipelineOverviewPanel({
   data,
   loading,
@@ -65,19 +64,19 @@ export function PipelineOverviewPanel({
     },
     {
       tab: "queue",
-      label: "In queue",
+      label: "Open work",
       value: openQueue.length,
       sub: `${ingested.length} ingested · ${failedQueue.length} failed`,
     },
     {
       tab: "content",
-      label: "Approved sources",
+      label: "Published sources",
       value: (data?.sources ?? []).length,
-      sub: "graded + deduped",
+      sub: "source JSON imported",
     },
     {
       tab: "claims",
-      label: "Claims pending",
+      label: "Claims review",
       value: pendingClaims.length,
       sub: `${verifiedClaims.length} verified`,
     },
@@ -104,6 +103,28 @@ export function PipelineOverviewPanel({
 
   return (
     <Panel title="Pipeline overview">
+      <p className="mb-4 text-sm text-muted-foreground">
+        Reserving a queue item only assigns the work. Claims appear after a local agent extracts the
+        source and you publish its JSON; verification is the human gate before that knowledge can
+        augment articles or ground architecture designs.
+      </p>
+      <div className="mb-4 flex flex-col gap-3 rounded-md border border-teal-500/30 bg-teal-500/10 p-3 md:flex-row md:items-center md:justify-between">
+        <div>
+          <div className="text-sm font-medium text-foreground">Run the journey as one job</div>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            The orchestrator drains queued sources, asks one evidence-based question round about
+            articles and architecture, pauses for source publication and claim verification, then
+            resumes generation and prepares one final Publish all release.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigator.clipboard?.writeText("/prompts:fa-orchestrate EXECUTE=true")}
+          className="shrink-0 rounded border border-teal-500/30 bg-background px-3 py-2 font-mono text-xs text-teal-700 hover:bg-accent dark:text-teal-200"
+        >
+          /prompts:fa-orchestrate EXECUTE=true
+        </button>
+      </div>
       <div className="flex flex-col gap-2 lg:flex-row lg:items-stretch">
         {stages.map((stage, i) => (
           <div key={stage.tab} className="flex items-center gap-2 lg:flex-1">
@@ -126,6 +147,99 @@ export function PipelineOverviewPanel({
             )}
           </div>
         ))}
+      </div>
+
+      <div className="mt-5">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Full operator sequence
+        </div>
+        <ol className="mt-2 grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          {[
+            {
+              title: "1. Discover and reserve",
+              body: "A watcher or admin queues a URL. Reserve it to signal that a local ingestion run owns it; this does not create knowledge claims.",
+              tab: "queue",
+              action: "Open Queue",
+            },
+            {
+              title: "2. Extract locally",
+              body: "Run /prompts:fa-ingest (or /ingest-batch). Review the paraphrased, cited claims written to content/sources/<slug>.json.",
+              tab: "queue",
+              action: "Review source work",
+            },
+            {
+              title: "3. Publish and link",
+              body: "Publish Source (+ claims). Pending claims are inserted with the source; then complete the queue item by selecting that result source.",
+              tab: "publish",
+              action: "Open Publish",
+            },
+            {
+              title: "4. Verify",
+              body: "Review pending claims for accuracy, capability, depth, and source trust. Only verified active claims can ground downstream content.",
+              tab: "claims",
+              action: "Review Claims",
+            },
+          ].map((step) => (
+            <li key={step.title} className="rounded-md border border-border bg-card p-3">
+              <div className="text-sm font-medium text-foreground">{step.title}</div>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{step.body}</p>
+              <button
+                type="button"
+                onClick={() => onNavigate(step.tab)}
+                className="mt-2 text-xs font-medium text-teal-700 hover:underline dark:text-teal-200"
+              >
+                {step.action}
+              </button>
+            </li>
+          ))}
+        </ol>
+      </div>
+
+      <div className="mt-5">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Reuse verified source knowledge
+        </div>
+        <div className="mt-2 grid gap-2 lg:grid-cols-3">
+          {[
+            {
+              title: "Create or augment an article",
+              body: "Run the blog prompt. It creates an article only when one is missing; otherwise it enriches the active article when the source adds verified depth, coverage, diagrams, or drift corrections.",
+              command: "/prompts:fa-blog TOPIC=<topic-slug>",
+              tab: "blogs",
+            },
+            {
+              title: "Create a solution architecture",
+              body: "Run the design prompt with the workload scenario, volume, latency, and existing estate. Publish the result as Design, then validate it before sharing.",
+              command: '/prompts:fa-design SCENARIO="<problem>"',
+              tab: "content",
+            },
+            {
+              title: "Add a data architecture pattern",
+              body: "When a reusable data pattern is missing, use a pattern-focused scenario and tag the design DataArchitecture and ArchitecturePattern. Designs are the governed home for both pattern and solution architectures.",
+              command: '/prompts:fa-design SCENARIO="Reusable <pattern> data architecture pattern"',
+              tab: "content",
+            },
+          ].map((route) => (
+            <div key={route.title} className="rounded-md border border-border bg-card p-3">
+              <button
+                type="button"
+                onClick={() => onNavigate(route.tab)}
+                className="text-left text-sm font-medium text-foreground hover:underline"
+              >
+                {route.title}
+              </button>
+              <p className="mt-1 text-xs leading-5 text-muted-foreground">{route.body}</p>
+              <button
+                type="button"
+                onClick={() => navigator.clipboard?.writeText(route.command)}
+                className="mt-2 max-w-full truncate rounded border border-border bg-background px-2 py-1 font-mono text-xs text-teal-700 hover:bg-accent dark:text-teal-200"
+                title={`Copy ${route.command}`}
+              >
+                {route.command}
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div className="mt-5">

@@ -69,7 +69,7 @@ export function QueuePanel({
   const bulkClaim = useMutation({
     mutationFn: () => bulkClaimFn({ data: { itemIds: selectedQueuedIds } }),
     onSuccess: (result) => {
-      toast.success(`${result.claimed} queue item${result.claimed === 1 ? "" : "s"} claimed.`);
+      toast.success(`${result.claimed} queue item${result.claimed === 1 ? "" : "s"} reserved.`);
       setSelectedIds(new Set());
       onDone();
     },
@@ -106,7 +106,7 @@ export function QueuePanel({
             disabled={!selectedQueuedIds.length || bulkClaim.isPending || mutate.isPending}
             onClick={() => bulkClaim.mutate()}
           >
-            {bulkClaim.isPending ? "Claiming…" : `Claim selected (${selectedQueuedIds.length})`}
+            {bulkClaim.isPending ? "Reserving…" : `Reserve selected (${selectedQueuedIds.length})`}
           </Button>
         </div>
       )}
@@ -159,7 +159,7 @@ export function QueuePanel({
                       disabled={mutate.isPending || q.status !== "queued"}
                       onClick={() => runAction(q, "claim")}
                     >
-                      claim
+                      reserve
                     </Button>
                     <Button
                       size="sm"

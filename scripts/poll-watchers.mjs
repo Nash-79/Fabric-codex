@@ -94,6 +94,40 @@ function parseWebFeed(body) {
     .filter((x) => x.url);
 }
 
+function parseSitemap(body) {
+  const urls = [...body.matchAll(/<url\b[\s\S]*?<loc>([\s\S]*?)<\/loc>[\s\S]*?<\/url>/gi)].map(
+    (m) => ({ url: decodeXmlEntities(m[1]), title: "" }),
+  );
+  const sitemaps = [
+    ...body.matchAll(/<sitemap\b[\s\S]*?<loc>([\s\S]*?)<\/loc>[\s\S]*?<\/sitemap>/gi),
+  ].map((m) => decodeXmlEntities(m[1]));
+  return { urls, sitemaps };
+}
+
+function feedLinks(body, base) {
+  return [
+    ...body.matchAll(
+      /<link\b[^>]*\brel=["'][^"']*alternate[^"']*["'][^>]*\b(?:type=["'](?:application\/(?:rss|atom)\+xml|application\/feed\+json)["'])[^>]*>/gi,
+    ),
+  ]
+    .map((m) => m[0].match(/\bhref=["']([^"']+)["']/i)?.[1])
+    .filter(Boolean)
+    .map((url) => canonicalizeUrl(url, base))
+    .filter(Boolean);
+}
+
+function listingLinks(body, base, watcher) {
+  const seen = new Set();
+  return [...body.matchAll(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
+    .map((m) => ({
+      url: canonicalizeUrl(m[1], base),
+      title: decodeXmlEntities(m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")),
+    }))
+    .filter(
+      (item) => item.url && inScope(item.url, watcher) && !seen.has(item.url) && seen.add(item.url),
+    );
+}
+
 function canonicalizeUrl(value, base) {
   try {
     const u = new URL(value, base);
@@ -150,6 +184,94 @@ async function fetchFeed(url) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function discoverLocal(watcher) {
+  const attempts = [];
+  const fetched = new Map();
+  const tried = new Set();
+  const root = watcher.url;
+  const seeds = [...new Set([watcher.alternative_url, root].filter(Boolean))];
+  const get = async (url) => {
+    const resolved = canonicalizeUrl(url, root);
+    if (!fetched.has(resolved)) fetched.set(resolved, await fetchFeed(resolved));
+    return { url: resolved, body: fetched.get(resolved) };
+  };
+  const attempt = async (mode, url) => {
+    const resolvedUrl = canonicalizeUrl(url, root);
+    const key = `${mode}:${resolvedUrl}`;
+    if (!resolvedUrl || tried.has(key)) return null;
+    tried.add(key);
+    try {
+      const page = await get(resolvedUrl);
+      let candidates = [];
+      if (mode === "rss") candidates = parseWebFeed(page.body);
+      else if (mode === "sitemap") {
+        const parsed = parseSitemap(page.body);
+        candidates.push(...parsed.urls);
+        for (const childUrl of parsed.sitemaps.slice(
+          0,
+          Math.max(0, (watcher.max_pages || 100) - 1),
+        )) {
+          try {
+            candidates.push(...parseSitemap((await get(childUrl)).body).urls);
+          } catch {
+            // Continue through remaining sitemap children and fallback strategies.
+          }
+        }
+      } else if (mode === "listing") candidates = listingLinks(page.body, page.url, watcher);
+      else candidates = [{ url: page.url, title: watcher.title || "" }];
+      candidates = candidates
+        .map((item) => ({ ...item, url: canonicalizeUrl(item.url, page.url) }))
+        .filter((item) => item.url && inScope(item.url, watcher));
+      attempts.push({ mode, url: resolvedUrl, candidates: candidates.length });
+      return candidates.length ? { mode, resolvedUrl, candidates, attempts } : null;
+    } catch (err) {
+      attempts.push({ mode, url: resolvedUrl, candidates: 0, error: err.message });
+      return null;
+    }
+  };
+  if (watcher.detected_mode && watcher.detected_url) {
+    const retained = await attempt(watcher.detected_mode, watcher.detected_url);
+    if (retained) return retained;
+  }
+  for (const seed of seeds) {
+    const direct = await attempt("rss", seed);
+    if (direct) return direct;
+  }
+  for (const seed of seeds) {
+    try {
+      const page = await get(seed);
+      for (const link of feedLinks(page.body, page.url)) {
+        const result = await attempt("rss", link);
+        if (result) return result;
+      }
+    } catch {
+      // Other candidates can still succeed.
+    }
+  }
+  const origins = [...new Set(seeds.map((seed) => new URL(seed).origin))];
+  for (const feed of origins.flatMap((origin) =>
+    ["/feed", "/feed/", "/rss", "/rss.xml", "/atom.xml", "/feed.xml"].map(
+      (path) => `${origin}${path}`,
+    ),
+  )) {
+    const result = await attempt("rss", feed);
+    if (result) return result;
+  }
+  for (const map of [...seeds, ...origins.map((origin) => `${origin}/sitemap.xml`)]) {
+    const result = await attempt("sitemap", map);
+    if (result) return result;
+  }
+  for (const seed of seeds) {
+    const result = await attempt("listing", seed);
+    if (result) return result;
+  }
+  for (const seed of seeds) {
+    const result = await attempt("page", seed);
+    if (result) return result;
+  }
+  throw new Error(`No watcher strategy returned output (${attempts.length} attempts).`);
 }
 
 async function knownUrls(base, key, watcherIds) {
@@ -214,24 +336,15 @@ async function main() {
 
   for (const watcher of targets) {
     const label = watcher.title || watcher.url;
-    const feedUrl = watcher.alternative_url || watcher.url;
-    let body;
+    let discovered;
     try {
-      body = await fetchFeed(feedUrl);
+      discovered = await discoverLocal(watcher);
     } catch (err) {
       console.log(`✗ ${label}: ${err.message}`);
       continue;
     }
-    const items = parseWebFeed(body);
-    if (!items.length) {
-      console.log(
-        `✗ ${label}: no feed items found (local poller handles RSS/Atom/JSON feeds only).`,
-      );
-      continue;
-    }
-    let candidates = items
-      .map((x) => ({ ...x, url: canonicalizeUrl(x.url, feedUrl) }))
-      .filter((x) => x.url && inScope(x.url, watcher));
+    const items = discovered.candidates;
+    let candidates = items;
     const cap = watcher.last_success_at ? watcher.max_pages || 100 : FIRST_POLL_CAP;
     const capped = candidates.length > cap;
     if (capped) candidates = candidates.slice(0, cap);
@@ -241,9 +354,16 @@ async function main() {
       additions.push({ watcher: label, tier: watcher.default_tier ?? 6, ...item });
     }
     console.log(
-      `✓ ${label}: ${items.length} item(s), ${candidates.length} in scope` +
+      `✓ ${label}: ${discovered.mode} via ${discovered.resolvedUrl}; ${items.length} item(s), ${candidates.length} in scope` +
         `${capped ? ` (capped at ${cap})` : ""}, ${fresh.length} new`,
     );
+    if (
+      watcher.detected_mode !== discovered.mode ||
+      watcher.detected_url !== discovered.resolvedUrl
+    )
+      console.log(
+        `  retained mapping changed locally to ${discovered.mode} ${discovered.resolvedUrl}; an authenticated server poll will persist it.`,
+      );
   }
 
   if (!additions.length) {

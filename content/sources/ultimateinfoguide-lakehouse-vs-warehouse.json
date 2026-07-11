@@ -1,0 +1,74 @@
+{
+  "url": "https://ultimateinfoguide.com/fabric-lakehouse-vs-data-warehouse-best-practices/",
+  "title": "Fabric Lakehouse vs Data Warehouse: Best Practices",
+  "tier": 6,
+  "summary": "A community blog post walking through when to choose a Fabric Lakehouse versus a Fabric Warehouse, framed as a decision tree (dev-tooling fit, transactional needs, data shape) rather than a size-based choice, plus notes on how the two engines interoperate inside one workspace.",
+  "audience": "Fabric architects and data engineers choosing or mixing Lakehouse and Warehouse items within a medallion architecture.",
+  "why_it_matters": "Teams often default to Lakehouse-only or Warehouse-only designs; this source captures the cross-engine interop constraints (read-only SQL endpoint, no Spark writes to Warehouse tables, RLS-mode conflicts) that force a mixed 'better together' pattern in practice.",
+  "takeaways": [
+    "Engine choice should follow team tooling (T-SQL vs Spark) and transactional needs, not data volume.",
+    "Lakehouse's SQL analytics endpoint is read-only, so multi-table T-SQL writes require a Warehouse.",
+    "Spark cannot write directly to Warehouse tables — Lakehouse-then-INSERT/SELECT is the standard bridge pattern.",
+    "OneLake keeps both engines on the same Delta Parquet files, so mixed Lakehouse+Warehouse designs share one storage layer and one capacity cost pool.",
+    "Applying security at the wrong layer (T-SQL RLS vs semantic-model RLS) has different downstream effects for each engine."
+  ],
+  "tags": ["MicrosoftFabric", "Lakehouse", "Warehouse", "MedallionArchitecture", "OneLake"],
+  "claims": [
+    {
+      "capability_id": "fabric-platform",
+      "text": "The choice between Lakehouse and Warehouse is best framed as which development tooling the team already uses (Spark/PySpark vs T-SQL) and what transactional guarantees the Gold layer needs, rather than a decision driven by data size.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MicrosoftFabric", "Lakehouse", "Warehouse", "ArchitectureDecision"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Every Fabric Lakehouse auto-provisions a read-only SQL analytics endpoint, so multi-table T-SQL DML is not possible against a Lakehouse directly.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["Lakehouse", "SQLEndpoint"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Spark notebooks in Fabric cannot write directly to Warehouse tables (no Warehouse target for saveAsTable-style writes); the standard bridge pattern is for Spark to write to a Lakehouse table and have the Warehouse pull it in via INSERT...SELECT.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["Warehouse", "Spark", "ETL"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Fabric supports cross-database queries between a Lakehouse and Warehouse in the same workspace using three-part naming (database.schema.table), which is how a Gold-layer Warehouse commonly reads Silver-layer Lakehouse tables.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Warehouse", "Lakehouse", "CrossDatabaseQuery"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "Lakehouse and Warehouse items in the same capacity both store data as Delta Parquet in OneLake and draw from the same F-SKU capacity unit pool, so there is no separate storage choice or separate pricing tier between the two engines.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["OneLake", "Capacity", "Warehouse", "Lakehouse"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "The post reports a known compatibility issue where OneLake's workspace-level security roles (OneSecurity) do not work together with Direct Lake semantic models built on the same Lakehouse, as of mid-2026.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["DirectLake", "OneLake", "Security"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "A recommended medallion pattern keeps Bronze and Silver layers in a Lakehouse for Spark-based ETL/CDC/feature engineering, while the Gold layer is built either as Lakehouse materialized views or as a Warehouse with T-SQL star schemas, with the Warehouse reading Lakehouse tables via cross-database queries.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MedallionArchitecture", "Warehouse", "Lakehouse", "GoldLayer"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Row-level security is recommended at the semantic-model layer for Power BI consumption, while T-SQL-layer row-level security in the Warehouse is reserved for direct Warehouse access by non-Power-BI clients, since the two security layers behave differently for downstream reporting.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Warehouse", "RowLevelSecurity", "PowerBI"]
+    }
+  ]
+}

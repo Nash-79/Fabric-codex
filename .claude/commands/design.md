@@ -13,3 +13,8 @@ original diagram. **Publishing is a human step**: tell the user to open **Settin
 Design** and paste the JSON (agents have no Supabase write access). Label inference vs cited fact.
 Finish by suggesting `/validate <slug>` on the draft and the server-side validate action after
 publishing.
+
+The Design content type also governs reusable data architecture patterns. For a pattern request,
+require explicit context, forces, decision, consequences, and appropriate/inappropriate-use
+boundaries; add `DataArchitecture` and `ArchitecturePattern` tags. Enrich/version an existing
+matching design instead of creating a duplicate.

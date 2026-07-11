@@ -55,38 +55,24 @@
     },
     {
       "capability_id": "lakehouse",
-      "text": "Automatic metadata discovery runs as a single background sync instance per Fabric workspace, and that one instance is responsible for scanning every lakehouse in the workspace for committed changes — the scan work is serialized across lakehouses rather than parallelized per lakehouse.",
-      "depth": 4,
-      "type": "internal",
-      "tags": ["MetadataSync", "Workspace", "Bottleneck"]
-    },
-    {
-      "capability_id": "lakehouse",
-      "text": "Because sync is a single per-workspace instance, a workspace holding many lakehouses is a documented cause of increased sync latency; Microsoft's stated mitigation is to split lakehouses across separate workspaces so each workspace's automatic metadata discovery scales independently.",
-      "depth": 4,
-      "type": "antipattern",
-      "tags": ["MetadataSync", "Workspace", "Scalability"]
-    },
-    {
-      "capability_id": "lakehouse",
-      "text": "Under normal conditions the lag between a committed lakehouse change and its visibility in the SQL analytics endpoint is under one minute, ranging from a few seconds to minutes; the background sync process itself only runs while the endpoint is active and stops after 15 minutes of endpoint inactivity.",
-      "depth": 4,
+      "text": "Beyond the automatic sync, three manual-refresh paths exist: an on-demand Refresh action in the SQL analytics endpoint's portal Explorer toolbar, the Refresh SQL endpoint metadata REST API for programmatic use, and (only for endpoints created after enabling the new metadata sync) the sys.sp_dw_refresh_ext_table T-SQL stored procedure, which refreshes a single named table's data rather than the whole endpoint's schema.",
+      "depth": 3,
       "type": "fact",
-      "tags": ["MetadataSync", "Latency", "Performance"]
+      "tags": ["MetadataSync", "ManualRefresh", "RESTAPI"]
     },
     {
       "capability_id": "lakehouse",
-      "text": "Sync and query latency both degrade as small-file counts grow: because Parquet files are immutable, every update or delete adds new files rather than rewriting existing ones, so unmaintained tables accumulate files that add read overhead to both the metadata scan and subsequent queries — the documented fix is scheduled Delta table maintenance (OPTIMIZE/compaction).",
-      "depth": 4,
-      "type": "antipattern",
-      "tags": ["MetadataSync", "SmallFiles", "TableMaintenance"]
+      "text": "Microsoft's guidance is to use the schema-level refresh (portal button or REST API) only when tables or columns were added, removed, or retyped, and to prefer the narrower sys.sp_dw_refresh_ext_table stored procedure for pure data-freshness issues on a single table, since it avoids re-scanning the whole item.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["MetadataSync", "ManualRefresh", "BestPractice"]
     },
     {
       "capability_id": "lakehouse",
-      "text": "Partition column choice affects sync latency: a high-cardinality partition column fragments a Delta table into a large number of partitions, which slows the metadata discovery scan for changes; Microsoft recommends choosing lower-cardinality partition columns that yield partitions of roughly 1 GB or larger instead.",
-      "depth": 4,
-      "type": "antipattern",
-      "tags": ["MetadataSync", "Partitioning", "Performance"]
+      "text": "Every Lakehouse, warehouse, database, and mirrored database in Fabric is automatically provisioned with exactly one SQL analytics endpoint apiece, so each Delta table in the source item surfaces as a queryable SQL table without any data being moved or copied.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["SQLAnalyticsEndpoint", "Provisioning"]
     },
     {
       "capability_id": "lakehouse",

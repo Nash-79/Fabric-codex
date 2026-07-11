@@ -21,7 +21,9 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
 1. If `$ARGUMENTS` contains URLs to add to the queue, you can't write them yourself — list them and
    tell the user to add them via **Settings → Queue** (or the URL submit box) before re-running.
 2. **Server queue (primary — URLs submitted via the frontend):**
-   `curl -s "$SB/queue_public?status=eq.queued&kind=eq.source&select=id,url,title,tier,tags,notes&order=created_at" -H "$H1" -H "$H2"`.
+   `curl -s "$SB/queue_public?status=in.(queued,claimed)&kind=eq.source&select=id,url,title,tier,tags,notes,status&order=created_at" -H "$H1" -H "$H2"`.
+   Include `claimed` items — Settings → Queue "bulk claim" marks items claimed to hand them to
+   this local run; they are still open work, not someone else's.
    For each item, in order:
    a. Use the **knowledge-curator** subagent on the item's `url` with its `tier`; pass the
    submitter's `notes` and `tags` as context. The curator writes `content/sources/<slug>.json`

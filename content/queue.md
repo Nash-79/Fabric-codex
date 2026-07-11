@@ -57,6 +57,46 @@ processed lines are moved to the Done section below with the resulting content f
 # discovered via fabric-data-agent-evaluation: https://learn.microsoft.com/en-us/fabric/data-science/fabric-data-agent-sdk tier=1 (Python SDK reference)
 # discovered via fabric-data-agent-create: https://learn.microsoft.com/en-us/fabric/governance/external-data-sharing-overview tier=1 (external data sharing overview)
 
+# ---- Suggested sources discovered during 2026-07-11 batch ingestion (77 queue items → 57 new source files; human approval needed — add via Settings → Queue, kind=source) ----
+# Highest value first. Deduped across 20 curator runs; links already present as sources or queue items were dropped.
+# discovered via ultimateinfoguide-rayfin-apps-guide + fabric-blog-rayfin-ama: https://learn.microsoft.com/en-us/fabric/apps/overview tier=1 (Fabric Apps/Rayfin official docs — NEW product surface with thin tier-1 coverage; surfaced independently by two curators)
+# discovered via lakehouse-sql-endpoint-internals re-ingest: https://learn.microsoft.com/en-us/fabric/data-engineering/sql-analytics-endpoint-performance tier=1 (HIGH PRIORITY — the sync-latency/small-file/partition facts REMOVED from the metadata-sync page moved here; recaptures 5 dropped claims)
+# discovered via fabric-blog-oap-rti: https://learn.microsoft.com/en-us/fabric/security/workspace-outbound-access-protection-overview tier=1 (OAP canonical doc behind both OAP blog posts)
+# discovered via fabric-blog-runtime-release-channels: https://learn.microsoft.com/fabric/data-engineering/release-channels tier=1 (canonical release-channels doc behind the announcement)
+# discovered via fabric-blog-synapse-migration-cli: https://learn.microsoft.com/fabric/fundamentals/skills-for-fabric-overview tier=1 (Skills for Fabric concept doc; also -install and -discover pages + github.com/microsoft/skills-for-fabric tier=3)
+# discovered via warehouse-performance-guidelines re-ingest: https://learn.microsoft.com/en-us/fabric/data-warehouse/statistics tier=1, /transactions tier=1, /clone-table tier=1, /data-clustering tier=1, /query-insights tier=1 (new perf-guidelines subtopics)
+# discovered via warehouse-overview re-ingest: https://learn.microsoft.com/en-us/fabric/fundamentals/decision-guide-lakehouse-warehouse tier=1 (also cited by ultimateinfoguide-lakehouse-vs-warehouse), /fabric/data-warehouse/migration-assistant tier=1
+# discovered via fabric-blog-data-protection-ai-ready: https://learn.microsoft.com/fabric/governance/information-protection tier=1, /fabric/governance/protection-policies-overview tier=1, /purview/dlp-powerbi-get-started tier=1, /purview/data-security-posture-management-learn-about tier=1 (Purview/governance depth pack)
+# discovered via ultimateinfoguide-operations-agent: https://learn.microsoft.com/en-us/fabric/real-time-intelligence/operations-agent tier=1 + /operations-agent-limitations tier=1 (tier-1 grounding to supersede the tier-6 Operations Agent claims)
+# discovered via fabric-blog-spark-failure-diagnosis: https://learn.microsoft.com/fabric/data-engineering/spark-monitoring-overview tier=1, /spark-monitoring-best-practices tier=1, https://github.com/microsoft/skills-for-fabric tier=3
+# discovered via fabric-blog-spark-efficient-scaledown: https://learn.microsoft.com/fabric/data-engineering/efficient-scaledown-remote-shuffle-manager tier=1
+# discovered via spark-compute-pools re-ingest: https://learn.microsoft.com/en-us/fabric/data-engineering/custom-live-pools-overview tier=1
+# discovered via fabric-blog-item-recovery: https://learn.microsoft.com/fabric/admin/retention-recovery tier=1
+# discovered via fabric-blog-lakehouse-table-health: https://learn.microsoft.com/sql/relational-databases/system-stored-procedures/sp-get-table-health-metrics-transact-sql tier=1
+# discovered via fabric-blog-df-multicloud-patterns: https://learn.microsoft.com/fabric/data-factory/activity-overview tier=1, /connector-overview tier=1
+# discovered via sql-database-fabric-overview re-ingest: https://learn.microsoft.com/en-us/fabric/database/sql/use-case-ai-application tier=1, /use-case-translytical-applications tier=1, /fabric/mirroring/azure-sql-database tier=1
+# discovered via sql-database-hyperscale-architecture re-ingest: https://learn.microsoft.com/en-us/azure/azure-sql/database/service-tier-hyperscale-replicas tier=1, /read-scale-out tier=1
+# discovered via fabric-blog-billing-planning: https://community.fabric.microsoft.com/t5/Fabric-Updates-Blog/Introducing-Planning-in-Microsoft-Fabric-IQ-From-historical-data/ba-p/5172232 tier=2 (deeper Fabric IQ Planning concept post)
+# discovered via fabric-blog-sql-2026-roundup: full-collation ba-p/5172032 tier=2, migration-assistant ba-p/5172048 tier=2, https://devblogs.microsoft.com/azure-sql/introducing-sql-mcp-server/ tier=2
+# discovered via ultimateinfoguide-fabric-iq-deep-dive: https://learn.microsoft.com/en-us/fabric/iq/rules-in-ontology tier=1
+# discovered via ultimateinfoguide-data-agent-tutorial: https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/fabric tier=1 (Foundry data-agent tool), Service-Principal-Support ba-p/5181634 tier=2
+# discovered via ultimateinfoguide-governance-tutorial: https://learn.microsoft.com/en-us/fabric/governance/onelake-catalog-overview tier=1, /onelake-catalog-govern tier=1, /microsoft-purview-fabric tier=1, govern-tab security-insights blog post tier=2
+# discovered via ultimateinfoguide-mirroring-tutorial: https://learn.microsoft.com/en-us/fabric/mirroring/open-mirroring-partners-ecosystem tier=1, /mirroring/monitor tier=1, extended-capabilities-in-mirroring blog tier=2
+# discovered via ultimateinfoguide-capacity-optimization: https://learn.microsoft.com/en-us/fabric/enterprise/optimize-capacity tier=1, /metrics-app tier=1, /plan-capacity tier=1, /fabric/data-engineering/autoscale-billing-for-spark-overview tier=1
+# discovered via ultimateinfoguide-onelake-shortcut-403-fix: https://learn.microsoft.com/en-us/fabric/onelake/onelake-shortcut-security tier=1, workspace-identity-authentication blog tier=2
+# discovered via ultimateinfoguide-pbir-format: https://learn.microsoft.com/en-us/power-bi/developer/embedded/projects-enhanced-report-format tier=1, /developer/projects/projects-overview tier=1
+# discovered via ultimateinfoguide-power-bi posts: https://learn.microsoft.com/en-us/power-bi/create-reports/copilot-introduction tier=1, /copilot-prepare-data-ai tier=1, /natural-language/q-and-a-intro tier=1 (Q&A deprecation Dec 2026)
+# discovered via ultimateinfoguide-fabric-vs-synapse: https://learn.microsoft.com/en-us/fabric/data-engineering/comparison-between-fabric-and-azure-synapse-spark tier=1, /fabric/data-warehouse/data-types tier=1
+# discovered via fabric-blog-oap-event-flows: https://learn.microsoft.com/en-us/fabric/real-time-hub/fabric-events-overview tier=1, /fabric-events-paused-state tier=1, /private-links-real-time-events tier=1
+# discovered via ultimateinfoguide-eventstream-tutorial: https://learn.microsoft.com/en-us/fabric/real-time-intelligence/event-streams/overview tier=1
+# discovered via fabricdataagent-community-hub re-ingest: https://github.com/microsoft/fabric_data_agent_client tier=3, https://github.com/microsoft/Data-and-Agent-Governance-and-Security-Accelerator tier=3
+# discovered via fabric-blog-rayfin-ama: introducing-rayfin ba-p/5191676 tier=1, https://github.com/microsoft/rayfin tier=3
+# discovered via ultimateinfoguide-production-stability: https://learn.microsoft.com/en-us/fabric/onelake/security/data-access-control-model tier=1, /fabric/onelake/onelake-storage-tiers tier=1
+
+# ---- Data-hygiene note (2026-07-11) ----
+# Supabase has the CoddSpeed SIGMOD paper as a source under TWO slugs: coddspeed-gpu-warehouse and
+# coddspeed-hardware-accelerated-query-processing-in-microsoft-fabric. Admin should review and retire one.
+
 # ---- Source tracking (2026-07-05) ----
 # fabricdataagent.com has NO RSS feed. Track it two ways:
 # 1. RSS: add https://github.com/pawarbi/fabric-data-agent-website/commits/main.atom (tier 4, tags FabricDataAgent,Community)

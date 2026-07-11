@@ -1,0 +1,76 @@
+{
+  "url": "https://community.fabric.microsoft.com/t5/Fabric-Updates-Blog/Improve-performance-for-Python-UDFs-and-complex-data-types-in/ba-p/5212036",
+  "title": "Improve performance for Python UDFs and complex data types in Microsoft Fabric's Native Execution Engine",
+  "tier": 1,
+  "summary": "A Fabric Updates Blog post walking through why Python/Scala UDFs and nested data types (arrays, maps, structs) used to defeat Spark's columnar execution, how the Native Execution Engine (NEE) now keeps both in the native path, and the internal benchmark multipliers Microsoft is citing for the improvement.",
+  "audience": "Spark/data engineers running ETL pipelines with custom Python or Scala business logic over semi-structured or nested data in Fabric notebooks and Spark job definitions.",
+  "why_it_matters": "Teams have historically worked around UDF and nested-type slowness by rewriting logic in SQL or flattening schemas at ingestion time; this post explains the mechanism that removes that tradeoff so engineers can judge whether their existing workloads would benefit from simply enabling NEE rather than re-architecting pipelines.",
+  "takeaways": [
+    "The performance penalty for UDFs comes from repeated JVM-to-Python-worker serialization round trips, and for nested types from the engine dropping out of columnar execution into row-based processing.",
+    "NEE addresses both bottlenecks by keeping UDF execution and complex-type operations inside the native columnar path, with no code changes required to existing notebooks or jobs.",
+    "Microsoft cites internal benchmark ranges rather than a single fixed multiplier, and vectorized UDFs benefit far more than standard (row-at-a-time) UDFs.",
+    "Enabling NEE and confirming it took effect is a config-and-verify workflow: environment setting, workload comparison, and checking for the absence of fallback alerts.",
+    "The complex-type improvements are pitched specifically at lakehouse optimization patterns like Z-order and liquid clustering on semi-structured data, not just raw UDF speed."
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "Standard Spark UDF execution requires serializing rows out of Spark's internal format, transferring them to a separate Python worker process, executing the UDF, and serializing results back to the JVM for every batch, which adds CPU overhead and breaks vectorized execution.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["MicrosoftFabric", "Spark", "PySpark", "NativeExecutionEngine", "Performance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Under NEE, Python and Scala UDF execution reduces serialization round trips between the JVM and the Python worker by keeping data in columnar format longer, with vectorized UDFs seeing the largest gains and standard (non-vectorized) UDFs also improving.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Spark", "PySpark", "NativeExecutionEngine", "Performance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Complex data types (arrays, maps, structs) previously forced Spark's engine off its optimized columnar path into row-based processing; under NEE, operations like explode, map access, and struct field extraction are processed natively in the columnar engine without that fallback.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "ComplexTypes", "Performance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Microsoft's internal benchmarks report vectorized Python/Scala UDFs up to 5.76x faster, complex (non-vectorized) UDFs 1.08x-2.5x faster depending on complexity, and TPC-DS end-to-end workloads including complex-type queries up to 2.35x faster, all run on production-scale datasets with enterprise-typical cluster configurations; actual gains vary by workload and cluster configuration.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Benchmark", "Performance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Because NEE's UDF and complex-type handling requires no code changes, existing Spark notebooks and jobs that already use Python/Scala UDFs or nested schemas benefit automatically once NEE is enabled on the environment, with no new API or syntax needed.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Migration"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The post frames native handling of arrays, maps, and structs as directly useful for advanced lakehouse optimization scenarios such as Z-order optimization, liquid clustering, semi-structured analytics, and event-driven architectures, letting teams keep complex schemas without restructuring pipelines for performance.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MicrosoftFabric", "Spark", "Lakehouse", "NativeExecutionEngine", "ZOrder", "LiquidClustering"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "To enable and verify NEE for a workload, the recommended workflow is: turn on Native Execution Engine on an Environment item under its Compute/Spark settings, attach that environment to the notebook or Spark job, run the workload, compare execution time against a run without NEE, and check for the absence of native-engine fallback alerts to confirm native execution actually occurred.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Spark", "NativeExecutionEngine", "Configuration"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://community.fabric.microsoft.com/t5/image/serverpage/image-id/1352823i8187950C47829A58/image-size/large?v=v2&px=999",
+      "caption": "Bar chart comparing relative execution time with and without the Native Execution Engine across vectorized UDF, complex UDF, and TPC-DS workload categories; lower bars indicate faster performance.",
+      "attribution": "Microsoft Fabric Updates Blog (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "spark"
+    }
+  ]
+}

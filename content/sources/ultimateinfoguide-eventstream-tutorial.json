@@ -1,0 +1,82 @@
+{
+  "url": "https://ultimateinfoguide.com/eventstream-in-fabric-microsoft-fabric-tutorial-series-2025/",
+  "title": "Eventstream in Fabric: Technical Facts & Configuration Guide (Tutorial Series)",
+  "tier": 6,
+  "tags": ["MicrosoftFabric", "RTI", "Eventstream", "DataEngineering", "StreamingData"],
+  "summary": "An independent practitioner tutorial walking through Fabric Eventstream's pipeline model, transformation operators, windowing types, and destination routing, with an emphasis on operational tuning and delivery-semantics gotchas rather than feature enumeration.",
+  "audience": "Data engineers building or operating real-time ingestion pipelines in Fabric who already know Eventstream exists and want concrete tuning and deduplication guidance.",
+  "why_it_matters": "Most Eventstream documentation describes what the feature does; this piece is useful for the operational decisions around it — when to use Direct Ingestion vs. transformation, how to dedupe at each destination, and how to read the health metrics that indicate a misconfigured stream.",
+  "takeaways": [
+    "Direct Ingestion (no transformation) is the lower-latency, lower-cost default; add Event Processing only when volume reduction, enrichment, or content routing is actually needed.",
+    "Eventstream's delivery guarantee is at-least-once, so downstream deduplication is the consumer's responsibility, not something the platform guarantees away.",
+    "The four windowing types (tumbling, hopping, session, sliding) map to distinct use cases and are not interchangeable defaults.",
+    "A single Eventstream can fan out to multiple destination types simultaneously, which is the basis for a lambda-style speed+batch pattern.",
+    "Growing queue depth and rising CU consumption are the two health signals that indicate a transformation chain is undersized for its source volume."
+  ],
+  "claims": [
+    {
+      "capability_id": "rti",
+      "text": "Eventstream pipelines are structured as three stages: event sources feed a default stream, which can pass through optional chained transformation operators, before fanning out to one or more destinations.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["Eventstream", "RTI", "StreamingData"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "Direct Ingestion sends raw, unprocessed events straight to a destination and carries lower latency and lower capacity-unit cost than routing events through transformation (Event Processing) first.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Eventstream", "PerformanceTuning", "RTI"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "A recommended practice is to start with Direct Ingestion and push filtering or aggregation logic to query time, only introducing Event Processing transformations when reducing volume, enriching records, or content-based routing is specifically required.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Eventstream", "PerformanceTuning"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "Eventstream's transformation operators (filter, aggregate, group-by, join, manage fields, convert) can be chained, and filtering events as close to the source as possible avoids spending capacity units on transformations applied to data that will be discarded anyway.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Eventstream", "PerformanceTuning"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "Eventstream supports four temporal windowing types with distinct semantics: tumbling (non-overlapping fixed intervals), hopping (overlapping fixed intervals for smoothed/moving-average metrics), session (dynamic duration based on gaps between events), and sliding (continuously advancing fixed-duration window for real-time threshold detection).",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["Eventstream", "RTI"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "A single Eventstream can write simultaneously to an Eventhouse KQL database and a Lakehouse, which is described as the basis for a lambda-architecture pattern combining a real-time speed layer with a historical batch layer.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Eventstream", "Lakehouse", "EventhouseKQL", "ArchitecturePattern"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "Eventstream provides at-least-once delivery, so duplicate events are possible (for example during connector restarts); the post recommends deduplicating at the destination using KQL's arg_max() by event ID for Eventhouse, or Delta MERGE logic keyed on event ID for Lakehouse.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["Eventstream", "DataQuality", "EventhouseKQL", "DeltaLake"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "Recommended Eventstream health signals to monitor include end-to-end latency, event throughput drop versus the source rate, error rate from schema mismatches, and pending-event queue depth; a steadily growing queue indicates the destination is falling behind and the stream needs scaling or simplified transforms.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Eventstream", "Monitoring", "RTI"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "Managed identity is recommended for Eventstream-to-Eventhouse and Eventstream-to-Lakehouse connections so that credentials do not need manual rotation, and the Manage Fields operator can be used to hash or mask sensitive columns before data reaches a destination.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Eventstream", "Security", "Governance"]
+    }
+  ],
+  "assets": []
+}

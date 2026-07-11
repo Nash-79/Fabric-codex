@@ -1,0 +1,74 @@
+{
+  "url": "https://ultimateinfoguide.com/onelake-shortcut-authorization-failed-cross-workspace-fix/",
+  "title": "OneLake Shortcut Authorization Failed: Fixing Cross-Workspace 403 Errors",
+  "tier": 6,
+  "summary": "A community troubleshooting walkthrough for a 403 'OneLake shortcut authorization failed' error that appears when a lakehouse shortcut spans two workspaces. It maps the error to three distinct root causes and gives a matching fix for each.",
+  "audience": "Fabric admins and lakehouse owners who see shortcut access denied errors in a multi-workspace setup and need to know which of several possible causes applies to them.",
+  "why_it_matters": "Cross-workspace shortcut authorization failures can look identical in the UI while stemming from unrelated causes (identity delegation, missing data-plane roles, credential rotation, or a UI-only false positive), so a fast differential checklist shortens what would otherwise be a multi-cause guessing exercise.",
+  "takeaways": [
+    "A 403 on a cross-workspace OneLake shortcut is often an identity-mode misconfiguration, not a missing permission.",
+    "Control-plane workspace roles (e.g. Viewer) and OneLake data-plane security roles are separate grants; both must be present.",
+    "Row-level security can produce a 403-looking preview failure in the UI even when the underlying query succeeds.",
+    "External ADLS Gen2 shortcuts have their own credential-expiry failure mode, distinct from internal OneLake shortcuts."
+  ],
+  "tags": ["MicrosoftFabric", "OneLake", "Lakehouse", "Troubleshooting", "Security"],
+  "claims": [
+    {
+      "capability_id": "onelake",
+      "text": "A cross-workspace OneLake shortcut can return a 403 authorization error when the source lakehouse's SQL analytics endpoint is set to a fixed or delegated identity instead of user identity, which blocks single sign-on passthrough between the two workspaces.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["OneLake", "Troubleshooting", "Security"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Setting the source lakehouse's SQL analytics endpoint identity mode to 'user identity' is reported to resolve cross-workspace shortcut 403 errors caused by blocked SSO passthrough, provided the calling user also holds at least Viewer on the source workspace.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["OneLake", "Troubleshooting", "Security"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Workspace-level control-plane roles (e.g. Viewer) and OneLake data-plane security role assignments are separate grants; a user can hold a workspace role yet still be denied at the shortcut target path without an explicit OneLake data-access role.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["OneLake", "Security"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "After assigning a OneLake security read role on a shortcut path, the post reports an observed propagation delay of roughly two to three minutes before access takes effect.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["OneLake", "Troubleshooting"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "External ADLS Gen2 shortcuts can fail authorization when SAS tokens or account keys used as the shortcut credential expire or rotate, a distinct failure mode from internal OneLake-to-OneLake shortcuts that rely on identity passthrough.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["OneLake", "Troubleshooting"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "The post recommends configuring a Fabric workspace identity (a service principal) with the Storage Blob Data Reader Azure RBAC role on the target ADLS Gen2 account for external shortcuts, instead of fixed SAS/account-key credentials, to avoid future credential-expiry failures.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["OneLake", "Security"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Row-level security applied to a shortcut's target table can cause the Lakehouse Explorer preview pane to show a 403-style failure even though a direct SQL query (e.g. a SELECT TOP 10) against the same shortcut succeeds, indicating the failure is a UI preview limitation rather than a real authorization gap.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["OneLake", "Lakehouse", "Troubleshooting"]
+    },
+    {
+      "capability_id": "capacity",
+      "text": "The post notes reports of P-SKU capacities showing incompatibility with firewalled ADLS Gen2 access for shortcuts, unless Trusted Workspace Access is configured.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["OneLake", "Security", "Capacity"]
+    }
+  ],
+  "assets": []
+}

@@ -13,3 +13,9 @@ Data flow, Component responsibilities, Performance, Governance & security, Cost 
 & anti-patterns, Assumptions, Open questions. Optionally commission original diagrams via
 `/prompts:fa-diagram`; include only registered `content/diagrams/*` paths. Label inference vs cited
 fact. End with the exact Settings -> Publish action and suggest `/prompts:fa-validate`.
+
+This design content type covers both workload-specific solution architectures and reusable data
+architecture patterns. When the scenario asks for a reusable pattern, make the reusable context,
+forces, decision, consequences, and appropriate/inappropriate-use boundaries explicit, and include
+the tags `DataArchitecture` and `ArchitecturePattern`. Do not create a duplicate pattern when an
+existing active design already covers the same decision; enrich/version it instead.

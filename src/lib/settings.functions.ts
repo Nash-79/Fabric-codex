@@ -1054,6 +1054,13 @@ export const deleteRssSubscription = createServerFn({ method: "POST" })
 // --- Unified source watchers ----------------------------------------------
 
 type WatcherMode = "auto" | "rss" | "sitemap" | "listing" | "page";
+type WatcherAttemptResult = {
+  mode: WatcherMode;
+  url: string;
+  outcome: "success" | "empty" | "unchanged" | "error";
+  candidates: number;
+  error?: string;
+};
 type WatcherInput = {
   url: string;
   title?: string;
@@ -1071,9 +1078,6 @@ function watcherValues(data: WatcherInput) {
   if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
     throw new Error("Only credential-free HTTP(S) URLs are supported.");
   }
-  const mode = data.mode ?? "auto";
-  if (!["auto", "rss", "sitemap", "listing", "page"].includes(mode))
-    throw new Error("Invalid watcher mode.");
   const maxDepth = data.maxDepth ?? 1;
   const maxPages = data.maxPages ?? 100;
   const tier = data.defaultTier ?? 6;
@@ -1083,7 +1087,7 @@ function watcherValues(data: WatcherInput) {
   return {
     url: parsed.toString(),
     title: data.title?.trim() ?? "",
-    mode,
+    mode: "auto" as const,
     alternative_url: data.alternativeUrl?.trim() || null,
     allowed_host: parsed.hostname.toLowerCase(),
     allowed_path_prefix:
@@ -1130,6 +1134,7 @@ export const testSourceWatcher = createServerFn({ method: "POST" })
         code: (e as { code?: string }).code ?? "http",
         trigger: (e as { trigger?: string }).trigger,
         suggestedUrl: (e as { suggestedUrl?: string }).suggestedUrl,
+        attempts: (e as { attempts?: WatcherAttemptResult[] }).attempts ?? [],
       };
     }
   });
@@ -1141,9 +1146,25 @@ export const addSourceWatcher = createServerFn({ method: "POST" })
     await requireAdmin(context);
     const sb = await adminClient();
     const values = watcherValues(data);
+    const { testWatcher } = await import("@/lib/source-watcher.server");
+    const validation = await testWatcher({
+      ...values,
+      detected_mode: null,
+      detected_url: null,
+      last_success_at: null,
+      etag: null,
+      last_modified: null,
+    });
     const { data: row, error } = await sb
       .from("source_watchers")
-      .insert({ ...values, created_by: context.userId })
+      .insert({
+        ...values,
+        detected_mode: validation.mode,
+        detected_url: validation.resolvedUrl,
+        last_attempt_at: new Date().toISOString(),
+        last_success_at: new Date().toISOString(),
+        created_by: context.userId,
+      })
       .select("*")
       .single();
     if (error)
@@ -1151,6 +1172,8 @@ export const addSourceWatcher = createServerFn({ method: "POST" })
     await recordAudit(context.userId, "watcher.created", "source_watcher", row.id, {
       url: values.url,
       mode: values.mode,
+      detectedMode: validation.mode,
+      detectedUrl: validation.resolvedUrl,
     });
     return { ok: true as const, watcher: row };
   });
@@ -1162,7 +1185,48 @@ export const updateSourceWatcher = createServerFn({ method: "POST" })
     await requireAdmin(context);
     const sb = await adminClient();
     const values = watcherValues(data);
-    const { error } = await sb.from("source_watchers").update(values).eq("id", data.id);
+    const { data: existing, error: readError } = await sb
+      .from("source_watchers")
+      .select("*")
+      .eq("id", data.id)
+      .single();
+    if (readError || !existing) throw new Error(readError?.message ?? "Watcher not found.");
+    const discoveryChanged =
+      existing.url !== values.url ||
+      existing.alternative_url !== values.alternative_url ||
+      existing.allowed_host !== values.allowed_host ||
+      existing.allowed_path_prefix !== values.allowed_path_prefix ||
+      existing.max_depth !== values.max_depth ||
+      existing.max_pages !== values.max_pages;
+    let retained = {
+      detected_mode: existing.detected_mode,
+      detected_url: existing.detected_url,
+    };
+    if (discoveryChanged) {
+      const { testWatcher } = await import("@/lib/source-watcher.server");
+      const validation = await testWatcher({
+        ...values,
+        detected_mode: null,
+        detected_url: null,
+        last_success_at: null,
+        etag: null,
+        last_modified: null,
+      });
+      retained = {
+        detected_mode: validation.mode,
+        detected_url: validation.resolvedUrl,
+      };
+    }
+    const { error } = await sb
+      .from("source_watchers")
+      .update({
+        ...values,
+        ...retained,
+        ...(discoveryChanged
+          ? { etag: null, last_modified: null, last_attempt_at: new Date().toISOString() }
+          : {}),
+      })
+      .eq("id", data.id);
     if (error) throw new Error(error.message);
     await recordAudit(context.userId, "watcher.updated", "source_watcher", data.id, {
       url: values.url,

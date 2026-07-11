@@ -1,0 +1,59 @@
+{
+  "url": "https://ultimateinfoguide.com/data-warehousing-in-fabric-microsoft-fabric-tutorial-series/",
+  "title": "Data Warehousing in Fabric: Microsoft Fabric Tutorial Series",
+  "tier": 6,
+  "summary": "A tutorial-style community post walking through building a Fabric Warehouse Gold layer with CTAS and MERGE patterns, migrating off a Synapse dedicated SQL pool, and modeling conventions for star-schema fact/dimension tables.",
+  "audience": "Data engineers building their first Fabric Warehouse Gold layer or migrating an existing Synapse dedicated SQL pool warehouse into Fabric.",
+  "why_it_matters": "The migration checklist (which Synapse-specific DDL to strip out) and the fact-table cardinality heuristic are concrete, reusable rules of thumb not found in the Learn overview docs, which describe the target state but not the migration path or field-tested modeling heuristics.",
+  "takeaways": [
+    "Migrating a Synapse dedicated SQL pool warehouse into Fabric requires stripping distribution and clustered-columnstore-index DDL, which have no Fabric Warehouse equivalent.",
+    "CETAS-export-then-OneLake-shortcut-then-COPY-INTO is the suggested data movement path from Synapse into a Fabric Warehouse.",
+    "A wide fact table (the post suggests over roughly 50 columns) is a signal that some columns belong in a dimension table instead.",
+    "ABFSS path errors are a common early-stage mistake; the path format needs the workspace and item names in the right positions."
+  ],
+  "tags": ["MicrosoftFabric", "Warehouse", "Migration", "Synapse", "DataModeling"],
+  "claims": [
+    {
+      "capability_id": "warehouse",
+      "text": "Migrating DDL from a Synapse dedicated SQL pool into Fabric Warehouse requires removing distribution clauses (HASH, ROUND_ROBIN, REPLICATE), clustered columnstore index syntax, and manual INDEX REBUILD/REORGANIZE/CREATE STATISTICS statements, none of which have a Fabric Warehouse equivalent.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Warehouse", "Migration", "Synapse"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The suggested path for moving data from a Synapse dedicated SQL pool into Fabric is: CETAS-export the Synapse tables to Parquet in ADLS Gen2, create a OneLake shortcut to that ADLS container, then load into the Fabric Warehouse with COPY INTO.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Warehouse", "Migration", "OneLake", "COPYINTO"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "A practitioner heuristic offered in the post: a fact table with more than roughly 50 columns is likely carrying attributes that should be split out into a dimension table instead.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["DataModeling", "StarSchema", "Warehouse"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The post documents error 110802 as caused by an invalid ABFSS path or missing permissions, and recommends verifying the abfss://<workspace>@onelake.dfs.fabric.microsoft.com/<item>/... path format as the fix.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": ["Warehouse", "OneLake", "Troubleshooting"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The post recommends batching large DML deletes by partition rather than issuing a single large WHERE-clause delete, since very large single-transaction deletes can hit Delta transaction log limits.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["Warehouse", "DeltaLake", "Troubleshooting"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The recommended fix for a Direct Lake fallback caused by unsupported T-SQL constructs in a view is to materialize the view and remove non-deterministic functions from its definition.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["DirectLake", "Warehouse", "Troubleshooting"]
+    }
+  ]
+}

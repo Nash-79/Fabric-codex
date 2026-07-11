@@ -29,6 +29,7 @@ In a Codex session, type `/` and choose, or type the name directly:
 
 ```
 /prompts:fa-orchestrate FOCUS=ai-apis
+/prompts:fa-orchestrate EXECUTE=true
 /prompts:fa-ingest   SOURCE=https://learn.microsoft.com/fabric/...  TIER=1
 /prompts:fa-blog     TOPIC=direct-lake
 /prompts:fa-design   SCENARIO="Governed self-service BI over 5TB finance data, 800 users" LATENCY="near real-time"
@@ -55,6 +56,11 @@ Current authoring prompts read Supabase with the publishable/anon key in `.env` 
 git-tracked files under `content/`. Admin mutations remain app actions: publish files in
 **Settings -> Publish**, verify claims in **Settings -> Claims**, complete queue items in
 **Settings -> Queue**, and poll feeds in **Settings -> RSS Feeds**.
+
+`EXECUTE=true` keeps ingestion, editorial questions, downstream authoring, and validation in one
+resumable orchestration run. It pauses once for source publication and claim verification, then
+finishes with a consolidated **Publish all** action for generated articles, designs, lessons, and
+diagrams.
 
 The local FastAPI backend is still useful for backend development and tests, but the Codex content
 authoring loop does not require a metered OpenAI API key or server-side LLM calls.

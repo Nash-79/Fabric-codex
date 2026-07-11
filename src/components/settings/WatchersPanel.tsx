@@ -29,6 +29,7 @@ export type WatcherRow = {
   title: string;
   mode: string;
   detected_mode: string | null;
+  detected_url: string | null;
   alternative_url: string | null;
   status: "active" | "paused";
   default_tier: number;
@@ -65,15 +66,15 @@ export function WatchersPanel() {
   const query = useQuery({ queryKey: ["source-watchers"], queryFn: () => listFn() });
   const [url, setUrl] = useState(""),
     [title, setTitle] = useState(""),
-    [mode, setMode] = useState<"auto" | "rss" | "sitemap" | "listing" | "page">("auto"),
     [alternative, setAlternative] = useState(""),
     [tier, setTier] = useState("6"),
     [tags, setTags] = useState(""),
-    [editingId, setEditingId] = useState<string | null>(null);
+    [editingId, setEditingId] = useState<string | null>(null),
+    [testResult, setTestResult] = useState<any>(null);
   const payload = () => ({
     url: url.trim(),
     title: title.trim(),
-    mode,
+    mode: "auto" as const,
     alternativeUrl: alternative.trim() || undefined,
     defaultTier: Number(tier),
     defaultTags: tags
@@ -88,29 +89,29 @@ export function WatchersPanel() {
   const resetForm = () => {
     setUrl("");
     setTitle("");
-    setMode("auto");
     setAlternative("");
     setTier("6");
     setTags("");
     setEditingId(null);
+    setTestResult(null);
   };
   const beginEdit = (watcher: WatcherRow) => {
     setUrl(watcher.url);
     setTitle(watcher.title);
-    setMode(watcher.mode as typeof mode);
     setAlternative(watcher.alternative_url || "");
     setTier(String(watcher.default_tier));
     setTags((watcher.default_tags || []).join(", "));
     setEditingId(watcher.id);
   };
   const test = useMutation({
-    mutationFn: () => testFn({ data: payload() }),
+    mutationFn: () => {
+      setTestResult(null);
+      return testFn({ data: payload() });
+    },
     onSuccess: (r) => {
       if (r.ok) {
-        if (mode === "auto") setMode(r.mode);
-        toast.success(
-          `Detected ${r.mode}: ${r.discovered} URL(s), ${r.fetched} fetch(es). ${mode === "auto" ? "Watcher type updated." : ""}`,
-        );
+        setTestResult(r);
+        toast.success(`Auto detected ${r.mode}: ${r.discovered} URL(s), ${r.fetched} fetch(es).`);
         return;
       }
       toast.error(
@@ -122,6 +123,7 @@ export function WatchersPanel() {
           .filter(Boolean)
           .join(" "),
       );
+      setTestResult({ attempts: r.attempts ?? [], failed: true });
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -196,18 +198,9 @@ export function WatchersPanel() {
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Watcher name"
         />
-        <Select value={mode} onValueChange={(v) => setMode(v as typeof mode)}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {["auto", "rss", "sitemap", "listing", "page"].map((x) => (
-              <SelectItem key={x} value={x}>
-                {x}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <div className="flex items-center rounded-md border border-border bg-muted/30 px-3 text-sm text-muted-foreground">
+          Mode: auto (retained winner + fallbacks)
+        </div>
         <Input
           value={alternative}
           onChange={(e) => setAlternative(e.target.value)}
@@ -250,9 +243,45 @@ export function WatchersPanel() {
             onClick={() => (editingId ? update.mutate() : add.mutate())}
             disabled={!url.trim() || add.isPending || update.isPending}
           >
-            {update.isPending ? "Saving…" : editingId ? "Save changes" : "Add watcher"}
+            {add.isPending || update.isPending
+              ? "Validating…"
+              : editingId
+                ? "Validate and save"
+                : "Validate and add watcher"}
           </Button>
         </div>
+        {testResult && (
+          <div className="rounded-md border border-teal-500/30 bg-teal-500/10 p-3 text-xs md:col-span-2">
+            {testResult.failed ? (
+              <p className="font-medium text-rose-700 dark:text-rose-200">
+                No strategy returned usable in-scope output.
+              </p>
+            ) : (
+              <p className="font-medium text-foreground">
+                Winner: auto → {testResult.mode} · {testResult.resolvedUrl}
+              </p>
+            )}
+            <div className="mt-2 space-y-1 text-muted-foreground">
+              {(testResult.attempts ?? []).map((attempt: any, index: number) => (
+                <p key={`${attempt.mode}-${attempt.url}-${index}`}>
+                  {index + 1}. {attempt.mode} · {attempt.outcome} · {attempt.candidates} result(s) ·{" "}
+                  {attempt.url}
+                  {attempt.error ? ` · ${attempt.error}` : ""}
+                </p>
+              ))}
+            </div>
+            {!testResult.failed && (testResult.sample ?? []).length > 0 && (
+              <div className="mt-3 border-t border-teal-500/20 pt-2 text-muted-foreground">
+                <p className="mb-1 font-medium text-foreground">Sample output</p>
+                {(testResult.sample ?? []).slice(0, 5).map((item: any) => (
+                  <p key={item.url} className="truncate">
+                    {item.title || "Untitled"} · {item.url}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
       {query.isLoading ? (
         <Empty text="Loading watchers…" />
@@ -275,7 +304,7 @@ export function WatchersPanel() {
                   {r.title || r.url}
                 </a>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  <Badge variant="outline">{r.detected_mode || r.mode}</Badge>
+                  <Badge variant="outline">auto → {r.detected_mode || "detecting"}</Badge>
                   <Badge variant="outline">T{r.default_tier}</Badge>
                   <Badge variant="outline">{r.status}</Badge>
                   {r.last_error_code && (
@@ -314,6 +343,8 @@ export function WatchersPanel() {
                   </div>
                 )}
                 <p className="mt-1 text-xs text-muted-foreground">
+                  Retained endpoint: {r.detected_url || "not detected"}
+                  <br />
                   Last success:{" "}
                   {r.last_success_at ? new Date(r.last_success_at).toLocaleString() : "never"}
                 </p>

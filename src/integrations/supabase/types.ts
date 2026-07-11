@@ -1212,6 +1212,7 @@ export type Database = {
           default_tags: string[]
           default_tier: number
           detected_mode: string | null
+          detected_url: string | null
           error_count: number
           etag: string | null
           id: string
@@ -1240,6 +1241,7 @@ export type Database = {
           default_tags?: string[]
           default_tier?: number
           detected_mode?: string | null
+          detected_url?: string | null
           error_count?: number
           etag?: string | null
           id?: string
@@ -1268,6 +1270,7 @@ export type Database = {
           default_tags?: string[]
           default_tier?: number
           detected_mode?: string | null
+          detected_url?: string | null
           error_count?: number
           etag?: string | null
           id?: string
@@ -1908,47 +1911,77 @@ export type Database = {
       }
       source_watcher_status_public: {
         Row: {
+          allowed_host: string | null
+          allowed_path_prefix: string | null
+          alternative_url: string | null
           default_tags: string[] | null
           default_tier: number | null
           detected_mode: string | null
+          detected_url: string | null
           error_count: number | null
+          etag: string | null
           id: string | null
           last_attempt_at: string | null
           last_error: string | null
           last_error_code: string | null
+          last_error_trigger: string | null
+          last_modified: string | null
           last_success_at: string | null
+          max_depth: number | null
+          max_pages: number | null
           mode: string | null
           status: string | null
+          suggested_url: string | null
           title: string | null
           url: string | null
         }
         Insert: {
+          allowed_host?: string | null
+          allowed_path_prefix?: string | null
+          alternative_url?: string | null
           default_tags?: string[] | null
           default_tier?: number | null
           detected_mode?: string | null
+          detected_url?: string | null
           error_count?: number | null
+          etag?: string | null
           id?: string | null
           last_attempt_at?: string | null
           last_error?: string | null
           last_error_code?: string | null
+          last_error_trigger?: string | null
+          last_modified?: string | null
           last_success_at?: string | null
+          max_depth?: number | null
+          max_pages?: number | null
           mode?: string | null
           status?: string | null
+          suggested_url?: string | null
           title?: string | null
           url?: string | null
         }
         Update: {
+          allowed_host?: string | null
+          allowed_path_prefix?: string | null
+          alternative_url?: string | null
           default_tags?: string[] | null
           default_tier?: number | null
           detected_mode?: string | null
+          detected_url?: string | null
           error_count?: number | null
+          etag?: string | null
           id?: string | null
           last_attempt_at?: string | null
           last_error?: string | null
           last_error_code?: string | null
+          last_error_trigger?: string | null
+          last_modified?: string | null
           last_success_at?: string | null
+          max_depth?: number | null
+          max_pages?: number | null
           mode?: string | null
           status?: string | null
+          suggested_url?: string | null
           title?: string | null
           url?: string | null
         }

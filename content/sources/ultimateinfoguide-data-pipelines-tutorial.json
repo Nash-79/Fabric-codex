@@ -1,0 +1,82 @@
+{
+  "url": "https://ultimateinfoguide.com/data-pipelines-in-fabric-microsoft-fabric-tutorial-series/",
+  "title": "Data Pipelines in Fabric — Microsoft Fabric Tutorial Series",
+  "tier": 6,
+  "tags": ["MicrosoftFabric", "DataFactory", "DataEngineering", "ETL"],
+  "summary": "A practitioner-style walkthrough of Fabric Data Factory pipeline activities, trigger types, and production orchestration patterns, written and last verified in June 2026 by an independent tutorial site (not a Microsoft-affiliated publisher).",
+  "audience": "Data engineers building or maintaining production Fabric pipelines who want concrete activity behavior details and reusable orchestration patterns rather than a conceptual overview.",
+  "why_it_matters": "Goes beyond Microsoft Learn's conceptual pipeline documentation into operational specifics — concurrency limits, watermark patterns, and a governance-gated promotion pipeline — that practitioners often have to learn by trial and error.",
+  "takeaways": [
+    "Pipeline orchestration is best understood through composable control-flow activities (ForEach, If Condition, Until) rather than a single monolithic activity type.",
+    "Copy Job Activity is a newer no-code alternative to Copy Activity aimed at automatic schema handling and CDC-style incremental loads.",
+    "Watermark-based incremental loading is a three-step pattern: read the last watermark, filter the source copy by it, then persist the new watermark.",
+    "Small-file compaction (VACUUM/OPTIMIZE) materially affects Direct Lake query performance and is now exposed as a first-class pipeline activity.",
+    "A multi-stage approval gate can be built natively in a pipeline without an external workflow tool."
+  ],
+  "claims": [
+    {
+      "capability_id": "data-factory",
+      "text": "Fabric pipelines added a Copy Job Activity as a no-code alternative to the classic Copy Activity, offering automatic schema detection and bulk, incremental, and change-data-capture load modes; the post describes this as GA per the post's stated timeline.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["DataFactory", "CopyActivity", "CDC"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "The ForEach control-flow activity cannot nest another ForEach at the same pipeline level, so parallel iteration over nested collections requires splitting the loop into a parent pipeline that invokes a child pipeline per iteration.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataFactory", "Orchestration", "ControlFlow"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "A practical incremental-load pattern uses three activities in sequence: a Lookup activity that reads the last processed watermark value, a Copy Activity whose source query is parameterized with that watermark to pull only newer rows, and a Stored Procedure activity that writes the new watermark back to a control table after the copy succeeds.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataFactory", "IncrementalLoad", "ETL"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "CSV source files that include a byte-order mark can cause the first column name to be misread by Copy Activity; the fix is enabling a Skip BOM option in the source dataset settings rather than relying on positional column mapping.",
+      "depth": 2,
+      "type": "antipattern",
+      "tags": ["DataFactory", "CSV", "Troubleshooting"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "A dedicated Lakehouse Maintenance pipeline activity can run VACUUM and OPTIMIZE operations natively, compacting small Delta files; the post frames a 256 MB to 1 GB file size range as a practical target for good Direct Lake query performance, describing this as a preview-stage capability at time of writing.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Lakehouse", "DeltaLake", "DirectLake", "Performance"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "A governance-oriented pipeline pattern inserts an Approval Activity between a silver-to-gold promotion step and the final data-quality assertions, pausing execution until a designated approver responds (or a timeout triggers a failure branch), removing the need for an external workflow/approval tool.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataFactory", "Governance", "Orchestration"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "The Monitor hub in Fabric shows per-run and per-activity execution detail, including row counts and skipped-row counts logged by Copy Activity and Spark job IDs logged by Notebook Activity that link through to the underlying Spark UI for deeper diagnosis.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["DataFactory", "Monitoring", "Observability"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "A common secure Web Activity pattern authenticates by first calling an auth endpoint to retrieve a bearer token into a pipeline variable, then passing that token as an Authorization header on subsequent Copy or Web activity calls, avoiding hardcoded credentials in the pipeline definition.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataFactory", "Security", "Authentication"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "Recommended pipeline security hardening includes storing connection secrets only in linked-service-backed key vaults (never inline), authenticating Notebook activities via service principal or workspace identity rather than user credentials, and scoping service principal permissions to specific OneLake items instead of granting workspace Admin.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Security", "DataFactory", "Governance"]
+    }
+  ],
+  "assets": []
+}

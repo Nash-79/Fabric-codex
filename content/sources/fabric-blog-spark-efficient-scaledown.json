@@ -1,0 +1,91 @@
+{
+  "url": "https://community.fabric.microsoft.com/t5/Fabric-Updates-Blog/More-resilient-Spark-jobs-with-Efficient-Scaledown-Preview/ba-p/5212071",
+  "title": "More resilient Spark jobs with Efficient Scaledown (Preview)",
+  "tier": 1,
+  "tags": ["MicrosoftFabric", "DataEngineering", "Spark", "Performance", "Autoscale", "NativeExecutionEngine"],
+  "summary": "Microsoft explains Efficient Scaledown, a preview Fabric Spark capability that decouples shuffle data from executor lifetime by routing shuffle output to remote Blob Storage, aiming to let autoscale reclaim idle executors faster and make jobs more resilient to executor loss.",
+  "audience": "Data engineers and platform capacity owners tuning Spark autoscale behavior, shuffle-heavy batch workloads, and cost/performance tradeoffs on Fabric Spark clusters.",
+  "why_it_matters": "Shuffle data pinning executors to local disk is a well-known reason Spark clusters can't scale down cleanly; this feature reports substantial compute-cost and runtime deltas in Microsoft's own benchmark and requires specific Spark runtime/config prerequisites to enable.",
+  "takeaways": [
+    "Shuffle data traditionally lives on executor local disk, which prevents autoscale from releasing an executor until all downstream stages have read its shuffle blocks.",
+    "Efficient Scaledown introduces a Remote Shuffle Manager, shuffle migration on decommission, a per-stage routing decision layer, and an AQE shuffle-write optimization to break that coupling.",
+    "Microsoft's own TPC-DS benchmark reports a 43% reduction in total compute (VM-minutes) using this feature.",
+    "Routing only large shuffles remotely (versus routing all shuffles remotely) is reported to improve runtime by up to 57% while preserving the same scale-down benefit.",
+    "The feature requires the Native Execution Engine and Fabric Spark Runtime 3.5+, and is enabled via explicit Spark configuration properties; it is a preview capability."
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "By default Spark shuffle data is written to each executor's local disk, which prevents an executor from being released until every downstream stage has finished reading its shuffle blocks.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Spark", "Shuffle", "Autoscale"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "When an executor holding shuffle data is lost to a crash, spot reclamation, or scale-down, Spark raises a FetchFailedException and must re-execute the affected stages, which is a major source of unpredictable job runtime and wasted compute.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["Spark", "Shuffle", "Resilience"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Efficient Scaledown, a preview Fabric Spark capability, decouples shuffle data from executor lifetime by routing shuffle output to Azure Blob Storage (or migrating shuffle blocks on demand) instead of leaving them on local disk.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Spark", "Shuffle", "Preview"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Efficient Scaledown is composed of four cooperating parts: a Remote Shuffle Manager that reads/writes shuffle data to remote Blob Storage, shuffle migration that moves blocks off an executor before decommission rather than dropping them, a per-stage decision layer that keeps small shuffles local and routes large shuffles remotely, and an AQE shuffle-write optimization that adjusts shuffle partitions at runtime.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["Spark", "Shuffle", "AdaptiveQueryExecution"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "In Microsoft's own TPC-DS benchmark on Spark 4.1, with all queries run in a single session and a 3-minute pause between queries, total compute dropped from 3,724 to 2,121 VM-minutes, a reported 43% cost reduction, attributed to Efficient Scaledown.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Spark", "Benchmark", "CostOptimization"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Routing only large shuffles to remote storage while keeping small shuffles on local disk (via the per-stage decision layer) is reported to deliver up to 57% better runtime than routing all shuffles remotely, while preserving the same scale-down benefit.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Spark", "Performance", "Shuffle"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Efficient Scaledown requires the Native Execution Engine and is available starting with Fabric Spark Runtime 3.5 and later.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["Spark", "NativeExecutionEngine", "Configuration"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Enabling Efficient Scaledown is done through explicit Spark configuration properties, including spark.remote.shuffle.enabled, spark.sql.rsm.decisionlayer.enabled.level, spark.sql.adaptive.shuffleWrite.enabled, and shuffle-block decommission settings, which can be set at notebook, environment, workspace, or Spark Job Definition level.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["Spark", "Configuration", "Autoscale"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A separate configuration property, spark.dynamicAllocation.excludeDeltaSnapshotCache, prevents the Delta snapshot cache from blocking cluster scale-down.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Spark", "DeltaLake", "Configuration"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://community.fabric.microsoft.com/t5/image/serverpage/image-id/1352669iA22276C25E438107/image-size/large?v=v2&px=999",
+      "caption": "Diagram of how Efficient Scaledown decouples shuffle data from executor lifetime to deliver improved price-performance, as shown in the Fabric Updates blog post.",
+      "attribution": "Microsoft Fabric Updates Blog (© Microsoft), author Santhosh_Ravin1",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "spark"
+    }
+  ]
+}

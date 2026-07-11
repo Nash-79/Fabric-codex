@@ -43,8 +43,15 @@ mutates the existing row). A version cannot be saved without at least one cited 
 
 **Queue a source URL** submits a new URL with a trust tier, tags, and a note — this is the
 admin-side form described in _Submitting sources_. The table below lists every queue item
-with its status and per-row actions: **claim**, **complete** (needs a resulting source id),
-**fail** (needs a note), **requeue**, and **dismiss**.
+with its status and per-row actions: **reserve** (stored as `claimed`), **complete** (needs a
+resulting source id), **fail** (needs a note), **requeue**, and **dismiss**.
+
+**Reserve does not extract the source or create claims.** The complete sequence is shown in
+**Pipeline → Overview**: reserve → extract locally → publish Source (+ claims) → link the
+queue item to the result source → verify pending claims. The same overview then routes verified
+knowledge into a new or augmented article, a solution architecture, or a reusable data
+architecture pattern. Both architecture outputs are currently published as **Design**; pattern
+designs use the `DataArchitecture` and `ArchitecturePattern` tags.
 
 ## Publish
 
@@ -66,16 +73,26 @@ laptop agent later drains due commissions with `/commission-diagrams`.
 ## Website Watchers
 
 Add, test, pause, or delete watchers for RSS/Atom and JSON feeds, sitemaps, listing pages, or
-individual pages. Auto mode detects the best available first-party mechanism. New URLs and
-meaningfully changed known sources land in the Queue for human-reviewed ingestion; blocked sites
-remain visible with a structured diagnostic instead of bypassing their anti-bot controls.
+individual pages. Every watcher is always auto-mapped and must pass a server-side discovery test
+before it can be added. Polling tries the retained successful endpoint first, then falls back in
+order through feed, sitemap, listing, and single-page monitoring. The first strategy returning
+safe in-scope output becomes the retained mapping for the next poll; it is a performance hint, not
+a permanent lock. New URLs and meaningfully changed known sources land in the Queue for
+human-reviewed ingestion.
+
+**Test and detect** previews the winning strategy, resolved endpoint, sample count, and every
+attempt made. A single page is valid output: its normalized content fingerprint is monitored and a
+review is queued only when it changes. Fetch/parse errors, empty results, and out-of-scope results
+fall through to the next strategy. If every strategy fails, creation is refused with structured
+diagnostics rather than saving a watcher that cannot currently be polled.
 
 Some publishers challenge all datacenter traffic (Cloudflare and similar), so server-side polling
 of an otherwise-working feed fails permanently. For those watchers, run
-`node scripts/poll-watchers.mjs` on the authoring machine: it fetches the feed with the same
-honest client identity, dedupes against the knowledge base and open queue, and appends new posts
-to `content/queue.md` for the usual review + `/ingest-batch` flow. It never writes to the
-database.
+`node scripts/poll-watchers.mjs` on the authoring machine: it uses the same retained-first fallback
+hierarchy with the same honest client identity, dedupes against the knowledge base and open queue,
+and appends new posts to `content/queue.md` for the usual review + `/ingest-batch` flow. It reports
+a locally changed winner, but remains read-only; the next authenticated server poll persists that
+mapping.
 
 ## Logs
 

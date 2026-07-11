@@ -1,0 +1,82 @@
+{
+  "url": "https://ultimateinfoguide.com/transform-data-using-notebooks-microsoft-fabric-tutorial-series/",
+  "title": "Transform Data Using Notebooks (Microsoft Fabric Tutorial Series)",
+  "tier": 6,
+  "summary": "A practitioner walkthrough of Fabric notebooks for data transformation, covering runtime specifics, capacity/cold-start behavior, production patterns (schema enforcement, idempotent merges, incremental ingestion), and a decision guide for when to pick notebooks over Dataflow Gen2 or the SQL warehouse.",
+  "audience": "Data engineers already comfortable with PySpark who are ramping up on Fabric-specific notebook mechanics and orchestration.",
+  "why_it_matters": "Goes beyond generic Spark/PySpark instruction into Fabric-specific operational details — capacity SKU cold-start timing, mssparkutils parameterization, V-Order/Liquid Clustering defaults, and concrete cost/latency tradeoffs against Dataflow Gen2 and the SQL warehouse — that are easy to get wrong when moving from open-source Spark habits to Fabric.",
+  "takeaways": [
+    "Notebook cold-start time depends on capacity SKU size, not just being 'cold' vs 'warm'.",
+    "An attached Lakehouse changes how unqualified table names resolve, which is a common source of confusion when switching lakehouses mid-project.",
+    "Fabric's default engine behaviors (V-Order on, default shuffle partition count) are tuning levers practitioners should know rather than leave unexamined.",
+    "Notebooks, Dataflow Gen2, and the SQL warehouse are not interchangeable — the source frames a scenario-by-scenario decision matrix rather than a single 'best' tool.",
+    "Time-travel and VACUUM retention interact: shortening retention silently breaks downstream point-in-time queries."
+  ],
+  "tags": ["MicrosoftFabric", "DataEngineering", "PySpark", "Spark", "FabricNotebooks"],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "Per the post, Fabric notebook cold start takes roughly 20 to 60 seconds on F2-F4 capacities but drops to under 20 seconds on F8 and larger SKUs.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Spark", "Capacity", "Performance"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "An attached Lakehouse is required before a notebook can write Delta tables, and unqualified table names in code resolve against whichever Lakehouse is currently attached.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Lakehouse", "FabricNotebooks"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Switching the attached Lakehouse partway through a project forces a rewrite of any unqualified table references in the notebook's code, since they no longer resolve to the same tables.",
+      "depth": 2,
+      "type": "antipattern",
+      "tags": ["MicrosoftFabric", "Lakehouse", "FabricNotebooks"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Per the post, incremental ingestion in Fabric notebooks is commonly parameterized using mssparkutils.runtime.getParameterValue so a pipeline can pass in a run date and the notebook reads only that day's partition.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MicrosoftFabric", "Spark", "PySpark", "DataFactory"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "Fabric notebooks have no native scheduling of their own; recurring execution is handled exclusively by wrapping the notebook in a Data Factory pipeline notebook activity.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "DataFactory", "FabricNotebooks"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "V-Order is described as enabled by default on Fabric Delta tables and is recommended to leave on rather than disable.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "Lakehouse", "DeltaLake", "Performance"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Reducing Delta VACUUM retention below the default about 7-day window is flagged as risky because it can cause downstream time-travel queries against older snapshots to fail once those versions are purged.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["MicrosoftFabric", "Lakehouse", "DeltaLake"]
+    },
+    {
+      "capability_id": "dataflow-gen2",
+      "text": "The post frames the notebook-versus-Dataflow-Gen2 choice around scale and audience: notebooks suit large recurring transforms (its example is a daily 10GB-plus load) while Dataflow Gen2 suits low-code, business-user-driven visual mapping.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MicrosoftFabric", "DataflowGen2", "DataEngineering"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The post notes Fabric notebook library installs via %pip install apply only to the current interactive session, and recommends workspace-level library management instead for libraries that must persist across notebook runs.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["MicrosoftFabric", "Spark", "PySpark", "FabricNotebooks"]
+    }
+  ],
+  "assets": []
+}

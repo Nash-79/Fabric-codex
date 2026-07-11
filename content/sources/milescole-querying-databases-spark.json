@@ -1,0 +1,69 @@
+{
+  "url": "https://milescole.dev/optimization/2024/01/24/Querying-Databases-via-Apache-Spark-Pandas-or-Spark.html",
+  "title": "Querying Databases via Apache Spark: Pandas or Spark?",
+  "tier": 4,
+  "summary": "A community benchmark comparing three ways to query a database from a Fabric/Spark notebook: plain Pandas over ODBC, the Spark DataFrame API over JDBC, and Pandas-on-Spark over JDBC. The extracted claims cover the timing results for a small, single-record query and the underlying reason distributed tooling can lose to simple Pandas for low-volume lookups.",
+  "audience": "Fabric and Spark notebook developers deciding how to query relational sources for small versus large workloads.",
+  "why_it_matters": "It's easy to assume distributed APIs are always faster, but this source shows that distributed-processing overhead can make Spark or Pandas-on-Spark slower than plain Pandas for small, singleton queries against a database, which matters when choosing a connector pattern in Fabric notebooks.",
+  "takeaways": [
+    "Plain Pandas over ODBC was fastest for a single-record query in the author's test, both cold and warm.",
+    "Spark's JDBC-based DataFrame API was the slowest for a small lookup, despite being distributed.",
+    "Pandas-on-Spark sits between the two, using JDBC but a Pandas-like API surface.",
+    "Tool choice should be driven by workload size, not a default assumption that distributed tooling wins."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "DataEngineering",
+    "Pandas",
+    "Spark",
+    "Python",
+    "JDBC",
+    "Performance",
+    "AzureSQL"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "Distributed tools such as the Spark DataFrame API and Pandas-on-Spark are not universally faster than plain Pandas for database queries; the right tool depends on query and result-set size, since distributed processing carries coordination overhead that can outweigh its benefits on small workloads.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Spark", "Pandas", "WorkloadSizing"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "In the author's test querying a single record from Azure SQL Database, plain Pandas using PyODBC and SQLAlchemy over ODBC Driver 18 completed in about 1.5 seconds, Pandas-on-Spark over JDBC took about 5 seconds, and the Spark DataFrame API over JDBC took over 8 seconds on first execution.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Benchmark", "Pandas", "Spark", "JDBC", "ODBC"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "On repeated executions of the same single-record query within the same notebook session, Pandas averaged about 300 milliseconds while both the Spark DataFrame API and Pandas-on-Spark averaged about 900 milliseconds, showing the distributed approaches retained a fixed overhead even after session warm-up.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Benchmark", "Performance", "Spark", "Pandas"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Plain Pandas executes entirely at the notebook driver, while both the Spark DataFrame API and Pandas-on-Spark distribute execution across executors, which is what gives the latter two an advantage on large workloads but adds fixed coordination cost on small ones.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Pandas", "Spark", "Driver", "Executors"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Pandas connects to Azure SQL Database via PyODBC and SQLAlchemy using ODBC Driver 18 for SQL Server, whereas both the Spark DataFrame API and Pandas-on-Spark connect via JDBC connection strings, removing the need for the PyODBC/SQLAlchemy dependency chain.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["Pandas", "Spark", "JDBC", "ODBC", "AzureSQL"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "For singleton lookups or low-volume queries, plain Pandas is the recommended approach, while the Spark DataFrame API is a reasonable starting point for developers new to Pandas who need to scale to larger data volumes.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["Pandas", "Spark", "BestPractice"]
+    }
+  ],
+  "assets": []
+}

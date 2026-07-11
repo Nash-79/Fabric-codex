@@ -1,0 +1,99 @@
+{
+  "url": "https://community.fabric.microsoft.com/t5/Fabric-Updates-Blog/Know-before-you-optimize-Diagnose-Lakehouse-table-health-with-a/ba-p/5228076",
+  "title": "Know before you optimize: Diagnose Lakehouse table health with a T-SQL stored procedure",
+  "tier": 1,
+  "summary": "A Fabric Updates Blog post introducing sp_get_table_health_metrics, a built-in stored procedure exposed through the SQL analytics endpoint that lets users diagnose the physical health of a Lakehouse Delta table in T-SQL, without opening a Spark notebook. It explains what the anomaly and storage metrics mean, and shows a check-then-act pipeline pattern that runs OPTIMIZE only when the procedure flags a real problem.",
+  "audience": "Data engineers and analytics engineers who serve Lakehouse tables through the SQL analytics endpoint and want a lighter-weight way to decide when table maintenance (OPTIMIZE/compaction) is actually needed.",
+  "why_it_matters": "Blind, schedule-based OPTIMIZE runs waste capacity units on healthy tables while leaving genuinely degraded tables unaddressed; a T-SQL-native diagnostic closes that gap for teams whose primary interface is the SQL analytics endpoint rather than Spark, directly informing Lakehouse operational/performance guidance.",
+  "takeaways": [
+    "sp_get_table_health_metrics is a built-in stored procedure available through the Fabric SQL analytics endpoint for diagnosing Lakehouse table physical health in T-SQL.",
+    "It surfaces anomaly types like excessive small files, excessive deleted rows, missing recent checkpoints, and invalid file statistics.",
+    "It returns file-size and row-count distribution histograms so fragmentation is visible at a glance.",
+    "The recommended pattern is check-then-act: run the procedure first, and only trigger a Spark OPTIMIZE job when an anomaly is actually detected.",
+    "The SQL analytics endpoint remains read-only and cannot perform the OPTIMIZE itself; the procedure only exposes the diagnostic signal, and the fix still runs in Spark or the Lakehouse engine."
+  ],
+  "tags": ["MicrosoftFabric", "Lakehouse", "Warehouse", "TSQL", "Performance", "DataEngineering"],
+  "claims": [
+    {
+      "capability_id": "sql-database",
+      "text": "sp_get_table_health_metrics is a built-in stored procedure exposed through the Fabric SQL analytics endpoint that provides a T-SQL-native way to check the structural/physical health of Lakehouse Delta tables.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["TSQL", "Lakehouse", "Diagnostics"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Delta table files can drift into a suboptimal physical layout over time even when the logical data hasn't changed, which is described as the underlying cause of gradually slowing queries against Lakehouse tables.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Lakehouse", "DeltaLake", "Performance"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "sp_get_table_health_metrics returns anomaly-detection columns (PotentialAnomalyType and PotentialAnomalyDescription) flagging conditions such as too many small files, too many deleted rows, no recent checkpoint, or invalid file statistics, with a numeric type code for programmatic use.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["TSQL", "Diagnostics", "DeltaLake"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "The procedure's output includes snapshot and checkpoint version information used to judge whether a new Delta checkpoint is warranted.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["TSQL", "DeltaLake", "Checkpoint"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "The procedure reports file-size distribution across bins from 1 KiB to over 16 GiB and row-count distribution, letting a user spot small-file problems and data fragmentation at a glance.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["TSQL", "Performance", "SmallFiles"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Running OPTIMIZE (Spark table compaction) on a fixed schedule regardless of actual table condition is called out as an antipattern: it wastes compute/capacity units on already-healthy tables while tables that truly need attention can still be missed.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["Lakehouse", "OPTIMIZE", "CapacityManagement"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "A recommended check-then-act pipeline pattern runs sp_get_table_health_metrics first inside an ETL/ELT pipeline, then conditionally triggers a Spark notebook to run OPTIMIZE only if an anomaly was detected, implementable as a two-activity Fabric pipeline with an if-condition.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["DataFactory", "Orchestration", "Lakehouse"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "Because the SQL analytics endpoint is read-only, it cannot perform table maintenance itself; sp_get_table_health_metrics only exposes the diagnostic signal, while the actual OPTIMIZE/compaction fix must still run through Spark or the Lakehouse engine.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["TSQL", "Lakehouse", "Architecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "sp_get_table_health_metrics is callable as standard T-SQL from Fabric pipelines, Azure Data Factory, dbt, or any SQL-based orchestration tool, since it does not require a Spark session to invoke.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["TSQL", "Orchestration", "dbt"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://community.fabric.microsoft.com/t5/image/serverpage/image-id/1353167i7B52B6CB1AFF31F0/image-size/large?v=v2&px=999",
+      "caption": "Sample result set returned by sp_get_table_health_metrics, showing anomaly and storage-health columns.",
+      "attribution": "Microsoft Fabric Updates Blog (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "sql-database"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://community.fabric.microsoft.com/t5/image/serverpage/image-id/1353168i821149DE2A82269C/image-size/large?v=v2&px=999",
+      "caption": "A two-activity Fabric pipeline that checks table health and conditionally runs OPTIMIZE.",
+      "attribution": "Microsoft Fabric Updates Blog (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "data-factory"
+    }
+  ]
+}

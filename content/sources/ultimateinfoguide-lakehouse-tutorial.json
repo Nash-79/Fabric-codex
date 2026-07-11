@@ -1,0 +1,89 @@
+{
+  "url": "https://ultimateinfoguide.com/fabric-lakehouse-tutorial-microsoft-fabric-tutorial-series/",
+  "title": "Microsoft Fabric Lakehouse Tutorial: Technical Facts & Configuration Guide (Tutorial Series)",
+  "tier": 6,
+  "tags": ["MicrosoftFabric", "Lakehouse", "DeltaLake", "DirectLake", "PySpark", "DataEngineering"],
+  "summary": "An independent practitioner tutorial covering Lakehouse provisioning, the medallion-architecture layering pattern, SQL-endpoint visibility rules, Direct Lake fallback diagnosis, and table-maintenance guidance, oriented toward engineers building and operating Lakehouses rather than evaluating the concept.",
+  "audience": "Data engineers and BI developers building on Fabric Lakehouse who need concrete troubleshooting steps for SQL endpoint visibility, Direct Lake fallback, and partition sizing rather than a conceptual overview.",
+  "why_it_matters": "The Direct Lake fallback root-cause list and the OneSecurity/Direct Lake incompatibility are exactly the kind of debugging knowledge that saves an engineer from an unexplained DirectQuery fallback, and the SQL-endpoint visibility rule explains a very common Lakehouse confusion (why a file the user just uploaded doesn't show up in a query).",
+  "takeaways": [
+    "Only managed Delta tables are exposed through the SQL analytics endpoint and default semantic model — raw files sitting under the Files section are invisible to T-SQL and Power BI until they are registered as a Delta table.",
+    "Direct Lake falling back to DirectQuery has a short, diagnosable list of root causes: unsupported DAX functions, OneLake data access roles (OneSecurity) enabled on the same Lakehouse, a model too large for the capacity's memory framing, or unsupported column types/relationship cardinality.",
+    "OneLake data access roles (OneSecurity) and Direct Lake semantic models on the same Lakehouse are described as incompatible — enabling OneSecurity causes Direct Lake to fail and fall back to DirectQuery.",
+    "Partition sizing has a practical sweet spot: files under 128 MB hurt metadata reads and files over 4 GB hurt parallelism, with 256 MB-1 GB cited as the target after OPTIMIZE.",
+    "The medallion architecture can be implemented as schemas inside one Lakehouse for smaller teams, or as separate Lakehouses per layer when teams need independent ownership or security boundaries."
+  ],
+  "claims": [
+    {
+      "capability_id": "lakehouse",
+      "text": "Creating a Lakehouse automatically provisions three linked items: the Lakehouse storage itself (Delta tables plus a Files area for raw files), a read-only SQL analytics endpoint, and a default Power BI semantic model.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["Lakehouse", "PowerBI"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Only managed Delta tables are exposed through the SQL analytics endpoint and default semantic model; raw files stored as CSV, JSON, or Parquet under the Files area are not queryable via T-SQL or visible to Power BI until they are written or registered as a proper Delta table.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": ["Lakehouse", "DeltaLake", "PowerBI"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "If a Delta file was written to a table path without using saveAsTable (for example via a plain .save() call), the underlying files exist but are unregistered in the catalog; calling spark.catalog.createTable() against that path registers it as a managed table so it becomes visible to the SQL endpoint.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Lakehouse", "PySpark", "DeltaLake"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "A Direct Lake semantic model falling back to DirectQuery has four commonly cited root causes: use of DAX functions unsupported in Direct Lake mode, OneLake data access roles (OneSecurity) enabled on the same Lakehouse, the model exceeding the capacity's memory framing limit, or unsupported column types/relationship cardinality such as binary columns or many-to-many relationships without a bridge table.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["DirectLake", "PowerBI", "Troubleshooting"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "Diagnosing a Direct Lake fallback is done by running Performance Analyzer in Power BI Desktop and looking for DirectQuery storage-engine events in the trace, which confirm the model dropped out of Direct Lake mode.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["DirectLake", "PowerBI", "Troubleshooting"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "OneLake data access roles (the OneSecurity feature enforcing table/column/row-level permissions at the storage layer) are described as incompatible with Direct Lake semantic models built on the same Lakehouse: enabling OneSecurity on a Lakehouse causes Direct Lake models against it to fail and fall back to DirectQuery, so row-level security should instead be managed at the semantic-model level when Direct Lake is required.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["DirectLake", "Security", "PowerBI"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Recommended Delta table partition sizing after running OPTIMIZE is roughly 256 MB to 1 GB per file: partitions under about 128 MB hurt metadata-read performance from having too many small files, while partitions over about 4 GB hurt parallelism; for time-series tables, partitioning by year and month rather than by day avoids accumulating an excessive number of small partitions.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Lakehouse", "DeltaLake", "PerformanceTuning"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "The medallion architecture (bronze/silver/gold) can be implemented either as separate schemas within a single Lakehouse, which suits small-to-medium teams sharing one workspace, or as separate Lakehouses per layer, which suits larger teams needing independent ownership, differing security policies, or the need to share the gold layer across workspaces via shortcuts.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Lakehouse", "MedallionArchitecture", "ArchitecturePattern"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "A Lakehouse is positioned as the right choice for raw ingestion, data science, and feature engineering across structured and unstructured data with multi-engine (Spark, SQL, Power BI) access via the open Delta format, whereas a Warehouse is positioned for governed relational workloads that need full transactional T-SQL DML (INSERT/UPDATE/DELETE), stored procedures, and cross-database queries — with the two commonly used together.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["Lakehouse", "Warehouse", "ArchitecturePattern"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Accessing a OneLake shortcut requires the identity to hold Storage Blob Data Reader on the target ADLS Gen2 storage, or equivalent read permission on the target Lakehouse's workspace, when the shortcut points at another Lakehouse.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["OneLake", "Security"]
+    }
+  ],
+  "assets": []
+}

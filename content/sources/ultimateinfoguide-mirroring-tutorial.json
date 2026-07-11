@@ -1,0 +1,75 @@
+{
+  "url": "https://ultimateinfoguide.com/data-mirroring-in-fabric-microsoft-fabric-tutorial-series-2025/",
+  "title": "Data Mirroring in Microsoft Fabric: Technical Facts & Resources (Tutorial Series)",
+  "tier": 6,
+  "tags": ["MicrosoftFabric", "Mirroring", "DataEngineering", "CDC", "DeltaLake"],
+  "summary": "An independent practitioner walkthrough of Fabric Mirroring's snapshot-then-CDC mechanics, schema-change behavior, and setup pitfalls, aimed at engineers configuring and operating mirrored sources rather than evaluating the feature.",
+  "audience": "Data engineers setting up or troubleshooting Fabric Mirroring against operational databases who need to know how schema drift and delivery ordering actually behave, not just that mirroring exists.",
+  "why_it_matters": "The schema-change behavior table and the mid-snapshot permission-failure gotcha are the kind of operational detail that determines whether a mirroring rollout goes smoothly, and they are not typically spelled out in feature-overview documentation.",
+  "takeaways": [
+    "Mirroring runs as an initial full snapshot followed by continuous change-data-capture streaming applied in strict transaction order.",
+    "Schema changes are handled differently by change type: added columns propagate automatically, but renamed columns are not recognized as renames and are instead treated as a drop plus an add.",
+    "A snapshot that fails partway through due to a permission error leaves partial data behind and requires a full restart, so validating connectivity and permissions before the first snapshot is worth the extra step.",
+    "Native mirroring does not support row-level filtering (WHERE clauses) at the connector level; filtering has to happen downstream in a transformation layer.",
+    "Landing mirrored tables read-only and applying business logic in a separate transform layer keeps the raw replica trustworthy for reconciliation."
+  ],
+  "claims": [
+    {
+      "capability_id": "mirroring",
+      "text": "Fabric Mirroring operates in two phases: an initial snapshot that captures a consistent baseline of the source database into Delta tables in OneLake, followed by continuous application of the source's change log (inserts, updates, deletes) in strict transaction order.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["Mirroring", "CDC", "OneLake"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "Schema-change handling in mirroring differs by change type: added columns propagate automatically with NULLs backfilled for historical rows, dropped columns are retained rather than deleted from the mirrored table, and renamed columns are not detected as renames — they are instead treated as a drop of the old column plus an add of a new one, requiring manual downstream coordination.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": ["Mirroring", "SchemaEvolution", "DataQuality"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "A snapshot that fails partway through because of a permission error leaves partial data written to OneLake and forces a complete restart of the snapshot, so the recommended practice is to validate connectivity and service-account permissions before kicking off the first snapshot.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": ["Mirroring", "Troubleshooting"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "Native mirroring does not support applying a WHERE-clause row filter at the connector level; row filtering has to be applied after load, in a downstream transformation notebook or Dataflow Gen2.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": ["Mirroring", "Dataflow Gen2"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "A recommended layering pattern for mirrored data is landing mirrored tables as read-only, applying business logic (joins, filtering, column selection) in a separate transformation layer, and exposing only the curated result to BI consumers, rather than letting consumers query raw mirrored tables directly.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Mirroring", "ArchitecturePattern", "MedallionArchitecture"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "For reconciliation, mirrored tables can be validated against the source with a row-count comparison query and an EXCEPT-based key comparison to identify rows present on one side but not the other, rather than assuming the CDC stream is complete.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Mirroring", "DataQuality", "Troubleshooting"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "Least-privilege access for a mirroring setup is described as restricting mirroring configuration to workspace admins, limiting raw mirrored tables to the data engineering team, and giving analysts reader access only to the curated tables downstream of the transform layer.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Mirroring", "Security", "Governance"]
+    },
+    {
+      "capability_id": "mirroring",
+      "text": "A SQL Server column typed NVARCHAR(MAX) maps to a Spark STRING type when mirrored, which works for most workloads but can carry performance implications on very wide string columns.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["Mirroring", "DeltaLake", "PerformanceTuning"]
+    }
+  ],
+  "assets": []
+}

@@ -1,0 +1,81 @@
+{
+  "url": "https://ultimateinfoguide.com/microsoft-fabric-data-warehouse-optimization/",
+  "title": "Microsoft Fabric Data Warehouse Optimization",
+  "tier": 6,
+  "summary": "A community blog post collecting practitioner-level optimization tactics for Fabric Warehouse: partitioning and file-compaction habits, when Direct Lake silently falls back to DirectQuery, capacity-throttling stages and their symptoms, and a set of recurring error codes with fixes.",
+  "audience": "Fabric Warehouse owners doing day-two performance tuning and capacity troubleshooting.",
+  "why_it_matters": "This goes beyond the Learn performance-guidelines doc by naming the specific failure modes practitioners hit — RLS forcing a Direct Lake fallback, a since-disabled result-set-caching feature, and the exact throttling escalation ladder — which are the kind of operational gotchas that don't show up until something breaks in production.",
+  "takeaways": [
+    "V-Order (write-time Parquet encoding) and ZORDER (physical row layout) are independent optimizations that can be combined, but are frequently confused with each other.",
+    "Applying row-level security in T-SQL on a Warehouse table forces any Power BI Direct Lake model built on it to fall back to DirectQuery.",
+    "Fabric capacity throttling escalates through smoothing, interactive delay, interactive rejection (error 24801), then background rejection — each stage has a distinct symptom.",
+    "Pausing a capacity outside business hours can cut monthly runtime hours dramatically, but needs a warm-up query after resume to avoid a cold first query.",
+    "Result set caching in Fabric Warehouse was made generally available and then temporarily disabled again after a correctness bug was found."
+  ],
+  "tags": ["MicrosoftFabric", "Warehouse", "PerformanceTuning", "DirectLake", "Capacity"],
+  "claims": [
+    {
+      "capability_id": "warehouse",
+      "text": "V-Order and ZORDER are distinct, independently-applicable optimizations: V-Order is a write-time Parquet encoding, while ZORDER is a physical file/row-group layout choice, and the post flags these as commonly confused with each other.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Warehouse", "VOrder", "ZOrder", "Performance"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "Applying row-level security at the T-SQL layer on a Fabric Warehouse table causes Power BI Direct Lake semantic models built on that table to fall back to DirectQuery mode; the recommended fix is to implement RLS at the semantic-model layer instead.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["DirectLake", "RowLevelSecurity", "Warehouse", "PowerBI"]
+    },
+    {
+      "capability_id": "capacity",
+      "text": "The post describes capacity throttling as escalating through four stages: smoothing (short bursts absorbed with no visible impact), interactive delay (queries delayed under sustained overuse), interactive rejection (queries rejected, citing error 24801), and background rejection (pipelines and scheduled refreshes rejected under severe sustained overuse).",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["Capacity", "Throttling", "Troubleshooting"]
+    },
+    {
+      "capability_id": "capacity",
+      "text": "The post recommends running a warm-up query against key tables shortly after resuming a paused capacity, since the first queries after resume can otherwise hit stale-statistics or cold-cache delays.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Capacity", "Warehouse", "Performance"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Per the post, Fabric Warehouse result set caching reached general availability in January 2026 but was temporarily disabled again in February 2026 after certain queries were found to return incorrect cached results; it recommends checking the official Fabric Known Issues page before relying on the feature.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["Warehouse", "Caching", "KnownIssue"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "For loading via COPY INTO, the post recommends batching source files above roughly 100 MB each, since many small files below that size add per-file scheduling overhead; the suggested fix for slow COPY INTO is to stage and merge small files in a Lakehouse notebook first.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Warehouse", "COPYINTO", "Ingestion", "Performance"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "When a large table needs both file compaction and Z-order layout, the post recommends running OPTIMIZE without ZORDER first and OPTIMIZE with ZORDER separately afterward, and partitioning very large tables so ZORDER operates one partition at a time rather than rewriting the whole table at once.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Warehouse", "Optimize", "ZOrder", "Performance"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The post recommends maintaining a load-audit table that logs row counts, duration, and status after every pipeline run, as a queryable trend history for catching data-volume anomalies independent of the Capacity Metrics app.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Warehouse", "Monitoring", "DataQuality"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "The post recommends using the community Semantic Link Labs Python library to evaluate Direct Lake guardrails and identify the specific cause of a DirectQuery fallback (e.g., row/column cardinality against F-SKU limits, or RLS placement) rather than guessing.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["DirectLake", "SemanticLinkLabs", "Troubleshooting"]
+    }
+  ]
+}

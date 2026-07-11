@@ -122,4 +122,90 @@ describe("source watcher parsing", () => {
       suggestedUrl: "https://example.com/feed",
     });
   });
+
+  it("tries the retained mapping first and sends its conditional headers", async () => {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith("/robots.txt")) return new Response("User-agent: *\nAllow: /");
+      expect(url).toBe("https://example.com/retained.xml");
+      expect(new Headers(init?.headers).get("if-none-match")).toBe('"feed-v1"');
+      return new Response(
+        `<rss><item><title>Retained</title><link>https://example.com/article</link></item></rss>`,
+        { headers: { "content-type": "application/rss+xml", etag: '"feed-v2"' } },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const { testWatcher } = await import("./source-watcher.server");
+    const result = await testWatcher({
+      url: "https://example.com/news",
+      title: "Example",
+      mode: "auto",
+      detected_mode: "rss",
+      detected_url: "https://example.com/retained.xml",
+      alternative_url: null,
+      allowed_host: "example.com",
+      allowed_path_prefix: "/",
+      max_depth: 1,
+      max_pages: 10,
+      last_success_at: "2026-07-11T00:00:00Z",
+      etag: '"feed-v1"',
+      last_modified: null,
+    });
+    expect(result).toMatchObject({
+      mode: "rss",
+      resolvedUrl: "https://example.com/retained.xml",
+      discovered: 1,
+    });
+    expect(result.attempts).toEqual([
+      expect.objectContaining({ mode: "rss", outcome: "success", candidates: 1 }),
+    ]);
+  });
+
+  it("falls through a failed discovered feed to listing output", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request) => {
+        const url = String(input);
+        if (url.endsWith("/robots.txt")) return new Response("User-agent: *\nAllow: /");
+        if (url === "https://example.com/news")
+          return new Response(
+            `<html><head><link rel="alternate" type="application/rss+xml" href="/broken.xml"></head><body><a href="/article">Article</a></body></html>`,
+            { headers: { "content-type": "text/html" } },
+          );
+        if (url === "https://example.com/article")
+          return new Response("<html><title>Article</title><main>Useful article</main></html>", {
+            headers: { "content-type": "text/html" },
+          });
+        return new Response("missing", { status: 404 });
+      }),
+    );
+    const { testWatcher } = await import("./source-watcher.server");
+    const result = await testWatcher({
+      url: "https://example.com/news",
+      title: "Example",
+      mode: "auto",
+      detected_mode: null,
+      detected_url: null,
+      alternative_url: null,
+      allowed_host: "example.com",
+      allowed_path_prefix: "/",
+      max_depth: 1,
+      max_pages: 20,
+      last_success_at: null,
+      etag: null,
+      last_modified: null,
+    });
+    expect(result.mode).toBe("listing");
+    expect(result.sample[0].url).toBe("https://example.com/article");
+    expect(result.attempts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          mode: "rss",
+          url: "https://example.com/broken.xml",
+          outcome: "error",
+        }),
+        expect.objectContaining({ mode: "listing", outcome: "success", candidates: 1 }),
+      ]),
+    );
+  });
 });

@@ -20,6 +20,8 @@ type Watcher = {
   alternative_url?: string | null;
   title: string;
   mode: WatcherMode;
+  detected_mode?: WatcherMode | null;
+  detected_url?: string | null;
   allowed_host: string;
   allowed_path_prefix: string;
   max_depth: number;
@@ -34,6 +36,9 @@ type Watcher = {
 export type WatcherResult = {
   watcher: string;
   mode: WatcherMode | null;
+  resolvedUrl: string | null;
+  retainedChanged: boolean;
+  attempts: WatcherAttempt[];
   fetched: number;
   discovered: number;
   changed: number;
@@ -48,6 +53,14 @@ export type WatcherResult = {
   } | null;
 };
 
+export type WatcherAttempt = {
+  mode: WatcherMode;
+  url: string;
+  outcome: "success" | "empty" | "unchanged" | "error";
+  candidates: number;
+  error?: string;
+};
+
 export const FIRST_POLL_CAP = 25;
 const TIMEOUT_MS = 15_000;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
@@ -60,6 +73,7 @@ class WatcherFailure extends Error {
     message: string,
     public trigger?: string,
     public suggestedUrl?: string,
+    public attempts: WatcherAttempt[] = [],
   ) {
     super(message);
   }
@@ -376,139 +390,170 @@ async function robotsFor(watcher: Watcher): Promise<{ allowed: boolean; sitemaps
 
 async function discover(watcher: Watcher): Promise<{
   mode: WatcherMode;
+  resolvedUrl: string;
   candidates: Candidate[];
   fetched: number;
+  attempts: WatcherAttempt[];
   etag?: string;
   lastModified?: string;
 }> {
   const robots = await robotsFor(watcher);
   if (!robots.allowed)
     throw new WatcherFailure("robots_denied", "robots.txt disallows this watcher path.");
-  const start = watcher.alternative_url || watcher.url;
-  const conditional: Record<string, string> = {};
-  if (watcher.etag) conditional["if-none-match"] = watcher.etag;
-  if (watcher.last_modified) conditional["if-modified-since"] = watcher.last_modified;
-  let first;
-  try {
-    first = await fetchText(start, conditional);
-  } catch (error) {
-    if (error instanceof WatcherFailure && error.code === "blocked") {
-      const origin = new URL(start).origin;
-      const feedPaths = ["/feed", "/feed/", "/rss", "/rss.xml", "/atom.xml", "/feed.xml"];
-      for (const feed of feedPaths.map((p) => `${origin}${p}`)) {
-        try {
-          const r = await fetchText(feed);
-          const items = parseWebFeed(r.body);
-          if (items.length) return { mode: "rss", candidates: items, fetched: 1 };
-        } catch {
-          // Try the next first-party feed before falling back to sitemaps.
-        }
-      }
-      for (const map of [...robots.sitemaps, `${origin}/sitemap.xml`]) {
-        try {
-          const sitemap = await fetchText(map);
-          const parsed = parseSitemap(sitemap.body);
-          if (parsed.urls.length) {
-            const scoped = parsed.urls.filter(
-              (item) => canonicalizeUrl(item.url) && inScope(canonicalizeUrl(item.url)!, watcher),
-            );
-            const hydrated = await fingerprintPages(scoped, watcher, 1);
-            return {
-              mode: "sitemap",
-              candidates: hydrated.candidates,
-              fetched: hydrated.fetched,
-            };
-          }
-        } catch {
-          // Try the next first-party sitemap before reporting the original challenge.
-        }
-      }
+  const attempts: WatcherAttempt[] = [];
+  const attempted = new Set<string>();
+  const cache = new Map<string, Awaited<ReturnType<typeof fetchText>>>();
+  let fetched = 0;
+  const root = watcher.url;
+  const seeds = [...new Set([watcher.alternative_url, root].filter(Boolean) as string[])];
+  const safeMessage = (e: unknown) =>
+    (e instanceof Error ? e.message : String(e)).replace(/\s+/g, " ").slice(0, 240);
+  const get = async (url: string, retained = false) => {
+    const canonical = canonicalizeUrl(url, root)!;
+    if (cache.has(canonical)) return cache.get(canonical)!;
+    const conditional: Record<string, string> = {};
+    if (retained && canonical === watcher.detected_url) {
+      if (watcher.etag) conditional["if-none-match"] = watcher.etag;
+      if (watcher.last_modified) conditional["if-modified-since"] = watcher.last_modified;
     }
-    throw error;
-  }
-  if (first.status === 304)
-    return { mode: watcher.mode === "auto" ? "page" : watcher.mode, candidates: [], fetched: 1 };
-  const meta = {
-    etag: first.headers.get("etag") || undefined,
-    lastModified: first.headers.get("last-modified") || undefined,
+    const response = await fetchText(canonical, conditional);
+    cache.set(canonical, response);
+    fetched++;
+    return response;
   };
-  const directFeed = parseWebFeed(first.body);
-  if ((watcher.mode === "rss" || watcher.mode === "auto") && directFeed.length)
-    return { mode: "rss", candidates: directFeed, fetched: 1, ...meta };
-  if (watcher.mode === "auto")
-    for (const feed of feedLinks(first.body, first.url)) {
-      const f = await fetchText(feed);
-      const items = parseWebFeed(f.body);
-      if (items.length) return { mode: "rss", candidates: items, fetched: 2, ...meta };
-    }
-  const directMap = parseSitemap(first.body);
-  if (
-    (watcher.mode === "sitemap" || watcher.mode === "auto") &&
-    (directMap.urls.length || directMap.sitemaps.length)
-  ) {
-    const urls = [...directMap.urls];
-    let fetched = 1;
-    for (const map of directMap.sitemaps.slice(0, watcher.max_pages - 1)) {
-      const child = await fetchText(map);
-      fetched++;
-      urls.push(...parseSitemap(child.body).urls);
-    }
-    const scoped = urls.filter(
-      (x) => canonicalizeUrl(x.url) && inScope(canonicalizeUrl(x.url)!, watcher),
-    );
-    const hydrated = await fingerprintPages(scoped, watcher, fetched);
-    return { mode: "sitemap", candidates: hydrated.candidates, fetched: hydrated.fetched, ...meta };
-  }
-  if (watcher.mode === "auto")
-    for (const map of [...robots.sitemaps, `${new URL(start).origin}/sitemap.xml`]) {
-      try {
-        const s = await fetchText(map);
-        const parsed = parseSitemap(s.body);
-        if (parsed.urls.length) {
-          const scoped = parsed.urls.filter(
-            (x) => canonicalizeUrl(x.url) && inScope(canonicalizeUrl(x.url)!, watcher),
-          );
-          const hydrated = await fingerprintPages(scoped, watcher, 2);
-          return {
-            mode: "sitemap",
-            candidates: hydrated.candidates,
-            fetched: hydrated.fetched,
-            ...meta,
-          };
-        }
-      } catch {
-        /* fall through to listing */
+  const scoped = (items: Candidate[]) =>
+    items.filter((item) => {
+      const url = canonicalizeUrl(item.url, root);
+      return !!url && inScope(url, watcher);
+    });
+  const attempt = async (mode: WatcherMode, url: string, retained = false) => {
+    const resolvedUrl = canonicalizeUrl(url, root)!;
+    const key = `${mode}:${resolvedUrl}`;
+    if (attempted.has(key)) return null;
+    attempted.add(key);
+    try {
+      const response = await get(resolvedUrl, retained);
+      if (response.status === 304) {
+        attempts.push({ mode, url: resolvedUrl, outcome: "unchanged", candidates: 0 });
+        return { mode, resolvedUrl, candidates: [] as Candidate[], response };
       }
+      let candidates: Candidate[] = [];
+      if (mode === "rss") candidates = scoped(parseWebFeed(response.body));
+      else if (mode === "sitemap") {
+        const parsed = parseSitemap(response.body);
+        const urls = [...parsed.urls];
+        for (const childUrl of parsed.sitemaps.slice(0, Math.max(0, watcher.max_pages - 1))) {
+          try {
+            const child = await get(childUrl);
+            urls.push(...parseSitemap(child.body).urls);
+          } catch (e) {
+            attempts.push({
+              mode,
+              url: canonicalizeUrl(childUrl, root)!,
+              outcome: "error",
+              candidates: 0,
+              error: safeMessage(e),
+            });
+          }
+        }
+        candidates = scoped(urls);
+        if (candidates.length) {
+          const hydrated = await fingerprintPages(candidates, watcher, fetched);
+          candidates = hydrated.candidates;
+          fetched = Math.max(fetched, hydrated.fetched);
+        }
+      } else if (mode === "listing") {
+        const links = htmlLinks(response.body, response.url, watcher);
+        const hydrated =
+          watcher.max_depth > 0
+            ? await fingerprintPages(links, watcher, fetched)
+            : { candidates: links, fetched };
+        candidates = scoped(hydrated.candidates);
+        fetched = Math.max(fetched, hydrated.fetched);
+      } else {
+        const pageUrl = canonicalizeUrl(response.url)!;
+        if (inScope(pageUrl, watcher))
+          candidates = [
+            { url: pageUrl, title: watcher.title, fingerprint: hash(normalizeHtml(response.body)) },
+          ];
+      }
+      attempts.push({
+        mode,
+        url: resolvedUrl,
+        outcome: candidates.length ? "success" : "empty",
+        candidates: candidates.length,
+      });
+      if (!candidates.length) return null;
+      return { mode, resolvedUrl, candidates, response };
+    } catch (e) {
+      attempts.push({
+        mode,
+        url: resolvedUrl,
+        outcome: "error",
+        candidates: 0,
+        error: safeMessage(e),
+      });
+      return null;
     }
-  if (watcher.mode === "listing" || watcher.mode === "auto") {
-    const links = htmlLinks(first.body, first.url, watcher);
-    if (links.length) {
-      const hydrated =
-        watcher.max_depth > 0
-          ? await fingerprintPages(links, watcher, 1)
-          : { candidates: links, fetched: 1 };
-      return {
-        mode: "listing",
-        candidates: hydrated.candidates,
-        fetched: hydrated.fetched,
-        ...meta,
-      };
+  };
+  const finish = (result: NonNullable<Awaited<ReturnType<typeof attempt>>>) => ({
+    mode: result.mode,
+    resolvedUrl: result.resolvedUrl,
+    candidates: result.candidates,
+    fetched,
+    attempts,
+    etag: result.response.headers.get("etag") || undefined,
+    lastModified: result.response.headers.get("last-modified") || undefined,
+  });
+
+  if (watcher.detected_mode && watcher.detected_url) {
+    const retained = await attempt(watcher.detected_mode, watcher.detected_url, true);
+    if (retained) return finish(retained);
+  }
+  for (const seed of seeds) {
+    const direct = await attempt("rss", seed);
+    if (direct) return finish(direct);
+  }
+  for (const seed of seeds) {
+    try {
+      const response = await get(seed);
+      for (const link of feedLinks(response.body, response.url)) {
+        const feed = await attempt("rss", link);
+        if (feed) return finish(feed);
+      }
+    } catch {
+      // The attempt diagnostics are recorded by direct strategies below.
     }
   }
-  if (watcher.mode === "page" || watcher.mode === "auto")
-    return {
-      mode: "page",
-      candidates: [
-        {
-          url: canonicalizeUrl(first.url)!,
-          title: watcher.title,
-          fingerprint: hash(normalizeHtml(first.body)),
-        },
-      ],
-      fetched: 1,
-      ...meta,
-    };
-  throw new WatcherFailure("parse_failure", `The response was not valid ${watcher.mode} content.`);
+  const origins = [...new Set(seeds.map((seed) => new URL(seed).origin))];
+  for (const feed of origins.flatMap((origin) =>
+    ["/feed", "/feed/", "/rss", "/rss.xml", "/atom.xml", "/feed.xml"].map(
+      (path) => `${origin}${path}`,
+    ),
+  )) {
+    const result = await attempt("rss", feed);
+    if (result) return finish(result);
+  }
+  for (const map of [...seeds, ...robots.sitemaps, ...origins.map((x) => `${x}/sitemap.xml`)]) {
+    const result = await attempt("sitemap", map);
+    if (result) return finish(result);
+  }
+  for (const seed of seeds) {
+    const result = await attempt("listing", seed);
+    if (result) return finish(result);
+  }
+  for (const seed of seeds) {
+    const result = await attempt("page", seed);
+    if (result) return finish(result);
+  }
+  const failure = attempts.find((x) => x.outcome === "error");
+  throw new WatcherFailure(
+    "parse_failure",
+    `No watcher strategy returned usable in-scope output.${failure?.error ? ` First error: ${failure.error}` : ""}`,
+    undefined,
+    undefined,
+    attempts,
+  );
 }
 
 async function enqueueCandidate(
@@ -578,13 +623,22 @@ async function enqueueCandidate(
 
 export async function testWatcher(
   input: Omit<Watcher, "id" | "default_tier" | "default_tags">,
-): Promise<{ mode: WatcherMode; fetched: number; discovered: number; sample: Candidate[] }> {
+): Promise<{
+  mode: WatcherMode;
+  resolvedUrl: string;
+  fetched: number;
+  discovered: number;
+  sample: Candidate[];
+  attempts: WatcherAttempt[];
+}> {
   const result = await discover({ ...input, id: "test", default_tier: 6, default_tags: [] });
   return {
     mode: result.mode,
+    resolvedUrl: result.resolvedUrl,
     fetched: result.fetched,
     discovered: result.candidates.length,
     sample: result.candidates.slice(0, 10),
+    attempts: result.attempts,
   };
 }
 
@@ -601,6 +655,8 @@ export async function pollSourceWatchersCore(
     const now = new Date().toISOString();
     try {
       const found = await discover(watcher);
+      const retainedChanged =
+        watcher.detected_mode !== found.mode || watcher.detected_url !== found.resolvedUrl;
       const firstPoll = !watcher.last_success_at;
       let candidates = found.candidates;
       let capped = false;
@@ -631,6 +687,7 @@ export async function pollSourceWatchersCore(
         .from("source_watchers")
         .update({
           detected_mode: found.mode,
+          detected_url: found.resolvedUrl,
           last_attempt_at: now,
           last_success_at: now,
           error_count: 0,
@@ -638,13 +695,16 @@ export async function pollSourceWatchersCore(
           last_error: "",
           last_error_trigger: null,
           suggested_url: null,
-          etag: found.etag,
-          last_modified: found.lastModified,
+          etag: found.etag ?? null,
+          last_modified: found.lastModified ?? null,
         })
         .eq("id", watcher.id);
       results.push({
         watcher: watcher.title || watcher.url,
         mode: found.mode,
+        resolvedUrl: found.resolvedUrl,
+        retainedChanged,
+        attempts: found.attempts,
         fetched: found.fetched,
         discovered: found.candidates.length,
         changed,
@@ -671,6 +731,9 @@ export async function pollSourceWatchersCore(
       results.push({
         watcher: watcher.title || watcher.url,
         mode: null,
+        resolvedUrl: null,
+        retainedChanged: false,
+        attempts: failure.attempts,
         fetched: 0,
         discovered: 0,
         changed: 0,

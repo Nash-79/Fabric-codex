@@ -1,0 +1,76 @@
+{
+  "url": "https://milescole.dev/data-engineering/2026/02/04/Creating-your-first-Spark-Job-Definition.html",
+  "title": "Creating Your First Spark Job Definition",
+  "tier": 4,
+  "summary": "A community walkthrough introducing Fabric Spark Job Definitions (SJDs) as the production execution mechanism corresponding to spark-submit, contrasted with interactive notebooks. The extracted claims cover the required configuration components, structural differences from notebooks (explicit SparkSession, argparse-based parameters, testability), and a recommended path from notebook prototype to production SJD.",
+  "audience": "Fabric data engineers moving pipelines from notebook prototypes to scheduled, production-grade Spark execution.",
+  "why_it_matters": "Notebooks are convenient for exploration but hide setup steps that production jobs must handle explicitly. This source clarifies what an SJD actually requires and why that extra structure buys testability and reproducibility, which matters when a team decides notebooks are no longer sufficient for a maturing pipeline.",
+  "takeaways": [
+    "An SJD is Fabric's packaged, spark-submit-style execution mechanism, distinct from an interactive notebook.",
+    "SJDs require explicit SparkSession creation and imports that notebooks auto-provide.",
+    "Configuration flows through a lakehouse reference, an environment reference, and command-line arguments via argparse.",
+    "A main()-with-guard pattern makes SJD code importable and unit-testable.",
+    "Cole recommends a staged path from notebook prototype to packaged library to production SJD."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "DataEngineering",
+    "Spark",
+    "SparkJobDefinition",
+    "Python",
+    "Testing",
+    "Orchestration"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "A Fabric Spark Job Definition is the platform's equivalent of spark-submit: a packaged, parameter-driven application runner, distinct from the cell-by-cell interactive exploration model of a notebook.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["SparkJobDefinition", "SparkSubmit", "Notebooks"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Configuring a Spark Job Definition requires five components: a single entry-point script (.py, .scala, or .r), optional reference files for importable modules, optional command-line arguments, a lakehouse reference that sets the default metastore context, and an environment reference that supplies libraries and Spark pool configuration.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["SparkJobDefinition", "Configuration", "Lakehouse"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Unlike a notebook, a Spark Job Definition does not auto-inject a SparkSession or pre-load common imports; the entry-point script must explicitly instantiate its own SparkSession and import any utilities it needs, including notebookutils-equivalent helpers.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["SparkJobDefinition", "SparkSession", "Notebooks"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "SJD parameterization separates two concerns: structured, versioned configuration data (such as zone or load-group settings) is best held in YAML files read from OneLake via ABFSS paths, while runtime control flow is best handled through argparse command-line arguments with type enforcement and validation.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SparkJobDefinition", "Configuration", "OneLake", "Python"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Structuring an SJD entry point around a main(argv) function guarded by if __name__ == '__main__' allows the same code to be imported into unit tests without triggering execution, which notebooks do not support natively.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SparkJobDefinition", "Testing", "Python", "BestPractice"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Because SJDs remove interactive cell output, production observability shifts to the Spark UI for execution details and to structured logging on stdout/stderr, making explicit logging configuration more important than it is in notebook development.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SparkJobDefinition", "Logging", "Observability"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The author recommends a staged path from prototype to production: build a proof of concept in a notebook, formalize it into a packaged, unit-tested library, write an entry-point script, test the entry point, attach the package to a Fabric environment, then create and run the SJD with its references and arguments.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["SparkJobDefinition", "DevelopmentWorkflow", "BestPractice"]
+    }
+  ],
+  "assets": []
+}

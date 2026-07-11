@@ -1,0 +1,91 @@
+{
+  "url": "https://milescole.dev/optimization/2024/02/19/Unlocking-Parallel-Processing-Power.html",
+  "title": "Unlocking Parallel Processing Power: Spark Cluster Configuration Strategies",
+  "tier": 4,
+  "summary": "A community comparison of three ways to run large numbers of concurrent Spark jobs in a lakehouse: one shared high-concurrency cluster, one dedicated job cluster per job, and multithreading many tasks inside a single job cluster. The extracted claims cover the tradeoffs of each pattern, why Python multiprocessing is a poor fit for Spark, and a benchmark comparing multithreading against per-job clusters.",
+  "audience": "Fabric and Databricks Spark engineers designing orchestration patterns for high-volume, metadata-driven pipelines.",
+  "why_it_matters": "Choosing how to parallelize many small-to-medium Spark jobs affects cost, executor utilization, and pipeline throughput. This source helps readers weigh cluster-per-job simplicity against the resource-sharing benefits of multithreaded orchestration, and understand where the GIL and Spark's execution model interact.",
+  "takeaways": [
+    "A single shared high-concurrency cluster is bottlenecked by driver contention and fixed executor counts.",
+    "Dedicated per-job clusters remove contention but face VM quota limits and unpredictable costs.",
+    "Multithreading many tasks inside one job cluster shares resources efficiently and outperformed per-job clusters in the author's test.",
+    "Python multiprocessing is incompatible with Spark's own distributed execution model.",
+    "concurrent.futures.ThreadPoolExecutor is favored over the raw threading module for lifecycle management."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "DataEngineering",
+    "Spark",
+    "Python",
+    "Concurrency",
+    "ClusterConfiguration",
+    "Orchestration",
+    "Performance"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "Running many jobs on a single shared high-concurrency cluster caps effective parallelism at the cluster's executor count, so a four-worker cluster behaves like four available execution slots regardless of how many jobs are queued.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["ClusterConfiguration", "Concurrency", "Spark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A single shared cluster funnels job submission and coordination through one driver node, which becomes a bottleneck under high job volume and can cause initialization failures when many jobs start together.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["ClusterConfiguration", "Driver", "Bottleneck"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Dedicated job clusters, one per job, remove resource contention between jobs and allow each cluster to be sized independently, but they are constrained by per-region VM quotas and make aggregate cost harder to predict than a shared-cluster approach.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["ClusterConfiguration", "Cost", "VMQuota"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Both the single shared cluster and the dedicated per-job cluster patterns share the same underlying inefficiency: compute allocated to a lightly loaded job cannot be borrowed by a concurrently running job that needs more capacity.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["ClusterConfiguration", "ResourceSharing", "Inefficiency"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Multithreading a large number of tasks within one or more job clusters, using Python threads under a single Spark session, lets tasks share memory and processing power and is recommended as the most cost-effective pattern for high-volume lakehouse orchestration.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Multithreading", "Spark", "Orchestration", "SparkSession"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Python's multiprocessing model creates isolated resource boundaries between processes, which conflicts with Spark's own distributed execution framework; multithreading, coordinated by the Global Interpreter Lock, is the compatible concurrency approach for issuing many Spark actions from one session.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["Multiprocessing", "GIL", "Spark", "Python"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The concurrent.futures library's ThreadPoolExecutor is preferred over the lower-level threading module because it offers a simpler API for submitting concurrent work, though its cancel() method only affects threads still queued and cannot stop threads that have already started executing.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["Python", "ThreadPoolExecutor", "ConcurrentFutures"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "In the author's benchmark on a single-node, four-core Databricks cluster running 48 total jobs (each reading 1 million rows from a Delta table and writing to a new table), multithreading with a default of 8 concurrent workers completed in about 9.5% of the total execution time that running one dedicated job cluster per job required.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Multithreading", "Benchmark", "Performance", "DeltaLake"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Long-running multithreaded ELT jobs need explicit status monitoring because progress-visualization tools such as the Rich.Progress Python library were found to be incompatible with Microsoft Fabric notebooks at the time of writing.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["Monitoring", "FabricNotebooks", "Compatibility"]
+    }
+  ],
+  "assets": []
+}

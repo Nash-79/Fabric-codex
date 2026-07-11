@@ -21,14 +21,16 @@ A metered Anthropic/OpenAI API key is **not** required for any of the authoring 
 
 ```
  0. Plan      /orchestrate-content  reads queue/RSS/claims/blogs, dedupes, ranks next actions
- 1. Curate    /ingest <source>      curator extracts claims + tags + image refs ─▶ content/sources/*.json
- 2. Visualise /diagram <capability> diagram-author draws an ORIGINAL svg/mmd     ─▶ content/diagrams/*
- 3. Verify    Settings → Claims     human approves pending claims
- 4. Blog      /blog <topic>         author writes a rich cited article           ─▶ content/articles/*.json
- 5. Design    /design <scenario>    architect writes cited markdown/json         ─▶ content/designs/*
- 6. Validate  /validate <id>        reviewer reasons locally; server adds deterministic checks after publish
- 7. Teach     /lesson <cap> <level> learning-author writes a tiered lesson        ─▶ content/lessons/*.md
- 8. Maintain  /drift <source-key>   drift analyst re-extracts, supersedes, flags affected content
+ 1. Reserve   Settings → Queue     queued → claimed (assignment only; creates no claims)
+ 2. Curate    /ingest <source>      curator extracts claims + tags + image refs ─▶ content/sources/*.json
+ 3. Publish   Settings → Publish   source upsert + pending claim insertion; queue ─▶ ingested
+ 4. Verify    Settings → Claims     human approves pending claims
+ 5. Visualise /diagram <capability> diagram-author draws an ORIGINAL svg/mmd     ─▶ content/diagrams/*
+ 6. Article   /blog <topic>         create missing article or enrich one with justified new evidence
+ 7. Design    /design <scenario>    solution architecture or reusable data pattern ─▶ content/designs/*
+ 8. Validate  /validate <id>        reviewer reasons locally; server adds deterministic checks after publish
+ 9. Teach     /lesson <cap> <level> learning-author writes a tiered lesson        ─▶ content/lessons/*.md
+10. Maintain  /drift <source-key>   drift analyst re-extracts, supersedes, flags affected content
 ```
 
 The orchestrator is deliberately a human-in-the-loop planning layer. It reads unclaimed and
@@ -38,6 +40,22 @@ articles are routed as enrichments only when new verified claims, deeper coverag
 diagrams, drift, or validation gaps justify a revision. Each article candidate gets a lightweight
 self-evaluation for grounding, novelty, richness, depth, diagrams, and the next human gate before
 any authoring command runs.
+
+Verified claims can feed several downstream paths. `/blog` creates an article only when the topic
+is not covered; otherwise it performs a justified augmentation using new sources, depth, diagrams,
+or drift corrections. `/design` is the governed authoring path for both workload-specific solution
+architectures and reusable data architecture patterns. Until a separate pattern subtype is needed,
+reusable patterns remain `kind="design"` and are distinguished with the `DataArchitecture` and
+`ArchitecturePattern` tags.
+
+For a single resumable run, invoke `/prompts:fa-orchestrate EXECUTE=true` or
+`/orchestrate-content execute`. The orchestrator drains the source queue, derives evidence-backed
+content opportunities, and asks a consolidated question round for article augmentation/new
+articles, solution constraints, and reusable data-pattern boundaries. It then pauses at the
+mandatory source publish + claim verification checkpoint. After the admin confirms that gate, the
+same run refreshes the verified KB, creates and validates the accepted artifacts, and ends with one
+ordered Publish all release. This is deliberately two publish moments: sources must enter the KB
+before their claims can be verified; downstream content is bulk-published only after that.
 
 Claude call path:
 
@@ -59,6 +77,13 @@ Codex call path:
 
 For the latest RSS entries, first run **Settings → RSS Feeds → Poll now**, then rerun the
 orchestrator so it plans against the newly queued links.
+
+Website watchers are always auto-mapped. Creation performs a server-side validation poll, then
+stores the successful mode and resolved endpoint as a retained hint. Later polls try that hint
+first and fall back through RSS/JSON Feed → sitemap → listing → single-page fingerprint. Empty,
+failed, or out-of-scope attempts do not prevent later strategies from running. The dependency-free
+local poller mirrors this hierarchy for sites that block the hosted poller, but only authenticated
+server polling persists a changed retained mapping.
 
 ## Publish
 

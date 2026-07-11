@@ -24,8 +24,10 @@ produces and shows on every citation and on the Sources page.
 Queued URLs appear in the **Settings → Queue** table with one of these statuses:
 
 - **queued** — waiting for an ingestion run.
-- **claimed** — an ingestion run has picked it up.
-- **complete** — done; the source and its pending claims are now in the knowledge base.
+- **claimed** — reserved by an operator or ingestion run. This does **not** create knowledge
+  claims; the similar names describe different things.
+- **ingested** — done; the published source and its pending claims are now in the knowledge base,
+  and the queue item links to that source.
 - **failed** — something went wrong (the note explains what); **requeue** puts it back in
   line, **dismiss** drops it.
 
@@ -35,16 +37,21 @@ Queued URLs appear in the **Settings → Queue** table with one of these statuse
    `/ingest-batch`. The knowledge-curator agent claims each queued item, reads the source,
    and extracts a handful of paraphrased claims tagged to a capability and depth — never
    copied text, and external images are linked with attribution, never re-hosted. The
-   queue item moves to **complete** and the source appears on the Sources page.
-2. **Verify** — the new claims arrive as **pending**. An admin approves them in
+   source file is ready for review. Reserving the queue item alone does not perform this step.
+2. **Publish and link** — publish the file with **Settings → Publish → Source (+ claims)**.
+   This creates or refreshes the source and inserts its extracted claims as **pending**. Then
+   complete the queue item by choosing the resulting source; its status becomes **ingested**.
+3. **Verify** — the new claims arrive as **pending**. An admin approves them in
    **Settings → Claims**, one at a time or with **Verify all** for a whole capability at
    once. Until a claim is verified, no article, design, or lesson can cite it.
-3. **Publish into content** — once verified, the claims are available to the blog-author,
+4. **Reuse the knowledge** — once verified, the claims are available to the blog-author,
    solution-architect, and learning-author agents. Running `/blog`, `/design`, or `/lesson`
-   drafts a cited article, design, or lesson from the new knowledge; an admin then pastes
-   the resulting file into **Settings → Publish**, which always creates a new version rather
-   than overwriting anything.
-4. **Commit** — ingestion wrote `content/sources/<slug>.json`; commit it to git so the
+   drafts cited content from the new knowledge. `/blog` creates an article when the topic has no
+   article, or augments the active article only when the source adds verified coverage, depth,
+   diagrams, or drift corrections. `/design` authors both scenario-specific solution
+   architectures and reusable data architecture patterns; tag reusable patterns
+   `DataArchitecture` and `ArchitecturePattern`. Publish the resulting file through Settings.
+5. **Commit** — ingestion wrote `content/sources/<slug>.json`; commit it to git so the
    knowledge is reproducible on any environment.
 
 If an item is marked **failed**, the note explains why (usually an unreachable URL);
