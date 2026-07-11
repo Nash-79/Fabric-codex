@@ -135,7 +135,7 @@ export function DiagramLightbox({
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent
-          className="h-[94vh] max-h-[94vh] w-[98vw] max-w-[98vw] gap-0 overflow-hidden border-border/60 bg-background p-0 sm:rounded-2xl"
+          className="h-[100dvh] max-h-[100dvh] w-screen max-w-none gap-0 overflow-hidden border-0 bg-background p-0 [&>button]:hidden sm:h-[94dvh] sm:max-h-[94dvh] sm:w-[98vw] sm:max-w-[98vw] sm:rounded-2xl sm:border"
           aria-describedby={describeId}
         >
           <DialogTitle className="sr-only">
@@ -187,11 +187,15 @@ function LightboxViewer({
   const toggleFullscreen = useCallback(async () => {
     const el = rootRef.current;
     if (!el) return;
+    if (typeof el.requestFullscreen !== "function") {
+      setIsFullscreen((value) => !value);
+      return;
+    }
     try {
       if (!document.fullscreenElement) {
-        await el.requestFullscreen?.();
+        await el.requestFullscreen();
       } else {
-        await document.exitFullscreen?.();
+        await document.exitFullscreen();
       }
     } catch {
       // Fallback: use CSS "cover" via isFullscreen state.
@@ -248,13 +252,14 @@ function LightboxViewer({
               <img
                 src={src}
                 alt={alt}
-                className="max-h-[88vh] w-auto select-none"
+                className="max-h-[100dvh] max-w-full select-none object-contain sm:max-h-[88dvh]"
                 draggable={false}
               />
             </TransformComponent>
+            <OrientationRefit />
             {caption && (
               <div
-                className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center px-4 pb-4"
+                className="pointer-events-none absolute inset-x-0 bottom-0 hidden justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex"
                 aria-hidden
               >
                 <div className="pointer-events-auto max-w-3xl rounded-xl border border-border/60 bg-background/90 px-4 py-2.5 text-center text-sm text-muted-foreground shadow-md backdrop-blur">
@@ -310,10 +315,10 @@ function Toolbar({
       role="toolbar"
       aria-label="Diagram zoom controls"
       aria-orientation="horizontal"
-      className="absolute right-3 top-3 z-10 flex items-center gap-1 rounded-full border border-border/60 bg-background/85 p-1 shadow-md backdrop-blur"
+      className="absolute right-[max(0.5rem,env(safe-area-inset-right))] top-[max(0.5rem,env(safe-area-inset-top))] z-10 flex items-center gap-0.5 rounded-full border border-border/60 bg-background/90 p-1 shadow-md backdrop-blur sm:right-3 sm:top-3 sm:gap-1"
     >
       <span
-        className="min-w-[3.25rem] px-2 text-center font-mono text-xs tabular-nums text-muted-foreground"
+        className="hidden min-w-[3.25rem] px-2 text-center font-mono text-xs tabular-nums text-muted-foreground sm:block"
         aria-live="polite"
         aria-atomic="true"
         aria-label={`Zoom level ${pct} percent`}
@@ -358,7 +363,7 @@ const ToolbarButton = forwardRef<
       aria-label={label}
       aria-pressed={pressed}
       title={label}
-      className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground"
+      className="h-10 w-10 rounded-full text-muted-foreground hover:text-foreground sm:h-9 sm:w-9"
     >
       {children}
     </Button>
@@ -387,5 +392,24 @@ function KeyboardBridge({ onFullscreen, utils }: { onFullscreen: () => void; uti
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onFullscreen, utils]);
+  return null;
+}
+
+function OrientationRefit() {
+  const { resetTransform } = useControls();
+
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refit = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => resetTransform(180), 150);
+    };
+    window.addEventListener("orientationchange", refit);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("orientationchange", refit);
+    };
+  }, [resetTransform]);
+
   return null;
 }
