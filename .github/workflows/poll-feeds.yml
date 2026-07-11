@@ -17,6 +17,7 @@ on:
 jobs:
   poll:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Poll Fabric Atlas feeds
         env:
@@ -25,8 +26,14 @@ jobs:
           FEEDS: ${{ github.event.inputs.feeds || 'true' }}
           ROADMAP: ${{ github.event.inputs.roadmap || 'true' }}
         run: |
-          test -n "$FABRIC_ATLAS_BASE_URL"
-          test -n "$SUPABASE_PUBLISHABLE_KEY"
+          if [ -z "$FABRIC_ATLAS_BASE_URL" ]; then
+            echo "Error: FABRIC_ATLAS_BASE_URL secret is not set. Please ensure the secret is configured."
+            exit 1
+          fi
+          if [ -z "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "Error: SUPABASE_PUBLISHABLE_KEY secret is not set. Please ensure the secret is configured."
+            exit 1
+          fi
           curl --fail-with-body \
             -X POST "$FABRIC_ATLAS_BASE_URL/api/public/hooks/poll-feeds" \
             -H "content-type: application/json" \
