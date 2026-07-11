@@ -1,13 +1,7 @@
 import { useEffect, useState } from "react";
 import { BookmarkCheck, X } from "lucide-react";
 
-export function ResumeReadingPill({
-  pct,
-  scrollY,
-}: {
-  pct: number;
-  scrollY: number;
-}) {
+export function ResumeReadingPill({ pct, scrollY }: { pct: number; scrollY: number }) {
   const [visible, setVisible] = useState(true);
 
   // Auto-hide after 8s or when the user scrolls significantly

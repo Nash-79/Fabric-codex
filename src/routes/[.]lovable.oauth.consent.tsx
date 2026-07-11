@@ -100,8 +100,8 @@ function Consent() {
           Connect {clientName} to Fabric Atlas
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This lets {clientName} call Fabric Atlas MCP tools while you are signed in. It does
-          not bypass this app's row-level policies.
+          This lets {clientName} call Fabric Atlas MCP tools while you are signed in. It does not
+          bypass this app's row-level policies.
         </p>
         {scopes.length > 0 && (
           <ul className="mt-4 space-y-1 text-xs text-muted-foreground">
@@ -111,7 +111,10 @@ function Consent() {
           </ul>
         )}
         {error && (
-          <p role="alert" className="mt-4 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300">
+          <p
+            role="alert"
+            className="mt-4 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300"
+          >
             {error}
           </p>
         )}

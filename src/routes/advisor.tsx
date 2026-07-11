@@ -31,7 +31,6 @@ import { Shimmer } from "@/components/ai-elements/shimmer";
 import { subDays } from "date-fns";
 import { toast } from "sonner";
 
-
 type AdvisorSearch = { prompt?: string };
 
 export const Route = createFileRoute("/advisor")({
@@ -144,7 +143,6 @@ function loadThreads(): ChatThread[] {
     return [];
   }
 }
-
 
 function groupThreads(threads: ChatThread[]): [string, ChatThread[]][] {
   const groups: Record<string, ChatThread[]> = {
@@ -266,7 +264,6 @@ function AdvisorPage() {
       return updated;
     });
   }, [messages, activeThreadId, modelId]);
-
 
   const isLoading = status === "submitted" || status === "streaming";
   const activeModel = ADVISOR_MODELS.find((m) => m.id === modelId) ?? ADVISOR_MODELS[1];
@@ -571,8 +568,8 @@ function AdvisorPage() {
                     </h2>
                     <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
                       Grounded answers over verified claims, blogs, designs, lessons, sources,
-                      topics, capabilities, and diagrams. Unsupported facts are refused rather
-                      than guessed.
+                      topics, capabilities, and diagrams. Unsupported facts are refused rather than
+                      guessed.
                     </p>
                     <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-[11px] text-muted-foreground">
                       <Database className="h-3 w-3" />
@@ -653,7 +650,6 @@ function AdvisorPage() {
           />
         </main>
       </div>
-
     </div>
   );
 }

@@ -15,7 +15,14 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 // iOS launch (splash) image link entries. iOS Safari picks the matching file
 // via `media` — CSS-pixel dimensions + device-pixel-ratio + orientation.
 // Set is emitted by scripts/generate-splash (see public/splash/).
-const APPLE_SPLASH: Array<{ w: number; h: number; dw: number; dh: number; dpr: number; o: "portrait" | "landscape" }> = [
+const APPLE_SPLASH: Array<{
+  w: number;
+  h: number;
+  dw: number;
+  dh: number;
+  dpr: number;
+  o: "portrait" | "landscape";
+}> = [
   { w: 2048, h: 2732, dw: 1024, dh: 1366, dpr: 2, o: "portrait" },
   { w: 2732, h: 2048, dw: 1024, dh: 1366, dpr: 2, o: "landscape" },
   { w: 1668, h: 2388, dw: 834, dh: 1194, dpr: 2, o: "portrait" },
@@ -44,7 +51,6 @@ const appleSplashLinks = APPLE_SPLASH.map(({ w, h, dw, dh, dpr, o }) => ({
   href: `/splash/apple-splash-${w}x${h}.png`,
   media: `screen and (device-width: ${dw}px) and (device-height: ${dh}px) and (-webkit-device-pixel-ratio: ${dpr}) and (orientation: ${o})`,
 }));
-
 
 function NotFoundComponent() {
   return (
@@ -218,7 +224,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "mobile-web-app-capable", content: "yes" },
     ],
 
-
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
@@ -238,8 +243,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       // Each media query pins the file to that device's CSS-pixel size + DPR.
       ...appleSplashLinks,
     ],
-
-
   }),
   shellComponent: RootShell,
   component: RootComponent,

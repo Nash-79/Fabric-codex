@@ -37,13 +37,8 @@ export function AdvisorMessage({
   }
 
   return (
-    <Message
-      from={message.role}
-      aria-label={mine ? "Your message" : "Advisor response"}
-    >
-      <MessageContent
-        className={mine ? "" : "w-full max-w-none"}
-      >
+    <Message from={message.role} aria-label={mine ? "Your message" : "Advisor response"}>
+      <MessageContent className={mine ? "" : "w-full max-w-none"}>
         {mine ? (
           <p className="whitespace-pre-wrap">{text}</p>
         ) : (
@@ -74,8 +69,7 @@ export function AdvisorMessage({
                   if (lang === "mermaid") {
                     const getText = (node: any): string => {
                       if (node == null || typeof node === "boolean") return "";
-                      if (typeof node === "string" || typeof node === "number")
-                        return String(node);
+                      if (typeof node === "string" || typeof node === "number") return String(node);
                       if (Array.isArray(node)) return node.map(getText).join("");
                       if (typeof node === "object" && "props" in node) {
                         return getText(node.props?.children);
@@ -165,10 +159,7 @@ export function AdvisorMessage({
 
       {!mine && (
         <MessageActions className="opacity-100 md:opacity-0 md:transition group-hover:opacity-100 group-focus-within:opacity-100">
-          <MessageAction
-            tooltip={copied ? "Copied" : "Copy response"}
-            onClick={copyMessage}
-          >
+          <MessageAction tooltip={copied ? "Copied" : "Copy response"} onClick={copyMessage}>
             {copied ? <Check /> : <Copy />}
           </MessageAction>
           {isLastAssistant && (

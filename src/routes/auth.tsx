@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { FabricMark } from "@/components/FabricMark";
 
 export const Route = createFileRoute("/auth")({
-  validateSearch: (s: Record<string, unknown>) => ({
+  validateSearch: (s: Record<string, unknown>): { next?: string } => ({
     next: typeof s.next === "string" && s.next.startsWith("/") ? s.next : undefined,
   }),
   head: () => ({
@@ -59,9 +59,7 @@ function AuthPage() {
           email,
           password,
           options: {
-            emailRedirectTo: returnTo
-              ? window.location.origin + returnTo
-              : window.location.origin,
+            emailRedirectTo: returnTo ? window.location.origin + returnTo : window.location.origin,
           },
         });
         if (error) throw error;

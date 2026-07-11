@@ -77,7 +77,9 @@ export function DiagramLightbox({
       <figure
         id={figId}
         className="not-prose article-figure group my-10 scroll-mt-24"
-        style={{ contentVisibility: "auto", containIntrinsicSize: `600px auto` } as React.CSSProperties}
+        style={
+          { contentVisibility: "auto", containIntrinsicSize: `600px auto` } as React.CSSProperties
+        }
         aria-labelledby={captionText && captionId ? captionId : undefined}
         aria-label={!captionText ? alt || "Diagram" : undefined}
       >
@@ -110,10 +112,7 @@ export function DiagramLightbox({
               }}
             />
           ) : (
-            <div
-              aria-hidden
-              className="h-full w-full animate-pulse bg-muted/50"
-            />
+            <div aria-hidden className="h-full w-full animate-pulse bg-muted/50" />
           )}
           <span
             aria-hidden
@@ -162,7 +161,6 @@ export function DiagramLightbox({
   );
 }
 
-
 function LightboxViewer({
   src,
   alt,
@@ -201,7 +199,8 @@ function LightboxViewer({
     }
   }, []);
 
-  const fsActive = isFullscreen || (typeof document !== "undefined" && !!document.fullscreenElement);
+  const fsActive =
+    isFullscreen || (typeof document !== "undefined" && !!document.fullscreenElement);
 
   return (
     <div
@@ -209,7 +208,9 @@ function LightboxViewer({
       className={cn(
         "relative flex h-full w-full flex-col bg-background",
         "[overscroll-behavior:contain] [touch-action:none]",
-        isFullscreen && typeof document !== "undefined" && !document.fullscreenElement &&
+        isFullscreen &&
+          typeof document !== "undefined" &&
+          !document.fullscreenElement &&
           "fixed inset-0 z-[100]",
       )}
     >
@@ -343,7 +344,6 @@ function Toolbar({
   );
 }
 
-
 const ToolbarButton = forwardRef<
   HTMLButtonElement,
   { onClick: () => void; label: string; pressed?: boolean; children: React.ReactNode }
@@ -365,8 +365,6 @@ const ToolbarButton = forwardRef<
   );
 });
 
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function KeyboardBridge({ onFullscreen, utils }: { onFullscreen: () => void; utils: any }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

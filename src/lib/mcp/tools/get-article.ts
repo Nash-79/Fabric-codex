@@ -8,9 +8,7 @@ export default defineTool({
   description:
     "Fetch the full body (markdown), summary, and cited sources for one Fabric Atlas content item (article, design, or lesson).",
   inputSchema: {
-    kind: z
-      .enum(["article", "design", "lesson"])
-      .describe("Content kind."),
+    kind: z.enum(["article", "design", "lesson"]).describe("Content kind."),
     slug: z.string().min(1).describe("Content item slug."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },

@@ -38,8 +38,7 @@ export function useTocHeadings(bodyMd: string): TocEntry[] {
 
 function prefersReducedMotion() {
   return (
-    typeof window !== "undefined" &&
-    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
   );
 }
 
@@ -95,11 +94,7 @@ export function ContentTocSidebar({ headings }: { headings: TocEntry[] }) {
         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Contents
         </div>
-        <div
-          className="flex items-center gap-0.5"
-          role="group"
-          aria-label="Jump between sections"
-        >
+        <div className="flex items-center gap-0.5" role="group" aria-label="Jump between sections">
           <button
             type="button"
             onClick={() => goRelative(-1)}

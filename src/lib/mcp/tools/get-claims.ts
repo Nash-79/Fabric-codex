@@ -15,7 +15,13 @@ export default defineTool({
     depth: z.number().int().min(1).max(5).optional().describe("Depth level 1-5."),
     tier: z.number().int().min(1).max(6).optional().describe("Trust tier 1 (best) - 6 (unknown)."),
     q: z.string().optional().describe("Free-text search over claim text."),
-    limit: z.number().int().min(1).max(100).optional().describe("Max claims to return (default 20)."),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe("Max claims to return (default 20)."),
   },
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async (input) => {

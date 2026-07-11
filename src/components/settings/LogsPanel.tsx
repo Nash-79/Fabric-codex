@@ -133,7 +133,8 @@ export function LogsPanel({
     if (level !== "all" && e.level !== level) return false;
     const term = q.trim().toLowerCase();
     if (term) {
-      const hay = `${e.action} ${e.target} ${e.actor} ${e.detail ?? ""} ${JSON.stringify(e.metadata ?? {})}`.toLowerCase();
+      const hay =
+        `${e.action} ${e.target} ${e.actor} ${e.detail ?? ""} ${JSON.stringify(e.metadata ?? {})}`.toLowerCase();
       if (!hay.includes(term)) return false;
     }
     return true;
@@ -150,9 +151,18 @@ export function LogsPanel({
   };
 
   const exportJson = () => {
-    const blob = new Blob([JSON.stringify(filtered.map((e) => e.raw), null, 2)], {
-      type: "application/json",
-    });
+    const blob = new Blob(
+      [
+        JSON.stringify(
+          filtered.map((e) => e.raw),
+          null,
+          2,
+        ),
+      ],
+      {
+        type: "application/json",
+      },
+    );
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

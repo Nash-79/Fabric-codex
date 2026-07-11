@@ -53,11 +53,7 @@ export function AdvisorComposer({
             Enter to send · Shift+Enter for newline · Answers cite Atlas sources
           </span>
         </PromptInputTools>
-        <PromptInputSubmit
-          status={status}
-          onStop={onStop}
-          disabled={disabled || !value.trim()}
-        />
+        <PromptInputSubmit status={status} onStop={onStop} disabled={disabled || !value.trim()} />
       </PromptInputFooter>
     </PromptInput>
   );

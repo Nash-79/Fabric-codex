@@ -6,7 +6,9 @@ export type PdfMeta = {
   summary?: string | null;
   tags?: string[] | null;
   updatedAt?: string | null;
-  citations?: Array<{ source?: { title?: string | null; url?: string | null; tier?: number | null } | null }>;
+  citations?: Array<{
+    source?: { title?: string | null; url?: string | null; tier?: number | null } | null;
+  }>;
 };
 
 const A4_W = 210; // mm

@@ -171,9 +171,7 @@ export const getContentSiblings = createServerFn({ method: "GET" })
       return {
         prev: idx > 0 ? { slug: list[idx - 1].slug, title: list[idx - 1].title } : null,
         next:
-          idx < list.length - 1
-            ? { slug: list[idx + 1].slug, title: list[idx + 1].title }
-            : null,
+          idx < list.length - 1 ? { slug: list[idx + 1].slug, title: list[idx + 1].title } : null,
       };
     } catch {
       return { prev: null, next: null };

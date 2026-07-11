@@ -21,12 +21,5 @@ export default defineMcp({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated",
   }),
-  tools: [
-    listCapabilitiesTool,
-    listTopicsTool,
-    getClaimsTool,
-    searchAtlasTool,
-    getArticleTool,
-  ],
+  tools: [listCapabilitiesTool, listTopicsTool, getClaimsTool, searchAtlasTool, getArticleTool],
 });
-

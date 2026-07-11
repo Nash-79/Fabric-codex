@@ -94,8 +94,7 @@ function ContentItemPage() {
   const [progress, setProgress] = useState(0);
   const [citationsOpen, setCitationsOpen] = useState(false);
   const savedProgress = useReadingProgress(kind, slug);
-  const showResume =
-    savedProgress != null && savedProgress.pct > 10 && savedProgress.pct < 95;
+  const showResume = savedProgress != null && savedProgress.pct > 10 && savedProgress.pct < 95;
 
   // [ / ] jumps to previous / next sibling article.
   useEffect(() => {
@@ -121,7 +120,6 @@ function ContentItemPage() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [siblings, kind, navigate]);
-
 
   useEffect(() => {
     function updateProgress() {

@@ -108,7 +108,9 @@ export async function pollRssFeedsCore(
       });
       if (!res.ok) {
         const bodySnippet = (await res.text().catch(() => "")).slice(0, 300);
-        throw new Error(`HTTP ${res.status} ${res.statusText || ""}${bodySnippet ? ` — ${bodySnippet.replace(/\s+/g, " ")}` : ""}`.trim());
+        throw new Error(
+          `HTTP ${res.status} ${res.statusText || ""}${bodySnippet ? ` — ${bodySnippet.replace(/\s+/g, " ")}` : ""}`.trim(),
+        );
       }
       const body = await res.text();
       if (/Just a moment\.\.\.|cf-browser-verification|challenge-platform/i.test(body)) {
@@ -244,7 +246,8 @@ export async function pollFabricRoadmapCore(sb: SupabaseAdmin): Promise<RoadmapP
   try {
     const res = await fetch(FABRIC_ROADMAP_FEED_URL, {
       headers: {
-        accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
+        accept:
+          "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
         "accept-language": "en-US,en;q=0.9",
         "user-agent":
           "Mozilla/5.0 (compatible; FabricAtlasBot/1.0; +https://fabric-atlas.lovable.app/) AppleWebKit/537.36",
@@ -253,7 +256,9 @@ export async function pollFabricRoadmapCore(sb: SupabaseAdmin): Promise<RoadmapP
     });
     if (!res.ok) {
       const bodySnippet = (await res.text().catch(() => "")).slice(0, 300);
-      throw new Error(`HTTP ${res.status} ${res.statusText || ""}${bodySnippet ? ` — ${bodySnippet.replace(/\s+/g, " ")}` : ""}`.trim());
+      throw new Error(
+        `HTTP ${res.status} ${res.statusText || ""}${bodySnippet ? ` — ${bodySnippet.replace(/\s+/g, " ")}` : ""}`.trim(),
+      );
     }
     const xml = await res.text();
 
