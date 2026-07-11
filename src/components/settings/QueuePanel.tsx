@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { mutateQueueItem, submitSourceUrl } from "@/lib/settings.functions";
+import { bulkClaimQueueItems, mutateQueueItem, submitSourceUrl } from "@/lib/settings.functions";
 import { Empty, Panel, statusBadge } from "@/components/settings/shared";
 
 type QueueAction = "claim" | "complete" | "fail" | "requeue" | "dismiss";
@@ -42,8 +43,14 @@ export function QueuePanel({
   loading: boolean;
 }) {
   const actionFn = useServerFn(mutateQueueItem);
+  const bulkClaimFn = useServerFn(bulkClaimQueueItems);
   const [completeItem, setCompleteItem] = useState<any>(null);
   const [failItem, setFailItem] = useState<any>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const queuedItems = (data?.queue ?? []).filter((item: any) => item.status === "queued");
+  const selectedQueuedIds = queuedItems
+    .filter((item: any) => selectedIds.has(item.id))
+    .map((item: any) => item.id);
   const mutate = useMutation({
     mutationFn: (task: Promise<unknown>) => task,
     onSuccess: () => {
@@ -59,16 +66,57 @@ export function QueuePanel({
     action: QueueAction,
     extra: { sourceId?: string; error?: string } = {},
   ) => mutate.mutate(actionFn({ data: { itemId: item.id, action, ...extra } }));
+  const bulkClaim = useMutation({
+    mutationFn: () => bulkClaimFn({ data: { itemIds: selectedQueuedIds } }),
+    onSuccess: (result) => {
+      toast.success(`${result.claimed} queue item${result.claimed === 1 ? "" : "s"} claimed.`);
+      setSelectedIds(new Set());
+      onDone();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+  const toggleSelected = (id: string, checked: boolean) =>
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  const allQueuedSelected =
+    queuedItems.length > 0 && queuedItems.every((item: any) => selectedIds.has(item.id));
 
   return (
     <Panel title="Queue">
       <QueueSubmitForm onDone={onDone} />
+      {queuedItems.length > 0 && (
+        <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-border bg-card p-3">
+          <label className="flex items-center gap-2 text-sm text-foreground">
+            <Checkbox
+              checked={allQueuedSelected}
+              onCheckedChange={(checked) =>
+                setSelectedIds(
+                  checked ? new Set(queuedItems.map((item: any) => item.id)) : new Set(),
+                )
+              }
+            />
+            Select all queued ({queuedItems.length})
+          </label>
+          <Button
+            size="sm"
+            disabled={!selectedQueuedIds.length || bulkClaim.isPending || mutate.isPending}
+            onClick={() => bulkClaim.mutate()}
+          >
+            {bulkClaim.isPending ? "Claiming…" : `Claim selected (${selectedQueuedIds.length})`}
+          </Button>
+        </div>
+      )}
       {loading ? (
         <Empty text="Loading queue..." />
       ) : (
         <Table className="text-foreground">
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
+              <TableHead className="w-10">Select</TableHead>
               <TableHead>Work item</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Kind</TableHead>
@@ -78,6 +126,14 @@ export function QueuePanel({
           <TableBody>
             {(data?.queue ?? []).map((q: any) => (
               <TableRow key={q.id} className="border-border hover:bg-accent">
+                <TableCell>
+                  <Checkbox
+                    aria-label={`Select ${q.title || q.target_slug || q.url}`}
+                    checked={selectedIds.has(q.id)}
+                    disabled={q.status !== "queued" || bulkClaim.isPending}
+                    onCheckedChange={(checked) => toggleSelected(q.id, checked === true)}
+                  />
+                </TableCell>
                 <TableCell>
                   <a
                     href={q.url}

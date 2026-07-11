@@ -768,6 +768,24 @@ export const mutateQueueItem = createServerFn({ method: "POST" })
     return { ok: true };
   });
 
+export const bulkClaimQueueItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { itemIds: string[] }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const itemIds = [...new Set(data.itemIds)];
+    if (!itemIds.length) throw new Error("Select at least one queued item.");
+    if (itemIds.length > 100) throw new Error("You can claim up to 100 items at once.");
+
+    const sb = await adminClient();
+    const { mutateQueueItem: mutateQueueItemRecord } = await adminServices();
+    for (const itemId of itemIds) {
+      await mutateQueueItemRecord(sb, itemId, "claim");
+      await recordAudit(context.userId, "queue.claim", "queue_item", itemId, { bulk: true });
+    }
+    return { ok: true as const, claimed: itemIds.length };
+  });
+
 type DiagramCoverageRow = {
   slug: string;
   name: string;
