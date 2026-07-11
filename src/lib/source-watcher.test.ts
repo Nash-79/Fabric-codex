@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   assertSafeUrl,
   canonicalizeUrl,
+  detectAntiBot,
   normalizeHtml,
   parseSitemap,
   parseWebFeed,
@@ -85,7 +86,7 @@ describe("source watcher parsing", () => {
         etag: null,
         last_modified: null,
       }),
-    ).rejects.toThrow("anti-bot challenge");
+    ).rejects.toThrow("Cloudflare browser challenge");
     await expect(
       testWatcher({
         url: "https://example.com/blog",
@@ -101,5 +102,17 @@ describe("source watcher parsing", () => {
         last_modified: null,
       }),
     ).rejects.not.toThrow("SECRET RESPONSE BODY");
+  });
+
+  it("identifies the protection trigger and suggests a first-party feed", () => {
+    const headers = new Headers({ server: "cloudflare", "cf-ray": "abc-LHR" });
+    expect(detectAntiBot(403, headers, "Just a moment", "https://example.com/news/post")).toEqual({
+      trigger: "Cloudflare browser challenge",
+      suggestedUrl: "https://example.com/feed",
+    });
+    expect(detectAntiBot(429, new Headers(), "", "https://example.com/news")).toEqual({
+      trigger: "HTTP 429 rate limit",
+      suggestedUrl: "https://example.com/feed",
+    });
   });
 });

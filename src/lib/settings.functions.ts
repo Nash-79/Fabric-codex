@@ -1110,6 +1110,8 @@ export const testSourceWatcher = createServerFn({ method: "POST" })
         ok: false as const,
         error: (e as Error).message || "Watcher test failed.",
         code: (e as { code?: string }).code ?? "http",
+        trigger: (e as { trigger?: string }).trigger,
+        suggestedUrl: (e as { suggestedUrl?: string }).suggestedUrl,
       };
     }
   });

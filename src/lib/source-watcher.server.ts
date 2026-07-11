@@ -40,7 +40,12 @@ export type WatcherResult = {
   queued: number;
   skipped: number;
   capped: boolean;
-  error: { code: WatcherErrorCode; message: string } | null;
+  error: {
+    code: WatcherErrorCode;
+    message: string;
+    trigger?: string;
+    suggestedUrl?: string;
+  } | null;
 };
 
 export const FIRST_POLL_CAP = 25;
@@ -53,6 +58,8 @@ class WatcherFailure extends Error {
   constructor(
     public code: WatcherErrorCode,
     message: string,
+    public trigger?: string,
+    public suggestedUrl?: string,
   ) {
     super(message);
   }
@@ -133,10 +140,39 @@ function inScope(value: string, watcher: Watcher): boolean {
   );
 }
 
-function challenge(text: string): boolean {
-  return /Just a moment|cf-browser-verification|challenge-platform|Attention Required! \| Cloudflare/i.test(
-    text,
-  );
+type AntiBotDetection = { trigger: string; suggestedUrl: string };
+
+export function detectAntiBot(
+  status: number,
+  headers: Pick<Headers, "get">,
+  text: string,
+  value: string,
+): AntiBotDetection | null {
+  const origin = new URL(value).origin;
+  const suggestedUrl = `${origin}/feed`;
+  const server = headers.get("server") || "";
+  if (
+    headers.get("cf-mitigated") === "challenge" ||
+    /cf-browser-verification|challenge-platform|Just a moment|Attention Required! \| Cloudflare/i.test(
+      text,
+    ) ||
+    ((status === 403 || status === 503) && (/cloudflare/i.test(server) || headers.get("cf-ray")))
+  )
+    return { trigger: "Cloudflare browser challenge", suggestedUrl };
+  if (headers.get("x-sucuri-block") || /sucuri website firewall|access denied - sucuri/i.test(text))
+    return { trigger: "Sucuri website firewall", suggestedUrl };
+  if (/datadome/i.test(text) || headers.get("x-datadome"))
+    return { trigger: "DataDome bot protection", suggestedUrl };
+  if (/incapsula|imperva/i.test(text) || headers.get("x-iinfo"))
+    return { trigger: "Imperva browser challenge", suggestedUrl };
+  if (/akamai.*(?:reference|ghost)|_abck/i.test(text) || headers.get("x-akamai-transformed"))
+    return { trigger: "Akamai bot protection", suggestedUrl };
+  if (/captcha|verify (?:you are|that you're) human|enable javascript and cookies/i.test(text))
+    return { trigger: "Human verification challenge", suggestedUrl };
+  if (status === 429) return { trigger: "HTTP 429 rate limit", suggestedUrl };
+  if (status === 401 || status === 403)
+    return { trigger: `HTTP ${status} access policy`, suggestedUrl };
+  return null;
 }
 function decode(value: string): string {
   return value
@@ -297,10 +333,13 @@ async function fetchText(
     if (bytes.byteLength > MAX_RESPONSE_BYTES)
       throw new WatcherFailure("invalid_content", "Response exceeds the 5 MB limit.");
     const body = new TextDecoder().decode(bytes);
-    if (challenge(body))
+    const antiBot = detectAntiBot(res.status, res.headers, body, current);
+    if (antiBot)
       throw new WatcherFailure(
         "blocked",
-        "The site returned an anti-bot challenge; configure a first-party feed, sitemap, or alternative URL.",
+        `Blocked by ${antiBot.trigger}.`,
+        antiBot.trigger,
+        antiBot.suggestedUrl,
       );
     if (!res.ok)
       throw new WatcherFailure(
@@ -596,6 +635,8 @@ export async function pollSourceWatchersCore(
           error_count: 0,
           last_error_code: null,
           last_error: "",
+          last_error_trigger: null,
+          suggested_url: null,
           etag: found.etag,
           last_modified: found.lastModified,
         })
@@ -622,6 +663,8 @@ export async function pollSourceWatchersCore(
           error_count: count,
           last_error_code: failure.code,
           last_error: failure.message.slice(0, 300),
+          last_error_trigger: failure.trigger || null,
+          suggested_url: failure.suggestedUrl || null,
         })
         .eq("id", watcher.id);
       results.push({
@@ -633,7 +676,12 @@ export async function pollSourceWatchersCore(
         queued: 0,
         skipped: 0,
         capped: false,
-        error: { code: failure.code, message: failure.message },
+        error: {
+          code: failure.code,
+          message: failure.message,
+          trigger: failure.trigger,
+          suggestedUrl: failure.suggestedUrl,
+        },
       });
     }
   }

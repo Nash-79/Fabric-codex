@@ -20,6 +20,7 @@ import {
   pollSourceWatchers,
   setSourceWatcherStatus,
   testSourceWatcher,
+  updateSourceWatcher,
 } from "@/lib/settings.functions";
 
 export type WatcherRow = {
@@ -28,13 +29,17 @@ export type WatcherRow = {
   title: string;
   mode: string;
   detected_mode: string | null;
+  alternative_url: string | null;
   status: "active" | "paused";
   default_tier: number;
+  default_tags: string[];
   last_attempt_at: string | null;
   last_success_at: string | null;
   error_count: number;
   last_error_code: string | null;
   last_error: string;
+  last_error_trigger: string | null;
+  suggested_url: string | null;
 };
 
 const REMEDIATION: Record<string, string> = {
@@ -46,12 +51,13 @@ const REMEDIATION: Record<string, string> = {
   parse_failure: "Response didn't match the selected mode. Try mode=auto or switch to rss/sitemap.",
   http: "HTTP error from the origin. Check the URL is reachable, then retry.",
 };
-const remediation = (code: string | null) => (code ? REMEDIATION[code] ?? null : null);
+const remediation = (code: string | null) => (code ? (REMEDIATION[code] ?? null) : null);
 
 export function WatchersPanel() {
   const listFn = useServerFn(listSourceWatchers),
     addFn = useServerFn(addSourceWatcher),
     testFn = useServerFn(testSourceWatcher),
+    updateFn = useServerFn(updateSourceWatcher),
     pollFn = useServerFn(pollSourceWatchers),
     statusFn = useServerFn(setSourceWatcherStatus),
     deleteFn = useServerFn(deleteSourceWatcher);
@@ -62,7 +68,8 @@ export function WatchersPanel() {
     [mode, setMode] = useState<"auto" | "rss" | "sitemap" | "listing" | "page">("auto"),
     [alternative, setAlternative] = useState(""),
     [tier, setTier] = useState("6"),
-    [tags, setTags] = useState("");
+    [tags, setTags] = useState(""),
+    [editingId, setEditingId] = useState<string | null>(null);
   const payload = () => ({
     url: url.trim(),
     title: title.trim(),
@@ -78,22 +85,60 @@ export function WatchersPanel() {
     void qc.invalidateQueries({ queryKey: ["source-watchers"] });
     void qc.invalidateQueries({ queryKey: ["suggested-actions"] });
   };
+  const resetForm = () => {
+    setUrl("");
+    setTitle("");
+    setMode("auto");
+    setAlternative("");
+    setTier("6");
+    setTags("");
+    setEditingId(null);
+  };
+  const beginEdit = (watcher: WatcherRow) => {
+    setUrl(watcher.url);
+    setTitle(watcher.title);
+    setMode(watcher.mode as typeof mode);
+    setAlternative(watcher.alternative_url || "");
+    setTier(String(watcher.default_tier));
+    setTags((watcher.default_tags || []).join(", "));
+    setEditingId(watcher.id);
+  };
   const test = useMutation({
     mutationFn: () => testFn({ data: payload() }),
-    onSuccess: (r) =>
-      r.ok
-        ? toast.success(`Detected ${r.mode}: ${r.discovered} URL(s), ${r.fetched} fetch(es).`)
-        : toast.error(r.error),
+    onSuccess: (r) => {
+      if (r.ok) {
+        if (mode === "auto") setMode(r.mode);
+        toast.success(
+          `Detected ${r.mode}: ${r.discovered} URL(s), ${r.fetched} fetch(es). ${mode === "auto" ? "Watcher type updated." : ""}`,
+        );
+        return;
+      }
+      toast.error(
+        [
+          r.error,
+          r.trigger && `Triggered: ${r.trigger}.`,
+          r.suggestedUrl && `Try ${r.suggestedUrl}`,
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
+    },
     onError: (e) => toast.error((e as Error).message),
   });
   const add = useMutation({
     mutationFn: () => addFn({ data: payload() }),
     onSuccess: () => {
       toast.success("Watcher added.");
-      setUrl("");
-      setTitle("");
-      setAlternative("");
-      setTags("");
+      resetForm();
+      invalidate();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const update = useMutation({
+    mutationFn: () => updateFn({ data: { id: editingId!, ...payload() } }),
+    onSuccess: () => {
+      toast.success("Watcher updated.");
+      resetForm();
       invalidate();
     },
     onError: (e) => toast.error((e as Error).message),
@@ -137,6 +182,9 @@ export function WatchersPanel() {
         </Button>
       </div>
       <div className="mb-4 grid gap-2 rounded-md border border-border bg-card p-4 md:grid-cols-2">
+        {editingId && (
+          <p className="text-sm font-medium text-foreground md:col-span-2">Editing watcher</p>
+        )}
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
@@ -184,6 +232,11 @@ export function WatchersPanel() {
           placeholder="Tags, comma separated"
         />
         <div className="flex justify-end gap-2 md:col-span-2">
+          {editingId && (
+            <Button variant="ghost" size="sm" onClick={resetForm}>
+              Cancel
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
@@ -192,8 +245,12 @@ export function WatchersPanel() {
           >
             {test.isPending ? "Testing…" : "Test and detect"}
           </Button>
-          <Button size="sm" onClick={() => add.mutate()} disabled={!url.trim() || add.isPending}>
-            Add watcher
+          <Button
+            size="sm"
+            onClick={() => (editingId ? update.mutate() : add.mutate())}
+            disabled={!url.trim() || add.isPending || update.isPending}
+          >
+            {update.isPending ? "Saving…" : editingId ? "Save changes" : "Add watcher"}
           </Button>
         </div>
       </div>
@@ -232,6 +289,25 @@ export function WatchersPanel() {
                     <p>
                       <span className="font-medium">{r.error_count}× failure:</span> {r.last_error}
                     </p>
+                    {r.last_error_trigger && (
+                      <p className="mt-1">
+                        <span className="font-medium">Protection triggered:</span>{" "}
+                        {r.last_error_trigger}
+                      </p>
+                    )}
+                    {r.suggested_url && (
+                      <p className="mt-1">
+                        Try next:{" "}
+                        <a
+                          href={r.suggested_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="font-medium underline underline-offset-2"
+                        >
+                          {r.suggested_url}
+                        </a>
+                      </p>
+                    )}
                     {remediation(r.last_error_code) && (
                       <p className="mt-1 text-rose-300/80">{remediation(r.last_error_code)}</p>
                     )}
@@ -243,6 +319,9 @@ export function WatchersPanel() {
                 </p>
               </div>
               <div className="flex shrink-0 gap-1">
+                <Button size="sm" variant="outline" onClick={() => beginEdit(r)}>
+                  Edit
+                </Button>
                 {r.status === "active" && (
                   <Button
                     size="sm"
