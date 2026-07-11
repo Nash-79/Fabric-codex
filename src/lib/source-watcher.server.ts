@@ -352,8 +352,19 @@ async function discover(watcher: Watcher): Promise<{
   try {
     first = await fetchText(start, conditional);
   } catch (error) {
-    if (watcher.mode === "auto" && error instanceof WatcherFailure && error.code === "blocked") {
-      for (const map of [...robots.sitemaps, `${new URL(start).origin}/sitemap.xml`]) {
+    if (error instanceof WatcherFailure && error.code === "blocked") {
+      const origin = new URL(start).origin;
+      const feedPaths = ["/feed", "/feed/", "/rss", "/rss.xml", "/atom.xml", "/feed.xml"];
+      for (const feed of feedPaths.map((p) => `${origin}${p}`)) {
+        try {
+          const r = await fetchText(feed);
+          const items = parseWebFeed(r.body);
+          if (items.length) return { mode: "rss", candidates: items, fetched: 1 };
+        } catch {
+          // Try the next first-party feed before falling back to sitemaps.
+        }
+      }
+      for (const map of [...robots.sitemaps, `${origin}/sitemap.xml`]) {
         try {
           const sitemap = await fetchText(map);
           const parsed = parseSitemap(sitemap.body);
