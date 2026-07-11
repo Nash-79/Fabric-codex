@@ -70,7 +70,9 @@ export function WatchersPanel() {
   const test = useMutation({
     mutationFn: () => testFn({ data: payload() }),
     onSuccess: (r) =>
-      toast.success(`Detected ${r.mode}: ${r.discovered} URL(s), ${r.fetched} fetch(es).`),
+      r.ok
+        ? toast.success(`Detected ${r.mode}: ${r.discovered} URL(s), ${r.fetched} fetch(es).`)
+        : toast.error(r.error),
     onError: (e) => toast.error((e as Error).message),
   });
   const add = useMutation({
