@@ -113,6 +113,7 @@ export function canonicalizeUrl(value: string, base?: string): string | null {
     u.hash = "";
     for (const key of [...u.searchParams.keys()])
       if (/^(utm_|fbclid$|gclid$|msclkid$)/i.test(key)) u.searchParams.delete(key);
+    u.searchParams.sort();
     u.hostname = u.hostname.toLowerCase();
     if (
       (u.protocol === "https:" && u.port === "443") ||

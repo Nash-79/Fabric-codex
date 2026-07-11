@@ -53,6 +53,13 @@ describe("source watcher parsing", () => {
     ).toBe("Useful text");
   });
 
+  it("canonicalizes equivalent query parameter orders to one queue URL", () => {
+    const first = canonicalizeUrl("https://example.com/post?b=2&a=1&utm_medium=rss");
+    const second = canonicalizeUrl("https://EXAMPLE.com/post?a=1&b=2#comments");
+    expect(first).toBe("https://example.com/post?a=1&b=2");
+    expect(second).toBe(first);
+  });
+
   it("rejects private destinations", async () => {
     await expect(assertSafeUrl("http://127.0.0.1/admin")).rejects.toThrow(
       "Private network destinations",
