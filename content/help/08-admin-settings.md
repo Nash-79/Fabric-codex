@@ -63,10 +63,12 @@ an admin **commission** additional diagrams for a topic at a chosen future time 
 an item to the same queue mechanism the ingestion queue uses, tagged for diagram work. A
 laptop agent later drains due commissions with `/commission-diagrams`.
 
-## RSS Feeds
+## Website Watchers
 
-Add, pause, or delete RSS subscriptions used to discover new source URLs automatically, and
-manually trigger a poll. Discovered URLs land in the Queue tab tagged "discovered."
+Add, test, pause, or delete watchers for RSS/Atom and JSON feeds, sitemaps, listing pages, or
+individual pages. Auto mode detects the best available first-party mechanism. New URLs and
+meaningfully changed known sources land in the Queue for human-reviewed ingestion; blocked sites
+remain visible with a structured diagnostic instead of bypassing their anti-bot controls.
 
 ## Logs
 

@@ -116,7 +116,7 @@ async function main() {
   try {
     const [queue, rss, topics, items, diagrams, claims] = await Promise.all([
       rest(url, key, "queue_public?select=*&order=created_at.desc"),
-      rest(url, key, "rss_status_public?select=*"),
+      rest(url, key, "source_watcher_status_public?select=*"),
       rest(url, key, "topics?select=slug,name,active&active=eq.true"),
       rest(
         url,
@@ -142,7 +142,7 @@ async function main() {
     const articleLess = topicSlugs.filter((slug) => !articleTopics.has(slug));
     const diagramGaps = topicSlugs.filter((slug) => !diagramTopics.has(slug));
     const storageOverrides = diagrams.filter((d) => /^https?:\/\//i.test(d.path ?? ""));
-    const staleFeeds = rss.filter((r) => r.status === "active" && olderThanDay(r.last_polled_at));
+    const staleFeeds = rss.filter((r) => r.status === "active" && olderThanDay(r.last_attempt_at));
     const failingFeeds = rss.filter((r) => (r.error_count ?? 0) > 0);
 
     digest.queue = {
@@ -165,7 +165,8 @@ async function main() {
     for (const item of openSources.slice(0, 3))
       digest.next.push(`/ingest-batch # ${item.title || item.url}`);
     for (const item of commissions.slice(0, 3)) digest.next.push(commandFor(item));
-    if (staleFeeds.length || failingFeeds.length) digest.next.push("/poll-rss-feeds");
+    if (staleFeeds.length || failingFeeds.length)
+      digest.next.push("Settings → Watchers → Poll all");
     for (const slug of articleLess.slice(0, 2)) digest.next.push(`/blog ${slug}`);
     for (const slug of diagramGaps.slice(0, 2)) digest.next.push(`/commission-diagrams ${slug}`);
     if (claims.length) digest.next.push("/orchestrate-content");

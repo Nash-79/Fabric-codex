@@ -13,7 +13,7 @@ export const Route = createFileRoute("/api/public/hooks/poll-feeds")({
           return new Response("unauthorized", { status: 401 });
         }
 
-        let body: { feeds?: boolean; roadmap?: boolean } = {};
+        let body: { watchers?: boolean; feeds?: boolean; roadmap?: boolean } = {};
         try {
           const raw = await request.text();
           body = raw ? JSON.parse(raw) : {};
@@ -21,14 +21,15 @@ export const Route = createFileRoute("/api/public/hooks/poll-feeds")({
           return Response.json({ ok: false, error: "Invalid JSON body." }, { status: 400 });
         }
 
-        const runFeeds = body.feeds !== false;
+        const runWatchers = body.watchers ?? body.feeds ?? true;
         const runRoadmap = body.roadmap !== false;
         const result: Record<string, unknown> = {};
         const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-        const { pollFabricRoadmapCore, pollRssFeedsCore } = await import("@/lib/rss-poll.server");
+        const { pollFabricRoadmapCore } = await import("@/lib/rss-poll.server");
+        const { pollSourceWatchersCore } = await import("@/lib/source-watcher.server");
 
-        if (runFeeds) {
-          result.feeds = await pollRssFeedsCore(supabaseAdmin, { actorId: null });
+        if (runWatchers) {
+          result.watchers = await pollSourceWatchersCore(supabaseAdmin, { actorId: null });
         }
         if (runRoadmap) {
           result.roadmap = await pollFabricRoadmapCore(supabaseAdmin);
@@ -36,7 +37,7 @@ export const Route = createFileRoute("/api/public/hooks/poll-feeds")({
 
         await supabaseAdmin.from("admin_audit_events").insert({
           actor_id: null,
-          action: "rss.polled_by_hook",
+          action: "watcher.polled_by_hook",
           target_type: "hook",
           target_id: "poll-feeds",
           metadata: result as any,

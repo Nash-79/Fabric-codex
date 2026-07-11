@@ -376,7 +376,7 @@ export async function computeSuggestedActions(sb: SupabaseAdmin) {
   const now = new Date().toISOString();
   const [
     { data: queue },
-    { data: rss },
+    { data: watchers },
     { data: topics },
     { data: contentItems },
     { data: claims },
@@ -389,8 +389,8 @@ export async function computeSuggestedActions(sb: SupabaseAdmin) {
       .in("status", ["queued", "claimed", "failed"])
       .order("created_at", { ascending: true }),
     sb
-      .from("rss_subscriptions")
-      .select("id,title,feed_url,status,last_polled_at,error_count,last_error")
+      .from("source_watchers")
+      .select("id,title,url,status,last_attempt_at,error_count,last_error,last_error_code")
       .order("created_at", { ascending: true }),
     sb.from("topics").select("slug,name,active").eq("active", true),
     sb
@@ -464,20 +464,21 @@ export async function computeSuggestedActions(sb: SupabaseAdmin) {
   }
 
   const staleCutoff = Date.now() - 24 * 60 * 60 * 1000;
-  const staleFeeds = (rss ?? []).filter(
+  const staleWatchers = (watchers ?? []).filter(
     (r: any) =>
       r.status === "active" &&
-      (!r.last_polled_at || new Date(r.last_polled_at).getTime() < staleCutoff),
+      (!r.last_attempt_at || new Date(r.last_attempt_at).getTime() < staleCutoff),
   );
-  const failingFeeds = (rss ?? []).filter((r: any) => (r.error_count ?? 0) > 0);
-  if (staleFeeds.length || failingFeeds.length) {
+  const failingWatchers = (watchers ?? []).filter((r: any) => (r.error_count ?? 0) > 0);
+  if (staleWatchers.length || failingWatchers.length) {
     actions.push({
       id: "rss-attention",
       priority: 80,
-      label: `${staleFeeds.length} stale / ${failingFeeds.length} failing feed(s)`,
-      detail: failingFeeds[0]?.last_error || staleFeeds[0]?.title || staleFeeds[0]?.feed_url || "",
+      label: `${staleWatchers.length} stale / ${failingWatchers.length} failing watcher(s)`,
+      detail:
+        failingWatchers[0]?.last_error || staleWatchers[0]?.title || staleWatchers[0]?.url || "",
       tab: "rss",
-      command: "/poll-rss-feeds",
+      command: "Settings → Watchers → Poll all",
     });
   }
 

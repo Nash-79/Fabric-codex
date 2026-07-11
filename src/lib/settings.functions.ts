@@ -1033,6 +1033,155 @@ export const deleteRssSubscription = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+// --- Unified source watchers ----------------------------------------------
+
+type WatcherMode = "auto" | "rss" | "sitemap" | "listing" | "page";
+type WatcherInput = {
+  url: string;
+  title?: string;
+  mode?: WatcherMode;
+  alternativeUrl?: string;
+  allowedPathPrefix?: string;
+  maxDepth?: number;
+  maxPages?: number;
+  defaultTier?: number;
+  defaultTags?: string[];
+};
+
+function watcherValues(data: WatcherInput) {
+  const parsed = new URL(data.url.trim());
+  if (!["http:", "https:"].includes(parsed.protocol) || parsed.username || parsed.password) {
+    throw new Error("Only credential-free HTTP(S) URLs are supported.");
+  }
+  const mode = data.mode ?? "auto";
+  if (!["auto", "rss", "sitemap", "listing", "page"].includes(mode))
+    throw new Error("Invalid watcher mode.");
+  const maxDepth = data.maxDepth ?? 1;
+  const maxPages = data.maxPages ?? 100;
+  const tier = data.defaultTier ?? 6;
+  if (maxDepth < 0 || maxDepth > 3 || maxPages < 1 || maxPages > 500 || tier < 1 || tier > 6)
+    throw new Error("Watcher limits or tier are out of range.");
+  if (data.alternativeUrl) new URL(data.alternativeUrl);
+  return {
+    url: parsed.toString(),
+    title: data.title?.trim() ?? "",
+    mode,
+    alternative_url: data.alternativeUrl?.trim() || null,
+    allowed_host: parsed.hostname.toLowerCase(),
+    allowed_path_prefix:
+      data.allowedPathPrefix?.trim() || parsed.pathname.replace(/[^/]*$/, "") || "/",
+    max_depth: maxDepth,
+    max_pages: maxPages,
+    default_tier: tier,
+    default_tags: data.defaultTags ?? [],
+  };
+}
+
+export const listSourceWatchers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { data, error } = await sb
+      .from("source_watchers")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return { watchers: data ?? [] };
+  });
+
+export const testSourceWatcher = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: WatcherInput) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const values = watcherValues(data);
+    const { testWatcher } = await import("@/lib/source-watcher.server");
+    return testWatcher({ ...values, last_success_at: null, etag: null, last_modified: null });
+  });
+
+export const addSourceWatcher = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: WatcherInput) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const values = watcherValues(data);
+    const { data: row, error } = await sb
+      .from("source_watchers")
+      .insert({ ...values, created_by: context.userId })
+      .select("*")
+      .single();
+    if (error)
+      throw new Error(error.code === "23505" ? "That URL is already watched." : error.message);
+    await recordAudit(context.userId, "watcher.created", "source_watcher", row.id, {
+      url: values.url,
+      mode: values.mode,
+    });
+    return { ok: true as const, watcher: row };
+  });
+
+export const updateSourceWatcher = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: WatcherInput & { id: string }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const values = watcherValues(data);
+    const { error } = await sb.from("source_watchers").update(values).eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "watcher.updated", "source_watcher", data.id, {
+      url: values.url,
+      mode: values.mode,
+    });
+    return { ok: true as const };
+  });
+
+export const setSourceWatcherStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { id: string; status: "active" | "paused" }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { error } = await sb
+      .from("source_watchers")
+      .update({ status: data.status })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, `watcher.${data.status}`, "source_watcher", data.id);
+    return { ok: true as const };
+  });
+
+export const deleteSourceWatcher = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { id: string }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { error } = await sb.from("source_watchers").delete().eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "watcher.deleted", "source_watcher", data.id);
+    return { ok: true as const };
+  });
+
+export const pollSourceWatchers = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { watcherId?: string } | undefined) => d ?? {})
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { pollSourceWatchersCore } = await import("@/lib/source-watcher.server");
+    const result = await pollSourceWatchersCore(sb, {
+      watcherId: data.watcherId,
+      actorId: context.userId,
+    });
+    await recordAudit(context.userId, "watcher.polled", "source_watcher", data.watcherId ?? "all", {
+      totalQueued: result.totalQueued,
+      results: result.results,
+    });
+    return result;
+  });
+
 // --- RSS polling -----------------------------------------------------------
 // Fetch each active feed, dedupe new entries against existing sources + the open
 // queue, and enqueue them as kind=source items. Runs on the server (Lovable host)

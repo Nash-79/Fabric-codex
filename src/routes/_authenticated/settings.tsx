@@ -11,7 +11,7 @@ import {
   ListChecks,
   Milestone,
   RefreshCw,
-  Rss,
+  Radar,
   ShieldCheck,
   Upload,
   UserCog,
@@ -30,7 +30,7 @@ import { QueuePanel } from "@/components/settings/QueuePanel";
 import { PublishPanel } from "@/components/settings/PublishPanel";
 import { DiagramsPanel } from "@/components/settings/DiagramsPanel";
 import { PipelineOverviewPanel } from "@/components/settings/PipelineOverviewPanel";
-import { RssPanel } from "@/components/settings/RssPanel";
+import { WatchersPanel } from "@/components/settings/WatchersPanel";
 import { RoadmapPanel } from "@/components/settings/RoadmapPanel";
 import { LogsPanel } from "@/components/settings/LogsPanel";
 import { SystemPanel } from "@/components/settings/SystemPanel";
@@ -63,7 +63,7 @@ const navGroups = [
     label: "Pipeline",
     items: [
       { id: "pipeline", label: "Overview", icon: Workflow },
-      { id: "rss", label: "RSS Feeds", icon: Rss },
+      { id: "rss", label: "Watchers", icon: Radar },
       { id: "queue", label: "Queue", icon: FileText },
       { id: "publish", label: "Publish", icon: Upload },
       { id: "roadmap", label: "Roadmap", icon: Milestone },
@@ -206,7 +206,7 @@ function SettingsPage() {
             <PipelineOverviewPanel data={cms.data} loading={cms.isLoading} onNavigate={setTab} />
           </TabsContent>
           <TabsContent value="rss" className="mt-0">
-            <RssPanel />
+            <WatchersPanel />
           </TabsContent>
           <TabsContent value="roadmap" className="mt-0">
             <RoadmapPanel />

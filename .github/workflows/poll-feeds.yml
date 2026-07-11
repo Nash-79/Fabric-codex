@@ -5,8 +5,8 @@ on:
     - cron: "0 6,18 * * *"
   workflow_dispatch:
     inputs:
-      feeds:
-        description: "Poll RSS subscriptions"
+      watchers:
+        description: "Poll website watchers"
         type: boolean
         default: true
       roadmap:
@@ -17,13 +17,13 @@ on:
 jobs:
   poll:
     runs-on: ubuntu-latest
-    environment: production
+    environment: prod
     steps:
       - name: Poll Fabric Atlas feeds
         env:
           FABRIC_ATLAS_BASE_URL: ${{ secrets.FABRIC_ATLAS_BASE_URL }}
           SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY }}
-          FEEDS: ${{ github.event.inputs.feeds || 'true' }}
+          WATCHERS: ${{ github.event.inputs.watchers || 'true' }}
           ROADMAP: ${{ github.event.inputs.roadmap || 'true' }}
         run: |
           if [ -z "$FABRIC_ATLAS_BASE_URL" ]; then
@@ -38,4 +38,4 @@ jobs:
             -X POST "$FABRIC_ATLAS_BASE_URL/api/public/hooks/poll-feeds" \
             -H "content-type: application/json" \
             -H "apikey: $SUPABASE_PUBLISHABLE_KEY" \
-            -d "{\"feeds\":$FEEDS,\"roadmap\":$ROADMAP}"
+            -d "{\"watchers\":$WATCHERS,\"roadmap\":$ROADMAP}"

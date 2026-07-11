@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { MoveRight } from "lucide-react";
-import { getSuggestedActions, listRssSubscriptions } from "@/lib/settings.functions";
+import { getSuggestedActions, listSourceWatchers } from "@/lib/settings.functions";
 import { Empty, Panel } from "@/components/settings/shared";
-import type { RssRow } from "@/components/settings/RssPanel";
+import type { WatcherRow } from "@/components/settings/WatchersPanel";
 
 // How a polled URL becomes a published article, at a glance: feeds → queue → approved
 // sources → claims (pending → verified) → live articles. Counts come from the same CMS
@@ -17,9 +17,9 @@ export function PipelineOverviewPanel({
   loading: boolean;
   onNavigate: (tab: string) => void;
 }) {
-  const listFn = useServerFn(listRssSubscriptions);
+  const listFn = useServerFn(listSourceWatchers);
   const suggestedFn = useServerFn(getSuggestedActions);
-  const subs = useQuery({ queryKey: ["rss-subscriptions"], queryFn: () => listFn() });
+  const subs = useQuery({ queryKey: ["source-watchers"], queryFn: () => listFn() });
   const suggested = useQuery({
     queryKey: ["suggested-actions"],
     queryFn: () => suggestedFn(),
@@ -33,12 +33,12 @@ export function PipelineOverviewPanel({
     );
   }
 
-  const feeds = (subs.data?.subscriptions ?? []) as RssRow[];
+  const feeds = (subs.data?.watchers ?? []) as WatcherRow[];
   const activeFeeds = feeds.filter((f) => f.status === "active");
   const failingFeeds = feeds.filter((f) => (f.error_count ?? 0) > 0);
   const lastPolled =
     feeds
-      .map((f) => f.last_polled_at)
+      .map((f) => f.last_attempt_at)
       .filter((t): t is string => !!t)
       .sort()
       .pop() ?? null;
@@ -59,7 +59,7 @@ export function PipelineOverviewPanel({
   const stages: Array<{ tab: string; label: string; value: number; sub: string }> = [
     {
       tab: "rss",
-      label: "Active feeds",
+      label: "Active watchers",
       value: activeFeeds.length,
       sub: lastPolled ? `polled ${new Date(lastPolled).toLocaleDateString()}` : "never polled",
     },
@@ -92,7 +92,7 @@ export function PipelineOverviewPanel({
   const attention: Array<{ tab: string; text: string }> = [
     ...failingFeeds.map((f) => ({
       tab: "rss",
-      text: `Feed "${f.title || f.feed_url}" failing (${f.error_count}×): ${f.last_error || "unknown error"}`,
+      text: `Watcher "${f.title || f.url}" failing (${f.error_count}×): ${f.last_error || "unknown error"}`,
     })),
     ...(failedQueue.length
       ? [{ tab: "queue", text: `${failedQueue.length} queue item(s) failed ingestion` }]
