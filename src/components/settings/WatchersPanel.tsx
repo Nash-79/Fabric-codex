@@ -37,6 +37,17 @@ export type WatcherRow = {
   last_error: string;
 };
 
+const REMEDIATION: Record<string, string> = {
+  blocked:
+    "Site returned an anti-bot challenge. Try setting an alternative URL to a first-party RSS feed (e.g. /feed) or sitemap (/sitemap.xml). Auto-fallback probes these on retry.",
+  robots_denied: "robots.txt disallows this path. Point the watcher at an allowed path or feed.",
+  timeout: "The request timed out. The site may be slow; retry, or use a lighter feed URL.",
+  invalid_content: "Response was invalid or too large. Configure a smaller first-party feed.",
+  parse_failure: "Response didn't match the selected mode. Try mode=auto or switch to rss/sitemap.",
+  http: "HTTP error from the origin. Check the URL is reachable, then retry.",
+};
+const remediation = (code: string | null) => (code ? REMEDIATION[code] ?? null : null);
+
 export function WatchersPanel() {
   const listFn = useServerFn(listSourceWatchers),
     addFn = useServerFn(addSourceWatcher),
@@ -217,9 +228,14 @@ export function WatchersPanel() {
                   )}
                 </div>
                 {r.last_error && (
-                  <p className="mt-1 text-xs text-rose-300">
-                    {r.error_count}× {r.last_error}
-                  </p>
+                  <div className="mt-1 rounded-sm border border-rose-400/30 bg-rose-500/10 p-2 text-xs text-rose-200">
+                    <p>
+                      <span className="font-medium">{r.error_count}× failure:</span> {r.last_error}
+                    </p>
+                    {remediation(r.last_error_code) && (
+                      <p className="mt-1 text-rose-300/80">{remediation(r.last_error_code)}</p>
+                    )}
+                  </div>
                 )}
                 <p className="mt-1 text-xs text-muted-foreground">
                   Last success:{" "}
@@ -230,11 +246,11 @@ export function WatchersPanel() {
                 {r.status === "active" && (
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant={r.last_error ? "default" : "outline"}
                     onClick={() => poll.mutate(r.id)}
                     disabled={poll.isPending}
                   >
-                    Poll
+                    {r.last_error ? "Retry" : "Poll"}
                   </Button>
                 )}
                 <Button size="sm" variant="outline" onClick={() => toggle.mutate(r)}>
