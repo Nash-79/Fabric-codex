@@ -1141,6 +1141,148 @@ export type Database = {
         }
         Relationships: []
       }
+      source_watcher_items: {
+        Row: {
+          canonical_url: string
+          content_fingerprint: string
+          first_seen_at: string
+          id: string
+          last_queued_fingerprint: string | null
+          last_seen_at: string
+          source_modified_at: string | null
+          stable_id: string | null
+          title: string
+          watcher_id: string
+        }
+        Insert: {
+          canonical_url: string
+          content_fingerprint: string
+          first_seen_at?: string
+          id?: string
+          last_queued_fingerprint?: string | null
+          last_seen_at?: string
+          source_modified_at?: string | null
+          stable_id?: string | null
+          title?: string
+          watcher_id: string
+        }
+        Update: {
+          canonical_url?: string
+          content_fingerprint?: string
+          first_seen_at?: string
+          id?: string
+          last_queued_fingerprint?: string | null
+          last_seen_at?: string
+          source_modified_at?: string | null
+          stable_id?: string | null
+          title?: string
+          watcher_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "source_watcher_items_watcher_id_fkey"
+            columns: ["watcher_id"]
+            isOneToOne: false
+            referencedRelation: "rss_status_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_watcher_items_watcher_id_fkey"
+            columns: ["watcher_id"]
+            isOneToOne: false
+            referencedRelation: "source_watcher_status_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "source_watcher_items_watcher_id_fkey"
+            columns: ["watcher_id"]
+            isOneToOne: false
+            referencedRelation: "source_watchers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      source_watchers: {
+        Row: {
+          allowed_host: string
+          allowed_path_prefix: string
+          alternative_url: string | null
+          created_at: string
+          created_by: string | null
+          default_tags: string[]
+          default_tier: number
+          detected_mode: string | null
+          error_count: number
+          etag: string | null
+          id: string
+          last_attempt_at: string | null
+          last_error: string
+          last_error_code: string | null
+          last_modified: string | null
+          last_success_at: string | null
+          legacy_last_seen_guid: string | null
+          max_depth: number
+          max_pages: number
+          mode: string
+          status: string
+          title: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          allowed_host: string
+          allowed_path_prefix?: string
+          alternative_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          default_tags?: string[]
+          default_tier?: number
+          detected_mode?: string | null
+          error_count?: number
+          etag?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string
+          last_error_code?: string | null
+          last_modified?: string | null
+          last_success_at?: string | null
+          legacy_last_seen_guid?: string | null
+          max_depth?: number
+          max_pages?: number
+          mode?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          allowed_host?: string
+          allowed_path_prefix?: string
+          alternative_url?: string | null
+          created_at?: string
+          created_by?: string | null
+          default_tags?: string[]
+          default_tier?: number
+          detected_mode?: string | null
+          error_count?: number
+          etag?: string | null
+          id?: string
+          last_attempt_at?: string | null
+          last_error?: string
+          last_error_code?: string | null
+          last_modified?: string | null
+          last_success_at?: string | null
+          legacy_last_seen_guid?: string | null
+          max_depth?: number
+          max_pages?: number
+          mode?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
       sources: {
         Row: {
           active: boolean
@@ -1715,6 +1857,7 @@ export type Database = {
       }
       rss_status_public: {
         Row: {
+          created_at: string | null
           default_tags: string[] | null
           default_tier: number | null
           error_count: number | null
@@ -1725,30 +1868,83 @@ export type Database = {
           last_seen_guid: string | null
           status: string | null
           title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_tags?: string[] | null
+          default_tier?: number | null
+          error_count?: number | null
+          feed_url?: string | null
+          id?: string | null
+          last_error?: string | null
+          last_polled_at?: string | null
+          last_seen_guid?: string | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          default_tags?: string[] | null
+          default_tier?: number | null
+          error_count?: number | null
+          feed_url?: string | null
+          id?: string | null
+          last_error?: string | null
+          last_polled_at?: string | null
+          last_seen_guid?: string | null
+          status?: string | null
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      source_watcher_status_public: {
+        Row: {
+          default_tags: string[] | null
+          default_tier: number | null
+          detected_mode: string | null
+          error_count: number | null
+          id: string | null
+          last_attempt_at: string | null
+          last_error: string | null
+          last_error_code: string | null
+          last_success_at: string | null
+          mode: string | null
+          status: string | null
+          title: string | null
+          url: string | null
         }
         Insert: {
           default_tags?: string[] | null
           default_tier?: number | null
+          detected_mode?: string | null
           error_count?: number | null
-          feed_url?: string | null
           id?: string | null
+          last_attempt_at?: string | null
           last_error?: string | null
-          last_polled_at?: string | null
-          last_seen_guid?: string | null
+          last_error_code?: string | null
+          last_success_at?: string | null
+          mode?: string | null
           status?: string | null
           title?: string | null
+          url?: string | null
         }
         Update: {
           default_tags?: string[] | null
           default_tier?: number | null
+          detected_mode?: string | null
           error_count?: number | null
-          feed_url?: string | null
           id?: string | null
+          last_attempt_at?: string | null
           last_error?: string | null
-          last_polled_at?: string | null
-          last_seen_guid?: string | null
+          last_error_code?: string | null
+          last_success_at?: string | null
+          mode?: string | null
           status?: string | null
           title?: string | null
+          url?: string | null
         }
         Relationships: []
       }
