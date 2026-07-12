@@ -689,32 +689,97 @@ export type Database = {
         }
         Relationships: []
       }
+      diagram_nodes: {
+        Row: {
+          classification: string
+          description: string
+          diagram_slug: string
+          drill_slug: string | null
+          drill_type: string | null
+          label: string
+          node_id: string
+          search_vector: unknown
+          source_keys: string[]
+          tags: string[]
+        }
+        Insert: {
+          classification?: string
+          description?: string
+          diagram_slug: string
+          drill_slug?: string | null
+          drill_type?: string | null
+          label: string
+          node_id: string
+          search_vector?: unknown
+          source_keys?: string[]
+          tags?: string[]
+        }
+        Update: {
+          classification?: string
+          description?: string
+          diagram_slug?: string
+          drill_slug?: string | null
+          drill_type?: string | null
+          label?: string
+          node_id?: string
+          search_vector?: unknown
+          source_keys?: string[]
+          tags?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "diagram_nodes_diagram_slug_fkey"
+            columns: ["diagram_slug"]
+            isOneToOne: false
+            referencedRelation: "diagrams"
+            referencedColumns: ["slug"]
+          },
+        ]
+      }
       diagrams: {
         Row: {
+          accessible_summary: string
           capability_id: string | null
           caption: string
           created_at: string
+          interaction_version: string
           kind: string
           path: string
+          qa_status: string
+          reviewed_at: string | null
           slug: string
+          static_hash: string
+          supported_layers: string[]
           topic_slug: string | null
         }
         Insert: {
+          accessible_summary?: string
           capability_id?: string | null
           caption?: string
           created_at?: string
+          interaction_version?: string
           kind?: string
           path: string
+          qa_status?: string
+          reviewed_at?: string | null
           slug: string
+          static_hash?: string
+          supported_layers?: string[]
           topic_slug?: string | null
         }
         Update: {
+          accessible_summary?: string
           capability_id?: string | null
           caption?: string
           created_at?: string
+          interaction_version?: string
           kind?: string
           path?: string
+          qa_status?: string
+          reviewed_at?: string | null
           slug?: string
+          static_hash?: string
+          supported_layers?: string[]
           topic_slug?: string | null
         }
         Relationships: [
@@ -1476,31 +1541,40 @@ export type Database = {
       }
       validation_runs: {
         Row: {
+          completed_checks: Json
           confidence: number | null
           design_id: string | null
           id: string
           ran_at: string
+          revision_hash: string
           score: number | null
           target_id: string | null
           target_kind: string
+          validator_version: string
         }
         Insert: {
+          completed_checks?: Json
           confidence?: number | null
           design_id?: string | null
           id?: string
           ran_at?: string
+          revision_hash?: string
           score?: number | null
           target_id?: string | null
           target_kind?: string
+          validator_version?: string
         }
         Update: {
+          completed_checks?: Json
           confidence?: number | null
           design_id?: string | null
           id?: string
           ran_at?: string
+          revision_hash?: string
           score?: number | null
           target_id?: string | null
           target_kind?: string
+          validator_version?: string
         }
         Relationships: [
           {
