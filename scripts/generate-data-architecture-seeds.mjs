@@ -22,6 +22,18 @@ const topics = [
       "Can data remain in OneLake?",
       "Choose governed Fabric workload boundary",
     ],
+    example:
+      "Finance delivers daily positions first, proves governance and operations, then adds intraday risk on the same owned boundary.",
+    controls: [
+      "Named data-product owner",
+      "Capacity and recovery objective",
+      "Recorded architecture decisions",
+    ],
+    risks: [
+      "Platform without a business outcome",
+      "Shared workspace without ownership",
+      "Unmeasured capacity demand",
+    ],
   },
   {
     slug: "data-modelling",
@@ -43,6 +55,10 @@ const topics = [
       "Choose dimensional, vault, or canonical form",
       "Publish governed semantic model",
     ],
+    example:
+      "Order-line facts join conformed customer and product dimensions; governed revenue measures preserve the declared grain.",
+    controls: ["Grain and key tests", "History rule validation", "Certified measure ownership"],
+    risks: ["Mixed grain", "Hidden history logic", "Measures duplicated per report"],
   },
   {
     slug: "silver-layer-modelling",
@@ -64,6 +80,10 @@ const topics = [
       "Is change history required?",
       "Select deduplication and SCD strategy",
     ],
+    example:
+      "Customer CDC is ordered, deduplicated, and merged into SCD2 silver while invalid records enter a replayable quarantine.",
+    controls: ["Deterministic merge key", "Late-arrival policy", "Schema-evolution contract"],
+    risks: ["Unordered latest-row logic", "Gold aggregates in silver", "Quarantine without replay"],
   },
   {
     slug: "metadata-driven-architecture",
@@ -85,6 +105,10 @@ const topics = [
       "Can retries be idempotent?",
       "Promote a versioned execution contract",
     ],
+    example:
+      "An Orders metadata row selects connector, target, watermark, merge notebook, retry policy, and quality rules without cloning a pipeline.",
+    controls: ["Schema-validated metadata", "Versioned promotion", "Secret references only"],
+    risks: ["Untyped metadata language", "Mid-run configuration change", "Non-idempotent retry"],
   },
   {
     slug: "event-driven-architecture",
@@ -106,6 +130,10 @@ const topics = [
       "Must events be replayed?",
       "Choose streaming, trigger, or scheduled execution",
     ],
+    example:
+      "order.created drives a hot alert and a durable replay path; an idempotency key prevents duplicate downstream loads.",
+    controls: ["Event identity", "Replay procedure", "Event-time policy"],
+    risks: ["Notification treated as state", "No duplicate strategy", "Trigger storm"],
   },
   {
     slug: "architecture-implementation",
@@ -127,13 +155,42 @@ const topics = [
       "Can the slice prove end-to-end value?",
       "Scale only after operational acceptance",
     ],
+    example:
+      "A sales slice proves one source, silver model, gold fact, certified report, deployment, rollback, monitoring, and support end to end.",
+    controls: [
+      "Automated contract tests",
+      "Environment configuration",
+      "Release and rollback evidence",
+    ],
+    risks: [
+      "Framework before product",
+      "Manual production configuration",
+      "No operational acceptance",
+    ],
   },
 ];
 
 const esc = (value) =>
   value.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[char]);
 
-function diagramSvg(title, subtitle, nodes, decision = false) {
+function textLines(value, x, max = 58, limit = 3) {
+  const words = value.split(/\s+/),
+    lines = [];
+  let line = "";
+  for (const word of words) {
+    if (`${line} ${word}`.trim().length > max && line) {
+      lines.push(line);
+      line = word;
+    } else line = `${line} ${word}`.trim();
+  }
+  if (line) lines.push(line);
+  return lines
+    .slice(0, limit)
+    .map((item, index) => `<tspan x="${x}" dy="${index ? 19 : 0}">${esc(item)}</tspan>`)
+    .join("");
+}
+
+function diagramSvg(title, subtitle, nodes, decision = false, topic) {
   const boxes = nodes
     .map((node, index) => {
       const x = 80 + index * 350;
@@ -172,13 +229,25 @@ function diagramSvg(title, subtitle, nodes, decision = false) {
       return `<path d="M ${fromX} ${fromY} C ${fromX + 35} ${fromY}, ${toX - 35} ${toY}, ${toX} ${toY}" fill="none" stroke="#2AAC94" stroke-width="4" marker-end="url(#arrow)"/>`;
     })
     .join("\n");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 620" font-family="Segoe UI,Arial,sans-serif"><title>${esc(title)}</title><desc>${esc(subtitle)}. Original Fabric Atlas diagram.</desc><defs><linearGradient id="head" x1="0" x2="1"><stop stop-color="#063D3B"/><stop offset="1" stop-color="#117865"/></linearGradient><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2AAC94"/></marker></defs><rect width="1180" height="620" fill="#FAF9F8"/><rect width="1180" height="118" fill="url(#head)"/><text x="52" y="54" fill="white" font-size="28" font-weight="700">${esc(title)}</text><text x="52" y="84" fill="#CFF3E9" font-size="15">${esc(subtitle)}</text><text x="52" y="154" fill="#605E5C" font-size="13" letter-spacing="2">${decision ? "DECISION PATH" : "ARCHITECTURE FLOW"}</text>${arrows}${boxes}<rect x="52" y="520" width="1076" height="58" rx="14" fill="#F0F5F3" stroke="#B8D8CE"/><text x="590" y="554" text-anchor="middle" fill="#063D3B" font-size="14">Select each numbered element in Fabric Atlas for evidence, risks, path tracing, and drill-through.</text><text x="1128" y="602" text-anchor="end" fill="#605E5C" font-size="10">Fabric Atlas original · Microsoft Fabric implementation guidance</text></svg>\n`;
+  const controls = topic.controls
+    .map(
+      (item, index) =>
+        `<text x="82" y="${695 + index * 24}" fill="#285943" font-size="14">✓ ${esc(item)}</text>`,
+    )
+    .join("");
+  const risks = topic.risks
+    .map(
+      (item, index) =>
+        `<text x="640" y="${695 + index * 24}" fill="#7A4B00" font-size="14">⚠ ${esc(item)}</text>`,
+    )
+    .join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 900" font-family="Segoe UI,Arial,sans-serif"><title>${esc(title)}</title><desc>${esc(subtitle)}. Includes an end-to-end path, worked example, controls, and failure modes.</desc><defs><linearGradient id="head" x1="0" x2="1"><stop stop-color="#063D3B"/><stop offset="1" stop-color="#117865"/></linearGradient><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#2AAC94"/></marker></defs><rect width="1180" height="900" fill="#FAF9F8"/><rect width="1180" height="118" fill="url(#head)"/><text x="52" y="54" fill="white" font-size="28" font-weight="700">${esc(title)}</text><text x="52" y="84" fill="#CFF3E9" font-size="15">${esc(subtitle)}</text><text x="52" y="154" fill="#605E5C" font-size="13" letter-spacing="2">${decision ? "DECISION PATH" : "END-TO-END ARCHITECTURE"}</text>${arrows}${boxes}<rect x="52" y="485" width="1076" height="118" rx="16" fill="#E8F6F1" stroke="#2AAC94" stroke-width="2"/><text x="76" y="515" fill="#117865" font-size="12" font-weight="700" letter-spacing="1.4">WORKED EXAMPLE</text><text x="76" y="547" fill="#063D3B" font-size="15">${textLines(topic.example, 76)}</text><rect x="52" y="630" width="516" height="145" rx="16" fill="#EDF8F1" stroke="#6BBF8A"/><text x="78" y="662" fill="#176B3A" font-size="13" font-weight="700" letter-spacing="1.3">IMPLEMENTATION CONTROLS</text>${controls}<rect x="612" y="630" width="516" height="145" rx="16" fill="#FFF7E6" stroke="#D6A84B"/><text x="638" y="662" fill="#7A4B00" font-size="13" font-weight="700" letter-spacing="1.3">FAILURE MODES</text>${risks}<rect x="52" y="800" width="1076" height="54" rx="13" fill="#F0F5F3" stroke="#B8D8CE"/><text x="590" y="832" text-anchor="middle" fill="#063D3B" font-size="14">In Atlas: select a choice → inspect evidence → drill into inputs, processing, outputs, example, controls, and risks.</text><text x="1128" y="882" text-anchor="end" fill="#605E5C" font-size="10">Fabric Atlas original · Microsoft Fabric implementation guidance</text></svg>\n`;
 }
 
 function body(topic) {
   const arch = `${topic.slug}-architecture.svg`;
   const decision = `${topic.slug}-decision.svg`;
-  return `## Purpose and Fabric boundary\n\n${topic.title} treats architecture as an explicit set of Fabric workload, storage, governance, and operating decisions. Fabric brings multiple analytical workloads together over OneLake, while each workload retains its own execution responsibilities [S1][S2].\n\n![${topic.title} architecture](/diagrams/${arch})\n\n## Architecture and data flow\n\nThe recommended flow is **${topic.stages.join(" → ")}**. This is an authored Fabric pattern: validate it against workload-specific constraints, and use the cited product behavior as the factual boundary [S1][S2].\n\n## Decision framework\n\nUse the decision path below to make the boundary visible rather than hiding it in implementation code. Decisions that are not established by a Fabric source are labelled as pattern guidance [S1][S3].\n\n![${topic.title} decision framework](/diagrams/${decision})\n\n## Worked implementation example\n\nStart with one bounded data product. Record its owners, source contract, target Fabric items, quality rules, security boundary, recovery objective, and observable completion signal. Implement the thinnest end-to-end slice before generalising the framework; this sequencing is pattern guidance, not a Fabric product guarantee [S1][S4].\n\n## Governance, security, and operations\n\nApply workspace and item access deliberately, retain source-to-output lineage, and separate configuration from secrets. Monitor run state and capacity behavior at the same boundary used for ownership; exact controls depend on the selected Fabric workloads [S3][S4].\n\n## Failure modes and anti-patterns\n\nAvoid framework-first delivery, hidden grain or history rules, non-idempotent retries, and diagrams that imply guarantees absent from cited sources. Treat preview behavior, limits, and performance figures as source-sensitive and revalidate them during drift review [S1][S4].\n\n## Internals\n\n### Architecture & design\n\nThe design composes existing Fabric capabilities rather than introducing a separate execution service. Topic-to-capability mappings keep retrieval and validation anchored to the registry [S1][S2].\n\n### How it works internally\n\nThe implementation passes versioned data and metadata contracts between the selected Fabric items. Product-specific execution details remain in the capability articles; this topic explains their architectural composition [S1][S2].\n\n### Performance characteristics\n\n*Coming soon.* Performance must be established from workload-specific L4 evidence and measured against the actual capacity, data shape, concurrency, and freshness objective. No universal throughput or latency number is inferred here [S4].\n\n## Source legend\n\n| # | Source key | Tier |\n|---|---|---|\n${topic.sources.map((source, index) => `| S${index + 1} | ${source} | See source record |`).join("\n")}\n`;
+  return `## Purpose and Fabric boundary\n\n${topic.title} treats architecture as an explicit set of Fabric workload, storage, governance, and operating decisions. Fabric brings multiple analytical workloads together over OneLake, while each workload retains its own execution responsibilities [S1][S2].\n\n![${topic.title} architecture](/diagrams/${arch})\n\n## Architecture and data flow\n\nThe recommended flow is **${topic.stages.join(" → ")}**. This is an authored Fabric pattern: validate it against workload-specific constraints, and use the cited product behavior as the factual boundary [S1][S2].\n\n## Decision framework\n\nUse the decision path below to make the boundary visible rather than hiding it in implementation code. Decisions that are not established by a Fabric source are labelled as pattern guidance [S1][S3].\n\n![${topic.title} decision framework](/diagrams/${decision})\n\n## Worked implementation example\n\nStart with one bounded data product. Record its owners, source contract, target Fabric items, quality rules, security boundary, recovery objective, and observable completion signal. Implement the thinnest end-to-end slice before generalising the framework; this sequencing is pattern guidance, not a Fabric product guarantee [S1][S4].\n\n## Governance, security, and operations\n\nApply workspace and item access deliberately, retain source-to-output lineage, and separate configuration from secrets. Monitor run state and capacity behavior at the same boundary used for ownership; exact controls depend on the selected Fabric workloads [S3][S4].\n\n## Failure modes and anti-patterns\n\nAvoid framework-first delivery, hidden grain or history rules, non-idempotent retries, and diagrams that imply guarantees absent from cited sources. Treat preview behavior, limits, and performance figures as source-sensitive and revalidate them during drift review [S1][S4].\n\n## Internals\n\n### Architecture & design\n\nThe design composes existing Fabric capabilities rather than introducing a separate execution service. Topic-to-capability mappings keep retrieval and validation anchored to the registry [S1][S2].\n\n### How it works internally\n\nThe implementation passes versioned data and metadata contracts between the selected Fabric items. Product-specific execution details remain in the capability articles; this topic explains their architectural composition [S1][S2].\n\n### Performance characteristics\n\n*Workload-specific.* Performance must be established from workload-specific L4 evidence and measured against the actual capacity, data shape, concurrency, and freshness objective. No universal throughput or latency number is inferred here [S4].\n\n## Source legend\n\n| # | Source key | Tier |\n|---|---|---|\n${topic.sources.map((source, index) => `| S${index + 1} | ${source} | See source record |`).join("\n")}\n`;
 }
 
 mkdirSync("content/articles", { recursive: true });
@@ -230,7 +299,7 @@ for (const topic of topics) {
   for (const item of diagrams) {
     const slug = `${topic.slug}-${item.suffix}`;
     const path = `content/diagrams/${slug}.svg`;
-    writeFileSync(path, diagramSvg(topic.title, item.caption, item.nodes, item.decision));
+    writeFileSync(path, diagramSvg(topic.title, item.caption, item.nodes, item.decision, topic));
     if (!manifest.some((entry) => entry.path === path))
       manifest.push({
         kind: "generated",

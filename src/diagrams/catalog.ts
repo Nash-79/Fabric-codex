@@ -1,5 +1,35 @@
 import diagramAssets from "../../content/diagrams/assets.json";
-import type { DiagramClassification, DiagramLayer, InteractiveDiagramDefinition } from "./types";
+import { layoutDiagram } from "./layout";
+import type {
+  AuthoredDiagram,
+  DiagramClassification,
+  DiagramLayer,
+  InteractiveDiagramDefinition,
+} from "./types";
+
+/**
+ * Authored sidecars are the source of truth. `content/diagrams/<slug>.diagram.json` carries real
+ * nodes, real edges, and per-node evidence, written by the diagram-author agent alongside the
+ * hand-drawn SVG (which remains the print / no-JavaScript fallback).
+ *
+ * Diagrams without a sidecar fall back to `definitionFromAsset` below, which derives placeholder
+ * nodes from the caption string. That fallback is a migration crutch, not a design: it cannot cite
+ * sources and it cannot know the real topology. Delete it once every asset has a sidecar.
+ */
+const sidecarModules = import.meta.glob<{ default: AuthoredDiagram }>(
+  "../../content/diagrams/*.diagram.json",
+  { eager: true },
+);
+
+const sidecars = new Map<string, AuthoredDiagram>(
+  Object.entries(sidecarModules).map(([path, module]) => {
+    const slug = path
+      .split("/")
+      .pop()!
+      .replace(/\.diagram\.json$/, "");
+    return [slug, module.default];
+  }),
+);
 
 type Asset = {
   path: string;
@@ -229,17 +259,18 @@ function inferLayer(text: string, index: number): DiagramLayer {
   return layerOrder[index % layerOrder.length] ?? "data";
 }
 
-function definitionFromAsset(asset: Asset): InteractiveDiagramDefinition {
+/**
+ * Migration fallback for assets with no authored sidecar yet: derive placeholder nodes from the
+ * caption. It cannot know the real topology and cannot cite sources, so every node it makes is
+ * classified as an inference and carries no evidence. Authoring a sidecar replaces it entirely.
+ */
+function authoredFromAsset(asset: Asset): AuthoredDiagram {
   const id = slugFromPath(asset.path);
   const caption = asset.caption || id.replace(/-/g, " ");
   const terms = phrases(caption, asset.topic_slug, asset.capability_id);
-  const columns = 3;
   const nodes = terms.map((term, index) => {
-    const row = Math.floor(index / columns);
-    const column = index % columns;
     const layer = inferLayer(term, index);
     const details = detailsFor(asset.topic_slug, layer, term);
-    const classification = classify(term);
     const target =
       index === 0 && asset.topic_slug
         ? {
@@ -260,20 +291,18 @@ function definitionFromAsset(asset: Asset): InteractiveDiagramDefinition {
       summary: term,
       detail: `This element is part of the ${titleFromCaption(caption, id)} view. Select connected elements to trace how the concern moves through the Fabric architecture.`,
       whyItMatters: `It makes the ${layer} responsibility explicit so implementation and ownership decisions are not hidden in a decorative box.`,
-      inputs: details.inputs,
-      processing: details.processing,
-      outputs: details.outputs,
-      example: details.example,
-      controls: details.controls,
-      failureModes: details.failures,
-      classification,
-      sourceKeys: [],
-      tags: ["MicrosoftFabric", "DataArchitecture", layer],
+      classification: classify(term),
       layers: [layer],
-      x: 55 + column * 315,
-      y: 130 + row * 205,
-      width: 260,
-      height: 132,
+      evidence: [],
+      tags: ["MicrosoftFabric", layer],
+      drill: {
+        inputs: details.inputs,
+        processing: details.processing,
+        outputs: details.outputs,
+        example: details.example,
+        controls: details.controls,
+        failureModes: details.failures,
+      },
       drillTarget: target,
     };
   });
@@ -281,7 +310,8 @@ function definitionFromAsset(asset: Asset): InteractiveDiagramDefinition {
     id: `${id}-edge-${index + 1}`,
     from: nodes[index]!.id,
     to: node.id,
-    layer: node.layers[0] ?? "data",
+    layer: node.layers[0] ?? ("data" as DiagramLayer),
+    kind: "flow" as const,
   }));
   return {
     id,
@@ -299,7 +329,6 @@ function definitionFromAsset(asset: Asset): InteractiveDiagramDefinition {
     revision: asset.interaction_version || "1",
     qaStatus: asset.qa_status || "draft",
     staticPath: `/${asset.path.replace(/^content\//, "")}`,
-    viewBox: { width: 1000, height: nodes.length > 3 ? 570 : 390 },
     nodes,
     edges,
     walkthrough: nodes.map((node, index) => ({
@@ -312,10 +341,16 @@ function definitionFromAsset(asset: Asset): InteractiveDiagramDefinition {
 
 const catalog = new Map(
   (diagramAssets as Asset[]).map((asset) => {
-    const definition = definitionFromAsset(asset);
-    return [definition.id, definition] as const;
+    const slug = slugFromPath(asset.path);
+    const authored = sidecars.get(slug) ?? authoredFromAsset(asset);
+    return [slug, layoutDiagram(authored)] as const;
   }),
 );
+
+/** True when the diagram has a real authored sidecar rather than caption-derived placeholders. */
+export function isAuthored(slugOrPath: string) {
+  return sidecars.has(slugFromPath(slugOrPath));
+}
 
 export function getInteractiveDiagram(slugOrPath: string) {
   return catalog.get(slugFromPath(slugOrPath));

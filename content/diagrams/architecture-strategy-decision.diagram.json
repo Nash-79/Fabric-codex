@@ -1,0 +1,292 @@
+{
+  "id": "architecture-strategy-decision",
+  "title": "Sequence the Platform, or Sequence the Outcome?",
+  "purpose": "Decide what to build first in Fabric — a bounded data product that reaches a real consumer, or the platform underneath it — and then when to add the second workload and when a domain needs its own capacity.",
+  "accessibleSummary": "A decision tree with three questions. The first asks whether anything has yet reached a real consumer. If not, the recommended path is one bounded data product delivered end to end; the alternative, building the platform and its frameworks first, is flagged as the warning branch because it produces no outcome to validate against. The second question asks whether a second workload is genuinely required by a consumer or is being added speculatively. The third asks whether a domain needs its own capacity, which turns on whether its workloads are actually contending for compute rather than on org-chart boundaries.",
+  "longDescription": "This is a decision tree about sequencing, not about components. Question one: has anything reached a real consumer yet? If not, deliver one bounded data product end to end — source through OneLake to a semantic model and a report someone actually opens — because that is the only thing that validates the architecture. The opposing branch, building the platform, the frameworks, and the governance model first, is drawn as a warning: it generates a great deal of work whose correctness cannot be tested, because nothing consumes it. Question two asks whether a second workload is pulled in by a consumer requirement or pushed in speculatively; Fabric's workloads share OneLake and can exchange data without duplication, so adding one is cheap when it is genuinely needed and pure cost when it is not. Question three asks whether a domain needs its own capacity: the honest trigger is compute contention and a need for an independent cost and throttling boundary, not the shape of the org chart.",
+  "type": "decision",
+  "topicSlug": "architecture-strategy",
+  "capabilityIds": ["fabric-platform", "onelake", "capacity", "purview"],
+  "revision": "2",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/architecture-strategy-decision.svg",
+  "nodes": [
+    {
+      "id": "start-question",
+      "label": "Has anything reached a real consumer yet?",
+      "summary": "The root question. Everything else in the sequence depends on whether a real user is already being served.",
+      "detail": "Before choosing what to build next, establish whether any part of the platform currently produces something a named consumer actually uses. This is a deliberately uncomfortable question, and it is the one that separates a programme that is learning from one that is only accumulating.",
+      "whyItMatters": "Until something is consumed, no architectural assumption has been tested. Every framework built before that point is a bet placed without feedback, and the cost of being wrong compounds with each additional layer built on top of it.",
+      "classification": "pattern",
+      "layers": ["governance"],
+      "tags": ["decision-root", "ArchitectureStrategy"],
+      "evidence": [],
+      "drill": {
+        "inputs": [
+          "The list of what has been built in the tenant so far",
+          "The named consumers who were supposed to use it",
+          "Evidence of actual use, not planned use"
+        ],
+        "processing": [
+          "Name one consumer and one decision they make with the data",
+          "Trace whether a path from source to that decision exists end to end today",
+          "Mark honestly whether the answer is yes or no — a report nobody opens is a no"
+        ],
+        "outputs": [
+          "A truthful yes or no that routes to either the bounded-product branch or the warning branch"
+        ],
+        "example": "A team has three months of pipeline framework, a medallion structure, and a governance model — but no report anyone opens. The honest answer is no, which routes them to deliver one bounded product before extending the platform.",
+        "controls": [
+          "Require a named consumer, not a persona, before counting a path as delivered"
+        ],
+        "failureModes": [
+          "Counting internal artefacts (a pipeline, a framework, a workspace) as if they were consumption",
+          "Answering yes on the basis of a demo rather than a repeated, real decision"
+        ]
+      }
+    },
+    {
+      "id": "outcome-bounded-product",
+      "label": "Deliver one bounded data product",
+      "summary": "One source, through OneLake, to one semantic model and one report that a named person actually uses.",
+      "detail": "Build the thinnest complete slice: one source ingested, landed in OneLake in Delta, modelled, exposed through a semantic model, and consumed in a report a named person opens. Because every Fabric workload persists tabular data to OneLake in open Delta Parquet regardless of the engine that wrote it, this thin slice does not paint you into a corner — the data it lands stays available to every other engine you add later.",
+      "whyItMatters": "A thin end-to-end slice is the only construct that tests the whole chain — ingestion, storage, modelling, security, and consumption — against reality. It converts architectural assumptions into observations.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["DataProduct", "OneLake"],
+      "evidence": [
+        {
+          "sourceKey": "onelake-overview",
+          "note": "All Fabric data items, including lakehouses and warehouses, automatically persist tabular data to OneLake in open Delta Parquet, regardless of which engine wrote it — so a first slice does not lock the data to that engine."
+        },
+        {
+          "sourceKey": "onelake-overview",
+          "note": "The one-copy design lets multiple engines (T-SQL, Spark, Analysis Services) operate over the same physical Delta Parquet data, so teams are not locked into the engine that first loaded it."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "One named consumer and one decision they need to make",
+          "The single source system that decision depends on",
+          "An agreed definition of done that includes consumption"
+        ],
+        "processing": [
+          "Ingest that one source into OneLake as Delta",
+          "Model only what that one decision requires — resist generalising",
+          "Expose it through a semantic model and a report the consumer opens",
+          "Prove security, refresh, and recovery on this slice before widening"
+        ],
+        "outputs": [
+          "A working, consumed data product",
+          "Tested assumptions about ingestion, modelling, security, and operations",
+          "Delta tables in OneLake that any later engine can read"
+        ],
+        "example": "A finance domain ships a governed daily positions product end to end — one source, one model, one report the controller opens each morning — and only then adds intraday risk.",
+        "controls": [
+          "Definition of done includes a consumer using it, not a pipeline succeeding",
+          "Ownership of the workspace and the items is assigned before launch"
+        ],
+        "failureModes": [
+          "Generalising the slice into a framework before it has ever been consumed",
+          "Declaring the slice done when the pipeline runs green but nobody opens the report"
+        ]
+      }
+    },
+    {
+      "id": "warning-platform-first",
+      "label": "Platform-first delivery with no outcome",
+      "summary": "Frameworks, medallion layers, and governance models built before anything is consumed.",
+      "detail": "The alternative branch builds the platform first: a metadata-driven ingestion framework, a full medallion structure, a governance model, and a capacity plan — all before any consumer receives anything. It feels like progress and is measurable in artefacts, which is precisely why it persists. But none of it can be validated, because nothing is consuming it.",
+      "whyItMatters": "Every unvalidated framework is a bet compounding on other bets. When the first real consumer finally arrives and the assumptions turn out wrong, the rework is proportional to how much was built on top of them.",
+      "classification": "warning",
+      "layers": ["governance"],
+      "tags": ["AntiPattern", "ArchitectureStrategy"],
+      "evidence": [],
+      "drill": {
+        "inputs": [
+          "A programme plan organised by platform component rather than by consumer outcome",
+          "Milestones that read 'framework complete' rather than 'consumer served'"
+        ],
+        "processing": [
+          "Recognise the pattern: artefacts accumulating with no consumption",
+          "Pick the single highest-value consumer and cut a thin slice to them now",
+          "Let the frameworks be extracted from the second and third slice, not invented before the first"
+        ],
+        "outputs": [
+          "A course correction toward a bounded product",
+          "Frameworks that are extracted from working code instead of guessed in advance"
+        ],
+        "example": "Six months of ingestion framework is delivered before the first report; the first real consumer then needs a load pattern the framework cannot express, and the framework is rewritten.",
+        "controls": [
+          "Refuse to let any framework precede the second real use case that would justify it"
+        ],
+        "failureModes": [
+          "Mistaking artefact count for progress",
+          "Building the abstraction before you have two concrete cases to abstract over"
+        ]
+      }
+    },
+    {
+      "id": "second-workload-question",
+      "label": "Is a second workload actually required?",
+      "summary": "Second question: is the new workload pulled in by a consumer, or pushed in speculatively?",
+      "detail": "Fabric organises functionality into role-oriented workloads — Data Factory, Data Engineering, Data Warehouse, Real-Time Intelligence, and others — which all run in one environment and can share data without duplication. That makes adding one genuinely cheap when a consumer needs it, and genuinely wasteful when nobody does.",
+      "whyItMatters": "Because sharing data across workloads is free, the cost of a second workload is not integration — it is the surface area, the skills, and the operational burden of running it. That cost only pays back when a consumer requires it.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["FabricWorkloads"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-platform-overview",
+          "note": "Fabric organises functionality into role-oriented workloads that all run in the same environment and can share data and items without duplication."
+        },
+        {
+          "sourceKey": "fabric-platform-overview",
+          "note": "Beneath the workloads sits a shared platform layer used by every experience: OneLake for storage, Copilot, and centralised governance via built-in Purview."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "The consumer requirement that supposedly needs the new workload",
+          "The current workload set and what it already covers"
+        ],
+        "processing": [
+          "Name the consumer requirement the new workload serves",
+          "Check whether an existing workload already satisfies it adequately",
+          "Add the workload only if the answer is a real, dated requirement"
+        ],
+        "outputs": [
+          "A workload added for a stated reason, or deliberately not added"
+        ],
+        "example": "Real-Time Intelligence is added only when the operations team commits to acting on sub-minute alerts — not because streaming appeared on a roadmap slide.",
+        "controls": [
+          "Record which consumer requirement justified each workload, so it can be revisited"
+        ],
+        "failureModes": [
+          "Adding workloads because they exist, then carrying their operational cost indefinitely",
+          "Assuming the integration cost is the burden, when the real burden is skills and operations"
+        ]
+      }
+    },
+    {
+      "id": "capacity-question",
+      "label": "Does a domain need its own capacity?",
+      "summary": "Third question: separate capacity is a compute-contention and cost-boundary decision, not an org-chart one.",
+      "detail": "The trigger for a separate capacity is that a domain's workloads genuinely contend for compute with another domain's, or that the domain needs its own cost and throttling boundary. Capacity is a compute allocation, so the question is about compute behaviour under load, not about who reports to whom.",
+      "whyItMatters": "Splitting capacity along org-chart lines fragments compute that would have been better pooled, while leaving genuinely contending workloads together lets one domain's heavy job throttle another's interactive reports.",
+      "classification": "inference",
+      "layers": ["compute", "governance"],
+      "tags": ["Capacity"],
+      "evidence": [],
+      "drill": {
+        "inputs": [
+          "Observed capacity utilisation and throttling behaviour per domain",
+          "Whether each domain needs an independent cost boundary",
+          "Which workloads are interactive and which are background"
+        ],
+        "processing": [
+          "Measure contention before assuming it — check whether domains actually collide under load",
+          "Decide whether a separate cost and throttling boundary is genuinely required",
+          "Split capacity only where contention or the cost boundary justifies it"
+        ],
+        "outputs": [
+          "A capacity boundary drawn on evidence of contention rather than on the org chart"
+        ],
+        "example": "Two domains sharing a capacity show no overlap in peak windows and no throttling — they stay pooled, and the separate-capacity request is declined until contention is actually observed.",
+        "controls": [
+          "Monitor capacity behaviour before splitting, and keep monitoring after",
+          "Treat the cost boundary as a legitimate reason even where contention is absent"
+        ],
+        "failureModes": [
+          "Giving every team its own capacity by default and fragmenting compute that would pool better",
+          "Ignoring real contention until one domain's background jobs throttle another's reports"
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-start-product",
+      "from": "start-question",
+      "to": "outcome-bounded-product",
+      "label": "no — nothing is consumed yet",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-warning",
+      "from": "start-question",
+      "to": "warning-platform-first",
+      "label": "no — but we're building the platform anyway",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-second",
+      "from": "start-question",
+      "to": "second-workload-question",
+      "label": "yes — something is genuinely consumed",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-warning-product",
+      "from": "warning-platform-first",
+      "to": "outcome-bounded-product",
+      "label": "correct course: cut a thin slice",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-product-second",
+      "from": "outcome-bounded-product",
+      "to": "second-workload-question",
+      "label": "once it is consumed, consider extending",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-second-capacity",
+      "from": "second-workload-question",
+      "to": "capacity-question",
+      "label": "as workloads and domains multiply",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-capacity-start",
+      "from": "capacity-question",
+      "to": "start-question",
+      "label": "re-ask each increment",
+      "layer": "governance",
+      "kind": "feedback"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "start-question",
+      "title": "1. Ask the uncomfortable question",
+      "explanation": "Has anything reached a real consumer? A pipeline running green is not a yes."
+    },
+    {
+      "nodeId": "outcome-bounded-product",
+      "title": "2. If not, cut one thin slice",
+      "explanation": "One source through OneLake to one report someone opens — the only thing that validates the architecture."
+    },
+    {
+      "nodeId": "warning-platform-first",
+      "title": "3. Beware the platform-first trap",
+      "explanation": "Frameworks built before consumption are bets placed without feedback, and rework compounds on them."
+    },
+    {
+      "nodeId": "second-workload-question",
+      "title": "4. Add workloads on demand, not on spec",
+      "explanation": "Workloads share OneLake and exchange data freely, so the cost is skills and operations — pay it only when a consumer requires it."
+    },
+    {
+      "nodeId": "capacity-question",
+      "title": "5. Split capacity on contention, not org chart",
+      "explanation": "Measure whether domains actually collide under load before fragmenting compute between them."
+    }
+  ]
+}

@@ -1,0 +1,394 @@
+{
+  "id": "event-driven-architecture-architecture",
+  "title": "Event-Driven Architecture in Microsoft Fabric",
+  "purpose": "Show how a single Fabric event forks from one ingestion point into a hot operational-action path and a durable cold analytical path, with a feedback path for replay and dead-lettering.",
+  "accessibleSummary": "An event source feeds Eventstream, which routes to Real-Time hub and forks two ways: a hot path through Activator that fires an immediate action, and a cold path into Eventhouse and OneLake for durable history and downstream analytics. A replay/dead-letter path feeds back into the router, and two warning nodes call out the idempotency and durability risks of treating the hot path as the system of record.",
+  "longDescription": "This diagram traces one event from source to outcome through Microsoft Fabric's Real-Time Intelligence surface. Events (application, IoT, CDC, or platform events) are collected by Eventstream, which applies stream-processing operators and publishes into Real-Time hub as a catalogued stream. From that single routing point, the architecture genuinely forks: a hot path evaluates the stream with Activator and fires an immediate action (alert, pipeline/Spark/Dataflow run, Power Automate flow) within the freshness the business actually needs, while a cold path lands the same stream durably in an Eventhouse, which mirrors to OneLake in Delta format so Lakehouse, Warehouse, Direct Lake, and Spark can query it without copying data. A feedback edge represents the replay/dead-letter procedure that reprocesses failed or delayed events back through the router. Three risk nodes are called out explicitly: treating a hot-path notification as durable state, a trigger storm overwhelming batch-oriented downstream work, and a replay duplicating a load when no idempotency key is enforced.",
+  "type": "architecture",
+  "topicSlug": "event-driven-architecture",
+  "capabilityIds": ["rti", "eventhouse-kql", "data-factory"],
+  "revision": "2",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/event-driven-architecture-architecture.svg",
+  "nodes": [
+    {
+      "id": "event-source",
+      "label": "Event source",
+      "summary": "Where the business or platform event originates.",
+      "detail": "The originating event — an application emitting a domain event, an IoT device, a CDC feed off a transactional database, or a Fabric platform event such as a file landing or an item lifecycle change. Real-Time hub surfaces Microsoft-managed CDC sources (Azure SQL DB, Cosmos DB, PostgreSQL) alongside custom streams and Fabric workspace item events as a single organization-wide catalog.",
+      "whyItMatters": "The event's identity, event time, and durability guarantee are decided here and propagate through the whole architecture; getting this wrong upstream cannot be fixed downstream.",
+      "classification": "fact",
+      "layers": ["data", "orchestration"],
+      "evidence": [
+        {
+          "sourceKey": "rti-overview",
+          "note": "Real-Time hub surfaces active data streams, Microsoft-managed CDC feeds (Azure SQL DB, Cosmos DB, PostgreSQL), and Fabric workspace item events as an organization-wide catalog available to every workload."
+        }
+      ],
+      "tags": ["MicrosoftFabric", "RealTimeIntelligence", "CDC"],
+      "drill": {
+        "inputs": ["Application domain events", "IoT device telemetry", "Database CDC change rows", "Fabric workspace item events"],
+        "processing": [
+          "Event is emitted with an identity and an event-time timestamp",
+          "Event reaches Fabric via a supported connector or the platform's own item-event stream",
+          "Event becomes visible in Real-Time hub's organization-wide catalog"
+        ],
+        "outputs": ["A catalogued, discoverable event stream any workload can subscribe to"],
+        "example": "An order-management service emits order.created with an order id, a business timestamp, and a payload; it reaches Fabric as one record in a subscribed stream.",
+        "controls": ["Event schema/contract ownership", "Event-time vs. arrival-time distinction", "Source system change-feed retention"],
+        "failureModes": ["No stable event identity, making downstream de-duplication impossible", "Event time not distinguished from arrival time, breaking late-event handling"]
+      }
+    },
+    {
+      "id": "eventstream",
+      "label": "Eventstream",
+      "summary": "No-code ingestion, transformation, and routing for streaming data.",
+      "detail": "Eventstream ingests from sources including Apache Kafka, AWS Kinesis, Google Cloud Pub/Sub, MQTT v3.1/v3.1.1, and the MQTT-based Real-Time Weather connector, then applies built-in operators — filtering, cleansing, windowed aggregation, deduplication, and content-based routing — before publishing to one or more destinations simultaneously. A derived eventstream can package a transformation as a reusable, shareable output.",
+      "whyItMatters": "This is the single point where the event stream is shaped and split; every downstream branch (hot and cold) reads from what Eventstream decides to route, so its transform and routing rules are the architecture's real decision point, not an implementation detail.",
+      "classification": "fact",
+      "layers": ["data", "orchestration"],
+      "evidence": [
+        {
+          "sourceKey": "rti-overview",
+          "note": "Eventstreams provide a no-code pipeline for collecting, transforming, and routing high-volume real-time data to multiple destinations simultaneously, with built-in operators including filtering, dedup, windowed aggregation, and content-based routing."
+        }
+      ],
+      "tags": ["Eventstream", "StreamProcessing"],
+      "drill": {
+        "inputs": ["Kafka/Kinesis/Pub/Sub/MQTT streams", "Fabric platform events", "Custom event producers"],
+        "processing": [
+          "Apply filtering, cleansing, and deduplication operators",
+          "Apply windowed aggregation where needed",
+          "Route by content to one or more destinations, optionally producing a derived eventstream"
+        ],
+        "outputs": ["A shaped stream published into Real-Time hub", "Optionally a reusable derived eventstream"],
+        "example": "Eventstream deduplicates order.created events by order id within a short window before routing the cleaned stream onward, so a retried producer call does not produce two logical events.",
+        "controls": ["Which operators run before routing", "Destination fan-out list", "Whether output is a raw pass-through or a derived eventstream"],
+        "failureModes": ["Transform logic silently drops fields a downstream consumer needs", "Dedup window too short to catch a real retry"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "rti", "label": "Open Real-Time Intelligence" }
+    },
+    {
+      "id": "real-time-hub",
+      "label": "Real-Time hub router",
+      "summary": "Organization-wide catalog and the fork point between hot and cold paths.",
+      "detail": "Real-Time hub is where the shaped stream becomes visible to every Fabric workload as a catalogued item. Architecturally, it is the fork: the same stream is simultaneously readable by Activator for the hot path and by Eventhouse ingestion for the cold path — no data is copied to fork it, both paths subscribe to the same routed stream.",
+      "whyItMatters": "This is the node that makes the architecture event-driven rather than a simple pipe: one event, two independent consumers with different latency and durability contracts, evaluated from the same source of truth.",
+      "classification": "fact",
+      "layers": ["orchestration", "data"],
+      "evidence": [
+        {
+          "sourceKey": "rti-overview",
+          "note": "Real-Time hub functions as an organization-wide catalog of data in motion, accessible to every Fabric workload."
+        }
+      ],
+      "tags": ["RealTimeHub", "RealTimeIntelligence"],
+      "drill": {
+        "inputs": ["Shaped stream from Eventstream"],
+        "processing": [
+          "Register the stream as a catalogued, discoverable item",
+          "Expose the same stream to any number of independent subscribers",
+          "Allow Activator and Eventhouse ingestion to subscribe concurrently"
+        ],
+        "outputs": ["Hot-path subscription for Activator", "Cold-path subscription for Eventhouse ingestion"],
+        "example": "One order.created stream is subscribed to by an Activator rule watching for high-value orders and, independently, by an Eventhouse table ingesting every order for history — neither subscription affects the other.",
+        "controls": ["Which workloads are granted subscription access", "Stream discoverability/catalog metadata"],
+        "failureModes": ["Treating the hub as a queue with single-consumer semantics instead of a fan-out catalog"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "rti", "label": "Open Real-Time Intelligence" }
+    },
+    {
+      "id": "activator",
+      "label": "Activator (hot path)",
+      "summary": "Evaluates the stream in near-real time and fires an automated action.",
+      "detail": "Activator monitors data flowing through Real-Time hub, KQL queries, or Power BI reports and fires an action — notification, Fabric pipeline/Spark job/Dataflow run, User Data Function call, or Power Automate workflow — when a threshold, pattern, or KQL-defined condition is met. It can also directly invoke a Copy job as a rule action without an intermediate pipeline, and Fabric or Azure Blob Storage events can trigger it to start Spark jobs or Dataflows with no polling schedule.",
+      "whyItMatters": "This is the operational half of the fork: it is what makes the system react within the business's actual time budget instead of waiting for the next scheduled run, but its output is an action, not a system of record.",
+      "classification": "fact",
+      "layers": ["orchestration", "compute"],
+      "evidence": [
+        {
+          "sourceKey": "rti-overview",
+          "note": "Activator monitors data flowing through Real-Time hub, KQL queries, or Power BI reports and fires automated actions when threshold, pattern, or KQL-defined conditions are met."
+        },
+        {
+          "sourceKey": "fabric-blog-activator-copy-job",
+          "note": "Activator can now directly invoke a Copy job as a rule action, without requiring an intermediate Data Factory pipeline, GA."
+        }
+      ],
+      "tags": ["Activator", "EventDriven", "Automation"],
+      "drill": {
+        "inputs": ["Real-Time hub subscription", "Rule condition (threshold, pattern, or KQL query)"],
+        "processing": [
+          "Continuously evaluate the condition against the live stream",
+          "Fire the configured action only when the condition is met",
+          "Optionally invoke a Copy job, pipeline, Spark job, Dataflow, User Data Function, or Power Automate flow directly"
+        ],
+        "outputs": ["Notification", "Triggered pipeline/Spark/Dataflow/Copy job run", "Power Automate workflow invocation"],
+        "example": "An Activator rule watches order.value > $10,000 in the routed stream and, when true, invokes a Copy job to replicate the order to a fraud-review workspace with no intermediate pipeline.",
+        "controls": ["Rule condition definition (threshold/pattern/KQL)", "Action target (notification vs. job invocation)", "Rule enable/disable state"],
+        "failureModes": ["Rule fires repeatedly on a noisy signal (no debounce), producing a trigger storm downstream", "Action treated as guaranteed delivery when it is a best-effort automated action"],
+        "metrics": [
+          { "label": "Copy job invocation", "value": "Direct, no intermediate pipeline required", "sourceKey": "fabric-blog-activator-copy-job" }
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "rti", "label": "Open Real-Time Intelligence" }
+    },
+    {
+      "id": "eventhouse",
+      "label": "Eventhouse (cold path)",
+      "summary": "Durable, indexed storage of the full event history.",
+      "detail": "Eventhouse automatically organizes ingested records by arrival time, enabling fast indexed queries over structured, semi-structured, and unstructured event data at any scale, and mirrors the data to OneLake as a single logical Delta copy. This is the durable system-of-record half of the fork: it retains the full history the hot path does not.",
+      "whyItMatters": "The cold path is what makes replay, audit, and downstream analytics possible; without it the architecture only has ephemeral notifications and no durable history to reconstruct state from.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        {
+          "sourceKey": "rti-overview",
+          "note": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries at any scale; data is also mirrored to OneLake as a single logical copy."
+        }
+      ],
+      "tags": ["Eventhouse", "KQL", "OneLake"],
+      "drill": {
+        "inputs": ["Real-Time hub subscription (cold-path ingestion)"],
+        "processing": [
+          "Ingest and index records by arrival time",
+          "Store in premium cache tier for the hot dataset and standard tier for full retention",
+          "Mirror to OneLake in Delta format on an adaptive batching schedule"
+        ],
+        "outputs": ["Queryable KQL/T-SQL history", "Delta-format OneLake copy for Lakehouse/Warehouse/Direct Lake/Spark"],
+        "example": "Every order.created event is ingested into an Orders KQL table; a fraud-analysis notebook later queries six months of history that the hot-path Activator rule never had to hold in memory.",
+        "controls": ["Caching policy (hot-tier window)", "Retention policy (total history retained)", "OneLake availability toggle per table or database"],
+        "failureModes": ["Assuming Eventhouse ingestion is synchronous with the hot path when the two are independent subscriptions with different latency"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "eventhouse-kql", "label": "Open Eventhouse / KQL" }
+    },
+    {
+      "id": "onelake-history",
+      "label": "OneLake durable history",
+      "summary": "Delta-format mirror of Eventhouse data for cross-workload analytics.",
+      "detail": "When OneLake availability is enabled, Eventhouse table data is exposed in Delta Lake format and directly queryable by Power BI Direct Lake, Warehouse, Lakehouse, and Spark notebooks without data movement, at no additional storage charge beyond the standard OneLake tier. An adaptive batching mechanism delays the mirror write until enough data accumulates for well-sized Parquet files (typically 200-256 MB), with a default max delay of up to 3 hours, configurable down to 5 minutes.",
+      "whyItMatters": "This is what turns the cold path from an isolated KQL store into a shared analytical asset every other Fabric workload can read directly, which is the point of putting the durable history in Fabric rather than an external sink.",
+      "classification": "fact",
+      "layers": ["data", "governance"],
+      "evidence": [
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "Enabling OneLake availability exposes KQL table data in Delta Lake format, directly queryable by Direct Lake, Warehouse, Lakehouse, and Spark without data movement; adaptive batching delays writes (default up to 3 hours, down to 5 minutes) to produce well-sized Parquet files."
+        }
+      ],
+      "tags": ["OneLake", "DeltaLake", "DirectLake"],
+      "drill": {
+        "inputs": ["Eventhouse KQL table data (OneLake-availability enabled)"],
+        "processing": [
+          "Batch accumulated rows toward an optimal Parquet file size",
+          "Write the Delta-format mirror to OneLake on the mirroring policy's delay",
+          "Age out mirrored data in sync with the KQL retention policy"
+        ],
+        "outputs": ["Delta table readable by Direct Lake, Warehouse, Lakehouse, and Spark with no copy"],
+        "example": "A finance Direct Lake semantic model reads the OneLake mirror of the Orders Eventhouse table directly, without a separate ETL job moving the data into a Warehouse.",
+        "controls": ["Mirroring policy delay (5 minutes to 3 hours default)", "OneLake availability scope (table vs. database level)"],
+        "failureModes": ["Setting the mirroring delay too low, producing many small files that degrade downstream query performance"],
+        "metrics": [
+          { "label": "Default max mirror delay", "value": "Up to 3 hours (configurable to 5 minutes)", "sourceKey": "eventhouse-overview" },
+          { "label": "Target Parquet file size", "value": "Typically 200-256 MB", "sourceKey": "eventhouse-overview" }
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "eventhouse-kql", "label": "Open Eventhouse / KQL" }
+    },
+    {
+      "id": "replay-dead-letter",
+      "label": "Replay / dead-letter procedure",
+      "summary": "Reprocesses failed or delayed events back through the router.",
+      "detail": "When a hot-path action fails, times out, or an event needs reprocessing (e.g. a downstream system was unavailable), a replay or dead-letter procedure resubmits the event back through Real-Time hub so it is re-evaluated by the same routing logic. This is not a product-guaranteed mechanism in the cited sources — it is the pattern an implementer must build using the durable cold-path history as the replay source.",
+      "whyItMatters": "Without an explicit replay path, a failed hot-path action is simply lost, since Activator's action is best-effort; the durable Eventhouse history is what makes replay possible at all, so this feedback edge is what closes the loop between the two forked paths.",
+      "classification": "pattern",
+      "layers": ["orchestration", "observability"],
+      "evidence": [],
+      "tags": ["Replay", "DeadLetter", "ArchitecturePattern"],
+      "drill": {
+        "inputs": ["Failed or unacknowledged hot-path action", "Durable event history in Eventhouse"],
+        "processing": [
+          "Detect the failure or gap (missing acknowledgement, error signal, or manual audit)",
+          "Re-select the affected event(s) from Eventhouse durable history",
+          "Resubmit through Real-Time hub so it is evaluated again by the same rules"
+        ],
+        "outputs": ["Re-triggered hot-path action", "Reprocessed cold-path record (guarded by idempotency key)"],
+        "example": "A Power Automate call fails silently for one order; an operator queries the Eventhouse history for that order id and republishes it through Real-Time hub, and the idempotency key on the downstream write prevents a duplicate order record.",
+        "controls": ["Idempotency key enforced on any resubmitted write", "Dead-letter queue/table for events that repeatedly fail", "Manual vs. automated replay trigger"],
+        "failureModes": ["Replaying an event without an idempotency key, duplicating the original action's side effect"]
+      }
+    },
+    {
+      "id": "warning-notification-as-state",
+      "label": "Risk: notification treated as durable state",
+      "summary": "Building business logic that assumes the hot-path alert is the system of record.",
+      "detail": "A common anti-pattern is relying on the Activator notification or triggered action itself as if it were durable, queryable state. Activator's action is a best-effort automated response, not a store; the durable, replayable copy of the event only exists on the cold path in Eventhouse/OneLake. Any downstream system that needs to reconstruct history or recover from a missed action must read the cold path, not assume the hot-path fired reliably.",
+      "whyItMatters": "This is precisely the failure this diagram's fork exists to prevent: conflating the two paths' guarantees leads to silent data loss when the hot path's best-effort action is the only place a business decision was recorded.",
+      "classification": "warning",
+      "layers": ["orchestration", "governance"],
+      "evidence": [],
+      "tags": ["AntiPattern", "Risk", "EventDriven"],
+      "drill": {
+        "inputs": ["Hot-path action output treated as authoritative"],
+        "processing": [
+          "Downstream system reads only the Activator-triggered action or notification",
+          "No reconciliation against the Eventhouse durable history",
+          "A missed or failed action becomes an invisible gap"
+        ],
+        "outputs": ["Silent data loss or state drift with no audit trail"],
+        "example": "A team builds an inventory adjustment purely on Activator alerts firing Power Automate flows; when one flow silently fails, the inventory count drifts and there is no durable log to reconcile against because the cold path was never wired in.",
+        "controls": ["Always land the cold-path copy in Eventhouse/OneLake even when a hot-path action also exists", "Periodic reconciliation job comparing hot-path actions taken against cold-path history"],
+        "failureModes": ["No cold path at all — only the hot-path action exists", "Reconciliation job never built or never scheduled"]
+      }
+    },
+    {
+      "id": "warning-trigger-storm",
+      "label": "Risk: trigger storm overwhelms batch work",
+      "summary": "A burst of events fires more downstream job runs than batch-oriented systems can absorb.",
+      "detail": "Because Activator can trigger pipeline, Spark, Dataflow, or Copy job runs directly on an event with no polling schedule, a burst of qualifying events can launch far more concurrent runs than a batch-oriented target was designed for, since fixed-schedule systems were built assuming bounded, scheduled concurrency rather than unbounded event-driven fan-out.",
+      "whyItMatters": "This is the operational cost of removing the polling schedule: event-driven triggering eliminates empty runs and reduces latency, but without a rate limit or batching strategy it can invert into the opposite problem — too many concurrent runs against systems that assume scheduled cadence.",
+      "classification": "warning",
+      "layers": ["orchestration", "compute"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-blog-activator-copy-job",
+          "note": "Fixed-schedule data movement's costs (empty runs, latency-vs-cost tradeoffs) are what event-driven triggering solves — but the same source frames Activator's condition-driven firing as running 'automatically only when that condition is met,' with no built-in concurrency governor across bursts of qualifying events."
+        }
+      ],
+      "tags": ["AntiPattern", "Risk", "Capacity"],
+      "drill": {
+        "inputs": ["Burst of qualifying events (e.g. a batch upstream load landing many files at once)"],
+        "processing": [
+          "Each qualifying event independently satisfies the Activator rule condition",
+          "Each satisfied condition fires its own downstream job/pipeline run",
+          "Downstream compute or capacity is not designed for that level of concurrency"
+        ],
+        "outputs": ["Capacity throttling, queued or failed downstream runs, degraded shared-capacity performance"],
+        "example": "An upstream batch export drops 500 files into OneLake in one minute; an Activator file-created rule fires 500 concurrent Copy job runs against a target designed for a handful of scheduled runs per hour.",
+        "controls": ["Batch or debounce the trigger condition where the source supports it", "Cap concurrent downstream runs", "Route bursty sources through Eventstream windowed aggregation before the rule evaluates them"],
+        "failureModes": ["No debounce/windowing before the Activator rule", "Downstream target capacity sized only for the old scheduled cadence"]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-source-eventstream",
+      "from": "event-source",
+      "to": "eventstream",
+      "label": "raw events",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "edge-eventstream-hub",
+      "from": "eventstream",
+      "to": "real-time-hub",
+      "label": "shaped, routed stream",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "edge-hub-activator",
+      "from": "real-time-hub",
+      "to": "activator",
+      "label": "hot path: evaluate condition",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-hub-eventhouse",
+      "from": "real-time-hub",
+      "to": "eventhouse",
+      "label": "cold path: durable ingest",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-eventhouse-onelake",
+      "from": "eventhouse",
+      "to": "onelake-history",
+      "label": "mirror to Delta",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "edge-eventhouse-replay",
+      "from": "eventhouse",
+      "to": "replay-dead-letter",
+      "label": "durable history feeds replay",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "edge-replay-hub-feedback",
+      "from": "replay-dead-letter",
+      "to": "real-time-hub",
+      "label": "resubmit for re-evaluation",
+      "layer": "orchestration",
+      "kind": "feedback"
+    },
+    {
+      "id": "edge-activator-warning-state",
+      "from": "activator",
+      "to": "warning-notification-as-state",
+      "label": "risk if treated as system of record",
+      "layer": "governance",
+      "kind": "flow"
+    },
+    {
+      "id": "edge-activator-warning-storm",
+      "from": "activator",
+      "to": "warning-trigger-storm",
+      "label": "risk under event bursts",
+      "layer": "compute",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "event-source",
+      "title": "1. An event originates",
+      "explanation": "Start with the event itself — a domain event, IoT reading, CDC row, or Fabric platform event. Its identity and event-time are decided here and carried through the whole path."
+    },
+    {
+      "nodeId": "eventstream",
+      "title": "2. Eventstream shapes and routes it",
+      "explanation": "Eventstream ingests from Kafka, Kinesis, Pub/Sub, or MQTT sources, applies filtering/dedup/windowing, and routes the shaped stream toward Real-Time hub — possibly to multiple destinations at once."
+    },
+    {
+      "nodeId": "real-time-hub",
+      "title": "3. Real-Time hub is the fork point",
+      "explanation": "The routed stream becomes a catalogued item any workload can subscribe to. From here the architecture genuinely forks: Activator subscribes for the hot path, Eventhouse subscribes for the cold path — independently."
+    },
+    {
+      "nodeId": "activator",
+      "title": "4. Hot path: Activator reacts immediately",
+      "explanation": "Activator evaluates the stream against a threshold, pattern, or KQL condition and fires an action — notification, pipeline/Spark/Dataflow/Copy job run, or Power Automate flow — within the freshness the business needs."
+    },
+    {
+      "nodeId": "eventhouse",
+      "title": "5. Cold path: Eventhouse retains durable history",
+      "explanation": "The same stream is independently ingested into Eventhouse, indexed by arrival time, retained for the configured window, and made queryable via KQL/T-SQL."
+    },
+    {
+      "nodeId": "onelake-history",
+      "title": "6. Durable history mirrors to OneLake",
+      "explanation": "Eventhouse data mirrors to OneLake in Delta format so Direct Lake, Warehouse, Lakehouse, and Spark can query the same history with no data movement."
+    },
+    {
+      "nodeId": "replay-dead-letter",
+      "title": "7. Replay closes the loop",
+      "explanation": "When a hot-path action fails, the durable cold-path history is the only place to recover from — a replay/dead-letter procedure resubmits the event back through Real-Time hub, guarded by an idempotency key."
+    },
+    {
+      "nodeId": "warning-notification-as-state",
+      "title": "8. Risk: don't treat the alert as the record",
+      "explanation": "The hot-path action is best-effort, not durable. Anything that needs to be recovered or audited must read the cold path, never the notification alone."
+    },
+    {
+      "nodeId": "warning-trigger-storm",
+      "title": "9. Risk: a burst can overwhelm batch-oriented targets",
+      "explanation": "Removing the polling schedule removes empty runs, but a burst of qualifying events can fire far more concurrent downstream runs than a batch-sized target can absorb."
+    }
+  ]
+}

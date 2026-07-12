@@ -28,10 +28,39 @@ before/after).
    curl -s "$SB/claims?capability_id=eq.<id>&active=eq.true&select=id,text,depth,type" -H "$H1" -H "$H2"
    ```
    The diagram must reflect facts that exist in the knowledge base — do not draw invented limits.
-2. Author the diagram:
-   - **Mermaid** for flows/decision trees/sequence — save `content/diagrams/<slug>.mmd`.
-   - **SVG** for richer infographics — save `content/diagrams/<slug>.svg`. Keep it self-contained,
-     readable at small sizes, and free of any copied logos or trademarked marks.
+2. **Author the interactive sidecar — `content/diagrams/<slug>.diagram.json`. This is the primary
+   artifact and it is not optional.** It conforms to the `AuthoredDiagram` type in
+   `src/diagrams/types.ts` (read that file — it is the contract). The renderer consumes this; the
+   SVG is only the print/no-JavaScript fallback.
+
+   - **Author the graph, not the geometry.** The sidecar carries **no** `x`/`y`/`width`/`height`.
+     `src/diagrams/layout.ts` derives coordinates from the edges, so topology reflects meaning.
+     Hand-placing boxes is what produced the old uniform-grid mess.
+   - `type` drives layout: `architecture`/`model` → layered lanes, left-to-right;
+     `decision` → top-down branching tree; `flow`/`internals` → top-down path.
+   - **A `decision` diagram must actually branch** — a question node with 2+ outgoing
+     `kind: "branch"` edges whose **labels are the answers**. A decision tree that renders as a
+     straight line is a bug.
+   - **Every edge gets a `label`.** An unlabelled arrow is decorative, and decorative is banned.
+     Use `kind: "feedback"` for genuine backward edges (replay, retry, watermark) — they route
+     around the outside instead of corrupting the ranking.
+   - **`classification` is an honesty contract.** `fact` = sourced product behaviour and **must**
+     carry `evidence`; `pattern` = recommended practice, not a product guarantee; `inference` =
+     your architectural interpretation; `warning` = a real failure mode or limit. When a claim
+     doesn't back it, say `pattern`/`inference` and cite nothing — never fake a citation.
+   - **`drill` must be specific to that node.** It renders as the drill-down infographic
+     (inputs → processing → outputs, worked example, controls, failure modes, optional sourced
+     `metrics` stat tiles). Reusing one block of topic-level text across every node is precisely
+     the "shallow and textual" failure this contract replaces.
+   - Never invent a product limit, quota, or performance figure. A `metric` with a `sourceKey`
+     must trace to a real claim; pattern guidance carries no `sourceKey`.
+
+3. Author the static fallback:
+   - **SVG** for richer infographics — save `content/diagrams/<slug>.svg`. **The filename must
+     match the sidecar slug exactly** — that pairing is how `src/diagrams/catalog.ts` finds it.
+     Keep it self-contained, readable at small sizes, and free of any copied logos or trademarks.
+   - **Mermaid** (`content/diagrams/<slug>.mmd`) is acceptable only for a throwaway sketch; it is
+     not a substitute for the sidecar.
    - Mirror the SVG to `public/diagrams/<slug>.svg` so the app can serve it (blogs embed
      `/diagrams/<slug>.svg`).
    - **Aim for infographic-grade, not a bare 3-box flow.** A blog diagram should carry real
@@ -41,7 +70,7 @@ before/after).
      (≈1200×780, grouped zones, gradients, a legend) — **not** the thin
      `direct-lake-query-path.svg`. For an SVG infographic prefer a canvas around 1000–1200px wide
      so labels are legible; keep text in a system sans stack and ensure contrast on the dark page.
-3. Register it by appending an entry to the git-tracked manifest `content/diagrams/assets.json`
+4. Register it by appending an entry to the git-tracked manifest `content/diagrams/assets.json`
    (you have no Supabase write access — the manifest is replayed into Supabase at publish time by
    the in-app **bootstrap** / `scripts/import_content.py`). Append an object:
    ```json
@@ -66,11 +95,15 @@ before/after).
 
 - Original work only. No traced or copied source images, no third-party logos/IP.
 - The diagram's content must be traceable to knowledge-base claims; note which claims it visualises.
-- Prefer Mermaid for anything that is fundamentally a graph/flow; reserve hand-built SVG for
-  infographics where layout carries meaning.
+- **Ship the sidecar or ship nothing.** An SVG with no `.diagram.json` renders as caption-derived
+  placeholder nodes that cite no sources — the failure mode this contract exists to prevent.
+- Validate before finishing: the JSON parses, every `edge.from`/`edge.to` resolves to a node id,
+  every `fact` node has at least one `evidence` entry, and every edge has a label.
 
 ## Output
 
-The saved file path(s) (`content/diagrams/` + mirrored `public/diagrams/`), the manifest entry
-appended to `content/diagrams/assets.json`, and a one-line note on which claims the diagram is
-grounded in. Remind that the asset registers into Supabase on the next bootstrap/publish.
+The saved file paths — **`content/diagrams/<slug>.diagram.json`** plus the `content/diagrams/`
+SVG and its `public/diagrams/` mirror — the manifest entry appended to
+`content/diagrams/assets.json`, and a note on which claims ground the `fact` nodes (and why any
+node is `pattern`/`inference` rather than `fact`). Remind that the asset registers into Supabase on
+the next bootstrap/publish.

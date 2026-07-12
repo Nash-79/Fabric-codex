@@ -182,6 +182,9 @@ reads it, with content/queue.md as the offline fallback.
 - Generated diagrams use the typed interactive React/SVG contract: keyboard/touch-selectable
   nodes, evidence, layers, path tracing, walkthrough, and Atlas drill targets. The committed SVG is
   a script-free print/no-JavaScript fallback whose hash must match the registered revision.
+- Each diagram requires a matching `.diagram.json` authored topology: labelled edges, evidence for
+  fact nodes, and node-specific drill infographics covering inputs, processing, outputs, a worked
+  example, controls, and failure modes. Caption-derived fallback diagrams are not publishable.
 
 - `/publish-topic` commissions **≥2** original diagrams before the blog-author runs — an
   architecture diagram and a decision/internals diagram.

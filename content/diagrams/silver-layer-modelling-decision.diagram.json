@@ -1,0 +1,372 @@
+{
+  "id": "silver-layer-modelling-decision",
+  "title": "History, Quarantine, and When to Optimize",
+  "purpose": "Make the three recurring silver-layer decisions explicit: whether the table needs SCD Type 2 history or a plain overwrite, what happens to records that fail a quality rule, and when to spend a physical rewrite on OPTIMIZE and V-Order.",
+  "accessibleSummary": "A decision tree with three questions. The first asks whether anyone needs to see the state of a row as it was at a past point in time: if yes, the table needs SCD Type 2 history; if no, an overwrite or snapshot is simpler and cheaper. The second asks what should happen to records that fail a quality rule — quarantine them and keep the good records flowing, or fail the whole batch when partial data would be worse than none. The third asks whether the table is read-heavy enough to justify V-Order and compaction, which is disabled by default in new Fabric workspaces and costs roughly fifteen percent more write time. A warning branch covers the specific failure of resolving the latest row without a deterministic ordering key.",
+  "longDescription": "This is a decision tree covering the three questions that recur on almost every silver table. Question one is about history: SCD Type 2 is justified only when someone genuinely needs to reconstruct the state of a row as of a past date; otherwise an overwrite or snapshot is simpler, cheaper, and easier to reason about. Question two is about failure handling: quarantine keeps good records flowing and isolates the bad ones for correction and replay, but it is only honest if a replay path actually exists; failing the batch outright is the right call when partial data downstream would be worse than no data. Question three is about physical layout: V-Order improves downstream read performance across Fabric engines and pays off most in read-heavy dashboarding and repeated scans, but Microsoft states it costs roughly fifteen percent longer on writes, and it is disabled by default in new workspaces. Because toggling the table property only affects future writes, applying it to existing data requires a physical rewrite via OPTIMIZE. The warning node captures the classic silver bug: resolving the latest row per key without a deterministic ordering column, which corrupts history non-reproducibly on every retry.",
+  "type": "decision",
+  "topicSlug": "silver-layer-modelling",
+  "capabilityIds": ["lakehouse", "spark", "data-factory"],
+  "revision": "2",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/silver-layer-modelling-decision.svg",
+  "nodes": [
+    {
+      "id": "history-question",
+      "label": "Does anyone need the row as it was?",
+      "summary": "The history question: SCD Type 2 is justified by a real point-in-time requirement, nothing less.",
+      "detail": "Ask whether any consumer genuinely needs to reconstruct a row's state as of a past date — a price as it stood at time of sale, an address as it was when the contract was signed. If nobody does, SCD Type 2 is complexity without a customer.",
+      "whyItMatters": "SCD Type 2 changes the grain of the table, the shape of every downstream join, and the cost of every query against it. Adopting it speculatively imposes that cost permanently on a requirement that may never arrive.",
+      "classification": "pattern",
+      "layers": ["data"],
+      "tags": ["decision-root", "SCD"],
+      "evidence": [],
+      "drill": {
+        "inputs": [
+          "The consumer questions the table must answer",
+          "Whether any of them are 'as of' questions",
+          "Regulatory or reconciliation requirements for point-in-time reconstruction"
+        ],
+        "processing": [
+          "List the questions asked of this entity",
+          "Mark which ones require a past state rather than the current state",
+          "If none do, stop — the table does not need Type 2"
+        ],
+        "outputs": ["A yes or no that routes to Type 2 history or to overwrite/snapshot"],
+        "example": "A product dimension is asked only 'what is this product called now', never 'what was it called when that order shipped' — so it is overwritten, not versioned.",
+        "controls": [
+          "Require a named 'as of' question before adopting Type 2"
+        ],
+        "failureModes": [
+          "Applying Type 2 to every dimension by convention and paying the join cost forever",
+          "Discovering the history requirement after the fact, with no way to reconstruct what was overwritten"
+        ]
+      }
+    },
+    {
+      "id": "history-scd2",
+      "label": "SCD Type 2 history",
+      "summary": "Version the row: close the old record, open a new one, keep both.",
+      "detail": "Under SCD Type 2, a change closes the current version of the row and opens a new one, so the table holds every state the entity has ever been in with validity ranges. This requires a deterministic ordering key so changes are applied in the order they truly happened — which is precisely where the warning node applies.",
+      "whyItMatters": "It is the only structure that answers 'as of' questions correctly. It is also the structure most often implemented with a subtly non-deterministic ordering, which corrupts history quietly.",
+      "classification": "pattern",
+      "layers": ["data"],
+      "tags": ["SCD", "History"],
+      "evidence": [],
+      "drill": {
+        "inputs": [
+          "Change records with a business key",
+          "A deterministic ordering column — source commit time or a monotonic sequence",
+          "The set of attributes whose change should trigger a new version"
+        ],
+        "processing": [
+          "Order changes deterministically by the ordering key, never by arrival order",
+          "Close the current row by setting its validity end, and insert the new version",
+          "Merge idempotently, so a replayed batch does not create duplicate versions"
+        ],
+        "outputs": [
+          "A versioned Delta table with validity ranges per row",
+          "The ability to reconstruct any entity's state as of any past date"
+        ],
+        "example": "A customer's address change is applied by source commit time; the previous row's validity is closed and a new row opened, so an order from last year still joins to the address that was current then.",
+        "controls": [
+          "A deterministic ordering key, enforced and tested",
+          "An idempotent merge key so retries are safe"
+        ],
+        "failureModes": [
+          "Applying changes in arrival order rather than event order, producing a plausible but wrong history",
+          "A non-idempotent merge that duplicates versions when a batch is replayed"
+        ]
+      }
+    },
+    {
+      "id": "history-overwrite",
+      "label": "Overwrite or snapshot",
+      "summary": "No point-in-time requirement, so keep the current state and skip the versioning cost.",
+      "detail": "Where only the current state is ever asked for, overwrite the row or take a periodic full snapshot. Delta still supplies ACID guarantees and time travel over the underlying Parquet files, so a limited amount of history remains recoverable without modelling it explicitly.",
+      "whyItMatters": "It keeps the table at its natural grain and its joins simple. Delta's time travel means choosing this does not leave you with literally no recourse if a past state is needed for recovery.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["DeltaLake"],
+      "evidence": [
+        {
+          "sourceKey": "lakehouse-overview",
+          "note": "All managed lakehouse tables use Delta, which supplies ACID transactions, schema enforcement, and time travel over the underlying Parquet files."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "Current-state records from the source",
+          "A business key to match on"
+        ],
+        "processing": [
+          "Merge on the business key, updating in place",
+          "Or write a periodic full snapshot where the source has no reliable change signal"
+        ],
+        "outputs": [
+          "A current-state table at its natural grain",
+          "Delta time travel available for recovery, though not modelled as business history"
+        ],
+        "example": "A product reference table is merged on product key each night; only the current name and category are kept, and Delta time travel covers accidental-overwrite recovery.",
+        "controls": [
+          "Do not lean on Delta time travel as if it were business history — retention is bounded"
+        ],
+        "failureModes": [
+          "Treating time travel as an SCD Type 2 substitute and discovering the retention window has passed"
+        ]
+      }
+    },
+    {
+      "id": "failure-question",
+      "label": "What happens to records that fail a rule?",
+      "summary": "Second question: quarantine the bad records, or fail the whole batch?",
+      "detail": "When a record violates a quality rule, there are two honest options. Quarantine isolates the bad records and lets the good ones proceed — but only if a replay path genuinely exists. Failing the batch stops everything, which is correct when partial data downstream would be worse than no data at all.",
+      "whyItMatters": "Choosing quarantine without building the replay path is the worst of both worlds: bad records vanish into a table nobody reads, and the data silently becomes incomplete without anyone being alerted.",
+      "classification": "pattern",
+      "layers": ["orchestration"],
+      "tags": ["DataQuality"],
+      "evidence": [],
+      "drill": {
+        "inputs": [
+          "The quality rules and their severities",
+          "Whether downstream consumers can tolerate partial data",
+          "Whether anyone will actually own and work the quarantine table"
+        ],
+        "processing": [
+          "Classify each rule: does violating it invalidate the record, or the whole batch?",
+          "For quarantine, commit to a replay path and an owner before enabling it",
+          "For fail-fast, make the alert loud enough that someone acts on it"
+        ],
+        "outputs": [
+          "An explicit, owned failure policy per rule rather than an implicit one"
+        ],
+        "example": "A missing optional attribute quarantines the single record; a source file with the wrong schema fails the whole batch, because loading half a day's orders would be worse than loading none.",
+        "controls": [
+          "Every quarantine table has a named owner and a replay procedure",
+          "Reconciliation counts published per run: loaded, quarantined, rejected"
+        ],
+        "failureModes": [
+          "A quarantine table that grows forever because nobody owns it — silent, permanent data loss",
+          "Failing the batch on a trivial rule and blocking a day's data for a cosmetic violation"
+        ]
+      }
+    },
+    {
+      "id": "optimize-question",
+      "label": "Is this table read-heavy enough for V-Order?",
+      "summary": "Third question: V-Order costs ~15% on writes and is off by default — spend it where reads dominate.",
+      "detail": "V-Order is a write-time optimisation that improves downstream read performance across Fabric engines, and it pays off most in read-heavy patterns such as dashboarding, interactive analytics, and repeated scans. Microsoft states the tradeoff as writes taking roughly 15% longer on average. It is disabled by default in newly created Fabric workspaces — a deliberate default favouring write-heavy ingestion pipelines.",
+      "whyItMatters": "This is a genuine tradeoff with a published cost, not a free win. Enabling it on a write-heavy staging table pays the write penalty for read acceleration nobody uses.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["VOrder", "DeltaOptimization"],
+      "evidence": [
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "V-Order is a write-time Parquet optimisation improving downstream read performance across Fabric engines; it pays off most in read-heavy patterns like dashboarding, interactive analytics, and repeated scans."
+        },
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "Microsoft states the typical tradeoff as writes taking roughly 15% longer on average, in exchange for reads that can improve significantly depending on workload."
+        },
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "V-Order is disabled by default in newly created Fabric workspaces, a deliberate default favouring write-heavy ingestion and transformation pipelines."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "The table's read-to-write ratio",
+          "Whether the table backs dashboards or repeated interactive scans",
+          "The current V-Order setting, which defaults to off in new workspaces"
+        ],
+        "processing": [
+          "Classify the table as read-heavy (dashboards, repeated scans) or write-heavy (staging, transient)",
+          "Enable V-Order only on the read-heavy ones",
+          "Remember that toggling the table property affects only future writes — existing files keep their layout"
+        ],
+        "outputs": [
+          "V-Order applied where reads dominate, and left off where writes do",
+          "A conscious ~15% write cost accepted only where it buys read performance"
+        ],
+        "example": "A gold table backing an executive dashboard has V-Order enabled and is compacted; the bronze staging table it is built from is left at the workspace default of off.",
+        "controls": [
+          "Control V-Order at the session config, the Delta table property, or the per-write option — noting session and write settings take precedence over the table property"
+        ],
+        "failureModes": [
+          "Enabling V-Order globally and paying ~15% on every write, including write-heavy staging tables that are scanned once",
+          "Expecting a property change to reformat existing data — it does not"
+        ]
+      }
+    },
+    {
+      "id": "optimize-compact",
+      "label": "OPTIMIZE to rewrite existing files",
+      "summary": "Toggling the property only affects future writes — existing data needs a physical rewrite.",
+      "detail": "Because toggling the V-Order table property only affects future writes, files already on disk keep the layout they were written with. Applying or removing V-Order across existing data therefore requires a physical rewrite via table compaction — OPTIMIZE. This is also the step that consolidates the small files that incremental merges accumulate.",
+      "whyItMatters": "Teams routinely enable the property, see no improvement, and conclude V-Order does not work. It does — but only for data written after the change, unless OPTIMIZE rewrites what is already there.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["OPTIMIZE", "Compaction"],
+      "evidence": [
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "Toggling the V-Order table property only affects future writes; files already on disk keep their layout, so applying or removing V-Order on existing data requires a physical rewrite via compaction (OPTIMIZE)."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "A table whose V-Order setting has just changed",
+          "A table accumulating small files from incremental merges",
+          "A maintenance window with capacity headroom"
+        ],
+        "processing": [
+          "Run OPTIMIZE to compact small files and physically rewrite them in the new layout",
+          "Schedule it against the table's actual write cadence, not on a fixed arbitrary timer"
+        ],
+        "outputs": [
+          "Compacted Delta files carrying the intended V-Order layout",
+          "Fewer, larger files for downstream scans to read"
+        ],
+        "example": "After enabling V-Order on a gold table, OPTIMIZE is run once to rewrite the existing files; without it, only rows written from that point forward would have been accelerated.",
+        "controls": [
+          "Run OPTIMIZE after any V-Order property change, or the change is a no-op for existing data",
+          "Budget the capacity the rewrite consumes"
+        ],
+        "failureModes": [
+          "Enabling the property, skipping OPTIMIZE, and concluding V-Order delivers nothing",
+          "Running OPTIMIZE so frequently that the rewrite cost exceeds the read benefit"
+        ]
+      }
+    },
+    {
+      "id": "warning-nondeterministic-latest",
+      "label": "Trap: 'latest row' with no ordering key",
+      "summary": "Resolving the latest row per key without a deterministic ordering column corrupts history — differently each retry.",
+      "detail": "The classic silver bug: deduplicating to the 'latest' row per business key using arrival order, file order, or an unstable timestamp. It usually looks correct, because most of the time the orders coincide. On a retry, a late-arriving file, or a reshuffled partition, it silently picks a different winner — and an SCD Type 2 table built on it records a history that never happened.",
+      "whyItMatters": "The failure is non-deterministic, so it does not reproduce on demand and it does not fail loudly. It just quietly writes a different history each time the job runs.",
+      "classification": "warning",
+      "layers": ["data"],
+      "tags": ["AntiPattern", "SCD"],
+      "evidence": [],
+      "drill": {
+        "inputs": [
+          "Change records with more than one row per business key in a batch",
+          "The column currently being used to decide which one wins"
+        ],
+        "processing": [
+          "Identify a genuinely deterministic ordering key — source commit time, a monotonic sequence, or an LSN",
+          "Break ties explicitly, so two rows with the same timestamp still resolve identically every run",
+          "Make the merge idempotent so a replay reproduces the same result exactly"
+        ],
+        "outputs": [
+          "Deduplication that produces the same winner on every run",
+          "An SCD Type 2 history that is reproducible rather than incidental"
+        ],
+        "example": "Two updates for one customer land in the same batch with identical processing timestamps; without a tiebreak, the winner depends on partition order, so the recorded address differs between two runs of the same input.",
+        "controls": [
+          "A deterministic ordering key plus an explicit tiebreak, tested with a deliberately reordered replay"
+        ],
+        "failureModes": [
+          "Using ingestion or file-arrival time as if it were event time",
+          "Assuming a same-second tie will not happen, so leaving the tiebreak undefined"
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-history-scd2",
+      "from": "history-question",
+      "to": "history-scd2",
+      "label": "yes — 'as of' questions are asked",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-history-overwrite",
+      "from": "history-question",
+      "to": "history-overwrite",
+      "label": "no — only the current state matters",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-scd2-warning",
+      "from": "history-scd2",
+      "to": "warning-nondeterministic-latest",
+      "label": "requires a deterministic ordering key",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-scd2-failure",
+      "from": "history-scd2",
+      "to": "failure-question",
+      "label": "then decide the failure policy",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-overwrite-failure",
+      "from": "history-overwrite",
+      "to": "failure-question",
+      "label": "then decide the failure policy",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-failure-optimize",
+      "from": "failure-question",
+      "to": "optimize-question",
+      "label": "once the table lands cleanly",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-optimize-compact",
+      "from": "optimize-question",
+      "to": "optimize-compact",
+      "label": "read-heavy — and existing files need rewriting",
+      "layer": "compute",
+      "kind": "branch"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "history-question",
+      "title": "1. Does anyone ask 'as of'?",
+      "explanation": "SCD Type 2 needs a real point-in-time requirement. Without one, it is permanent complexity with no customer."
+    },
+    {
+      "nodeId": "history-scd2",
+      "title": "2. If yes, version the row",
+      "explanation": "Close the old version, open the new one — and order the changes deterministically."
+    },
+    {
+      "nodeId": "history-overwrite",
+      "title": "3. If no, overwrite",
+      "explanation": "Keep the natural grain. Delta time travel still covers accidental-overwrite recovery."
+    },
+    {
+      "nodeId": "failure-question",
+      "title": "4. Quarantine, or fail the batch?",
+      "explanation": "Quarantine only if a replay path and an owner genuinely exist; otherwise it is silent data loss."
+    },
+    {
+      "nodeId": "optimize-question",
+      "title": "5. Spend V-Order where reads dominate",
+      "explanation": "It is off by default and costs roughly 15% on writes — enable it on read-heavy tables, not staging."
+    },
+    {
+      "nodeId": "optimize-compact",
+      "title": "6. OPTIMIZE to rewrite what already exists",
+      "explanation": "The property only affects future writes; existing files keep their layout until compaction rewrites them."
+    },
+    {
+      "nodeId": "warning-nondeterministic-latest",
+      "title": "7. Avoid the non-deterministic latest row",
+      "explanation": "Without a deterministic ordering key, each retry can record a different history — and none of them fail loudly."
+    }
+  ]
+}

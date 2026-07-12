@@ -1,0 +1,311 @@
+{
+  "id": "event-driven-architecture-decision",
+  "title": "Event-Driven vs. Scheduled Batch: The Decision Path",
+  "purpose": "Branch the decision between an event-driven pattern and a scheduled-batch pattern based on reaction latency, durability requirement, and replay need.",
+  "accessibleSummary": "A root question asks whether the business must react within seconds of an event. If no, the path leads to a scheduled/interval pipeline. If yes, a second question asks whether the event itself is durable state that must be retained, branching to an event-driven pattern with a durable Eventhouse cold path versus a lightweight Activator-only notification pattern. A third question on the durable branch asks whether replay is required, branching to an idempotent replay design versus a simple durable log with no replay contract.",
+  "longDescription": "This is a top-down branching decision tree, not a linear flow. It starts from the real architectural fork this topic is about: does the business need to react to an event within seconds, or is a scheduled or interval-based pipeline sufficient? If latency tolerance allows minutes-to-hours, a scheduled/interval Data Factory pipeline is the simpler, cheaper choice, since Fabric pipeline schedules and interval-based schedules already cover that case without adding event infrastructure. If sub-second-to-seconds reaction is required, the path moves to Activator-driven event evaluation, and a second question determines whether the event itself is durable business state that must be retained and queried later, or a transient signal that only needs to trigger an action. A durable-state answer leads to the full event-driven pattern with an Eventhouse cold path; a transient-signal answer leads to a lighter Activator-only notification pattern with no cold-path storage. On the durable-state branch, a third question asks whether replay is required — if yes, the design must add an explicit idempotency key and dead-letter/replay procedure; if no, a straightforward durable log without a replay contract is sufficient.",
+  "type": "decision",
+  "topicSlug": "event-driven-architecture",
+  "capabilityIds": ["rti", "eventhouse-kql", "data-factory"],
+  "revision": "2",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/event-driven-architecture-decision.svg",
+  "nodes": [
+    {
+      "id": "q-reaction-latency",
+      "label": "Must the business react within seconds?",
+      "summary": "The root question: reaction-time requirement.",
+      "detail": "The first branching decision is whether the business process genuinely needs to act on an event within seconds of it occurring, or whether a periodic check is acceptable. This is not a technology question — it is a requirement question that determines whether event infrastructure is justified at all.",
+      "whyItMatters": "Event-driven infrastructure (Eventstream, Real-Time hub, Activator, Eventhouse) has real setup and operational cost; a scheduled pipeline is simpler and cheaper when nothing downstream actually consumes sub-minute freshness.",
+      "classification": "pattern",
+      "layers": ["orchestration"],
+      "evidence": [],
+      "tags": ["DecisionPoint", "ArchitecturePattern"],
+      "drill": {
+        "inputs": ["Business SLA for reacting to the triggering condition", "Cost tolerance for continuous evaluation vs. periodic checks"],
+        "processing": [
+          "Identify the actual downstream consumer of the reaction and its real freshness need",
+          "Compare against what a scheduled or interval-based pipeline can deliver"
+        ],
+        "outputs": ["A latency requirement in seconds/minutes/hours that determines the next branch"],
+        "example": "A fraud-review team needs to block a high-value order within seconds of it being placed — that is a seconds-scale requirement, not a batch one.",
+        "controls": ["Document the actual business SLA before choosing infrastructure", "Avoid defaulting to event-driven because it feels more modern"],
+        "failureModes": ["Building event infrastructure for a report that is only reviewed once a day"]
+      }
+    },
+    {
+      "id": "outcome-scheduled-batch",
+      "label": "Use a scheduled or interval pipeline",
+      "summary": "Minutes-to-hours latency is fine — a Data Factory pipeline schedule covers it.",
+      "detail": "Fabric pipelines can be run on demand, on a time-based schedule (up to 20 schedules per pipeline, each with a required start and end date), or with interval-based schedules (currently preview) that inject window-start/window-end parameters for time-sliced incremental processing. This is the simpler, cheaper answer when sub-minute reaction is not actually required.",
+      "whyItMatters": "Choosing this path avoids the operational overhead of event infrastructure when it buys nothing the business actually needs — schedule sprawl and empty runs are a real cost, but so is over-engineering an event-driven system nobody needed.",
+      "classification": "fact",
+      "layers": ["orchestration"],
+      "evidence": [
+        {
+          "sourceKey": "pipeline-runs",
+          "note": "A pipeline run can be started on demand, on a time-based schedule (up to 20 schedules per pipeline, each requiring start/end dates), or from an event trigger; interval-based schedules (preview) inject window-start/window-end parameters for time-sliced processing."
+        }
+      ],
+      "tags": ["DataFactory", "Scheduling", "Batch"],
+      "drill": {
+        "inputs": ["Defined cadence requirement (daily, hourly, interval-windowed)"],
+        "processing": [
+          "Configure a time-based or interval-based schedule on the pipeline",
+          "Set required start/end dates (schedules have no open-ended option)",
+          "Pass schedule-sourced parameters into the pipeline run"
+        ],
+        "outputs": ["Predictable, scheduled pipeline runs with bounded concurrency"],
+        "example": "A daily sales-summary pipeline runs on a fixed 2am schedule with an end date set five years out; no event infrastructure is needed because nothing downstream reads it before morning.",
+        "controls": ["Schedule frequency vs. cost tradeoff", "Up to 20 schedules per pipeline for multiple cadences", "Interval schedules for time-sliced incremental loads"],
+        "failureModes": ["Interval-based schedules (preview) cannot be edited/enabled/disabled after creation and lack backfill, limiting production windowed-load use"],
+        "metrics": [
+          { "label": "Max schedules per pipeline", "value": "20", "sourceKey": "pipeline-runs" }
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "data-factory", "label": "Open Data Factory" }
+    },
+    {
+      "id": "q-durable-state",
+      "label": "Is the event durable business state?",
+      "summary": "Second question: must the event be retained and queried later, or is it just a trigger?",
+      "detail": "Given seconds-scale reaction is required, the next question is whether the event itself represents state the business needs to retain and query later (an order, a sensor reading, a transaction) or whether it is a transient signal only meaningful as a trigger (a heartbeat, a threshold crossing that only needs to fire an alert once).",
+      "whyItMatters": "This determines whether a cold, durable path (Eventhouse/OneLake) is architecturally required, or whether an Activator-only notification pattern is sufficient and cheaper to run.",
+      "classification": "pattern",
+      "layers": ["orchestration", "data"],
+      "evidence": [],
+      "tags": ["DecisionPoint", "ArchitecturePattern"],
+      "drill": {
+        "inputs": ["Whether any downstream process needs to query this event's history later", "Whether the event has intrinsic business value beyond triggering an action"],
+        "processing": [
+          "Ask whether losing the event after the action fires would cause real data loss",
+          "Ask whether audit, replay, or historical analytics needs to reference this event later"
+        ],
+        "outputs": ["A durable-state branch or a transient-signal branch"],
+        "example": "An order.created event is durable business state (it must be queryable for months); a CPU-threshold-crossed heartbeat used only to page an operator is transient.",
+        "controls": ["Distinguish state-carrying events from pure signals during event contract design"],
+        "failureModes": ["Treating a transient signal as durable state and over-building storage for it", "Treating durable state as transient and losing it after the alert fires"]
+      }
+    },
+    {
+      "id": "outcome-activator-only",
+      "label": "Activator-only notification pattern",
+      "summary": "Lightweight: evaluate and act, no durable cold-path storage.",
+      "detail": "When the event is a transient signal rather than durable state, the architecture only needs Eventstream routing into Real-Time hub and an Activator rule that fires the action — no Eventhouse ingestion or OneLake mirror is required, since there is nothing worth retaining once the action has fired.",
+      "whyItMatters": "This is the cheaper, simpler event-driven pattern; adding an unnecessary cold path for signals with no lasting business value is pure operational overhead.",
+      "classification": "pattern",
+      "layers": ["orchestration"],
+      "evidence": [],
+      "tags": ["Activator", "ArchitecturePattern", "Lightweight"],
+      "drill": {
+        "inputs": ["Transient signal routed through Eventstream/Real-Time hub"],
+        "processing": [
+          "Activator rule evaluates the condition",
+          "Rule fires its action (notification, job trigger, Power Automate flow)",
+          "No cold-path ingestion configured"
+        ],
+        "outputs": ["Fired action only; no durable record retained"],
+        "example": "A capacity-threshold-crossed signal pages an on-call engineer via Power Automate; once the page is sent there is no requirement to query that specific crossing again next month.",
+        "controls": ["Confirm no compliance or audit requirement exists before skipping the cold path", "Revisit if the signal later gains business value"],
+        "failureModes": ["A signal quietly becomes business-critical and the missing durable history is discovered only during an incident review"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "rti", "label": "Open Real-Time Intelligence" }
+    },
+    {
+      "id": "outcome-event-driven-durable",
+      "label": "Full event-driven pattern with Eventhouse cold path",
+      "summary": "Hot path for immediate action plus a durable Eventhouse/OneLake cold path.",
+      "detail": "When the event is durable business state and sub-second-to-seconds reaction is required, the full pattern applies: Eventstream routes into Real-Time hub, which forks into an Activator hot path for immediate action and an Eventhouse cold path for durable, queryable history mirrored to OneLake.",
+      "whyItMatters": "This is the pattern this topic's architecture diagram visualises end to end — the branch that justifies the full event-driven investment because both the reaction-time and the durability requirements are real.",
+      "classification": "pattern",
+      "layers": ["orchestration", "data"],
+      "evidence": [
+        {
+          "sourceKey": "rti-overview",
+          "note": "Real-Time Intelligence is described as a complete end-to-end solution for event-driven and streaming scenarios, covering ingestion through automated actions."
+        }
+      ],
+      "tags": ["EventDriven", "ArchitecturePattern", "Eventhouse"],
+      "drill": {
+        "inputs": ["Durable event routed through Eventstream/Real-Time hub"],
+        "processing": [
+          "Fork to Activator for immediate action",
+          "Fork to Eventhouse for durable, indexed ingestion",
+          "Mirror Eventhouse data to OneLake for cross-workload query"
+        ],
+        "outputs": ["Immediate action plus a durable, replayable event history"],
+        "example": "An order.created event triggers a fraud-check alert via Activator while independently landing in an Eventhouse table for compliance queries six months later.",
+        "controls": ["Both paths must be provisioned and tested independently, since they are separate subscriptions", "Retention and caching policy sized to the required query window"],
+        "failureModes": ["Building the hot path first and treating the cold path as an afterthought, producing the notification-as-state risk"]
+      },
+      "drillTarget": { "kind": "topic", "slug": "event-driven-architecture", "label": "Open Event-Driven Architecture" }
+    },
+    {
+      "id": "q-replay-required",
+      "label": "Is replay of failed/delayed events required?",
+      "summary": "Third question, on the durable branch: does the design need a replay contract?",
+      "detail": "Given the durable event-driven pattern applies, the remaining question is whether the business requires the ability to reprocess an event after a downstream failure (replay) or accepts that a failed action is simply logged and handled manually.",
+      "whyItMatters": "Replay is not free: it requires an explicit idempotency key so a resubmitted event does not duplicate its original side effect. Skipping this question is how teams end up with the trigger-storm and duplicate-load risks called out on the architecture diagram.",
+      "classification": "pattern",
+      "layers": ["orchestration", "observability"],
+      "evidence": [],
+      "tags": ["DecisionPoint", "Replay", "Idempotency"],
+      "drill": {
+        "inputs": ["Business tolerance for a permanently lost action on downstream failure", "Compliance/audit requirement to guarantee eventual processing"],
+        "processing": [
+          "Determine whether a missed action requires guaranteed eventual reprocessing",
+          "Weigh the cost of building an idempotent replay path against manual recovery"
+        ],
+        "outputs": ["A replay-required branch or a no-replay branch"],
+        "example": "A payment-settlement event must always eventually process, even after a downstream outage — that requires replay. A dashboard-refresh trigger does not — a missed refresh is caught on the next event.",
+        "controls": ["Classify each event type's replay requirement explicitly during design, not after an incident"],
+        "failureModes": ["No replay path exists and a downstream outage causes silent, permanent data loss for events that needed guaranteed processing"]
+      }
+    },
+    {
+      "id": "outcome-idempotent-replay",
+      "label": "Idempotent replay + dead-letter design",
+      "summary": "Add an explicit idempotency key and dead-letter/replay procedure.",
+      "detail": "The design must add an idempotency key enforced on any write that could be replayed, plus a dead-letter/replay procedure that resubmits failed events from the durable Eventhouse history back through Real-Time hub. This is the pattern this topic's architecture diagram shows as its feedback edge.",
+      "whyItMatters": "Without the idempotency key, replay itself becomes a data-integrity risk — the exact anti-pattern called out on the architecture diagram (a replay duplicating a load).",
+      "classification": "pattern",
+      "layers": ["orchestration", "observability"],
+      "evidence": [],
+      "tags": ["Replay", "DeadLetter", "Idempotency"],
+      "drill": {
+        "inputs": ["Failed hot-path action", "Durable Eventhouse history as the replay source"],
+        "processing": [
+          "Detect failure and route the event to a dead-letter record",
+          "Enforce an idempotency key on the resubmitted write",
+          "Resubmit through Real-Time hub for re-evaluation"
+        ],
+        "outputs": ["Reliable eventual processing with no duplicate side effects"],
+        "example": "A settlement event that failed due to a downstream outage is replayed from Eventhouse history; the idempotency key on the settlement write ensures the second attempt updates, not duplicates, the ledger entry.",
+        "controls": ["Idempotency key design (natural key, not a generated retry id)", "Dead-letter monitoring and alerting"],
+        "failureModes": ["Idempotency key derived from a retry attempt id instead of the business event id, defeating its purpose"]
+      }
+    },
+    {
+      "id": "outcome-no-replay",
+      "label": "Durable log, no replay contract",
+      "summary": "Land the durable history but do not build a formal replay path.",
+      "detail": "When replay is not required, the Eventhouse cold path still provides durable history for audit and analytics, but the design does not need to invest in an automated replay/dead-letter procedure — a failed hot-path action is logged and, if needed, corrected manually by referencing the durable history.",
+      "whyItMatters": "This keeps the design honest about scope: not every durable event needs an automated replay contract, and building one unnecessarily adds idempotency-key overhead with no corresponding requirement.",
+      "classification": "pattern",
+      "layers": ["orchestration", "observability"],
+      "evidence": [],
+      "tags": ["ArchitecturePattern", "Scope"],
+      "drill": {
+        "inputs": ["Durable Eventhouse history", "Failed hot-path action, logged but not auto-replayed"],
+        "processing": [
+          "Log the failure with enough context to investigate manually",
+          "Leave reprocessing, if ever needed, as a manual, ad hoc query against Eventhouse history"
+        ],
+        "outputs": ["Auditable durable history; no automated replay pipeline"],
+        "example": "A dashboard-refresh trigger occasionally fails; the durable Eventhouse log lets an engineer confirm what happened, but no automated replay is built because a missed refresh self-corrects on the next event.",
+        "controls": ["Revisit this decision if the event type's business criticality changes"],
+        "failureModes": ["Business criticality of the event grows over time and nobody revisits the no-replay decision"]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-latency-no",
+      "from": "q-reaction-latency",
+      "to": "outcome-scheduled-batch",
+      "label": "No — minutes/hours is fine",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-latency-yes",
+      "from": "q-reaction-latency",
+      "to": "q-durable-state",
+      "label": "Yes — seconds-scale reaction required",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-durable-no",
+      "from": "q-durable-state",
+      "to": "outcome-activator-only",
+      "label": "No — transient signal only",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-durable-yes",
+      "from": "q-durable-state",
+      "to": "outcome-event-driven-durable",
+      "label": "Yes — durable business state",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-durable-to-replay-question",
+      "from": "outcome-event-driven-durable",
+      "to": "q-replay-required",
+      "label": "then decide replay contract",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "edge-replay-yes",
+      "from": "q-replay-required",
+      "to": "outcome-idempotent-replay",
+      "label": "Yes — must guarantee eventual processing",
+      "layer": "observability",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-replay-no",
+      "from": "q-replay-required",
+      "to": "outcome-no-replay",
+      "label": "No — manual recovery acceptable",
+      "layer": "observability",
+      "kind": "branch"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "q-reaction-latency",
+      "title": "1. Start with the reaction-time requirement",
+      "explanation": "Ask whether the business genuinely needs to react within seconds of the event. This is the root branch that decides whether event infrastructure is justified at all."
+    },
+    {
+      "nodeId": "outcome-scheduled-batch",
+      "title": "2a. No — a scheduled or interval pipeline is enough",
+      "explanation": "If minutes-to-hours latency is acceptable, a Data Factory time-based or interval-based schedule is the simpler, cheaper answer — stop here."
+    },
+    {
+      "nodeId": "q-durable-state",
+      "title": "2b. Yes — now ask whether the event is durable state",
+      "explanation": "Given seconds-scale reaction is required, the next branch is whether the event is business state worth retaining, or a transient trigger signal."
+    },
+    {
+      "nodeId": "outcome-activator-only",
+      "title": "3a. Transient signal — Activator-only pattern",
+      "explanation": "If the event has no lasting value once acted on, a lightweight Activator-only pattern with no cold-path storage is sufficient."
+    },
+    {
+      "nodeId": "outcome-event-driven-durable",
+      "title": "3b. Durable state — the full event-driven pattern",
+      "explanation": "If the event must be retained and queried later, the full pattern applies: Activator hot path plus Eventhouse/OneLake cold path, as shown in this topic's architecture diagram."
+    },
+    {
+      "nodeId": "q-replay-required",
+      "title": "4. On the durable branch — is replay required?",
+      "explanation": "Ask whether a failed hot-path action must be guaranteed to eventually process, or whether manual recovery from the durable log is acceptable."
+    },
+    {
+      "nodeId": "outcome-idempotent-replay",
+      "title": "5a. Yes — build idempotent replay and dead-lettering",
+      "explanation": "Guaranteed eventual processing requires an explicit idempotency key and a dead-letter/replay procedure, matching the feedback edge on the architecture diagram."
+    },
+    {
+      "nodeId": "outcome-no-replay",
+      "title": "5b. No — durable log without a replay contract",
+      "explanation": "If manual recovery is acceptable, keep the durable history for audit but skip building an automated replay pipeline you don't need."
+    }
+  ]
+}

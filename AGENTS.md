@@ -75,6 +75,10 @@ in the same run.
   article embeds **every** one of them. Each embedded `content/diagrams/*` path must exist on
   disk before the article is published; the validation pass flags a missing embedded diagram as
   a **critical** issue, blocking `ready_to_share`.
+- Interactive diagrams require a matching `content/diagrams/<slug>.diagram.json` authored topology.
+  Every edge is labelled; every fact node cites evidence; every node drills into inputs, processing,
+  outputs, a worked example, controls, and failure modes. Run `npm run validate:diagrams`; caption-
+  derived fallback diagrams are not publishable.
 - **`## Internals` is mandatory on every article and design** (kept in sync with `CLAUDE.md`):
   fixed sub-headings `### Architecture & design`, `### How it works internally`,
   `### Performance characteristics` — grounded in verified L4/L5 claims where they exist

@@ -1,0 +1,206 @@
+{
+  "id": "metadata-driven-architecture-decision",
+  "title": "Metadata-Driven or Plain Pipeline?",
+  "purpose": "Make the boundary explicit between a plain, hard-coded pipeline and a metadata-driven framework, and show where the metadata contract should live once you commit to the pattern.",
+  "accessibleSummary": "The decision starts by asking how many data objects share the same load shape. A single one-off load stays a plain pipeline. Many sources with the same shape justify a metadata-driven framework, but the follow-up question is where the metadata contract lives: alongside the pipeline as simple parameters and a variable library, or in an external governed store when volume and audit requirements grow. Many sources with genuinely different shapes should not be forced into one contract — that path leads to the config-explosion warning this framework is meant to avoid.",
+  "longDescription": "This is a decision tree, not a linear flow: the same starting question about object count and shape produces three different branches with three different recommended outcomes. Branch 1, one source with a one-off shape, ends at 'keep it a plain pipeline' because a metadata contract adds indirection with no reuse payoff. Branch 2, many sources sharing the same load shape, is the case the pattern is built for; it then asks a second question about how many objects and how much audit/governance is required, forking again into 'lightweight config in pipeline parameters and a variable library' versus 'externalized versioned contract with a run ledger'. Branch 3, many sources with genuinely different shapes forced into a single generic contract, is flagged as an anti-pattern outcome that leads directly to the config-explosion failure mode documented on the architecture diagram — the fix there is multiple narrower contracts, not one contract trying to describe every shape.",
+  "type": "decision",
+  "topicSlug": "metadata-driven-architecture",
+  "capabilityIds": ["data-factory", "lakehouse", "purview"],
+  "revision": "2",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/metadata-driven-architecture-decision.svg",
+  "nodes": [
+    {
+      "id": "start-question",
+      "label": "How many sources, and do they share a load shape?",
+      "summary": "The root question: object count and shape similarity, not team size or budget, should drive this decision.",
+      "detail": "Before choosing an architecture, count the data objects you actually need to load and ask whether they share a load shape — same kind of source, same target pattern, same class of quality rules. This single question separates the three outcomes below far more reliably than 'how big is the team' or 'how important is this project'.",
+      "whyItMatters": "Choosing metadata-driven for a one-off load adds indirection with no payoff; choosing a plain pipeline for fifty same-shape sources guarantees config duplication and drift. Getting this question right up front avoids both mistakes.",
+      "classification": "pattern",
+      "layers": ["metadata"],
+      "evidence": [],
+      "tags": ["decision-root"],
+      "drill": {
+        "inputs": ["List of data objects the team needs to load", "For each object: source type, target Fabric item, load cadence"],
+        "processing": [
+          "Count distinct objects in scope",
+          "Group objects by load shape: same source type + same target pattern + same quality-rule class counts as 'same shape'",
+          "Identify how many distinct shape groups exist"
+        ],
+        "outputs": ["A shape-group count that routes to one of the three branches below"],
+        "example": "A team has 40 source tables from the same operational database, all incremental loads into bronze lakehouse tables with the same not-null/uniqueness rule pattern — one shape group of 40, routing toward the metadata-driven branch.",
+        "controls": ["How strictly 'same shape' is defined — too loose a definition forces unlike objects into one contract"],
+        "failureModes": [
+          "Grouping objects as 'same shape' because they're all databases, when their actual load logic differs enough to need separate handling"
+        ]
+      }
+    },
+    {
+      "id": "outcome-one-off",
+      "label": "Keep it a plain pipeline",
+      "summary": "One source, one-off shape: a plain parameterized pipeline is simpler and just as correct.",
+      "detail": "For a single data object with no expectation of near-duplicate siblings, a plain Data Factory pipeline with hard-coded or lightly parameterized settings is the right call. A metadata contract, config-resolution step, and run ledger are all indirection that has to be built and maintained for a reuse benefit that never materializes.",
+      "whyItMatters": "Metadata-driven frameworks are justified by reuse across many objects; applying the pattern to one object pays the framework's overhead cost with none of its benefit.",
+      "classification": "pattern",
+      "layers": ["orchestration"],
+      "evidence": [],
+      "tags": ["outcome", "plain-pipeline"],
+      "drill": {
+        "inputs": ["Single source connection details", "Target lakehouse/warehouse table"],
+        "processing": [
+          "Author one Data Factory pipeline with Copy/transform activities specific to this object",
+          "Parameterize only what genuinely varies between environments (dev/test/prod), via a variable library"
+        ],
+        "outputs": ["A working, simple pipeline with no separate metadata layer to maintain"],
+        "example": "A one-time historical backfill from a retiring legacy system into a lakehouse table is built as a single pipeline with environment parameters, with no expectation it will ever run again after the backfill.",
+        "controls": ["Environment parameterization via variable library, even for a one-off pipeline"],
+        "failureModes": [
+          "The 'one-off' load quietly gains siblings over time and nobody revisits the architecture decision, leading to copy-pasted pipelines instead of a deliberate framework"
+        ]
+      }
+    },
+    {
+      "id": "check-scale-governance",
+      "label": "How much scale and audit rigor is needed?",
+      "summary": "Second-order question once metadata-driven is justified: lightweight config vs. externalized governed contract.",
+      "detail": "Once object count and shared shape justify a metadata-driven approach, the next question is how the contract itself should be stored and governed: a small number of objects with modest audit needs can live comfortably as pipeline parameters backed by a variable library, while a larger object count or a compliance-driven audit requirement justifies externalizing the contract into its own versioned, governed store with a run ledger.",
+      "whyItMatters": "Over-building the contract layer for a handful of objects wastes effort; under-building it for dozens of objects with compliance requirements produces an ungoverned, unauditable config sprawl.",
+      "classification": "inference",
+      "layers": ["metadata", "governance"],
+      "evidence": [],
+      "tags": ["decision-fork"],
+      "drill": {
+        "inputs": ["Object count in the shared-shape group", "Applicable compliance/audit requirements", "Team's tooling maturity"],
+        "processing": [
+          "Estimate object count and expected growth rate",
+          "Check whether sensitivity labels, DLP, or lineage requirements apply (governance-relevant data)",
+          "Weigh the operational cost of building/maintaining an external contract store against the cost of parameter sprawl in pipeline definitions"
+        ],
+        "outputs": ["A routing decision between the lightweight-config and externalized-contract branches"],
+        "example": "A team with 12 internal reporting tables and no regulatory scope chooses lightweight pipeline parameters; a team with 60 objects feeding a HIPAA-scoped reporting layer chooses an externalized, versioned contract with full lineage capture.",
+        "controls": ["Threshold at which the team commits to building the external contract store", "Whether governance requirements are already known or discovered later"],
+        "failureModes": [
+          "Starting lightweight and never revisiting the decision as object count and compliance scope both grow past the point where parameters-in-pipeline is still manageable"
+        ]
+      }
+    },
+    {
+      "id": "outcome-lightweight-config",
+      "label": "Lightweight: pipeline parameters + variable library",
+      "summary": "Modest object count, modest audit needs: parameters and a variable library are enough contract.",
+      "detail": "A small set of same-shape objects can be driven by a single reusable pipeline whose per-object differences live as rows in a parameter table or entries in a Fabric variable library, without standing up a separate contract store, config-resolution service, or dedicated run ledger beyond the pipeline's own run history.",
+      "whyItMatters": "This is the pragmatic middle ground — reuse without the operational overhead of a fully externalized framework, appropriate when scale and governance needs are both modest.",
+      "classification": "pattern",
+      "layers": ["metadata", "orchestration"],
+      "evidence": [],
+      "tags": ["outcome", "lightweight"],
+      "drillTarget": { "kind": "capability", "slug": "data-factory", "label": "Data Factory capability" },
+      "drill": {
+        "inputs": ["Small object list (roughly single digits to low tens)", "Shared load shape across those objects"],
+        "processing": [
+          "Store per-object values (connection name, target table, watermark column) in a variable library or parameter table",
+          "Schedule the pipeline can pass parameter values sourced from the variable library, centralizing config for promotion across environments",
+          "Reuse the pipeline's native run history as the de facto run ledger"
+        ],
+        "outputs": ["A small, auditable set of parameter entries and a working reusable pipeline"],
+        "example": "Twelve internal reporting tables share one pipeline; each table's connection string and target path live as entries in a variable library referenced by the pipeline's schedule.",
+        "controls": ["Parameter name matching between the variable library entry and the pipeline's declared parameters"],
+        "failureModes": [
+          "A parameter name mismatch between the schedule and the pipeline's declared parameter names is silently ignored at run time rather than raising an error, so a typo produces a default value instead of a failure"
+        ]
+      }
+    },
+    {
+      "id": "outcome-externalized-contract",
+      "label": "Externalized: versioned contract + run ledger",
+      "summary": "Larger object count or real audit requirements: build the full metadata-driven framework.",
+      "detail": "A larger or compliance-sensitive set of same-shape objects justifies the full pattern described on the architecture diagram: a versioned metadata contract living outside the pipeline definition, a config-resolution step, and a dedicated run ledger that records status, watermark, and quality evidence per run, tied into Fabric's lineage and monitoring surface.",
+      "whyItMatters": "This is where the framework earns its overhead — dozens of objects with audit obligations cannot be safely governed as ad hoc pipeline parameters.",
+      "classification": "pattern",
+      "layers": ["metadata", "governance", "observability"],
+      "evidence": [],
+      "tags": ["outcome", "full-framework"],
+      "drillTarget": { "kind": "diagram", "slug": "metadata-driven-architecture-architecture", "label": "See the full architecture" },
+      "drill": {
+        "inputs": ["Larger object list (tens or more) sharing a load shape", "Compliance/audit or lineage requirements"],
+        "processing": [
+          "Externalize the contract into its own versioned store, separate from any single pipeline definition",
+          "Build a config-resolution step that reads the contract plus the run ledger's watermark",
+          "Wire quality evidence and lineage capture into Fabric's governance surface for audit"
+        ],
+        "outputs": ["The full metadata-driven pipeline shown on the architecture diagram"],
+        "example": "A 60-object, HIPAA-scoped reporting layer gets a dedicated contract store, a config-resolution notebook, and a run ledger table whose entries are scanned by Purview Data Map for lineage.",
+        "controls": ["Contract schema governance (who approves new fields/entries)", "Which run outcome advances the watermark"],
+        "failureModes": [
+          "Building the full framework's machinery before validating it against one real object end-to-end, discovering structural problems only after generalizing"
+        ]
+      }
+    },
+    {
+      "id": "outcome-shape-mismatch-warning",
+      "label": "Anti-pattern: forcing mismatched shapes into one contract",
+      "summary": "Many sources, but genuinely different shapes: one contract trying to describe everything becomes the config-explosion failure.",
+      "detail": "When sources are numerous but do not actually share a load shape — different source paradigms, different target structures, fundamentally different quality-rule classes — forcing them into a single generic metadata contract does not achieve reuse. It produces a contract riddled with per-object conditional fields, which is exactly the 'metadata becomes a hidden programming language' failure mode called out on the architecture diagram.",
+      "whyItMatters": "This is the most common way teams overreach with the pattern: mistaking 'many sources' alone, without checking shape similarity, as sufficient justification for one shared contract.",
+      "classification": "warning",
+      "layers": ["metadata"],
+      "evidence": [],
+      "tags": ["antipattern", "outcome"],
+      "drillTarget": { "kind": "diagram", "slug": "metadata-driven-architecture-architecture", "label": "See the failure mode on the architecture diagram" },
+      "drill": {
+        "inputs": ["Many objects incorrectly grouped as 'same shape' during the root question"],
+        "processing": [
+          "Attempt to fit dissimilar load logic (differing source types, target structures, rule classes) into one contract schema",
+          "Add conditional fields and per-object overrides to accommodate each mismatch as it's discovered"
+        ],
+        "outputs": ["A single, overloaded contract that no longer functions as declarative configuration"],
+        "example": "A team forces five REST API sources, three file drops, and two database sources into one contract schema; the entry for each source type ends up with a different, mutually exclusive set of fields, and the resolution logic has to special-case each source type anyway.",
+        "controls": ["Splitting into multiple narrower contracts, one per genuinely shared shape, instead of one universal contract"],
+        "failureModes": [
+          "The single contract becomes unreadable without also reading the resolution code, defeating the purpose of externalizing configuration",
+          "Onboarding a new source type requires understanding the entire existing contract's conditional logic rather than adding one new, independent entry"
+        ]
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e-start-oneoff", "from": "start-question", "to": "outcome-one-off", "label": "one source, one-off shape", "layer": "metadata", "kind": "branch" },
+    { "id": "e-start-scale", "from": "start-question", "to": "check-scale-governance", "label": "many sources, same shape", "layer": "metadata", "kind": "branch" },
+    { "id": "e-start-mismatch", "from": "start-question", "to": "outcome-shape-mismatch-warning", "label": "many sources, different shapes", "layer": "metadata", "kind": "branch" },
+    { "id": "e-scale-lightweight", "from": "check-scale-governance", "to": "outcome-lightweight-config", "label": "modest scale, modest audit needs", "layer": "metadata", "kind": "branch" },
+    { "id": "e-scale-externalized", "from": "check-scale-governance", "to": "outcome-externalized-contract", "label": "larger scale or audit-driven", "layer": "governance", "kind": "branch" }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "start-question",
+      "title": "Ask the shape question first",
+      "explanation": "Before picking an architecture, establish how many objects you have and whether they genuinely share a load shape — this single fork determines everything downstream."
+    },
+    {
+      "nodeId": "outcome-one-off",
+      "title": "One source: stay simple",
+      "explanation": "A single one-off load doesn't justify a metadata layer; a plain parameterized pipeline is the correct, simpler answer."
+    },
+    {
+      "nodeId": "outcome-shape-mismatch-warning",
+      "title": "Watch for the false-positive case",
+      "explanation": "Many sources alone isn't sufficient justification — if they don't share a real load shape, forcing them into one contract produces the config-explosion anti-pattern instead of reuse."
+    },
+    {
+      "nodeId": "check-scale-governance",
+      "title": "Same shape: now size the contract",
+      "explanation": "Once metadata-driven is justified, the next question is how heavyweight the contract itself needs to be, based on object count and audit requirements."
+    },
+    {
+      "nodeId": "outcome-lightweight-config",
+      "title": "Small scale: keep the contract lightweight",
+      "explanation": "A handful of same-shape objects with modest governance needs can be driven by pipeline parameters and a variable library, no separate contract store required."
+    },
+    {
+      "nodeId": "outcome-externalized-contract",
+      "title": "Larger scale: build the full framework",
+      "explanation": "Dozens of objects or real audit requirements justify externalizing the contract with a versioned store and a run ledger — this is where the full architecture diagram applies."
+    }
+  ]
+}

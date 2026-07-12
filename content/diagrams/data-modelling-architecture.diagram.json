@@ -1,0 +1,300 @@
+{
+  "id": "data-modelling-architecture",
+  "title": "Data Modelling in Microsoft Fabric — from business concept to semantic contract",
+  "purpose": "Shows how a Fabric data-modelling effort moves from a conceptual business model through a logical modelling technique choice, into a physical layer that branches Lakehouse vs Warehouse, and converges on a semantic model — including where Direct Lake changes the storage-mode trade-off and where mixed-grain design breaks the whole chain.",
+  "accessibleSummary": "A branching architecture diagram with nine nodes. It starts at a conceptual business model, moves to a logical model decision point that splits into dimensional (star/snowflake) and data-vault modelling techniques, then both feed a physical-layer choice between a Fabric Lakehouse and a Fabric Warehouse. Both physical options converge on a semantic model, which can run in Direct Lake mode for near-real-time queries without a separate import refresh. A ninth node, marked as a warning, calls out mixed-grain fact tables and Direct Lake fallback to DirectQuery as the two concrete failure modes that break this chain in production.",
+  "longDescription": "This diagram traces the Fabric-recommended data-modelling path end to end. It begins with a conceptual business model — the bounded entities and grain a team agrees on before touching any Fabric item, which is pattern guidance rather than a product feature. That flows into a logical modelling decision: teams choose between a dimensional (star/snowflake) design optimised for BI query patterns, or a data-vault design optimised for auditability and slowly-changing source integration. Either logical technique is then implemented physically in one of two Fabric items that share the same underlying Delta-on-OneLake storage and SQL engine: a Lakehouse (Spark-first, handles unstructured data, single-table writes) or a Warehouse (T-SQL-first, full multi-table ACID transactions). Both physical items expose their Delta tables to a semantic model, the actual BI consumption contract, which can be built in Import, DirectQuery, or Direct Lake storage mode. Direct Lake is called out as its own node because it changes the trade-off materially: it reads Parquet files directly from OneLake without a memory-resident import copy, but it has two documented flavors (Direct Lake on OneLake vs Direct Lake on SQL) with different security and fallback behaviour. The diagram's warning node names the two real failure modes that break this path: mixing multiple grains in a single fact table, which corrupts the dimensional model long before it reaches the semantic layer, and a Direct Lake model silently falling back to slower DirectQuery execution when its tables are built on SQL views instead of base tables.",
+  "type": "architecture",
+  "topicSlug": "data-modelling",
+  "capabilityIds": ["lakehouse", "warehouse", "semantic-model", "direct-lake"],
+  "revision": "2",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/data-modelling-architecture.svg",
+  "nodes": [
+    {
+      "id": "conceptual-model",
+      "label": "Conceptual business model",
+      "summary": "Bounded entities, grain, and ownership agreed before any Fabric item is created.",
+      "detail": "The conceptual model is the plain-language agreement on what a business entity is, what one row of a fact represents (the grain), and who owns that definition. Microsoft's Fabric guidance does not prescribe this step as a product feature — it is authored pattern advice recommending a bounded data product be scoped explicitly, including owners, source contract, and quality rules, before generalising into implementation.",
+      "whyItMatters": "Every downstream failure mode in this diagram — mixed grain, wrong storage mode, brittle semantic model — traces back to a grain or ownership decision that was never made explicit here.",
+      "classification": "pattern",
+      "layers": ["governance"],
+      "evidence": [],
+      "tags": ["modelling", "governance"],
+      "drill": {
+        "inputs": ["Stakeholder interviews", "Existing source-system entity definitions", "Reporting requirements"],
+        "processing": [
+          "Name the bounded business entities (e.g. Customer, Order, Shipment)",
+          "Agree the grain of each fact (one row = one what?)",
+          "Assign an owner and a source-of-truth contract per entity",
+          "Write down quality rules and the security boundary before build starts"
+        ],
+        "outputs": ["A written entity/grain glossary", "An owner map used to gate the logical model review"],
+        "example": "A retail team agrees 'one Order fact row = one order line, not one order' before any table is built, avoiding a grain mismatch that would otherwise surface only after the semantic model is in front of report authors.",
+        "controls": ["Grain definition sign-off", "Entity ownership register", "Source-of-truth contract per entity"],
+        "failureModes": ["Framework-first delivery that skips this step and starts with tables, leaving grain implicit and undocumented until it breaks a report"]
+      }
+    },
+    {
+      "id": "logical-model",
+      "label": "Logical model: dimensional vs vault",
+      "summary": "The design technique decision point — star/snowflake vs data vault vs plain canonical.",
+      "detail": "The logical model translates the conceptual entities into a normalized or semi-normalized structure independent of any specific Fabric item. Fabric does not mandate a modelling technique here; teams choose based on query pattern (BI-facing dimensional) versus source-integration and audit needs (data vault), or a plain canonical/3NF model when neither specialised technique is warranted. This is architectural interpretation informed by the recommended conceptual-to-physical flow in the topic's own guidance, not a Fabric product feature.",
+      "whyItMatters": "This is the branch point that determines whether the physical Lakehouse/Warehouse tables end up query-optimised for BI (dimensional) or integration-optimised for change tracking and lineage (vault) — retrofitting the wrong choice later means re-loading history.",
+      "classification": "inference",
+      "layers": ["data", "governance"],
+      "evidence": [],
+      "tags": ["modelling", "logical-model"],
+      "drill": {
+        "inputs": ["Conceptual entity/grain glossary", "Known query patterns (BI dashboards vs audit/lineage needs)"],
+        "processing": [
+          "Evaluate whether the primary consumer is BI reporting (favours dimensional) or multi-source integration with change history (favours vault)",
+          "Pick dimensional, vault, or a plain canonical/3NF structure per subject area — the choice can vary by subject area within one platform",
+          "Define conformed dimensions or hub/link/satellite structures at this logical layer, before physical tables exist"
+        ],
+        "outputs": ["A logical schema handed to the physical Lakehouse or Warehouse build", "A documented rationale for the chosen technique per subject area"],
+        "example": "A finance subject area with strict audit requirements is logically modelled as data vault (hubs for GL account, links for transactions, satellites for changing attributes), while the adjacent sales subject area is modelled dimensionally for the BI team's star-schema reports.",
+        "controls": ["Technique choice recorded per subject area", "Conformed dimension registry for dimensional designs", "Hub/link/satellite naming standard for vault designs"],
+        "failureModes": ["Picking dimensional for a highly volatile, multi-source integration area and then having to bolt on ad-hoc history tracking later", "Picking vault for a small, stable BI-only subject area and paying unnecessary join complexity at query time"]
+      }
+    },
+    {
+      "id": "dimensional-technique",
+      "label": "Dimensional (star / snowflake)",
+      "summary": "Fact + conformed dimension tables optimised for BI query patterns.",
+      "detail": "Dimensional modelling organises data into fact tables (measurements at an agreed grain) and dimension tables (descriptive attributes), joined in a star or snowflake shape. It is a modelling technique, not a Fabric product behaviour — Fabric's own topic guidance recommends validating the technique against workload-specific constraints rather than treating it as a guarantee.",
+      "whyItMatters": "This is the structure the semantic model layer is built to consume efficiently — most Direct Lake and Import-mode performance guidance assumes a dimensional shape underneath.",
+      "classification": "pattern",
+      "layers": ["data"],
+      "evidence": [],
+      "tags": ["modelling", "star-schema"],
+      "drill": {
+        "inputs": ["Logical schema for a BI-facing subject area"],
+        "processing": [
+          "Define one fact table per business process at a single, explicit grain",
+          "Build conformed dimension tables shared across fact tables (e.g. one Date dimension for Sales and Returns)",
+          "Choose star (denormalized dimensions) or snowflake (normalized dimension hierarchies) per dimension based on volatility and size"
+        ],
+        "outputs": ["Fact and dimension table definitions ready to physicalise in Lakehouse or Warehouse Delta tables"],
+        "example": "A Sales fact table at grain 'one row per order line' joins to Date, Product, and Customer dimensions; a separate Returns fact reuses the same Date and Product dimensions so both facts roll up consistently.",
+        "controls": ["One documented grain per fact table", "Shared/conformed dimension list", "Slowly changing dimension (SCD) type per dimension attribute"],
+        "failureModes": ["A fact table that silently mixes two grains (e.g. order-line rows and order-header rows in one table) — this is the platform's most common and hardest-to-detect modelling defect, called out separately in this diagram's warning node"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse capability" }
+    },
+    {
+      "id": "vault-technique",
+      "label": "Data vault (hub / link / satellite)",
+      "summary": "Auditable, insert-only structure for multi-source integration and history.",
+      "detail": "Data vault splits entities into hubs (business keys), links (relationships/transactions), and satellites (descriptive, time-stamped attributes), all loaded insert-only. It is a modelling technique choice, not a Fabric product feature, and suits environments with multiple volatile source systems and a hard audit requirement.",
+      "whyItMatters": "Vault's insert-only satellites give a full audit trail that a dimensional model does not provide by default, at the cost of more joins at query time — a trade-off the physical layer (Lakehouse vs Warehouse) inherits directly.",
+      "classification": "pattern",
+      "layers": ["data", "governance"],
+      "evidence": [],
+      "tags": ["modelling", "data-vault"],
+      "drill": {
+        "inputs": ["Logical schema for a multi-source, audit-sensitive subject area"],
+        "processing": [
+          "Identify business keys and model one hub table per key",
+          "Model transactions/relationships between business keys as link tables",
+          "Model descriptive, time-varying attributes as satellite tables, loaded insert-only with load-date and source metadata"
+        ],
+        "outputs": ["Hub/link/satellite table definitions ready to physicalise as Delta tables"],
+        "example": "A GL Account hub, a Transaction link connecting Account and Cost Centre hubs, and a satellite recording account status changes over time — every change is a new satellite row, never an update.",
+        "controls": ["Business key standard per hub", "Load-date and record-source columns on every satellite", "No update/delete on satellite rows"],
+        "failureModes": ["Treating satellites as mutable and updating rows in place, which destroys the audit trail vault exists to provide"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse capability" }
+    },
+    {
+      "id": "lakehouse-physical",
+      "label": "Lakehouse physical layer",
+      "summary": "Delta tables on OneLake, Spark-first, handles unstructured data alongside structured tables.",
+      "detail": "A Fabric Lakehouse stores all managed tables as Delta Lake format over Parquet on OneLake, giving ACID transactions, schema enforcement, and time travel. It splits storage into a managed Tables area (Delta only) and a Files area for unstructured or non-Delta data, and every lakehouse auto-provisions a read-only SQL analytics endpoint over its Delta tables for T-SQL exploration.",
+      "whyItMatters": "This is where the dimensional or vault logical model becomes physical rows — the choice of Lakehouse here means Spark is the primary write path and single-table operations only, no multi-table transactions.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "lakehouse-overview", "note": "All managed lakehouse tables use the Delta Lake storage format, supplying ACID transactions, schema enforcement, and time travel over Parquet, and storage splits into a managed Tables area and a Files area." }
+      ],
+      "tags": ["lakehouse", "delta-lake"],
+      "drill": {
+        "inputs": ["Dimensional or vault table definitions from the logical model"],
+        "processing": [
+          "Land tables via Spark notebooks, pipeline copy activities, Spark job definitions, Dataflows Gen2, or OneLake shortcuts",
+          "Fabric auto-validates Delta format on write to the managed Tables area and registers the table in the metastore",
+          "SQL analytics endpoint auto-provisions read-only T-SQL access over the same Delta tables"
+        ],
+        "outputs": ["Delta tables on OneLake, immediately queryable from Spark SQL or T-SQL with no manual CREATE TABLE"],
+        "example": "A gold-layer dimensional fact table is written by a Spark notebook as a managed Delta table; it appears in the SQL analytics endpoint moments later with no separate registration step.",
+        "controls": ["Choice of ingestion route (notebook, pipeline, Dataflow Gen2, shortcut)", "Tables vs Files area placement"],
+        "failureModes": ["Landing non-Delta formats (Parquet, CSV) into the Tables area expecting SQL-endpoint visibility — only Delta tables surface there, including via shortcuts"],
+        "metrics": []
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse capability" }
+    },
+    {
+      "id": "warehouse-physical",
+      "label": "Warehouse physical layer",
+      "summary": "Delta tables on OneLake, T-SQL-first, full multi-table ACID transactions.",
+      "detail": "A Fabric Warehouse is an enterprise-scale relational warehouse also built on Delta tables over OneLake, but development is primarily T-SQL with a large SQL Database Engine surface: multi-table ACID transactions, materialized views, stored procedures. Storage and compute are separated, allowing near-instant scaling, and the query engine is autonomously managed with no user-facing tuning knobs.",
+      "whyItMatters": "Warehouse is the physical choice when the logical model needs multi-table transactional writes or a T-SQL-first team — a capability the Lakehouse branch of this same diagram does not offer.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "warehouse-overview", "note": "Warehouse tables are physically stored as Delta tables on OneLake; development is primarily T-SQL with full multi-table ACID transactions, materialized views, and stored procedures, and storage/compute are separated for near-instant scaling." }
+      ],
+      "tags": ["warehouse", "delta-lake", "t-sql"],
+      "drill": {
+        "inputs": ["Dimensional or vault table definitions from the logical model"],
+        "processing": [
+          "Load via COPY INTO, Data Factory pipelines, Dataflows, Spark bulk writes, or cross-database CTAS/INSERT SELECT",
+          "Warehouse engine commits multi-table transactions as a single ACID unit",
+          "Data auto-publishes to OneLake Files in Delta format for external/other-workload reads"
+        ],
+        "outputs": ["Delta tables on OneLake queryable via T-SQL with a SQL analytics endpoint, and readable by other Fabric workloads with no export job"],
+        "example": "A vault load inserts a new hub row and its related link row for a transaction as one multi-table T-SQL transaction, which the Lakehouse's single-table write model cannot guarantee atomically.",
+        "controls": ["Ingestion route (COPY INTO, pipeline, Spark bulk write, cross-database CTAS)", "Materialized views for pre-aggregated reporting"],
+        "failureModes": ["Choosing Warehouse for a workload that is actually Spark-first and unstructured-data-heavy, where T-SQL-centric tooling adds friction the Lakehouse would not"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse capability" }
+    },
+    {
+      "id": "semantic-model-layer",
+      "label": "Semantic model (consumption contract)",
+      "summary": "The Analysis Services tabular model report authors actually query — Import, DirectQuery, or Direct Lake.",
+      "detail": "A semantic model is a data model built on Analysis Services tabular technology (apart from streaming models) that report authors query. It supports three storage modes distinguished by whether data is copied into memory (Import) or left at the source at query time (DirectQuery), plus Composite models mixing both. Row-level security roles can be dynamic (filtered by the querying user's identity) or static.",
+      "whyItMatters": "This is the single consumption contract both the Lakehouse and Warehouse physical branches converge on — the storage-mode choice made here, not the physical layer underneath, is what determines whether report queries hit fresh data or a scheduled snapshot.",
+      "classification": "fact",
+      "layers": ["data", "security"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "Semantic models are Analysis Services tabular models supporting Import, DirectQuery, and Composite storage modes, with dynamic or static row-level security roles." }
+      ],
+      "tags": ["semantic-model", "power-bi"],
+      "drill": {
+        "inputs": ["Delta tables from either the Lakehouse or Warehouse physical layer"],
+        "processing": [
+          "Choose storage mode: Import (loaded fully into memory, refreshed on a schedule), DirectQuery (forwards queries to source live), or Composite (mixes both per table)",
+          "Define row-level security roles as dynamic (filtered by report-user identity) or static (one fixed filter for all assigned users)",
+          "Publish the model as the governed contract report authors build against"
+        ],
+        "outputs": ["A published semantic model consumed by Power BI reports"],
+        "example": "A finance semantic model uses a dynamic RLS role so a regional controller only sees their region's GL transactions, sourced from the same Warehouse Delta tables every controller's report queries.",
+        "controls": ["Storage mode per table (Import/DirectQuery/Composite)", "RLS role type (dynamic/static)", "Refresh schedule for Import-mode tables"],
+        "failureModes": ["Import-mode models serving a stale snapshot because a scheduled refresh silently failed, while DirectQuery models forward every query to source and stay current but pay per-query latency"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic model capability" }
+    },
+    {
+      "id": "direct-lake-consumption",
+      "label": "Direct Lake mode",
+      "summary": "Reads Parquet straight from OneLake without an Import-mode memory copy — two flavors with different security paths.",
+      "detail": "Direct Lake is a semantic-model storage mode that reads data directly from OneLake instead of importing a copy into memory. It has two flavors: Direct Lake on OneLake (OneLake security, richer modelling features, faster queries, the default for Power BI Desktop/service-created models) and Direct Lake on SQL (needed when SQL-endpoint security rules under delegated identity apply, or when DirectQuery fallback is required). Direct Lake on OneLake also supports composite models, keeping large fact tables in Direct Lake while dimension tables use Import or DirectQuery.",
+      "whyItMatters": "Direct Lake is the mode that makes the dimensional fact table from this diagram's logical-model branch queryable near-live without a refresh job — but the flavor chosen changes which security model and fallback behaviour apply.",
+      "classification": "fact",
+      "layers": ["data", "security"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "Direct Lake has two flavors — Direct Lake on OneLake and Direct Lake on SQL — distinguished by security model, modelling features, and DirectQuery-fallback support; Direct Lake on OneLake also supports composite models mixing Direct Lake fact tables with Import/DirectQuery dimensions." }
+      ],
+      "tags": ["direct-lake", "semantic-model"],
+      "drill": {
+        "inputs": ["Delta tables from the Lakehouse or Warehouse physical layer, via the SQL analytics endpoint or OneLake directly"],
+        "processing": [
+          "Create the model from the SQL analytics endpoint page, which offers a choice of Direct Lake flavor",
+          "Direct Lake on OneLake: shared expression points straight at OneLake storage; OneLake APIs handle schema discovery, security, and data loading, no SQL endpoint involved",
+          "Direct Lake on SQL: shared expression points at the SQL analytics endpoint, consulted only for schema/security discovery — data still reads from OneLake unless a query falls back to DirectQuery"
+        ],
+        "outputs": ["A Direct Lake semantic model with near-real-time queries against the physical Delta tables, no scheduled refresh required"],
+        "example": "A Warehouse's dimensional fact table is exposed through Direct Lake on SQL because the SQL analytics endpoint runs in delegated identity mode, so every query is authorised through SQL-endpoint security rules rather than OneLake security directly.",
+        "controls": ["Flavor selection at model creation (OneLake vs SQL)", "Base-table vs SQL-view sourcing for each Direct Lake table", "Composite model mixing for very large fact tables"],
+        "failureModes": ["Basing a Direct Lake on SQL table on a SQL view instead of a base table, forcing every query on that table into slower DirectQuery fallback"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake capability" }
+    },
+    {
+      "id": "mixed-grain-failure",
+      "label": "Mixed grain & fallback failures",
+      "summary": "The two concrete ways this modelling chain breaks: mixed-grain fact tables, and Direct Lake view-based fallback.",
+      "detail": "Two documented failure modes recur along this path. First, a fact table that mixes rows of different grain (e.g. order-header and order-line rows in one table) corrupts every downstream dimensional aggregation, and it is a logical-model defect that Fabric's tooling will not detect for you. Second, a Direct Lake on SQL table built on a SQL view rather than a base table forces every query against it into DirectQuery fallback, silently degrading the near-real-time performance the semantic-model layer was chosen for.",
+      "whyItMatters": "Both failures are invisible until report authors notice wrong numbers or slow dashboards — neither is caught by schema validation, because both tables remain structurally valid Delta tables.",
+      "classification": "warning",
+      "layers": ["data", "observability"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode." }
+      ],
+      "tags": ["anti-pattern", "failure-mode"],
+      "drill": {
+        "inputs": ["A fact table with an undocumented or inconsistent grain", "A Direct Lake on SQL table sourced from a SQL view"],
+        "processing": [
+          "Mixed grain: aggregations silently double-count or under-count because two different row meanings are summed together as if they were one",
+          "View-based fallback: the Direct Lake engine detects the underlying object is a view, not a base table, and routes every query for that table through DirectQuery instead of direct Parquet reads"
+        ],
+        "outputs": ["Wrong report totals (mixed grain) or degraded query latency (fallback) — both reaching end users before the root cause is diagnosed"],
+        "example": "A Sales fact table accidentally receives both order-line rows from one pipeline and order-header summary rows from a second backfill job; a 'total revenue' measure silently overstates revenue because header rows double-count the line rows already present.",
+        "controls": ["Grain assertion checks in the load pipeline (row-count or key-uniqueness tests per load)", "Preferring base tables over views for every Direct Lake on SQL source table", "Reviewing TMDL/M expressions to confirm which Direct Lake flavor and source object type is actually in use"],
+        "failureModes": ["Both failures pass Delta schema validation and produce a structurally valid table, so they are only caught by grain/row-count testing or by report authors noticing wrong or slow results"]
+      }
+    }
+  ],
+  "edges": [
+    { "id": "e-concept-logical", "from": "conceptual-model", "to": "logical-model", "label": "translated into a logical design", "layer": "governance", "kind": "flow" },
+    { "id": "e-logical-dimensional", "from": "logical-model", "to": "dimensional-technique", "label": "BI-facing subject area", "layer": "data", "kind": "branch" },
+    { "id": "e-logical-vault", "from": "logical-model", "to": "vault-technique", "label": "multi-source, audit-sensitive area", "layer": "data", "kind": "branch" },
+    { "id": "e-dimensional-lakehouse", "from": "dimensional-technique", "to": "lakehouse-physical", "label": "Spark-first physicalisation", "layer": "compute", "kind": "flow" },
+    { "id": "e-dimensional-warehouse", "from": "dimensional-technique", "to": "warehouse-physical", "label": "T-SQL-first physicalisation", "layer": "compute", "kind": "flow" },
+    { "id": "e-vault-lakehouse", "from": "vault-technique", "to": "lakehouse-physical", "label": "insert-only Spark loads", "layer": "compute", "kind": "flow" },
+    { "id": "e-vault-warehouse", "from": "vault-technique", "to": "warehouse-physical", "label": "multi-table transactional loads", "layer": "compute", "kind": "flow" },
+    { "id": "e-lakehouse-semantic", "from": "lakehouse-physical", "to": "semantic-model-layer", "label": "SQL analytics endpoint exposes Delta tables", "layer": "data", "kind": "flow" },
+    { "id": "e-warehouse-semantic", "from": "warehouse-physical", "to": "semantic-model-layer", "label": "SQL analytics endpoint exposes Delta tables", "layer": "data", "kind": "flow" },
+    { "id": "e-semantic-directlake", "from": "semantic-model-layer", "to": "direct-lake-consumption", "label": "storage mode = Direct Lake", "layer": "data", "kind": "flow" },
+    { "id": "e-dimensional-warning", "from": "dimensional-technique", "to": "mixed-grain-failure", "label": "undocumented grain risk", "layer": "observability", "kind": "feedback" },
+    { "id": "e-directlake-warning", "from": "direct-lake-consumption", "to": "mixed-grain-failure", "label": "view-sourced table risk", "layer": "observability", "kind": "feedback" }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "conceptual-model",
+      "title": "1. Start with the business concept, not the table",
+      "explanation": "Before any Fabric item exists, agree the bounded entities, the grain of each fact, and who owns that definition. This is pattern guidance, not a Fabric feature — but every failure later in this diagram traces back to a decision skipped here."
+    },
+    {
+      "nodeId": "logical-model",
+      "title": "2. Choose the logical modelling technique",
+      "explanation": "Translate the conceptual entities into a logical design. The path branches here: a BI-facing subject area favours dimensional modelling; a multi-source, audit-sensitive area favours data vault. Both are valid Fabric-agnostic techniques — Fabric does not prescribe either."
+    },
+    {
+      "nodeId": "dimensional-technique",
+      "title": "3a. Dimensional: facts and conformed dimensions",
+      "explanation": "Star or snowflake schema, built around an explicit fact grain and shared dimensions. This is the branch most semantic-model and Direct Lake performance guidance assumes underneath it."
+    },
+    {
+      "nodeId": "vault-technique",
+      "title": "3b. Data vault: hubs, links, satellites",
+      "explanation": "Insert-only structure for auditability and multi-source integration. Trades query-time join complexity for a full change history that dimensional models don't provide by default."
+    },
+    {
+      "nodeId": "lakehouse-physical",
+      "title": "4a. Physicalise in a Lakehouse",
+      "explanation": "Either logical technique can land as managed Delta tables in a Lakehouse — Spark-first, handles unstructured Files alongside Tables, single-table writes only."
+    },
+    {
+      "nodeId": "warehouse-physical",
+      "title": "4b. Physicalise in a Warehouse",
+      "explanation": "Or land as Delta tables in a Warehouse — T-SQL-first, full multi-table ACID transactions, the same underlying Delta-on-OneLake storage as the Lakehouse branch."
+    },
+    {
+      "nodeId": "semantic-model-layer",
+      "title": "5. Converge on the semantic model",
+      "explanation": "Both physical branches expose their Delta tables through a SQL analytics endpoint that becomes the source for a single semantic model — the actual contract report authors build against, in Import, DirectQuery, or Composite storage mode."
+    },
+    {
+      "nodeId": "direct-lake-consumption",
+      "title": "6. Direct Lake changes the storage-mode trade-off",
+      "explanation": "Instead of importing a memory copy, Direct Lake reads Parquet straight from OneLake. Two flavors exist — Direct Lake on OneLake and Direct Lake on SQL — with different security paths and fallback behaviour."
+    },
+    {
+      "nodeId": "mixed-grain-failure",
+      "title": "7. Where this chain actually breaks",
+      "explanation": "Two real failure modes recur: a fact table mixing grains corrupts aggregations invisibly, and a Direct Lake on SQL table built on a view silently falls back to slower DirectQuery. Neither is caught by schema validation — both look like structurally valid Delta tables."
+    }
+  ]
+}

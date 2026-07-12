@@ -1,0 +1,606 @@
+{
+  "id": "metadata-driven-architecture-architecture",
+  "title": "Metadata-Driven Architecture on Fabric",
+  "purpose": "Show how a versioned metadata contract drives reusable Fabric pipelines and notebooks, and how run state feeds back into the next run instead of being thrown away.",
+  "accessibleSummary": "A metadata contract describing sources and load rules is resolved into per-object configuration, which a single reusable pipeline and set of reusable notebooks execute against Fabric compute. Each run writes state, quality, and lineage telemetry to a run ledger; the ledger both proves what happened and supplies the watermark the next run reads to stay restartable. Two warning nodes call out where this pattern breaks: an over-grown metadata schema that turns into an untyped programming language, and non-idempotent writes that corrupt data on retry.",
+  "longDescription": "This diagram traces one execution of a metadata-driven load on Microsoft Fabric. A versioned metadata contract (object list, source connection, target shape, quality rules, load type) is resolved at run start into a concrete parameter set for one data object. That resolved configuration parameterizes a single reusable Data Factory pipeline, which in turn invokes reusable Spark notebooks or Fabric compute rather than one pipeline per source. Execution lands data in a lakehouse via Delta-managed tables. Every run — success or failure — writes to a run ledger that records status, rows processed, and the watermark for the next run; that ledger is what makes the framework restartable, and it feeds back into config resolution for the following run (the feedback edge). Quality checks evaluate the landed data against the contract's rules and post evidence forward; lineage and telemetry are captured for governance and observability. Two warning nodes are deliberately included: the metadata contract can accrete conditional logic until it functions as an undocumented programming language understood by no single person, and a non-idempotent pipeline write will corrupt or duplicate data if a failed run is blindly retried without the ledger's watermark discipline.",
+  "type": "architecture",
+  "topicSlug": "metadata-driven-architecture",
+  "capabilityIds": [
+    "data-factory",
+    "spark",
+    "lakehouse",
+    "purview"
+  ],
+  "revision": "2",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/metadata-driven-architecture-architecture.svg",
+  "nodes": [
+    {
+      "id": "metadata-contract",
+      "label": "Versioned metadata contract",
+      "summary": "Object list, source, target shape, quality rules, load type — versioned like code.",
+      "detail": "A structured, version-controlled record (table, file, or config store) listing every data object the framework loads: its source connection, target Fabric item, column/type expectations, quality rules, load type (full vs incremental), and ownership. Because it is versioned, a schema or rule change is auditable and reversible, the same discipline applied to claims in this knowledge base.",
+      "whyItMatters": "This is the single place that defines what 'correct' looks like for every object. If it drifts silently, every downstream run inherits the drift with no record of why.",
+      "classification": "pattern",
+      "layers": [
+        "metadata",
+        "governance"
+      ],
+      "evidence": [],
+      "tags": [
+        "contract",
+        "config"
+      ],
+      "drill": {
+        "inputs": [
+          "Source system inventory",
+          "Business rules from data owners",
+          "Prior contract version"
+        ],
+        "processing": [
+          "Author or edit one row/entry per data object",
+          "Validate the new version against a schema (required fields, allowed load types)",
+          "Commit as a new version; tag the prior version as superseded"
+        ],
+        "outputs": [
+          "Machine-readable contract consumed by config resolution",
+          "Change history for audit"
+        ],
+        "example": "A new source table 'returns' is added to the contract with load_type=incremental, watermark_column=updated_at, and a not-null rule on order_id; the contract version increments from v14 to v15.",
+        "controls": [
+          "Who can approve a new contract version",
+          "Required-field schema for a contract entry",
+          "Whether breaking changes require a review gate"
+        ],
+        "failureModes": [
+          "Contract accretes per-object exceptions and conditional flags until reading it requires reading code, not config",
+          "A contract change ships without versioning, so a bad edit cannot be diffed or rolled back",
+          "Two teams edit the same object entry concurrently and one change is silently lost"
+        ]
+      }
+    },
+    {
+      "id": "config-resolution",
+      "label": "Config resolution",
+      "summary": "Turns the generic contract into one object's concrete run parameters.",
+      "detail": "At run start, this step reads the metadata contract plus the current watermark from the run ledger and resolves them into the concrete parameter set for a single object: which connection to open, which incremental window to pull, which target table to write, and which quality rules apply. This is the translation layer between declarative metadata and an executable run.",
+      "whyItMatters": "This is where 'metadata' actually becomes 'a run' — if resolution logic is wrong, every object it touches gets the wrong parameters, not just one.",
+      "classification": "pattern",
+      "layers": [
+        "metadata",
+        "orchestration"
+      ],
+      "evidence": [],
+      "tags": [
+        "parameterization"
+      ],
+      "drill": {
+        "inputs": [
+          "Metadata contract (current version)",
+          "Last successful watermark from run ledger",
+          "Trigger context (schedule or event)"
+        ],
+        "processing": [
+          "Look up the object's contract entry",
+          "Read the last committed watermark for that object from the ledger",
+          "Build the concrete parameter payload (connection, window, target, rules) for this run"
+        ],
+        "outputs": [
+          "Resolved parameter set handed to the pipeline invocation"
+        ],
+        "example": "For 'returns', resolution reads last watermark updated_at=2026-07-11T00:00Z from the ledger and produces parameters: window=[2026-07-11T00:00Z, now], target=lh_bronze.returns, rules=[not_null(order_id)].",
+        "controls": [
+          "Resolution logic itself (code, not data) — kept intentionally thin",
+          "Fallback behavior when no prior watermark exists (first run)"
+        ],
+        "failureModes": [
+          "Resolution silently defaults a missing contract field instead of failing the run, masking a bad contract entry",
+          "Clock or timezone mismatch between the watermark and the source system skips or duplicates a window of rows"
+        ]
+      }
+    },
+    {
+      "id": "pipeline-invocation",
+      "label": "Reusable pipeline invocation",
+      "summary": "One parameterized Data Factory pipeline drives every object instead of one pipeline per source.",
+      "detail": "A single generic Data Factory pipeline accepts the resolved parameter set and executes the movement/orchestration steps common to every object: connect, copy or trigger transform, checkpoint. Fabric pipelines are the orchestration layer that chains data movement and transformation activities with control-flow constructs, authored once and driven by parameters rather than duplicated per source.",
+      "whyItMatters": "Reuse is what keeps the framework's maintenance cost flat as object count grows — the alternative is one pipeline per source, which is the config-explosion problem this pattern exists to avoid.",
+      "classification": "fact",
+      "layers": [
+        "orchestration"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "Pipelines are the orchestration layer: a single pipeline can chain data movement, transformation activities, and control-flow constructs, authored in a low-code designer."
+        }
+      ],
+      "tags": [
+        "pipeline",
+        "orchestration"
+      ],
+      "drill": {
+        "inputs": [
+          "Resolved parameter set from config resolution"
+        ],
+        "processing": [
+          "Bind incoming parameters to pipeline variables",
+          "Execute copy/transform activities using those variables instead of hard-coded values",
+          "Invoke the reusable notebook/compute step for object-specific transform logic",
+          "Emit a run status signal on completion or failure"
+        ],
+        "outputs": [
+          "Triggered notebook/compute execution",
+          "Run status event to the run ledger"
+        ],
+        "example": "The pipeline binds source_connection, target_table, and window parameters for 'returns', runs a Copy activity into the bronze zone, then calls the reusable transform notebook.",
+        "controls": [
+          "Pipeline parameter schema",
+          "Retry policy per activity",
+          "Concurrency/parallelism settings for the pipeline"
+        ],
+        "failureModes": [
+          "A parameter name typo between config resolution and the pipeline is silently ignored at run time and the pipeline falls back to a default instead of erroring",
+          "An activity retry re-runs a non-idempotent write and duplicates rows already committed on a prior attempt"
+        ],
+        "metrics": []
+      }
+    },
+    {
+      "id": "pipeline-run-execution",
+      "label": "Pipeline run instance",
+      "summary": "Each trigger produces one concrete, individually monitorable run.",
+      "detail": "A pipeline run is one execution instance of the pipeline, started on demand, on a time-based schedule, or from an event trigger such as a file arriving in storage. Each run is tracked independently, which is what lets the framework retry or inspect one failed object without touching the others.",
+      "whyItMatters": "Treating each object's execution as its own run instance, rather than one big batch job, is what makes per-object retry and monitoring possible at all.",
+      "classification": "fact",
+      "layers": [
+        "orchestration",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "pipeline-runs",
+          "note": "A pipeline run is one execution instance of a pipeline and can be started on demand, on a schedule, or from an event trigger such as files arriving in storage."
+        }
+      ],
+      "tags": [
+        "runs",
+        "triggers"
+      ],
+      "drill": {
+        "inputs": [
+          "Trigger signal (schedule, event, or manual)",
+          "Pipeline definition + bound parameters"
+        ],
+        "processing": [
+          "Fabric allocates a run ID and starts activity execution",
+          "Activities execute in the order/branches defined by the pipeline",
+          "Run status (succeeded/failed/in progress) is tracked for this run ID"
+        ],
+        "outputs": [
+          "Activity outputs (copied/transformed data)",
+          "A run ID and status usable for monitoring and retry"
+        ],
+        "example": "An event trigger fires when a new file lands for 'returns'; Fabric starts run ID 9F21 and tracks its activities independently of any other object's concurrent run.",
+        "controls": [
+          "Trigger type (schedule vs event vs manual)",
+          "Per-run timeout and retry count"
+        ],
+        "failureModes": [
+          "Manual test runs never generate scheduled-run failure notifications, so a person watching only email alerts misses failures from manual runs",
+          "Two triggers overlap for the same object and their runs race on the same target table"
+        ]
+      }
+    },
+    {
+      "id": "lakehouse-landing",
+      "label": "Lakehouse landing (Delta)",
+      "summary": "Data lands as managed Delta tables, auto-registered and immediately queryable.",
+      "detail": "The pipeline/notebook writes the object's data into a Fabric lakehouse's managed Tables area. Fabric validates the Delta format, extracts schema and partitioning metadata, and registers the table in the metastore automatically, so it is queryable from Spark or T-SQL without a manual CREATE TABLE step.",
+      "whyItMatters": "Auto-registration removes an entire class of manual schema-drift bugs that plague hand-rolled loaders, but it also means a bad write is immediately visible to every consumer — there is no staging gate unless the framework adds one.",
+      "classification": "fact",
+      "layers": [
+        "data",
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "lakehouse-overview",
+          "note": "When data lands in the managed Tables area, Fabric validates the Delta format, extracts schema/partitioning metadata, and registers the table in the metastore, making it immediately queryable from Spark SQL or T-SQL."
+        }
+      ],
+      "tags": [
+        "delta",
+        "lakehouse"
+      ],
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "lakehouse",
+        "label": "Lakehouse capability"
+      },
+      "drill": {
+        "inputs": [
+          "Transformed rows from the pipeline/notebook step",
+          "Target table path from resolved config"
+        ],
+        "processing": [
+          "Write rows as Delta files to the target Tables path",
+          "Fabric validates the Delta format and extracts column/type/partition metadata",
+          "Table is registered in the metastore for Spark SQL / T-SQL access"
+        ],
+        "outputs": [
+          "Queryable managed Delta table",
+          "Updated table metadata for the metastore"
+        ],
+        "example": "'returns' rows are written to Tables/bronze/returns as Delta; the metastore registers the table with its inferred schema, and it is immediately queryable via the SQL analytics endpoint.",
+        "controls": [
+          "Write mode (append/merge/overwrite) chosen per load_type in the contract",
+          "Target zone (bronze/silver/gold) selection"
+        ],
+        "failureModes": [
+          "A retry after partial failure re-appends already-written rows because the write is append-only and not idempotent",
+          "Only Delta format is supported for metastore auto-registration; a non-Delta write silently fails to register"
+        ]
+      }
+    },
+    {
+      "id": "quality-evidence",
+      "label": "Quality evidence",
+      "summary": "Contract-defined rules are evaluated against the landed data and recorded as evidence.",
+      "detail": "The quality rules declared per object in the metadata contract (not-null checks, row-count thresholds, referential checks) are evaluated against the data that just landed. The result — pass, fail, or a specific rule violation — is recorded as evidence attached to that run, not just logged and discarded.",
+      "whyItMatters": "Without recorded evidence, 'the load succeeded' and 'the load produced correct data' are conflated; this node is what keeps them separate and auditable.",
+      "classification": "pattern",
+      "layers": [
+        "governance",
+        "observability"
+      ],
+      "evidence": [],
+      "tags": [
+        "dataquality"
+      ],
+      "drill": {
+        "inputs": [
+          "Landed Delta table",
+          "Quality rules from the object's contract entry"
+        ],
+        "processing": [
+          "Run each declared rule against the landed data (e.g., not-null, row-count delta, uniqueness)",
+          "Aggregate rule results into a pass/fail evidence record",
+          "Attach the evidence record to this run's ledger entry"
+        ],
+        "outputs": [
+          "Quality evidence record tied to the run ID",
+          "Optional alert on rule failure"
+        ],
+        "example": "The not_null(order_id) rule for 'returns' is evaluated against the newly landed rows; 3 violations are found and recorded as a failed-rule evidence entry on run 9F21.",
+        "controls": [
+          "Which rules block downstream consumption vs only warn",
+          "Evidence retention period"
+        ],
+        "failureModes": [
+          "Quality checks run after downstream consumers have already read the data, so a bad batch is discovered too late",
+          "A rule that should block the run is configured as warn-only and the bad data proceeds"
+        ]
+      }
+    },
+    {
+      "id": "run-ledger",
+      "label": "Run ledger / state store",
+      "summary": "Records what happened, and holds the watermark the next run needs.",
+      "detail": "A persistent store of run history: one entry per pipeline run instance, carrying status, rows processed, watermark position, and links to quality evidence and lineage. It is both the audit trail and the operational memory that makes the framework restartable rather than stateless.",
+      "whyItMatters": "This is the node that turns a series of independent runs into a framework: without it, every run starts from zero and 'incremental load' is impossible.",
+      "classification": "pattern",
+      "layers": [
+        "metadata",
+        "observability"
+      ],
+      "evidence": [],
+      "tags": [
+        "watermark",
+        "restartability"
+      ],
+      "drill": {
+        "inputs": [
+          "Run status from the pipeline run instance",
+          "Quality evidence record",
+          "New watermark position after successful write"
+        ],
+        "processing": [
+          "Write one ledger row per run: run ID, object, status, rows written, watermark, timestamp",
+          "On failure, retain the previous committed watermark rather than advancing it",
+          "Expose the latest committed watermark per object for the next run's config resolution"
+        ],
+        "outputs": [
+          "Watermark fed back into the next run's config resolution",
+          "Auditable run history for operations"
+        ],
+        "example": "Run 9F21 for 'returns' succeeds with 4,812 rows written; the ledger commits watermark updated_at=2026-07-12T00:00Z, which the next scheduled run will read as its starting point.",
+        "controls": [
+          "What counts as 'success' for watermark advancement (all rules must pass vs write-only)",
+          "Retention/archival policy for old ledger entries"
+        ],
+        "failureModes": [
+          "A partially failed run advances the watermark anyway, silently skipping the unwritten rows on the next incremental pull",
+          "The ledger itself becomes a write bottleneck if every object's every run contends on the same table without partitioning"
+        ]
+      }
+    },
+    {
+      "id": "lineage-telemetry",
+      "label": "Lineage & telemetry",
+      "summary": "Source-to-output lineage and monitoring signals captured for governance.",
+      "detail": "Fabric's governance surface captures item-level metadata and lineage for the objects the framework touches, and monitoring hub / capacity metrics expose run-level operational signals. The framework should apply this at the same object boundary it uses for ownership, not as an afterthought bolted on separately.",
+      "whyItMatters": "Lineage is what lets someone answer 'where did this number come from' months later; telemetry is what lets an operator see capacity strain before it becomes an incident.",
+      "classification": "fact",
+      "layers": [
+        "governance",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "governance-compliance-overview",
+          "note": "Fabric's governance surface includes discovery/trust (OneLake catalog, lineage) and monitoring activity (monitoring hub, capacity metrics), and Purview Data Map can scan Fabric items to extract item-level metadata and lineage."
+        }
+      ],
+      "tags": [
+        "lineage",
+        "governance"
+      ],
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "purview",
+        "label": "Governance & Purview capability"
+      },
+      "drill": {
+        "inputs": [
+          "Run ledger entries",
+          "Item metadata from lakehouse tables touched by the run"
+        ],
+        "processing": [
+          "Scan/register item-level metadata and lineage edges (source object to target table) for the run's objects",
+          "Surface run-level operational metrics through the monitoring hub"
+        ],
+        "outputs": [
+          "Lineage graph entry linking source to 'returns' target table",
+          "Monitoring signal available in the admin monitoring workspace"
+        ],
+        "example": "Purview Data Map records that lh_bronze.returns was last written by run 9F21 of the metadata-driven pipeline, sourced from the 'returns' operational system.",
+        "controls": [
+          "Scan frequency/scope for metadata scanning",
+          "Which monitoring signals trigger an alert"
+        ],
+        "failureModes": [
+          "Lineage capture lags actual writes, so an incident investigation sees a stale lineage graph",
+          "Monitoring is set up only at the pipeline level, missing capacity strain visible only at the object level"
+        ]
+      }
+    },
+    {
+      "id": "warning-metadata-language",
+      "label": "Metadata becomes a hidden language",
+      "summary": "An over-flexible contract stops being config and starts being undocumented code.",
+      "detail": "As more edge cases accumulate, teams add conditional flags, per-object overrides, and nested rule expressions directly into the metadata contract until interpreting an entry requires understanding a bespoke, undocumented execution model — the contract has become a programming language with no compiler, type system, or review discipline.",
+      "whyItMatters": "This is the most common way metadata-driven frameworks fail in practice: the framework's own flexibility becomes its biggest liability, and the failure mode is invisible until someone has to change it under pressure.",
+      "classification": "warning",
+      "layers": [
+        "metadata"
+      ],
+      "evidence": [],
+      "tags": [
+        "antipattern",
+        "risk"
+      ],
+      "drill": {
+        "inputs": [
+          "Metadata contract, after many incremental exception additions"
+        ],
+        "processing": [
+          "Each new edge case is solved by adding another conditional field to the contract rather than extending the executor",
+          "No schema versioning discipline is applied to the growing set of fields",
+          "New team members can no longer predict run behavior by reading the contract alone"
+        ],
+        "outputs": [
+          "A contract that requires reading pipeline/notebook code to interpret, defeating the purpose of externalizing configuration"
+        ],
+        "example": "A single object's contract entry grows to include seven boolean override flags and two nested rule blocks that only the original author fully understands, and onboarding a new engineer now requires a code walkthrough rather than reading the metadata.",
+        "controls": [
+          "A schema review gate before new contract fields are accepted",
+          "A cap or review trigger on per-object override count"
+        ],
+        "failureModes": [
+          "The framework becomes harder to change than the one-off pipelines it replaced",
+          "Silent behavior differences between objects because flags interact in ways no one tested"
+        ]
+      }
+    },
+    {
+      "id": "warning-nonidempotent-retry",
+      "label": "Non-idempotent retry corrupts data",
+      "summary": "Retrying a failed write without watermark discipline duplicates or corrupts committed rows.",
+      "detail": "If a pipeline activity's write is not idempotent (e.g., a blind append rather than a merge keyed on a natural key, or a write that ignores the ledger's last committed watermark), retrying a failed or partial run reprocesses rows that already landed, producing duplicates or inconsistent aggregates downstream.",
+      "whyItMatters": "Retries are the normal recovery path in any orchestrated system; a framework that cannot retry safely turns every transient failure into a manual data-fix incident.",
+      "classification": "warning",
+      "layers": [
+        "orchestration",
+        "data"
+      ],
+      "evidence": [],
+      "tags": [
+        "antipattern",
+        "risk",
+        "idempotency"
+      ],
+      "drill": {
+        "inputs": [
+          "A partially completed run (e.g., 60% of rows written before failure)",
+          "A retry trigger (automatic or manual)"
+        ],
+        "processing": [
+          "Retry re-executes the same activity from the start rather than from the ledger's last confirmed watermark",
+          "The write step appends rather than merges, so already-landed rows are written a second time"
+        ],
+        "outputs": [
+          "Duplicate rows in the target Delta table",
+          "Downstream aggregates silently inflated"
+        ],
+        "example": "A run for 'returns' fails after writing 3,000 of 4,812 rows; an automatic retry re-runs the full window and appends all 4,812 rows again, leaving 3,000 duplicates in the bronze table.",
+        "controls": [
+          "Write strategy: merge/upsert on a natural key instead of blind append",
+          "Retry logic that resumes from the ledger's last committed watermark, not from the trigger's original window"
+        ],
+        "failureModes": [
+          "Downstream reports show inflated totals until someone manually de-duplicates the table",
+          "The duplication is discovered only when a business user questions a number, long after the retry happened"
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-contract-resolve",
+      "from": "metadata-contract",
+      "to": "config-resolution",
+      "label": "resolved per object",
+      "layer": "metadata",
+      "kind": "flow"
+    },
+    {
+      "id": "e-resolve-pipeline",
+      "from": "config-resolution",
+      "to": "pipeline-invocation",
+      "label": "parameter set",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-pipeline-run",
+      "from": "pipeline-invocation",
+      "to": "pipeline-run-execution",
+      "label": "triggered as",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-run-lakehouse",
+      "from": "pipeline-run-execution",
+      "to": "lakehouse-landing",
+      "label": "writes data",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-lakehouse-quality",
+      "from": "lakehouse-landing",
+      "to": "quality-evidence",
+      "label": "evaluated against rules",
+      "layer": "governance",
+      "kind": "flow"
+    },
+    {
+      "id": "e-quality-ledger",
+      "from": "quality-evidence",
+      "to": "run-ledger",
+      "label": "evidence recorded",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-run-ledger",
+      "from": "pipeline-run-execution",
+      "to": "run-ledger",
+      "label": "run status recorded",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-lakehouse-lineage",
+      "from": "lakehouse-landing",
+      "to": "lineage-telemetry",
+      "label": "lineage captured",
+      "layer": "governance",
+      "kind": "flow"
+    },
+    {
+      "id": "e-ledger-feedback",
+      "from": "run-ledger",
+      "to": "config-resolution",
+      "label": "next run's watermark",
+      "layer": "metadata",
+      "kind": "feedback"
+    },
+    {
+      "id": "e-contract-warning",
+      "from": "metadata-contract",
+      "to": "warning-metadata-language",
+      "label": "if left ungoverned",
+      "layer": "metadata",
+      "kind": "flow"
+    },
+    {
+      "id": "e-pipeline-warning",
+      "from": "pipeline-invocation",
+      "to": "warning-nonidempotent-retry",
+      "label": "on blind retry",
+      "layer": "orchestration",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "metadata-contract",
+      "title": "Start with the contract",
+      "explanation": "Everything in the framework traces back to this versioned record of what data objects exist, where they come from, and what 'correct' means for each."
+    },
+    {
+      "nodeId": "config-resolution",
+      "title": "Resolve one object's run",
+      "explanation": "The generic contract, combined with the last watermark, becomes a concrete parameter set for a single object's run — this is the translation step."
+    },
+    {
+      "nodeId": "pipeline-invocation",
+      "title": "One pipeline, many objects",
+      "explanation": "A single reusable Data Factory pipeline accepts those parameters instead of a bespoke pipeline existing per source — this is the reuse the pattern is built for."
+    },
+    {
+      "nodeId": "pipeline-run-execution",
+      "title": "Each trigger is its own run",
+      "explanation": "Fabric tracks each execution as an independent run instance, which is what makes per-object retry and monitoring possible."
+    },
+    {
+      "nodeId": "lakehouse-landing",
+      "title": "Data lands and self-registers",
+      "explanation": "Fabric auto-validates and registers the Delta table in the metastore, so it's queryable immediately — but also immediately visible to consumers if the write is wrong."
+    },
+    {
+      "nodeId": "quality-evidence",
+      "title": "Prove it's correct, not just that it ran",
+      "explanation": "Contract-defined rules are evaluated against the landed data and recorded as evidence, separating 'the load succeeded' from 'the data is correct'."
+    },
+    {
+      "nodeId": "run-ledger",
+      "title": "The ledger is the framework's memory",
+      "explanation": "Status, rows, and watermark are recorded here — this is what makes the next run incremental instead of starting from zero."
+    },
+    {
+      "nodeId": "lineage-telemetry",
+      "title": "Governance catches up automatically",
+      "explanation": "Lineage and monitoring signals are captured at the same object boundary as ownership, so the framework stays auditable as it scales."
+    },
+    {
+      "nodeId": "run-ledger",
+      "title": "The ledger closes the loop",
+      "explanation": "The ledger's watermark feeds back into the next run's config resolution — without this feedback loop, this is just a batch job, not a metadata-driven framework."
+    },
+    {
+      "nodeId": "warning-metadata-language",
+      "title": "Watch the contract's complexity",
+      "explanation": "Left ungoverned, the contract accumulates conditional logic until it is an undocumented programming language only its author understands."
+    },
+    {
+      "nodeId": "warning-nonidempotent-retry",
+      "title": "Retries must be safe",
+      "explanation": "A blind retry on a non-idempotent write duplicates already-committed rows — recovery has to respect the ledger's watermark, not just re-run the trigger."
+    }
+  ]
+}

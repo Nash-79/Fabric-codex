@@ -29,8 +29,11 @@ For each **due** commission:
    `curl -s "$SB/queue_public?kind=eq.diagram&status=eq.queued&or=(scheduled_at.is.null,scheduled_at.lte.now())&select=id,target_slug,notes,scheduled_at" -H "$H1" -H "$H2"`
 
 2. Use the **diagram-author** subagent on the item's `target_slug` (a topic or capability): fetch
-   the relevant verified claims for grounding, author an ORIGINAL Mermaid/SVG diagram (never a copy,
-   no third-party logos), save it under `content/diagrams/`, mirror it to `public/diagrams/`, and
+   the relevant verified claims for grounding, author an ORIGINAL `<slug>.diagram.json` topology
+   plus a detailed SVG fallback (never a copy, no third-party logos). Every node drills into
+   inputs, processing, outputs, a worked example, controls, and failure modes; every edge is
+   labelled and decision diagrams branch. Save both under `content/diagrams/`, mirror the SVG to
+   `public/diagrams/`, run `npm run validate:diagrams`, and
    append the asset entry to `content/diagrams/assets.json` with both `topic_slug` and
    `capability_id` (the `target_slug` from the commission is a topic slug unless the queue notes
    explicitly say otherwise).

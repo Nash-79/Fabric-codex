@@ -1,0 +1,272 @@
+{
+  "id": "silver-layer-modelling-architecture",
+  "title": "Silver Layer Modelling: Bronze-to-Silver Conformance Flow",
+  "purpose": "Trace how raw bronze records become conformed, queryable silver Delta tables in a Fabric lakehouse, including the quality-rule branch into quarantine and the replay path back into the merge.",
+  "accessibleSummary": "A top-down flow diagram: bronze records are standardised, deduplicated by commit time, and checked against quality rules. Passing records merge into silver tables using SCD Type 2 history; failing records branch into a quarantine table and can be replayed back into the merge once fixed. The merged table is periodically compacted and V-Ordered before being published as conformed silver tables.",
+  "longDescription": "This flow starts at bronze intake in the lakehouse Tables area and ends at conformed silver Delta tables. Between those two points it shows five concrete steps that a real silver pipeline performs: type/key standardisation, dedup-and-order-by-commit-time, a quality-rule gate that branches into a quarantine table, an SCD Type 2 merge step, and a compaction/V-Order pass over the resulting Delta files. A feedback edge shows corrected quarantine records replaying back into the merge rather than being silently dropped. One warning node calls out the specific failure mode of resolving 'latest row' without a deterministic ordering key, which produces nondeterministic SCD Type 2 history.",
+  "type": "flow",
+  "topicSlug": "silver-layer-modelling",
+  "capabilityIds": ["lakehouse", "spark"],
+  "revision": "2",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/silver-layer-modelling-architecture.svg",
+  "nodes": [
+    {
+      "id": "bronze-intake",
+      "label": "Bronze intake (Delta, Tables area)",
+      "summary": "Raw records land as Delta tables in the lakehouse managed Tables area.",
+      "detail": "Bronze data arrives through one of several Fabric ingestion routes — Spark notebooks, pipeline copy activities, Spark job definitions, Dataflows Gen2, or OneLake shortcuts to data held elsewhere — and lands in the lakehouse's managed Tables area, where Fabric auto-registers it as Delta in the metastore. Silver modelling always starts from this already-Delta, already-queryable bronze state; there is no separate bronze 'staging format' to convert from.",
+      "whyItMatters": "Because bronze is already Delta and already in the metastore, the silver job can read it directly with Spark SQL or DataFrame APIs with no manual CREATE TABLE or format conversion step — the standardisation work in the next node is purely schema and value normalisation, not format plumbing.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "lakehouse-overview", "note": "Data can enter a lakehouse through Spark notebooks, pipeline copy activities, Spark job definitions, Dataflows Gen2, or OneLake shortcuts; when data lands in the Tables area Fabric auto-validates the Delta format and registers it in the metastore." }
+      ],
+      "drill": {
+        "inputs": ["Source system extracts (CDC feed, API pull, file drop) already landed as raw Delta via a pipeline copy activity or notebook write"],
+        "processing": ["Fabric validates the incoming write is Delta-format", "Extracts column names, types, compression, partitioning", "Registers/updates the table in the metastore"],
+        "outputs": ["A queryable bronze Delta table under Tables/, immediately visible to Spark SQL and the SQL analytics endpoint"],
+        "example": "A pipeline copy activity lands a nightly CDC extract from an order-management system into Tables/bronze_orders; no manual DDL is run — the table shows up in the lakehouse explorer as soon as the write commits.",
+        "controls": ["Choice of ingestion route (notebook vs pipeline vs Dataflow Gen2 vs shortcut)", "Partition column selection on first write"],
+        "failureModes": ["Landing non-Delta formats (CSV/Parquet) directly and expecting auto-registration — only Delta is auto-discovered", "Schema drift on the source system silently changing bronze column types between loads"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
+    },
+    {
+      "id": "standardise",
+      "label": "Standardise types & keys",
+      "summary": "Normalise column types, naming, and business keys across bronze sources.",
+      "detail": "Bronze columns are cast to consistent types, renamed to a shared naming convention, and business/natural keys are resolved into the surrogate or conformed key shape the silver model will use downstream. This step is pattern guidance — Fabric does not enforce a silver naming or typing convention; it is a modelling decision the team makes.",
+      "whyItMatters": "Every downstream step — dedup, quality rules, and the SCD merge join — depends on keys and types already matching across sources. Standardising early avoids re-deriving the same casts and key logic in every later step.",
+      "classification": "pattern",
+      "layers": ["data"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Raw bronze columns with source-native types (e.g. string dates, inconsistent casing on keys)"],
+        "processing": ["Cast columns to the target silver schema's types", "Rename to conformed column names", "Resolve/derive the business key used for the SCD merge join"],
+        "outputs": ["A typed, key-normalised DataFrame ready for dedup"],
+        "example": "order_dt arrives as a string in one source and an epoch long in another; both are cast to a single timestamp column, and OrderID/CustomerID are trimmed and upper-cased so the same customer joins consistently across sources.",
+        "controls": ["Target schema/type mapping definition", "Key-resolution logic when the same entity has different natural keys per source"],
+        "failureModes": ["Implicit type coercion (e.g. string-to-int) silently truncating or nulling malformed values instead of failing loud", "Key normalisation logic diverging between two pipelines that feed the same silver table"]
+      }
+    },
+    {
+      "id": "dedup-order",
+      "label": "Dedup & order by commit time",
+      "summary": "Collapse duplicate records per key, ordered by a deterministic commit-time column.",
+      "detail": "Within each micro-batch or load window, records are deduplicated per business key using a commit-time (or ingestion-sequence) column as the ordering key, so that when multiple updates for the same entity arrive together only the last true state is kept before the merge step. This is pattern guidance for building a correct SCD Type 2 pipeline, not a Fabric platform behaviour.",
+      "whyItMatters": "The SCD Type 2 merge downstream assumes it receives at most one row per business key per batch. Skipping this step is the single most common cause of incorrect history — the failure mode captured explicitly in the warning node below.",
+      "classification": "pattern",
+      "layers": ["data"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Standardised, typed records for the batch, potentially containing multiple updates per business key"],
+        "processing": ["Partition by business key", "Order rows within each partition by a deterministic commit-time or monotonically increasing sequence column", "Keep only the last row per key"],
+        "outputs": ["One row per business key per batch, ready to evaluate against quality rules"],
+        "example": "Three updates for CustomerID=4471 arrive in one CDC batch (address change, then a phone update, then a status flip); ordering by the source system's commit_ts and keeping the last row collapses them into the single correct end-state row for the merge.",
+        "controls": ["Choice of ordering column (must be monotonic and trustworthy, e.g. source commit timestamp or LSN, not ingestion arrival time)", "Tie-breaking rule when two records share the same ordering value"],
+        "failureModes": ["Using ingestion/arrival time instead of source commit time as the ordering key, which reorders records under retries or out-of-order delivery — this is exactly the scenario the warning node below describes"]
+      }
+    },
+    {
+      "id": "quality-rules",
+      "label": "Quality rules gate",
+      "summary": "Evaluate each deduplicated record against defined validity rules; branch pass/fail.",
+      "detail": "Deduplicated records are checked against a defined set of quality rules — null checks on required fields, referential checks against known dimension keys, range/format checks — and split into two paths: records that pass continue to the SCD merge, records that fail branch off to quarantine. This gate and its rule set are pattern guidance the team defines per data product; Fabric provides no built-in silver-layer quality-rule engine.",
+      "whyItMatters": "This is the boundary that keeps bad data out of the conformed silver tables consumers rely on, without silently dropping it — failing records are captured, not discarded, so they can be diagnosed and replayed.",
+      "classification": "pattern",
+      "layers": ["data", "governance"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Deduplicated, one-row-per-key records for the batch"],
+        "processing": ["Evaluate each row against the rule set (required-field nulls, referential integrity against conformed dimensions, value-range/format checks)", "Tag each row pass or fail with a reason code"],
+        "outputs": ["Pass path: records forwarded to the SCD Type 2 merge", "Fail path: records plus reason code forwarded to quarantine"],
+        "example": "A row with CustomerID that doesn't resolve against the conformed customer dimension is tagged fail:unresolved_fk and routed to quarantine instead of merging with a null/garbage key.",
+        "controls": ["The rule set definition itself (which fields are required, which FKs are checked)", "Whether a rule failure quarantines the whole row or just flags a column"],
+        "failureModes": ["Rule set drifting out of sync with schema changes upstream, silently passing rows it should be catching", "Over-broad rules quarantining a high volume of otherwise-valid records and masking a real upstream break"]
+      }
+    },
+    {
+      "id": "quarantine",
+      "label": "Quarantine table",
+      "summary": "Failed records land in a separate Delta table with their failure reason, for triage.",
+      "detail": "Records that fail the quality-rules gate are written to a dedicated quarantine Delta table alongside the reason code that failed them, rather than being dropped or force-merged. This keeps the failure visible and auditable and gives operators a concrete place to fix and resubmit records. This is pattern guidance for building a defensible silver pipeline, not a Fabric-provided feature.",
+      "whyItMatters": "Without a quarantine path, a quality-rule failure either silently drops real business data or blocks the whole batch. A quarantine table makes the failure an operational, auditable event instead of a hidden data-loss bug.",
+      "classification": "pattern",
+      "layers": ["data", "governance"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Records tagged fail by the quality-rules gate, with their reason code"],
+        "processing": ["Append to the quarantine Delta table with batch id, timestamp, and failure reason", "Optionally alert an owner when volume crosses a threshold"],
+        "outputs": ["An auditable record of every rejected row, queryable independently of the silver tables"],
+        "example": "62 rows fail the referential-integrity rule in one nightly batch; they land in silver_quarantine_orders with reason=unresolved_customer_fk, and the data-quality owner reviews them the next morning instead of them vanishing from the pipeline.",
+        "controls": ["Retention policy on the quarantine table", "Alerting threshold on quarantine volume"],
+        "failureModes": ["Quarantine table growing unbounded with no triage process, becoming a write-only graveyard nobody reviews", "No alerting, so a broken upstream feed quarantines 100% of records for days before anyone notices"]
+      }
+    },
+    {
+      "id": "replay-fix",
+      "label": "Triage & fix",
+      "summary": "An operator or corrective job resolves the quarantined record's root cause.",
+      "detail": "A human reviewer or an automated corrective job addresses the root cause of a quarantined record — for example resolving a missing dimension key or correcting a malformed source value — and marks the record ready to re-enter the pipeline. This triage step is pattern guidance describing how teams typically operate a quarantine path; it is not a Fabric platform capability.",
+      "whyItMatters": "Quarantine is only useful if there is a defined way back in. Without this step, quarantine becomes a dead end and the feedback loop the diagram shows doesn't actually close.",
+      "classification": "inference",
+      "layers": ["governance", "orchestration"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Quarantined records with failure reason codes, reviewed on a cadence (e.g. daily)"],
+        "processing": ["Diagnose root cause per reason code", "Apply a fix (backfill a missing dimension row, correct a malformed value at source or in-flight)", "Mark corrected records ready for replay"],
+        "outputs": ["A corrected batch of previously-quarantined records, re-queued for the merge step"],
+        "example": "The unresolved_customer_fk rows from the earlier example turn out to reference a customer created same-day in the source system but not yet synced to the conformed dimension; once the dimension sync catches up, those quarantined rows are marked ready and replayed.",
+        "controls": ["Triage cadence and ownership", "Whether corrections are manual (a person edits/resubmits) or automated (a scheduled reconciliation job)"],
+        "failureModes": ["No defined owner for quarantine triage, so records sit indefinitely", "Fixing the symptom in quarantine without fixing the upstream root cause, so the same rows quarantine again next batch"]
+      }
+    },
+    {
+      "id": "scd-merge",
+      "label": "SCD Type 2 merge",
+      "summary": "Merge passing (and replayed) records into silver using slowly changing dimension history.",
+      "detail": "Records that pass the quality gate — plus any replayed, corrected quarantine records — are merged into the silver Delta table using a Slowly Changing Dimension Type 2 pattern: an existing open row is closed (end-dated) when a tracked attribute changes, and a new row is inserted as the current version. This preserves full history of how each entity's attributes changed over time. SCD Type 2 is a modelling pattern the team implements on top of Delta MERGE, not a Fabric-provided feature.",
+      "whyItMatters": "This is the step that turns deduplicated, quality-checked bronze-derived records into the conformed, history-aware silver table that downstream consumers query. Getting the merge condition and effective-dating logic right here is the crux of correct silver modelling.",
+      "classification": "pattern",
+      "layers": ["data", "compute"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Quality-gate-passed records for this batch, plus any replayed corrected quarantine records"],
+        "processing": ["MERGE INTO the silver Delta table on business key", "Where a tracked attribute differs and the existing row is current: end-date the existing row", "Insert a new current row with an open effective-from date"],
+        "outputs": ["Updated silver Delta table with correct current and historical rows per business key"],
+        "example": "A customer's address changes; the merge closes the prior address row (setting is_current=false, effective_to=batch_date) and inserts a new row with the new address and is_current=true, so a query 'as of last quarter' still returns the old address.",
+        "controls": ["Which attributes are tracked for history vs overwritten in place (Type 1 columns mixed into an otherwise Type 2 table)", "The merge join condition and effective-dating column names"],
+        "failureModes": ["Determining 'latest row' without a deterministic ordering key — see the warning node for the specific failure this causes", "Merge condition matching on the wrong grain (e.g. missing a sub-key), silently overwriting unrelated history rows"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark" }
+    },
+    {
+      "id": "nondeterministic-latest-row",
+      "label": "Nondeterministic 'latest row' logic",
+      "summary": "Resolving the current row without a deterministic ordering key corrupts SCD history.",
+      "detail": "A specific, real production failure mode: if the merge or upstream dedup step decides which record is 'latest' using an unstable key — arrival/ingestion time instead of source commit time, or no explicit ordering at all and relying on incidental file/partition read order — then re-running the same batch (e.g. after a job retry) can produce a different 'latest' row each time. In an SCD Type 2 table this doesn't just produce a wrong current value; it can open and close history rows inconsistently across reruns, corrupting the audit trail the whole pattern exists to provide.",
+      "whyItMatters": "This is the single most damaging silver-layer bug because it is silent — the pipeline succeeds, row counts look normal, and the corruption is only visible when someone queries history and gets a different answer depending on which run they're looking at.",
+      "classification": "warning",
+      "layers": ["data", "governance"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Same source batch replayed twice (e.g. once normally, once after a job retry following a transient failure)"],
+        "processing": ["Both runs execute the identical dedup + merge logic", "But 'latest' is resolved by arrival order or unspecified row order, which differs between the two executions"],
+        "outputs": ["Two different 'current' rows and two different history timelines for the same business key, depending on which run is inspected"],
+        "example": "A Spark retry re-reads the same micro-batch after a transient executor failure; because the dedup step ordered by ingestion timestamp (which shifts on retry) rather than the source system's commit sequence, the retried run picks a different row as 'latest' than the original attempt, silently rewriting which address is marked current for that customer.",
+        "controls": ["Always order by a source-provided, monotonic commit/sequence column — never by ingestion/arrival time or unspecified row order", "Make dedup and merge idempotent: the same input batch, run twice, must produce byte-identical output"],
+        "failureModes": ["Silent history corruption discovered only during an audit or a customer dispute, long after the offending batch has aged out of retention", "Idempotency gaps compounding: each retry after a transient failure introduces another possible divergent 'latest' resolution"]
+      }
+    },
+    {
+      "id": "optimize-compact",
+      "label": "Optimize / compact (V-Order)",
+      "summary": "Periodically compact small files and apply V-Order to the merged Delta table.",
+      "detail": "After merges accumulate many small Parquet files, an OPTIMIZE (compaction) pass consolidates them into fewer, larger files. V-Order can be applied during this same compaction pass — it reorganises the physical Parquet layout (row-group distribution, encoding, compression) at write time without changing logical data, and is the mechanism Microsoft recommends for applying V-Order retroactively to existing table data, since toggling the table's V-Order property alone only affects future writes.",
+      "whyItMatters": "The SCD Type 2 merge pattern in the previous step writes a new file per batch, which left unmanaged degrades read performance over time through file-count bloat; compaction (optionally with V-Order) is what keeps the resulting silver table fast to query.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "delta-optimization-and-v-order", "note": "Toggling the V-Order table property only affects future writes; applying V-Order to existing data requires a physical rewrite via table compaction (OPTIMIZE). V-Order reorganises row-group distribution, encoding, and compression at write time without changing logical data." }
+      ],
+      "drill": {
+        "inputs": ["The silver Delta table after repeated small-batch SCD merges, with many small Parquet files"],
+        "processing": ["Run OPTIMIZE to compact small files into larger ones", "Optionally enable V-Order (session, table property, or per-write) so the compaction rewrite also applies V-Order layout"],
+        "outputs": ["A silver table with fewer, larger, optionally V-Ordered Parquet files, unchanged logical rows"],
+        "example": "A silver_customers table accumulates 400 small files from a month of nightly SCD merges; a weekly OPTIMIZE job with V-Order enabled rewrites them into ~15 larger, V-Ordered files, improving downstream dashboard scan times without touching a single logical row.",
+        "controls": ["Compaction cadence (e.g. nightly vs weekly)", "Whether V-Order is enabled for this compaction (read-heavy tables benefit; write-dominated tables should skip it per Microsoft's guidance)"],
+        "failureModes": ["Never compacting, letting small-file counts silently degrade read performance", "Enabling V-Order on the compaction of a table that's actually write-dominated downstream, paying the ~15% write-time cost for no read benefit"],
+        "metrics": [
+          { "label": "Typical V-Order write overhead", "value": "~15% longer writes", "sourceKey": "delta-optimization-and-v-order" }
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
+    },
+    {
+      "id": "silver-tables",
+      "label": "Conformed silver Delta tables",
+      "summary": "The published, queryable silver tables consumers and downstream gold layers read.",
+      "detail": "The output of the flow: conformed Delta tables in the lakehouse Tables area, immediately queryable via Spark SQL or the auto-provisioned SQL analytics endpoint, with full SCD Type 2 history and consistent, deduplicated, quality-checked records. These are the tables downstream gold aggregation, reporting, and semantic models build on.",
+      "whyItMatters": "This is the deliverable of silver modelling: a reusable, trustworthy conformed layer that multiple downstream consumers can build on without each re-implementing dedup, quality checks, or history logic themselves.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "lakehouse-overview", "note": "All managed lakehouse tables use Delta, giving ACID transactions and schema enforcement; a companion SQL analytics endpoint makes any Delta table in Tables/ immediately queryable via T-SQL, and Spark SQL queries it directly in the same session." }
+      ],
+      "drill": {
+        "inputs": ["The compacted, optionally V-Ordered silver Delta table"],
+        "processing": ["No further transformation here — this node represents the published state", "Table is registered and queryable via both Spark SQL and the SQL analytics endpoint"],
+        "outputs": ["Queryable silver tables for gold-layer aggregation, reporting, and semantic models"],
+        "example": "A BI team's semantic model queries silver_customers via the SQL analytics endpoint for a slowly-changing 'customer as of report date' report, while a data science notebook reads the same table with Spark for feature engineering — both against the identical conformed table.",
+        "controls": ["Access grants on the silver tables/workspace", "Which columns/tables are exposed to which downstream consumers"],
+        "failureModes": ["Downstream consumers bypassing silver and reading bronze directly, reintroducing the dedup/quality problems silver exists to solve", "Schema changes to silver tables breaking downstream gold jobs with no contract/versioning in place"]
+      },
+      "drillTarget": { "kind": "topic", "slug": "silver-layer-modelling", "label": "Silver Layer Modelling" }
+    }
+  ],
+  "edges": [
+    { "id": "e-bronze-standardise", "from": "bronze-intake", "to": "standardise", "label": "read bronze Delta table", "layer": "data", "kind": "flow" },
+    { "id": "e-standardise-dedup", "from": "standardise", "to": "dedup-order", "label": "typed, key-normalised rows", "layer": "data", "kind": "flow" },
+    { "id": "e-dedup-quality", "from": "dedup-order", "to": "quality-rules", "label": "one row per key per batch", "layer": "data", "kind": "flow" },
+    { "id": "e-quality-merge", "from": "quality-rules", "to": "scd-merge", "label": "pass", "layer": "data", "kind": "flow" },
+    { "id": "e-quality-quarantine", "from": "quality-rules", "to": "quarantine", "label": "fail (reason code)", "layer": "governance", "kind": "branch" },
+    { "id": "e-quarantine-triage", "from": "quarantine", "to": "replay-fix", "label": "reviewed by owner", "layer": "governance", "kind": "flow" },
+    { "id": "e-triage-merge", "from": "replay-fix", "to": "scd-merge", "label": "corrected, replayed", "layer": "data", "kind": "feedback" },
+    { "id": "e-merge-warning", "from": "scd-merge", "to": "nondeterministic-latest-row", "label": "risk if ordering key is unstable", "layer": "data", "kind": "branch" },
+    { "id": "e-merge-optimize", "from": "scd-merge", "to": "optimize-compact", "label": "accumulated small files", "layer": "compute", "kind": "flow" },
+    { "id": "e-optimize-silver", "from": "optimize-compact", "to": "silver-tables", "label": "compacted, V-Ordered table", "layer": "data", "kind": "flow" }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "bronze-intake",
+      "title": "Start: bronze is already Delta",
+      "explanation": "Silver modelling begins from bronze records that Fabric already auto-registered as Delta tables in the metastore — there's no format-conversion step, only conformance work."
+    },
+    {
+      "nodeId": "standardise",
+      "title": "Normalise types and keys first",
+      "explanation": "Before anything else, columns are cast to consistent types and business keys are resolved so every later step — dedup, quality rules, the merge join — can rely on matching keys and types."
+    },
+    {
+      "nodeId": "dedup-order",
+      "title": "Collapse duplicates by commit time",
+      "explanation": "Multiple updates for the same entity in one batch are collapsed to a single row, ordered by a deterministic source commit-time column — this ordering choice matters enough to have its own warning node later in the flow."
+    },
+    {
+      "nodeId": "quality-rules",
+      "title": "The gate: pass or quarantine",
+      "explanation": "Each deduplicated record is checked against quality rules and splits into two paths here — this is the branch point that makes the flow more than a straight line."
+    },
+    {
+      "nodeId": "quarantine",
+      "title": "Failures are captured, not dropped",
+      "explanation": "Records that fail quality rules land in a dedicated quarantine table with their failure reason, keeping the rejection auditable instead of silently discarding real business data."
+    },
+    {
+      "nodeId": "replay-fix",
+      "title": "Triage closes the loop",
+      "explanation": "An operator or corrective job resolves the root cause of a quarantined record and marks it ready to re-enter the pipeline — without this step quarantine would be a dead end."
+    },
+    {
+      "nodeId": "scd-merge",
+      "title": "Feedback: corrected records rejoin the merge",
+      "explanation": "Replayed, corrected quarantine records merge in alongside the batch's passing records — the feedback edge from triage back into this node is what closes the quarantine loop."
+    },
+    {
+      "nodeId": "nondeterministic-latest-row",
+      "title": "Warning: an unstable ordering key corrupts history",
+      "explanation": "If 'latest row' is resolved using arrival time or unspecified order instead of a deterministic source commit sequence, a job retry can silently produce a different SCD history than the original run — a real, damaging production failure mode."
+    },
+    {
+      "nodeId": "optimize-compact",
+      "title": "Compact and optionally V-Order",
+      "explanation": "Repeated small-batch merges leave many small files; a periodic OPTIMIZE pass compacts them, and V-Order can be applied in the same rewrite for read-heavy silver tables — Microsoft documents this as the only way to apply V-Order to already-written data."
+    },
+    {
+      "nodeId": "silver-tables",
+      "title": "End: conformed, queryable silver tables",
+      "explanation": "The result is a deduplicated, quality-checked, history-aware Delta table that downstream gold aggregation, reporting, and semantic models can build on without redoing this work themselves."
+    }
+  ]
+}
