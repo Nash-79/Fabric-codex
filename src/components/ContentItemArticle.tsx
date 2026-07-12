@@ -7,6 +7,8 @@ import { ExternalLink } from "lucide-react";
 import { markdownPanels } from "@/components/MarkdownPanels";
 import { Callout } from "@/components/Callout";
 import { DiagramLightbox } from "@/components/DiagramLightbox";
+import { InteractiveDiagram } from "@/components/InteractiveDiagram";
+import { getInteractiveDiagram } from "@/diagrams/catalog";
 import { AdvisorMermaidBlock } from "@/components/AdvisorMermaidBlock";
 import { TierBadge } from "@/components/Badges";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -175,6 +177,16 @@ export function ContentItemArticle({
             const caption = captionByFile.get(base) || alt;
             const resolvedSrc = srcByFile.get(base) ?? (src as string);
             figCounter.n += 1;
+            const interactive = getInteractiveDiagram(base);
+            if (interactive) {
+              return (
+                <InteractiveDiagram
+                  definition={interactive}
+                  caption={caption}
+                  figureIndex={figCounter.n}
+                />
+              );
+            }
             return (
               <DiagramLightbox
                 src={resolvedSrc}

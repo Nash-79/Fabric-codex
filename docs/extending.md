@@ -99,6 +99,17 @@ creates a new section automatically.
 
 ## 3. Theme and visual changes
 
+### Interactive diagram contract
+
+Registered diagrams render through the typed React/SVG catalog in `src/diagrams/`. Author stable
+nodes and directed edges with layers, walkthrough steps, classifications, source keys, risks, and
+valid Atlas drill targets. The file under `content/diagrams/` is a script-free print/no-JavaScript
+fallback, not an executable asset. Run `npm run validate:diagrams` and `npm run validate:content`
+before publishing; a changed fallback hash or incomplete review clears ready-to-share status.
+
+Tooltips must be supplemental: keyboard or touch selection opens the same persistent inspector.
+Every hotspot must add evidence, explanation, navigation, or decision support.
+
 All theming is in **`frontend/src/theme.js`**:
 
 - `themes.light` / `themes.dark` — token maps (Fluent neutrals + the Fabric brand ramp

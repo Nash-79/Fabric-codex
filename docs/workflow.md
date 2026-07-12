@@ -25,7 +25,7 @@ A metered Anthropic/OpenAI API key is **not** required for any of the authoring 
  2. Curate    /ingest <source>      curator extracts claims + tags + image refs ─▶ content/sources/*.json
  3. Publish   Settings → Publish   source upsert + pending claim insertion; queue ─▶ ingested
  4. Verify    Settings → Claims     human approves pending claims
- 5. Visualise /diagram <capability> diagram-author draws an ORIGINAL svg/mmd     ─▶ content/diagrams/*
+ 5. Visualise /diagram <capability> diagram-author creates typed React/SVG + static fallback ─▶ src/diagrams/ + content/diagrams/*
  6. Article   /blog <topic>         create missing article or enrich one with justified new evidence
  7. Design    /design <scenario>    solution architecture or reusable data pattern ─▶ content/designs/*
  8. Validate  /validate <id>        reviewer reasons locally; server adds deterministic checks after publish

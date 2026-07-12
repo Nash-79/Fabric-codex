@@ -94,6 +94,14 @@ an admin in Settings → Publish.
      of skipping it: `# internals gap: <topic-slug> / <sub-heading> — NEEDS SOURCE: <one-line
 description of what to find>`. Never fabricate detail to avoid a placeholder — a labeled
      gap is honest; invented internals are not.
+   - **Workload-specific (pattern docs only):** the sub-heading truthfully has no universal
+     number — performance depends entirely on the reader's workload, not on a missing source.
+     Open the paragraph with `*Workload-specific.*` instead of `*Coming soon*` and do **not**
+     add a queue line — no source ingestion can close it, so queueing one creates a permanently
+     stale ledger entry. Use `*Coming soon*` only when ingesting a source would actually close
+     the gap; CI (`scripts/validate-content.mjs`, via `scripts/lib/internals-gaps.mjs`) fails on
+     a "Tracked in `content/queue.md`" assertion with no matching queue line and warns on an
+     untracked `*Coming soon*` placeholder.
      Do not add extra `###` sub-headings under Internals beyond these three unless the topic
      structurally needs a fourth (e.g. a comparison table of engines) — keep the three-heading
      shape recognizable across the whole portal.

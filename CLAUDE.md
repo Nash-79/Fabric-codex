@@ -48,6 +48,8 @@ content/            Git-tracked authored content: sources/, diagrams/, designs/,
                     blogs/, help/, topics.json (seed tree), queue.md (offline queue)
 docs/data-model.md  How claim versioning and supersede work — read before touching models
 docs/extending.md   Extension points: content, capabilities, theme tokens, views, agents
+docs/knowledge-gaps.md  The gap-tracking model: truth/ledger/view layers, the two markers,
+                    what CI fails vs warns on — the inventory itself is `node scripts/gaps.mjs`
 ```
 
 ## Build-time authoring vs run-time serving (the operating model)
@@ -177,6 +179,10 @@ reads it, with content/queue.md as the offline fallback.
 
 **Diagram coverage is enforced, not optional** (mirror these in `AGENTS.md` for Codex):
 
+- Generated diagrams use the typed interactive React/SVG contract: keyboard/touch-selectable
+  nodes, evidence, layers, path tracing, walkthrough, and Atlas drill targets. The committed SVG is
+  a script-free print/no-JavaScript fallback whose hash must match the registered revision.
+
 - `/publish-topic` commissions **≥2** original diagrams before the blog-author runs — an
   architecture diagram and a decision/internals diagram.
 - The blog-author embeds **every** commissioned diagram, not just the first.
@@ -201,15 +207,22 @@ heading text below is a hard, exact-match convention, not a schema field:
   three every time.
 - Grounded where verified L4/L5 claims exist (engine internals, execution/query paths, benchmarks —
   Polaris, Spark, SQL engine, OneLake, Direct Lake, NDP/GPU-accelerated query processing, etc. are
-  the expected home for this depth). Otherwise a labeled `*Coming soon*` placeholder — never a
-  silently omitted section and never invented detail.
-- Every placeholder gets a matching `# internals gap: <slug> / <sub-heading> — ...` line in
-  `content/queue.md` so it routes into ingestion, not just a dangling TODO in prose.
+  the expected home for this depth). Otherwise a labeled placeholder — never a silently omitted
+  section and never invented detail. Two markers, machine-separable (see `docs/knowledge-gaps.md`):
+  `*Coming soon*` = a real gap a source could close; `*Workload-specific.*` = a pattern doc that
+  truthfully has no universal number — not a gap, never queued.
+- Every `*Coming soon*` placeholder gets a matching `# internals gap: <slug> / <sub-heading> — ...`
+  line in `content/queue.md` so it routes into ingestion, not just a dangling TODO in prose.
+  `npm run validate:content` enforces this via `scripts/lib/internals-gaps.mjs`: a false
+  "Tracked in `content/queue.md`" assertion or a stale queue line **fails CI**; an honest untracked
+  placeholder only warns. The derived inventory is `node scripts/gaps.mjs` (or `/gaps`) — never a
+  hand-written gap document.
 - **Non-blocking.** `validation-reviewer` flags a missing section/sub-heading as a warning and an
-  untracked placeholder as info, but a placeholder itself never blocks `ready_to_share` — thin L4/L5
-  coverage should not gate publishing good L1–L3 content.
-- `coverage-auditor` scans published articles for placeholder text and reports them as a ranked
-  depth gap, same track as any other L4/L5 gap.
+  untracked placeholder as a warning (a false "Tracked in" assertion as critical), but a placeholder
+  itself never blocks `ready_to_share` — thin L4/L5 coverage should not gate publishing good L1–L3
+  content.
+- `coverage-auditor` reads `node scripts/gaps.mjs --json` (not a literal grep) and reports real
+  placeholders as a ranked depth gap, same track as any other L4/L5 gap.
 - `fabric-advisor` checks an article's `## Internals` before answering "how does X work
   internally" questions, and says explicitly when it's pointing at a placeholder rather than
   answering from grounded depth.

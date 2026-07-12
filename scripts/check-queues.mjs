@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { collectInternalsGaps } from "./lib/internals-gaps.mjs";
 
 const args = new Set(process.argv.slice(2));
 const brief = args.has("--brief");
@@ -80,8 +81,17 @@ function textReport(digest) {
   } else if (!brief) {
     lines.push(`Plan file not found; continuing without it: ${digest.plan.path}`);
   }
+  const internalsGapLine = () => {
+    if (!digest.coverage.internalsGaps) return;
+    const gaps = digest.coverage.internalsGaps;
+    const drift = gaps.untracked + gaps.stale;
+    lines.push(
+      `Internals gaps: ${gaps.placeholders} placeholder(s), ${gaps.untracked} untracked, ${gaps.stale} stale ledger line(s)${drift ? " — run node scripts/gaps.mjs" : ""}`,
+    );
+  };
   if (digest.error) {
     lines.push(`Queue check unavailable: ${digest.error}`);
+    internalsGapLine();
     return `${lines.join("\n")}\n`;
   }
   lines.push(
@@ -93,6 +103,7 @@ function textReport(digest) {
   lines.push(
     `Coverage: ${digest.coverage.articleLessTopics} article-less topic(s), ${digest.coverage.diagramGaps} diagram gap(s), ${digest.claims.pending} pending claim(s)`,
   );
+  internalsGapLine();
   if (digest.next.length) {
     lines.push("Next actions:");
     for (const action of digest.next.slice(0, brief ? 4 : 8)) {
@@ -115,11 +126,22 @@ async function main() {
     plan: { path: planPath, exists: existsSync(planPath) },
     queue: { openSources: 0, dueCommissions: 0, failed: 0 },
     rss: { active: 0, stale: 0, failing: 0 },
-    coverage: { articleLessTopics: 0, diagramGaps: 0, storageOverrides: 0 },
+    coverage: { articleLessTopics: 0, diagramGaps: 0, storageOverrides: 0, internalsGaps: null },
     claims: { pending: 0 },
     next: [],
     error: "",
   };
+
+  try {
+    const gaps = collectInternalsGaps();
+    digest.coverage.internalsGaps = {
+      placeholders: gaps.placeholders.length,
+      untracked: gaps.untracked.length,
+      stale: gaps.stale.length,
+    };
+  } catch {
+    // Local-file gap scan is best-effort; the digest still reports the rest.
+  }
 
   if (!url || !key) {
     digest.error = "missing SUPABASE_URL/VITE_SUPABASE_URL or publishable key";

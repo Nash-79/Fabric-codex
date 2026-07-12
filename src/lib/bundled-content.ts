@@ -146,6 +146,12 @@ function diagramRows() {
       caption: diagram.caption ?? "",
       kind: diagram.kind ?? "generated",
       capability_id: diagram.capability_id ?? "",
+      topic_slug: diagram.topic_slug ?? null,
+      interaction_version: diagram.interaction_version ?? "1",
+      static_hash: diagram.static_hash ?? "",
+      qa_status: diagram.qa_status ?? "draft",
+      accessible_summary: diagram.accessible_summary ?? diagram.caption ?? "",
+      supported_layers: diagram.supported_layers ?? [],
     };
   });
 }

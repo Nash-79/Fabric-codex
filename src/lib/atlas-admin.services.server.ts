@@ -609,6 +609,17 @@ export async function validateContent(
       target_id: data.id,
       confidence,
       score: Math.round(confidence * 100),
+      revision_hash: doc.content_hash ?? "",
+      validator_version: "deterministic-v2",
+      completed_checks: {
+        deterministic: true,
+        grounding: false,
+        fact_consistency: false,
+        copyright: false,
+        accessibility: false,
+        visual_quality: false,
+        complete: false,
+      },
     })
     .select("*")
     .single();
@@ -629,9 +640,15 @@ export async function validateContent(
 
   const { error: updateError } = await sb
     .from("content_items")
-    .update({ validation_confidence: confidence, confidence, ready_to_share: critical === 0 })
+    .update({ validation_confidence: confidence, confidence, ready_to_share: false })
     .eq("id", data.id);
   if (updateError) throw new Error(updateError.message);
 
-  return { run, issues, confidence, ready_to_share: critical === 0 };
+  return {
+    run,
+    issues,
+    confidence,
+    ready_to_share: false,
+    requires_agent_review: true,
+  };
 }

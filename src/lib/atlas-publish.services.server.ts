@@ -204,6 +204,11 @@ type ContentItemPayload = {
   slug?: string;
   topic_slug?: string | null;
   capability_id?: string | null;
+  interaction_version?: string;
+  static_hash?: string;
+  qa_status?: "draft" | "passed" | "failed";
+  accessible_summary?: string;
+  supported_layers?: string[];
   title: string;
   summary?: string;
   body_md: string;
@@ -315,6 +320,11 @@ type DiagramPayload = {
   kind?: string;
   topic_slug?: string | null;
   capability_id?: string | null;
+  interaction_version?: string;
+  static_hash?: string;
+  qa_status?: "draft" | "passed" | "failed";
+  accessible_summary?: string;
+  supported_layers?: string[];
 };
 
 async function resolveTopicSlug(sb: SupabaseAdmin, entry: DiagramPayload): Promise<string | null> {
@@ -353,6 +363,11 @@ async function diagramRow(sb: SupabaseAdmin, entry: DiagramPayload) {
     kind: entry.kind && entry.kind !== "generated" ? entry.kind : "architecture",
     topic_slug: await resolveTopicSlug(sb, entry),
     capability_id: entry.capability_id ?? null,
+    interaction_version: entry.interaction_version ?? "1",
+    static_hash: entry.static_hash ?? "",
+    qa_status: entry.qa_status ?? "draft",
+    accessible_summary: entry.accessible_summary ?? entry.caption ?? "",
+    supported_layers: entry.supported_layers ?? [],
   };
 }
 

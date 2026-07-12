@@ -4,6 +4,7 @@
 
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { allInteractiveDiagrams } from "@/diagrams/catalog";
 
 const topicsJson = import.meta.glob("/content/topics.json", { eager: true }) as Record<
   string,
@@ -293,13 +294,34 @@ export async function runContentSeed(supabaseAdmin: SupabaseClient): Promise<See
       path: `/diagrams/${slug}.svg`,
       caption: d.caption ?? "",
       kind: d.kind ?? "architecture",
-      topic_slug: null,
+      topic_slug: d.topic_slug ?? null,
+      capability_id: d.capability_id ?? null,
+      interaction_version: d.interaction_version ?? "1",
+      static_hash: d.static_hash ?? "",
+      qa_status: d.qa_status ?? "draft",
+      accessible_summary: d.accessible_summary ?? d.caption ?? "",
+      supported_layers: d.supported_layers ?? [],
     };
   });
   if (diagRows.length) {
     await supabaseAdmin.from("diagrams").upsert(diagRows, { onConflict: "slug" });
     summary.diagramRowsUpserted = diagRows.length;
   }
+  const diagramNodes = allInteractiveDiagrams().flatMap((diagram) =>
+    diagram.nodes.map((node) => ({
+      diagram_slug: diagram.id,
+      node_id: node.id,
+      label: node.label,
+      description: node.detail,
+      classification: node.classification,
+      source_keys: node.sourceKeys,
+      tags: node.tags,
+      drill_type: node.drillTarget?.kind ?? null,
+      drill_slug: node.drillTarget?.slug ?? null,
+    })),
+  );
+  await supabaseAdmin.from("diagram_nodes").delete().neq("node_id", "__never__");
+  if (diagramNodes.length) await supabaseAdmin.from("diagram_nodes").upsert(diagramNodes);
 
   // 7) Help
   await supabaseAdmin.from("help_docs").delete().neq("slug", "__never__");

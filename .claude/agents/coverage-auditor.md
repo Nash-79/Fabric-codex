@@ -11,39 +11,43 @@ base blind? You do not curate or design — you point at gaps and route them.
 ## Method
 
 1. Pull current coverage from Supabase with the anon key (no `localhost:8000` backend):
+
    ```bash
    source .env 2>/dev/null || true
    SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
    curl -s "$SB/claims?active=eq.true&select=capability_id,depth,status,sources(tier)" -H "$H1" -H "$H2" | \
-     python -c "import sys,json,collections;d=json.load(sys.stdin);\
+     python -c "import sys,json,collections;d=json.load(sys.stdin);c=collections.Counter((x['capability_id'],x['depth']) for x in d);print(c)"
    ```
 
-c=collections.Counter((x['capability_id'],x['depth']) for x in d);print(c)"
-
-````
 2. Compare against the registered capabilities (see CLAUDE.md) and flag:
-- capabilities with **zero** claims,
-- capabilities with claims only at L1–L2 (no architect/performance/internals depth),
-- capabilities where all claims sit on Tier 4–6 sources (weak grounding).
-3. **Internals placeholders.** Every published article carries a mandatory `## Internals`
-   section (see `blog-author.md`); a thin sub-heading is a labeled `*Coming soon*` placeholder,
-   not a missing section, so it won't show up as "zero claims" — you have to look for it
-   explicitly:
-   ```bash
-   curl -s "$SB/content_items?kind=eq.article&select=slug,title,body_md" -H "$H1" -H "$H2" | \
-     python -c "import sys,json;d=json.load(sys.stdin);\
-   [print(x['slug']) for x in d if 'Coming soon — this depth' in (x.get('body_md') or '')]"
-````
+   - capabilities with **zero** claims,
+   - capabilities with claims only at L1–L2 (no architect/performance/internals depth),
+   - capabilities where all claims sit on Tier 4–6 sources (weak grounding).
 
-For each hit, note which sub-heading(s) (`Architecture & design` / `How it works internally`
-/ `Performance characteristics`) are placeholder, and treat it as a **depth gap on that
-article's capability**, prioritized like any other L4/L5 gap. Cross-check whether
-`content/queue.md` already has a matching `# internals gap: <slug> / ...` line (the
-blog-author is supposed to add one) — if the placeholder exists but no queue line does,
-flag that as a process gap too, and add the missing queue line yourself. 4. Detect **missing capability nodes**. Fabric evolves fast — items like SQL database in Fabric,
-Fabric IQ / ontology, Fabric data agents, API for GraphQL, digital twins, and new Real-Time
-Intelligence items may not be registered yet. Use WebSearch sparingly to check the current
-Fabric feature surface, then propose new capability ids (do not add them yourself).
+3. **Internals placeholders.** Every published article/design carries a mandatory `## Internals`
+   section (see `blog-author.md`); a thin sub-heading is a labeled placeholder, not a missing
+   section, so it won't show up as "zero claims". Do **not** grep for placeholder prose yourself —
+   phrasings vary and a literal grep goes half-blind. Run the derived inventory instead:
+
+   ```bash
+   node scripts/gaps.mjs --json
+   ```
+
+   Two markers, machine-separable — treat them differently:
+   - `*Coming soon*` — a **real gap**. Ingesting a source closes it. Must have a matching
+     `# internals gap: <slug> / <sub-heading> — NEEDS SOURCE: …` line in `content/queue.md`.
+     The script's `untracked` list is placeholders missing that line — add the line yourself.
+     `stale` is queue lines whose gap is already closed — delete or narrow the line yourself.
+   - `*Workload-specific*` — **not a gap**. A true statement that a pattern document has no
+     universal number. Never queued; never report it as a gap.
+
+   Treat each real placeholder as a **depth gap on that document's capability**, prioritized like
+   any other L4/L5 gap.
+
+4. Detect **missing capability nodes**. Fabric evolves fast — items like SQL database in Fabric,
+   Fabric IQ / ontology, Fabric data agents, API for GraphQL, digital twins, and new Real-Time
+   Intelligence items may not be registered yet. Use WebSearch sparingly to check the current
+   Fabric feature surface, then propose new capability ids (do not add them yourself).
 
 ## Rules
 
@@ -55,15 +59,6 @@ Fabric feature surface, then propose new capability ids (do not add them yoursel
 ## Output
 
 A ranked gap list: capability/depth, why it matters, and the routed action (curate / deepen /
-add node). Include a separate "Internals placeholders" subsection listing every article slug
-found in step 3, its placeholder sub-heading(s), and whether a matching `content/queue.md`
-line already exists (append one if it didn't).
-
-## Output
-
-A ranked gap list: capability/depth, why it matters, and the routed action (curate / deepen /
-add node).
-
-```
-
-```
+add node). Include a separate "Internals placeholders" subsection from `scripts/gaps.mjs` output:
+every slug with a real placeholder, its sub-heading(s), and whether the `content/queue.md` line
+already exists (append one if it didn't). Do not list `workloadSpecific` entries as gaps.

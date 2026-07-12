@@ -12,8 +12,6 @@ processed lines are moved to the Done section below with the resulting content f
 
 # internals gap: mirroring / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog, conference talk, or internals deep-dive documenting Fabric Mirroring replication engine throughput limits, concurrent-table scaling behavior, or benchmark numbers beyond the single as-little-as-15-seconds latency figure tier=1
 
-# internals gap: eventhouse-kql / How it works internally — NEEDS SOURCE: a Kusto/Azure Data Explorer engineering blog or the Kusto white paper documenting KQL query-execution engine internals (columnar operator execution against the hot cache, indexing structures, update-policy/materialized-view transform pipeline) tier=1
-
 # internals gap: sql-database / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog or benchmark publishing measured throughput/latency numbers for the SQL database-to-OneLake replication path (replication lag under write load, Parquet conversion throughput) beyond the qualitative near-real-time characterization tier=1
 
 # internals gap: capacity / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog or internals deep-dive publishing measured throttling/smoothing benchmark numbers (e.g. observed burndown rates under sustained load, or empirical CU-to-latency curves by SKU) tier=1
@@ -28,8 +26,6 @@ processed lines are moved to the Done section below with the resulting content f
 
 # internals gap: power-bi / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog or benchmark publishing measured VertiPaq query-latency numbers by segment size, Direct Lake cold-vs-hot query latency figures, or on-demand-load column-paging throughput numbers for large-format semantic models tier=1
 
-# internals gap: dataflow-gen2 / all sub-headings — NEEDS SOURCE: a Microsoft engineering blog or deep-dive on Dataflow Gen2 mashup-engine execution, staging/fast-copy internals, or measured refresh throughput tier=1
-
 # internals gap: fabric-overview / all sub-headings — NEEDS SOURCE: a Microsoft engineering blog or conference talk on Fabric control-plane/workspace architecture internals beyond the L1-L2 overview docs tier=1
 
 # internals gap: governance / all sub-headings — NEEDS SOURCE: a Microsoft engineering blog or deep-dive on Purview policy-evaluation/lineage-scanning internals in Fabric tier=1
@@ -40,7 +36,19 @@ processed lines are moved to the Done section below with the resulting content f
 
 # internals gap: multi-stack-integration / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog or benchmark on multi-cloud shortcut read latency/egress behavior (S3/GCS shortcut throughput, cache hit behavior) tier=1
 
-# internals gap: streaming-analytics-pattern / How it works internally — NEEDS SOURCE: same gap as rti internals above — Eventstream operator pipeline, checkpointing, and Activator evaluation internals; resolves the streaming-analytics-pattern design placeholder too tier=1
+# internals gap: streaming-analytics-pattern / How it works internally + Performance characteristics — NEEDS SOURCE: same gap as rti internals above — Eventstream operator pipeline, checkpointing, and Activator evaluation internals, plus measured Eventstream throughput/end-to-end latency benchmarks; resolves the streaming-analytics-pattern design placeholders too tier=1
+
+# internals gap: fabric-iq / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog covering Fabric IQ ontology query performance, NL2Ontology latency characteristics, graph-refresh throughput at scale, or measured benchmark numbers for the operations agent 5-minute polling cadence under high-cardinality Eventhouse tables tier=1
+
+# internals gap: graphql-api / How it works internally + Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog or architecture deep-dive on how Fabric GraphQL resolvers translate a fan-out query into SQL analytics endpoint calls (pushdown behavior, join strategy, query planning), plus measured query latency/resolver overhead versus direct SQL at scale tier=1
+
+# internals gap: fabric-data-agent / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog or benchmark publishing verified latency/throughput numbers for data agent query execution, generation time by generator type, or capacity consumption under concurrent agent load tier=1
+
+# internals gap: multi-cloud-data-architecture / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog or benchmark on cross-cloud shortcut read latency, egress behavior, and cache-hit characteristics (S3/GCS shortcut throughput) for the multi-cloud pattern tier=1
+
+# internals gap: event-driven-orchestration / How it works internally + Performance characteristics — NEEDS SOURCE: same gap as rti internals above — Eventstream operator pipeline, checkpointing, and Activator condition-evaluation internals, plus measured event-trigger-to-pipeline-start latency for event-driven orchestration tier=1
+
+# internals gap: investment-analytics-medallion / Performance characteristics — NEEDS SOURCE: a Microsoft engineering blog or benchmark with measured medallion-pipeline numbers applicable to this workload (Spark transformation duration by data shape, Warehouse query latency, Direct Lake/semantic-model refresh figures) tier=1
 
 # ---- Suggested sources discovered during 2026-07-05 ingestion (human approval needed — add via Settings → Queue, kind=source) ----
 # discovered via fabric-jumpstart-catalog: https://github.com/microsoft/fabric-jumpstart tier=3 (backing repo: install mechanics, Core/Community standards)

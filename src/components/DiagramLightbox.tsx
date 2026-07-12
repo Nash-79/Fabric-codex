@@ -9,6 +9,8 @@ import { Maximize2, Minimize2, Move, Plus, Minus, RotateCcw, X, ZoomIn } from "l
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { InteractiveDiagram } from "@/components/InteractiveDiagram";
+import { getInteractiveDiagram } from "@/diagrams/catalog";
 
 // Module-level cache of natural aspect ratios so revisiting an image doesn't
 // re-run the reflow after decode.
@@ -25,6 +27,11 @@ export function DiagramLightbox({
   caption?: string;
   figureIndex?: number;
 }) {
+  const slug = src
+    .split("/")
+    .pop()
+    ?.replace(/\.(svg|mmd)$/i, "");
+  const interactive = slug ? getInteractiveDiagram(slug) : undefined;
   const [open, setOpen] = useState(false);
   const [ratio, setRatio] = useState<number | null>(() => ratioCache.get(src) ?? null);
   const [inView, setInView] = useState(false);
@@ -71,6 +78,27 @@ export function DiagramLightbox({
   const captionId = figId ? `${figId}-caption` : undefined;
   const describeId = figId ? `${figId}-desc` : undefined;
   const captionText = caption || alt;
+
+  if (interactive) {
+    return (
+      <figure
+        id={figId}
+        data-diagram-slug={interactive.id}
+        className="not-prose article-figure my-10 scroll-mt-24"
+        aria-labelledby={captionText && captionId ? captionId : undefined}
+      >
+        <InteractiveDiagram definition={interactive} />
+        {captionText && (
+          <figcaption
+            id={captionId}
+            className="mx-auto mt-3 max-w-[72ch] text-center text-sm italic leading-relaxed text-muted-foreground"
+          >
+            {captionText}
+          </figcaption>
+        )}
+      </figure>
+    );
+  }
 
   return (
     <>

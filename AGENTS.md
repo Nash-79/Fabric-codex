@@ -67,18 +67,25 @@ in the same run.
 - External source images are `referenced` assets: store URL + caption + **attribution**, never
   re-host (copyright). Prefer authoring an **original** Mermaid/SVG diagram (`generated` asset) via
   `/prompts:fa-diagram`. Diagrams are vector diagram-as-code, not raster art; no third-party logos.
+- Generated diagrams use the typed interactive React/SVG contract: keyboard/touch-selectable
+  nodes, evidence, layers, path tracing, walkthrough, and Atlas drill targets. The committed SVG is
+  a script-free print/no-JavaScript fallback whose hash must match the registered revision.
 - **Diagram coverage is enforced** (kept in sync with `CLAUDE.md`): publishing a topic
   commissions **≥2** original diagrams — one architecture, one decision/internals — and the
   article embeds **every** one of them. Each embedded `content/diagrams/*` path must exist on
   disk before the article is published; the validation pass flags a missing embedded diagram as
   a **critical** issue, blocking `ready_to_share`.
-- **`## Internals` is mandatory on every article** (kept in sync with `CLAUDE.md`): fixed
-  sub-headings `### Architecture & design`, `### How it works internally`,
+- **`## Internals` is mandatory on every article and design** (kept in sync with `CLAUDE.md`):
+  fixed sub-headings `### Architecture & design`, `### How it works internally`,
   `### Performance characteristics` — grounded in verified L4/L5 claims where they exist
   (engine internals: Polaris, Spark, SQL engine, OneLake, Direct Lake, GPU/NDP-accelerated
-  query processing), else a labeled `*Coming soon*` placeholder plus a matching
-  `content/queue.md` entry. Never silently omitted, never fabricated; placeholders are
-  **non-blocking** for `ready_to_share`.
+  query processing), else a labeled placeholder. Two markers (see `docs/knowledge-gaps.md`):
+  `*Coming soon*` = a real gap, needs a matching `# internals gap:` line in `content/queue.md`;
+  `*Workload-specific.*` = a pattern doc with no universal number — not a gap, never queued.
+  Never silently omitted, never fabricated; placeholders are **non-blocking** for
+  `ready_to_share`, but CI fails on a false "Tracked in `content/queue.md`" assertion or a stale
+  queue line (`scripts/lib/internals-gaps.mjs`). The derived inventory is `node scripts/gaps.mjs`
+  (prompt: `/prompts:fa-gaps`).
 
 ## Scope discipline
 
