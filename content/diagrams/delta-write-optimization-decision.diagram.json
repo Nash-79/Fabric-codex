@@ -1,60 +1,49 @@
 {
   "id": "delta-write-optimization-decision",
-  "title": "Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, del…",
-  "purpose": "Original diagram: Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each",
+  "title": "Delta write optimization decision",
+  "purpose": "Decision guide for choosing V-Order, Optimized Write, deletion vectors, or compaction from an observed Delta table symptom, with compatibility and measurement guardrails.",
+  "accessibleSummary": "Delta write optimization decision. Observe the table symptom; Read layout is inefficient?; Too many small output files?; Update-heavy workload?; Existing files fragmented?; Check engine compatibility; Measure and maintain.",
+  "longDescription": "Decision guide for choosing V-Order, Optimized Write, deletion vectors, or compaction from an observed Delta table symptom, with compatibility and measurement guardrails.",
   "type": "decision",
   "topicSlug": "lakehouse",
   "capabilityIds": [
     "lakehouse"
   ],
-  "revision": "1",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/delta-write-optimization-decision.svg",
   "nodes": [
     {
       "id": "step-1",
-      "label": "lakehouse boundary",
-      "summary": "lakehouse boundary in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
+      "label": "Observe the table symptom",
+      "summary": "File count, scan behavior, update pattern, and consumer engines identify the real Delta problem.",
+      "detail": "Start from evidence in table history and workload plans rather than enabling every feature.",
+      "whyItMatters": "Different optimizations address different storage symptoms.",
       "classification": "pattern",
       "layers": [
-        "data"
+        "data",
+        "observability"
       ],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
-      ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
+          "Delta history",
+          "File inventory",
+          "Query profile"
         ],
         "processing": [
-          "Apply the lakehouse boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Classify write and read symptoms"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Dominant problem"
         ],
-        "example": "Trace one representative data product through lakehouse boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A frequently appended table has thousands of small files and slow scans.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Baseline window"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "One atypical run drives a permanent setting."
         ]
       },
       "drillTarget": {
@@ -65,275 +54,258 @@
     },
     {
       "id": "step-2",
-      "label": "Decision infographic for Delta write optimization in Fabric",
-      "summary": "Decision infographic for Delta write optimization in Fabric in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Read layout is inefficient?",
+      "summary": "V-Order optimizes Parquet organization for analytical reads in Fabric.",
+      "detail": "Choose it when read layout is the bottleneck and its write trade-off is acceptable.",
+      "whyItMatters": "It targets file encoding and layout, not file-count explosion by itself.",
+      "classification": "fact",
       "layers": [
-        "orchestration"
+        "data"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "evidence": [
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "V-Order is a Fabric write optimization for Parquet layout and read performance."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
+          "Read profile",
+          "Write path"
         ],
         "processing": [
-          "Apply the Decision infographic for Delta write optimization in Fabric responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Apply supported V-Order behavior"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Optimized Parquet layout"
         ],
-        "example": "Trace one representative data product through Decision infographic for Delta write optimization in Fabric: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A gold table used by BI is written with V-Order.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Workspace or write setting"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Extra write work is enabled where reads do not benefit."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "lakehouse",
+        "label": "Open lakehouse"
       }
     },
     {
       "id": "step-3",
-      "label": "when to reach for V-Order",
-      "summary": "when to reach for V-Order in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Too many small output files?",
+      "summary": "Optimized Write reshapes Spark output to produce more appropriately sized files.",
+      "detail": "Choose it when parallel tasks create fragmented output during writes.",
+      "whyItMatters": "Better output sizing reduces downstream metadata and scan overhead.",
+      "classification": "fact",
       "layers": [
+        "data",
         "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "milescole-optimized-write-fabric",
+          "note": "Optimized Write changes Spark write behavior to reduce small-file output."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Spark write",
+          "Partition distribution"
         ],
         "processing": [
-          "Apply the when to reach for V-Order responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Shuffle and coalesce output during the write"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Fewer better-sized files"
         ],
-        "example": "Trace one representative data product through when to reach for V-Order: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A high-parallelism append produces consolidated output files.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Optimized Write configuration"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Write shuffle cost outweighs benefit on tiny jobs."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "lakehouse",
+        "label": "Open lakehouse"
       }
     },
     {
       "id": "step-4",
-      "label": "Optimized Write",
-      "summary": "Optimized Write in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Update-heavy workload?",
+      "summary": "Deletion vectors record row deletions without immediately rewriting every affected data file.",
+      "detail": "Choose them for supported update/delete patterns after checking reader compatibility.",
+      "whyItMatters": "They trade immediate rewrite cost for later maintenance and compatibility obligations.",
+      "classification": "fact",
       "layers": [
-        "metadata"
+        "data"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "evidence": [
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "Delta deletion vectors represent row removals separately from base Parquet rewrites."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
+          "DELETE or UPDATE",
+          "Compatible Delta table"
         ],
         "processing": [
-          "Apply the Optimized Write responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Write deletion metadata"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Logical row removal"
         ],
-        "example": "Trace one representative data product through Optimized Write: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A correction marks a small subset of rows deleted without rewriting large files.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Table feature enablement",
+          "Reader compatibility"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "An older reader cannot understand the table feature."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "lakehouse",
+        "label": "Open lakehouse"
       }
     },
     {
       "id": "step-5",
-      "label": "deletion vectors",
-      "summary": "deletion vectors in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Existing files fragmented?",
+      "summary": "Compaction rewrites accumulated small files into fewer larger files.",
+      "detail": "Use maintenance when fragmentation already exists rather than expecting a future write setting to repair history.",
+      "whyItMatters": "Compaction treats the backlog while write optimization prevents recurrence.",
+      "classification": "fact",
       "layers": [
-        "governance"
+        "data",
+        "orchestration"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
+      "evidence": [
+        {
+          "sourceKey": "milescole-table-compaction",
+          "note": "Delta compaction rewrites small files into a smaller set of larger files."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
+          "Fragmented table",
+          "Maintenance window"
         ],
         "processing": [
-          "Apply the deletion vectors responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Read and rewrite files",
+          "Commit compacted version"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Consolidated table version"
         ],
-        "example": "Trace one representative data product through deletion vectors: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A scheduled maintenance job compacts yesterday's append partitions.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Target partitions",
+          "Schedule"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Concurrent maintenance conflicts or rewrites too much data."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "lakehouse",
+        "label": "Open lakehouse"
       }
     },
     {
       "id": "step-6",
-      "label": "or compaction",
-      "summary": "or compaction in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Check engine compatibility",
+      "summary": "Every table feature must be supported by all required writers and readers.",
+      "detail": "The decision gate checks Direct Lake, SQL endpoint, Spark runtime, mirroring, and external consumers before enabling a feature.",
+      "whyItMatters": "Open format does not mean every client supports every table feature version.",
+      "classification": "warning",
       "layers": [
-        "security"
+        "data",
+        "governance"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "evidence": [
+        {
+          "sourceKey": "delta-lake-storage-internals",
+          "note": "Delta table features and protocol metadata govern reader and writer compatibility."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Candidate feature",
+          "Consumer inventory"
         ],
         "processing": [
-          "Apply the or compaction responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Verify protocol support",
+          "Approve, defer or isolate"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Compatibility decision"
         ],
-        "example": "Trace one representative data product through or compaction: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A deletion-vector change is held until every production reader is validated.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Protocol review",
+          "Rollback plan"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "A feature silently strands a critical consumer."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "lakehouse",
+        "label": "Open lakehouse"
       }
     },
     {
       "id": "step-7",
-      "label": "with the measured benefit and trade-off of each",
-      "summary": "with the measured benefit and trade-off of each in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
+      "label": "Measure and maintain",
+      "summary": "Validate scan cost, write duration, file count, and correctness after the change.",
+      "detail": "Optimization is a lifecycle: observe, change one lever, verify, and schedule maintenance where needed.",
+      "whyItMatters": "Measured iteration avoids cargo-cult settings.",
       "classification": "pattern",
       "layers": [
-        "observability"
+        "observability",
+        "orchestration"
       ],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
-      ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
+          "Changed table",
+          "Baseline"
         ],
         "processing": [
-          "Apply the with the measured benefit and trade-off of each responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Run representative reads and writes",
+          "Compare metrics"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Accepted change or rollback"
         ],
-        "example": "Trace one representative data product through with the measured benefit and trade-off of each: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "The team confirms fewer files and stable write SLA before rollout.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Acceptance threshold",
+          "Maintenance cadence"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Warm-cache testing hides unchanged physical scans."
         ]
       },
       "drillTarget": {
-        "kind": "capability",
+        "kind": "topic",
         "slug": "lakehouse",
         "label": "Open lakehouse"
       }
@@ -341,97 +313,121 @@
   ],
   "edges": [
     {
-      "id": "edge-1",
+      "id": "e1",
       "from": "step-1",
       "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "orchestration",
+      "label": "read layout dominates",
+      "layer": "data",
       "kind": "branch"
     },
     {
-      "id": "edge-2",
-      "from": "step-2",
+      "id": "e2",
+      "from": "step-1",
       "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
+      "label": "new writes create small files",
+      "layer": "data",
       "kind": "branch"
     },
     {
-      "id": "edge-3",
-      "from": "step-3",
+      "id": "e3",
+      "from": "step-1",
       "to": "step-4",
-      "label": "then evaluate",
+      "label": "updates rewrite too much data",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e4",
+      "from": "step-1",
+      "to": "step-5",
+      "label": "historical fragmentation dominates",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e5",
+      "from": "step-2",
+      "to": "step-6",
+      "label": "candidate layout feature",
       "layer": "metadata",
       "kind": "flow"
     },
     {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
+      "id": "e6",
+      "from": "step-3",
       "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
+      "label": "candidate write behavior",
+      "layer": "metadata",
       "kind": "flow"
     },
     {
-      "id": "edge-6",
-      "from": "step-6",
+      "id": "e7",
+      "from": "step-4",
+      "to": "step-6",
+      "label": "candidate table feature",
+      "layer": "metadata",
+      "kind": "flow"
+    },
+    {
+      "id": "e8",
+      "from": "step-5",
       "to": "step-7",
-      "label": "then evaluate",
+      "label": "maintenance result",
       "layer": "observability",
       "kind": "flow"
     },
     {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
+      "id": "e9",
+      "from": "step-6",
+      "to": "step-7",
+      "label": "Compatible: validate outcome",
+      "layer": "observability",
       "kind": "branch"
+    },
+    {
+      "id": "e10",
+      "from": "step-6",
+      "to": "step-1",
+      "label": "Incompatible: choose another lever",
+      "layer": "governance",
+      "kind": "feedback"
     }
   ],
   "walkthrough": [
     {
       "nodeId": "step-1",
-      "title": "1. lakehouse boundary",
-      "explanation": "lakehouse boundary in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture."
+      "title": "1. Observe the table symptom",
+      "explanation": "File count, scan behavior, update pattern, and consumer engines identify the real Delta problem."
     },
     {
       "nodeId": "step-2",
-      "title": "2. Decision infographic for Delta write optimization in Fabric",
-      "explanation": "Decision infographic for Delta write optimization in Fabric in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture."
+      "title": "2. Read layout is inefficient?",
+      "explanation": "V-Order optimizes Parquet organization for analytical reads in Fabric."
     },
     {
       "nodeId": "step-3",
-      "title": "3. when to reach for V-Order",
-      "explanation": "when to reach for V-Order in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture."
+      "title": "3. Too many small output files?",
+      "explanation": "Optimized Write reshapes Spark output to produce more appropriately sized files."
     },
     {
       "nodeId": "step-4",
-      "title": "4. Optimized Write",
-      "explanation": "Optimized Write in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture."
+      "title": "4. Update-heavy workload?",
+      "explanation": "Deletion vectors record row deletions without immediately rewriting every affected data file."
     },
     {
       "nodeId": "step-5",
-      "title": "5. deletion vectors",
-      "explanation": "deletion vectors in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture."
+      "title": "5. Existing files fragmented?",
+      "explanation": "Compaction rewrites accumulated small files into fewer larger files."
     },
     {
       "nodeId": "step-6",
-      "title": "6. or compaction",
-      "explanation": "or compaction in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture."
+      "title": "6. Check engine compatibility",
+      "explanation": "Every table feature must be supported by all required writers and readers."
     },
     {
       "nodeId": "step-7",
-      "title": "7. with the measured benefit and trade-off of each",
-      "explanation": "with the measured benefit and trade-off of each in the Decision infographic for Delta write optimization in Fabric — when to reach for V-Order, Optimized Write, deletion vectors, or compaction, with the measured benefit and trade-off of each architecture."
+      "title": "7. Measure and maintain",
+      "explanation": "Validate scan cost, write duration, file count, and correctness after the change."
     }
   ]
 }

@@ -1,429 +1,418 @@
 {
   "id": "graphql-api-query-flow",
-  "title": "life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against…",
-  "purpose": "Original diagram: life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches",
-  "accessibleSummary": "An interactive architecture infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches",
+  "title": "Life of a Fabric GraphQL request",
+  "purpose": "End-to-end request path from client and authorization through schema validation, source-backed resolution, typed response, and schema or mutation failure paths.",
+  "accessibleSummary": "Life of a Fabric GraphQL request. GraphQL client request; Identity and permission gate; Parse and validate schema; Resolve source operation; Typed JSON response; Mutation and agent branches; Schema and workload risks.",
+  "longDescription": "End-to-end request path from client and authorization through schema validation, source-backed resolution, typed response, and schema or mutation failure paths.",
   "type": "architecture",
   "topicSlug": "graphql-api",
   "capabilityIds": [
     "graphql-api"
   ],
-  "revision": "1",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/graphql-api-query-flow.svg",
   "nodes": [
     {
       "id": "step-1",
-      "label": "graphql api boundary",
-      "summary": "graphql api boundary in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "GraphQL client request",
+      "summary": "A client sends a query or mutation selecting fields from the published API schema.",
+      "detail": "The selection set expresses exactly which typed fields the caller requests.",
+      "whyItMatters": "The client contract starts at the schema, not at database-specific SQL.",
+      "classification": "fact",
       "layers": [
-        "data"
+        "orchestration"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "evidence": [
+        {
+          "sourceKey": "api-graphql-overview",
+          "note": "Fabric API for GraphQL exposes a typed GraphQL endpoint over supported data sources."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
+          "GraphQL document",
+          "Variables"
         ],
         "processing": [
-          "Apply the graphql api boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Send request to endpoint"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Authenticated API call"
         ],
-        "example": "Trace one representative data product through graphql api boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "An app requests customer id, name, and open orders.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Client timeout",
+          "Persisted query policy"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "A client requests a field removed from the schema."
         ]
       },
       "drillTarget": {
         "kind": "topic",
         "slug": "graphql-api",
-        "label": "Open graphql api"
+        "label": "Open graphql-api"
       }
     },
     {
       "id": "step-2",
-      "label": "life of a GraphQL request in Fabric - client query",
-      "summary": "life of a GraphQL request in Fabric - client query in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Identity and permission gate",
+      "summary": "The endpoint evaluates caller authentication and access before resolving data.",
+      "detail": "API access does not bypass permissions on the configured Fabric data source.",
+      "whyItMatters": "The gate keeps a convenient API surface from becoming an alternate authorization path.",
+      "classification": "fact",
       "layers": [
-        "compute"
+        "security"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "api-graphql-overview",
+          "note": "GraphQL requests use Fabric authentication and authorization for endpoint and source access."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Bearer identity",
+          "Endpoint permission"
         ],
         "processing": [
-          "Apply the life of a GraphQL request in Fabric - client query responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Authenticate caller",
+          "Authorize endpoint operation"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Authorized request or denial"
         ],
-        "example": "Trace one representative data product through life of a GraphQL request in Fabric - client query: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "An application service principal calls an endpoint it was granted access to.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Entra identity",
+          "API item permissions"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Endpoint access is granted more broadly than underlying data."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "graphql-api",
+        "label": "Open graphql-api"
       }
     },
     {
       "id": "step-3",
-      "label": "endpoint auth/permission gate",
-      "summary": "endpoint auth/permission gate in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Parse and validate schema",
+      "summary": "The service parses the document and validates fields, types, and operation shape against its schema.",
+      "detail": "Invalid selections stop before source execution and return GraphQL errors.",
+      "whyItMatters": "Early validation makes schema evolution visible to clients.",
+      "classification": "fact",
       "layers": [
-        "security"
+        "metadata",
+        "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "evidence": [
+        {
+          "sourceKey": "api-graphql-overview",
+          "note": "Fabric generates a GraphQL schema from configured source objects for typed querying."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Authorized document",
+          "Generated schema"
         ],
         "processing": [
-          "Apply the endpoint auth/permission gate responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Parse syntax",
+          "Validate fields and arguments"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Executable operation or validation error"
         ],
-        "example": "Trace one representative data product through endpoint auth/permission gate: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A misspelled orderStatus field fails validation without querying the warehouse.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Published objects",
+          "Schema naming"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Source schema changes invalidate a client selection."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "graphql-api",
+        "label": "Open graphql-api"
       }
     },
     {
       "id": "step-4",
-      "label": "parse and validate against the auto-generated schema",
-      "summary": "parse and validate against the auto-generated schema in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Resolve source operation",
+      "summary": "Resolvers translate validated fields into operations against the configured source.",
+      "detail": "Filtering, projection, and relationship traversal are pushed toward the data source where supported.",
+      "whyItMatters": "Resolver behavior determines both correctness and source workload.",
+      "classification": "fact",
       "layers": [
-        "metadata"
+        "compute",
+        "data"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "evidence": [
+        {
+          "sourceKey": "api-graphql-overview",
+          "note": "The API resolves GraphQL queries against configured Fabric data sources."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
+          "Validated operation",
+          "Resolver metadata"
         ],
         "processing": [
-          "Apply the parse and validate against the auto-generated schema responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Build source query",
+          "Execute against source"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Rows or source error"
         ],
-        "example": "Trace one representative data product through parse and validate against the auto-generated schema: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "The customer selection resolves through a SQL analytics source.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Relationships",
+          "Allowed operations"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "An unbounded selection creates excessive source work."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "graphql-api",
+        "label": "Open graphql-api"
       }
     },
     {
       "id": "step-5",
-      "label": "resolver pushdown to the source's SQL analytics endpoint",
-      "summary": "resolver pushdown to the source's SQL analytics endpoint in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Typed JSON response",
+      "summary": "Resolved values are assembled into GraphQL data and error envelopes.",
+      "detail": "The response shape follows the client's selection and can contain field-level errors.",
+      "whyItMatters": "A stable typed contract decouples consumers from physical table access.",
+      "classification": "fact",
       "layers": [
-        "compute"
+        "orchestration",
+        "metadata"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "api-graphql-overview",
+          "note": "GraphQL returns typed API results shaped by the requested selection."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Resolved rows",
+          "Selection tree"
         ],
         "processing": [
-          "Apply the resolver pushdown to the source's SQL analytics endpoint responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Map fields",
+          "Serialize data and errors"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "JSON response"
         ],
-        "example": "Trace one representative data product through resolver pushdown to the source's SQL analytics endpoint: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "The app receives only customer id, name, and open orders.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Response size",
+          "Nullability"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Partial errors are ignored by the client."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "graphql-api",
+        "label": "Open graphql-api"
       }
     },
     {
       "id": "step-6",
-      "label": "typed JSON response",
-      "summary": "typed JSON response in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
+      "label": "Mutation and agent branches",
+      "summary": "Mutations change supported source data; agents are a separate grounded conversational access pattern.",
+      "detail": "Treat write operations and natural-language agent requests as distinct contracts with distinct controls.",
+      "whyItMatters": "Separating branches prevents GraphQL from being described as an AI reasoning layer.",
       "classification": "pattern",
       "layers": [
+        "orchestration",
         "security"
       ],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Validated mutation or agent intent"
         ],
         "processing": [
-          "Apply the typed JSON response responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Apply write controls or route through an agent's grounding"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Write result or grounded answer"
         ],
-        "example": "Trace one representative data product through typed JSON response: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "An app updates a supported record, while a data agent answers a business question through its own tools.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Mutation exposure",
+          "Agent data-source scope"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Conflating API permissions with agent grounding policy."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "graphql-api",
+        "label": "Open graphql-api"
       }
     },
     {
       "id": "step-7",
-      "label": "plus schema-evolution",
-      "summary": "plus schema-evolution in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Schema and workload risks",
+      "summary": "Schema drift, over-broad selection, and unsupported operations can break or overload clients.",
+      "detail": "Contract tests and bounded queries catch failure before a production consumer is affected.",
+      "whyItMatters": "The warning makes API lifecycle ownership explicit.",
+      "classification": "warning",
       "layers": [
-        "metadata"
+        "metadata",
+        "observability"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "evidence": [
+        {
+          "sourceKey": "api-graphql-overview",
+          "note": "The generated schema reflects configured source objects, so source and API evolution must be managed together."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
+          "Schema change",
+          "Client operation",
+          "Source telemetry"
         ],
         "processing": [
-          "Apply the plus schema-evolution responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Run contract tests",
+          "Inspect validation and source errors"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Compatible release or remediation"
         ],
-        "example": "Trace one representative data product through plus schema-evolution: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "CI detects a renamed source column before the mobile app deploys.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Schema review",
+          "Query depth and size policy"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Breaking schema change reaches production without client coordination."
         ]
       },
       "drillTarget": {
-        "kind": "capability",
+        "kind": "topic",
         "slug": "graphql-api",
-        "label": "Open graphql api"
+        "label": "Open graphql-api"
       }
     }
   ],
   "edges": [
     {
-      "id": "edge-1",
+      "id": "e1",
       "from": "step-1",
       "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "compute",
+      "label": "HTTPS GraphQL operation",
+      "layer": "orchestration",
       "kind": "flow"
     },
     {
-      "id": "edge-2",
+      "id": "e2",
       "from": "step-2",
       "to": "step-3",
-      "label": "hands governed output to",
+      "label": "authorized document",
       "layer": "security",
       "kind": "flow"
     },
     {
-      "id": "edge-3",
+      "id": "e3",
       "from": "step-3",
       "to": "step-4",
-      "label": "hands governed output to",
+      "label": "validated selection and arguments",
       "layer": "metadata",
       "kind": "flow"
     },
     {
-      "id": "edge-4",
+      "id": "e4",
       "from": "step-4",
       "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "compute",
+      "label": "resolved source values",
+      "layer": "data",
       "kind": "flow"
     },
     {
-      "id": "edge-5",
-      "from": "step-5",
+      "id": "e5",
+      "from": "step-3",
       "to": "step-6",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
+      "label": "mutation or agent-specific path",
+      "layer": "orchestration",
+      "kind": "branch"
     },
     {
-      "id": "edge-6",
-      "from": "step-6",
+      "id": "e6",
+      "from": "step-3",
       "to": "step-7",
-      "label": "hands governed output to",
+      "label": "invalid or changed contract",
       "layer": "metadata",
-      "kind": "flow"
+      "kind": "branch"
+    },
+    {
+      "id": "e7",
+      "from": "step-7",
+      "to": "step-3",
+      "label": "schema fix is revalidated",
+      "layer": "observability",
+      "kind": "feedback"
     }
   ],
   "walkthrough": [
     {
       "nodeId": "step-1",
-      "title": "1. graphql api boundary",
-      "explanation": "graphql api boundary in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture."
+      "title": "1. GraphQL client request",
+      "explanation": "A client sends a query or mutation selecting fields from the published API schema."
     },
     {
       "nodeId": "step-2",
-      "title": "2. life of a GraphQL request in Fabric - client query",
-      "explanation": "life of a GraphQL request in Fabric - client query in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture."
+      "title": "2. Identity and permission gate",
+      "explanation": "The endpoint evaluates caller authentication and access before resolving data."
     },
     {
       "nodeId": "step-3",
-      "title": "3. endpoint auth/permission gate",
-      "explanation": "endpoint auth/permission gate in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture."
+      "title": "3. Parse and validate schema",
+      "explanation": "The service parses the document and validates fields, types, and operation shape against its schema."
     },
     {
       "nodeId": "step-4",
-      "title": "4. parse and validate against the auto-generated schema",
-      "explanation": "parse and validate against the auto-generated schema in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture."
+      "title": "4. Resolve source operation",
+      "explanation": "Resolvers translate validated fields into operations against the configured source."
     },
     {
       "nodeId": "step-5",
-      "title": "5. resolver pushdown to the source's SQL analytics endpoint",
-      "explanation": "resolver pushdown to the source's SQL analytics endpoint in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture."
+      "title": "5. Typed JSON response",
+      "explanation": "Resolved values are assembled into GraphQL data and error envelopes."
     },
     {
       "nodeId": "step-6",
-      "title": "6. typed JSON response",
-      "explanation": "typed JSON response in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture."
+      "title": "6. Mutation and agent branches",
+      "explanation": "Mutations change supported source data; agents are a separate grounded conversational access pattern."
     },
     {
       "nodeId": "step-7",
-      "title": "7. plus schema-evolution",
-      "explanation": "plus schema-evolution in the life of a GraphQL request in Fabric - client query, endpoint auth/permission gate, parse and validate against the auto-generated schema, resolver pushdown to the source's SQL analytics endpoint, typed JSON response, plus schema-evolution, mutation, and AI-agent (MCP) branches architecture."
+      "title": "7. Schema and workload risks",
+      "explanation": "Schema drift, over-broad selection, and unsupported operations can break or overload clients."
     }
   ]
 }

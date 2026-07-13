@@ -1,313 +1,315 @@
 {
   "id": "event-driven-orchestration-architecture",
-  "title": "Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job…",
-  "purpose": "Original diagram: Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling",
-  "accessibleSummary": "An interactive architecture infographic with 5 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling",
+  "title": "Event-driven Fabric orchestration",
+  "purpose": "Events enter through governed streaming connectors, are shaped and evaluated, trigger a bounded Copy job, and close the loop with run telemetry and replay handling.",
+  "accessibleSummary": "Event-driven Fabric orchestration. Operational event sources; Eventstream routing; Activator condition; Governed Copy job; Telemetry, dedupe and replay.",
+  "longDescription": "Events enter through governed streaming connectors, are shaped and evaluated, trigger a bounded Copy job, and close the loop with run telemetry and replay handling.",
   "type": "architecture",
   "topicSlug": "data-factory",
   "capabilityIds": [
     "data-factory"
   ],
-  "revision": "1",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/event-driven-orchestration-architecture.svg",
   "nodes": [
     {
       "id": "step-1",
-      "label": "data factory boundary",
-      "summary": "data factory boundary in the Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Operational event sources",
+      "summary": "Cloud, Kafka, MQTT, database CDC, and Fabric item events provide change signals.",
+      "detail": "A source event should identify a business change, not merely replace a frequent polling tick.",
+      "whyItMatters": "Good event contracts carry identity and time for deduplication and replay.",
+      "classification": "fact",
       "layers": [
-        "data"
+        "data",
+        "orchestration"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "evidence": [
+        {
+          "sourceKey": "rti-overview",
+          "note": "Real-Time hub catalogs streams and Fabric or Azure events for event-driven workloads."
+        },
+        {
+          "sourceKey": "fabric-blog-eventstream-connectors",
+          "note": "Eventstream includes production connectors for Kafka and private-network sources."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
+          "Source event",
+          "Event identity",
+          "Event time"
         ],
         "processing": [
-          "Apply the data factory boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Authenticate connector",
+          "Receive event"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Ingested event"
         ],
-        "example": "Trace one representative data product through data factory boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A file-created event identifies a new supplier extract.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Connector security",
+          "Schema contract"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Duplicate or out-of-order events trigger repeated work."
         ]
       },
       "drillTarget": {
         "kind": "topic",
         "slug": "data-factory",
-        "label": "Open data factory"
+        "label": "Open data-factory"
       }
     },
     {
       "id": "step-2",
-      "label": "Fabric event-driven orchestration from event sources through Events…",
-      "summary": "Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution in the Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Eventstream routing",
+      "summary": "Eventstream filters, transforms, deduplicates, and routes events to multiple destinations.",
+      "detail": "The stream layer normalizes the signal before automation consumes it.",
+      "whyItMatters": "Early shaping keeps downstream rules simple and observable.",
+      "classification": "fact",
       "layers": [
-        "security"
+        "orchestration",
+        "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "evidence": [
+        {
+          "sourceKey": "rti-overview",
+          "note": "Eventstreams provide filtering, cleansing, windowing, deduplication and content-based routing."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Ingested event"
         ],
         "processing": [
-          "Apply the Fabric event-driven orchestration from event sources through Eventstream and Activator in… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Validate schema",
+          "Filter and route"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Qualified event stream"
         ],
-        "example": "Trace one representative data product through Fabric event-driven orchestration from event sources through Eventstream and Activator into governe…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "Only completed-file events for the production path pass to automation.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Filter expression",
+          "Dead-letter destination"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "An over-broad filter floods downstream actions."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "data-factory",
+        "label": "Open data-factory"
       }
     },
     {
       "id": "step-3",
-      "label": "operational telemetry",
-      "summary": "operational telemetry in the Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Activator condition",
+      "summary": "Activator continuously evaluates a defined event or metric condition.",
+      "detail": "When the condition is met it invokes the configured action instead of waiting for a schedule.",
+      "whyItMatters": "The rule is the explicit bridge between detection and work.",
+      "classification": "fact",
       "layers": [
-        "observability"
+        "orchestration"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
+      "evidence": [
+        {
+          "sourceKey": "fabric-blog-activator-copy-job",
+          "note": "Activator can monitor file, table, or metric conditions and invoke a Copy job only when the condition is met."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
+          "Qualified event",
+          "Rule state"
         ],
         "processing": [
-          "Apply the operational telemetry responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Evaluate condition",
+          "Suppress non-matches"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Action invocation"
         ],
-        "example": "Trace one representative data product through operational telemetry: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A new production file invokes the supplier Copy job.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Condition",
+          "Cooldown"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "A noisy rule triggers duplicate executions."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "data-factory",
+        "label": "Open data-factory"
       }
     },
     {
       "id": "step-4",
-      "label": "and failure handling",
-      "summary": "and failure handling in the Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "warning",
+      "label": "Governed Copy job",
+      "summary": "The Copy job moves full or incremental data using configured source, destination, and mappings.",
+      "detail": "The action is authored and tested before Activator invokes it.",
+      "whyItMatters": "Separating detection from movement keeps retries bounded and auditable.",
+      "classification": "fact",
       "layers": [
-        "metadata"
+        "orchestration",
+        "data"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "evidence": [
+        {
+          "sourceKey": "fabric-blog-activator-copy-job",
+          "note": "The recommended pattern defines the Copy job first, then uses an Activator rule to invoke it."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
+          "Action invocation",
+          "Copy configuration"
         ],
         "processing": [
-          "Apply the and failure handling responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Read source",
+          "Map and write destination"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Copied data and run record"
         ],
-        "example": "Trace one representative data product through and failure handling: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "The job incrementally loads the new supplier file to bronze.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Incremental key",
+          "Retry"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "The copy succeeds but its watermark is not committed."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "data-factory",
+        "label": "Open data-factory"
       }
     },
     {
       "id": "step-5",
-      "label": "data factory governed outcome",
-      "summary": "data factory governed outcome in the Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Telemetry, dedupe and replay",
+      "summary": "Run history and event identity determine whether to acknowledge, retry, quarantine, or replay.",
+      "detail": "Operators reconcile source events with action and Copy job outcomes.",
+      "whyItMatters": "The feedback path makes event-driven automation recoverable rather than fire-and-forget.",
+      "classification": "warning",
       "layers": [
-        "security"
+        "observability",
+        "orchestration"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "evidence": [
+        {
+          "sourceKey": "fabric-blog-lakehouse-table-health",
+          "note": "Operational telemetry over lakehouse workloads is needed to surface failures and maintenance state."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Event id",
+          "Rule invocation",
+          "Copy run result"
         ],
         "processing": [
-          "Apply the data factory governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Correlate outcomes",
+          "Retry or quarantine deterministically"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Acknowledgement or replay"
         ],
-        "example": "Trace one representative data product through data factory governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A failed copy is replayed once using the same event id after the destination recovers.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Idempotency key",
+          "Retry ceiling"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "No correlation exists between event and copy run."
         ]
       },
       "drillTarget": {
-        "kind": "capability",
+        "kind": "topic",
         "slug": "data-factory",
-        "label": "Open data factory"
+        "label": "Open data-factory"
       }
     }
   ],
   "edges": [
     {
-      "id": "edge-1",
+      "id": "e1",
       "from": "step-1",
       "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "security",
+      "label": "authenticated event stream",
+      "layer": "orchestration",
       "kind": "flow"
     },
     {
-      "id": "edge-2",
+      "id": "e2",
       "from": "step-2",
       "to": "step-3",
-      "label": "hands governed output to",
+      "label": "qualified business events",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e3",
+      "from": "step-3",
+      "to": "step-4",
+      "label": "condition invokes action",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e4",
+      "from": "step-4",
+      "to": "step-5",
+      "label": "copy outcome and correlation id",
       "layer": "observability",
       "kind": "flow"
     },
     {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
+      "id": "e5",
+      "from": "step-5",
+      "to": "step-3",
+      "label": "safe replay of failed event",
+      "layer": "orchestration",
+      "kind": "feedback"
     }
   ],
   "walkthrough": [
     {
       "nodeId": "step-1",
-      "title": "1. data factory boundary",
-      "explanation": "data factory boundary in the Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling architecture."
+      "title": "1. Operational event sources",
+      "explanation": "Cloud, Kafka, MQTT, database CDC, and Fabric item events provide change signals."
     },
     {
       "nodeId": "step-2",
-      "title": "2. Fabric event-driven orchestration from event sources through Events…",
-      "explanation": "Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution in the Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling architecture."
+      "title": "2. Eventstream routing",
+      "explanation": "Eventstream filters, transforms, deduplicates, and routes events to multiple destinations."
     },
     {
       "nodeId": "step-3",
-      "title": "3. operational telemetry",
-      "explanation": "operational telemetry in the Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling architecture."
+      "title": "3. Activator condition",
+      "explanation": "Activator continuously evaluates a defined event or metric condition."
     },
     {
       "nodeId": "step-4",
-      "title": "4. and failure handling",
-      "explanation": "and failure handling in the Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling architecture."
+      "title": "4. Governed Copy job",
+      "explanation": "The Copy job moves full or incremental data using configured source, destination, and mappings."
     },
     {
       "nodeId": "step-5",
-      "title": "5. data factory governed outcome",
-      "explanation": "data factory governed outcome in the Fabric event-driven orchestration from event sources through Eventstream and Activator into governed Copy Job execution, operational telemetry, and failure handling architecture."
+      "title": "5. Telemetry, dedupe and replay",
+      "explanation": "Run history and event identity determine whether to acknowledge, retry, quarantine, or replay."
     }
   ]
 }

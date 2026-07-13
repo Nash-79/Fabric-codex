@@ -1,60 +1,54 @@
 {
   "id": "purview-inheritance-decision-tree",
-  "title": "how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item…",
-  "purpose": "Decision diagram: how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Decision diagram: how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries",
+  "title": "Purview policy and label resolution",
+  "purpose": "Decision path from an access request through tenant/domain policy, workspace and item authorization, supported data-level controls, label resolution, and protected export.",
+  "accessibleSummary": "Purview policy and label resolution. Access request; Delegated domain setting; Workspace and item scope; Data security supported?; Resolve sensitivity label; Enforce effective state; Export and unlabeled risk.",
+  "longDescription": "Decision path from an access request through tenant/domain policy, workspace and item authorization, supported data-level controls, label resolution, and protected export.",
   "type": "decision",
   "topicSlug": "governance",
   "capabilityIds": [
     "purview"
   ],
-  "revision": "1",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/purview-inheritance-decision-tree.svg",
   "nodes": [
     {
       "id": "step-1",
-      "label": "governance boundary",
-      "summary": "governance boundary in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Access request",
+      "summary": "A user or workload attempts to open an item or query its data.",
+      "detail": "Identity, workspace role, item permission, and the requested operation establish the authorization context.",
+      "whyItMatters": "Governance begins with effective access, not with a label alone.",
+      "classification": "fact",
       "layers": [
         "security"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "evidence": [
+        {
+          "sourceKey": "governance-compliance-overview",
+          "note": "Fabric combines workspace access with row-, column-, and table-level controls on supported data items."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "User identity",
+          "Requested item and operation"
         ],
         "processing": [
-          "Apply the governance boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Resolve workspace and item permissions",
+          "Pass the authorized request to data-level controls"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Authorized evaluation context"
         ],
-        "example": "Trace one representative data product through governance boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A regional analyst opens a certified sales semantic model from its workspace.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Workspace role",
+          "Item sharing permissions"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "A broad workspace role grants more item access than intended."
         ]
       },
       "drillTarget": {
@@ -65,373 +59,366 @@
     },
     {
       "id": "step-2",
-      "label": "how permissions and sensitivity labels resolve at open/query time a…",
-      "summary": "how permissions and sensitivity labels resolve at open/query time across tenant in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Delegated domain setting",
+      "summary": "A domain can override only governance settings delegated from the tenant level.",
+      "detail": "Tenant administrators establish defaults; domain administrators apply permitted overrides for their business area.",
+      "whyItMatters": "The branch separates centrally fixed policy from legitimately delegated policy.",
+      "classification": "fact",
       "layers": [
-        "security"
+        "governance"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "evidence": [
+        {
+          "sourceKey": "governance-compliance-overview",
+          "note": "Domains may apply governance settings delegated from the tenant."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Tenant defaults",
+          "Item domain assignment"
         ],
         "processing": [
-          "Apply the how permissions and sensitivity labels resolve at open/query time across tenant responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Check whether the setting is delegated",
+          "Apply a permitted domain override"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Effective domain policy"
         ],
-        "example": "Trace one representative data product through how permissions and sensitivity labels resolve at open/query time across tenant: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "Finance applies its delegated certification workflow while retaining tenant-wide DLP.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Delegation scope",
+          "Domain administrator"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Assuming every tenant setting can be overridden."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "governance",
+        "label": "Open governance"
       }
     },
     {
       "id": "step-3",
-      "label": "and item boundaries",
-      "summary": "and item boundaries in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Workspace and item scope",
+      "summary": "Workspace roles and item permissions narrow who can reach the governed item.",
+      "detail": "The request is evaluated at workspace and item boundaries before supported data rules.",
+      "whyItMatters": "This is where ownership and sharing mistakes surface.",
+      "classification": "fact",
       "layers": [
-        "compute"
+        "security"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "governance-compliance-overview",
+          "note": "Fabric governance spans domains, workspaces and item-level metadata and access surfaces."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Effective domain policy",
+          "Workspace role",
+          "Item permissions"
         ],
         "processing": [
-          "Apply the and item boundaries responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Resolve applicable access grants"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Item access decision"
         ],
-        "example": "Trace one representative data product through and item boundaries: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A viewer discovers a warehouse but can query only when the item owner grants access.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Workspace membership",
+          "Item sharing"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Confusing catalog visibility with query permission."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "governance",
+        "label": "Open governance"
       }
     },
     {
       "id": "step-4",
-      "label": "tenant-default vs domain-delegated settings",
-      "summary": "tenant-default vs domain-delegated settings in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Data security supported?",
+      "summary": "RLS, CLS and TLS are available only on supported Fabric item types.",
+      "detail": "The item type determines whether granular policies can further restrict an authorized query.",
+      "whyItMatters": "The decision prevents promising controls the serving item does not implement.",
+      "classification": "fact",
       "layers": [
-        "metadata"
+        "security"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "evidence": [
+        {
+          "sourceKey": "governance-compliance-overview",
+          "note": "RLS, CLS and TLS are supported for SQL analytics endpoints, warehouses, Direct Lake, and KQL Database items."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
+          "Item access decision",
+          "Item type"
         ],
         "processing": [
-          "Apply the tenant-default vs domain-delegated settings responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Check supported granular controls"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Policy path or item-level-only path"
         ],
-        "example": "Trace one representative data product through tenant-default vs domain-delegated settings: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A warehouse query proceeds to RLS evaluation.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Item type",
+          "RLS/CLS/TLS definitions"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Designing around an unavailable security feature."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "governance",
+        "label": "Open governance"
       }
     },
     {
       "id": "step-5",
-      "label": "subdomain resolution",
-      "summary": "subdomain resolution in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Resolve sensitivity label",
+      "summary": "Labels may be manual, defaulted, inherited, or applied programmatically.",
+      "detail": "Purview Information Protection supplies classification independently of access.",
+      "whyItMatters": "A consistent label path keeps protection attached to data.",
+      "classification": "fact",
       "layers": [
-        "governance"
+        "governance",
+        "metadata"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
+      "evidence": [
+        {
+          "sourceKey": "governance-compliance-overview",
+          "note": "Sensitivity labels can be manual, defaulted, inherited, or programmatic."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
+          "Item metadata",
+          "Label policy",
+          "Upstream label"
         ],
         "processing": [
-          "Apply the subdomain resolution responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Choose the applicable labeling mechanism",
+          "Record the effective label"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Effective sensitivity label"
         ],
-        "example": "Trace one representative data product through subdomain resolution: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A lakehouse inherits Confidential from its governed upstream source.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Default labeling",
+          "Mandatory labeling"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Unlabeled items provide no downstream classification signal."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "governance",
+        "label": "Open governance"
       }
     },
     {
       "id": "step-6",
-      "label": "RLS/CLS/TLS eligibility by item type",
-      "summary": "RLS/CLS/TLS eligibility by item type in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
+      "label": "Enforce effective state",
+      "summary": "Authorization, data security, and label policy converge on the allowed operation.",
+      "detail": "Supported filters restrict returned data while the label informs protection and governance handling.",
+      "whyItMatters": "Labels do not replace authorization.",
       "classification": "pattern",
       "layers": [
-        "security"
+        "security",
+        "governance"
       ],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Eligible access path",
+          "Effective label"
         ],
         "processing": [
-          "Apply the RLS/CLS/TLS eligibility by item type responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Apply supported filters and protection policy"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Governed result or denial"
         ],
-        "example": "Trace one representative data product through RLS/CLS/TLS eligibility by item type: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "The analyst receives only its region's rows from a Confidential table.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Policy tests",
+          "Audit logging"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Treating a label as an access grant."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "governance",
+        "label": "Open governance"
       }
     },
     {
       "id": "step-7",
-      "label": "and the label-resolution walk (manual",
-      "summary": "and the label-resolution walk (manual in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Export and unlabeled risk",
+      "summary": "Supported exports retain label protection; an unlabeled path loses that safeguard.",
+      "detail": "This warning contrasts protected export with inconsistent label coverage.",
+      "whyItMatters": "Exports can leave the managed analytics boundary.",
+      "classification": "warning",
       "layers": [
-        "observability"
+        "security",
+        "governance"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
+      "evidence": [
+        {
+          "sourceKey": "fabric-blog-data-protection-ai-ready",
+          "note": "Label protection follows supported exports and can enforce encryption for authorized users."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
+          "Governed result",
+          "Export request"
         ],
         "processing": [
-          "Apply the and the label-resolution walk (manual responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Verify label and supported export path"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Protected export or governance gap"
         ],
-        "example": "Trace one representative data product through and the label-resolution walk (manual: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A Confidential report exported to PDF remains restricted.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Export policy",
+          "Label coverage report"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "An unlabeled item is exported without intended protection."
         ]
       },
       "drillTarget": {
-        "kind": "capability",
-        "slug": "purview",
-        "label": "Open purview"
+        "kind": "topic",
+        "slug": "governance",
+        "label": "Open governance"
       }
     }
   ],
   "edges": [
     {
-      "id": "edge-1",
+      "id": "e1",
       "from": "step-1",
       "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "security",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
+      "label": "resolve governing domain policy",
       "layer": "governance",
       "kind": "flow"
     },
     {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
+      "id": "e2",
+      "from": "step-2",
+      "to": "step-3",
+      "label": "Delegated: apply domain override",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e3",
+      "from": "step-2",
+      "to": "step-3",
+      "label": "Not delegated: retain tenant default",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e4",
+      "from": "step-3",
+      "to": "step-4",
+      "label": "authorized request reaches controls",
       "layer": "security",
       "kind": "flow"
     },
     {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "observability",
+      "id": "e5",
+      "from": "step-4",
+      "to": "step-6",
+      "label": "Supported: apply RLS, CLS or TLS",
+      "layer": "security",
+      "kind": "branch"
+    },
+    {
+      "id": "e6",
+      "from": "step-4",
+      "to": "step-6",
+      "label": "Unsupported: use available item controls",
+      "layer": "security",
+      "kind": "branch"
+    },
+    {
+      "id": "e7",
+      "from": "step-5",
+      "to": "step-6",
+      "label": "effective label informs protection",
+      "layer": "metadata",
       "kind": "flow"
     },
     {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
+      "id": "e8",
+      "from": "step-6",
+      "to": "step-7",
+      "label": "result may cross item boundary",
+      "layer": "security",
+      "kind": "flow"
     }
   ],
   "walkthrough": [
     {
       "nodeId": "step-1",
-      "title": "1. governance boundary",
-      "explanation": "governance boundary in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture."
+      "title": "1. Access request",
+      "explanation": "A user or workload attempts to open an item or query its data."
     },
     {
       "nodeId": "step-2",
-      "title": "2. how permissions and sensitivity labels resolve at open/query time a…",
-      "explanation": "how permissions and sensitivity labels resolve at open/query time across tenant in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture."
+      "title": "2. Delegated domain setting",
+      "explanation": "A domain can override only governance settings delegated from the tenant level."
     },
     {
       "nodeId": "step-3",
-      "title": "3. and item boundaries",
-      "explanation": "and item boundaries in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture."
+      "title": "3. Workspace and item scope",
+      "explanation": "Workspace roles and item permissions narrow who can reach the governed item."
     },
     {
       "nodeId": "step-4",
-      "title": "4. tenant-default vs domain-delegated settings",
-      "explanation": "tenant-default vs domain-delegated settings in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture."
+      "title": "4. Data security supported?",
+      "explanation": "RLS, CLS and TLS are available only on supported Fabric item types."
     },
     {
       "nodeId": "step-5",
-      "title": "5. subdomain resolution",
-      "explanation": "subdomain resolution in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture."
+      "title": "5. Resolve sensitivity label",
+      "explanation": "Labels may be manual, defaulted, inherited, or applied programmatically."
     },
     {
       "nodeId": "step-6",
-      "title": "6. RLS/CLS/TLS eligibility by item type",
-      "explanation": "RLS/CLS/TLS eligibility by item type in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture."
+      "title": "6. Enforce effective state",
+      "explanation": "Authorization, data security, and label policy converge on the allowed operation."
     },
     {
       "nodeId": "step-7",
-      "title": "7. and the label-resolution walk (manual",
-      "explanation": "and the label-resolution walk (manual in the how permissions and sensitivity labels resolve at open/query time across tenant, domain, workspace, and item boundaries — tenant-default vs domain-delegated settings, subdomain resolution, RLS/CLS/TLS eligibility by item type, and the label-resolution walk (manual, inheritance from an upstream source, default labeling, or programmatic/unlabeled), converging on an enforced label/permission state that persists through export and across tenant boundaries architecture."
+      "title": "7. Export and unlabeled risk",
+      "explanation": "Supported exports retain label protection; an unlabeled path loses that safeguard."
     }
   ]
 }

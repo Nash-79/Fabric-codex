@@ -1,371 +1,388 @@
 {
   "id": "multi-stack-integration-architecture",
-  "title": "Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external…",
-  "purpose": "Original diagram: Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths",
-  "accessibleSummary": "An interactive architecture infographic with 6 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths",
+  "title": "Multi-stack integration architecture",
+  "purpose": "External estates connect to governed OneLake through deliberate virtualize, replicate, or copy paths, then serve Fabric and API consumers without hiding security and freshness trade-offs.",
+  "accessibleSummary": "Multi-stack integration architecture. External data estates; Virtualize with shortcut; Replicate with mirroring; Copy with Data Factory; Governed OneLake hub; Serve BI, APIs and engineering.",
+  "longDescription": "External estates connect to governed OneLake through deliberate virtualize, replicate, or copy paths, then serve Fabric and API consumers without hiding security and freshness trade-offs.",
   "type": "architecture",
   "topicSlug": "multi-stack-integration",
   "capabilityIds": [
     "onelake"
   ],
-  "revision": "1",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/multi-stack-integration-architecture.svg",
   "nodes": [
     {
       "id": "step-1",
-      "label": "multi stack integration boundary",
-      "summary": "multi stack integration boundary in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
+      "label": "External data estates",
+      "summary": "Operational databases and cloud object stores remain authoritative outside Fabric.",
+      "detail": "Source ownership, network reachability, change semantics, and egress constraints frame the integration choice.",
+      "whyItMatters": "The architecture begins by respecting systems of record.",
       "classification": "pattern",
       "layers": [
-        "data"
+        "data",
+        "security"
       ],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
-      ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
+          "External databases",
+          "S3, GCS or ADLS",
+          "Source SLAs"
         ],
         "processing": [
-          "Apply the multi stack integration boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Classify source and access constraints"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Integration requirements"
         ],
-        "example": "Trace one representative data product through multi stack integration boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A Snowflake source and S3 landing zone must feed the same analytics product.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Source owner",
+          "Network policy"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Treating every source as a batch-copy candidate."
         ]
       },
       "drillTarget": {
         "kind": "topic",
         "slug": "multi-stack-integration",
-        "label": "Open multi stack integration"
+        "label": "Open multi-stack-integration"
       }
     },
     {
       "id": "step-2",
-      "label": "Fabric/OneLake hub with virtualize (shortcut)",
-      "summary": "Fabric/OneLake hub with virtualize (shortcut) in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Virtualize with shortcut",
+      "summary": "OneLake shortcuts reference supported external data without creating another physical copy.",
+      "detail": "The shortcut presents remote data in the OneLake namespace while the source remains authoritative.",
+      "whyItMatters": "Virtualization minimizes duplication when remote access and freshness are acceptable.",
+      "classification": "fact",
       "layers": [
-        "orchestration"
+        "data"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "evidence": [
+        {
+          "sourceKey": "onelake-shortcuts",
+          "note": "OneLake shortcuts expose supported internal and external storage through a virtual reference."
+        },
+        {
+          "sourceKey": "onelake-overview",
+          "note": "OneLake provides a unified logical namespace for Fabric data."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
+          "Remote object path",
+          "Shortcut connection"
         ],
         "processing": [
-          "Apply the Fabric/OneLake hub with virtualize (shortcut) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Resolve shortcut path",
+          "Read source data on demand"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "OneLake-visible virtual data"
         ],
-        "example": "Trace one representative data product through Fabric/OneLake hub with virtualize (shortcut): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A lakehouse reads governed Parquet in S3 through a shortcut.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Authentication mode",
+          "Cache policy"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Remote permissions or egress make reads fail or costly."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "multi-stack-integration",
+        "label": "Open multi-stack-integration"
       }
     },
     {
       "id": "step-3",
-      "label": "replicate (mirroring)",
-      "summary": "replicate (mirroring) in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Replicate with mirroring",
+      "summary": "Mirroring continuously brings supported source changes into Fabric-managed storage.",
+      "detail": "A replica supports analytics without redirecting operational ownership to Fabric.",
+      "whyItMatters": "Replication is useful when local analytical reads and low-copy-latency matter.",
+      "classification": "fact",
       "layers": [
-        "compute"
+        "data",
+        "orchestration"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "mirroring-overview",
+          "note": "Fabric Mirroring replicates supported operational and analytical sources into OneLake for analytics."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Supported source",
+          "Change stream"
         ],
         "processing": [
-          "Apply the replicate (mirroring) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Capture and apply changes"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Fabric analytical replica"
         ],
-        "example": "Trace one representative data product through replicate (mirroring): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A supported database mirrors order changes for near-current BI.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Mirroring configuration",
+          "Lag monitoring"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Unsupported changes or stalled replication create freshness gaps."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "multi-stack-integration",
+        "label": "Open multi-stack-integration"
       }
     },
     {
       "id": "step-4",
-      "label": "and copy (pipeline) spokes to external non-Fabric estates",
-      "summary": "and copy (pipeline) spokes to external non-Fabric estates in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Copy with Data Factory",
+      "summary": "Pipelines and Copy activity move bounded snapshots or increments across many connectors.",
+      "detail": "Orchestration adds schedules, mappings, branching, retries, and explicit destination ownership.",
+      "whyItMatters": "Copy is the flexible path when transformation or controlled materialization is required.",
+      "classification": "fact",
       "layers": [
-        "orchestration"
+        "orchestration",
+        "data"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "evidence": [
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "Fabric Data Factory provides pipelines and data movement across sources."
+        },
+        {
+          "sourceKey": "copy-activity-performance-and-scalability",
+          "note": "Copy activity supports scalable movement with configurable source and sink behavior."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
+          "Source dataset",
+          "Watermark or schedule"
         ],
         "processing": [
-          "Apply the and copy (pipeline) spokes to external non-Fabric estates responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Read, map and write",
+          "Record run state"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Owned destination copy"
         ],
-        "example": "Trace one representative data product through and copy (pipeline) spokes to external non-Fabric estates: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A pipeline copies a nightly Salesforce increment into a bronze lakehouse table.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Trigger",
+          "Parallelism",
+          "Retry"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "A failed watermark advance skips or duplicates records."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "multi-stack-integration",
+        "label": "Open multi-stack-integration"
       }
     },
     {
       "id": "step-5",
-      "label": "plus open-Delta interop and outward exposure paths",
-      "summary": "plus open-Delta interop and outward exposure paths in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Governed OneLake hub",
+      "summary": "Virtual and materialized paths converge in workspaces where ownership, lineage, and security are applied.",
+      "detail": "The logical hub lets downstream workloads find data through a consistent Fabric boundary.",
+      "whyItMatters": "Convergence is valuable only when access models remain explicit per path.",
+      "classification": "fact",
       "layers": [
-        "governance"
+        "governance",
+        "security",
+        "data"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
+      "evidence": [
+        {
+          "sourceKey": "governance-compliance-overview",
+          "note": "Fabric governance covers discovery, lineage, labels, access and monitoring."
+        },
+        {
+          "sourceKey": "onelake-security",
+          "note": "OneLake security provides data-access controls for governed storage."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
+          "Shortcut, mirror or copied data",
+          "Domain policy"
         ],
         "processing": [
-          "Apply the plus open-Delta interop and outward exposure paths responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Catalog and secure items",
+          "Expose governed contracts"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Discoverable data products"
         ],
-        "example": "Trace one representative data product through plus open-Delta interop and outward exposure paths: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A domain publishes curated customer data with lineage to both S3 and CRM.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Workspace ownership",
+          "Sensitivity labels"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "A shortcut's source permissions are mistaken for local item ownership."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "multi-stack-integration",
+        "label": "Open multi-stack-integration"
       }
     },
     {
       "id": "step-6",
-      "label": "onelake governed outcome",
-      "summary": "onelake governed outcome in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Serve BI, APIs and engineering",
+      "summary": "Fabric workloads consume the governed data through SQL, Spark, semantic models, and GraphQL.",
+      "detail": "Serving contracts should match consumer latency, query, and write requirements.",
+      "whyItMatters": "A shared hub supports multiple experiences without pretending they use identical engines.",
+      "classification": "warning",
       "layers": [
-        "security"
+        "compute",
+        "metadata"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "evidence": [
+        {
+          "sourceKey": "api-graphql-overview",
+          "note": "Fabric API for GraphQL provides a typed API over configured Fabric data sources."
+        },
+        {
+          "sourceKey": "lakehouse-sql-analytics-endpoint",
+          "note": "A lakehouse SQL analytics endpoint exposes a SQL query surface over lakehouse tables."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Governed products",
+          "Consumer contract"
         ],
         "processing": [
-          "Apply the onelake governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Select serving surface",
+          "Monitor freshness and authorization"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Reports, APIs or engineering outputs"
         ],
-        "example": "Trace one representative data product through onelake governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "Power BI reads a semantic model while an app uses GraphQL over a curated source.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Serving SLA",
+          "Schema version"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Consumers assume shortcut, mirror and copy have identical freshness."
         ]
       },
       "drillTarget": {
-        "kind": "capability",
-        "slug": "onelake",
-        "label": "Open onelake"
+        "kind": "topic",
+        "slug": "multi-stack-integration",
+        "label": "Open multi-stack-integration"
       }
     }
   ],
   "edges": [
     {
-      "id": "edge-1",
+      "id": "e1",
       "from": "step-1",
       "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "orchestration",
-      "kind": "flow"
+      "label": "remote data stays in place",
+      "layer": "data",
+      "kind": "branch"
     },
     {
-      "id": "edge-2",
-      "from": "step-2",
+      "id": "e2",
+      "from": "step-1",
       "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
+      "label": "supported changes are replicated",
+      "layer": "data",
+      "kind": "branch"
     },
     {
-      "id": "edge-3",
-      "from": "step-3",
+      "id": "e3",
+      "from": "step-1",
       "to": "step-4",
-      "label": "hands governed output to",
+      "label": "bounded data is materialized",
       "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "e4",
+      "from": "step-2",
+      "to": "step-5",
+      "label": "virtual path enters namespace",
+      "layer": "data",
       "kind": "flow"
     },
     {
-      "id": "edge-4",
+      "id": "e5",
+      "from": "step-3",
+      "to": "step-5",
+      "label": "replica lands for analytics",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e6",
       "from": "step-4",
       "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "governance",
+      "label": "pipeline writes owned copy",
+      "layer": "data",
       "kind": "flow"
     },
     {
-      "id": "edge-5",
+      "id": "e7",
       "from": "step-5",
       "to": "step-6",
-      "label": "hands governed output to",
-      "layer": "security",
+      "label": "governed serving contracts",
+      "layer": "metadata",
       "kind": "flow"
     }
   ],
   "walkthrough": [
     {
       "nodeId": "step-1",
-      "title": "1. multi stack integration boundary",
-      "explanation": "multi stack integration boundary in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture."
+      "title": "1. External data estates",
+      "explanation": "Operational databases and cloud object stores remain authoritative outside Fabric."
     },
     {
       "nodeId": "step-2",
-      "title": "2. Fabric/OneLake hub with virtualize (shortcut)",
-      "explanation": "Fabric/OneLake hub with virtualize (shortcut) in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture."
+      "title": "2. Virtualize with shortcut",
+      "explanation": "OneLake shortcuts reference supported external data without creating another physical copy."
     },
     {
       "nodeId": "step-3",
-      "title": "3. replicate (mirroring)",
-      "explanation": "replicate (mirroring) in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture."
+      "title": "3. Replicate with mirroring",
+      "explanation": "Mirroring continuously brings supported source changes into Fabric-managed storage."
     },
     {
       "nodeId": "step-4",
-      "title": "4. and copy (pipeline) spokes to external non-Fabric estates",
-      "explanation": "and copy (pipeline) spokes to external non-Fabric estates in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture."
+      "title": "4. Copy with Data Factory",
+      "explanation": "Pipelines and Copy activity move bounded snapshots or increments across many connectors."
     },
     {
       "nodeId": "step-5",
-      "title": "5. plus open-Delta interop and outward exposure paths",
-      "explanation": "plus open-Delta interop and outward exposure paths in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture."
+      "title": "5. Governed OneLake hub",
+      "explanation": "Virtual and materialized paths converge in workspaces where ownership, lineage, and security are applied."
     },
     {
       "nodeId": "step-6",
-      "title": "6. onelake governed outcome",
-      "explanation": "onelake governed outcome in the Fabric/OneLake hub with virtualize (shortcut), replicate (mirroring), and copy (pipeline) spokes to external non-Fabric estates, plus open-Delta interop and outward exposure paths architecture."
+      "title": "6. Serve BI, APIs and engineering",
+      "explanation": "Fabric workloads consume the governed data through SQL, Spark, semantic models, and GraphQL."
     }
   ]
 }

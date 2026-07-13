@@ -1,341 +1,297 @@
 {
   "id": "polaris-engine",
-  "title": "Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless com…",
-  "purpose": "Original diagram: Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage",
-  "accessibleSummary": "An interactive architecture infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage",
+  "title": "Polaris Distributed SQL Query Engine",
+  "purpose": "Trace SQL compilation, distributed task planning, scheduling, stateless execution, and cell-based access to durable storage.",
+  "accessibleSummary": "SQL enters a front end and two-phase optimizer. DQP turns the plan into a task DAG. Finite-state orchestration and a global scheduler place work on stateless compute. Tasks operate over data cells whose durable state remains in remote storage.",
+  "longDescription": "Polaris separates SQL compilation from distributed execution. The optimizer selects physical distribution and movement. DQP divides plans into maximal tasks connected as a DAG. Hierarchical finite-state machines manage progress and retry. A global workload graph schedules tasks onto stateless SQL compute. Cell abstractions connect those tasks to partitioned and hash-distributed data in durable remote storage.",
   "type": "internals",
   "topicSlug": "polaris",
   "capabilityIds": [
     "polaris"
   ],
-  "revision": "1",
-  "qaStatus": "draft",
-  "staticPath": "/diagrams/polaris-engine.svg",
   "nodes": [
     {
       "id": "step-1",
-      "label": "polaris boundary",
-      "summary": "polaris boundary in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the polaris boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through polaris boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "polaris",
-        "label": "Open polaris"
-      }
-    },
-    {
-      "id": "step-2",
-      "label": "Polaris distributed SQL query engine",
-      "summary": "Polaris distributed SQL query engine in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "SQL front end",
+      "summary": "The SQL front end parses and optimizes a query before distributed execution.",
+      "detail": "The SQL front end parses and optimizes a query before distributed execution. Bind names, optimize expressions, and produce a plan.",
+      "whyItMatters": "A plan ready for distributed physical planning depends on making this responsibility and its operating boundary explicit.",
+      "classification": "fact",
       "layers": [
         "compute"
       ],
-      "evidence": [],
+      "evidence": [
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "The SQL frontend optimizes requests and passes plans to DQP."
+        }
+      ],
       "tags": [
         "MicrosoftFabric",
-        "DataArchitecture",
         "compute"
       ],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "T-SQL request, schema metadata, and statistics"
         ],
         "processing": [
-          "Apply the Polaris distributed SQL query engine responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Bind names, optimize expressions, and produce a plan"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "A plan ready for distributed physical planning"
         ],
-        "example": "Trace one representative data product through Polaris distributed SQL query engine: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A grouped sales query is compiled before any backend task runs.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Statistics and query shape"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "SQL front-end",
-      "summary": "SQL front-end in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the SQL front-end responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through SQL front-end: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "DQP task DAG scheduler",
-      "summary": "DQP task DAG scheduler in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the DQP task DAG scheduler responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through DQP task DAG scheduler: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "FSM orchestrator",
-      "summary": "FSM orchestrator in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the FSM orchestrator responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through FSM orchestrator: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "stateless compute pool",
-      "summary": "stateless compute pool in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the stateless compute pool responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through stateless compute pool: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "cell-based data distribution",
-      "summary": "cell-based data distribution in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "observability"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the cell-based data distribution responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through cell-based data distribution: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Stale statistics lead to a costly distribution choice"
         ]
       },
       "drillTarget": {
         "kind": "capability",
         "slug": "polaris",
-        "label": "Open polaris"
+        "label": "Polaris"
+      }
+    },
+    {
+      "id": "step-2",
+      "label": "Distributed optimizer",
+      "summary": "A second planning phase chooses distribution properties and minimizes data movement.",
+      "detail": "A second planning phase chooses distribution properties and minimizes data movement. Enumerate distributed alternatives and add required move operators.",
+      "whyItMatters": "A valid distributed physical plan depends on making this responsibility and its operating boundary explicit.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Polaris performs distributed cost-based planning and injects redistribution or broadcast enforcers."
+        }
+      ],
+      "tags": [
+        "MicrosoftFabric",
+        "compute"
+      ],
+      "drill": {
+        "inputs": [
+          "Logical optimizer search space and data distributions"
+        ],
+        "processing": [
+          "Enumerate distributed alternatives and add required move operators"
+        ],
+        "outputs": [
+          "A valid distributed physical plan"
+        ],
+        "example": "A small dimension is broadcast instead of repartitioning a large fact table.",
+        "controls": [
+          "Distribution keys and estimated cardinalities"
+        ],
+        "failureModes": [
+          "Bad estimates choose a broadcast too large for available memory"
+        ]
+      }
+    },
+    {
+      "id": "step-3",
+      "label": "Task DAG",
+      "summary": "DQP divides the physical plan into tasks linked by dataflow and precedence.",
+      "detail": "DQP divides the physical plan into tasks linked by dataflow and precedence. Fuse compatible operators and cut tasks at blocking movement boundaries.",
+      "whyItMatters": "A directed acyclic graph of executable tasks depends on making this responsibility and its operating boundary explicit.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "orchestration"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "A Polaris plan becomes a DAG of task templates whose edges encode dataflow and precedence."
+        }
+      ],
+      "tags": [
+        "MicrosoftFabric",
+        "compute",
+        "orchestration"
+      ],
+      "drill": {
+        "inputs": [
+          "Distributed physical operators and cell collections"
+        ],
+        "processing": [
+          "Fuse compatible operators and cut tasks at blocking movement boundaries"
+        ],
+        "outputs": [
+          "A directed acyclic graph of executable tasks"
+        ],
+        "example": "Aligned joins remain one task while a hash redistribution creates a boundary.",
+        "controls": [
+          "Task boundaries and intermediate statistics"
+        ],
+        "failureModes": [
+          "Excessive movement produces slow blocking stages"
+        ]
+      }
+    },
+    {
+      "id": "step-4",
+      "label": "FSM orchestration",
+      "summary": "Hierarchical state machines track query, template, and task progress and retry.",
+      "detail": "Hierarchical state machines track query, template, and task progress and retry. Advance states, log transitions, retry transient task failures.",
+      "whyItMatters": "Resumable and reproducible query execution depends on making this responsibility and its operating boundary explicit.",
+      "classification": "fact",
+      "layers": [
+        "orchestration",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Polaris orchestrates execution with hierarchical finite-state machines and task-level retry."
+        }
+      ],
+      "tags": [
+        "MicrosoftFabric",
+        "orchestration",
+        "observability"
+      ],
+      "drill": {
+        "inputs": [
+          "Task DAG, state transitions, and failure signals"
+        ],
+        "processing": [
+          "Advance states, log transitions, retry transient task failures"
+        ],
+        "outputs": [
+          "Resumable and reproducible query execution"
+        ],
+        "example": "One failed task is retried without restarting every completed task.",
+        "controls": [
+          "Retry classification and state-transition logs"
+        ],
+        "failureModes": [
+          "A persistent data error is repeatedly misclassified as transient"
+        ]
+      }
+    },
+    {
+      "id": "step-5",
+      "label": "Global workload scheduler",
+      "summary": "A workload graph schedules tasks across concurrent queries by multidimensional resource demand.",
+      "detail": "A workload graph schedules tasks across concurrent queries by multidimensional resource demand. Select eligible tasks and place them on available compute.",
+      "whyItMatters": "Concurrent task assignments across the pool depends on making this responsibility and its operating boundary explicit.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "The scheduler unions active task DAGs and places tasks using CPU, memory, and disk demand."
+        }
+      ],
+      "tags": [
+        "MicrosoftFabric",
+        "compute"
+      ],
+      "drill": {
+        "inputs": [
+          "Ready tasks, node resources, and active-query DAGs"
+        ],
+        "processing": [
+          "Select eligible tasks and place them on available compute"
+        ],
+        "outputs": [
+          "Concurrent task assignments across the pool"
+        ],
+        "example": "Root-near tasks are prioritized to release shared resources sooner.",
+        "controls": [
+          "Scheduling policy and resource pools"
+        ],
+        "failureModes": [
+          "Resource pressure delays tasks while callers assume fixed latency"
+        ]
+      }
+    },
+    {
+      "id": "step-6",
+      "label": "Stateless compute pool",
+      "summary": "Compute nodes run task templates while durable state remains external.",
+      "detail": "Compute nodes run task templates while durable state remains external. Execute encoded SQL operators and materialize output cells.",
+      "whyItMatters": "Task results and updated cache locality depends on making this responsibility and its operating boundary explicit.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Polaris externalizes durable data, metadata, and logs; compute retains only rebuildable caches."
+        }
+      ],
+      "tags": [
+        "MicrosoftFabric",
+        "compute"
+      ],
+      "drill": {
+        "inputs": [
+          "Scheduled task, input cells, and local cache state"
+        ],
+        "processing": [
+          "Execute encoded SQL operators and materialize output cells"
+        ],
+        "outputs": [
+          "Task results and updated cache locality"
+        ],
+        "example": "A replacement node re-reads persisted cells after another node fails.",
+        "controls": [
+          "Pool isolation and cache affinity"
+        ],
+        "failureModes": [
+          "Scale-out nodes start cold and temporarily lose cache locality"
+        ]
+      }
+    },
+    {
+      "id": "step-7",
+      "label": "Data cells and storage",
+      "summary": "Two-dimensional cells connect partition pruning and hash distribution to durable data.",
+      "detail": "Two-dimensional cells connect partition pruning and hash distribution to durable data. Prune partitions, select hash buckets, and read or write cell collections.",
+      "whyItMatters": "Storage-agnostic inputs and durable task outputs depends on making this responsibility and its operating boundary explicit.",
+      "classification": "fact",
+      "layers": [
+        "data",
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Datasets are grids of partitioned and hash-distributed cells used as DQP units."
+        }
+      ],
+      "tags": [
+        "MicrosoftFabric",
+        "data",
+        "compute"
+      ],
+      "drill": {
+        "inputs": [
+          "Partition predicates, distribution keys, and stored table data"
+        ],
+        "processing": [
+          "Prune partitions, select hash buckets, and read or write cell collections"
+        ],
+        "outputs": [
+          "Storage-agnostic inputs and durable task outputs"
+        ],
+        "example": "A date predicate prunes partitions while customer hash spreads work across nodes.",
+        "controls": [
+          "Partition and distribution design"
+        ],
+        "failureModes": [
+          "Skew concentrates cells and computation on too few nodes"
+        ]
       }
     }
   ],
@@ -344,7 +300,7 @@
       "id": "edge-1",
       "from": "step-1",
       "to": "step-2",
-      "label": "hands governed output to",
+      "label": "hands off logical search space",
       "layer": "compute",
       "kind": "flow"
     },
@@ -352,7 +308,7 @@
       "id": "edge-2",
       "from": "step-2",
       "to": "step-3",
-      "label": "hands governed output to",
+      "label": "emits distributed physical plan",
       "layer": "compute",
       "kind": "flow"
     },
@@ -360,15 +316,15 @@
       "id": "edge-3",
       "from": "step-3",
       "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "metadata",
+      "label": "registers task state graph",
+      "layer": "orchestration",
       "kind": "flow"
     },
     {
       "id": "edge-4",
       "from": "step-4",
       "to": "step-5",
-      "label": "hands governed output to",
+      "label": "releases ready tasks",
       "layer": "orchestration",
       "kind": "flow"
     },
@@ -376,7 +332,7 @@
       "id": "edge-5",
       "from": "step-5",
       "to": "step-6",
-      "label": "hands governed output to",
+      "label": "places tasks by resources",
       "layer": "compute",
       "kind": "flow"
     },
@@ -384,46 +340,57 @@
       "id": "edge-6",
       "from": "step-6",
       "to": "step-7",
-      "label": "hands governed output to",
-      "layer": "observability",
+      "label": "reads and materializes cells",
+      "layer": "data",
       "kind": "flow"
+    },
+    {
+      "id": "edge-7",
+      "from": "step-7",
+      "to": "step-4",
+      "label": "task completion advances state",
+      "layer": "observability",
+      "kind": "feedback"
     }
   ],
+  "revision": "3",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/polaris-engine.svg",
   "walkthrough": [
     {
       "nodeId": "step-1",
-      "title": "1. polaris boundary",
-      "explanation": "polaris boundary in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture."
+      "title": "1. SQL front end",
+      "explanation": "The SQL front end parses and optimizes a query before distributed execution."
     },
     {
       "nodeId": "step-2",
-      "title": "2. Polaris distributed SQL query engine",
-      "explanation": "Polaris distributed SQL query engine in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture."
+      "title": "2. Distributed optimizer",
+      "explanation": "A second planning phase chooses distribution properties and minimizes data movement."
     },
     {
       "nodeId": "step-3",
-      "title": "3. SQL front-end",
-      "explanation": "SQL front-end in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture."
+      "title": "3. Task DAG",
+      "explanation": "DQP divides the physical plan into tasks linked by dataflow and precedence."
     },
     {
       "nodeId": "step-4",
-      "title": "4. DQP task DAG scheduler",
-      "explanation": "DQP task DAG scheduler in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture."
+      "title": "4. FSM orchestration",
+      "explanation": "Hierarchical state machines track query, template, and task progress and retry."
     },
     {
       "nodeId": "step-5",
-      "title": "5. FSM orchestrator",
-      "explanation": "FSM orchestrator in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture."
+      "title": "5. Global workload scheduler",
+      "explanation": "A workload graph schedules tasks across concurrent queries by multidimensional resource demand."
     },
     {
       "nodeId": "step-6",
-      "title": "6. stateless compute pool",
-      "explanation": "stateless compute pool in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture."
+      "title": "6. Stateless compute pool",
+      "explanation": "Compute nodes run task templates while durable state remains external."
     },
     {
       "nodeId": "step-7",
-      "title": "7. cell-based data distribution",
-      "explanation": "cell-based data distribution in the Polaris distributed SQL query engine — SQL front-end, DQP task DAG scheduler, FSM orchestrator, stateless compute pool, cell-based data distribution, OneLake storage architecture."
+      "title": "7. Data cells and storage",
+      "explanation": "Two-dimensional cells connect partition pruning and hash distribution to durable data."
     }
   ]
 }

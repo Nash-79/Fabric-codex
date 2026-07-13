@@ -61,8 +61,10 @@ before/after).
    - **Mermaid** (`content/diagrams/<slug>.mmd`) is acceptable only for a throwaway sketch; it is
      not a substitute for the sidecar.
    - Give the root SVG an identified `<title>` and `<desc>`, `role="img"`, and `aria-labelledby`.
-     Map every sidecar node to exactly one meaningful visual element or group with
-     `data-node-id="<node-id>"`, `tabindex="0"`, and an `aria-label`. The article renderer adds the
+     Map every sidecar node to exactly one meaningful `<g>` region containing the complete card,
+     stage, lane, decision, or callout shape plus its visible label; never attach interaction only
+     to a text fragment. Give the group `data-node-id="<node-id>"`, `tabindex="0"`, and an
+     `aria-label`. The article renderer adds the
      evidence tooltip; do not add scripts or event handlers to the SVG.
    - Mirror the SVG byte-for-byte to `public/diagrams/<slug>.svg` so the app can serve it (blogs embed
      `/diagrams/<slug>.svg`).
@@ -99,6 +101,10 @@ before/after).
 - Original work only. No traced or copied source images, no third-party logos/IP.
 - The diagram's content must be traceable to knowledge-base claims; note which claims it visualises.
 - **Ship the sidecar or ship nothing.** An SVG without its evidence contract is not publishable.
+- Render the finished SVG at 390px, 768px, and 1280px with
+  `npm run validate:diagram-layout`; fix every off-canvas label and unintended text collision.
+- Source text below 10px is reserved for short provenance/legend notes. Explanatory copy must
+  remain readable on a laptop and become comfortably inspectable through the mobile lightbox.
 - Validate before finishing: the JSON parses, every `edge.from`/`edge.to` resolves to a node id,
   every `fact` node has at least one `evidence` entry, and every edge has a label.
 

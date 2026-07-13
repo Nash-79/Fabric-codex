@@ -6,7 +6,8 @@ const root = resolve(import.meta.dirname, ".."),
 const assets = JSON.parse(readFileSync(join(dir, "assets.json"), "utf8"));
 const failures = [],
   paths = new Set(),
-  slugs = new Set();
+  slugs = new Set(),
+  assetsBySlug = new Map();
 for (const asset of assets) {
   const path = join(root, asset.path),
     slug = basename(asset.path).replace(/\.(svg|mmd)$/i, "");
@@ -14,6 +15,7 @@ for (const asset of assets) {
   if (slugs.has(slug)) failures.push(`duplicate slug ${slug}`);
   paths.add(asset.path);
   slugs.add(slug);
+  assetsBySlug.set(slug, asset);
   if (!existsSync(path)) {
     failures.push(`missing ${asset.path}`);
     continue;
@@ -75,7 +77,15 @@ for (const name of sidecarNames) {
 
   if (doc.id !== slug) failures.push(`${label}: id "${doc.id}" must equal the slug "${slug}"`);
   if (!kinds.has(doc.type)) failures.push(`${label}: invalid type "${doc.type}"`);
+  if (!doc.purpose) failures.push(`${label}: missing purpose`);
   if (!doc.accessibleSummary) failures.push(`${label}: missing accessibleSummary`);
+  if (!doc.longDescription) failures.push(`${label}: missing longDescription`);
+  if (!doc.revision) failures.push(`${label}: missing revision`);
+  else if (String(doc.revision) !== String(assetsBySlug.get(slug)?.interaction_version))
+    failures.push(
+      `${label}: revision "${doc.revision}" must match manifest interaction_version ` +
+        `"${assetsBySlug.get(slug)?.interaction_version}"`,
+    );
 
   const nodes = Array.isArray(doc.nodes) ? doc.nodes : [];
   const edges = Array.isArray(doc.edges) ? doc.edges : [];
@@ -101,9 +111,15 @@ for (const name of sidecarNames) {
     if (node.classification === "fact" && !(node.evidence?.length > 0))
       failures.push(`${label}: node "${node.id}" is classified "fact" but cites no evidence`);
 
-    for (const item of node.evidence ?? [])
-      if (!item.sourceKey)
+    for (const item of node.evidence ?? []) {
+      if (!item.sourceKey) {
         failures.push(`${label}: node "${node.id}" has evidence with no sourceKey`);
+      } else if (!existsSync(join(root, "content", "sources", `${item.sourceKey}.json`))) {
+        failures.push(
+          `${label}: node "${node.id}" cites unknown sourceKey "${item.sourceKey}"`,
+        );
+      }
+    }
 
     // A metric with a sourceKey asserts a sourced product figure; without one it is pattern guidance.
     for (const metric of node.drill?.metrics ?? [])
@@ -114,6 +130,10 @@ for (const name of sidecarNames) {
     if (!drill?.inputs?.length || !drill?.processing?.length || !drill?.outputs?.length)
       failures.push(`${label}: node "${node.id}" drill needs inputs, processing, and outputs`);
     if (!drill?.example) failures.push(`${label}: node "${node.id}" drill needs a worked example`);
+    if (!drill?.controls?.length)
+      failures.push(`${label}: node "${node.id}" drill needs at least one control`);
+    if (!drill?.failureModes?.length)
+      failures.push(`${label}: node "${node.id}" drill needs at least one failure mode`);
   }
 
   const svg = readFileSync(join(dir, `${slug}.svg`), "utf8");

@@ -67,7 +67,9 @@ function addRootAccessibility(svg, diagram) {
     return `<svg${next} role="img" aria-labelledby="${titleId} ${descId}" data-diagram-id="${xml(diagram.id)}">`;
   });
 
-  const rootEnd = svg.indexOf(">");
+  const svgStart = svg.search(/<svg\b/i);
+  const rootEnd = svg.indexOf(">", svgStart);
+  if (svgStart < 0 || rootEnd < 0) throw new Error(`${diagram.id}: missing SVG root element`);
   const firstTitle = /<title(?:\s[^>]*)?>[\s\S]*?<\/title>/i.exec(svg.slice(rootEnd + 1));
   if (firstTitle) {
     const start = rootEnd + 1 + firstTitle.index;
@@ -98,6 +100,27 @@ function addNodeRegions(svg, diagram) {
   const mapped = new Set(
     [...svg.matchAll(/\bdata-node-id=["']([^"']+)["']/g)].map((match) => match[1]),
   );
+  for (const node of diagram.nodes.filter((candidate) => mapped.has(candidate.id))) {
+    const escapedId = node.id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const startPattern = new RegExp(
+      `<([a-z][\\w:-]*)\\b([^>]*\\bdata-node-id=["']${escapedId}["'][^>]*)>`,
+      "i",
+    );
+    svg = svg.replace(startPattern, (match, tag, attrs) => {
+      const next = attrs
+        .replace(/\stabindex=["'][^"']*["']/i, "")
+        .replace(/\saria-label=["'][^"']*["']/i, "");
+      return `<${tag}${next} tabindex="0" aria-label="${xml(node.label)}">`;
+    });
+    const tooltipPattern = new RegExp(
+      `(\\bdata-node-id=["']${escapedId}["'][^>]*>\\s*)<title\\b[^>]*data-node-tooltip=["']true["'][^>]*>[\\s\\S]*?<\\/title>`,
+      "i",
+    );
+    svg = svg.replace(
+      tooltipPattern,
+      `$1<title data-node-tooltip="true">${xml(node.label)} — ${xml(node.summary)}</title>`,
+    );
+  }
   const textPattern = /<text\b([^>]*)>([\s\S]*?)<\/text>/gi;
   const candidates = [...svg.matchAll(textPattern)].map((match) => ({
     start: match.index,

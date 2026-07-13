@@ -55,3 +55,24 @@ decision branching, and one focusable SVG region per sidecar node.
 The renderer and all registered asset contracts are migrated. Older sidecars and thin template-era
 SVGs still require capability-by-capability editorial review before their QA status can honestly
 move from `draft` to `passed`; validation proves structural integrity, not visual or factual depth.
+
+## July 2026 legacy-sidecar and layout pass
+
+- All 32 legacy sidecars now use revision 3 semantics. The 22 revision-1 contracts were
+  re-authored with grounded facts, honest pattern/inference labels, node-specific drill content,
+  warnings, and meaningful topology; the ten grounded revision-2 contracts were reviewed and
+  promoted without discarding their detail.
+- `validate:diagram-layout` renders all registered SVGs in headless Chromium at 390px, 768px, and
+  1280px. It rejects horizontal overflow, off-canvas text, unintended text collisions, malformed
+  SVG roots, and empty interactive regions.
+- The rendered audit exposed malformed Polaris roots plus real clipping/collision defects that the
+  structural validator could not see. These are now part of the normal acceptance gate.
+- New diagrams must map nodes to complete semantic `<g>` regions. Legacy text-only hit targets
+  remain `draft` until each capability-family visual review expands them to its complete card or
+  stage; CSS bounding-box targeting and clamped tooltips provide a safe interim reader experience.
+
+No new article is required solely to close diagram coverage: every legacy asset is already embedded
+in an article, design, or lesson. Prefer strengthening the existing topic before creating another
+thin page. High-value future deep dives are Spark autoscaling/session internals, event-driven
+orchestration, and multi-cloud data access; commission them only when enough distinct verified L4/L5
+claims exist to support a genuinely separate article.

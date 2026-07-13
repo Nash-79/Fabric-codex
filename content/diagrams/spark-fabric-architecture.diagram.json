@@ -1,60 +1,60 @@
 {
   "id": "spark-fabric-architecture",
-  "title": "How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm star…",
-  "purpose": "Original diagram: How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O",
-  "type": "decision",
+  "title": "Fabric Spark session architecture",
+  "purpose": "How notebooks and job definitions acquire managed Spark compute through starter or custom pools, run driver and executor work against OneLake, and expose lifecycle and monitoring signals.",
+  "accessibleSummary": "Fabric Spark session architecture. Notebook or job definition; Capacity vCore envelope; Starter or custom pool; Driver and executors; Native and JVM execution; OneLake Delta I/O; Session lifecycle risk.",
+  "longDescription": "How notebooks and job definitions acquire managed Spark compute through starter or custom pools, run driver and executor work against OneLake, and expose lifecycle and monitoring signals.",
+  "type": "architecture",
   "topicSlug": "spark",
   "capabilityIds": [
     "spark"
   ],
-  "revision": "1",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/spark-fabric-architecture.svg",
   "nodes": [
     {
       "id": "step-1",
-      "label": "spark boundary",
-      "summary": "spark boundary in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Notebook or job definition",
+      "summary": "Interactive notebooks and scheduled job definitions submit Spark applications.",
+      "detail": "The authoring item carries code, environment, and execution configuration into a session request.",
+      "whyItMatters": "The entry point determines scheduling and reproducibility needs.",
+      "classification": "fact",
       "layers": [
+        "orchestration",
         "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "milescole-spark-job-definition",
+          "note": "Spark Job Definitions provide a configured, schedulable way to run Spark workloads."
+        },
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "Fabric Spark supports notebook and job sessions."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Code artifact",
+          "Environment",
+          "Parameters"
         ],
         "processing": [
-          "Apply the spark boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Build session request",
+          "Submit application"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Spark session request"
         ],
-        "example": "Trace one representative data product through spark boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A nightly job definition submits a bronze-to-silver transform.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Environment version",
+          "Job parameters"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Notebook-only state makes production execution irreproducible."
         ]
       },
       "drillTarget": {
@@ -65,275 +65,268 @@
     },
     {
       "id": "step-2",
-      "label": "How a Spark session comes to exist in Fabric",
-      "summary": "How a Spark session comes to exist in Fabric in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Capacity vCore envelope",
+      "summary": "The assigned Fabric capacity bounds Spark compute available to its workspaces.",
+      "detail": "Pool configuration and concurrent sessions consume from that shared envelope.",
+      "whyItMatters": "Capacity is an outer constraint on pool scale, not a per-job performance guarantee.",
+      "classification": "fact",
       "layers": [
-        "compute"
+        "compute",
+        "governance"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "Fabric capacity units determine the Spark vCore envelope available to configured pools."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Capacity assignment",
+          "Concurrent demand"
         ],
         "processing": [
-          "Apply the How a Spark session comes to exist in Fabric responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Admit session within available envelope"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Admitted or queued acquisition"
         ],
-        "example": "Trace one representative data product through How a Spark session comes to exist in Fabric: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "Two workspace jobs contend for the same capacity's Spark envelope.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Capacity assignment",
+          "Pool maximum"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Aggregate pool maxima exceed practical concurrent capacity."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
       }
     },
     {
       "id": "step-3",
-      "label": "capacity vCore budget",
-      "summary": "capacity vCore budget in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Starter or custom pool",
+      "summary": "Starter pools favor preconfigured fast acquisition; custom pools expose node and scale controls.",
+      "detail": "Fabric chooses prewarmed or on-demand acquisition according to the selected configuration and availability.",
+      "whyItMatters": "Pool choice balances startup consistency with workload-specific tuning.",
+      "classification": "fact",
       "layers": [
         "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "Fabric provides preconfigured starter pools and configurable custom Spark pools."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Session request",
+          "Pool selection"
         ],
         "processing": [
-          "Apply the capacity vCore budget responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Choose prewarmed or configured acquisition"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Cluster request"
         ],
-        "example": "Trace one representative data product through capacity vCore budget: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "Exploration uses a starter pool while a scheduled workload uses a tuned custom pool.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Node size",
+          "Min/max nodes"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "A starter pool falls back to on-demand acquisition under demand."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
       }
     },
     {
       "id": "step-4",
-      "label": "starter vs custom pools",
-      "summary": "starter vs custom pools in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Driver and executors",
+      "summary": "A pool has a head node hosting the driver and worker nodes hosting executors.",
+      "detail": "The driver plans and coordinates work; executors run tasks over partitions.",
+      "whyItMatters": "Understanding roles directs memory and failure diagnosis.",
+      "classification": "fact",
       "layers": [
-        "metadata"
+        "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "evidence": [
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "Fabric Spark pools use a head node for the driver and worker nodes for executors."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
+          "Cluster resources",
+          "Spark application"
         ],
         "processing": [
-          "Apply the starter vs custom pools responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Initialize driver",
+          "Register executors"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Runnable Spark application"
         ],
-        "example": "Trace one representative data product through starter vs custom pools: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "The driver builds stages and four executors process table partitions.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Driver memory",
+          "Worker node size"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Driver collection exhausts head-node memory."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
       }
     },
     {
       "id": "step-5",
-      "label": "cold/warm startup paths",
-      "summary": "cold/warm startup paths in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Native and JVM execution",
+      "summary": "Supported SQL operators can run through the native engine while unsupported segments fall back to JVM Spark.",
+      "detail": "Gluten translates supported physical-plan segments to Substrait for Velox; correctness continues through fallback.",
+      "whyItMatters": "Mixed execution explains why acceleration varies within one job.",
+      "classification": "fact",
       "layers": [
-        "governance"
+        "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "Gluten converts supported Spark plan segments for Velox; unsupported segments fall back to JVM execution."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
+          "Optimized physical plan"
         ],
         "processing": [
-          "Apply the cold/warm startup paths responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Route supported operators to native execution",
+          "Run others on JVM"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Executed stages"
         ],
-        "example": "Trace one representative data product through cold/warm startup paths: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A scan and aggregation run natively while one unsupported expression falls back.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "NEE setting",
+          "Runtime version"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Precision-sensitive behavior differs across native and JVM paths."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
       }
     },
     {
       "id": "step-6",
-      "label": "session lifecycle",
-      "summary": "session lifecycle in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "OneLake Delta I/O",
+      "summary": "Spark reads and writes lakehouse Delta tables in OneLake.",
+      "detail": "Delta commits connect parallel task output to a versioned table state consumed by other Fabric engines.",
+      "whyItMatters": "Shared storage is the durable hand-off; cluster disks are temporary execution state.",
+      "classification": "fact",
       "layers": [
-        "security"
+        "data"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "evidence": [
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "Fabric Spark writes Delta tables and supports Fabric-specific layout optimization."
+        },
+        {
+          "sourceKey": "milescole-dataframewriterv2",
+          "note": "Spark DataFrame write APIs commit managed Delta table changes."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Task output",
+          "Delta table metadata"
         ],
         "processing": [
-          "Apply the session lifecycle responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Write Parquet files",
+          "Commit transaction"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "New Delta table version"
         ],
-        "example": "Trace one representative data product through session lifecycle: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "The job appends validated orders to a silver Delta table.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Write mode",
+          "Partitioning"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Partial output or conflicting write fails the commit."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
       }
     },
     {
       "id": "step-7",
-      "label": "and notebook/job entry points into lakehouse I/O",
-      "summary": "and notebook/job entry points into lakehouse I/O in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Session lifecycle risk",
+      "summary": "Idle expiry and deallocation end the session; startup and library personalization affect schedules.",
+      "detail": "Operational design must include acquisition time, session timeout, run telemetry, and retry behavior.",
+      "whyItMatters": "Ignoring lifecycle turns a correct job into an unreliable service.",
+      "classification": "warning",
       "layers": [
-        "observability"
+        "observability",
+        "orchestration"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
+      "evidence": [
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "Sessions have configurable expiry and pools deallocate after inactivity; acquisition time varies by pool configuration."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
+          "Run state",
+          "Session activity",
+          "Logs"
         ],
         "processing": [
-          "Apply the and notebook/job entry points into lakehouse I/O responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Monitor startup and execution",
+          "Expire and deallocate safely"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Run history and released compute"
         ],
-        "example": "Trace one representative data product through and notebook/job entry points into lakehouse I/O: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "An orchestration timeout is set above expected custom-pool acquisition and library setup.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Session timeout",
+          "Retry policy"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "A scheduler treats cluster startup as job failure and duplicates the run."
         ]
       },
       "drillTarget": {
-        "kind": "capability",
+        "kind": "topic",
         "slug": "spark",
         "label": "Open spark"
       }
@@ -341,97 +334,97 @@
   ],
   "edges": [
     {
-      "id": "edge-1",
+      "id": "e1",
       "from": "step-1",
       "to": "step-2",
-      "label": "yes — follow this criterion",
+      "label": "session requests capacity",
       "layer": "compute",
-      "kind": "branch"
+      "kind": "flow"
     },
     {
-      "id": "edge-2",
+      "id": "e2",
       "from": "step-2",
       "to": "step-3",
-      "label": "then evaluate",
+      "label": "admitted pool acquisition",
       "layer": "compute",
-      "kind": "branch"
+      "kind": "flow"
     },
     {
-      "id": "edge-3",
+      "id": "e3",
       "from": "step-3",
       "to": "step-4",
-      "label": "then evaluate",
-      "layer": "metadata",
+      "label": "cluster starts application",
+      "layer": "compute",
       "kind": "flow"
     },
     {
-      "id": "edge-4",
+      "id": "e4",
       "from": "step-4",
       "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
+      "label": "physical plan reaches operators",
+      "layer": "compute",
       "kind": "flow"
     },
     {
-      "id": "edge-5",
+      "id": "e5",
       "from": "step-5",
       "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
+      "label": "tasks read and write table data",
+      "layer": "data",
       "kind": "flow"
     },
     {
-      "id": "edge-6",
-      "from": "step-6",
+      "id": "e6",
+      "from": "step-4",
       "to": "step-7",
-      "label": "then evaluate",
+      "label": "session emits lifecycle telemetry",
       "layer": "observability",
-      "kind": "flow"
+      "kind": "branch"
     },
     {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
+      "id": "e7",
+      "from": "step-7",
+      "to": "step-1",
+      "label": "retry submits a new session",
+      "layer": "orchestration",
+      "kind": "feedback"
     }
   ],
   "walkthrough": [
     {
       "nodeId": "step-1",
-      "title": "1. spark boundary",
-      "explanation": "spark boundary in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture."
+      "title": "1. Notebook or job definition",
+      "explanation": "Interactive notebooks and scheduled job definitions submit Spark applications."
     },
     {
       "nodeId": "step-2",
-      "title": "2. How a Spark session comes to exist in Fabric",
-      "explanation": "How a Spark session comes to exist in Fabric in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture."
+      "title": "2. Capacity vCore envelope",
+      "explanation": "The assigned Fabric capacity bounds Spark compute available to its workspaces."
     },
     {
       "nodeId": "step-3",
-      "title": "3. capacity vCore budget",
-      "explanation": "capacity vCore budget in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture."
+      "title": "3. Starter or custom pool",
+      "explanation": "Starter pools favor preconfigured fast acquisition; custom pools expose node and scale controls."
     },
     {
       "nodeId": "step-4",
-      "title": "4. starter vs custom pools",
-      "explanation": "starter vs custom pools in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture."
+      "title": "4. Driver and executors",
+      "explanation": "A pool has a head node hosting the driver and worker nodes hosting executors."
     },
     {
       "nodeId": "step-5",
-      "title": "5. cold/warm startup paths",
-      "explanation": "cold/warm startup paths in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture."
+      "title": "5. Native and JVM execution",
+      "explanation": "Supported SQL operators can run through the native engine while unsupported segments fall back to JVM Spark."
     },
     {
       "nodeId": "step-6",
-      "title": "6. session lifecycle",
-      "explanation": "session lifecycle in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture."
+      "title": "6. OneLake Delta I/O",
+      "explanation": "Spark reads and writes lakehouse Delta tables in OneLake."
     },
     {
       "nodeId": "step-7",
-      "title": "7. and notebook/job entry points into lakehouse I/O",
-      "explanation": "and notebook/job entry points into lakehouse I/O in the How a Spark session comes to exist in Fabric — capacity vCore budget, starter vs custom pools, cold/warm startup paths, session lifecycle, and notebook/job entry points into lakehouse I/O architecture."
+      "title": "7. Session lifecycle risk",
+      "explanation": "Idle expiry and deallocation end the session; startup and library personalization affect schedules."
     }
   ]
 }

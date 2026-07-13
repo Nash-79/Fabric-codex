@@ -1,60 +1,55 @@
 {
   "id": "spark-job-execution-internals",
-  "title": "Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between…",
-  "purpose": "Original diagram: Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback",
-  "accessibleSummary": "An interactive architecture infographic with 5 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback",
+  "title": "Spark job execution internals",
+  "purpose": "Driver planning, stage and task execution, native versus JVM operator routing, and observable fallback and failure behavior inside a Fabric Spark job.",
+  "accessibleSummary": "Spark job execution internals. Driver builds the plan; Stages schedule tasks; Native operator route; JVM fallback route; Inspect fallback and failures.",
+  "longDescription": "Driver planning, stage and task execution, native versus JVM operator routing, and observable fallback and failure behavior inside a Fabric Spark job.",
   "type": "internals",
   "topicSlug": "spark",
   "capabilityIds": [
     "spark"
   ],
-  "revision": "1",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/spark-job-execution-internals.svg",
   "nodes": [
     {
       "id": "step-1",
-      "label": "spark boundary",
-      "summary": "spark boundary in the Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Driver builds the plan",
+      "summary": "The Spark driver analyzes transformations and produces an optimized physical plan.",
+      "detail": "Dependencies divide the application into stages separated by exchanges.",
+      "whyItMatters": "The plan is the map for both execution and diagnosis.",
+      "classification": "fact",
       "layers": [
-        "compute"
+        "compute",
+        "metadata"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "NEE receives Spark's optimized SQL physical plan while preserving optimizer behaviors."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "DataFrame or SQL operations",
+          "Catalog metadata"
         ],
         "processing": [
-          "Apply the spark boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Analyze and optimize",
+          "Create physical plan"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Stage graph"
         ],
-        "example": "Trace one representative data product through spark boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A join and aggregate become scan, exchange, and aggregation stages.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "AQE",
+          "Statistics"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Poor statistics produce an inefficient join plan."
         ]
       },
       "drillTarget": {
@@ -65,185 +60,179 @@
     },
     {
       "id": "step-2",
-      "label": "Spark execution internals in Fabric",
-      "summary": "Spark execution internals in Fabric in the Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Stages schedule tasks",
+      "summary": "Each stage expands into tasks over input partitions and available executors.",
+      "detail": "The scheduler coordinates dependencies and retries failed task attempts.",
+      "whyItMatters": "Partition count and skew shape parallelism more than raw worker count.",
+      "classification": "fact",
       "layers": [
         "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "Fabric pools provide driver and executor roles for Spark application execution."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Stage graph",
+          "Input partitions",
+          "Executors"
         ],
         "processing": [
-          "Apply the Spark execution internals in Fabric responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Schedule runnable tasks",
+          "Track completion"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Partition outputs"
         ],
-        "example": "Trace one representative data product through Spark execution internals in Fabric: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "Two hundred partitions are scheduled across available executors.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Shuffle partitions",
+          "Dynamic allocation"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "One skewed partition dominates stage duration."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
       }
     },
     {
       "id": "step-3",
-      "label": "driver-built DAG of stages and tasks",
-      "summary": "driver-built DAG of stages and tasks in the Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Native operator route",
+      "summary": "Gluten converts supported plan portions to Substrait and Velox executes vectorized C++ operators.",
+      "detail": "Supported scans, joins, and expressions can remain columnar through a native segment.",
+      "whyItMatters": "Native routing reduces JVM overhead without changing the whole Spark programming model.",
+      "classification": "fact",
       "layers": [
         "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "Gluten translates supported Spark plan portions into Substrait for vectorized Velox execution."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Supported physical operators"
         ],
         "processing": [
-          "Apply the driver-built DAG of stages and tasks responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Translate plan segment",
+          "Execute in Velox"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Native columnar result"
         ],
-        "example": "Trace one representative data product through driver-built DAG of stages and tasks: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A supported filter and aggregation appear as native transformer operators.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "NEE enablement",
+          "Runtime"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "A numerical edge case differs from JVM behavior."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
       }
     },
     {
       "id": "step-4",
-      "label": "and per-operator routing between the Native Execution Engine (Velox…",
-      "summary": "and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback in the Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "warning",
+      "label": "JVM fallback route",
+      "summary": "Unsupported operators or features automatically execute with standard JVM Spark.",
+      "detail": "Fallback preserves job correctness but removes native acceleration for that segment.",
+      "whyItMatters": "A mixed plan must be inspected per operator, not labelled wholly native.",
+      "classification": "fact",
       "layers": [
         "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "Unsupported operators, expressions, types, or features fall back to JVM Spark rather than failing the job."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Unsupported plan segment"
         ],
         "processing": [
-          "Apply the and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Bridge representation",
+          "Execute JVM operator"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Fallback result"
         ],
-        "example": "Trace one representative data product through and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fal…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "An unsupported expression runs on JVM between native scan and aggregate segments.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Supported-feature review"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Columnar-to-row transitions erode expected acceleration."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
       }
     },
     {
       "id": "step-5",
-      "label": "spark governed outcome",
-      "summary": "spark governed outcome in the Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Inspect fallback and failures",
+      "summary": "Spark UI, explain output, and execution telemetry reveal native operators, fallback, skew, and failed tasks.",
+      "detail": "Engine choice and task health must be verified from the executed plan.",
+      "whyItMatters": "Observability prevents unsupported assumptions about acceleration.",
+      "classification": "warning",
       "layers": [
-        "security"
+        "observability"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "Spark UI and explain output identify native operators and JVM fallback."
+        },
+        {
+          "sourceKey": "fabric-blog-spark-failure-diagnosis",
+          "note": "Fabric monitoring can surface skew, memory pressure, cluster sizing, and failed-run evidence."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Executed plan",
+          "Task metrics",
+          "Errors"
         ],
         "processing": [
-          "Apply the spark governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Inspect native markers and stages",
+          "Trace failed task root cause"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Diagnosis and remediation"
         ],
-        "example": "Trace one representative data product through spark governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "The UI reveals repeated columnar-to-row transitions around one UDF.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Spark UI",
+          "Event logs"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Only wall-clock duration is captured, leaving no actionable cause."
         ]
       },
       "drillTarget": {
-        "kind": "capability",
+        "kind": "topic",
         "slug": "spark",
         "label": "Open spark"
       }
@@ -251,63 +240,79 @@
   ],
   "edges": [
     {
-      "id": "edge-1",
+      "id": "e1",
       "from": "step-1",
       "to": "step-2",
-      "label": "hands governed output to",
+      "label": "DAG becomes runnable stages",
       "layer": "compute",
       "kind": "flow"
     },
     {
-      "id": "edge-2",
+      "id": "e2",
       "from": "step-2",
       "to": "step-3",
-      "label": "hands governed output to",
+      "label": "supported operators",
       "layer": "compute",
-      "kind": "flow"
+      "kind": "branch"
     },
     {
-      "id": "edge-3",
-      "from": "step-3",
+      "id": "e3",
+      "from": "step-2",
       "to": "step-4",
-      "label": "hands governed output to",
+      "label": "unsupported operators",
       "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e4",
+      "from": "step-3",
+      "to": "step-5",
+      "label": "native execution metrics",
+      "layer": "observability",
       "kind": "flow"
     },
     {
-      "id": "edge-4",
+      "id": "e5",
       "from": "step-4",
       "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "security",
+      "label": "fallback markers and metrics",
+      "layer": "observability",
       "kind": "flow"
+    },
+    {
+      "id": "e6",
+      "from": "step-5",
+      "to": "step-1",
+      "label": "plan or configuration is revised",
+      "layer": "observability",
+      "kind": "feedback"
     }
   ],
   "walkthrough": [
     {
       "nodeId": "step-1",
-      "title": "1. spark boundary",
-      "explanation": "spark boundary in the Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback architecture."
+      "title": "1. Driver builds the plan",
+      "explanation": "The Spark driver analyzes transformations and produces an optimized physical plan."
     },
     {
       "nodeId": "step-2",
-      "title": "2. Spark execution internals in Fabric",
-      "explanation": "Spark execution internals in Fabric in the Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback architecture."
+      "title": "2. Stages schedule tasks",
+      "explanation": "Each stage expands into tasks over input partitions and available executors."
     },
     {
       "nodeId": "step-3",
-      "title": "3. driver-built DAG of stages and tasks",
-      "explanation": "driver-built DAG of stages and tasks in the Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback architecture."
+      "title": "3. Native operator route",
+      "explanation": "Gluten converts supported plan portions to Substrait and Velox executes vectorized C++ operators."
     },
     {
       "nodeId": "step-4",
-      "title": "4. and per-operator routing between the Native Execution Engine (Velox…",
-      "explanation": "and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback in the Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback architecture."
+      "title": "4. JVM fallback route",
+      "explanation": "Unsupported operators or features automatically execute with standard JVM Spark."
     },
     {
       "nodeId": "step-5",
-      "title": "5. spark governed outcome",
-      "explanation": "spark governed outcome in the Spark execution internals in Fabric — driver-built DAG of stages and tasks, and per-operator routing between the Native Execution Engine (Velox + Gluten) and JVM row-based fallback architecture."
+      "title": "5. Inspect fallback and failures",
+      "explanation": "Spark UI, explain output, and execution telemetry reveal native operators, fallback, skew, and failed tasks."
     }
   ]
 }

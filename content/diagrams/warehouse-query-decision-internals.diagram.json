@@ -1,60 +1,52 @@
 {
   "id": "warehouse-query-decision-internals",
-  "title": "Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch w…",
-  "purpose": "Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals",
-  "accessibleSummary": "An interactive decision infographic with 6 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals",
+  "title": "Warehouse query tuning decision",
+  "purpose": "Evidence-led decision across scan volume, SQL and table optimization, concurrency management, cache reuse, and representative validation.",
+  "accessibleSummary": "Warehouse query tuning decision. Query workload; Data scanned is excessive?; Optimize layout and SQL; Concurrency contention?; Repeated result pattern?; Measure, then revisit.",
+  "longDescription": "Evidence-led decision across scan volume, SQL and table optimization, concurrency management, cache reuse, and representative validation.",
   "type": "decision",
   "topicSlug": "warehouse",
   "capabilityIds": [
     "warehouse"
   ],
-  "revision": "1",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/warehouse-query-decision-internals.svg",
   "nodes": [
     {
       "id": "step-1",
-      "label": "warehouse boundary",
-      "summary": "warehouse boundary in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Query workload",
+      "summary": "A warehouse request arrives with SQL shape, concurrency, and freshness needs.",
+      "detail": "Profile the workload before assuming one optimization fits.",
+      "whyItMatters": "Intent directs the tuning branch.",
+      "classification": "fact",
       "layers": [
         "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "warehouse-overview",
+          "note": "Fabric Warehouse provides managed T-SQL analytics over OneLake."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "T-SQL request",
+          "Concurrency"
         ],
         "processing": [
-          "Apply the warehouse boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Capture plan and runtime"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Query profile"
         ],
-        "example": "Trace one representative data product through warehouse boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A dashboard aggregate runs beside ELT.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Query text"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Tuning without a baseline."
         ]
       },
       "drillTarget": {
@@ -65,230 +57,212 @@
     },
     {
       "id": "step-2",
-      "label": "Decision/internals diagram: Fabric Warehouse query and write decisi…",
-      "summary": "Decision/internals diagram: Fabric Warehouse query and write decision internals in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
+      "label": "Data scanned is excessive?",
+      "summary": "Poor filtering or layout can make a query read more than its result requires.",
+      "detail": "Inspect pruning, predicates, statistics and organization before scaling.",
+      "whyItMatters": "Reduced scans address root cause.",
       "classification": "pattern",
       "layers": [
+        "data",
         "compute"
       ],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Query profile",
+          "Table layout"
         ],
         "processing": [
-          "Apply the Decision/internals diagram: Fabric Warehouse query and write decision internals responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Compare predicates with scanned data"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Layout or next branch"
         ],
-        "example": "Trace one representative data product through Decision/internals diagram: Fabric Warehouse query and write decision internals: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A date filter scans years of rows.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Table design"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Adding capacity while retaining avoidable scans."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "warehouse",
+        "label": "Open warehouse"
       }
     },
     {
       "id": "step-3",
-      "label": "cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and…",
-      "summary": "cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Optimize layout and SQL",
+      "summary": "Selective queries, suitable types, statistics, and table organization are core tuning levers.",
+      "detail": "Align physical data and predicates so irrelevant work is eliminated.",
+      "whyItMatters": "Efficient scans benefit every consumer.",
+      "classification": "fact",
       "layers": [
+        "data",
         "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "evidence": [
+        {
+          "sourceKey": "warehouse-performance-guidelines",
+          "note": "Guidance covers query design, data types, statistics, and table organization."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
+          "Scan finding",
+          "Query plan"
         ],
         "processing": [
-          "Apply the cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Rewrite predicates",
+          "Maintain statistics and layout"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Reduced scan"
         ],
-        "example": "Trace one representative data product through cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "Replace a non-sargable date expression with a bounded predicate.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Statistics",
+          "Data types"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "A rewrite changes semantics."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "warehouse",
+        "label": "Open warehouse"
       }
     },
     {
       "id": "step-4",
-      "label": "MPP-vs-forced-single-node execution branch triggered by TOP/global…",
-      "summary": "MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED P… in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Concurrency contention?",
+      "summary": "Workload management can control competing warehouse requests.",
+      "detail": "Check whether a healthy query is delayed only with other workloads.",
+      "whyItMatters": "Controls protect interactive service levels.",
+      "classification": "fact",
       "layers": [
-        "orchestration"
+        "compute",
+        "governance"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "evidence": [
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "Warehouse workload management controls competing workloads."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
+          "Profile",
+          "Concurrent sessions"
         ],
         "processing": [
-          "Apply the MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Identify queueing",
+          "Apply classification and priority"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Managed concurrency"
         ],
-        "example": "Trace one representative data product through MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "BI receives predictable treatment during a bulk load.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Workload groups"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Priority starves background work."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "warehouse",
+        "label": "Open warehouse"
       }
     },
     {
       "id": "step-5",
-      "label": "and batched-vs-trickle-DML write-pattern branch with background com…",
-      "summary": "and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Repeated result pattern?",
+      "summary": "Caching can avoid repeating eligible warehouse work.",
+      "detail": "Confirm freshness and query shape permit reuse.",
+      "whyItMatters": "Cache cannot repair inefficient SQL.",
+      "classification": "fact",
       "layers": [
-        "governance"
+        "compute"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
+      "evidence": [
+        {
+          "sourceKey": "warehouse-caching",
+          "note": "Fabric Warehouse uses caching in query performance behavior."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
+          "Stable pattern",
+          "Freshness need"
         ],
         "processing": [
-          "Apply the and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order wr… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Check cache eligibility and invalidation"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Cached or fresh result"
         ],
-        "example": "Trace one representative data product through and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time i…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A repeated dashboard query reuses eligible data.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Cache-aware tests"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Assuming similar queries always hit cache."
         ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "warehouse",
+        "label": "Open warehouse"
       }
     },
     {
       "id": "step-6",
-      "label": "warehouse governed outcome",
-      "summary": "warehouse governed outcome in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
+      "label": "Measure, then revisit",
+      "summary": "Verify each change under representative data and concurrency.",
+      "detail": "Compare plan, scan, duration and queueing instead of anecdotal speed.",
+      "whyItMatters": "Measured iteration prevents shaky tuning.",
+      "classification": "warning",
       "layers": [
-        "security"
+        "observability"
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "evidence": [
+        {
+          "sourceKey": "warehouse-performance-guidelines",
+          "note": "Warehouse tuning depends on observed workload behavior, not one universal setting."
+        }
       ],
+      "tags": [],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
+          "Changed workload",
+          "Representative test"
         ],
         "processing": [
-          "Apply the warehouse governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Compare before and after"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Validated change or rollback"
         ],
-        "example": "Trace one representative data product through warehouse governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "Retest during the ELT window.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Baseline",
+          "Regression threshold"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Accepting one warm-cache run."
         ]
       },
       "drillTarget": {
-        "kind": "capability",
+        "kind": "topic",
         "slug": "warehouse",
         "label": "Open warehouse"
       }
@@ -296,84 +270,100 @@
   ],
   "edges": [
     {
-      "id": "edge-1",
+      "id": "e1",
       "from": "step-1",
       "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "compute",
-      "kind": "branch"
+      "label": "profile scan efficiency",
+      "layer": "observability",
+      "kind": "flow"
     },
     {
-      "id": "edge-2",
+      "id": "e2",
       "from": "step-2",
       "to": "step-3",
-      "label": "then evaluate",
+      "label": "Yes: reduce avoidable reads",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e3",
+      "from": "step-2",
+      "to": "step-4",
+      "label": "No: inspect concurrency",
       "layer": "compute",
       "kind": "branch"
     },
     {
-      "id": "edge-3",
+      "id": "e4",
       "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "orchestration",
+      "to": "step-6",
+      "label": "retest optimized query",
+      "layer": "observability",
       "kind": "flow"
     },
     {
-      "id": "edge-4",
+      "id": "e5",
       "from": "step-4",
       "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
+      "label": "No: inspect repetition",
       "layer": "compute",
       "kind": "branch"
+    },
+    {
+      "id": "e6",
+      "from": "step-4",
+      "to": "step-6",
+      "label": "Yes: validate controls",
+      "layer": "observability",
+      "kind": "branch"
+    },
+    {
+      "id": "e7",
+      "from": "step-5",
+      "to": "step-6",
+      "label": "validate cache behavior",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e8",
+      "from": "step-6",
+      "to": "step-2",
+      "label": "remaining bottleneck starts another pass",
+      "layer": "observability",
+      "kind": "feedback"
     }
   ],
   "walkthrough": [
     {
       "nodeId": "step-1",
-      "title": "1. warehouse boundary",
-      "explanation": "warehouse boundary in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture."
+      "title": "1. Query workload",
+      "explanation": "A warehouse request arrives with SQL shape, concurrency, and freshness needs."
     },
     {
       "nodeId": "step-2",
-      "title": "2. Decision/internals diagram: Fabric Warehouse query and write decisi…",
-      "explanation": "Decision/internals diagram: Fabric Warehouse query and write decision internals in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture."
+      "title": "2. Data scanned is excessive?",
+      "explanation": "Poor filtering or layout can make a query read more than its result requires."
     },
     {
       "nodeId": "step-3",
-      "title": "3. cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and…",
-      "explanation": "cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture."
+      "title": "3. Optimize layout and SQL",
+      "explanation": "Selective queries, suitable types, statistics, and table organization are core tuning levers."
     },
     {
       "nodeId": "step-4",
-      "title": "4. MPP-vs-forced-single-node execution branch triggered by TOP/global…",
-      "explanation": "MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED P… in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture."
+      "title": "4. Concurrency contention?",
+      "explanation": "Workload management can control competing warehouse requests."
     },
     {
       "nodeId": "step-5",
-      "title": "5. and batched-vs-trickle-DML write-pattern branch with background com…",
-      "explanation": "and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture."
+      "title": "5. Repeated result pattern?",
+      "explanation": "Caching can avoid repeating eligible warehouse work."
     },
     {
       "nodeId": "step-6",
-      "title": "6. warehouse governed outcome",
-      "explanation": "warehouse governed outcome in the Decision/internals diagram: Fabric Warehouse query and write decision internals — cold-vs-warm cache branch with in-memory/SSD cache-tier cutaway and LRU eviction mechanics, MPP-vs-forced-single-node execution branch triggered by TOP/global sort/final merge with the OPTION(FORCE DISTRIBUTED PLAN) mitigation and SELECT/non-SELECT 50-50 workload pool split, and batched-vs-trickle-DML write-pattern branch with background compaction and V-Order write-time internals architecture."
+      "title": "6. Measure, then revisit",
+      "explanation": "Verify each change under representative data and concurrency."
     }
   ]
 }

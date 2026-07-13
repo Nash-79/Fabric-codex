@@ -7,6 +7,7 @@ type ActiveNode = {
   node: AuthoredDiagramNode;
   left: number;
   top: number;
+  placement: "above" | "below";
 };
 
 function nodeElement(target: EventTarget | null) {
@@ -48,10 +49,19 @@ export function AuthoredSvg({
     if (!root || !element || !node) return;
     const rootBox = root.getBoundingClientRect();
     const box = element.getBoundingClientRect();
+    const rawLeft = box.left - rootBox.left + box.width / 2;
+    const tooltipWidth = Math.min(352, Math.max(0, rootBox.width - 16));
+    const halfTooltip = tooltipWidth / 2;
+    const relativeTop = box.top - rootBox.top;
+    const placement = relativeTop >= 190 ? "above" : "below";
     setActive({
       node,
-      left: box.left - rootBox.left + box.width / 2,
-      top: Math.max(8, box.top - rootBox.top),
+      left: Math.min(
+        Math.max(rawLeft, halfTooltip + 8),
+        Math.max(halfTooltip + 8, rootBox.width - halfTooltip - 8),
+      ),
+      top: placement === "above" ? relativeTop : box.bottom - rootBox.top,
+      placement,
     });
   };
 
@@ -77,7 +87,12 @@ export function AuthoredSvg({
       {active && (
         <aside
           role="tooltip"
-          className="pointer-events-auto absolute z-30 w-[min(22rem,calc(100%-1rem))] -translate-x-1/2 -translate-y-[calc(100%+0.5rem)] rounded-xl border border-border bg-popover p-3 text-left text-popover-foreground shadow-xl"
+          className={cn(
+            "pointer-events-auto absolute z-30 max-h-[min(18rem,calc(100%-1rem))] w-[min(22rem,calc(100%-1rem))] -translate-x-1/2 overflow-y-auto rounded-xl border border-border bg-popover p-3 text-left text-popover-foreground shadow-xl",
+            active.placement === "above"
+              ? "-translate-y-[calc(100%+0.5rem)]"
+              : "translate-y-2",
+          )}
           style={{ left: active.left, top: active.top }}
         >
           <div className="flex items-start justify-between gap-3">
