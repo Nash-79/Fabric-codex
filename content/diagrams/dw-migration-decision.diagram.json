@@ -1,379 +1,186 @@
 {
   "id": "dw-migration-decision",
-  "title": "decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analy…",
-  "purpose": "Original diagram: decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge",
-  "accessibleSummary": "An interactive decision infographic with 6 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge",
+  "title": "Which Fabric Store Should Replace This Legacy Warehouse Workload?",
+  "purpose": "Route each migrated workload to its correct Fabric target store — Warehouse, lakehouse SQL analytics endpoint, SQL database, or Mirroring as a transitional bridge — based on write requirements, transformation ownership, and workload shape.",
+  "accessibleSummary": "A decision tree that asks first whether the workload needs OLTP-style transactional writes; if so it routes to SQL database. If the workload is read-mostly analytical reporting already curated by Spark, it routes to the lakehouse SQL analytics endpoint, which is read-only. If the workload needs a full writable T-SQL surface with multi-table transactions, it routes to Fabric Warehouse, the default migration target. A separate branch covers using Mirroring as a transitional bridge to keep the legacy source live and queryable in OneLake during a phased cutover rather than a hard cutover. A warning node covers the trap of sending write-heavy workloads to the read-only SQL analytics endpoint.",
+  "longDescription": "This is a decision tree for the specific question a data warehouse migration keeps facing per workload: which Fabric store is the right target? The root question separates OLTP write-heavy workloads, which route to SQL database (built on the Hyperscale architecture, with automatic OneLake replication for analytics), from analytical workloads. Among analytical workloads, the next question is whether the data is already curated Spark output that only needs read access, which routes to the lakehouse's auto-provisioned, read-only SQL analytics endpoint, versus a workload that needs a full writable T-SQL surface with multi-table ACID transactions and stored procedures, which routes to Fabric Warehouse — the default target for most migrated reporting marts. A separate node explains Mirroring's transitional-bridge role: keeping the legacy source continuously replicated into OneLake so both old and new systems can be queried side by side during a phased migration, rather than forcing a single hard cutover. A warning node names the specific trap of treating the lakehouse's SQL analytics endpoint as a writable target, when it strictly is not.",
   "type": "decision",
   "topicSlug": "dw-migration",
-  "capabilityIds": [
-    "warehouse"
-  ],
-  "revision": "1",
+  "capabilityIds": ["warehouse", "lakehouse", "sql-database", "mirroring"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/dw-migration-decision.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "dw migration boundary",
-      "summary": "dw migration boundary in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
+      "id": "start-question",
+      "label": "Does this workload need OLTP writes?",
+      "summary": "Root question: transactional application writes vs analytical reporting.",
+      "detail": "The first branch in choosing a migration target is whether the workload is an OLTP application needing low-latency transactional writes, or an analytical reporting workload. This distinction exists because Fabric's stores specialize: SQL database is the OLTP-oriented engine, while Warehouse and the lakehouse SQL analytics endpoint are analytical surfaces.",
+      "whyItMatters": "Routing an OLTP workload into an analytical store, or an analytical reporting mart into an OLTP-oriented store, fights the engine each was designed for rather than working with it.",
       "classification": "pattern",
-      "layers": [
-        "data"
-      ],
+      "layers": ["data"],
+      "tags": ["decision-root", "Migration"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
-      ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the dw migration boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through dw migration boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "dw-migration",
-        "label": "Open dw migration"
+        "inputs": ["The legacy workload's read/write pattern and latency requirements", "Whether an application directly issues transactional writes against this store"],
+        "processing": ["Classify the workload as OLTP-write-heavy or analytical-read-heavy", "Confirm whether any application depends on synchronous transactional writes to this specific store"],
+        "outputs": ["A routed decision toward SQL database (OLTP) or one of the analytical stores"],
+        "example": "A legacy order-entry application with high-frequency single-row inserts/updates routes to SQL database, while its downstream nightly reporting extract routes to Warehouse."
+      ,
+        "controls": ["Document the write pattern per legacy workload before assigning a target store"],
+        "failureModes": ["Migrating an OLTP application onto an analytical store and discovering its multi-table transaction or low-latency-write assumptions don't hold"]
       }
     },
     {
-      "id": "step-2",
-      "label": "decision tree for the migration target store - Fabric Warehouse (wr…",
-      "summary": "decision tree for the migration target store - Fabric Warehouse (writable T-SQL default) in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through decision tree for the migration target store - Fabric Warehouse (writable T-SQL default): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "lakehouse SQL analytics endpoint (read-only)",
-      "summary": "lakehouse SQL analytics endpoint (read-only) in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the lakehouse SQL analytics endpoint (read-only) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through lakehouse SQL analytics endpoint (read-only): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
+      "id": "sql-database-path",
       "label": "SQL database (OLTP)",
-      "summary": "SQL database (OLTP) in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "summary": "Transactional engine on Hyperscale architecture, with automatic OneLake analytical replication.",
+      "detail": "SQL database in Fabric is a developer-oriented transactional database engine sharing the same underlying SQL Database Engine as Azure SQL Database, built on the Hyperscale distributed-functions architecture that separates compute from durable storage so each scales independently. Data is automatically and continuously replicated into OneLake as Parquet, and a companion read-only SQL analytics endpoint gives analytical access without touching the transactional workload.",
+      "whyItMatters": "This is the only target in the decision tree that provides a genuine low-latency, multi-table transactional write surface with automatic Entra ID auth and separated read/write contention — the right home for a migrated OLTP application, not a reporting mart.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "tags": ["SQLDatabase", "OLTP"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "SQL database in Fabric is a developer-oriented transactional database engine that shares the same underlying SQL Database Engine as Azure SQL Database, making it the designated home for OLTP workloads within the Fabric platform. When created, the platform automatically and continuously replicates its data into OneLake in near-real time as Parquet." },
+        { "sourceKey": "sql-database-hyperscale-architecture", "note": "SQL database in Microsoft Fabric is built on the Hyperscale distributed-functions architecture, which architecturally separates the relational query-processing engine from long-term data storage and durability so each scales independently." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the SQL database (OLTP) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through SQL database (OLTP): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "and mirroring as a transitional bridge",
-      "summary": "and mirroring as a transitional bridge in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and mirroring as a transitional bridge responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and mirroring as a transitional bridge: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "warehouse governed outcome",
-      "summary": "warehouse governed outcome in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the warehouse governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through warehouse governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A legacy OLTP application's schema, transactions, and write patterns"],
+        "processing": ["Migrate schema and data via SqlPackage (.bacpac/.dacpac) or equivalent tooling", "Application writes go through the transactional compute engine", "Data is continuously and automatically replicated into OneLake for analytics with no manual export"],
+        "outputs": ["A migrated transactional database with near-real-time OneLake analytical replication and automatic tuning"],
+        "example": "A legacy order-management OLTP database is migrated to SQL database in Fabric; its writes stay isolated on the transactional engine while a companion SQL analytics endpoint and OneLake replica serve reporting without contention.",
+        "controls": ["Automatic tuning and automatic index creation are on by default, reducing manual DBA work post-migration"],
+        "failureModes": ["Expecting SQL database to behave as a pure analytical warehouse when it is architected and billed as the OLTP-oriented engine in the platform"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "warehouse",
-        "label": "Open warehouse"
+      "drillTarget": { "kind": "capability", "slug": "sql-database", "label": "SQL Database" }
+    },
+    {
+      "id": "readonly-question",
+      "label": "Is this workload read-only over already-curated data?",
+      "summary": "Second question for analytical workloads: read-only reporting vs a writable T-SQL surface.",
+      "detail": "Among analytical (non-OLTP) workloads, the next fork is whether the data is already curated — typically by Spark in a lakehouse — and only needs read-only T-SQL query access, or whether the workload itself needs to write, transform, and manage data through a full T-SQL surface.",
+      "whyItMatters": "Getting this fork right avoids the specific trap named in the warning node below: sending a workload that needs writes to a read-only endpoint.",
+      "classification": "pattern",
+      "layers": ["data", "compute"],
+      "tags": ["Lakehouse", "Warehouse"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Whether the migrated workload's transformation logic is owned by Spark or by T-SQL", "Whether any consumer needs to write through this SQL surface, not just read"],
+        "processing": ["Confirm the data is already curated Delta output (typically from a lakehouse Spark pipeline)", "Confirm no consumer expects to INSERT/UPDATE/DELETE through the T-SQL surface itself"],
+        "outputs": ["A routed decision toward the read-only lakehouse SQL analytics endpoint or the writable Warehouse"],
+        "example": "A set of gold-layer tables already produced by a Spark pipeline in a lakehouse, consumed only by BI tools via T-SQL SELECT, is a clean fit for the SQL analytics endpoint rather than a Warehouse."
+      ,
+        "controls": ["Explicitly confirm write requirements before assuming an endpoint-only target is sufficient"],
+        "failureModes": ["Assuming any T-SQL-queryable surface is interchangeable with a full warehouse, without checking write requirements first"]
       }
+    },
+    {
+      "id": "lakehouse-endpoint-path",
+      "label": "Lakehouse SQL analytics endpoint (read-only)",
+      "summary": "Auto-provisioned, read-only T-SQL surface over Spark-curated Delta tables.",
+      "detail": "Every lakehouse automatically provisions a SQL analytics endpoint at creation time with no setup, exposing Delta tables through a read-only T-SQL query surface that runs on the same engine as Fabric Data Warehouse. INSERT, UPDATE, and DELETE are not possible through it — data modification must happen via Spark in the lakehouse — though T-SQL views, inline functions, and stored procedures can still be created and persisted on the endpoint.",
+      "whyItMatters": "This is the right target specifically when Spark already owns the transformation and the T-SQL consumer only needs to read — trying to write through it is the exact trap the warning node documents.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["Lakehouse", "SQLAnalyticsEndpoint"],
+      "evidence": [
+        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "Every lakehouse automatically provisions a SQL analytics endpoint at creation time with no setup, exposing the lakehouse's Delta tables through a read-only T-SQL query surface. The endpoint is strictly read-only for data: INSERT, UPDATE, and DELETE are not possible through it, and data modification must happen via Spark in the lakehouse." },
+        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "The SQL analytics endpoint runs on the same engine as Fabric Data Warehouse, so it inherits the warehouse engine's performance characteristics, T-SQL data types, and limitations." }
+      ],
+      "drill": {
+        "inputs": ["Curated Delta tables in a lakehouse's Tables area, written by Spark"],
+        "processing": ["Endpoint auto-detects table changes and refreshes SQL metadata with no import step", "T-SQL SELECT queries, views, and stored procedures run against the exposed tables", "Power BI semantic models connect over the endpoint's TDS interface"],
+        "outputs": ["Read-only, immediately queryable T-SQL access to Spark-curated data"],
+        "example": "A migrated reporting mart whose transformation logic was rewritten as PySpark lands as lakehouse gold tables; BI analysts query it via the auto-provisioned SQL analytics endpoint with no separate warehouse needed.",
+        "controls": ["Object-, column-, and row-level security on the endpoint apply only to access through that endpoint, not to Spark or OneLake access to the same data"],
+        "failureModes": ["Treating endpoint-level GRANT/DENY as the sole security boundary for lakehouse data, when Spark or OneLake access bypasses those SQL-level rules entirely"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
+    },
+    {
+      "id": "readonly-trap-warning",
+      "label": "Trap: sending write-heavy workloads to the read-only endpoint",
+      "summary": "The SQL analytics endpoint cannot accept INSERT/UPDATE/DELETE, no matter how it's used.",
+      "detail": "A workload migrated onto the lakehouse SQL analytics endpoint under the assumption that it's 'just another T-SQL surface' will fail at the first write: INSERT, UPDATE, and DELETE are categorically unsupported. All data modification must go through Spark in the lakehouse instead — the endpoint only ever reflects what Spark has already written.",
+      "whyItMatters": "This is a hard architectural boundary, not a permissions setting to adjust — a migration plan that assumed the endpoint could serve as a lightweight warehouse substitute for a write-heavy mart has to be redesigned, not patched.",
+      "classification": "warning",
+      "layers": ["compute", "data"],
+      "tags": ["Lakehouse", "AntiPattern"],
+      "evidence": [
+        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "The endpoint is strictly read-only for data: INSERT, UPDATE, and DELETE are not possible through it, and data modification must happen via Spark in the lakehouse — yet T-SQL views, inline functions, and stored procedures can still be created and persisted on the endpoint." }
+      ],
+      "drill": {
+        "inputs": ["A migration plan that assigned a write-dependent workload to the lakehouse SQL analytics endpoint"],
+        "processing": ["The first attempted INSERT/UPDATE/DELETE against the endpoint fails outright", "Team discovers the endpoint is read-only by design, not by misconfiguration", "Workload is re-routed to Fabric Warehouse or reworked as a Spark write path"],
+        "outputs": ["Either a corrected migration target (Warehouse) or a redesigned Spark-based write path"],
+        "example": "A migrated stored procedure that upserts into a staging table via T-SQL is pointed at a lakehouse SQL analytics endpoint during migration testing and fails immediately; the workload is re-scoped to Fabric Warehouse, which supports the same T-SQL DML.",
+        "controls": ["Confirm write requirements per workload before choosing the endpoint as a target, not after building against it"],
+        "failureModes": ["Discovering the read-only constraint only during migration testing, after other design decisions were already made assuming write access"]
+      }
+    },
+    {
+      "id": "warehouse-path",
+      "label": "Fabric Warehouse (writable T-SQL default)",
+      "summary": "Full T-SQL surface with multi-table ACID transactions — the default target for most migrated marts.",
+      "detail": "Fabric Data Warehouse is an enterprise-scale relational warehouse with development primarily in T-SQL over a large SQL engine surface, including full multi-table ACID transactions, materialized views, functions, and stored procedures. Storage and compute are separated for near-instant scaling, and the accelerated CoddSpeed execution path can transparently route eligible query fragments to GPU-backed hardware acceleration with no query rewrites required.",
+      "whyItMatters": "This is the default migration target for most legacy reporting warehouses precisely because it's the only Fabric store offering the full writable T-SQL surface — stored procedures, multi-table transactions, materialized views — that most legacy warehouse workloads were already built around.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "tags": ["Warehouse", "TSQL"],
+      "evidence": [
+        { "sourceKey": "warehouse-overview", "note": "Development is primarily in T-SQL on a large SQL Database Engine surface area, including full multi-table ACID transactions, materialized views, functions, and stored procedures. Storage and compute are separated in the warehouse, which allows near-instant scaling." },
+        { "sourceKey": "coddspeed-gpu-warehouse", "note": "CoddSpeed is a hardware-accelerated query execution capability built into Microsoft Fabric's Data Warehouse engine; the accelerated execution path runs transparently under existing SQL, with no query rewrites or hints needed to benefit from GPU-backed acceleration." }
+      ],
+      "drill": {
+        "inputs": ["Legacy warehouse schema, stored procedures, and multi-table transaction logic requiring a writable T-SQL surface"],
+        "processing": ["Rewrite legacy stored procedures and ETL/ELT logic as Warehouse T-SQL", "Load via COPY INTO, pipelines, Spark bulk writes, or cross-database CTAS", "Eligible query fragments are transparently routed to accelerated execution where available"],
+        "outputs": ["A writable, governed T-SQL warehouse with full multi-table ACID transaction support, physically Delta in OneLake"],
+        "example": "A legacy Synapse dedicated SQL pool's nightly ETL stored procedures, which update several fact and dimension tables inside one transaction, are rewritten as Fabric Warehouse T-SQL preserving the same multi-table transactional guarantee.",
+        "controls": ["Workload management is autonomous with no user-facing query-engine tuning knobs; the 50/50 SELECT/non-SELECT pool split is the main workload-isolation lever"],
+        "failureModes": ["Assuming source-system SQL tuning rules transfer unchanged when warehouse behavior depends on the distributed engine's own cache state and workload management"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
+    },
+    {
+      "id": "mirroring-bridge",
+      "label": "Mirroring as a transitional bridge",
+      "summary": "Keep the legacy source continuously replicated into OneLake during a phased cutover.",
+      "detail": "Rather than a single hard cutover, Mirroring can serve as a transitional bridge: for organisations with data already in a supported source like Azure SQL Database, Fabric Mirroring provides a low-latency, low-cost path to continuously replicate the existing estate into OneLake without rebuilding the source database. This lets both the legacy system and the new Fabric target be queried side by side during validation, before the legacy system is retired.",
+      "whyItMatters": "This de-risks a migration by making the cutover gradual and reversible instead of a single high-stakes switchover — both old and new can be compared live until confidence is established.",
+      "classification": "pattern",
+      "layers": ["data", "orchestration"],
+      "tags": ["Mirroring", "Migration"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "For organisations with data already in Azure SQL Database, Fabric Mirroring provides a low-latency, low-cost path to continuously replicate that existing estate into Fabric's OneLake without rebuilding the source database." }
+      ],
+      "drill": {
+        "inputs": ["A legacy source on a Mirroring-supported platform, kept live during migration"],
+        "processing": ["Enable Mirroring to continuously replicate the legacy source into OneLake as Delta", "Run the new Warehouse/lakehouse/SQL-database target and the mirrored legacy replica side by side", "Validate parity, then cut reports over and retire the legacy connection"],
+        "outputs": ["A live, queryable OneLake replica of the legacy source usable for comparison throughout the migration window"],
+        "example": "During a phased Azure SQL Database migration, Mirroring keeps a continuously current OneLake replica available for validation queries while the target Fabric Warehouse tables are built and tested in parallel.",
+        "controls": ["Migration window length before the legacy source and mirror are retired"],
+        "failureModes": ["Treating the mirrored bridge as a permanent architecture rather than a transitional step, leaving two live copies indefinitely"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "mirroring", "label": "Mirroring" }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-start-sqldb", "from": "start-question", "to": "sql-database-path", "label": "yes, OLTP application writes", "layer": "data", "kind": "branch" },
+    { "id": "e-start-readonly", "from": "start-question", "to": "readonly-question", "label": "no, analytical reporting workload", "layer": "data", "kind": "branch" },
+    { "id": "e-readonly-lakehouse", "from": "readonly-question", "to": "lakehouse-endpoint-path", "label": "read-only over Spark-curated data", "layer": "compute", "kind": "branch" },
+    { "id": "e-readonly-warehouse", "from": "readonly-question", "to": "warehouse-path", "label": "needs a writable T-SQL surface", "layer": "compute", "kind": "branch" },
+    { "id": "e-lakehouse-warning", "from": "lakehouse-endpoint-path", "to": "readonly-trap-warning", "label": "if writes are attempted", "layer": "compute", "kind": "branch" },
+    { "id": "e-warning-warehouse", "from": "readonly-trap-warning", "to": "warehouse-path", "label": "re-routed to a writable target", "layer": "data", "kind": "feedback" },
+    { "id": "e-sqldb-bridge", "from": "sql-database-path", "to": "mirroring-bridge", "label": "phased cutover, not a hard switch", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-warehouse-bridge", "from": "warehouse-path", "to": "mirroring-bridge", "label": "validate side by side before cutover", "layer": "orchestration", "kind": "flow" }
   ],
   "walkthrough": [
-    {
-      "nodeId": "step-1",
-      "title": "1. dw migration boundary",
-      "explanation": "dw migration boundary in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture."
-    },
-    {
-      "nodeId": "step-2",
-      "title": "2. decision tree for the migration target store - Fabric Warehouse (wr…",
-      "explanation": "decision tree for the migration target store - Fabric Warehouse (writable T-SQL default) in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture."
-    },
-    {
-      "nodeId": "step-3",
-      "title": "3. lakehouse SQL analytics endpoint (read-only)",
-      "explanation": "lakehouse SQL analytics endpoint (read-only) in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture."
-    },
-    {
-      "nodeId": "step-4",
-      "title": "4. SQL database (OLTP)",
-      "explanation": "SQL database (OLTP) in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture."
-    },
-    {
-      "nodeId": "step-5",
-      "title": "5. and mirroring as a transitional bridge",
-      "explanation": "and mirroring as a transitional bridge in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture."
-    },
-    {
-      "nodeId": "step-6",
-      "title": "6. warehouse governed outcome",
-      "explanation": "warehouse governed outcome in the decision tree for the migration target store - Fabric Warehouse (writable T-SQL default), lakehouse SQL analytics endpoint (read-only), SQL database (OLTP), and mirroring as a transitional bridge architecture."
-    }
+    { "nodeId": "start-question", "title": "1. OLTP writes or analytical reporting?", "explanation": "The root split: does this workload need transactional application writes, or is it analytical reporting over already-settled data?" },
+    { "nodeId": "sql-database-path", "title": "2. SQL database for OLTP", "explanation": "Built on the Hyperscale architecture with automatic OneLake replication, this is the target for migrated transactional application workloads." },
+    { "nodeId": "readonly-question", "title": "3. Read-only over curated data, or writable?", "explanation": "Among analytical workloads, the next question is whether Spark already owns the transformation and only read access is needed." },
+    { "nodeId": "lakehouse-endpoint-path", "title": "4. Lakehouse endpoint for read-only reporting", "explanation": "Auto-provisioned and zero-setup, but strictly read-only — the right fit only when Spark owns all the writes." },
+    { "nodeId": "readonly-trap-warning", "title": "5. Warning: the endpoint cannot accept writes, ever", "explanation": "A workload that turns out to need writes fails hard against the endpoint and must be re-routed to Warehouse, not patched." },
+    { "nodeId": "warehouse-path", "title": "6. Warehouse: the default writable target", "explanation": "Full T-SQL with multi-table transactions and stored procedures — the natural home for most migrated legacy warehouse marts." },
+    { "nodeId": "mirroring-bridge", "title": "7. Mirroring bridges the cutover", "explanation": "Rather than a hard switchover, Mirroring keeps the legacy source live in OneLake for side-by-side validation until the team is confident enough to retire it." }
   ]
 }

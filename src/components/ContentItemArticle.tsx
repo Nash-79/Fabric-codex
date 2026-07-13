@@ -1,4 +1,4 @@
-import { useMemo, type ComponentType, type ReactNode } from "react";
+import { useMemo, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -7,8 +7,7 @@ import { ExternalLink } from "lucide-react";
 import { markdownPanels } from "@/components/MarkdownPanels";
 import { Callout } from "@/components/Callout";
 import { DiagramLightbox } from "@/components/DiagramLightbox";
-import { InteractiveDiagram } from "@/components/InteractiveDiagram";
-import { getInteractiveDiagram } from "@/diagrams/catalog";
+import { getAuthoredDiagram, getStaticDiagramSvg } from "@/diagrams/catalog";
 import { AdvisorMermaidBlock } from "@/components/AdvisorMermaidBlock";
 import { TierBadge } from "@/components/Badges";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -118,6 +117,104 @@ export function ContentItemArticle({
     return map;
   }, [bodyMd]);
 
+  // The components map MUST be referentially stable. It is passed to ReactMarkdown as element
+  // renderers; a new object per render means new component identities, and React responds by
+  // unmounting and remounting the entire markdown tree. The article re-renders on every
+  // scroll-driven ToC highlight change, so without this memo every figure lost its local state
+  // (view toggles, selections) the moment the user scrolled — the "diagram reverts back to the
+  // original" bug.
+  const components = useMemo(
+    () =>
+      ({
+        ...markdownPanels,
+        pre: ({ children }) => {
+          if (codeLanguage(children) === "mermaid") {
+            return <AdvisorMermaidBlock code={textFromNode(children)} />;
+          }
+          const PanelPre = markdownPanels.pre as ComponentType<{ children?: ReactNode }>;
+          return <PanelPre>{children}</PanelPre>;
+        },
+        h2: ({ children, ...rest }) => {
+          const id = slugifyHeading(textFromNode(children));
+          return (
+            <h2 id={id} {...rest} className="group relative pl-4">
+              <span
+                className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-teal-400"
+                aria-hidden="true"
+              />
+              {children}
+              <a
+                href={`#${id}`}
+                aria-label="Copy link to section"
+                data-no-print
+                onClick={(e) => {
+                  e.preventDefault();
+                  const url = `${window.location.origin}${window.location.pathname}#${id}`;
+                  navigator.clipboard?.writeText(url);
+                  history.replaceState(null, "", `#${id}`);
+                }}
+                className="no-print ml-2 text-teal-500/40 opacity-0 transition group-hover:opacity-100 hover:text-teal-500"
+              >
+                #
+              </a>
+            </h2>
+          );
+        },
+        sup: ({ children, ...rest }) => <sup {...rest}>{children}</sup>,
+        // Markdown wraps a standalone image in a paragraph, but we render images as <figure>
+        // (interactive diagram or lightbox), and a <figure> inside a <p> is invalid HTML — the
+        // browser closes the <p> early, so the server and client trees diverge and hydration
+        // fails, leaving the whole diagram inert. Unwrap those paragraphs to a <div>.
+        // Test the mdast node, not React children: `children` here are our own custom renderers,
+        // never a literal "img" element.
+        p: ({ children, node }) => {
+          const holdsImage = node?.children?.some(
+            (child) => child.type === "element" && child.tagName === "img",
+          );
+          return holdsImage ? <div>{children}</div> : <p>{children}</p>;
+        },
+        a: ({ href, children, ...rest }) => {
+          if (href?.startsWith("#src-")) {
+            const n = Number(href.slice("#src-".length));
+            return (
+              <CitationMark href={href} citation={citations[n - 1]}>
+                {children}
+              </CitationMark>
+            );
+          }
+          return (
+            <a href={href} {...rest}>
+              {children}
+            </a>
+          );
+        },
+        blockquote: ({ children }) => <Callout>{children}</Callout>,
+        img: ({ src, alt }) => {
+          const base =
+            String(src ?? "")
+              .split("/")
+              .pop() ?? "";
+          const caption = captionByFile.get(base) || alt;
+          const figureIndex = figureIndexByFile.get(base);
+          const authored = getAuthoredDiagram(base);
+          const svgMarkup = getStaticDiagramSvg(base);
+          const resolvedSrc = srcByFile.get(base) ?? authored?.staticPath ?? (src as string);
+          return (
+            <DiagramLightbox
+              src={resolvedSrc}
+              alt={alt ?? ""}
+              caption={caption}
+              figureIndex={figureIndex}
+              svgMarkup={authored && svgMarkup ? svgMarkup : undefined}
+              definition={authored}
+              citations={citations}
+            />
+          );
+        },
+      }) satisfies ComponentProps<typeof ReactMarkdown>["components"],
+    [captionByFile, srcByFile, figureIndexByFile, citations],
+  );
+
   return (
     <div className="article-body prose dark:prose-invert prose-lg lg:prose-xl mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-h2:mt-16 prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-2xl prose-h3:mt-10 prose-h3:text-xl prose-p:leading-relaxed prose-a:text-teal-600 dark:prose-a:text-teal-300 prose-strong:text-foreground prose-li:marker:text-teal-500 dark:prose-li:marker:text-teal-400">
       <ReactMarkdown
@@ -128,98 +225,7 @@ export function ContentItemArticle({
             ? url.replace("/content/diagrams/", "/diagrams/")
             : url
         }
-        components={{
-          ...markdownPanels,
-          pre: ({ children }) => {
-            if (codeLanguage(children) === "mermaid") {
-              return <AdvisorMermaidBlock code={textFromNode(children)} />;
-            }
-            const PanelPre = markdownPanels.pre as ComponentType<{ children?: ReactNode }>;
-            return <PanelPre>{children}</PanelPre>;
-          },
-          h2: ({ children, ...rest }) => {
-            const id = slugifyHeading(textFromNode(children));
-            return (
-              <h2 id={id} {...rest} className="group relative pl-4">
-                <span
-                  className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-teal-400"
-                  aria-hidden="true"
-                />
-                {children}
-                <a
-                  href={`#${id}`}
-                  aria-label="Copy link to section"
-                  data-no-print
-                  onClick={(e) => {
-                    e.preventDefault();
-                    const url = `${window.location.origin}${window.location.pathname}#${id}`;
-                    navigator.clipboard?.writeText(url);
-                    history.replaceState(null, "", `#${id}`);
-                  }}
-                  className="no-print ml-2 text-teal-500/40 opacity-0 transition group-hover:opacity-100 hover:text-teal-500"
-                >
-                  #
-                </a>
-              </h2>
-            );
-          },
-          sup: ({ children, ...rest }) => <sup {...rest}>{children}</sup>,
-          // Markdown wraps a standalone image in a paragraph, but we render images as <figure>
-          // (interactive diagram or lightbox), and a <figure> inside a <p> is invalid HTML — the
-          // browser closes the <p> early, so the server and client trees diverge and hydration
-          // fails, leaving the whole diagram inert. Unwrap those paragraphs to a <div>.
-          // Test the mdast node, not React children: `children` here are our own custom renderers,
-          // never a literal "img" element.
-          p: ({ children, node }) => {
-            const holdsImage = node?.children?.some(
-              (child) => child.type === "element" && child.tagName === "img",
-            );
-            return holdsImage ? <div>{children}</div> : <p>{children}</p>;
-          },
-          a: ({ href, children, ...rest }) => {
-            if (href?.startsWith("#src-")) {
-              const n = Number(href.slice("#src-".length));
-              return (
-                <CitationMark href={href} citation={citations[n - 1]}>
-                  {children}
-                </CitationMark>
-              );
-            }
-            return (
-              <a href={href} {...rest}>
-                {children}
-              </a>
-            );
-          },
-          blockquote: ({ children }) => <Callout>{children}</Callout>,
-          img: ({ src, alt }) => {
-            const base =
-              String(src ?? "")
-                .split("/")
-                .pop() ?? "";
-            const caption = captionByFile.get(base) || alt;
-            const resolvedSrc = srcByFile.get(base) ?? (src as string);
-            const figureIndex = figureIndexByFile.get(base);
-            const interactive = getInteractiveDiagram(base);
-            if (interactive) {
-              return (
-                <InteractiveDiagram
-                  definition={interactive}
-                  caption={caption}
-                  figureIndex={figureIndex}
-                />
-              );
-            }
-            return (
-              <DiagramLightbox
-                src={resolvedSrc}
-                alt={alt ?? ""}
-                caption={caption}
-                figureIndex={figureIndex}
-              />
-            );
-          },
-        }}
+        components={components}
       >
         {renderedBody}
       </ReactMarkdown>

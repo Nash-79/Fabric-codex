@@ -1,437 +1,207 @@
 {
   "id": "eventhouse-kql-hot-cold-path",
-  "title": "Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view tr…",
-  "purpose": "Original diagram: Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder",
-  "type": "decision",
+  "title": "Eventhouse/KQL Hot Cache vs Cold Storage Internals",
+  "purpose": "Trace an ingested record from the hot cache through the retention-governed cold tier and the OneLake mirror, showing the two independently billed storage tiers, the adaptive-batching decision that governs OneLake writes, and the three-stage capacity throttling ladder that fires under sustained overload.",
+  "accessibleSummary": "An internals diagram tracing one ingested record through Eventhouse storage. Records land first in the premium-tier hot cache governed by the caching policy, and remain queryable there for fast, low-latency access. In parallel, the full retention window is held in a separate, independently billed standard-tier store governed by the retention policy. If OneLake availability is enabled, an adaptive-batching decision delays the OneLake write until enough data accumulates for optimally sized Parquet files, trading latency for file-size efficiency. A warning node covers the DDL operations blocked while OneLake availability is active. A second warning node describes the three-stage capacity throttling ladder — proactive, reactive, and extreme-reactive — that fires when query and ingestion demand exceeds available capacity.",
+  "longDescription": "This is an internals diagram over Eventhouse/KQL storage and capacity behaviour, not a data-movement pipeline. It starts at record ingestion and immediately splits into two independently billed storage tiers: a premium cache tier, comparable to ADLS premium, that holds the hot dataset governed by the caching policy, and a standard tier, comparable to ADLS hot, that holds the full retention window governed by the retention policy. Configuring a shorter cache window reduces premium-tier spend without affecting total queryable history, since the standard tier still holds everything within retention. From the standard tier, if OneLake availability is enabled (at the database or individual table level, with optional backfill of existing data), an adaptive-batching mechanism governs when data is actually written to OneLake as Delta/Parquet: it delays writes until enough data accumulates to produce optimally sized files (typically 200-256 MB), defaulting to a maximum delay of up to 3 hours, though the mirroring policy can lower that to as little as 5 minutes at the cost of producing many small files that degrade downstream query performance. The retention policy governs both tiers concurrently — when data ages out, it is deleted from the standard tier and concurrently soft-deleted from the OneLake copy. A warning node captures a specific, sourced trap: while OneLake availability is active on a table, several DDL operations are blocked outright (rename, column type change, row-level security, delete/purge), and enabling it back after a temporary disable triggers a full historic backfill rather than an incremental catch-up. A second warning node describes the escalating three-stage throttling ladder Eventhouse applies under capacity pressure — proactive (queries slow, ingestion unaffected), reactive (both paused, no data lost), and extreme-reactive (both paused with a real risk of data loss after a holding period) — which is the operational consequence of undersizing capacity against the ingestion and query load these two storage tiers actually sustain.",
+  "type": "internals",
   "topicSlug": "eventhouse-kql",
-  "capabilityIds": [
-    "eventhouse-kql"
-  ],
-  "revision": "1",
+  "capabilityIds": ["eventhouse-kql", "rti"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/eventhouse-kql-hot-cold-path.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "eventhouse kql boundary",
-      "summary": "eventhouse kql boundary in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "record-ingest",
+      "label": "Record ingested into KQL database",
+      "summary": "An event record arrives and is organized by arrival time for fast, indexed querying.",
+      "detail": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale. From this point, the same logical record exists in two independently governed storage tiers, described in the next two nodes.",
+      "whyItMatters": "The arrival-time organization is what makes both the hot cache and the cold standard tier fast to query without a separate indexing step — it is foundational to everything downstream in this diagram.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "rti-overview", "note": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale. Data stored in an Eventhouse is also mirrored to OneLake as a single logical copy for use by other Fabric experiences." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the eventhouse kql boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through eventhouse kql boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A streaming or batch record arriving via Eventstream or direct ingestion into a KQL database table"],
+        "processing": ["Record is indexed and organized by arrival time", "Record becomes queryable via native KQL and the T-SQL analytics endpoint", "Record is routed into the caching-policy hot tier and the retention-policy standard tier concurrently"],
+        "outputs": ["A queryable record, present in both the hot cache and the durable standard-tier store"],
+        "example": "A telemetry event from a fleet-tracking Eventstream lands in a KQL database table and is immediately queryable via KQL within seconds, indexed by its arrival timestamp alongside millions of other records from the same ingestion window.",
+        "controls": ["Ingestion source and format (Eventstream, direct SDK/API ingestion, batch)"],
+        "failureModes": ["Assuming query latency is uniform regardless of how old the queried data is — it is not, because hot and cold tiers behave differently (see the next two nodes)"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "eventhouse-kql",
-        "label": "Open eventhouse kql"
-      }
+      "drillTarget": { "kind": "capability", "slug": "eventhouse-kql", "label": "Eventhouse/KQL" }
     },
     {
-      "id": "step-2",
-      "label": "Eventhouse/KQL hot path vs cold path internals",
-      "summary": "Eventhouse/KQL hot path vs cold path internals in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "hot-cache-tier",
+      "label": "Hot cache tier (caching policy)",
+      "summary": "Premium-tier storage holding the hot dataset for fast queries, governed by the caching policy.",
+      "detail": "KQL database storage is split into two independently billed tiers: a premium cache tier, comparable to ADLS premium, that holds the hot dataset governed by the caching policy. Configuring a shorter cache window reduces premium-tier spend without affecting total queryable history, because the standard tier separately holds the full retention window regardless of the cache window's length.",
+      "whyItMatters": "This tier is the actual latency lever: queries against data inside the cache window run against premium storage, while queries reaching further back fall outside it — the cache window is a cost/performance dial, not a data-loss risk, since the standard tier still holds everything within retention.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "KQL database storage is split into two independently billed tiers: a premium cache tier (comparable to ADLS premium) that holds the hot dataset governed by the caching policy, and a standard tier (comparable to ADLS hot) that holds the full retention window governed by the retention policy. Configuring a shorter cache window reduces premium-tier spend without affecting total queryable history." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Eventhouse/KQL hot path vs cold path internals responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Eventhouse/KQL hot path vs cold path internals: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Recently ingested records, within the configured caching-policy window"],
+        "processing": ["Data within the cache window is kept resident in premium-tier storage", "Queries against this window read directly from premium storage for lower latency"],
+        "outputs": ["Fast query response for recent data, billed at premium-tier rates for the cache window's size"],
+        "example": "A dashboard querying the last 24 hours of IoT telemetry with a 48-hour caching policy always hits premium-tier storage, giving consistently fast response times regardless of how much older history the table also retains.",
+        "controls": ["Caching policy window length, set independently of the retention policy"],
+        "failureModes": ["Setting an unnecessarily long cache window and paying premium-tier rates for data that queries rarely touch", "Assuming shortening the cache window deletes data — it only moves the boundary of what's held at premium-tier speed, not what's retained"]
       }
     },
     {
-      "id": "step-3",
-      "label": "caching-policy hot cache",
-      "summary": "caching-policy hot cache in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "cold-standard-tier",
+      "label": "Cold standard tier (retention policy)",
+      "summary": "Standard-tier storage holding the full retention window, governed by the retention policy.",
+      "detail": "The standard tier, comparable to ADLS hot, holds the full retention window governed by the retention policy, independently billed from the premium cache tier. The retention policy also governs the OneLake copy concurrently: data aged out of the KQL database is concurrently soft-deleted from OneLake.",
+      "whyItMatters": "This is the tier that actually determines how far back a query can reach at all — the retention policy, not the caching policy, is the real data-lifecycle control, and it has a direct, concurrent effect on the separate OneLake copy.",
+      "classification": "fact",
+      "layers": ["data", "governance"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "KQL database storage is split into two independently billed tiers: a premium cache tier and a standard tier (comparable to ADLS hot) that holds the full retention window governed by the retention policy." },
+        { "sourceKey": "eventhouse-overview", "note": "The KQL retention policy also governs the OneLake copy: data aged out of the KQL database is concurrently soft-deleted from OneLake." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the caching-policy hot cache responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through caching-policy hot cache: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["All ingested records within the configured retention window, regardless of cache-window membership"],
+        "processing": ["Data is held in standard-tier storage for the full retention period", "When data ages past the retention window, it is deleted from the standard tier and concurrently soft-deleted from OneLake if OneLake availability is enabled"],
+        "outputs": ["The full queryable history within retention, at standard-tier cost, plus a synchronized deletion signal to the OneLake mirror"],
+        "example": "A table with a 2-year retention policy and a 48-hour cache window keeps two years of history queryable (at standard-tier latency beyond 48 hours) and automatically soft-deletes both the KQL copy and the OneLake copy of any record older than two years.",
+        "controls": ["Retention policy window, set per table or database"],
+        "failureModes": ["Assuming the OneLake copy persists independently of KQL retention — it does not; the same retention policy prunes both concurrently", "Setting retention shorter than a downstream OneLake consumer (e.g. a Lakehouse job) expects, silently losing history that consumer assumed was durable"]
       }
     },
     {
-      "id": "step-4",
-      "label": "update-policy materialized-view transforms",
-      "summary": "update-policy materialized-view transforms in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "id": "onelake-availability-decision",
+      "label": "OneLake availability enabled?",
+      "summary": "Whether the table's data is also exposed as Delta in OneLake, at the database or table level.",
+      "detail": "OneLake availability for a KQL database can be enabled at either the database level (covering all current and future tables, with optional backfill of existing data) or at the individual table level. Enabling it exposes KQL table data in Delta Lake format, making it directly queryable by other Fabric engines — including Power BI Direct Lake mode, Warehouse, Lakehouse, and Spark notebooks — without any data movement or copy, and at no additional storage charge beyond the standard OneLake storage tier already billed.",
+      "whyItMatters": "This is the fork that determines whether KQL data becomes a first-class OneLake citizen usable by the rest of Fabric, or stays confined to KQL/T-SQL query surfaces — a decision with real downstream architectural consequences.",
+      "classification": "fact",
+      "layers": ["data", "metadata"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "OneLake availability for a KQL database can be enabled at either the database level (covering all current and future tables, with optional backfill of existing data) or at the individual table level." },
+        { "sourceKey": "eventhouse-overview", "note": "Enabling OneLake availability exposes KQL table data in Delta Lake format, making it directly queryable by other Fabric engines — including Power BI Direct Lake mode, Warehouse, Lakehouse, and Spark notebooks — without any data movement or copy. There is no additional storage charge for the OneLake copy beyond the standard OneLake storage tier already billed." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the update-policy materialized-view transforms responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through update-policy materialized-view transforms: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
+        "inputs": ["A KQL database or individual table, with a decision on whether cross-engine access to its data is needed"],
+        "processing": ["If enabled at database level: all current and future tables get OneLake availability, with optional backfill for existing data", "If enabled at table level: only that specific table is exposed", "If left disabled: data stays queryable only via native KQL and the T-SQL analytics endpoint"],
+        "outputs": ["Either a Delta-format OneLake mirror usable by Direct Lake, Warehouse, Lakehouse, and Spark, or KQL-only access with no OneLake footprint"],
+        "example": "A team enables OneLake availability at the database level with backfill for a telemetry KQL database so a Direct Lake semantic model can report on it directly, at no incremental OneLake storage cost beyond what's already billed.",
+        "controls": ["Database-level vs table-level enablement", "Whether to backfill existing data or start availability from the point of enablement forward"],
+        "failureModes": ["Enabling database-level availability without realizing it applies to all future tables too, exposing data that wasn't meant to be OneLake-visible", "Not requesting backfill, and assuming historical data is available in OneLake when only new data going forward actually is"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
     },
     {
-      "id": "step-5",
-      "label": "retention-policy standard tier",
-      "summary": "retention-policy standard tier in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
+      "id": "adaptive-batching",
+      "label": "Adaptive batching to OneLake",
+      "summary": "OneLake writes are delayed until enough data accumulates for optimally sized Parquet files.",
+      "detail": "When OneLake availability is active, an adaptive batching mechanism delays writes to OneLake until enough data accumulates to produce optimally-sized Parquet files (typically 200-256 MB). The default maximum delay is up to 3 hours; it can be lowered to as little as 5 minutes via the mirroring policy, though smaller delays risk producing many small files that degrade downstream query performance.",
+      "whyItMatters": "This is a real latency-vs-file-efficiency tradeoff that architects must consciously set, not a fixed platform constant — the default 3-hour ceiling means OneLake-side freshness is meaningfully behind KQL-native freshness unless the mirroring policy is explicitly tuned tighter, and tuning it tighter has its own downstream query-performance cost.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "When OneLake availability is active, an adaptive batching mechanism delays writes to OneLake until enough data accumulates to produce optimally-sized Parquet files (typically 200-256 MB). The default maximum delay is up to 3 hours; it can be lowered to as little as 5 minutes via the mirroring policy, though smaller delays risk producing many small files that degrade downstream query performance." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the retention-policy standard tier responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through retention-policy standard tier: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Newly ingested records in a table with OneLake availability enabled", "The configured mirroring policy delay (default up to 3 hours, tunable down to 5 minutes)"],
+        "processing": ["Accumulate incoming records until either the target file size (200-256 MB) is reached or the maximum delay elapses", "Write the accumulated batch to OneLake as a Delta/Parquet file"],
+        "outputs": ["Delta-format files in OneLake, sized for efficient downstream query performance, at some latency behind KQL-native freshness"],
+        "example": "A high-volume table hits the 200-256 MB file-size target every 20 minutes during peak ingestion, so OneLake freshness tracks close to real time; the same table during a quiet period waits the full 3-hour default before a smaller batch is flushed.",
+        "controls": ["Mirroring policy delay, tunable from the 3-hour default down to 5 minutes"],
+        "failureModes": ["Tuning the delay down to 5 minutes for freshness without accounting for the resulting small-file query-performance cost downstream", "Assuming OneLake-side data is as fresh as KQL-native queries, when it can lag by up to 3 hours under the default policy"]
       }
     },
     {
-      "id": "step-6",
-      "label": "OneLake adaptive-batching decision",
-      "summary": "OneLake adaptive-batching decision in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the OneLake adaptive-batching decision responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through OneLake adaptive-batching decision: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "and the three-stage capacity throttling ladder",
-      "summary": "and the three-stage capacity throttling ladder in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
+      "id": "ddl-restriction-warning",
+      "label": "Trap: blocked DDL while OneLake-available",
+      "summary": "Rename, type change, row-level security, and delete/purge are blocked while OneLake availability is active.",
+      "detail": "While OneLake availability is enabled on a table, certain DDL operations are blocked: renaming the table, changing a column's data type, applying row-level security, and deleting or purging rows. These operations require temporarily disabling OneLake availability; re-enabling it triggers a full historic backfill.",
+      "whyItMatters": "This is a real operational trap for schema evolution: a team that enables OneLake availability early and later needs to rename a column or apply row-level security discovers the operation is blocked, and the fix (disable, change, re-enable) forces a full historic re-backfill rather than an incremental change.",
       "classification": "warning",
-      "layers": [
-        "observability"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
+      "layers": ["data", "governance"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "While OneLake availability is enabled on a table, certain DDL operations are blocked: renaming the table, changing a column's data type, applying row-level security, and deleting or purging rows. These operations require temporarily disabling OneLake availability; re-enabling it triggers a full historic backfill." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and the three-stage capacity throttling ladder responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and the three-stage capacity throttling ladder: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "eventhouse-kql",
-        "label": "Open eventhouse kql"
+        "inputs": ["A table with OneLake availability enabled", "A required DDL change: rename, column type change, row-level security, or delete/purge"],
+        "processing": ["Attempting the DDL directly fails while OneLake availability is active", "Disable OneLake availability on the table", "Perform the DDL change", "Re-enable OneLake availability, which triggers a full historic backfill rather than an incremental resync"],
+        "outputs": ["The DDL change applied, but at the cost of a full re-backfill of OneLake data for that table"],
+        "example": "A compliance requirement to apply row-level security to a customer telemetry table, already OneLake-available for six months of history, forces a disable/apply/re-enable cycle that re-backfills the entire six months into OneLake rather than just applying the new policy incrementally.",
+        "controls": ["Plan schema and security requirements (renames, type changes, row-level security) before enabling OneLake availability, not after", "Budget for a full backfill window when a blocked DDL operation is unavoidable on an already-available table"],
+        "failureModes": ["Discovering the DDL block only when an urgent schema or security change is needed, with no backfill window planned", "Repeated disable/re-enable cycles each re-triggering a full backfill, compounding cost and delay"]
       }
+    },
+    {
+      "id": "throttling-ladder",
+      "label": "Three-stage capacity throttling ladder",
+      "summary": "Proactive, reactive, and extreme-reactive throttling stages fire as capacity pressure escalates.",
+      "detail": "When query demand exceeds capacity, an Eventhouse applies throttling in three escalating stages: proactive (queries slowed, ingestion unaffected), reactive (both queries and ingestion paused but no data lost), and extreme-reactive (ingestion and queries paused with a risk of data loss after a holding period). Workspace-level surge protection lets capacity administrators cap each workspace's share of total CU consumption as a percentage over a rolling 24-hour window, and a workspace breaching its threshold is automatically blocked from accepting new operations, though mission-critical workspaces can be exempted.",
+      "whyItMatters": "This is the concrete operational consequence of undersizing capacity against the ingestion and query load the hot and cold tiers above actually sustain — and the escalation is not symmetric: the first two stages are recoverable with no data loss, but the third genuinely risks losing data after a holding period.",
+      "classification": "warning",
+      "layers": ["compute", "governance"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "When query demand exceeds capacity, an Eventhouse applies throttling in three escalating stages: proactive (queries slowed, ingestion unaffected), reactive (both queries and ingestion paused but no data lost), and extreme-reactive (ingestion and queries paused with a risk of data loss after a holding period)." },
+        { "sourceKey": "eventhouse-overview", "note": "Workspace-level surge protection allows capacity administrators to cap each workspace's share of total CU consumption as a percentage over a rolling 24-hour window. When a workspace breaches its threshold it is automatically blocked from accepting new operations; high-priority workspaces can be designated as mission-critical to exempt them from these rules." }
+      ],
+      "drill": {
+        "inputs": ["Sustained query and/or ingestion demand approaching or exceeding available capacity"],
+        "processing": ["Stage 1 (proactive): queries slow down, ingestion continues unaffected", "Stage 2 (reactive): both queries and ingestion pause, but no data is lost while paused", "Stage 3 (extreme-reactive): both remain paused, and data loss becomes a real risk after a holding period"],
+        "outputs": ["Either recovery as demand subsides at stage 1 or 2, or actual data loss if stage 3 is sustained past the holding period"],
+        "example": "A capacity undersized for a sudden 5x ingestion spike from a new Eventstream source first slows queries (stage 1); if the spike continues and capacity isn't increased, ingestion itself pauses (stage 2); left unaddressed past the holding period, incoming events begin to be dropped (stage 3).",
+        "controls": ["Capacity sizing sufficient for peak, not average, ingestion and query load", "Workspace-level surge protection to cap runaway consumption before it escalates the whole capacity toward stage 3", "Mission-critical workspace exemption for workloads that must never be throttled"],
+        "failureModes": ["Sizing capacity for average load and getting blindsided by a burst that pushes straight through proactive into reactive throttling", "Assuming all three stages are equally safe — extreme-reactive is the only one that risks real data loss, and it is reached only after sustained pressure past the holding period"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "orchestration",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "observability",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-ingest-hot", "from": "record-ingest", "to": "hot-cache-tier", "label": "record enters the caching-policy window", "layer": "data", "kind": "flow" },
+    { "id": "e-ingest-cold", "from": "record-ingest", "to": "cold-standard-tier", "label": "record enters the retention-policy window", "layer": "data", "kind": "flow" },
+    { "id": "e-cold-onelake-decision", "from": "cold-standard-tier", "to": "onelake-availability-decision", "label": "check whether OneLake availability is configured", "layer": "metadata", "kind": "flow" },
+    { "id": "e-decision-batching", "from": "onelake-availability-decision", "to": "adaptive-batching", "label": "enabled: route through adaptive batching", "layer": "data", "kind": "branch" },
+    { "id": "e-decision-ddl-warning", "from": "onelake-availability-decision", "to": "ddl-restriction-warning", "label": "enabled: DDL restrictions now apply", "layer": "governance", "kind": "branch" },
+    { "id": "e-hot-throttle", "from": "hot-cache-tier", "to": "throttling-ladder", "label": "risk under sustained query/ingestion pressure", "layer": "compute", "kind": "branch" },
+    { "id": "e-batching-throttle", "from": "adaptive-batching", "to": "throttling-ladder", "label": "OneLake write load contributes to capacity pressure", "layer": "compute", "kind": "flow" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. eventhouse kql boundary",
-      "explanation": "eventhouse kql boundary in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture."
+      "nodeId": "record-ingest",
+      "title": "Start: one record, two storage tiers",
+      "explanation": "An ingested record is organized by arrival time and immediately becomes part of two independently governed, independently billed storage tiers."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Eventhouse/KQL hot path vs cold path internals",
-      "explanation": "Eventhouse/KQL hot path vs cold path internals in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture."
+      "nodeId": "hot-cache-tier",
+      "title": "Hot: premium-tier cache for fast queries",
+      "explanation": "The caching policy window keeps recent data resident in premium storage — a cost/performance dial, not a retention control."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. caching-policy hot cache",
-      "explanation": "caching-policy hot cache in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture."
+      "nodeId": "cold-standard-tier",
+      "title": "Cold: standard-tier store for the full retention window",
+      "explanation": "The retention policy is the real data-lifecycle control, and it governs both the KQL standard tier and the OneLake copy concurrently."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. update-policy materialized-view transforms",
-      "explanation": "update-policy materialized-view transforms in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture."
+      "nodeId": "onelake-availability-decision",
+      "title": "The fork: is this table OneLake-visible?",
+      "explanation": "Enabling OneLake availability, at the database or table level, exposes KQL data as Delta to every other Fabric engine at no extra storage cost — but it isn't free of consequences, covered in the next two nodes."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. retention-policy standard tier",
-      "explanation": "retention-policy standard tier in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture."
+      "nodeId": "adaptive-batching",
+      "title": "Adaptive batching trades latency for file efficiency",
+      "explanation": "OneLake writes wait for an optimal file size or a maximum delay (3 hours by default, tunable to 5 minutes) — freshness and small-file query cost pull in opposite directions."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. OneLake adaptive-batching decision",
-      "explanation": "OneLake adaptive-batching decision in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture."
+      "nodeId": "ddl-restriction-warning",
+      "title": "Warning: OneLake availability blocks some DDL",
+      "explanation": "Rename, type change, row-level security, and delete/purge are blocked while enabled — the fix forces a full historic backfill, not an incremental change."
     },
     {
-      "nodeId": "step-7",
-      "title": "7. and the three-stage capacity throttling ladder",
-      "explanation": "and the three-stage capacity throttling ladder in the Eventhouse/KQL hot path vs cold path internals — caching-policy hot cache, update-policy materialized-view transforms, retention-policy standard tier, OneLake adaptive-batching decision, and the three-stage capacity throttling ladder architecture."
+      "nodeId": "throttling-ladder",
+      "title": "Warning: capacity pressure escalates in three stages",
+      "explanation": "Proactive and reactive throttling are recoverable with no data loss; extreme-reactive genuinely risks losing data after a holding period — the real cost of undersizing capacity for what these tiers sustain."
     }
   ]
 }

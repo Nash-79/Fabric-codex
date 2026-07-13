@@ -1,429 +1,274 @@
 {
   "id": "investment-gold-star-schema",
-  "title": "dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging vie…",
-  "purpose": "Original diagram: dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI",
-  "accessibleSummary": "An interactive architecture infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI",
-  "type": "architecture",
+  "title": "dbt Lineage: Staging Views to the wh_gold Star Schema",
+  "purpose": "Trace dbt's model lineage from silver staging views through dimension and incremental fact models to the wh_gold star schema Direct Lake serves, including the one SCD Type 2 dimension in an otherwise Type 1 gold layer.",
+  "accessibleSummary": "A flow diagram tracing dbt model lineage. Two staging views, stg_positions and stg_returns, read silver Delta sources in the lakehouse. Three dimension models — dim_date, dim_portfolio, dim_benchmark — and one SCD Type 2 dimension, dim_instrument, build from those staging views. Four incremental fact models — fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions — join the staging views to the dimensions. All four facts converge on the wh_gold star schema, which Direct Lake serves to Power BI. A warning node calls out the one dimension using SCD Type 2 history against three that overwrite in place, and the adapter limitation that makes dbt's incremental MERGE work on Fabric Warehouse at all.",
+  "longDescription": "This is dbt's own model lineage rendered as a diagram, not a generic ETL flow. Two staging views (stg_positions, stg_returns) read silver Delta sources from the lh_analytics lakehouse using dbt's three-part cross-database source names. From those staging views, three ordinary dimension models build (dim_date, dim_portfolio, dim_benchmark) and one dimension, dim_instrument, is built as SCD Type 2 to preserve full history of changing instrument attributes — the warning node explains why this one dimension differs from its siblings and what breaks if it doesn't. Four incremental fact models build on top: fact_positions, fact_returns_daily, fact_risk_measures, and fact_transactions, each joining the staging views to the relevant dimensions and using dbt's incremental merge strategy to avoid a full rebuild every run. All four facts converge into the wh_gold star schema, which Power BI reads through Direct Lake. A second fact node explains the adapter mechanics that make the incremental merge actually work against Fabric Warehouse's T-SQL surface.",
+  "type": "flow",
   "topicSlug": "medallion-lakehouse",
-  "capabilityIds": [
-    "warehouse"
-  ],
-  "revision": "1",
+  "capabilityIds": ["warehouse", "lakehouse", "direct-lake"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/investment-gold-star-schema.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "medallion lakehouse boundary",
-      "summary": "medallion lakehouse boundary in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
+      "id": "stg-positions",
+      "label": "stg_positions (staging view)",
+      "summary": "A dbt staging view reading silver positions from the lakehouse via a three-part source name.",
+      "detail": "stg_positions is a dbt view model that reads lh_analytics.silver.positions using dbt's sources.yml declaration, taking advantage of cross-database T-SQL to combine the warehouse and lakehouse in one query with zero data duplication.",
+      "whyItMatters": "Staging views are the single place column renames, type casts, and light cleanup happen before any dimension or fact model touches the data — every downstream model reads this normalized shape, not raw silver.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "warehouse-overview", "note": "Cross-database queries let a single T-SQL statement combine multiple Fabric data sources in the workspace with zero data duplication." }
+      ],
+      "drill": {
+        "inputs": ["lh_analytics.silver.positions Delta table"],
+        "processing": ["dbt source() reference resolves via sources.yml to the three-part cross-database name", "Light column renaming/casting, no aggregation"],
+        "outputs": ["stg_positions view, the single read point for all downstream position-related models"],
+        "example": "A downstream fact model references ref('stg_positions') rather than the raw silver table directly, so a later rename of the silver column only needs a fix in one staging model.",
+        "controls": ["sources.yml database/schema/table declaration"],
+        "failureModes": ["Downstream models bypassing the staging view and querying silver directly, duplicating cleanup logic and drifting out of sync"]
+      }
+    },
+    {
+      "id": "stg-returns",
+      "label": "stg_returns (staging view)",
+      "summary": "A dbt staging view reading silver daily returns from the lakehouse.",
+      "detail": "stg_returns reads lh_analytics.silver.returns_daily the same way stg_positions reads positions — a thin view over the cross-database source, feeding fact_returns_daily and fact_risk_measures.",
+      "whyItMatters": "Keeping returns staged separately from positions lets the two fact lineages (position-based and return-based) evolve independently even though both eventually join the same portfolio and date dimensions.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "warehouse-overview", "note": "Cross-database queries let a single T-SQL statement combine multiple Fabric data sources in the workspace with zero data duplication." }
+      ],
+      "drill": {
+        "inputs": ["lh_analytics.silver.returns_daily Delta table"],
+        "processing": ["dbt source() reference resolves via sources.yml", "Light column renaming/casting"],
+        "outputs": ["stg_returns view feeding fact_returns_daily and fact_risk_measures"],
+        "example": "A benchmark-return column added to silver later only requires exposing it in stg_returns for both dependent fact models to gain it.",
+        "controls": ["sources.yml declaration"],
+        "failureModes": ["Silent silver schema drift not caught until a downstream fact model's test fails, rather than at the staging layer"]
+      }
+    },
+    {
+      "id": "dim-date",
+      "label": "dim_date",
+      "summary": "A conventional calendar dimension joined by every fact model.",
+      "detail": "dim_date is a standard, Type 1, generated calendar dimension providing date keys and attributes (fiscal period, trading-day flag, etc.) that every fact model in the star schema joins to.",
+      "whyItMatters": "A shared, conformed date dimension is what lets facts at different grains (daily positions, daily returns) be compared and rolled up consistently by period.",
       "classification": "pattern",
-      "layers": [
-        "data"
-      ],
+      "layers": ["data"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
-      ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the medallion lakehouse boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through medallion lakehouse boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "medallion-lakehouse",
-        "label": "Open medallion lakehouse"
+        "inputs": ["A generated date spine covering the reporting horizon"],
+        "processing": ["Derive fiscal period, trading-day flags, and other calendar attributes per date"],
+        "outputs": ["dim_date, joined by every fact model"],
+        "example": "fact_positions_daily and fact_returns_daily both join dim_date on position_date/return_date, letting a single report compare positions and returns for the same trading day.",
+        "controls": ["Reporting horizon (start/end date) the spine covers"],
+        "failureModes": ["A fact's date column falling outside the generated spine's range, producing an unmatched join with no error"]
       }
     },
     {
-      "id": "step-2",
-      "label": "dbt lineage and the wh_gold star schema for investment risk analyti…",
-      "summary": "dbt lineage and the wh_gold star schema for investment risk analytics in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "warning",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the dbt lineage and the wh_gold star schema for investment risk analytics responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through dbt lineage and the wh_gold star schema for investment risk analytics: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "stg_positions/stg_returns staging views over lh_analytics silver De…",
-      "summary": "stg_positions/stg_returns staging views over lh_analytics silver Delta sources in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the stg_positions/stg_returns staging views over lh_analytics silver Delta sources responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through stg_positions/stg_returns staging views over lh_analytics silver Delta sources: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "through dbt dimension models (dim_date",
-      "summary": "through dbt dimension models (dim_date in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the through dbt dimension models (dim_date responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through through dbt dimension models (dim_date: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
+      "id": "dim-portfolio",
       "label": "dim_portfolio",
-      "summary": "dim_portfolio in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
+      "summary": "A conformed portfolio dimension built from stg_positions, joined by every fact.",
+      "detail": "dim_portfolio is a Type 1 dimension (overwrite in place, no history) built from the distinct portfolios seen in stg_positions, giving every fact model a single conformed portfolio key.",
+      "whyItMatters": "Every fact in this star schema is ultimately a portfolio-level measure, so a conformed portfolio dimension is what lets a single report join facts across positions, returns, risk, and transactions consistently.",
       "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
+      "layers": ["data"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the dim_portfolio responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through dim_portfolio: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Distinct portfolio records from stg_positions"],
+        "processing": ["Deduplicate to one row per portfolio_id", "Overwrite attributes in place on change (Type 1, no history)"],
+        "outputs": ["dim_portfolio, joined by fact_positions, fact_returns_daily, fact_risk_measures, and fact_transactions"],
+        "example": "A portfolio's name changes after a rebrand; dim_portfolio overwrites the old name, so historical facts now display under the new name too — the explicit Type 1 trade-off this dimension makes.",
+        "controls": ["Choosing Type 1 (overwrite) rather than tracking portfolio-attribute history"],
+        "failureModes": ["Needing historical portfolio names/attributes for an audit and discovering Type 1 already overwrote them — the case the SCD Type 2 warning node contrasts against"]
       }
     },
     {
-      "id": "step-6",
+      "id": "dim-benchmark",
       "label": "dim_benchmark",
-      "summary": "dim_benchmark in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
+      "summary": "A conformed benchmark dimension built from stg_returns, joined by return and risk facts.",
+      "detail": "dim_benchmark is a Type 1 dimension built from the distinct benchmarks referenced in stg_returns, giving fact_returns_daily and fact_risk_measures a conformed benchmark key for attribution and relative-performance measures.",
+      "whyItMatters": "Performance and risk measures are frequently expressed relative to a benchmark; a conformed benchmark dimension lets those comparisons join consistently rather than each fact model encoding its own benchmark logic.",
       "classification": "pattern",
-      "layers": [
-        "security"
-      ],
+      "layers": ["data"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the dim_benchmark responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through dim_benchmark: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Distinct benchmark references in stg_returns"],
+        "processing": ["Deduplicate to one row per benchmark", "Overwrite attributes in place on change"],
+        "outputs": ["dim_benchmark, joined by fact_returns_daily and fact_risk_measures"],
+        "example": "fact_returns_daily joins dim_benchmark to compute a portfolio's return relative to its assigned benchmark for a given trading day.",
+        "controls": ["Which benchmark identifier is treated as the conformed key across sources"],
+        "failureModes": ["A portfolio's benchmark reassignment mid-period being applied retroactively under Type 1 overwrite, silently changing historical relative-performance figures"]
       }
     },
     {
-      "id": "step-7",
-      "label": "and SCD Type 2 dim_instrument) and incremental fact models (fact_po…",
-      "summary": "and SCD Type 2 dim_instrument) and incremental fact models (fact_positions in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
+      "id": "dim-instrument-scd2",
+      "label": "dim_instrument (SCD Type 2)",
+      "summary": "The one dimension in gold that preserves full attribute history via SCD Type 2.",
+      "detail": "dim_instrument is built as a Slowly Changing Dimension Type 2, closing and end-dating an existing row when a tracked instrument attribute changes (e.g. sector reclassification, rating change) and inserting a new current row — unlike the other three dimensions, which overwrite in place.",
+      "whyItMatters": "Instrument attributes like sector or credit rating change over an instrument's life, and risk/performance attribution needs to know what the attribute was at the time of each historical position or transaction, not what it is today.",
       "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
+      "layers": ["data"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "drill": {
+        "inputs": ["Distinct instrument records and their attributes from stg_positions"],
+        "processing": ["On a tracked-attribute change, end-date the existing current row and insert a new row with an open effective-from date", "Non-tracked attributes update in place as Type 1 columns within the same table"],
+        "outputs": ["dim_instrument with full point-in-time history for tracked attributes, joined by facts using an effective-dated key"],
+        "example": "An instrument's sector reclassification is captured as a new dim_instrument row; a report as of last quarter still joins to the sector value that was current then, not today's.",
+        "controls": ["Which instrument attributes are tracked (Type 2) versus overwritten (Type 1) within the same table"],
+        "failureModes": ["See the SCD Type 2 consistency warning node — mixing Type 1 and Type 2 columns in one table is easy to get wrong at merge time"]
+      }
+    },
+    {
+      "id": "scd2-consistency-warning",
+      "label": "SCD Type 2 only on one dimension",
+      "summary": "Mixing one Type 2 dimension with three Type 1 dimensions in the same gold layer is a real design tension to manage deliberately.",
+      "detail": "dim_instrument alone carries full attribute history while dim_portfolio, dim_date, and dim_benchmark overwrite in place. This is a deliberate choice, not an oversight — instrument attributes are what risk attribution needs point-in-time for — but it means facts joining to dim_instrument must use an effective-dated key, while the same facts joining to the other three dimensions use a simple current-state key. Getting this join logic inconsistent across fact models is a genuine trap.",
+      "whyItMatters": "A fact model that joins dim_instrument on the wrong key (current-state instead of effective-dated) silently attributes historical risk to today's instrument classification instead of the classification that was true at the time — a quiet correctness bug, not a crash.",
+      "classification": "warning",
+      "layers": ["data"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Fact models joining both a Type 2 dimension (dim_instrument) and Type 1 dimensions in the same query"],
+        "processing": ["Correct joins use dim_instrument's effective-dated key matched against the fact's transaction/position date", "Incorrect joins use dim_instrument's surrogate key naively, matching only the current row"],
+        "outputs": ["Either point-in-time-correct risk/performance attribution, or silently mis-attributed historical figures"],
+        "example": "fact_risk_measures joins dim_instrument on instrument_id alone instead of an effective-dated join; every historical VaR calculation ends up attributed to whatever sector the instrument is classified as today, not the sector at calculation time.",
+        "controls": ["A written, tested join convention for every fact model that touches dim_instrument", "dbt tests asserting no fact row's date falls outside its matched dim_instrument row's effective range"],
+        "failureModes": ["A new fact model added later without following the effective-dated join convention, since nothing in the schema enforces it structurally", "Reviewers not catching the join-key inconsistency because the query still returns rows — it just returns the wrong ones"]
+      }
+    },
+    {
+      "id": "fact-positions",
+      "label": "fact_positions (incremental)",
+      "summary": "Daily position holdings by portfolio and instrument, built incrementally.",
+      "detail": "fact_positions joins stg_positions to dim_portfolio, dim_instrument, and dim_date, materialized as a dbt incremental model using a merge strategy keyed on portfolio, instrument, and date so each run only processes new/changed positions rather than rebuilding the whole fact.",
+      "whyItMatters": "Position history for an investment book can be large; incremental materialization keeps the nightly dbt build fast as the fact table grows, instead of a full rebuild every run.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "dbt-fabric-warehouse", "note": "The dbt-fabric adapter implements certain T-SQL operations dbt models rely on — including behaviors equivalent to MERGE — by translating them into CREATE TABLE AS SELECT (CTAS) plus DROP/CREATE sequences, because Fabric Data Warehouse's T-SQL surface does not support the same command set as SQL Server." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and SCD Type 2 dim_instrument) and incremental fact models (fact_positions responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and SCD Type 2 dim_instrument) and incremental fact models (fact_positions: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "warehouse",
-        "label": "Open warehouse"
+        "inputs": ["stg_positions joined to dim_portfolio, dim_instrument (effective-dated), and dim_date"],
+        "processing": ["dbt incremental materialization filters to rows newer than the fact's current max date on each run", "Merge strategy applies new/changed rows without a full table rebuild"],
+        "outputs": ["fact_positions_daily in wh_gold, growing incrementally"],
+        "example": "A nightly run only processes yesterday's new position rows rather than reprocessing years of history, keeping the dbt build time roughly constant as the table grows.",
+        "controls": ["The incremental filter's watermark column and grain"],
+        "failureModes": ["An incremental filter based on the wrong watermark column silently skipping late-arriving position corrections"]
       }
+    },
+    {
+      "id": "fact-returns-daily",
+      "label": "fact_returns_daily (incremental)",
+      "summary": "Daily time-weighted returns by portfolio, joined to benchmark and date.",
+      "detail": "fact_returns_daily joins stg_returns to dim_portfolio, dim_benchmark, and dim_date, built incrementally like fact_positions, providing the base return series performance attribution builds on.",
+      "whyItMatters": "Daily returns are the foundation performance measurement and attribution reports are built from — every downstream return calculation traces back to this fact.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "dbt-fabric-warehouse", "note": "The dbt-fabric adapter translates dbt's incremental MERGE behavior into CTAS plus DROP/CREATE sequences to work around Fabric Warehouse's T-SQL surface limitations relative to SQL Server." }
+      ],
+      "drill": {
+        "inputs": ["stg_returns joined to dim_portfolio, dim_benchmark, and dim_date"],
+        "processing": ["Incremental filter processes only new daily return records each run"],
+        "outputs": ["fact_returns_daily, the base series for performance attribution"],
+        "example": "A quarterly attribution report aggregates fact_returns_daily over the period, joined to dim_benchmark to compute relative performance.",
+        "controls": ["Return calculation methodology upstream in silver, not redefined here"],
+        "failureModes": ["A benchmark reassignment (see dim_benchmark's failure mode) propagating into historical attribution via the Type 1 join"]
+      }
+    },
+    {
+      "id": "fact-risk-measures",
+      "label": "fact_risk_measures (incremental)",
+      "summary": "VaR, exposures, and sensitivities by portfolio and instrument, joined via the effective-dated instrument key.",
+      "detail": "fact_risk_measures joins stg_returns-derived risk calculations to dim_portfolio, the effective-dated dim_instrument, and dim_date, carrying a measure_type degenerate dimension (VaR/exposure/sensitivity/stress) rather than a fourth join table.",
+      "whyItMatters": "This is the fact model where the SCD Type 2 join warning matters most in practice — risk attribution is specifically about what an instrument's classification was at calculation time.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "dbt-fabric-warehouse", "note": "The dbt-fabric adapter implements MERGE-equivalent behavior via CTAS plus DROP/CREATE because Fabric Data Warehouse's T-SQL surface does not support the same command set as SQL Server." }
+      ],
+      "drill": {
+        "inputs": ["Risk calculation records joined to dim_portfolio, dim_instrument (effective-dated), dim_date"],
+        "processing": ["Incremental merge processes new risk measures per run", "measure_type distinguishes VaR/exposure/sensitivity/stress within one table instead of four"],
+        "outputs": ["fact_risk_measures, the source for VaR dashboards and exposure reports"],
+        "example": "A VaR calculation from three months ago still joins to the instrument's sector classification as it was three months ago, because the join uses dim_instrument's effective-dated key correctly.",
+        "controls": ["The effective-dated join convention (see the SCD Type 2 warning node)"],
+        "failureModes": ["The exact silent mis-attribution failure mode described in the SCD Type 2 warning node — this is the fact model most exposed to it"]
+      }
+    },
+    {
+      "id": "fact-transactions",
+      "label": "fact_transactions (incremental)",
+      "summary": "Buys, sells, corporate actions, and cash flows, keyed by source system and transaction id.",
+      "detail": "fact_transactions joins transaction records to dim_portfolio, dim_instrument, and dim_date, materialized incrementally and keyed on (source_system, transaction_id) rather than a date-based watermark, since transactions can arrive out of order relative to their transaction date.",
+      "whyItMatters": "Transaction history is the audit trail for portfolio accounting; getting the incremental key wrong (missing late-arriving or corrected transactions) directly corrupts that audit trail.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "dbt-fabric-warehouse", "note": "The dbt-fabric adapter's MERGE-equivalent behavior via CTAS plus DROP/CREATE is what makes dbt's incremental strategy work against Fabric Warehouse at all, given the T-SQL surface gap versus SQL Server." }
+      ],
+      "drill": {
+        "inputs": ["Transaction records joined to dim_portfolio, dim_instrument, and dim_date"],
+        "processing": ["Incremental merge keyed on (source_system, transaction_id), not a date watermark", "New and corrected transactions merge in on each run"],
+        "outputs": ["fact_transactions, the transaction-level audit trail in gold"],
+        "example": "A corrected trade booked two days after the original transaction date still merges correctly into fact_transactions because the incremental key is the transaction id, not the transaction date.",
+        "controls": ["The (source_system, transaction_id) incremental key choice, deliberately not date-based"],
+        "failureModes": ["Using a date-based incremental filter instead of the transaction-id key would silently drop out-of-order corrections — the reason this fact model's key differs from the others"]
+      }
+    },
+    {
+      "id": "wh-gold-star",
+      "label": "wh_gold star schema",
+      "summary": "The published gold layer: four facts joined to conformed dimensions in the warehouse.",
+      "detail": "All four fact models converge into wh_gold, a conventional star schema where each fact joins dim_portfolio, dim_instrument, and dim_date (plus dim_benchmark for returns/risk), served to consumers through the warehouse's T-SQL surface and, for BI, through Direct Lake.",
+      "whyItMatters": "This is the stable, queryable contract downstream consumers build on — Power BI, ad hoc T-SQL analysis, and any future model all read this same conformed star rather than re-deriving it from silver.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "warehouse-overview", "note": "Fabric Data Warehouse is an enterprise-scale relational warehouse built on a data lake foundation, aimed at star/snowflake schemas, curated corporate data marts, and governed semantic models for BI." }
+      ],
+      "drill": {
+        "inputs": ["fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions, and all five dimensions"],
+        "processing": ["dbt test runs uniqueness/not-null tests on facts as a build gate", "No further transformation here — this is the published state"],
+        "outputs": ["A governed star schema in wh_gold, queryable via T-SQL or served through Direct Lake"],
+        "example": "A single T-SQL query joins fact_risk_measures to fact_returns_daily via dim_portfolio and dim_date to compare risk-adjusted returns for a book, without touching silver at all.",
+        "controls": ["dbt test coverage as the quality gate before a build is considered complete", "Access grants scoping who can query wh_gold directly vs only through the semantic model"],
+        "failureModes": ["A downstream consumer bypassing the semantic model and running unbounded ad hoc queries directly against wh_gold, competing with the nightly dbt build for warehouse compute"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    }
+    { "id": "e-stgpos-dimportfolio", "from": "stg-positions", "to": "dim-portfolio", "label": "distinct portfolios", "layer": "data", "kind": "flow" },
+    { "id": "e-stgpos-diminstrument", "from": "stg-positions", "to": "dim-instrument-scd2", "label": "distinct instruments", "layer": "data", "kind": "flow" },
+    { "id": "e-stgret-dimbenchmark", "from": "stg-returns", "to": "dim-benchmark", "label": "distinct benchmarks", "layer": "data", "kind": "flow" },
+    { "id": "e-diminstrument-warning", "from": "dim-instrument-scd2", "to": "scd2-consistency-warning", "label": "effective-dated join required downstream", "layer": "data", "kind": "branch" },
+    { "id": "e-stgpos-factpositions", "from": "stg-positions", "to": "fact-positions", "label": "position rows", "layer": "compute", "kind": "flow" },
+    { "id": "e-dimportfolio-factpositions", "from": "dim-portfolio", "to": "fact-positions", "label": "portfolio key", "layer": "data", "kind": "flow" },
+    { "id": "e-diminstrument-factpositions", "from": "dim-instrument-scd2", "to": "fact-positions", "label": "effective-dated instrument key", "layer": "data", "kind": "flow" },
+    { "id": "e-dimdate-factpositions", "from": "dim-date", "to": "fact-positions", "label": "date key", "layer": "data", "kind": "flow" },
+    { "id": "e-stgret-factreturns", "from": "stg-returns", "to": "fact-returns-daily", "label": "daily return rows", "layer": "compute", "kind": "flow" },
+    { "id": "e-dimbenchmark-factreturns", "from": "dim-benchmark", "to": "fact-returns-daily", "label": "benchmark key", "layer": "data", "kind": "flow" },
+    { "id": "e-stgret-factrisk", "from": "stg-returns", "to": "fact-risk-measures", "label": "risk calculation rows", "layer": "compute", "kind": "flow" },
+    { "id": "e-diminstrument-factrisk", "from": "dim-instrument-scd2", "to": "fact-risk-measures", "label": "effective-dated instrument key", "layer": "data", "kind": "flow" },
+    { "id": "e-stgpos-facttxn", "from": "stg-positions", "to": "fact-transactions", "label": "transaction rows", "layer": "compute", "kind": "flow" },
+    { "id": "e-factpositions-star", "from": "fact-positions", "to": "wh-gold-star", "label": "published fact", "layer": "data", "kind": "flow" },
+    { "id": "e-factreturns-star", "from": "fact-returns-daily", "to": "wh-gold-star", "label": "published fact", "layer": "data", "kind": "flow" },
+    { "id": "e-factrisk-star", "from": "fact-risk-measures", "to": "wh-gold-star", "label": "published fact", "layer": "data", "kind": "flow" },
+    { "id": "e-facttxn-star", "from": "fact-transactions", "to": "wh-gold-star", "label": "published fact", "layer": "data", "kind": "flow" }
   ],
   "walkthrough": [
-    {
-      "nodeId": "step-1",
-      "title": "1. medallion lakehouse boundary",
-      "explanation": "medallion lakehouse boundary in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture."
-    },
-    {
-      "nodeId": "step-2",
-      "title": "2. dbt lineage and the wh_gold star schema for investment risk analyti…",
-      "explanation": "dbt lineage and the wh_gold star schema for investment risk analytics in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture."
-    },
-    {
-      "nodeId": "step-3",
-      "title": "3. stg_positions/stg_returns staging views over lh_analytics silver De…",
-      "explanation": "stg_positions/stg_returns staging views over lh_analytics silver Delta sources in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture."
-    },
-    {
-      "nodeId": "step-4",
-      "title": "4. through dbt dimension models (dim_date",
-      "explanation": "through dbt dimension models (dim_date in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture."
-    },
-    {
-      "nodeId": "step-5",
-      "title": "5. dim_portfolio",
-      "explanation": "dim_portfolio in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture."
-    },
-    {
-      "nodeId": "step-6",
-      "title": "6. dim_benchmark",
-      "explanation": "dim_benchmark in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture."
-    },
-    {
-      "nodeId": "step-7",
-      "title": "7. and SCD Type 2 dim_instrument) and incremental fact models (fact_po…",
-      "explanation": "and SCD Type 2 dim_instrument) and incremental fact models (fact_positions in the dbt lineage and the wh_gold star schema for investment risk analytics — stg_positions/stg_returns staging views over lh_analytics silver Delta sources, through dbt dimension models (dim_date, dim_portfolio, dim_benchmark, and SCD Type 2 dim_instrument) and incremental fact models (fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions), to Direct Lake/Power BI architecture."
-    }
+    { "nodeId": "stg-positions", "title": "1. Staging: read silver once, per entity", "explanation": "stg_positions and stg_returns are the single read point over silver for every downstream model, using cross-database T-SQL with zero duplication." },
+    { "nodeId": "dim-portfolio", "title": "2. Three Type 1 dimensions build first", "explanation": "dim_portfolio, dim_date, and dim_benchmark overwrite in place — the conventional shape for reference data that doesn't need history." },
+    { "nodeId": "dim-instrument-scd2", "title": "3. One dimension carries full history", "explanation": "dim_instrument alone is SCD Type 2, because risk attribution needs to know an instrument's classification at the time, not today." },
+    { "nodeId": "scd2-consistency-warning", "title": "4. The trap: inconsistent join keys across facts", "explanation": "Mixing one Type 2 dimension with three Type 1 dimensions means fact models must use different join conventions for each — getting this wrong silently mis-attributes history." },
+    { "nodeId": "fact-positions", "title": "5. Four incremental facts build on the dimensions", "explanation": "fact_positions, fact_returns_daily, fact_risk_measures, and fact_transactions each join staging views to the dimensions, materialized incrementally so nightly builds stay fast." },
+    { "nodeId": "fact-risk-measures", "title": "6. Risk measures are where the SCD Type 2 join matters most", "explanation": "fact_risk_measures joins dim_instrument via its effective-dated key — getting this join wrong is exactly the failure mode the warning node describes." },
+    { "nodeId": "wh-gold-star", "title": "7. Convergence: the published star schema", "explanation": "All four facts converge into wh_gold, the stable contract Power BI and any T-SQL consumer builds on." }
   ]
 }

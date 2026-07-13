@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 826" font-family="Segoe UI, -apple-system, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 826" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-sql-query-lifecycle-title spark-sql-query-lifecycle-desc" data-diagram-id="spark-sql-query-lifecycle">
+  <title id="spark-sql-query-lifecycle-title">Lifecycle of a Spark SQL Query in a Fabric Notebook</title>
+  <desc id="spark-sql-query-lifecycle-desc">A top-down internals flow with eight steps. A Spark SQL cell submits its query text to the same Spark session as any PySpark or Scala cell in the notebook. Catalyst parses and optimizes it into a physical plan, which Adaptive Query Execution can re-plan mid-run using runtime statistics. Each operator in that plan is then routed either to the Native Execution Engine&apos;s vectorized C++ path or, for unsupported operators, back to the standard JVM path, with the split visible per-operator in the Spark UI. Both paths read and write Delta tables in OneLake through the same Delta transaction log. A warning node calls out that native execution is not always bit-for-bit identical to JVM Spark for certain numeric operations.</desc>
   <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
        Grounded in Spark SQL / notebook claims (spark-sql-fabric.json): %%sql cell magic runs
        against the shared notebook Spark context (claims re: %%pyspark/%%spark/%%sql/%%sparkr,
@@ -6,7 +8,8 @@
        Engine claims (spark-native-execution-engine.json): Gluten intercepts optimized physical
        plan -> Substrait -> Velox vectorized C++ execution; automatic per-operator fallback to
        JVM; AQE/cost-based rewrites/column pruning/predicate pushdown preserved; NEE accelerates
-       Delta reads incl. Z-order/Liquid Clustering; ~4x TPC-DS / up to 6x end-to-end benchmark.
+       Delta reads incl. Z-order/Liquid Clustering; benchmark figures below reflect the
+       refreshed 2026 NEE UDF/complex-type benchmark (vectorized UDFs to 5.76x, workload-dependent).
        Catalyst parse/analyze/optimize and logical->physical planning + AQE are added as
        well-established Apache Spark facts (model knowledge), not sourced from the two claim
        files above. -->
@@ -46,8 +49,8 @@
 
   <rect width="1180" height="826" fill="#FFFFFF"/>
 
-  <text x="40" y="42" font-size="22" font-weight="650" fill="#3D2200">Lifecycle of a Spark SQL Query in a Fabric Notebook</text>
-  <text x="40" y="64" font-size="12" fill="#616161">%%sql / spark.sql() → Catalyst parse &amp; optimize → physical plan + AQE → native or JVM execution → Delta on OneLake</text>
+  <text x="40" y="42" font-size="22" font-weight="650" fill="#3D2200" data-node-id="sql-cell" tabindex="0" aria-label="%%sql / spark.sql() cell"><title data-node-tooltip="true">%%sql / spark.sql() cell — A Spark SQL query entered via the %%sql magic or spark.sql() call in a Fabric notebook.</title>Lifecycle of a Spark SQL Query in a Fabric Notebook</text>
+  <text x="40" y="64" font-size="12" fill="#616161" data-node-id="jvm-fallback" tabindex="0" aria-label="JVM Spark fallback"><title data-node-tooltip="true">JVM Spark fallback — Unsupported operators, expressions, or features execute on standard JVM Spark instead.</title>%%sql / spark.sql() → Catalyst parse &amp; optimize → physical plan + AQE → native or JVM execution → Delta on OneLake</text>
 
   <!-- STAGE 1: ENTRY -->
   <text x="40" y="96" font-size="11" letter-spacing="1.5" fill="#8A8886">1 · QUERY ENTRY — SAME SPARK SESSION AS OTHER CELLS</text>
@@ -65,7 +68,7 @@
   <!-- STAGE 2: CATALYST -->
   <text x="40" y="234" font-size="11" letter-spacing="1.5" fill="#8A8886">2 · CATALYST — PARSE, ANALYZE, OPTIMIZE (APACHE SPARK CORE)</text>
   <rect x="40" y="244" width="1100" height="130" rx="10" fill="url(#catalystGrad)"/>
-  <text x="64" y="270" font-size="13" font-weight="600" fill="#FFFFFF">Catalyst optimizer turns SQL text into an optimized logical plan</text>
+  <text x="64" y="270" font-size="13" font-weight="600" fill="#FFFFFF" data-node-id="catalyst-plan" tabindex="0" aria-label="Catalyst parse &amp; logical plan"><title data-node-tooltip="true">Catalyst parse &amp; logical plan — Catalyst parses the query and builds an optimized logical plan.</title>Catalyst optimizer turns SQL text into an optimized logical plan</text>
 
   <g>
     <rect x="64" y="282" width="240" height="78" rx="7" fill="#FFFFFF" fill-opacity="0.14"/>
@@ -101,7 +104,7 @@
   <line x1="590" y1="374" x2="590" y2="394" stroke="#5A3E00" stroke-width="1.8" marker-end="url(#arrGold)"/>
 
   <!-- STAGE 3: PHYSICAL PLAN + AQE -->
-  <text x="40" y="412" font-size="11" letter-spacing="1.5" fill="#8A8886">3 · PHYSICAL PLANNING — SELECTED STRATEGY + ADAPTIVE QUERY EXECUTION (AQE)</text>
+  <text x="40" y="412" font-size="11" letter-spacing="1.5" fill="#8A8886" data-node-id="aqe-physical-plan" tabindex="0" aria-label="Physical planning with AQE"><title data-node-tooltip="true">Physical planning with AQE — The logical plan becomes a physical plan; Adaptive Query Execution can revise it mid-run.</title>3 · PHYSICAL PLANNING — SELECTED STRATEGY + ADAPTIVE QUERY EXECUTION (AQE)</text>
   <rect x="40" y="422" width="1100" height="100" rx="10" fill="#F3F2F1" stroke="#C8C6C4"/>
   <rect x="64" y="438" width="330" height="68" rx="7" fill="#FFFFFF" stroke="#B8860B"/>
   <text x="229" y="459" text-anchor="middle" font-size="11" font-weight="600" fill="#3D2200">Physical plan chosen</text>
@@ -121,15 +124,15 @@
   <line x1="590" y1="522" x2="590" y2="542" stroke="#5A3E00" stroke-width="1.8" marker-end="url(#arrGold)"/>
 
   <!-- STAGE 4: EXECUTION -->
-  <text x="40" y="560" font-size="11" letter-spacing="1.5" fill="#8A8886">4 · EXECUTION ON EXECUTORS — NATIVE (NEE) PATH OR JVM FALLBACK, PER OPERATOR</text>
+  <text x="40" y="560" font-size="11" letter-spacing="1.5" fill="#8A8886" data-node-id="native-jvm-divergence" tabindex="0" aria-label="Native results can diverge from JVM Spark"><title data-node-tooltip="true">Native results can diverge from JVM Spark — NEE is not always bit-for-bit identical to vanilla Spark for certain numeric operations.</title>4 · EXECUTION ON EXECUTORS — NATIVE (NEE) PATH OR JVM FALLBACK, PER OPERATOR</text>
   <rect x="40" y="570" width="1100" height="118" rx="10" fill="url(#execGrad)"/>
 
   <rect x="64" y="586" width="500" height="88" rx="8" fill="#FFFFFF" fill-opacity="0.14"/>
-  <text x="314" y="606" text-anchor="middle" font-size="12" font-weight="600" fill="#FFFFFF">Native Execution Engine (Gluten + Velox) — supported operators</text>
+  <text x="314" y="606" text-anchor="middle" font-size="12" font-weight="600" fill="#FFFFFF" data-node-id="native-execution" tabindex="0" aria-label="Native Execution Engine (Velox + Gluten)"><title data-node-tooltip="true">Native Execution Engine (Velox + Gluten) — Supported operators run as vectorized, SIMD-accelerated C++ code instead of JVM bytecode.</title>Native Execution Engine (Gluten + Velox) — supported operators</text>
   <text x="314" y="623" text-anchor="middle" font-size="9.5" fill="#CFF3E9">Gluten converts the physical plan segment into a Substrait plan;</text>
   <text x="314" y="637" text-anchor="middle" font-size="9.5" fill="#CFF3E9">Velox runs it as vectorized, SIMD, columnar C++ in place of JVM ops</text>
   <text x="314" y="654" text-anchor="middle" font-size="9.5" fill="#CFF3E9">Also accelerates Delta reads on Z-ordered / Liquid-Clustered tables</text>
-  <text x="314" y="668" text-anchor="middle" font-size="9.5" fill="#CFF3E9">~4x on 1TB TPC-DS · up to 6x end-to-end · no extra Spark cost</text>
+  <text x="314" y="668" text-anchor="middle" font-size="9.5" fill="#CFF3E9">Vectorized UDFs to 5.76x · TPC-DS end-to-end to 2.35x · workload-dependent</text>
 
   <rect x="584" y="586" width="230" height="88" rx="8" fill="#FFFFFF" fill-opacity="0.14"/>
   <text x="699" y="606" text-anchor="middle" font-size="12" font-weight="600" fill="#FFFFFF">JVM fallback</text>
@@ -150,7 +153,7 @@
   <!-- STAGE 5: ONELAKE -->
   <text x="40" y="730" font-size="11" letter-spacing="1.5" fill="#8A8886">5 · DELTA TABLE READ / WRITE ON ONELAKE</text>
   <rect x="40" y="740" width="1100" height="60" rx="9" fill="url(#lakeGrad2)"/>
-  <text x="64" y="763" font-size="12" font-weight="600" fill="#FFFFFF">Delta Parquet tables on OneLake — same physical files whether read via Spark SQL, PySpark, T-SQL, or Direct Lake</text>
+  <text x="64" y="763" font-size="12" font-weight="600" fill="#FFFFFF" data-node-id="delta-onelake-io" tabindex="0" aria-label="Delta read/write on OneLake"><title data-node-tooltip="true">Delta read/write on OneLake — Both native and JVM paths converge on the same Delta transaction log against OneLake.</title>Delta Parquet tables on OneLake — same physical files whether read via Spark SQL, PySpark, T-SQL, or Direct Lake</text>
   <text x="64" y="782" font-size="9.5" fill="#CFE1FA">Reads benefit from NEE's parallel Delta snapshot loading; writes commit ACID Delta log entries any Fabric engine can read next</text>
 
   <text x="1152" y="812" text-anchor="end" font-size="9" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Catalyst/AQE stages reflect standard Apache Spark architecture (model knowledge), not vendor-sourced.</text>

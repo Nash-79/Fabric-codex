@@ -1,437 +1,150 @@
 {
   "id": "spark-sql-engine-decision",
-  "title": "Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across la…",
-  "purpose": "Original diagram: Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload",
+  "title": "Which Query Engine? Spark SQL vs SQL Analytics Endpoint vs Warehouse T-SQL vs KQL",
+  "purpose": "Decide which Fabric query surface a workload should target, branching on read/write need, primary skillset, and data shape.",
+  "accessibleSummary": "A decision tree with one root question. If the workload must write and needs Spark-native transformation, it routes to Spark SQL in a notebook. If it only needs to query lakehouse Delta tables read-only via T-SQL, it routes to the lakehouse SQL analytics endpoint. If it needs full governed T-SQL with multi-table transactions, it routes to Warehouse T-SQL. If the data is high-volume time-series or log/telemetry data, it routes to KQL against an Eventhouse. A warning node flags the trap of trying to write through the SQL analytics endpoint, which is read-only.",
+  "longDescription": "This is a decision tree, not a pipeline. Four Fabric query surfaces share overlapping territory — all of them can read Delta data in OneLake — but they differ in read/write capability, primary language, and the workload shape they're built for. The root question asks what the workload actually needs: Spark-native transformation with read/write access routes to Spark SQL, itself one of four interchangeable per-cell languages in a Fabric notebook sharing the same Spark session as PySpark or Scala. Read-only ad hoc querying of already-landed lakehouse Delta tables via T-SQL routes to the auto-provisioned SQL analytics endpoint. A requirement for full governed T-SQL, multi-table ACID transactions, and stored procedures routes to Warehouse. High-volume time-series, log, or telemetry data with sub-second query latency routes to KQL against an Eventhouse. The warning node captures a specific, sourced trap: the SQL analytics endpoint looks like a normal SQL surface but is read-only, so any workload that tries to write through it will fail and needs Warehouse or Spark instead.",
   "type": "decision",
   "topicSlug": "spark",
-  "capabilityIds": [
-    "spark"
-  ],
-  "revision": "1",
+  "capabilityIds": ["spark"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/spark-sql-engine-decision.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "spark boundary",
-      "summary": "spark boundary in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
+      "id": "start-question",
+      "label": "What does the query workload need?",
+      "summary": "The root question: read/write need, skillset, and data shape decide the engine.",
+      "detail": "Before picking a query surface, establish whether the workload needs to write data or only read it, whether the team's skillset is Spark or T-SQL, and whether the data is relational/tabular versus high-volume time-series. These three factors together point to one of four Fabric query engines that otherwise look interchangeable because they can all touch Delta data in OneLake.",
+      "whyItMatters": "Picking the wrong surface here means discovering a read/write or governance limitation mid-project rather than at design time — for example choosing the SQL analytics endpoint for a workload that turns out to need writes.",
+      "classification": "inference",
+      "layers": ["compute"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["decision-root", "Spark", "Warehouse", "Eventhouse-KQL"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the spark boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through spark boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Whether the workload writes data or only reads it", "The team's primary language and skillset (Spark vs T-SQL vs KQL)", "Whether the data is relational/tabular or high-volume time-series/telemetry"],
+        "processing": ["Determine read-only vs read/write requirement first", "Match the team's skillset to a candidate engine", "Check whether the data shape (time-series vs relational) overrides the skillset preference"],
+        "outputs": ["A routed choice among Spark SQL, the SQL analytics endpoint, Warehouse T-SQL, or KQL"],
+        "example": "A data engineering team building nightly transformations with write-heavy Delta merges routes to Spark SQL; a BI analyst running ad hoc read-only reports against already-landed lakehouse tables routes instead to the SQL analytics endpoint.",
+        "controls": ["Write the read/write requirement down explicitly before comparing engines"],
+        "failureModes": ["Choosing an engine by team habit rather than by the workload's actual read/write and data-shape requirements"]
+      }
+    },
+    {
+      "id": "spark-sql-branch",
+      "label": "Spark SQL (notebook cell)",
+      "summary": "Spark-native, read/write, shares the notebook's Spark session — pick this for transformation workloads.",
+      "detail": "Spark SQL is one of four per-cell languages in a Fabric notebook (alongside PySpark, Scala, and SparkR), switched in with the %%sql magic and executed directly against the notebook's Apache Spark context. It reads and writes Delta tables and is the natural choice when a workload does data engineering-style transformation work, not just ad hoc querying.",
+      "whyItMatters": "Because it runs in the same session as PySpark/Scala cells, Spark SQL is the engine to reach for whenever a workload mixes SQL-style aggregation with broader Spark transformation logic in one notebook.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "spark-sql-fabric", "note": "Fabric notebooks support four Apache Spark cell languages — PySpark, Scala, Spark SQL, and SparkR — switched per cell with a language magic command, independent of the notebook's overall primary language." },
+        { "sourceKey": "spark-sql-fabric", "note": "A %%sql cell executes its query as SparkSQL against the notebook's Apache Spark context, sharing the same running Spark session, cluster, and attached lakehouse as PySpark or Scala cells." }
+      ],
+      "tags": ["Spark", "SparkSQL", "Notebooks"],
+      "drill": {
+        "inputs": ["A transformation workload needing both SQL aggregation and Spark DataFrame/Python logic in one place"],
+        "processing": ["Author %%sql cells alongside PySpark cells in the same notebook", "Read and write Delta tables directly through the shared Spark session"],
+        "outputs": ["Transformed Delta tables written back to the lakehouse, and any read-only reporting queries the same session can also serve"],
+        "example": "A silver-layer notebook uses a %%sql cell to aggregate daily order totals and a PySpark cell immediately after to apply a custom deduplication function to the same DataFrame, both in one session.",
+        "controls": ["Which cell language to use per step — SQL for set-based logic, PySpark/Scala for procedural logic"],
+        "failureModes": ["Splitting logically related transformation logic across a %%sql cell and a separate notebook unnecessarily, when both could share one session"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "spark",
-        "label": "Open spark"
-      }
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark" }
     },
     {
-      "id": "step-2",
-      "label": "Decision matrix comparing Spark SQL",
-      "summary": "Decision matrix comparing Spark SQL in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
+      "id": "sql-endpoint-branch",
+      "label": "Lakehouse SQL analytics endpoint",
+      "summary": "Read-only T-SQL over lakehouse Delta tables — pick this for ad hoc BI-style querying, never writes.",
+      "detail": "Every Fabric lakehouse auto-provisions a companion SQL analytics endpoint that makes any Delta table under Tables/ immediately queryable via T-SQL, with no separate ETL or export step. It shares the same underlying Delta data as the lakehouse's Spark session but is a read-only query surface, not a write target.",
+      "whyItMatters": "This is the natural fit for analysts who want T-SQL access to lakehouse data without learning Spark, as long as the workload never needs to write — which is exactly the boundary the warning node below exists to flag.",
       "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["Lakehouse", "SQLAnalyticsEndpoint"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Decision matrix comparing Spark SQL responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Decision matrix comparing Spark SQL: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
+        "inputs": ["An ad hoc or BI-style read-only query against already-landed lakehouse Delta tables"],
+        "processing": ["Connect a T-SQL client or Power BI DirectQuery to the SQL analytics endpoint", "Query the same Delta tables the lakehouse's Spark session writes"],
+        "outputs": ["Query results against current lakehouse table state, with no data movement or export"],
+        "example": "A BI analyst runs an ad hoc T-SQL query against a gold-layer lakehouse table through the SQL analytics endpoint to validate a number before building a report, without touching Spark at all.",
+        "controls": ["No write attempts should ever be routed here — see the warning node"],
+        "failureModes": ["Assuming the endpoint supports writes because it looks like a normal SQL database — see the dedicated warning node for this exact trap"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
     {
-      "id": "step-3",
-      "label": "the lakehouse SQL analytics endpoint",
-      "summary": "the lakehouse SQL analytics endpoint in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the the lakehouse SQL analytics endpoint responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through the lakehouse SQL analytics endpoint: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
+      "id": "warehouse-tsql-branch",
       "label": "Warehouse T-SQL",
-      "summary": "Warehouse T-SQL in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
+      "summary": "Full governed T-SQL with multi-table ACID transactions — pick this when the workload writes and needs transactional semantics.",
+      "detail": "Fabric Warehouse exposes a full T-SQL development surface including multi-table ACID transactions, stored procedures, and materialized views, over tables that are physically Delta and auto-published to OneLake. It is the right choice when a workload genuinely needs write access plus transactional guarantees that the read-only SQL analytics endpoint cannot provide.",
+      "whyItMatters": "This is the only one of the four engines offering full write-capable T-SQL with transactional semantics, so any workload with that specific requirement has effectively no substitute among the other three.",
+      "classification": "inference",
+      "layers": ["compute", "data"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["Warehouse", "TSQL"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Warehouse T-SQL responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Warehouse T-SQL: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "and KQL across language",
-      "summary": "and KQL across language in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and KQL across language responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and KQL across language: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "read/write capability",
-      "summary": "read/write capability in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the read/write capability responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through read/write capability: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "and typical workload",
-      "summary": "and typical workload in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "observability"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and typical workload responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and typical workload: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A write workload requiring multi-table transactional consistency, expressed as T-SQL"],
+        "processing": ["Load and transform data with T-SQL CTAS, MERGE, and stored procedures inside a governed warehouse", "Commit multi-table transactions as a single unit"],
+        "outputs": ["A transactionally consistent warehouse whose tables are still open Delta files in OneLake"],
+        "example": "A nightly load updates a fact table and three dimension tables inside one multi-table transaction, so a mid-load failure never leaves a partially-updated star schema visible to reports.",
+        "controls": ["Whether the workload actually uses the transaction boundary, or whether a simpler engine would suffice"],
+        "failureModes": ["Choosing Warehouse for a purely read-only reporting workload that the SQL analytics endpoint could serve for free"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "spark",
-        "label": "Open spark"
+      "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
+    },
+    {
+      "id": "kql-branch",
+      "label": "KQL against Eventhouse",
+      "summary": "High-volume time-series/telemetry querying — pick this when the data shape is streaming or log data, not relational.",
+      "detail": "KQL (Kusto Query Language) queries an Eventhouse's KQL database, purpose-built for high-volume, time-series, log, and telemetry data with sub-second query latency, distinct in both language and data shape from the three T-SQL/Spark-SQL-family engines above.",
+      "whyItMatters": "This is the branch that isn't really competing on skillset or write-capability — it's selected by data shape: relational/tabular data doesn't belong here, and time-series/telemetry data usually doesn't belong in the other three.",
+      "classification": "inference",
+      "layers": ["compute", "data"],
+      "evidence": [],
+      "tags": ["Eventhouse-KQL", "RTI"],
+      "drill": {
+        "inputs": ["High-volume, time-series, log, or telemetry event data"],
+        "processing": ["Query an Eventhouse KQL database using KQL rather than T-SQL or Spark SQL"],
+        "outputs": ["Sub-second query results over recent and historical event data"],
+        "example": "An operations team queries IoT sensor telemetry ingested through Eventstream into an Eventhouse, using KQL time-window aggregations that would be awkward to express as T-SQL joins.",
+        "controls": ["Whether the workload's data shape is genuinely time-series/event data versus relational, which is the real branch condition here"],
+        "failureModes": ["Forcing relational reporting data into an Eventhouse just because KQL feels novel, when a lakehouse or warehouse fits the shape better"]
+      }
+    },
+    {
+      "id": "endpoint-write-trap",
+      "label": "Trap: SQL analytics endpoint is read-only",
+      "summary": "Attempting to write through the SQL analytics endpoint fails — it looks like a normal SQL surface but isn't.",
+      "detail": "The SQL analytics endpoint exposes lakehouse Delta tables through T-SQL and looks, on the surface, like any writable SQL database. It is not: it is a read-only query surface. A workload that starts as read-only reporting and later grows a write requirement cannot simply add INSERT/UPDATE statements against the endpoint — it must move that write path to Spark SQL or Warehouse instead.",
+      "whyItMatters": "This is an easy mistake specifically because the endpoint's T-SQL surface makes it feel writable; the failure is discovered only when a write statement is actually attempted, often well after the read-only design was assumed settled.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "evidence": [],
+      "tags": ["Lakehouse", "SQLAnalyticsEndpoint", "AntiPattern"],
+      "drill": {
+        "inputs": ["A workload originally designed as read-only against the SQL analytics endpoint that later needs to write"],
+        "processing": ["Attempt an INSERT/UPDATE/MERGE against the endpoint (fails)", "Recognize the endpoint is read-only by design", "Reroute the write path to Spark SQL in a notebook or to Warehouse T-SQL"],
+        "outputs": ["A corrected architecture with reads still against the endpoint (or the new write-capable engine) and writes routed to a write-capable surface"],
+        "example": "A reporting workload built entirely against the SQL analytics endpoint later needs a scheduled correction job to patch bad rows; the fix has to be written as a Spark SQL notebook cell against the lakehouse, not as a T-SQL UPDATE against the endpoint.",
+        "controls": ["Confirm read/write requirements before committing an architecture to the SQL analytics endpoint alone"],
+        "failureModes": ["Discovering the read-only limitation only when a write statement fails in production or during a late-stage requirement change", "Working around it by writing directly to the underlying Delta files outside Fabric's managed paths, bypassing governance"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "observability",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-start-spark", "from": "start-question", "to": "spark-sql-branch", "label": "Spark transformation, read/write", "layer": "compute", "kind": "branch" },
+    { "id": "e-start-endpoint", "from": "start-question", "to": "sql-endpoint-branch", "label": "ad hoc T-SQL, read-only lakehouse data", "layer": "compute", "kind": "branch" },
+    { "id": "e-start-warehouse", "from": "start-question", "to": "warehouse-tsql-branch", "label": "governed T-SQL, multi-table writes", "layer": "compute", "kind": "branch" },
+    { "id": "e-start-kql", "from": "start-question", "to": "kql-branch", "label": "time-series / telemetry data shape", "layer": "compute", "kind": "branch" },
+    { "id": "e-endpoint-trap", "from": "sql-endpoint-branch", "to": "endpoint-write-trap", "label": "if a write is later attempted", "layer": "compute", "kind": "branch" }
   ],
   "walkthrough": [
-    {
-      "nodeId": "step-1",
-      "title": "1. spark boundary",
-      "explanation": "spark boundary in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture."
-    },
-    {
-      "nodeId": "step-2",
-      "title": "2. Decision matrix comparing Spark SQL",
-      "explanation": "Decision matrix comparing Spark SQL in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture."
-    },
-    {
-      "nodeId": "step-3",
-      "title": "3. the lakehouse SQL analytics endpoint",
-      "explanation": "the lakehouse SQL analytics endpoint in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture."
-    },
-    {
-      "nodeId": "step-4",
-      "title": "4. Warehouse T-SQL",
-      "explanation": "Warehouse T-SQL in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture."
-    },
-    {
-      "nodeId": "step-5",
-      "title": "5. and KQL across language",
-      "explanation": "and KQL across language in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture."
-    },
-    {
-      "nodeId": "step-6",
-      "title": "6. read/write capability",
-      "explanation": "read/write capability in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture."
-    },
-    {
-      "nodeId": "step-7",
-      "title": "7. and typical workload",
-      "explanation": "and typical workload in the Decision matrix comparing Spark SQL, the lakehouse SQL analytics endpoint, Warehouse T-SQL, and KQL across language, read/write capability, engine, and typical workload architecture."
-    }
+    { "nodeId": "start-question", "title": "1. Ask read/write, skillset, and data shape", "explanation": "The engine choice follows from whether the workload writes, what language the team knows, and whether the data is relational or time-series." },
+    { "nodeId": "spark-sql-branch", "title": "2. Spark SQL for read/write transformation", "explanation": "Shares the notebook's Spark session with PySpark and Scala cells — the right fit whenever the workload does more than ad hoc querying." },
+    { "nodeId": "sql-endpoint-branch", "title": "3. SQL analytics endpoint for read-only T-SQL", "explanation": "Auto-provisioned, zero-ETL T-SQL access to lakehouse Delta tables — but read-only, which the warning node explains." },
+    { "nodeId": "warehouse-tsql-branch", "title": "4. Warehouse for governed, transactional writes", "explanation": "The only branch offering full write-capable T-SQL with multi-table ACID transactions." },
+    { "nodeId": "kql-branch", "title": "5. KQL for time-series and telemetry data", "explanation": "Selected by data shape, not skillset — high-volume event data belongs in an Eventhouse, not a relational engine." },
+    { "nodeId": "endpoint-write-trap", "title": "6. Warning: the endpoint's T-SQL surface hides its read-only nature", "explanation": "A workload that grows a write requirement after being built against the SQL analytics endpoint has to move that write path elsewhere entirely." }
   ]
 }

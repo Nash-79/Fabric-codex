@@ -1,5 +1,5 @@
 ---
-description: Fabric Atlas — create an original interactive React/SVG diagram with a static fallback.
+description: Fabric Atlas — create an original rich authored SVG infographic with a grounded semantic sidecar.
 argument-hint: SUBJECT=<capability-id|design-id> [TYPE=architecture|decision-tree|internals|map]
 ---
 
@@ -11,9 +11,11 @@ Author `content/diagrams/<slug>.diagram.json` using `AuthoredDiagram` in `src/di
 stable nodes, labelled directed edges, layers, walkthrough steps, classifications, evidence, and
 valid Atlas drill targets. Every node's drill must explain inputs → ordered processing → outputs,
 a concrete worked example, implementation controls, and production failure modes. Decision views
-must genuinely branch. Generate a detailed, script-free
-`content/diagrams/<slug>.svg` print/no-JavaScript fallback and append interaction version, fallback
-hash, QA status, accessible summary, and supported layers to `content/diagrams/assets.json`.
+must genuinely branch. Generate a detailed, script-free primary
+`content/diagrams/<slug>.svg`; give it root accessibility metadata and map every node to exactly one
+focusable `data-node-id` region. Mirror it byte-for-byte under `public/diagrams/`, then append the
+interaction version, SVG hash, QA status, accessible summary, and supported layers to
+`content/diagrams/assets.json`.
 Include `topic_slug` and `capability_id`. Prefer `claim_id` for a single-claim diagram and `source_id`
 for one source. Output the file path, manifest entry, and which claims/source it visualises.
 Run `npm run validate:diagrams`; do not finish with caption-derived fallback diagrams.

@@ -4,7 +4,7 @@
 
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { allInteractiveDiagrams } from "@/diagrams/catalog";
+import { allAuthoredDiagrams } from "@/diagrams/catalog";
 
 const topicsJson = import.meta.glob("/content/topics.json", { eager: true }) as Record<
   string,
@@ -307,7 +307,7 @@ export async function runContentSeed(supabaseAdmin: SupabaseClient): Promise<See
     await supabaseAdmin.from("diagrams").upsert(diagRows, { onConflict: "slug" });
     summary.diagramRowsUpserted = diagRows.length;
   }
-  const diagramNodes = allInteractiveDiagrams().flatMap((diagram) =>
+  const diagramNodes = allAuthoredDiagrams().flatMap((diagram) =>
     diagram.nodes.map((node) => ({
       diagram_slug: diagram.id,
       node_id: node.id,

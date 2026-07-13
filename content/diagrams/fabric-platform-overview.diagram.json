@@ -1,313 +1,222 @@
 {
   "id": "fabric-platform-overview",
-  "title": "Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities",
-  "purpose": "Original diagram: Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities",
-  "accessibleSummary": "An interactive architecture infographic with 5 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities",
+  "title": "Microsoft Fabric Platform: Workloads Over One Shared Store",
+  "purpose": "Show how Fabric's role-oriented workloads all sit on the same three-part shared platform layer — OneLake storage, Copilot, and Purview governance — and how the tenant/domain/workspace/capacity hierarchy structures who owns and pays for what, so a request from any workload resolves through the same storage and governance path.",
+  "accessibleSummary": "An architecture diagram with two connected layers. On top, role-oriented workloads — Power BI, Data Factory, Data Engineering, Data Warehouse, Real-Time Intelligence, and others — each contribute their own item types but all write to and read from the same shared platform layer below: OneLake for storage, Copilot for embedded AI, and Purview for governance. Underneath that, the tenancy hierarchy is shown as a containment structure: a tenant holds domains, domains group workspaces, and workspaces draw compute from a capacity while holding the items each workload creates. A warning node flags that Fabric is SaaS, not a resource you provision piece by piece — there is no separate infrastructure layer to configure. A second warning covers the private-link tenant-wide toggle that disables specific Power BI and gateway functionality as a real operational trade-off.",
+  "longDescription": "This diagram separates what a user experiences (workloads) from what makes cross-workload interoperability actually work (the shared platform layer) and from how the whole thing is organized administratively (the tenancy hierarchy). Workloads — Power BI, Data Factory, Data Engineering, Data Warehouse, Databases, Real-Time Intelligence, and others — each target one functional area and contribute their own item types, but none of them bypasses the shared platform layer beneath: OneLake for storage, Copilot for embedded AI assistance, and centralized governance powered by built-in Microsoft Purview. This is the layer that lets a Spark notebook, a T-SQL warehouse query, and a Power BI Direct Lake report all operate against the same Delta-formatted data with no copy step. Administratively, a Fabric tenant maps one-to-one to a Microsoft Entra tenant; domains group workspaces into logical business areas and are the delegation point for governance settings; workspaces are the collaboration containers that hold items and draw compute from an assigned capacity; and capacities are the actual compute budget, sized by SKU. Two warning nodes capture real, sourced traps: Fabric being pure SaaS means there's no infrastructure layer to reach for (resource groups, ARM, redundancy settings don't apply, which is a real constraint for teams used to Azure-native control), and enabling tenant-level private links is an all-or-nothing trade-off that disables specific, named Power BI and gateway capabilities rather than being a free security upgrade.",
   "type": "architecture",
   "topicSlug": "fabric-overview",
-  "capabilityIds": [
-    "fabric-platform"
-  ],
-  "revision": "1",
+  "capabilityIds": ["fabric-platform", "onelake", "purview", "capacity"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/fabric-platform-overview.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "fabric overview boundary",
-      "summary": "fabric overview boundary in the Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "saas-model",
+      "label": "Fabric is SaaS, not PaaS",
+      "summary": "No Azure resource groups, ARM, redundancy settings, or region placement to manage — Microsoft manages the infrastructure.",
+      "detail": "Microsoft Fabric is delivered as a SaaS analytics platform covering the full data lifecycle — ingestion, transformation, stream processing, warehousing, data science, and BI reporting — inside one product, so teams do not have to stitch together separate Azure services. Because Fabric is SaaS, users never deal with Azure infrastructure concepts such as resource groups, RBAC, Azure Resource Manager, redundancy, or region placement, and an Azure account is not required to use the product.",
+      "whyItMatters": "This is a real architectural constraint as much as a convenience: platform engineers used to Azure-native control over networking topology and redundancy zones have to work within what Fabric exposes at the tenant/domain/workspace/capacity level instead — those Azure-level decisions simply aren't available to make.",
+      "classification": "fact",
+      "layers": ["governance"],
+      "tags": ["MicrosoftFabric", "SaaS"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-overview", "note": "Microsoft Fabric is delivered as a SaaS analytics platform that covers the full data lifecycle — ingestion, transformation, stream processing, warehousing, data science, and BI reporting — inside one product, so teams do not have to stitch together separate Azure services." },
+        { "sourceKey": "fabric-platform-overview", "note": "Because Fabric is SaaS, users never deal with Azure infrastructure concepts such as resource groups, RBAC, Azure Resource Manager, redundancy, or region placement, and an Azure account is not required to use the product." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the fabric overview boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through fabric overview boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A new organization onboarding to Fabric"],
+        "processing": ["Sign in to the Fabric portal (no Azure subscription required)", "Work directly with tenant, domain, workspace, capacity, and item concepts — no infrastructure provisioning step"],
+        "outputs": ["A working Fabric environment with no resource groups, VNets, or ARM templates to author for the platform itself"],
+        "example": "A team that would previously have provisioned an Azure Data Factory instance, a Databricks workspace, a Synapse workspace, and a Power BI Premium capacity — each with its own resource group and networking — instead works entirely inside one Fabric tenant with no separate Azure resource provisioning.",
+        "controls": ["Tenant, domain, workspace, and capacity structure — the concepts that remain in the platform engineer's hands"],
+        "failureModes": ["Expecting Azure-native networking/redundancy control that Fabric's SaaS model doesn't expose", "Assuming an Azure subscription is a prerequisite when it isn't"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "fabric-overview",
-        "label": "Open fabric overview"
-      }
+      "drillTarget": { "kind": "capability", "slug": "fabric-platform", "label": "Fabric Platform" }
     },
     {
-      "id": "step-2",
-      "label": "Microsoft Fabric platform - workloads over OneLake",
-      "summary": "Microsoft Fabric platform - workloads over OneLake in the Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "workloads",
+      "label": "Role-oriented workloads",
+      "summary": "Power BI, Data Factory, Data Engineering, Data Warehouse, Real-Time Intelligence, and more — each contributes its own item types.",
+      "detail": "Fabric organizes its functionality into role-oriented workloads — Power BI, Data Factory, Data Engineering, Data Science, Data Warehouse, Databases, Real-Time Intelligence, Industry Solutions, and the preview Fabric IQ — which all run in the same environment and can share data and items without duplication. An item is any object created within a workload — a lakehouse, notebook, warehouse, eventhouse, report — and each workload contributes its own item types.",
+      "whyItMatters": "Because every workload runs in the same environment rather than a separate product, a data engineer, an analyst, and a data scientist can all work on the same datasets without handoffs or format conversions — the workload boundary is functional, not a data or environment boundary.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["MicrosoftFabric", "Workloads"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-overview", "note": "Fabric organizes its functionality into role-oriented workloads — Power BI, Data Factory, Data Engineering, Data Science, Data Warehouse, Databases, Real-Time Intelligence, Industry Solutions, and the preview Fabric IQ — which all run in the same environment and can share data and items without duplication." },
+        { "sourceKey": "fabric-platform-terminology", "note": "In Fabric vocabulary, an item is any object you create — lakehouse, notebook, warehouse, eventhouse, and so on — and each workload contributes its own item types; a workload is the collection of capabilities aimed at one functional area." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Microsoft Fabric platform - workloads over OneLake responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Microsoft Fabric platform - workloads over OneLake: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "governed by Purview",
-      "summary": "governed by Purview in the Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the governed by Purview responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through governed by Purview: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "powered by capacities",
-      "summary": "powered by capacities in the Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the powered by capacities responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through powered by capacities: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "fabric platform governed outcome",
-      "summary": "fabric platform governed outcome in the Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the fabric platform governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through fabric platform governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A functional need: ingestion, transformation, warehousing, streaming, or reporting"],
+        "processing": ["User picks the workload matching the job and creates the relevant item type inside a workspace", "Item is immediately visible and shareable to every other workload in the same workspace"],
+        "outputs": ["A workload-specific item (lakehouse, pipeline, warehouse, eventhouse, report) available to the rest of the platform with no export step"],
+        "example": "A data engineer builds a lakehouse in the Data Engineering workload; without any handoff, an analyst in the same workspace immediately queries the same tables through the auto-provisioned SQL analytics endpoint, and a Power BI report reads it via Direct Lake.",
+        "controls": ["Which workload/item type matches the task at hand"],
+        "failureModes": ["Treating workloads as separate products requiring data export/import between them, when they're designed to share data natively"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "fabric-platform",
-        "label": "Open fabric platform"
+      "drillTarget": { "kind": "capability", "slug": "fabric-platform", "label": "Fabric Platform" }
+    },
+    {
+      "id": "onelake",
+      "label": "OneLake (shared storage)",
+      "summary": "One logical data lake per tenant; every workload writes and reads the same Delta Parquet data.",
+      "detail": "OneLake is Fabric's single logical data lake, built on Azure Data Lake Storage Gen2, and every Fabric compute experience comes preconfigured to use it as its native store. Delta Lake is the standard table format across all Fabric workloads — data ingested into Fabric is stored as Delta tables by default — which is what lets different engines read each other's output without conversion. The one-copy design lets multiple Fabric engines (T-SQL, Apache Spark, Analysis Services, and others) operate over the same physical Delta Parquet data, so teams do not duplicate datasets per engine.",
+      "whyItMatters": "This is the specific mechanism behind Fabric's cross-workload promise: it isn't that workloads happen to cooperate, it's that they're all reading and writing the identical physical Delta files in one namespace, so there is no ETL step or format translation between them.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["OneLake", "DeltaLake"],
+      "evidence": [
+        { "sourceKey": "onelake-overview", "note": "Every Microsoft Fabric tenant is provisioned with exactly one OneLake; tenants cannot create additional OneLake instances or delete the existing one, and no separate storage resources need to be provisioned or managed." },
+        { "sourceKey": "onelake-overview", "note": "The one-copy design lets multiple Fabric engines (T-SQL, Apache Spark, Analysis Services, and others) operate over the same physical Delta Parquet data, so teams do not duplicate datasets per engine or get locked into the engine that first loaded the data." },
+        { "sourceKey": "fabric-platform-terminology", "note": "Delta Lake is the standard table format across all Fabric workloads — data ingested into Fabric is stored as Delta tables by default — which is what lets different engines read each other's output without conversion." }
+      ],
+      "drill": {
+        "inputs": ["Writes from any workload's compute engine (Spark, T-SQL, Eventstream, Dataflow Gen2)"],
+        "processing": ["Data lands as Delta Parquet in the tenant's single OneLake namespace", "V-Order write-time optimization applied by default, speeding up subsequent reads by any engine"],
+        "outputs": ["Delta tables immediately readable by every other engine — Spark, T-SQL, KQL, Direct Lake — with no copy"],
+        "example": "A Spark notebook writes a curated Delta table; a warehouse query, a KQL cross-database query, and a Direct Lake semantic model all read that exact table with zero data movement between them.",
+        "controls": ["Table format is fixed to Delta by default across all workloads — not a per-item choice"],
+        "failureModes": ["Standing up separate physical data lakes per business group, recreating the duplication OneLake is designed to eliminate"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
+    },
+    {
+      "id": "purview-governance",
+      "label": "Purview governance",
+      "summary": "Built-in governance across data-estate management, protection, discovery, and monitoring — inherited automatically.",
+      "detail": "Fabric organizes its governance surface into four functional areas: managing the data estate (admin portal, domains, workspaces, capacities, metadata scanning), securing and protecting data (sensitivity labels, DLP, auditing), encouraging discovery and trust (OneLake catalog, endorsement, tags, lineage), and monitoring activity. Governance settings operate in a three-tier hierarchy: tenant-wide defaults, domain-level overrides for delegated settings, and workspace-level controls for the most granular scope.",
+      "whyItMatters": "Because governance is built into the shared platform layer rather than bolted onto individual workloads, permissions, sensitivity labels, and auditing apply consistently across every item type without each workload team having to implement its own security model.",
+      "classification": "fact",
+      "layers": ["governance", "security"],
+      "tags": ["Purview", "Governance"],
+      "evidence": [
+        { "sourceKey": "governance-compliance-overview", "note": "Fabric organizes its governance surface into four functional areas: managing the data estate, securing and protecting data, encouraging discovery and trust, and monitoring activity." },
+        { "sourceKey": "governance-compliance-overview", "note": "Governance settings in Fabric operate in a three-tier hierarchy: tenant-wide defaults set by Fabric admins, domain-level overrides applied by domain admins for delegated settings, and workspace-level controls managed by workspace owners for the most granular scope." },
+        { "sourceKey": "fabric-platform-overview", "note": "Beneath the workloads sits a shared platform layer of three services used consistently by every experience: OneLake for storage, Copilot for embedded AI assistance, and centralized governance powered by built-in Microsoft Purview." }
+      ],
+      "drill": {
+        "inputs": ["Items created across any workload, and the tenant/domain/workspace governance hierarchy"],
+        "processing": ["Apply tenant-wide defaults, then domain-level overrides where delegated, then workspace-level controls", "Sensitivity labels and permissions inherit automatically across items", "Metadata scanning and lineage tracked through the OneLake catalog and Purview Data Map"],
+        "outputs": ["Consistent, inherited governance across every workload's items with no per-workload reimplementation"],
+        "example": "A sensitivity label applied at the tenant level inherits down through a domain's workspaces to every lakehouse, warehouse, and report inside them, without a workspace owner having to configure labeling separately per item.",
+        "controls": ["Which governance tier (tenant/domain/workspace) owns a given setting"],
+        "failureModes": ["Assuming domain-level governance settings apply without being explicitly delegated from the tenant level"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "purview", "label": "Purview" }
+    },
+    {
+      "id": "tenant-domain-workspace",
+      "label": "Tenant, domains, workspaces",
+      "summary": "One tenant maps to one Entra tenant; domains group workspaces; workspaces hold items and draw from a capacity.",
+      "detail": "A Fabric tenant is a single organizational instance of the service aligned one-to-one with a Microsoft Entra tenant; inside it, workspaces act as collaboration containers that hold items, draw compute from a capacity, and control who can access their contents. Domains let an organization group workspaces into logical business areas, giving administrators a management and governance delegation point above the workspace level, and are the recommended mechanism for data mesh ownership boundaries within a single tenant.",
+      "whyItMatters": "This hierarchy is what makes delegated governance and cost attribution possible at organizational scale — a domain admin can apply department-specific policy without touching tenant-wide settings, and a workspace's capacity assignment is the unit compute cost actually attaches to.",
+      "classification": "fact",
+      "layers": ["governance"],
+      "tags": ["Tenancy", "Domains", "Workspaces"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-terminology", "note": "A Fabric tenant is a single organizational instance of the service aligned one-to-one with a Microsoft Entra tenant; inside it, workspaces act as collaboration containers that hold items, draw compute from a capacity, and control who can access their contents." },
+        { "sourceKey": "fabric-platform-terminology", "note": "Domains let an organization group workspaces into logical business areas (for example Finance or Marketing), giving administrators a level above the workspace at which to delegate management and apply governance policies." }
+      ],
+      "drill": {
+        "inputs": ["Organizational structure: business units, departments, or data-mesh domains"],
+        "processing": ["Create domains matching business areas", "Assign workspaces to the appropriate domain", "Each workspace draws compute from an assigned capacity and holds the items its team creates"],
+        "outputs": ["A governance and cost-attribution hierarchy that maps to how the organization is actually structured"],
+        "example": "A retail organization creates a Finance domain and a Supply Chain domain; each domain's workspaces are governed by that domain's delegated policies while still inheriting tenant-wide defaults from above.",
+        "controls": ["Domain assignment per workspace", "Capacity assignment per workspace"],
+        "failureModes": ["Leaving all workspaces on the tenant's default shared capacity indefinitely, missing the isolation and delegation the domain/workspace hierarchy is designed to provide"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "fabric-platform", "label": "Fabric Platform" }
+    },
+    {
+      "id": "capacity",
+      "label": "Capacity (compute budget)",
+      "summary": "A dedicated pool of capacity units every workload draws from; sized by SKU.",
+      "detail": "A capacity is a dedicated pool of resources that performs work in Fabric, and capacity units (CUs) are the single unit of compute measurement: every workload and operation draws CUs from the available capacity, with consumption classified as either interactive or background operations.",
+      "whyItMatters": "Every workload's compute — Spark, warehouse queries, Power BI refreshes, streaming — ultimately draws from the same capacity pool a workspace is assigned to, which is why capacity sizing and workspace assignment is as much an architectural decision as a cost one.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Capacity", "CapacityUnits"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-terminology", "note": "A capacity is a dedicated pool of resources that performs work in Fabric, and capacity units (CUs) are the single unit of compute measurement: every workload and operation draws CUs from the available capacity, with consumption classified as either interactive or background operations." }
+      ],
+      "drill": {
+        "inputs": ["An F-SKU or Trial capacity assigned to one or more workspaces"],
+        "processing": ["Every operation from any workload in an assigned workspace draws CUs from the capacity's pool", "Operations classified interactive or background, affecting how they're billed and throttled"],
+        "outputs": ["Compute for every workload's operations, bounded by the capacity's CU budget"],
+        "example": "A single F64 capacity backs both a Data Engineering workspace running nightly Spark jobs and a reporting workspace serving Direct Lake dashboards; both draw from the same 64-CU pool.",
+        "controls": ["Capacity SKU size", "Which workspaces are assigned to which capacity"],
+        "failureModes": ["Sharing one capacity across workloads with very different risk profiles, so one workload's contention threatens another's SLA — see the capacity sizing decision diagram for the isolation remedy"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "private-link-warning",
+      "label": "Trap: tenant-wide private links are all-or-nothing",
+      "summary": "Enabling tenant-level private links disables specific Power BI features and breaks on-premises gateways — a real trade-off, not free security.",
+      "detail": "On-premises data gateways cannot register and will not function when tenant-level Block Public Internet Access is enabled, with no supported alternative besides a VNet data gateway. Several Power BI capabilities are also unavailable when private links or public-access blocking is in effect: Publish to Web, email subscriptions, PDF and PowerPoint export, and Copilot under tenant-level private links are all unsupported.",
+      "whyItMatters": "Teams sometimes treat private links as a strictly-additive security upgrade; in reality it's an all-or-nothing tenant-wide toggle with named, permanent feature losses, so it needs to be evaluated as a real architectural trade-off rather than enabled by default.",
+      "classification": "warning",
+      "layers": ["governance", "security"],
+      "tags": ["PrivateLinks", "Networking"],
+      "evidence": [
+        { "sourceKey": "bradcoles-fabric-private-links", "note": "On-premises data gateways cannot register and will not function when tenant-level Block Public Internet Access is enabled. There is no supported configuration for using on-premises data gateways alongside tenant-level private links; the only replacement is a VNet data gateway." },
+        { "sourceKey": "bradcoles-fabric-private-links", "note": "Several Power BI features are unavailable when private links or public-access blocking is in effect: Publish to Web, email subscriptions, PDF and PowerPoint export, and Copilot under tenant-level private links are all unsupported." }
+      ],
+      "drill": {
+        "inputs": ["A tenant considering enabling tenant-level Block Public Internet Access for compliance reasons"],
+        "processing": ["Check for any dependency on on-premises data gateways (must migrate to VNet gateway first)", "Confirm no dependency on Publish to Web, email subscriptions, PDF/PowerPoint export, or Copilot under tenant-level private links", "Consider workspace-level private links (F SKU only) as a mixed public-private alternative if full tenant lockdown isn't required"],
+        "outputs": ["A deliberate private-link decision with the feature trade-offs accepted explicitly, not discovered after rollout"],
+        "example": "A regulated tenant considering tenant-level private links discovers during design review that several business users rely on Publish to Web for a public dashboard; the team switches to workspace-level private links for the regulated workspaces only, preserving Publish to Web elsewhere.",
+        "controls": ["Choice between tenant-level (all-or-nothing) and workspace-level (F SKU only, mixed deployment) private links", "Conditional Access plus IP firewall as a lighter-weight alternative when no regulatory mandate requires network-level isolation"],
+        "failureModes": ["Enabling tenant-level private links without auditing on-premises gateway or Power BI export/Copilot dependencies first, breaking them in production"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-saas-workloads", "from": "saas-model", "to": "workloads", "label": "workloads run inside the managed SaaS environment", "layer": "governance", "kind": "flow" },
+    { "id": "e-workloads-onelake", "from": "workloads", "to": "onelake", "label": "every workload's items store data in", "layer": "data", "kind": "flow" },
+    { "id": "e-workloads-purview", "from": "workloads", "to": "purview-governance", "label": "every item inherits governance from", "layer": "governance", "kind": "flow" },
+    { "id": "e-onelake-tenancy", "from": "onelake", "to": "tenant-domain-workspace", "label": "one OneLake per tenant, workspaces as containers", "layer": "data", "kind": "flow" },
+    { "id": "e-tenancy-capacity", "from": "tenant-domain-workspace", "to": "capacity", "label": "each workspace draws compute from an assigned capacity", "layer": "compute", "kind": "flow" },
+    { "id": "e-purview-tenancy", "from": "purview-governance", "to": "tenant-domain-workspace", "label": "three-tier hierarchy: tenant, domain, workspace", "layer": "governance", "kind": "flow" },
+    { "id": "e-tenancy-warning", "from": "tenant-domain-workspace", "to": "private-link-warning", "label": "risk when locking down network access tenant-wide", "layer": "security", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. fabric overview boundary",
-      "explanation": "fabric overview boundary in the Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities architecture."
+      "nodeId": "saas-model",
+      "title": "1. Fabric is SaaS, not infrastructure to assemble",
+      "explanation": "No resource groups, ARM templates, or redundancy settings to configure — Microsoft manages the infrastructure layer entirely."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Microsoft Fabric platform - workloads over OneLake",
-      "explanation": "Microsoft Fabric platform - workloads over OneLake in the Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities architecture."
+      "nodeId": "workloads",
+      "title": "2. Role-oriented workloads share one environment",
+      "explanation": "Power BI, Data Factory, Data Engineering, and the rest each contribute their own item types but all run inside the same environment with no data handoffs between them."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. governed by Purview",
-      "explanation": "governed by Purview in the Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities architecture."
+      "nodeId": "onelake",
+      "title": "3. OneLake: the shared storage that makes it real",
+      "explanation": "Every workload writes and reads the same Delta Parquet data in one tenant-wide logical lake — this is the mechanism behind the no-copy promise, not just a policy."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. powered by capacities",
-      "explanation": "powered by capacities in the Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities architecture."
+      "nodeId": "purview-governance",
+      "title": "4. Purview governance applies automatically",
+      "explanation": "Permissions, sensitivity labels, and auditing inherit across every item from the same three-tier tenant/domain/workspace hierarchy, with no per-workload reimplementation."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. fabric platform governed outcome",
-      "explanation": "fabric platform governed outcome in the Microsoft Fabric platform - workloads over OneLake, governed by Purview, powered by capacities architecture."
+      "nodeId": "tenant-domain-workspace",
+      "title": "5. The administrative hierarchy: tenant, domains, workspaces",
+      "explanation": "One tenant maps to one Entra tenant; domains group workspaces for delegated governance; workspaces hold items and draw compute from an assigned capacity."
+    },
+    {
+      "nodeId": "capacity",
+      "title": "6. Capacity: the actual compute budget",
+      "explanation": "Every workload's operations ultimately draw capacity units from whichever capacity their workspace is assigned to."
+    },
+    {
+      "nodeId": "private-link-warning",
+      "title": "7. Warning: locking down networking has named costs",
+      "explanation": "Tenant-level private links are an all-or-nothing toggle that breaks on-premises gateways and disables specific Power BI features — a real trade-off to evaluate deliberately, not a free upgrade."
     }
   ]
 }

@@ -1,429 +1,184 @@
 {
   "id": "spark-sql-query-lifecycle",
-  "title": "Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning w…",
-  "purpose": "Original diagram: Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake",
-  "accessibleSummary": "An interactive architecture infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake",
+  "title": "Lifecycle of a Spark SQL Query in a Fabric Notebook",
+  "purpose": "Trace a %%sql/spark.sql() query from the notebook cell through Catalyst planning, AQE, the native-vs-JVM execution fork, to Delta reads and writes on OneLake.",
+  "accessibleSummary": "A top-down internals flow with eight steps. A Spark SQL cell submits its query text to the same Spark session as any PySpark or Scala cell in the notebook. Catalyst parses and optimizes it into a physical plan, which Adaptive Query Execution can re-plan mid-run using runtime statistics. Each operator in that plan is then routed either to the Native Execution Engine's vectorized C++ path or, for unsupported operators, back to the standard JVM path, with the split visible per-operator in the Spark UI. Both paths read and write Delta tables in OneLake through the same Delta transaction log. A warning node calls out that native execution is not always bit-for-bit identical to JVM Spark for certain numeric operations.",
+  "longDescription": "This is an internals diagram, not a pipeline: it explains what happens after a developer runs a %%sql cell in a Fabric notebook rather than how to build a data product. The query text enters the notebook's shared Apache Spark context — the same session backing PySpark, Scala, and SparkR cells — and is handed to Catalyst, Spark's query optimizer, which parses it and produces a logical then physical plan. Adaptive Query Execution can revise that physical plan mid-execution using statistics gathered from completed stages, for example switching join strategies once actual partition sizes are known. The physical plan's operators are then evaluated one by one against the Native Execution Engine: supported operators offload to a vectorized C++ path built on Velox and Gluten, while anything unsupported (structured streaming, ANSI SQL mode, some JSON/XML paths at time of writing) falls back per-operator to standard JVM Spark, so a single query can run partly native and partly JVM. Both paths converge on the same Delta read/write layer against OneLake, using the Delta transaction log for ACID guarantees. A dedicated warning node captures the specific, sourced risk that NEE is not always bit-for-bit identical to JVM Spark — decimal-to-float casting and round() are two documented divergence points — which matters for numerically sensitive pipelines.",
   "type": "internals",
   "topicSlug": "spark",
-  "capabilityIds": [
-    "spark"
-  ],
-  "revision": "1",
+  "capabilityIds": ["spark"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/spark-sql-query-lifecycle.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "spark boundary",
-      "summary": "spark boundary in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
+      "id": "sql-cell",
+      "label": "%%sql / spark.sql() cell",
+      "summary": "A Spark SQL query entered via the %%sql magic or spark.sql() call in a Fabric notebook.",
+      "detail": "A Fabric notebook cell switched to Spark SQL via the %%sql language magic (or the cell language picker) submits its query text directly into the notebook's running Apache Spark context — the same session and cluster backing any PySpark, Scala, or SparkR cells in that notebook. There is no separate SQL service; the query is Spark SQL evaluated by the Spark engine itself.",
+      "whyItMatters": "Because the query runs in the shared session, it inherits whatever lakehouse is pinned as default and whatever cluster resources the notebook already has — understanding this is the starting point for reasoning about everything downstream, including which metastore table names resolve against.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "spark-sql-fabric", "note": "A %%sql cell executes its query as SparkSQL against the notebook's Apache Spark context, sharing the same running Spark session, cluster, and attached lakehouse as PySpark or Scala cells in that notebook." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["Spark", "SparkSQL", "Notebooks"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the spark boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through spark boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Query text in a cell prefixed with %%sql, or a spark.sql(\"...\") call in a PySpark cell", "The notebook's pinned default lakehouse, which determines the metastore for unqualified table names"],
+        "processing": ["Fabric routes the cell to the SparkSQL language runtime for that session", "The query text is handed to the Spark SQL engine's parser as the entry point into Catalyst"],
+        "outputs": ["A parsed query ready for Catalyst's logical planning phase"],
+        "example": "A cell reading %%sql\\nSELECT region, SUM(revenue) FROM sales GROUP BY region executes in the same session a prior PySpark cell used to read a DataFrame, with both sharing the notebook's attached lakehouse.",
+        "controls": ["Which lakehouse is pinned as the notebook's default", "Session-level SQL behavior tuned via %%configure, e.g. livy.rsc.sql.num-rows controlling returned row count"],
+        "failureModes": ["Querying a table in a lakehouse from a different workspace than the pinned default, which fails resolution because Spark SQL only resolves against the default lakehouse's metastore"],
+        "metrics": []
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "spark",
-        "label": "Open spark"
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark" }
+    },
+    {
+      "id": "catalyst-plan",
+      "label": "Catalyst parse & logical plan",
+      "summary": "Catalyst parses the query and builds an optimized logical plan.",
+      "detail": "Catalyst, Spark's built-in query optimizer, parses the SQL text into an unresolved logical plan, resolves table and column references against the metastore, and applies rule-based optimizations (predicate pushdown, column pruning, constant folding) to produce an optimized logical plan. This stage is identical in shape to how Catalyst treats a DataFrame-API query — Spark SQL is not a separate optimizer path.",
+      "whyItMatters": "This is where correctness and much of the baseline performance work happens before any physical execution decision is made; a query that is inefficient here stays inefficient regardless of native or JVM execution downstream.",
+      "classification": "inference",
+      "layers": ["compute"],
+      "evidence": [],
+      "tags": ["Spark", "Catalyst"],
+      "drill": {
+        "inputs": ["Parsed query text from the SQL cell", "Table/column metadata from the pinned lakehouse's metastore"],
+        "processing": ["Resolve unresolved references against the metastore catalog", "Apply rule-based logical optimizations: predicate pushdown, column pruning, constant folding", "Produce an optimized logical plan"],
+        "outputs": ["An optimized logical plan handed to the physical planner"],
+        "example": "A query filtering WHERE region = 'EMEA' has that predicate pushed down past the GROUP BY in the logical plan, so downstream physical planning only ever considers EMEA rows.",
+        "controls": ["Standard Spark SQL conf settings that toggle specific Catalyst rules (e.g. constant folding, pushdown)"],
+        "failureModes": ["Referencing a table not visible in the resolved metastore, producing a 'table not found' error at this stage rather than at physical execution"]
       }
     },
     {
-      "id": "step-2",
-      "label": "Lifecycle of a Spark SQL query in a Fabric notebook",
-      "summary": "Lifecycle of a Spark SQL query in a Fabric notebook in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
+      "id": "aqe-physical-plan",
+      "label": "Physical planning with AQE",
+      "summary": "The logical plan becomes a physical plan; Adaptive Query Execution can revise it mid-run.",
+      "detail": "Catalyst's cost-based physical planner selects concrete execution strategies (join algorithm, shuffle partitioning) for the optimized logical plan. Adaptive Query Execution (AQE) then re-optimizes parts of that physical plan during execution using runtime statistics gathered from completed shuffle stages — for example switching a sort-merge join to a broadcast join once actual partition sizes are known, or coalescing shuffle partitions. Fabric's Native Execution Engine explicitly preserves this AQE behavior even when some operators in the same query later offload to the native path.",
+      "whyItMatters": "AQE is what keeps a single static plan from being wrong for the actual data at runtime; knowing it can still act on a partly-native query is important for reasoning about why an execution plan changed shape mid-run.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "spark-native-execution-engine", "note": "NEE preserves Fabric Spark's existing query optimizer behaviors — adaptive query execution, cost-based rewrites, column pruning, and predicate pushdown — so these still apply even to queries where some operators are offloaded to the native path and others fall back to the JVM." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["Spark", "AQE", "QueryOptimizer"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Lifecycle of a Spark SQL query in a Fabric notebook responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Lifecycle of a Spark SQL query in a Fabric notebook: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["The optimized logical plan from Catalyst"],
+        "processing": ["Select initial physical operators and join strategies", "Execute shuffle stages", "Use post-shuffle statistics to re-plan remaining stages (join strategy switch, partition coalescing)"],
+        "outputs": ["A physical plan, potentially revised mid-execution, ready for per-operator native/JVM routing"],
+        "example": "A join initially planned as sort-merge is switched to a broadcast join by AQE once the shuffle stage reveals one side is small enough to broadcast, cutting shuffle volume for the rest of the query.",
+        "controls": ["AQE is enabled by default in Fabric Spark; specific thresholds (broadcast join size, partition coalescing) are tunable Spark SQL confs"],
+        "failureModes": ["Disabling AQE for a workload that actually benefits from runtime re-planning, and then hand-tuning join strategies that AQE would have picked correctly"]
       }
     },
     {
-      "id": "step-3",
-      "label": "%%sql/spark.sql() through Catalyst",
-      "summary": "%%sql/spark.sql() through Catalyst in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
+      "id": "native-execution",
+      "label": "Native Execution Engine (Velox + Gluten)",
+      "summary": "Supported operators run as vectorized, SIMD-accelerated C++ code instead of JVM bytecode.",
+      "detail": "For operators the Native Execution Engine supports, Gluten intercepts the physical plan and converts the supported portion into a Substrait plan, which Velox — a C++ vectorized execution library — then runs as columnar, SIMD-accelerated native code in place of the JVM implementation. This is a per-operator decision within a single query, not an all-or-nothing switch.",
+      "whyItMatters": "This is the mechanism behind NEE's performance gain, and understanding it is per-operator (not per-query) explains why a query can show a mix of native and JVM operators in the same execution graph.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "spark-native-execution-engine", "note": "Gluten intercepts the optimized Spark SQL physical plan and converts supported portions into a Substrait plan, which Velox then executes as vectorized, SIMD-accelerated, columnar C++ code in place of JVM operator implementations." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["Spark", "NativeExecutionEngine", "Velox", "Gluten"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the %%sql/spark.sql() through Catalyst responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through %%sql/spark.sql() through Catalyst: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "physical planning with AQE",
-      "summary": "physical planning with AQE in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the physical planning with AQE responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through physical planning with AQE: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "native or JVM execution",
-      "summary": "native or JVM execution in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the native or JVM execution responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through native or JVM execution: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "to Delta reads and writes on OneLake",
-      "summary": "to Delta reads and writes on OneLake in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the to Delta reads and writes on OneLake responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through to Delta reads and writes on OneLake: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "spark governed outcome",
-      "summary": "spark governed outcome in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the spark governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through spark governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Physical plan operators eligible for native execution"],
+        "processing": ["Gluten converts the eligible plan segment into a Substrait representation", "Velox executes that segment as vectorized columnar C++ code", "Results flow back into the surrounding JVM-orchestrated query"],
+        "outputs": ["Operator results computed on the native path, verifiable via Spark UI *Transformer suffixes or the Gluten SQL/DataFrame tab"],
+        "example": "A filter-then-aggregate segment of the plan runs entirely through Velox; the Spark UI shows the corresponding operators suffixed *NativeFileScan and *VeloxColumnarToRowExec, and the Gluten tab colors those nodes green.",
+        "controls": ["NEE is opt-in per workspace/environment; whether it's enabled at all"],
+        "failureModes": ["Assuming a query ran fully native without checking the Spark UI or Gluten tab, when in fact parts fell back to JVM"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "spark",
-        "label": "Open spark"
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark" }
+    },
+    {
+      "id": "jvm-fallback",
+      "label": "JVM Spark fallback",
+      "summary": "Unsupported operators, expressions, or features execute on standard JVM Spark instead.",
+      "detail": "When NEE encounters an operator, expression, data type, or feature it does not support, that segment of the query automatically falls back to standard JVM Spark rather than failing the job. Structured streaming and ANSI SQL mode always run on JVM Spark as of the current release; some JSON/XML source paths remain unaccelerated. Fabric Spark Advisor surfaces this fallback in real time as a cell-output alert.",
+      "whyItMatters": "Fallback is what makes NEE safe to enable broadly — a query never fails because an operator is unsupported — but it also means performance gains are workload-dependent, not guaranteed for every query.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "spark-native-execution-engine", "note": "When NEE encounters an operator, expression, data type, or feature it doesn't support, the affected segment of the query automatically falls back to the standard JVM Spark engine rather than failing the job; Fabric Spark Advisor surfaces this fallback in real time in the cell output." },
+        { "sourceKey": "spark-native-execution-engine", "note": "Structured streaming and ANSI SQL mode always execute on JVM Spark, and JSON/XML source formats are still not accelerated as of the current NEE release." }
+      ],
+      "tags": ["Spark", "NativeExecutionEngine", "Fallback"],
+      "drill": {
+        "inputs": ["Physical plan operators NEE does not (yet) support"],
+        "processing": ["Execute the unsupported segment on the standard JVM Spark engine", "Fabric Spark Advisor posts a fallback alert in the notebook cell output"],
+        "outputs": ["Correct results for the fallback segment, computed without native acceleration"],
+        "example": "A structured-streaming query always falls back entirely to JVM Spark, regardless of whether NEE is enabled for the workspace, because streaming is out of scope for the native path at time of writing.",
+        "controls": ["Monitoring Spark Advisor's fallback alerts to identify which operators are worth rewriting or waiting on"],
+        "failureModes": ["Treating a fully-fallback query as a NEE bug rather than checking whether it used an explicitly unsupported feature like structured streaming or ANSI SQL mode"]
       }
+    },
+    {
+      "id": "native-jvm-divergence",
+      "label": "Native results can diverge from JVM Spark",
+      "summary": "NEE is not always bit-for-bit identical to vanilla Spark for certain numeric operations.",
+      "detail": "Because Velox implements some operations independently rather than replicating JVM Spark's exact logic, documented divergences exist: DECIMAL-to-FLOAT casting differs because Velox casts directly from its internal int128_t representation instead of round-tripping through a string as Spark does, and round() can return different results because Velox uses the C++ standard library's std::round rather than Spark's own rounding logic. These are real, sourced discrepancies, not hypothetical edge cases.",
+      "whyItMatters": "A pipeline that assumes native execution is a transparent, purely performance-only switch can silently produce different numeric results after enabling NEE — the kind of regression that surfaces as a data-quality dispute, not an error.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "spark-native-execution-engine", "note": "NEE casting from DECIMAL to FLOAT diverges from vanilla Spark: Spark preserves precision by round-tripping through a string conversion, while Velox casts directly from the internal int128_t representation, which can produce different rounding results for the same input." },
+        { "sourceKey": "spark-native-execution-engine", "note": "The round() function can return different results under NEE than under vanilla Spark because Velox implements it using the C++ standard library's std::round rather than replicating Spark's own rounding logic." }
+      ],
+      "tags": ["Spark", "NativeExecutionEngine", "Correctness"],
+      "drill": {
+        "inputs": ["A query that performs DECIMAL-to-FLOAT casts or round() calls and executes (at least partially) on the native path"],
+        "processing": ["Identify which operators in the query are numerically sensitive", "Test the same query with NEE enabled and disabled and diff results", "Decide whether the divergence is acceptable or must be avoided for that pipeline"],
+        "outputs": ["A documented decision on whether NEE is safe for that specific numerically sensitive query"],
+        "example": "A financial rounding calculation using round() on currency values produces a one-cent discrepancy between NEE and JVM Spark for edge-case inputs, caught only because the team diffed results before shipping the pipeline to production.",
+        "controls": ["Test numerically sensitive pipelines with NEE both on and off before relying on it in production", "Use the Spark UI or Gluten tab to confirm exactly which operators in a sensitive query ran natively"],
+        "failureModes": ["Enabling NEE tenant-wide without auditing existing numerically sensitive pipelines for these specific divergence points", "Discovering the discrepancy only via a downstream reconciliation or audit failure, long after the query shipped"]
+      }
+    },
+    {
+      "id": "delta-onelake-io",
+      "label": "Delta read/write on OneLake",
+      "summary": "Both native and JVM paths converge on the same Delta transaction log against OneLake.",
+      "detail": "Regardless of whether an operator executed natively or on JVM, table reads and writes ultimately go through the Delta transaction log against Delta tables stored in OneLake. NEE additionally supports parallel Delta snapshot loading and accelerates reads on Delta tables organized with Z-ordering or Liquid Clustering, giving further gains when the underlying data layout is optimized.",
+      "whyItMatters": "This convergence point is why a partly-native, partly-JVM query still produces one consistent, ACID-safe result — the execution-engine split is purely a compute-layer optimization, not a storage-layer fork.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "spark-native-execution-engine", "note": "NEE supports parallel Delta snapshot loading and accelerates read operations on Delta tables organized with Z-ordering or Liquid Clustering, giving additional gains on top of raw operator vectorization when the underlying data layout is optimized." }
+      ],
+      "tags": ["Spark", "DeltaLake", "OneLake"],
+      "drill": {
+        "inputs": ["Query results and write operations from both the native and JVM execution paths"],
+        "processing": ["Resolve reads/writes against the Delta transaction log for the target table", "Apply Z-order/Liquid-Clustering-aware parallel snapshot loading where the native path is engaged"],
+        "outputs": ["Consistent, ACID-compliant Delta table state in OneLake, queryable by any engine"],
+        "example": "A GROUP BY query that ran half-native, half-JVM still commits its output write through the same Delta log as any other Spark write, so the resulting table is indistinguishable from one written by a fully-JVM job.",
+        "controls": ["Z-ordering or Liquid Clustering on source tables, to get the additional NEE read acceleration"],
+        "failureModes": ["Expecting NEE's read acceleration on a table with no Z-ordering or clustering applied, and being surprised the gain is smaller than benchmarked elsewhere"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-cell-catalyst", "from": "sql-cell", "to": "catalyst-plan", "label": "query text into the shared Spark session", "layer": "compute", "kind": "flow" },
+    { "id": "e-catalyst-aqe", "from": "catalyst-plan", "to": "aqe-physical-plan", "label": "optimized logical plan", "layer": "compute", "kind": "flow" },
+    { "id": "e-aqe-native", "from": "aqe-physical-plan", "to": "native-execution", "label": "supported operators", "layer": "compute", "kind": "branch" },
+    { "id": "e-aqe-jvm", "from": "aqe-physical-plan", "to": "jvm-fallback", "label": "unsupported operators", "layer": "compute", "kind": "branch" },
+    { "id": "e-native-warning", "from": "native-execution", "to": "native-jvm-divergence", "label": "risk for numerically sensitive ops", "layer": "compute", "kind": "branch" },
+    { "id": "e-native-delta", "from": "native-execution", "to": "delta-onelake-io", "label": "native path reads/writes", "layer": "data", "kind": "flow" },
+    { "id": "e-jvm-delta", "from": "jvm-fallback", "to": "delta-onelake-io", "label": "JVM path reads/writes", "layer": "data", "kind": "flow" }
   ],
   "walkthrough": [
-    {
-      "nodeId": "step-1",
-      "title": "1. spark boundary",
-      "explanation": "spark boundary in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture."
-    },
-    {
-      "nodeId": "step-2",
-      "title": "2. Lifecycle of a Spark SQL query in a Fabric notebook",
-      "explanation": "Lifecycle of a Spark SQL query in a Fabric notebook in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture."
-    },
-    {
-      "nodeId": "step-3",
-      "title": "3. %%sql/spark.sql() through Catalyst",
-      "explanation": "%%sql/spark.sql() through Catalyst in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture."
-    },
-    {
-      "nodeId": "step-4",
-      "title": "4. physical planning with AQE",
-      "explanation": "physical planning with AQE in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture."
-    },
-    {
-      "nodeId": "step-5",
-      "title": "5. native or JVM execution",
-      "explanation": "native or JVM execution in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture."
-    },
-    {
-      "nodeId": "step-6",
-      "title": "6. to Delta reads and writes on OneLake",
-      "explanation": "to Delta reads and writes on OneLake in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture."
-    },
-    {
-      "nodeId": "step-7",
-      "title": "7. spark governed outcome",
-      "explanation": "spark governed outcome in the Lifecycle of a Spark SQL query in a Fabric notebook — %%sql/spark.sql() through Catalyst, physical planning with AQE, native or JVM execution, to Delta reads and writes on OneLake architecture."
-    }
+    { "nodeId": "sql-cell", "title": "Start: a %%sql cell in the shared session", "explanation": "The query enters the same running Spark session as any PySpark or Scala cell in the notebook — there is no separate SQL service." },
+    { "nodeId": "catalyst-plan", "title": "Catalyst parses and optimizes", "explanation": "Catalyst resolves references against the metastore and applies rule-based logical optimizations before any physical execution decision is made." },
+    { "nodeId": "aqe-physical-plan", "title": "Physical planning, with room to change its mind", "explanation": "AQE can revise the physical plan mid-execution using runtime statistics — and keeps doing so even for queries that later split across native and JVM operators." },
+    { "nodeId": "native-execution", "title": "Branch: supported operators go native", "explanation": "Gluten converts eligible plan segments to Substrait; Velox executes them as vectorized C++ — this is a per-operator decision, not per-query." },
+    { "nodeId": "jvm-fallback", "title": "Branch: unsupported operators fall back", "explanation": "Structured streaming, ANSI SQL mode, and some JSON/XML paths always run on JVM Spark, with Spark Advisor surfacing the fallback in the cell output." },
+    { "nodeId": "native-jvm-divergence", "title": "Warning: native isn't always bit-identical", "explanation": "Documented divergences in DECIMAL-to-FLOAT casting and round() mean numerically sensitive pipelines should be tested with NEE on and off before trusting it in production." },
+    { "nodeId": "delta-onelake-io", "title": "End: both paths converge on Delta in OneLake", "explanation": "Native and JVM execution both read and write through the same Delta transaction log, so the compute-layer split never forks the storage-layer guarantees." }
   ]
 }

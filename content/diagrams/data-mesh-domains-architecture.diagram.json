@@ -1,429 +1,274 @@
 {
   "id": "data-mesh-domains-architecture",
-  "title": "Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLak…",
-  "purpose": "Original diagram: Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities)",
-  "accessibleSummary": "An interactive architecture infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities)",
+  "title": "Fabric as Federated Data-Mesh Domains",
+  "purpose": "Show how business domains map onto Fabric domains and workspaces over one shared OneLake, publish certified data products, share them across domains with zero-copy shortcuts, and stay governed and cost-isolated by a tenant-wide policy layer and per-domain capacities.",
+  "accessibleSummary": "An architecture diagram: business domains (Finance, Sales, HR) each own a Fabric domain grouping their workspaces and one per-domain capacity. Producer workspaces write gold Delta tables into the single tenant-wide OneLake and certify them as published products in the OneLake Catalog. Consuming domains create read-only OneLake shortcuts into certified products rather than copying data. Tenant-wide governance, powered by built-in Purview, applies labels, DLP, and auditing across every domain regardless of which one reads the data. A warning node flags the anti-pattern of standing up a separate physical lake per domain, and a second warning flags that OneLake security roles do not constrain workspace Admins or Members.",
+  "longDescription": "This architecture diagram traces the data-mesh pattern as it actually maps onto Fabric primitives. At the top, a business domain (illustrated with Finance) is modelled as a Fabric domain, which groups that domain's workspaces above the workspace level so governance and management can be delegated to a domain admin. Every domain's workspaces sit on exactly one tenant-wide OneLake — Fabric provisions only one OneLake per tenant, so the domain boundary is organisational, not a separate physical lake. A producer workspace inside the domain writes gold Delta tables and applies Certified endorsement, publishing the item as a discoverable data product in the OneLake Catalog. A second, consuming domain discovers that certified product through the catalog and creates an internal OneLake shortcut to it rather than copying the data — the shortcut behaves like a symbolic link, so the consumer always reads the current data with no duplication or ETL. Access through the shortcut is authorised with the consuming user's own identity, which must hold read permission at the target. Two governance layers run across the whole picture: a tenant-wide Purview governance plane applies sensitivity labels, DLP, and auditing to every item regardless of domain, layered over a three-tier tenant-to-domain-to-workspace settings hierarchy; and each domain runs on its own capacity, so Fabric's per-capacity throttling isolates one domain's load spike from another's. Two warning nodes capture real traps: standing up a separate physical lake per domain (an explicit Fabric anti-pattern that recreates the duplication OneLake exists to remove), and assuming OneLake security roles fence off a domain's own team — Admin/Member/Contributor roles bypass OneLake security entirely.",
   "type": "architecture",
   "topicSlug": "data-mesh-domains",
-  "capabilityIds": [
-    "fabric-platform"
-  ],
-  "revision": "1",
+  "capabilityIds": ["fabric-platform", "onelake"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/data-mesh-domains-architecture.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "data mesh domains boundary",
-      "summary": "data mesh domains boundary in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "fabric-domain",
+      "label": "Fabric domain (per business area)",
+      "summary": "Groups a business domain's workspaces above workspace level for delegated governance.",
+      "detail": "A Fabric domain lets an organisation group workspaces into a logical business area — Finance, Sales, HR — giving administrators a level above the workspace at which to delegate management and apply governance policies. Domains can contain subdomains, and workspace content in the OneLake catalog can be filtered by domain.",
+      "whyItMatters": "This is the construct a mesh domain owner actually operates: it is the delegation boundary that lets a business area own its workspaces and policy overrides without the central platform team managing every workspace individually.",
+      "classification": "fact",
+      "layers": ["governance"],
+      "tags": ["Domains", "MicrosoftFabric", "DataMesh"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-terminology", "note": "Domains let an organization group workspaces into logical business areas (for example Finance or Marketing), giving administrators a level above the workspace at which to delegate management and apply governance policies." },
+        { "sourceKey": "governance-compliance-overview", "note": "Domains let organizations logically group Fabric content by business area or department, enabling each department to apply its own governance settings where those settings have been delegated from the tenant level." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the data mesh domains boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through data mesh domains boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A named business area (e.g. Finance) with its own workspaces and data products", "A domain admin assigned by the central platform team"],
+        "processing": ["Create the Fabric domain and assign it a domain admin", "Move or create the business area's workspaces under the domain", "Optionally create subdomains for large domains (e.g. Sales -> EMEA/AMER)"],
+        "outputs": ["A domain grouping that domain admins can apply delegated governance overrides to", "Domain-filterable content in the OneLake Catalog"],
+        "example": "A Finance domain is created and its three existing workspaces (curated, development, sandbox) are moved under it; the Finance domain admin can now apply domain-level sensitivity-label defaults without touching tenant settings.",
+        "controls": ["Which settings are delegated from tenant level to domain admins", "Subdomain structure for large domains"],
+        "failureModes": ["Creating domains with no real owner, so delegated settings default back to tenant defaults anyway", "Standing up a separate physical lake per domain instead of grouping workspaces on shared OneLake — see the warning node"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "data-mesh-domains",
-        "label": "Open data mesh domains"
+      "drillTarget": { "kind": "design", "slug": "data-mesh-domains", "label": "Data-mesh domains design" }
+    },
+    {
+      "id": "separate-lakes-warning",
+      "label": "Trap: a separate physical lake per domain",
+      "summary": "Standing up per-group physical data lakes is an explicit Fabric anti-pattern.",
+      "detail": "Standing up separate physical data lakes per business group — a common pre-OneLake practice — is an antipattern in Fabric because it recreates the resource-management overhead and data duplication that a single tenant-wide OneLake with workspaces and shortcuts is designed to eliminate. A tenant is provisioned with exactly one OneLake and cannot create additional instances.",
+      "whyItMatters": "Teams migrating an old per-team-lake habit into Fabric domains can accidentally recreate the exact duplication problem OneLake was built to remove, losing the zero-copy sharing that makes the mesh pattern cheap in the first place.",
+      "classification": "warning",
+      "layers": ["data", "governance"],
+      "tags": ["OneLake", "AntiPattern"],
+      "evidence": [
+        { "sourceKey": "onelake-overview", "note": "Standing up separate physical data lakes per business group is an antipattern in Fabric because it recreates resource-management overhead and data duplication that the single tenant-wide OneLake is designed to eliminate; tenants cannot create additional OneLake instances." }
+      ],
+      "drill": {
+        "inputs": ["A domain design that provisions a distinct storage account or lakehouse silo per business area instead of reusing shared OneLake"],
+        "processing": ["Recognise a per-domain 'lake' request as a storage anti-pattern, not a mesh requirement", "Redirect the domain to workspaces + shortcuts on the single tenant OneLake"],
+        "outputs": ["A single physical OneLake shared by every domain, with domain boundaries expressed as workspace groupings, not separate storage"],
+        "example": "A well-intentioned platform team provisions a dedicated storage account per business unit to 'give them their own lake'; this duplicates data the moment two domains need the same source and reintroduces the ETL Fabric's shortcuts were meant to remove.",
+        "controls": ["Treat any request for a per-domain storage account as a design review flag", "Use domains + workspaces + shortcuts, never parallel storage"],
+        "failureModes": ["Rediscovering data-duplication and reconciliation problems a year into the mesh rollout", "Losing the 'one copy, many engines' property that makes cross-domain sharing cheap"]
       }
     },
     {
-      "id": "step-2",
-      "label": "Fabric organized as data-mesh domains - domains grouping workspaces…",
-      "summary": "Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "onelake-shared",
+      "label": "OneLake (single tenant-wide lake)",
+      "summary": "Exactly one OneLake per tenant; workspaces act as folders beneath it.",
+      "detail": "Every Fabric tenant is provisioned with exactly one OneLake, with a single file-system namespace spanning users, regions, and clouds. The tenant maps to the root of the lake and workspaces act like folders beneath it, with lakehouses and other items inside workspaces. All Fabric data items automatically persist their tabular data in OneLake as open Delta Parquet, regardless of which engine wrote it.",
+      "whyItMatters": "Because storage is shared by construction, a mesh in Fabric federates ownership and policy, not physical data — the domain boundary sits on top of one lake rather than requiring a distribution pipeline between separate lakes.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["OneLake", "DeltaLake"],
+      "evidence": [
+        { "sourceKey": "onelake-overview", "note": "Every Microsoft Fabric tenant is provisioned with exactly one OneLake; tenants cannot create additional OneLake instances, and no separate storage resources need to be provisioned or managed." },
+        { "sourceKey": "onelake-overview", "note": "All Fabric data items, including lakehouses and warehouses, automatically persist their tabular data in OneLake using the open Delta Parquet format, regardless of which engine wrote the data." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Fabric organized as data-mesh domains - domains grouping workspaces with their data produ… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Fabric organized as data-mesh domains - domains grouping workspaces with their data products on sha…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "cross-domain sharing via shortcuts",
-      "summary": "cross-domain sharing via shortcuts in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the cross-domain sharing via shortcuts responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through cross-domain sharing via shortcuts: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "and a central governance plane (Purview",
-      "summary": "and a central governance plane (Purview in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and a central governance plane (Purview responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and a central governance plane (Purview: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "tenant settings",
-      "summary": "tenant settings in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the tenant settings responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through tenant settings: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "capacities)",
-      "summary": "capacities) in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the capacities) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through capacities): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "fabric platform governed outcome",
-      "summary": "fabric platform governed outcome in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the fabric platform governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through fabric platform governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Every domain's workspaces and the items inside them"],
+        "processing": ["Workspaces surface as folders under the tenant-root namespace", "Items (lakehouses, warehouses) surface as subfolders inside their workspace", "Tabular data lands as Delta Parquet regardless of writing engine"],
+        "outputs": ["One physical copy of every dataset, addressable the same way from any domain with permission"],
+        "example": "Finance's curated workspace and Sales' curated workspace both live as folders in the same tenant OneLake namespace; Finance's gold Delta table is one physical object, not a copy replicated per consuming domain.",
+        "controls": ["Workspace-to-domain assignment", "Item placement inside the managed Tables/Files areas so Fabric auto-registers Delta"],
+        "failureModes": ["Assuming domains have separate storage quotas or physical isolation — they do not, only workspace and permission boundaries exist", "Landing non-Delta formats outside the managed areas and losing auto-registration"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "fabric-platform",
-        "label": "Open fabric platform"
+      "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
+    },
+    {
+      "id": "producer-workspace",
+      "label": "Producer workspace: certify gold product",
+      "summary": "A domain's curated workspace writes gold Delta tables and applies Certified endorsement.",
+      "detail": "Endorsement gives two trust signals: item owners can self-apply Promoted status, while the organisation can apply Certified status to items that meet defined quality standards; endorsed items get priority placement in certain search results and catalog views. A domain's producer workspace publishes its gold tables this way, marking them as the trusted, discoverable product.",
+      "whyItMatters": "Certification is what turns an ordinary table into a mesh 'data product' — a signal other domains can trust without having to ask the producing team whether a given table is production-ready.",
+      "classification": "fact",
+      "layers": ["data", "governance"],
+      "tags": ["Governance", "DataMesh"],
+      "evidence": [
+        { "sourceKey": "governance-compliance-overview", "note": "Endorsement provides two levels of item trustworthiness signaling: item owners can self-apply Promoted status, while organizations can apply Certified status to items that meet defined quality standards; endorsed items receive priority placement in certain search results and catalog views." }
+      ],
+      "drill": {
+        "inputs": ["Gold Delta tables written by the domain's own pipelines or Spark jobs"],
+        "processing": ["Validate the table meets the organisation's quality bar for certification", "Apply Certified endorsement to the item", "Leave in-progress or exploratory items unendorsed or Promoted only"],
+        "outputs": ["A Certified item visible with priority placement in the OneLake Catalog"],
+        "example": "Finance's gold revenue-by-region table passes the domain's quality checks and is marked Certified, so it appears with a trust badge when a Sales analyst searches the catalog for revenue data.",
+        "controls": ["Who is authorised to apply Certified status (typically the domain admin or a designated data owner)", "The quality bar an item must meet before certification"],
+        "failureModes": ["Certifying tables that still change schema without notice, breaking the trust signal", "Leaving genuinely production-ready products unendorsed, so consumers never find them"]
       }
+    },
+    {
+      "id": "onelake-catalog",
+      "label": "OneLake Catalog (discovery)",
+      "summary": "Single searchable surface for every Fabric item a user can access, filterable by domain and tag.",
+      "detail": "The OneLake Catalog is a single searchable surface for every Fabric item a user has access to, supporting domain-based and tag-based filtering so consumers reach relevant content without knowing which workspace holds the data.",
+      "whyItMatters": "This is the mechanism that makes 'data-as-a-product' actually discoverable across domain boundaries — a consuming domain does not need tribal knowledge of which workspace holds what.",
+      "classification": "fact",
+      "layers": ["governance", "metadata"],
+      "tags": ["OneLake", "Governance"],
+      "evidence": [
+        { "sourceKey": "governance-compliance-overview", "note": "The OneLake catalog provides a single searchable surface for all Fabric items a user has access to, supporting domain-based filtering and tag-based filtering to help users reach relevant content without needing prior knowledge of where it lives." }
+      ],
+      "drill": {
+        "inputs": ["Certified and Promoted items across every domain the user has permission to see"],
+        "processing": ["Index item metadata, endorsement status, domain, and tags", "Surface domain- and tag-filtered search results"],
+        "outputs": ["A discoverable list of candidate data products for a consuming domain to shortcut into"],
+        "example": "A Sales analyst filters the OneLake Catalog by domain=Finance and tag=Revenue and finds the Certified gold revenue table without ever being told which workspace it lives in.",
+        "controls": ["Domain and tag taxonomy consistency across producing teams"],
+        "failureModes": ["Inconsistent or missing tags making certified products effectively undiscoverable", "Users without cross-domain read permission seeing catalog entries they cannot actually shortcut into"]
+      }
+    },
+    {
+      "id": "consuming-domain-shortcut",
+      "label": "Consuming domain: OneLake shortcut",
+      "summary": "A second domain creates a zero-copy shortcut to the certified product instead of copying it.",
+      "detail": "OneLake shortcuts are embedded references from a shortcut path to a target path in another location, behaving like a symbolic link, giving a lakehouse live, read-only references to data held elsewhere in OneLake without duplicating the underlying data. Internal shortcuts can target other Fabric items across workspaces, and access is authorised with the calling user's own identity, which must hold read permission at the target.",
+      "whyItMatters": "This is the mechanic that makes 'consume, don't copy' real: a consuming domain builds on the producer's certified product with one physical copy, live data, and no distribution pipeline to maintain.",
+      "classification": "fact",
+      "layers": ["data", "security"],
+      "tags": ["OneLake", "Shortcuts"],
+      "evidence": [
+        { "sourceKey": "onelake-shortcuts", "note": "A OneLake shortcut is an object that points from a shortcut path to a target path in another storage location; it behaves like a symbolic link, so deleting the shortcut leaves the target untouched." },
+        { "sourceKey": "onelake-shortcuts", "note": "Internal OneLake shortcuts can target data in other Fabric items across items and workspaces, and access through them is authorized with the calling user's own identity, which must hold read permission at the target." }
+      ],
+      "drill": {
+        "inputs": ["The Certified producer item discovered via the OneLake Catalog", "The consuming user's own read permission at the target"],
+        "processing": ["Create an internal OneLake shortcut in the consuming domain's workspace pointing at the producer's item", "Reads are authorised live against the calling user's identity, not a copied credential"],
+        "outputs": ["A live, read-only reference the consuming domain's reports and pipelines can query like a local table"],
+        "example": "Sales creates a shortcut in its own lakehouse pointing at Finance's Certified gold revenue table; a Sales Spark notebook reads it exactly as if it were a native Sales table, with no copy job to schedule or maintain.",
+        "controls": ["Read permission granted at the producer target before a shortcut can resolve", "Shortcut placement rules (top level of Tables/, or schema shortcuts in schema-enabled lakehouses)"],
+        "failureModes": ["Requesting a shortcut without the underlying read grant, so the shortcut exists but resolves to nothing", "Naming a table shortcut with a space, which OneLake will not recognise as a Delta table"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake shortcuts" }
+    },
+    {
+      "id": "tenant-governance",
+      "label": "Tenant Purview governance plane",
+      "summary": "Labels, DLP, and auditing apply automatically across every domain, regardless of who reads the data.",
+      "detail": "Governance settings operate in a three-tier hierarchy: tenant-wide defaults set by Fabric admins, domain-level overrides applied by domain admins for delegated settings, and workspace-level controls for the most granular scope. Governance is centralised in the OneLake Catalog and powered by built-in Purview: permissions, sensitivity labels, and auditing are applied automatically and inherited across items.",
+      "whyItMatters": "This is what keeps a federated mesh from becoming ungoverned: each domain gets real autonomy on delegated settings, but tenant-wide labels, DLP, and auditing still apply no matter which domain is reading the data.",
+      "classification": "fact",
+      "layers": ["governance", "security"],
+      "tags": ["Purview", "Governance"],
+      "evidence": [
+        { "sourceKey": "governance-compliance-overview", "note": "Governance settings in Fabric operate in a three-tier hierarchy: tenant-wide defaults set by Fabric admins, domain-level overrides applied by domain admins for delegated settings, and workspace-level controls managed by workspace owners for the most granular scope." },
+        { "sourceKey": "fabric-platform-overview", "note": "Governance in Fabric is centralized in the OneLake Catalog and powered by built-in Purview: permissions, sensitivity labels, and auditing are applied automatically and inherited across Fabric items, and these controls remain enforced even when data is shared across tenant boundaries." }
+      ],
+      "drill": {
+        "inputs": ["Tenant-wide default policy plus each domain's delegated overrides"],
+        "processing": ["Apply tenant defaults to every item by default", "Layer domain-level overrides where delegated", "Apply sensitivity labels, DLP scanning, and auditing automatically and inherit them across items"],
+        "outputs": ["A consistent governance posture across every domain, with delegated room for domain-specific policy"],
+        "example": "A tenant-wide DLP policy flags any table containing a national ID pattern regardless of which domain created it, while Finance's own domain-level label default additionally marks its tables Confidential by default.",
+        "processing_note": null,
+        "controls": ["Which settings are delegated to domain admins vs kept tenant-wide", "Sensitivity label default and inheritance rules"],
+        "failureModes": ["Domain admins assuming delegated settings override tenant-wide DLP/compliance controls when they cannot", "Sensitive data shortcut-shared across a domain boundary before a label has propagated"]
+      },
+      "drillTarget": { "kind": "topic", "slug": "governance", "label": "Governance" }
+    },
+    {
+      "id": "onelake-security-roles-warning",
+      "label": "Trap: OneLake roles don't fence off Admins",
+      "summary": "Workspace Admin/Member/Contributor roles bypass OneLake security roles entirely.",
+      "detail": "Relying on OneLake security roles to restrict workspace Admins, Members, or Contributors is an antipattern: those roles bypass OneLake security entirely and can read and write all item data, so granular OneLake security roles only constrain Viewers and item-Read users.",
+      "whyItMatters": "A domain that assumes fine-grained OneLake roles keep its own engineers out of sensitive tables is wrong — anyone with Admin, Member, or Contributor on the workspace can already read and write everything, regardless of any OneLake security role defined.",
+      "classification": "warning",
+      "layers": ["security", "governance"],
+      "tags": ["OneLake", "Security", "AntiPattern"],
+      "evidence": [
+        { "sourceKey": "onelake-security", "note": "Relying on OneLake security roles to restrict workspace Admins, Members, or Contributors is an antipattern: those roles bypass OneLake security entirely and can read and write all item data, so granular roles only constrain Viewers and item-Read users." }
+      ],
+      "drill": {
+        "inputs": ["A domain's producer or consumer workspace with mixed workspace-role membership"],
+        "processing": ["Audit workspace role assignments, not just OneLake security role definitions, when scoping who can see sensitive data", "Keep producer-workspace membership tight so a 'read-only consumer' really is read-only"],
+        "outputs": ["An access model where sensitive-data protection is enforced by workspace role assignment, with OneLake security roles reserved for genuinely read-scoped users"],
+        "example": "A domain defines a granular OneLake security role restricting an HR table to payroll analysts, but three engineers with workspace Contributor access can still read and write the same table because Contributor bypasses OneLake security.",
+        "controls": ["Minimise workspace Admin/Member/Contributor membership on sensitive producer workspaces", "Use OneLake security roles specifically for Viewer/item-Read consumers, not as the primary control on privileged roles"],
+        "failureModes": ["A compliance review discovering that 'restricted' data was readable by every workspace Contributor the whole time", "Treating OneLake security roles as sufficient access control and skipping workspace role hygiene"]
+      }
+    },
+    {
+      "id": "domain-capacity",
+      "label": "Per-domain capacity (cost & blast-radius isolation)",
+      "summary": "Each domain runs on its own capacity, isolating cost and throttling from other domains.",
+      "detail": "A capacity is a distinct resource pool inside an Entra tenant; a tenant can hold as many capacities as needed, often aligned to geography or business unit. Fabric enforces throttling at the capacity level, not the tenant level, so a saturated capacity only affects the workspaces assigned to it while other capacities keep operating normally.",
+      "whyItMatters": "This is what makes domain autonomy real on cost, not just on ownership: a runaway job in one domain throttles only that domain's capacity, and each domain can be billed for its own pool.",
+      "classification": "fact",
+      "layers": ["compute", "governance"],
+      "tags": ["Capacity", "MicrosoftFabric"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-licenses-capacities", "note": "Each Fabric capacity is a distinct resource pool living inside a Microsoft Entra tenant; a tenant can hold as many capacities as the organization needs, often aligned to geography or business unit." },
+        { "sourceKey": "capacity-throttling", "note": "Fabric enforces throttling at the capacity level rather than the tenant level, so a saturated capacity only affects the workspaces assigned to it; other capacities continue operating normally." }
+      ],
+      "drill": {
+        "inputs": ["A domain's workspaces and their expected compute load"],
+        "processing": ["Assign the domain's workspaces to a dedicated capacity (or a dev/prod pair per the environment-stage-split guidance)", "Size the SKU to the domain's workload"],
+        "outputs": ["Independent billing and throttling scope per domain"],
+        "example": "Finance runs a heavy nightly Spark job that saturates its F64 capacity for twenty minutes; Sales' separate capacity is unaffected and its dashboards keep responding normally.",
+        "controls": ["Capacity SKU sizing per domain", "F64 viewer-licensing threshold when the product is consumed broadly outside the domain"],
+        "failureModes": ["Sharing one capacity across domains and losing the blast-radius isolation the mesh pattern depends on", "Under-sizing a domain's capacity and having its own workloads throttle each other"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "fabric-platform", "label": "Fabric platform" }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-domain-onelake", "from": "fabric-domain", "to": "onelake-shared", "label": "domain's workspaces sit on shared OneLake", "layer": "data", "kind": "flow" },
+    { "id": "e-domain-warning", "from": "fabric-domain", "to": "separate-lakes-warning", "label": "risk if a separate lake is provisioned instead", "layer": "governance", "kind": "branch" },
+    { "id": "e-onelake-producer", "from": "onelake-shared", "to": "producer-workspace", "label": "gold Delta tables land in a domain workspace", "layer": "data", "kind": "flow" },
+    { "id": "e-producer-catalog", "from": "producer-workspace", "to": "onelake-catalog", "label": "Certified item indexed for discovery", "layer": "governance", "kind": "flow" },
+    { "id": "e-catalog-shortcut", "from": "onelake-catalog", "to": "consuming-domain-shortcut", "label": "consumer discovers and requests access", "layer": "data", "kind": "flow" },
+    { "id": "e-shortcut-onelake", "from": "consuming-domain-shortcut", "to": "onelake-shared", "label": "shortcut reads live, no copy", "layer": "data", "kind": "feedback" },
+    { "id": "e-onelake-governance", "from": "onelake-shared", "to": "tenant-governance", "label": "every item covered by tenant policy", "layer": "governance", "kind": "flow" },
+    { "id": "e-governance-warning", "from": "tenant-governance", "to": "onelake-security-roles-warning", "label": "risk if Admin/Member roles assumed constrained", "layer": "security", "kind": "branch" },
+    { "id": "e-governance-capacity", "from": "tenant-governance", "to": "domain-capacity", "label": "policy applies regardless of capacity", "layer": "governance", "kind": "flow" },
+    { "id": "e-capacity-domain", "from": "domain-capacity", "to": "fabric-domain", "label": "isolates each domain's cost and throttling", "layer": "compute", "kind": "flow" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. data mesh domains boundary",
-      "explanation": "data mesh domains boundary in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture."
+      "nodeId": "fabric-domain",
+      "title": "Start: a business area becomes a Fabric domain",
+      "explanation": "Finance, Sales, or HR maps to a Fabric domain, which groups that business area's workspaces above the workspace level so governance can be delegated to a domain admin."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Fabric organized as data-mesh domains - domains grouping workspaces…",
-      "explanation": "Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture."
+      "nodeId": "separate-lakes-warning",
+      "title": "Warning: don't give the domain its own physical lake",
+      "explanation": "The most common mistake porting a pre-Fabric mesh design is provisioning a separate physical lake per domain — an explicit Fabric anti-pattern that recreates the duplication OneLake removes."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. cross-domain sharing via shortcuts",
-      "explanation": "cross-domain sharing via shortcuts in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture."
+      "nodeId": "onelake-shared",
+      "title": "One shared OneLake underneath every domain",
+      "explanation": "A tenant is provisioned with exactly one OneLake; every domain's workspaces are folders on that same lake, so the domain boundary is organisational, not physical storage."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. and a central governance plane (Purview",
-      "explanation": "and a central governance plane (Purview in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture."
+      "nodeId": "producer-workspace",
+      "title": "A domain publishes a certified data product",
+      "explanation": "The producing domain writes gold Delta tables and applies Certified endorsement, turning an ordinary table into a trusted, discoverable data-mesh product."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. tenant settings",
-      "explanation": "tenant settings in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture."
+      "nodeId": "onelake-catalog",
+      "title": "Discovery: the OneLake Catalog surfaces it",
+      "explanation": "Certified items are searchable and filterable by domain and tag, so a consuming domain can find the product without knowing which workspace holds it."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. capacities)",
-      "explanation": "capacities) in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture."
+      "nodeId": "consuming-domain-shortcut",
+      "title": "A second domain shortcuts instead of copying",
+      "explanation": "The consuming domain creates a zero-copy OneLake shortcut into the certified product, reading live data authorised against its own identity rather than duplicating it."
     },
     {
-      "nodeId": "step-7",
-      "title": "7. fabric platform governed outcome",
-      "explanation": "fabric platform governed outcome in the Fabric organized as data-mesh domains - domains grouping workspaces with their data products on shared OneLake, cross-domain sharing via shortcuts, and a central governance plane (Purview, tenant settings, capacities) architecture."
+      "nodeId": "tenant-governance",
+      "title": "Feedback: shortcut reads still land back on governed OneLake",
+      "explanation": "Because the shortcut resolves back to the same physical OneLake, every read is still covered by tenant-wide Purview governance — labels, DLP, and auditing apply no matter which domain is reading."
+    },
+    {
+      "nodeId": "onelake-security-roles-warning",
+      "title": "Warning: OneLake roles don't fence off your own team",
+      "explanation": "A domain that assumes granular OneLake security roles keep its own Admins and Members out of sensitive data is wrong — those workspace roles bypass OneLake security entirely."
+    },
+    {
+      "nodeId": "domain-capacity",
+      "title": "End: each domain's cost and blast radius stay isolated",
+      "explanation": "Per-domain capacities make chargeback real and contain blast radius — a saturated capacity in one domain throttles only that domain, closing the loop back to domain autonomy."
     }
   ]
 }

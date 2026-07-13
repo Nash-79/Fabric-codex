@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
+  <title id="polaris-query-execution-internals-title">Polaris Query Execution Internals: Compilation, Scheduling, Caching, Fault Tolerance</title>
+  <desc id="polaris-query-execution-internals-desc">An internals diagram with four decision points chained together. First, the two-phase Cascades optimizer decides per join whether to fuse it into the current task or insert a blocking data-move enforcer, based on whether inputs are already hash-aligned. Second, the resulting task DAG joins a global workload graph, where the scheduler picks FIFO under load or best-fit placement when idle capacity exists. Third, task placement is cache-affinitized to nodes, and a warning node describes the three different cache outcomes when the topology scales out, scales in, or a node fails. Fourth, a hierarchical state machine governs each task&apos;s execution, retrying transient failures at task granularity and escalating to the parent query only when a task cannot recover.</desc>
 <!--
   Polaris Query Execution Internals — Task DAG, Scheduling Decisions, Cache Affinity, Fault Tolerance
   Original diagram authored by Fabric Atlas diagram-author agent.
@@ -25,7 +27,7 @@
     841a5817-f4d7-4c71-9ffa-c541a1d8d37e (1 PB / 420 nodes TPC-H; 5,000 sessions / 10 nodes TPC-DS, ~9,000 concurrent tasks)
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 1260" width="1120" height="1260"
-     font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="12">
+     font-family="Segoe UI, Helvetica Neue, Arial, sans-serif" font-size="12" role="img" aria-labelledby="polaris-query-execution-internals-title polaris-query-execution-internals-desc" data-diagram-id="polaris-query-execution-internals">
 
   <defs>
     <linearGradient id="hdrGrad2" x1="0" y1="0" x2="1" y2="0">
@@ -229,7 +231,7 @@
   <!-- latency-floor callout -->
   <rect x="44" y="500" width="270" height="86" rx="8" fill="#FDEDEC" stroke="#C0392B" stroke-width="1.2"/>
   <text x="179" y="518" text-anchor="middle" fill="#C0392B" font-size="10" font-weight="700">Latency-floor consequence</text>
-  <text x="179" y="535" text-anchor="middle" fill="#1E2B38" font-size="8.8">Resource pressure on the graph triggers</text>
+  <text x="179" y="535" text-anchor="middle" fill="#1E2B38" font-size="8.8" data-node-id="workload-graph-scheduler" tabindex="0" aria-label="Workload-graph scheduler"><title data-node-tooltip="true">Workload-graph scheduler — FIFO by default, best-fit when idle capacity exists; triggers autonomous online scale-out under pressure.</title>Resource pressure on the graph triggers</text>
   <text x="179" y="548" text-anchor="middle" fill="#1E2B38" font-size="8.8">scale-out: nodes acquired in ~seconds,</text>
   <text x="179" y="561" text-anchor="middle" fill="#1E2B38" font-size="8.8">no SLA on assignment</text>
   <text x="179" y="577" text-anchor="middle" fill="#C0392B" font-size="8.6" font-weight="600">not built for sub-second distributed queries</text>
@@ -250,7 +252,7 @@
         stroke="#13A176" stroke-width="1.4" filter="url(#cardShadow2)"/>
   <text x="42" y="634" fill="#0E7C5B" font-size="12" font-weight="700" letter-spacing="1">
     3 · CACHE-AFFINITIZED PLACEMENT — OUTCOME BY TOPOLOGY EVENT</text>
-  <text x="42" y="651" fill="#555" font-size="9.5">Same data cells are consistently assigned to the same nodes, so buffer-pool / local-SSD cache state survives most topology changes.</text>
+  <text x="42" y="651" fill="#555" font-size="9.5" data-node-id="fuse-vs-enforcer" tabindex="0" aria-label="Fuse task or insert data-move enforcer?"><title data-node-tooltip="true">Fuse task or insert data-move enforcer? — Per join: fuse into the current task if inputs are hash-aligned, else insert a blocking enforcer.</title>Same data cells are consistently assigned to the same nodes, so buffer-pool / local-SSD cache state survives most topology changes.</text>
 
   <!-- table header -->
   <rect x="44" y="662" width="1032" height="30" rx="4" fill="#0E7C5B"/>
@@ -270,7 +272,7 @@
   <rect x="44" y="740" width="1032" height="46" fill="white" stroke="#EAF6F1" stroke-width="1"/>
   <rect x="52" y="748" width="196" height="30" rx="5" fill="#FFF8EC" stroke="#E8A020" stroke-width="0.8"/>
   <text x="150" y="767" text-anchor="middle" fill="#B8760E" font-size="9.2" font-weight="600">Scale-in (shrink)</text>
-  <text x="430" y="759" text-anchor="middle" fill="#1E2B38" font-size="9">Only the caches of the removed node(s) are lost;</text>
+  <text x="430" y="759" text-anchor="middle" fill="#1E2B38" font-size="9" data-node-id="cache-affinity-outcomes" tabindex="0" aria-label="Cache affinity under topology change"><title data-node-tooltip="true">Cache affinity under topology change — Scale-out preserves existing caches; scale-in loses only removed nodes&apos; caches; node failure redistributes tasks.</title>Only the caches of the removed node(s) are lost;</text>
   <text x="430" y="773" text-anchor="middle" fill="#1E2B38" font-size="9">surviving nodes' cached cells are untouched</text>
   <text x="820" y="767" text-anchor="middle" fill="#1E2B38" font-size="9" font-weight="600">Compute returned to region once pressure subsides</text>
 
@@ -287,9 +289,9 @@
   ═══════════════════════════════════════════════════════════════════ -->
   <rect x="26" y="852" width="1068" height="234" rx="10" fill="url(#ftGrad)"
         stroke="#8B3A9E" stroke-width="1.4" filter="url(#cardShadow2)"/>
-  <text x="42" y="874" fill="#6E2C7E" font-size="12" font-weight="700" letter-spacing="1">
+  <text x="42" y="874" fill="#6E2C7E" font-size="12" font-weight="700" letter-spacing="1" data-node-id="fault-tolerance-state-machine" tabindex="0" aria-label="Hierarchical fault-tolerance state machine"><title data-node-tooltip="true">Hierarchical fault-tolerance state machine — Transient failures retry at task granularity; only non-retriable failures escalate to the parent query.</title>
     4 · TASK-LEVEL FAULT TOLERANCE — HIERARCHICAL STATE MACHINES</text>
-  <text x="42" y="891" fill="#555" font-size="9.5">Query DAG → Task Templates → Tasks, each its own state machine; failures retry at the lowest level first and escalate only when not retriable.</text>
+  <text x="42" y="891" fill="#555" font-size="9.5" data-node-id="task-dag" tabindex="0" aria-label="Task DAG for the query"><title data-node-tooltip="true">Task DAG for the query — The compiled plan becomes a DAG of task templates whose edges encode dataflow and precedence.</title>Query DAG → Task Templates → Tasks, each its own state machine; failures retry at the lowest level first and escalate only when not retriable.</text>
 
   <!-- state chain -->
   <rect x="52" y="906" width="150" height="52" rx="24" fill="white" stroke="#8B3A9E" stroke-width="1.4"/>
@@ -343,7 +345,7 @@
   <rect x="52" y="1088" width="978" height="72" rx="8" fill="white" stroke="#0E7C5B" stroke-width="1.2"/>
   <text x="541" y="1108" text-anchor="middle" fill="#0E7C5B" font-size="10" font-weight="700">Why this shape: the two Polaris design goals</text>
   <text x="541" y="1126" text-anchor="middle" fill="#1E2B38" font-size="9">Converge data-warehouse and big-data workloads onto one engine, and fully separate compute from durable state.</text>
-  <text x="541" y="1142" text-anchor="middle" fill="#555" font-size="8.6">Task-level scheduling, enforcer-defined boundaries, cache affinity, and FSM-driven retry are the mechanisms that jointly deliver those two goals —</text>
+  <text x="541" y="1142" text-anchor="middle" fill="#555" font-size="8.6" data-node-id="task-dag-compile" tabindex="0" aria-label="Two-phase Cascades compilation"><title data-node-tooltip="true">Two-phase Cascades compilation — SQL Server Cascades optimizer builds the logical MEMO, then a distributed cost-based phase picks physical plans and task boundaries.</title>Task-level scheduling, enforcer-defined boundaries, cache affinity, and FSM-driven retry are the mechanisms that jointly deliver those two goals —</text>
   <text x="541" y="1154" text-anchor="middle" fill="#555" font-size="8.6">not independent features. See polaris-engine.svg for how these internals sit inside the full front-end / DQP / compute / storage system.</text>
 
   <!-- ══════════════════════════════════════════════════════════════════

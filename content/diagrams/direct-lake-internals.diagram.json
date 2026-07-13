@@ -1,437 +1,267 @@
 {
   "id": "direct-lake-internals",
-  "title": "Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-…",
-  "purpose": "Original diagram: Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor",
-  "type": "decision",
+  "title": "Direct Lake Internals: Residency, Transcoding, and Fallback",
+  "purpose": "Trace a Direct Lake query from its memory-residency state through cold-query transcoding, the row-group-to-segment mapping that determines how fast that transcode is, framing and eviction triggers that reset residency, and the DirectQuery fallback decision that only applies to one storage flavor.",
+  "accessibleSummary": "An internals diagram starting at a query hitting a Direct Lake model in one of four residency states: cold, semiwarm, warm, or hot, with latency improving at each step. A cold query triggers transcoding, remapping Parquet row-group dictionaries into a single global VertiPaq dictionary — a process whose cost is set by the table's row-group count, mapped one-to-one onto VertiPaq column segments. A framing node shows how a metadata-only refresh resets which Delta commit the model reads from and can evict segments; a companion node lists the three eviction triggers. A decision node forks by storage flavor: Direct Lake on SQL can fall back to DirectQuery under three documented triggers, while Direct Lake on OneLake never falls back at all. Two warning nodes cover the Overwrite-defeats-incremental-framing trap and the SQL-view-forces-fallback trap.",
+  "longDescription": "This is an internals diagram tracing how a Direct Lake query actually resolves, not a data-movement pipeline. It begins with a query hitting a model in one of four memory-residency states — cold, semiwarm, warm, or hot — with latency improving at each step; hot adds populated VertiScan caches on top of fully resident column data. A cold-state query is the expensive path: Direct Lake loads column data lazily, touching only columns the query and its relationships/measures actually need, and must merge the per-row-group local Parquet dictionaries of each needed column into a single global VertiPaq dictionary. The cost of that merge is set directly by the table's row-group count, because the total row-group count across a Delta table's Parquet files maps one-to-one to the number of VertiPaq segments per model column — many tiny row groups produce many tiny segments and degrade performance, while V-Order improves the whole transcode by raising RLE compression quality and letting VertiScan compute on compressed data without decompressing. A framing node shows the other half of the residency lifecycle: framing is a metadata-only refresh, typically finishing in seconds, that rebinds the model to the current Delta commit's Parquet file set — Direct Lake queries always reflect the state as of the most recent successful frame, not the live table. A companion eviction node lists the three reasons a resident column can be evicted: a framing refresh after the source changed, prolonged non-use, or general capacity memory pressure — and during incremental framing only the segments tied to removed row groups are evicted, with dictionaries kept and merely extended. The diagram then forks on storage flavor for the fallback question: DirectQuery fallback exists only in Direct Lake on SQL, triggered by querying a SQL-endpoint view, querying a table under SQL-endpoint row-level security, or a Delta table breaching capacity guardrails such as exceeding 10,000 Parquet files — Direct Lake on OneLake never falls back and skips SQL-endpoint coupling entirely, enabling more efficient DAX query plans. Two warning nodes close the diagram: loading a Delta table with Overwrite wipes commit history and forces a full cold-state reload on the next query, defeating incremental framing entirely; and basing a Direct Lake on SQL model table on a SQL view silently forces every query into DirectQuery fallback.",
+  "type": "internals",
   "topicSlug": "direct-lake",
-  "capabilityIds": [
-    "direct-lake"
-  ],
-  "revision": "1",
+  "capabilityIds": ["direct-lake", "semantic-model"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/direct-lake-internals.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "direct lake boundary",
-      "summary": "direct lake boundary in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "query-residency-state",
+      "label": "Query hits a residency state",
+      "summary": "A Direct Lake model sits in one of four memory-residency states, with latency improving at each step.",
+      "detail": "A Direct Lake model occupies one of four memory-residency states — cold, semiwarm, warm, or hot — with query latency improving at each step; hot adds populated VertiScan caches on top of fully resident column data. Which state a given query lands in determines everything downstream in this diagram: a cold state triggers the expensive transcoding path, while warm and hot states serve directly from already-resident memory.",
+      "whyItMatters": "Understanding residency state is the single most useful mental model for reasoning about Direct Lake performance variability — the same DAX query can be near-instant or noticeably slower purely depending on which state the model happens to be in when it runs.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "direct-lake-understand-storage", "note": "A Direct Lake model occupies one of four memory-residency states — cold, semiwarm, warm, or hot — with query latency improving at each step; hot adds populated VertiScan caches on top of fully resident column data." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the direct lake boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through direct lake boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A DAX query against a Direct Lake semantic model", "The model's current memory-residency state for the columns that query touches"],
+        "processing": ["Determine which columns the query needs, including relationship and measure dependencies", "Check whether those columns are already resident (warm/hot) or must be loaded (cold/semiwarm)"],
+        "outputs": ["A query served from memory directly (warm/hot) or one that triggers transcoding first (cold)"],
+        "example": "A dashboard's first query of the day after an overnight framing hits a fully cold model and pays the full transcoding cost; the second identical query minutes later hits hot state and returns near-instantly from resident VertiScan caches.",
+        "controls": ["Nothing directly controls residency state — it is a consequence of recent query activity, framing, and eviction, all covered in the rest of this diagram"],
+        "failureModes": ["Benchmarking Direct Lake performance using only warm/hot-state queries and missing the real cold-start latency users will actually experience after a refresh"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "direct-lake",
-        "label": "Open direct lake"
-      }
+      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
     },
     {
-      "id": "step-2",
-      "label": "Direct Lake internals",
-      "summary": "Direct Lake internals in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "cold-query-transcoding",
+      "label": "Cold query: transcoding",
+      "summary": "Direct Lake merges per-row-group local Parquet dictionaries into a single global VertiPaq dictionary.",
+      "detail": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes not just columns the query names but also those needed by relationships and measures. On a cold-state query, Direct Lake must merge the per-row-group local Parquet dictionaries of each needed column into a single global VertiPaq dictionary, so a Delta table with more row groups takes longer to transcode. Transcoding is usually a direct remap of Parquet data IDs to VertiPaq IDs when both sides use RLE/Bit-Packing hybrid encoding; if a Parquet file used plain or delta encoding instead, Direct Lake must re-encode the values, which slows column loading.",
+      "whyItMatters": "This is the actual mechanism behind 'cold query is slow' — it isn't a vague warm-up, it's a specific dictionary-merge and ID-remap operation whose cost is directly shaped by row-group count and Parquet encoding, both of which are things a table's write path controls.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "evidence": [
+        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes not just columns the query names but also those needed by relationships and measures." },
+        { "sourceKey": "direct-lake-understand-storage", "note": "On a cold-state query, Direct Lake must merge the per-row-group local Parquet dictionaries of each needed column into a single global VertiPaq dictionary, so a Delta table with more row groups takes longer to transcode." },
+        { "sourceKey": "direct-lake-understand-storage", "note": "Transcoding is usually a direct remap of Parquet data IDs to VertiPaq IDs when both sides use RLE/Bit-Packing hybrid encoding; if a Parquet file used plain or delta encoding instead, Direct Lake must re-encode the values, which slows column loading." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Direct Lake internals responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Direct Lake internals: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A query touching columns with no current VertiPaq residency", "The Delta table's Parquet row groups for those columns"],
+        "processing": ["Load each needed row group's local Parquet dictionary", "Merge local dictionaries into one global VertiPaq dictionary per column", "Remap Parquet data IDs to VertiPaq IDs (direct remap if RLE/Bit-Packing encoded; re-encode if plain/delta encoded)"],
+        "outputs": ["Resident VertiPaq column segments, ready to serve this and future queries until evicted"],
+        "example": "A 40-row-group sales fact table's Region column is queried cold; Direct Lake merges 40 local dictionaries into one global dictionary and remaps IDs — a fast direct remap because the table was written V-Ordered with RLE/Bit-Packing encoding.",
+        "controls": ["Row-group count on the source Delta table (fewer, larger row groups transcode faster)", "V-Order, which keeps encoding in the RLE/Bit-Packing form that supports a direct ID remap instead of re-encoding"],
+        "failureModes": ["A table written with many tiny row groups (see the row-group-to-segment node) turning every cold query into a slow multi-dictionary merge", "Plain or delta-encoded Parquet files forcing a re-encode step that a properly V-Ordered write would have avoided"]
       }
     },
     {
-      "id": "step-3",
-      "label": "column residency lifecycle (cold/semiwarm/warm/hot) with cold-query…",
-      "summary": "column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "row-group-segment-mapping",
+      "label": "Row-group-to-segment mapping",
+      "summary": "Row groups map one-to-one to VertiPaq segments; sizing them right is the real performance lever.",
+      "detail": "The total row-group count across a Delta table's Parquet files maps one-to-one to the number of VertiPaq segments per model column, so many tiny row groups produce many tiny column segments and degrade query performance. For large tables Direct Lake prefers column segments of roughly 1 to 16 million rows; Fabric may write even larger row groups for compressible data, which is tolerable, but row groups well under 1 million rows hurt performance. Direct Lake does not use Delta or Parquet statistics for row-group or file skipping when loading column data, so pruning optimizations that help other engines do not reduce its transcoding work.",
+      "whyItMatters": "This is the concrete, actionable performance lever behind cold-query cost: because Direct Lake can't skip row groups via statistics the way other engines do, every row group in a queried column gets transcoded regardless of relevance, so row-group sizing at write time directly controls query latency.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "direct-lake-understand-storage", "note": "The total row-group count across a Delta table's Parquet files maps one-to-one to the number of VertiPaq segments per model column, so many tiny row groups produce many tiny column segments and degrade query performance." },
+        { "sourceKey": "direct-lake-understand-storage", "note": "For large tables Direct Lake prefers column segments of roughly 1 to 16 million rows; Fabric may write even larger row groups for compressible data, which is tolerable, but row groups well under 1 million rows hurt performance." },
+        { "sourceKey": "direct-lake-understand-storage", "note": "Direct Lake does not use Delta or Parquet statistics for row-group or file skipping when loading column data, so pruning optimizations that help other engines do not reduce its transcoding work." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A Delta table's Parquet file layout: file count, row groups per file, rows per row group"],
+        "processing": ["Count total row groups across all Parquet files for the table", "Compare average row-group size against the 1-16 million row target range", "Identify whether over-partitioning (see the partitioning control) is inflating row-group count"],
+        "outputs": ["A row-group profile that predicts cold-query transcoding cost independent of query selectivity"],
+        "example": "A table partitioned on a high-cardinality customer ID column ends up with thousands of tiny row groups, each far under 1 million rows; every cold query against it transcodes thousands of tiny segments instead of a handful of well-sized ones, even though the query only cares about one region.",
+        "controls": ["Compaction/OPTIMIZE to consolidate small row groups into the target size range", "Partition only on low-cardinality columns to avoid fragmenting row groups unnecessarily"],
+        "failureModes": ["Over-partitioning a Delta table on a high-cardinality column, multiplying small Parquet files and row groups and inflating segment counts in the model", "Assuming query-level filtering reduces transcoding cost — it does not, since Direct Lake doesn't use statistics for row-group skipping"]
       }
     },
     {
-      "id": "step-4",
-      "label": "row-group-to-segment mapping",
-      "summary": "row-group-to-segment mapping in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "id": "framing",
+      "label": "Framing",
+      "summary": "A metadata-only refresh that rebinds the model to the current Delta commit's file set.",
+      "detail": "Framing is a metadata-only refresh that typically finishes in seconds: the model reads the latest Delta table version and rebinds itself to the current Parquet file set, establishing the new baseline for future transcoding. Direct Lake queries reflect the Delta table state as of the most recent successful framing operation, not the live table, so writes landing after the last frame remain invisible until the next one. An automatic-updates model setting, on by default, reframes Direct Lake tables whenever the underlying OneLake data changes; turning it off gives manual or scheduled control over data visibility, useful for pinning queries to a stable point during transient mid-ETL states.",
+      "whyItMatters": "Framing is the mechanism that makes Direct Lake's freshness behavior predictable and controllable — understanding that queries are always pinned to the last successful frame, not the live table, is essential for reasoning about data consistency during concurrent writes.",
+      "classification": "fact",
+      "layers": ["compute", "metadata"],
+      "evidence": [
+        { "sourceKey": "direct-lake-how-it-works", "note": "Framing is a metadata-only refresh that typically finishes in seconds: the model reads the latest Delta table version and rebinds itself to the current Parquet file set, establishing the new baseline for future transcoding." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake queries reflect the Delta table state as of the most recent successful framing operation, not the live table, so writes landing after the last frame remain invisible until the next one." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "An automatic-updates model setting, on by default, reframes Direct Lake tables whenever the underlying OneLake data changes; turn it off to control data visibility through manual or scheduled framing." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the row-group-to-segment mapping responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through row-group-to-segment mapping: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
+        "inputs": ["A change to the underlying Delta table (new commit)", "The model's automatic-updates setting (on by default)"],
+        "processing": ["If automatic updates are on: detect the new Delta commit and reframe automatically", "If off: wait for a manual or scheduled reframe trigger", "Rebind the model to the new Parquet file set as metadata, without moving data"],
+        "outputs": ["A new framing baseline; subsequent queries reflect this commit until the next successful frame"],
+        "example": "A mid-ETL job writes several intermediate, transiently inconsistent states to a Delta table; a report author disables automatic updates so their long-running analysis stays pinned to a stable pre-ETL frame instead of picking up partial writes.",
+        "controls": ["Automatic-updates setting: on for always-current data, off for deliberate point-in-time pinning"],
+        "failureModes": ["Assuming a Direct Lake query reflects the live table when it actually reflects the last successful frame, leading to confusion when recent writes don't appear", "Framing failing outright when a Delta table breaches capacity guardrails such as exceeding 10,000 Parquet files"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
     },
     {
-      "id": "step-5",
-      "label": "framing and eviction triggers",
-      "summary": "framing and eviction triggers in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "eviction-triggers",
+      "label": "Eviction triggers",
+      "summary": "Refresh, non-use, or memory pressure can evict a resident column back to cold.",
+      "detail": "A resident column can be evicted for three reasons: a refresh (framing) after the source Delta table changed, prolonged non-use by queries, or general memory pressure on the capacity from concurrent operations. During incremental framing specifically, Direct Lake reads each table's Delta log and evicts only the column segments tied to removed row groups, while dictionaries are kept and merely extended with new values to avoid re-transcoding.",
+      "whyItMatters": "Eviction is why residency state isn't permanent — a model can go from hot back to cold without any explicit action from a user, purely from capacity-wide memory pressure or a competing workload's activity, which matters for anyone trying to reason about why performance regressed between two runs.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "direct-lake-how-it-works", "note": "A resident column can be evicted for three reasons: a refresh (framing) after the source Delta table changed, prolonged non-use by queries, or general memory pressure on the capacity from concurrent operations." },
+        { "sourceKey": "direct-lake-understand-storage", "note": "During incremental framing, Direct Lake reads each table's Delta log and evicts only the column segments tied to removed row groups, while dictionaries are kept and merely extended with new values to avoid re-transcoding." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the framing and eviction triggers responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through framing and eviction triggers: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Resident VertiPaq column segments", "A framing event, a period of non-use, or a capacity memory-pressure signal"],
+        "processing": ["Framing: identify which row groups changed via the Delta log and evict only their segments, extending dictionaries rather than rebuilding them", "Non-use: evict segments that haven't been queried recently to reclaim memory", "Memory pressure: evict segments capacity-wide to make room for other concurrent operations"],
+        "outputs": ["Freed memory, and columns returned to cold state for their next query"],
+        "example": "A model stays hot all morning, then a concurrent Spark job on the same capacity triggers memory pressure that evicts several of its columns; the next dashboard refresh pays a partial cold-query cost it wouldn't have paid an hour earlier.",
+        "controls": ["Capacity sizing to reduce memory-pressure-driven eviction under concurrent load", "Incremental (not Overwrite) Delta writes, so framing evicts only changed segments instead of everything"],
+        "failureModes": ["Sharing a capacity with memory-hungry concurrent workloads and attributing the resulting cold-query regressions to the wrong cause", "Not realizing incremental framing's segment-level eviction depends entirely on the Delta table having a clean, non-overwritten commit history — see the Overwrite warning node"]
       }
     },
     {
-      "id": "step-6",
-      "label": "and the DirectQuery fallback decision tree by storage flavor",
-      "summary": "and the DirectQuery fallback decision tree by storage flavor in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
+      "id": "fallback-flavor-decision",
+      "label": "Which Direct Lake flavor?",
+      "summary": "DirectQuery fallback exists only in Direct Lake on SQL; Direct Lake on OneLake never falls back.",
+      "detail": "Direct Lake comes in two storage-mode flavors: Direct Lake on OneLake (OneLake security, richer modeling features, faster queries) and Direct Lake on SQL (needed for SQL-endpoint security rules under delegated identity, or when DirectQuery fallback is required). DirectQuery fallback exists only in Direct Lake on SQL; Direct Lake on OneLake never falls back to DirectQuery and skips SQL-endpoint coupling entirely, which enables more efficient DAX query plans since no SQL security check is needed. Fallback behavior for Direct Lake on SQL models is governed by the model's DirectLakeBehavior property, which has no effect on Direct Lake on OneLake models.",
+      "whyItMatters": "This is the fork that determines whether the fallback trap covered later in this diagram can even happen to a given model — it is architecturally impossible in Direct Lake on OneLake, and a real, documented risk in Direct Lake on SQL.",
+      "classification": "fact",
+      "layers": ["compute", "security"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "Direct Lake comes in two storage-mode flavors: Direct Lake on OneLake (OneLake security, richer modeling features, faster queries) and Direct Lake on SQL (needed for SQL-endpoint security rules under delegated identity, or when DirectQuery fallback is required)." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake on OneLake never falls back to DirectQuery and skips SQL-endpoint coupling entirely, which enables more efficient DAX query plans since no SQL security check is needed." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "Fallback behavior for Direct Lake on SQL models is governed by the model's DirectLakeBehavior property; the property has no effect on Direct Lake on OneLake models." }
+      ],
+      "drill": {
+        "inputs": ["A model creation decision, or an existing model whose flavor needs identifying", "Whether SQL-endpoint security under delegated identity is required"],
+        "processing": ["Choose Direct Lake on OneLake by default for speed and richer modeling, unless delegated-identity SQL-endpoint security or fallback capability is specifically needed", "To identify an existing model's flavor: check the M expression in TMDL view (ADLS connector = OneLake, SQL Server/OneLake.SqlAnalytics connector = SQL) or the XMLA shared expression target"],
+        "outputs": ["A model definitively on one flavor, with fallback either possible (SQL) or architecturally excluded (OneLake)"],
+        "example": "A team needing row-level security enforced through the SQL analytics endpoint under delegated identity mode has no choice but Direct Lake on SQL, and inherits the fallback risk that comes with it as a tradeoff for that security requirement.",
+        "controls": ["DirectLakeBehavior property on Direct Lake on SQL models, governing fallback behavior (no effect on OneLake-flavor models)"],
+        "failureModes": ["Choosing Direct Lake on SQL by default without needing its specific security model, and unknowingly inheriting fallback exposure for no benefit"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
+    },
+    {
+      "id": "directquery-fallback",
+      "label": "DirectQuery fallback (SQL flavor only)",
+      "summary": "Three documented triggers force a query to bypass Direct Lake and read the SQL endpoint directly.",
+      "detail": "Documented DirectQuery fallback triggers, applicable only to Direct Lake on SQL, are: querying a SQL-endpoint view, querying a table with SQL-endpoint row-level security, and a Delta table exceeding capacity guardrails. A fallen-back query reads the SQL analytics endpoint directly and therefore returns the latest data, escaping the framing point-in-time — at the cost of typically slower performance.",
+      "whyItMatters": "Fallback is a real, working escape valve, not a failure state by itself — it trades framing's point-in-time consistency for live freshness, at a real performance cost, which is exactly why the silent-view trap in the warning node below is dangerous: the tradeoff happens without anyone deciding to make it.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "evidence": [
+        { "sourceKey": "direct-lake-how-it-works", "note": "DirectQuery fallback exists only in Direct Lake on SQL; documented triggers are querying a SQL-endpoint view, querying a table with SQL-endpoint row-level security, and a Delta table exceeding capacity guardrails." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "A fallen-back query reads the SQL analytics endpoint directly and therefore returns the latest data, escaping the framing point-in-time — at the cost of typically slower performance." }
+      ],
+      "drill": {
+        "inputs": ["A query against a Direct Lake on SQL model table", "One of three trigger conditions: SQL-endpoint view, row-level security, or a capacity guardrail breach"],
+        "processing": ["Detect the trigger condition at query time", "Route the query to the SQL analytics endpoint instead of the Direct Lake in-memory path", "Return results reflecting live SQL-endpoint state rather than the last framed commit"],
+        "outputs": ["Correct, live results — but at DirectQuery-typical latency instead of Direct Lake's in-memory speed"],
+        "example": "A finance model table with row-level security enforced at the SQL endpoint falls back to DirectQuery for every query touching it, correctly enforcing per-viewer row filters at the cost of noticeably slower report load times than the model's other, non-RLS tables.",
+        "controls": ["DirectLakeBehavior property, which governs whether and how fallback is permitted for Direct Lake on SQL models"],
+        "failureModes": ["Diagnosing fallback-driven slowness as a general capacity problem instead of identifying which specific trigger is firing", "Not realizing a capacity guardrail breach (like the 10,000-Parquet-file ceiling) can force fallback for reasons unrelated to query design"]
+      }
+    },
+    {
+      "id": "overwrite-warning",
+      "label": "Trap: Overwrite defeats incremental framing",
+      "summary": "Loading with Overwrite wipes commit history, forcing a full cold reload on the next query.",
+      "detail": "Loading a Delta table with the Overwrite option wipes the table's commit history, defeating incremental framing and forcing a full cold-state reload of all segments, dictionaries, and join indexes on the next query. A framed Direct Lake model is pinned to a specific Delta commit version, so vacuuming must not remove the Parquet files of that version before the next reframe, or user queries fail when the referenced files are gone.",
+      "whyItMatters": "This silently destroys the cost-saving behaviour of incremental framing (evicting only changed segments) and replaces it with the most expensive possible path — a full re-transcode — for a write pattern that looks routine and doesn't announce the consequence anywhere.",
       "classification": "warning",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "direct-lake-understand-storage", "note": "Loading a Delta table with the Overwrite option wipes the table's commit history, defeating incremental framing and forcing a full cold-state reload of all segments, dictionaries, and join indexes on the next query." },
+        { "sourceKey": "direct-lake-understand-storage", "note": "A framed Direct Lake model is pinned to a specific Delta commit version, so vacuuming must not remove the Parquet files of that version before the next reframe, or user queries fail when the referenced files are gone." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and the DirectQuery fallback decision tree by storage flavor responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and the DirectQuery fallback decision tree by storage flavor: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A scheduled or ad hoc write to a Delta table backing a Direct Lake model, using Overwrite mode"],
+        "processing": ["Overwrite replaces the table's commit history rather than appending an incremental commit", "The next framing operation has no prior commit to diff against, so it cannot identify which specific segments changed", "Every column segment, dictionary, and join index for the table is reloaded from scratch on the next cold query"],
+        "outputs": ["A correct but maximally expensive reload — every query after the overwrite pays full cold-state cost, not just for changed rows"],
+        "example": "A nightly job that rebuilds a dimension table using Overwrite mode for simplicity unknowingly forces every downstream Direct Lake query the next morning to fully re-transcode that table, even though 95% of the rows didn't actually change.",
+        "controls": ["Use MERGE or incremental append/update patterns instead of Overwrite for Direct Lake-backed tables", "Avoid vacuuming Parquet files still referenced by the model's currently framed commit"],
+        "failureModes": ["Choosing Overwrite for its simplicity without knowing it defeats incremental framing, then misdiagnosing the resulting slow queries as an unrelated performance regression", "A vacuum job removing files from the currently framed commit, causing queries to fail outright rather than just slow down"]
       }
     },
     {
-      "id": "step-7",
-      "label": "direct lake governed outcome",
-      "summary": "direct lake governed outcome in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "sql-view-warning",
+      "label": "Trap: SQL view silently forces fallback",
+      "summary": "A model table based on a SQL view forces every query into DirectQuery fallback.",
+      "detail": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode. The model still reports itself as Direct Lake, so the regression is invisible unless someone specifically checks which tables are view-backed.",
+      "whyItMatters": "This is the sharpest version of the fallback trap: it happens by construction at model-design time, with zero runtime signal, so a team can build and ship a model believing it's fully Direct Lake when a subset of tables are silently paying DirectQuery cost on every single query.",
+      "classification": "warning",
+      "layers": ["compute", "data"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the direct lake governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through direct lake governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "direct-lake",
-        "label": "Open direct lake"
+        "inputs": ["A Direct Lake on SQL model with one or more tables sourced from a SQL analytics endpoint view instead of a base table"],
+        "processing": ["Every query touching a view-backed table triggers the SQL-endpoint view fallback condition", "The query routes to DirectQuery instead of the in-memory Direct Lake path, on every execution, with no exception"],
+        "outputs": ["Correct results, but at DirectQuery latency for every query against that table, indefinitely, until the model is redesigned"],
+        "example": "A modeler adds a convenience view joining two source tables for a Direct Lake on SQL table, unaware that doing so permanently routes every query against it into fallback; report load times for that one table are consistently slower and nobody connects it to the view until an audit checks table sourcing.",
+        "controls": ["Audit every model table's source in TMDL/XMLA and confirm it points at a base table, not a view", "Push any transformation logic a view was doing back into the silver/gold Delta layer instead"],
+        "failureModes": ["Diagnosing the resulting slowness as a capacity or SKU problem and scaling up instead of fixing the view", "Adding more views for modelling convenience over time, progressively converting more of the model to DirectQuery without anyone noticing"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "orchestration",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-state-cold", "from": "query-residency-state", "to": "cold-query-transcoding", "label": "cold state: columns not yet resident", "layer": "compute", "kind": "branch" },
+    { "id": "e-cold-rowgroup", "from": "cold-query-transcoding", "to": "row-group-segment-mapping", "label": "transcode cost set by row-group count", "layer": "data", "kind": "flow" },
+    { "id": "e-state-framing", "from": "query-residency-state", "to": "framing", "label": "residency baseline is set by the last frame", "layer": "metadata", "kind": "flow" },
+    { "id": "e-framing-eviction", "from": "framing", "to": "eviction-triggers", "label": "reframe is one of three eviction triggers", "layer": "compute", "kind": "flow" },
+    { "id": "e-eviction-cold", "from": "eviction-triggers", "to": "cold-query-transcoding", "label": "evicted columns return to cold on next query", "layer": "compute", "kind": "feedback" },
+    { "id": "e-framing-overwrite-warning", "from": "framing", "to": "overwrite-warning", "label": "risk if the source table was Overwrite-loaded", "layer": "data", "kind": "branch" },
+    { "id": "e-state-flavor", "from": "query-residency-state", "to": "fallback-flavor-decision", "label": "fallback behaviour depends on storage flavor", "layer": "security", "kind": "flow" },
+    { "id": "e-flavor-fallback", "from": "fallback-flavor-decision", "to": "directquery-fallback", "label": "Direct Lake on SQL: fallback is possible", "layer": "compute", "kind": "branch" },
+    { "id": "e-fallback-sqlview-warning", "from": "directquery-fallback", "to": "sql-view-warning", "label": "risk if a model table is view-backed", "layer": "data", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. direct lake boundary",
-      "explanation": "direct lake boundary in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture."
+      "nodeId": "query-residency-state",
+      "title": "Start: which residency state is the model in?",
+      "explanation": "Cold, semiwarm, warm, or hot — this state, not the query itself, is the biggest single factor in Direct Lake latency."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Direct Lake internals",
-      "explanation": "Direct Lake internals in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture."
+      "nodeId": "cold-query-transcoding",
+      "title": "Cold path: dictionary merge and ID remap",
+      "explanation": "A cold query merges per-row-group Parquet dictionaries into one global VertiPaq dictionary and remaps IDs — a direct remap if RLE/Bit-Packing encoded, a slower re-encode otherwise."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. column residency lifecycle (cold/semiwarm/warm/hot) with cold-query…",
-      "explanation": "column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture."
+      "nodeId": "row-group-segment-mapping",
+      "title": "The real lever: row-group sizing",
+      "explanation": "Row groups map one-to-one to VertiPaq segments, and Direct Lake can't skip them via statistics — sizing row groups in the 1-16 million row range at write time is what actually controls cold-query cost."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. row-group-to-segment mapping",
-      "explanation": "row-group-to-segment mapping in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture."
+      "nodeId": "framing",
+      "title": "Framing: the metadata-only refresh",
+      "explanation": "A fast, metadata-only operation that rebinds the model to the latest Delta commit — queries always reflect the last successful frame, never the live table."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. framing and eviction triggers",
-      "explanation": "framing and eviction triggers in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture."
+      "nodeId": "eviction-triggers",
+      "title": "Why residency isn't permanent",
+      "explanation": "Refresh, non-use, or capacity-wide memory pressure can all evict resident columns back to cold, even with no explicit user action."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. and the DirectQuery fallback decision tree by storage flavor",
-      "explanation": "and the DirectQuery fallback decision tree by storage flavor in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture."
+      "nodeId": "overwrite-warning",
+      "title": "Warning: Overwrite defeats incremental framing",
+      "explanation": "Wiping commit history forces a full cold reload of every segment, dictionary, and join index on the next query — a routine-looking write pattern with an expensive hidden cost."
     },
     {
-      "nodeId": "step-7",
-      "title": "7. direct lake governed outcome",
-      "explanation": "direct lake governed outcome in the Direct Lake internals — column residency lifecycle (cold/semiwarm/warm/hot) with cold-query transcoding, row-group-to-segment mapping, framing and eviction triggers, and the DirectQuery fallback decision tree by storage flavor architecture."
+      "nodeId": "fallback-flavor-decision",
+      "title": "The flavor fork: OneLake never falls back",
+      "explanation": "DirectQuery fallback is architecturally possible only in Direct Lake on SQL — Direct Lake on OneLake skips SQL-endpoint coupling entirely."
+    },
+    {
+      "nodeId": "directquery-fallback",
+      "title": "Three documented fallback triggers",
+      "explanation": "SQL-endpoint views, row-level security, and capacity guardrail breaches route a query to DirectQuery, trading framing's point-in-time consistency for live freshness at real latency cost."
+    },
+    {
+      "nodeId": "sql-view-warning",
+      "title": "Warning: the silent version of the trap",
+      "explanation": "A model table sourced from a SQL view forces fallback on every query permanently, with the model still reporting itself as Direct Lake — invisible until someone audits table sourcing."
     }
   ]
 }

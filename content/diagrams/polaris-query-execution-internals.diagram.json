@@ -1,437 +1,192 @@
 {
   "id": "polaris-query-execution-internals",
-  "title": "Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse…",
-  "purpose": "Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching",
-  "type": "decision",
+  "title": "Polaris Query Execution Internals: Compilation, Scheduling, Caching, Fault Tolerance",
+  "purpose": "Trace a query through Polaris's distributed execution engine: two-phase Cascades compilation choosing between fusing operators and inserting a data-move enforcer, workload-graph scheduling picking FIFO vs best-fit placement, cache-affinity outcomes under topology change, and the hierarchical fault-tolerance state machine deciding retry vs escalate.",
+  "accessibleSummary": "An internals diagram with four decision points chained together. First, the two-phase Cascades optimizer decides per join whether to fuse it into the current task or insert a blocking data-move enforcer, based on whether inputs are already hash-aligned. Second, the resulting task DAG joins a global workload graph, where the scheduler picks FIFO under load or best-fit placement when idle capacity exists. Third, task placement is cache-affinitized to nodes, and a warning node describes the three different cache outcomes when the topology scales out, scales in, or a node fails. Fourth, a hierarchical state machine governs each task's execution, retrying transient failures at task granularity and escalating to the parent query only when a task cannot recover.",
+  "longDescription": "This is an internals diagram tracing one query plan through Polaris's four architectural decision points, sourced from the Polaris VLDB paper and Microsoft's own workload-management documentation for the shared Fabric Warehouse/SQL-endpoint backend. It begins after the SQL frontend hands a plan to the Distributed Query Processing (DQP) engine. Compilation is two-phase: the SQL Server Cascades optimizer first builds a logical search space (MEMO), then a distributed cost-based phase enumerates physical plans, injecting 'data move enforcer' operators (hash re-distribution or broadcast) only where a join's inputs are not already hash-aligned; enforcers are blocking and define task boundaries, while hash-aligned joins are fused into the same task and re-encoded as T-SQL that runs natively inside a SQL Server instance on the compute node. The resulting task DAG for the whole query joins a global 'workload graph' unioning the task DAGs of every active query; the DQP scheduler places tasks FIFO by default but switches to best-fit placement when idle capacity exists, and triggers autonomous online scale-out under resource pressure. Task placement is cache-affinitized — the same data cells are consistently assigned to the same nodes to preserve SQL Server buffer-pool and local SSD caches — which produces three distinct outcomes depending on what changes: scaling out preserves all existing node caches while only new nodes warm from cold, scaling in loses only the caches on the removed nodes, and a node failure redistributes that node's in-flight tasks to healthy nodes for completion rather than failing the query. Underneath all of this, execution is orchestrated as a hierarchical composition of finite state machines over the query DAG, task templates, and individual tasks; transient failures are retried at task granularity, and a state machine only escalates a failure to its parent (ultimately failing the query) when the failure is not retriable — every transition is logged, making execution reproducible and resumable.",
+  "type": "internals",
   "topicSlug": "polaris",
-  "capabilityIds": [
-    "polaris"
-  ],
-  "revision": "1",
+  "capabilityIds": ["polaris", "warehouse"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/polaris-query-execution-internals.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "polaris boundary",
-      "summary": "polaris boundary in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
+      "id": "task-dag-compile",
+      "label": "Two-phase Cascades compilation",
+      "summary": "SQL Server Cascades optimizer builds the logical MEMO, then a distributed cost-based phase picks physical plans and task boundaries.",
+      "detail": "Query compilation in Polaris is two-phase: the SQL Server Cascades optimizer first generates the logical search space (the MEMO), then a distributed cost-based phase enumerates physical distributed plans. That second phase uses distribution properties both as correctness filters — an inner join requires hash-aligned inputs or a broadcast side — and as System-R-style interesting properties, and it picks the plan that minimizes data movement.",
+      "whyItMatters": "This is the phase that decides where task boundaries fall in the final plan, which directly determines how much of the query runs fused inside one SQL Server instance versus how much data gets shuffled across the cluster.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "polaris-vldb-paper", "note": "Query compilation in Polaris is two-phase: the SQL Server Cascades optimizer first generates the logical search space (MEMO), then a distributed cost-based phase enumerates physical distributed plans, using distribution properties both as correctness filters and as System-R-style interesting properties, picking the plan that minimizes data movement." },
+        { "sourceKey": "warehouse-workload-management", "note": "When a query arrives, the SQL frontend optimizes it and hands the plan to the Distributed Query Processing (DQP) engine, which splits it into tasks that run on backend compute nodes; results flow back through the frontend to the caller." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
-      ],
+      "tags": ["Polaris", "Cascades", "QueryOptimizer"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the polaris boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through polaris boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["An optimized logical query plan handed off by the SQL frontend"],
+        "processing": ["Build the logical MEMO search space with the Cascades optimizer", "Run the distributed cost-based phase, checking each join's inputs for hash alignment", "Enumerate physical distributed plans and pick the one minimizing data movement"],
+        "outputs": ["A physical distributed plan with task boundaries decided, ready to become a task DAG"],
+        "example": "A three-way join over hash-distributed fact and dimension tables compiles into a plan where two joins whose inputs are already co-located fuse into one task, while the third join against a non-aligned table gets a broadcast enforcer inserted ahead of it.",
+        "controls": ["No user-facing tuning knob — Polaris's cost-based phase makes this decision autonomously per query"],
+        "failureModes": ["Expecting to hand-tune the distributed plan the way one might hint a single-node optimizer — Polaris workload management is autonomous by design"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "polaris",
-        "label": "Open polaris"
-      }
+      "drillTarget": { "kind": "capability", "slug": "polaris", "label": "Polaris" }
     },
     {
-      "id": "step-2",
-      "label": "Decision/internals diagram: Polaris query execution internals",
-      "summary": "Decision/internals diagram: Polaris query execution internals in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
+      "id": "fuse-vs-enforcer",
+      "label": "Fuse task or insert data-move enforcer?",
+      "summary": "Per join: fuse into the current task if inputs are hash-aligned, else insert a blocking enforcer.",
+      "detail": "Polaris injects 'data move enforcer' operators — hash re-distribution and broadcast — to change a dataset's distribution properties whenever a join's inputs are not already hash-aligned. Enforcers are blocking and must persist all output cells before consumers start; the operator subtree rooted at an enforcer defines the input/output boundary of a task. Where inputs are already aligned, Polaris deliberately makes tasks maximal units of work by fusing multiple hash-aligned joins into one task, re-encoding the fused task template back into T-SQL that runs natively in a SQL Server instance on the compute node.",
+      "whyItMatters": "This per-join decision is the mechanism that combines big-data-style scale-out with SQL Server's mature scale-up columnar execution — fusing avoids unnecessary shuffles, while the blocking enforcer boundary lets SQL Server re-optimize with fresh statistics on the intermediate result.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "polaris-vldb-paper", "note": "Polaris injects 'data move enforcer' operators — hash re-distribution and broadcast — to change a dataset's distribution properties; enforcers are blocking and the operator subtree rooted at an enforcer defines a task's input/output boundary." },
+        { "sourceKey": "polaris-vldb-paper", "note": "Polaris deliberately makes tasks maximal units of work (e.g., fusing multiple hash-aligned joins into one task) and re-encodes each task template back into T-SQL that runs natively in a SQL Server instance on the compute node, letting SQL Server re-optimize with fresh statistics at blocking task boundaries." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["Polaris", "Tasks", "DataMovement"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Decision/internals diagram: Polaris query execution internals responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Decision/internals diagram: Polaris query execution internals: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A join operator from the physical plan, with the distribution properties of both input sides"],
+        "processing": ["Check whether both sides are already hash-aligned on the join key", "If aligned: fuse the join into the current task template", "If not aligned: insert a hash re-distribution or broadcast enforcer, closing the current task and opening a new one downstream"],
+        "outputs": ["Either an extended, fused task template, or a new task boundary with a persisted intermediate result"],
+        "example": "Joining two large fact tables both hash-distributed on customer_id fuses directly into one task; joining one of them against a small unpartitioned reference table instead inserts a broadcast enforcer that replicates the reference table to every node first.",
+        "controls": ["No direct user control — driven entirely by the tables' chosen hash-distribution definitions, which is why distribution key choice at table-design time matters"],
+        "failureModes": ["Choosing table distribution keys that never align across commonly-joined tables, forcing an enforcer (and a shuffle) on every query that joins them"]
       }
     },
     {
-      "id": "step-3",
-      "label": "Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision)",
-      "summary": "Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision) in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
+      "id": "task-dag",
+      "label": "Task DAG for the query",
+      "summary": "The compiled plan becomes a DAG of task templates whose edges encode dataflow and precedence.",
+      "detail": "A Polaris task is the physical execution of an operator expression over one hash-distribution of its inputs, with three components: input cell collections, a task template (the code for the expression), and an output cell collection. A query plan therefore becomes a DAG of task templates whose edges encode dataflow and precedence constraints — a warehouse task reads files from OneLake, joins, groups, or orders data produced by other tasks, and for ingestion jobs writes results to destination tables, so both query and ingest paths run through this same task-based engine.",
+      "whyItMatters": "Representing the query as a DAG rather than a linear pipeline is what allows tasks without mutual dependencies to run simultaneously, giving both intra-query parallelism and cross-query concurrency once the DAG joins the scheduler's workload graph.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "polaris-vldb-paper", "note": "A Polaris task is the physical execution of an operator expression over one hash-distribution of its inputs, with input cells, a task template, and output cells; a query plan becomes a DAG of task templates whose edges encode dataflow and precedence." },
+        { "sourceKey": "warehouse-workload-management", "note": "The DQP scheduler operates at task level and represents each query as a directed acyclic graph (DAG) of tasks, so tasks without mutual dependencies can execute simultaneously or out of order, giving intra-query parallelism and cross-query concurrency." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["Polaris", "TaskDAG", "OneLake"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["The compiled physical plan with task boundaries fixed by the fuse-vs-enforcer decisions"],
+        "processing": ["Instantiate each task template with its input/output cell collections", "Wire dependency edges between tasks based on enforcer boundaries", "Hand the resulting DAG to the scheduler as part of the global workload graph"],
+        "outputs": ["A ready-to-schedule task DAG for the query"],
+        "example": "A star-join query compiles into a DAG where three dimension-table read tasks run in parallel with no mutual dependency, all feeding into a downstream fact-join task that only starts once its inputs are persisted.",
+        "controls": ["No direct control at this stage — task boundaries were already fixed by the compilation phase"],
+        "failureModes": ["A poorly distributed table design produces an unnecessarily deep or wide DAG, increasing coordination overhead even before scheduling begins"]
       }
     },
     {
-      "id": "step-4",
-      "label": "workload-graph scheduling decisions (FIFO vs best-fit",
-      "summary": "workload-graph scheduling decisions (FIFO vs best-fit in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
+      "id": "workload-graph-scheduler",
+      "label": "Workload-graph scheduler",
+      "summary": "FIFO by default, best-fit when idle capacity exists; triggers autonomous online scale-out under pressure.",
+      "detail": "Polaris schedules across queries using a global 'workload graph' that unions the task DAGs of all active queries; each task carries a multi-dimensional resource demand vector (CPU and memory stretchable, local temp disk rigid), and compute nodes are modeled as multi-dimensional resource bins. Incoming tasks are scheduled FIFO by default, but the scheduler switches to best-fit placement when idle capacity exists, to improve concurrency. When the scheduler detects resource pressure it autonomously triggers scale-out; new nodes typically take a few seconds to acquire with no assignment SLA, and scaling is an online operation — in-flight queries keep running while nodes are added, and the topology scales back down when pressure subsides.",
+      "whyItMatters": "This is the mechanism that lets thousands of concurrent sessions share a Fabric Warehouse's compute without one heavy query starving the rest — but the lack of a scale-out assignment SLA is also why Polaris is not optimized for consistently sub-second latency on queries that require distributed processing.",
+      "classification": "fact",
+      "layers": ["compute", "orchestration"],
+      "evidence": [
+        { "sourceKey": "polaris-vldb-paper", "note": "Polaris schedules across queries using a global 'workload graph' that unions the task DAGs of all active queries; each task carries a multi-dimensional resource demand vector, compute nodes are modeled as resource bins, and supported policies include FIFO, sorting by resource demand, and sorting by proximity to the DAG root." },
+        { "sourceKey": "warehouse-workload-management", "note": "Incoming tasks are scheduled on first-in-first-out principles, but when idle capacity exists the scheduler can switch to a best-fit placement approach to improve concurrency." },
+        { "sourceKey": "warehouse-workload-management", "note": "When the scheduler detects resource pressure it autonomously triggers a scale-out of the backend topology; because acquiring new nodes typically takes a few seconds with no SLA on assignment, the engine is not optimized for consistently sub-second latency on queries that need distributed processing." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
+      "tags": ["Polaris", "WorkloadManagement", "Scheduling", "Autoscaling"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the workload-graph scheduling decisions (FIFO vs best-fit responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through workload-graph scheduling decisions (FIFO vs best-fit: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
+        "inputs": ["Task DAGs from every currently active query, unioned into the workload graph"],
+        "processing": ["Model each task's CPU/memory/disk demand as a resource vector", "Place tasks FIFO under load, or best-fit when idle capacity allows", "Trigger autonomous online scale-out when resource pressure is detected, then scale back down as pressure subsides"],
+        "outputs": ["Tasks placed on backend compute nodes, with topology adjusted elastically to demand"],
+        "example": "During a concurrency spike from 200 to 5,000 active sessions, the scheduler places new tasks FIFO against existing nodes first, then triggers scale-out within seconds when queued tasks exceed available capacity, all without interrupting queries already in flight.",
+        "controls": ["No user-facing scheduling knobs — placement policy and scale-out triggers are autonomous", "Workspace-level burstable capacity and smoothing settings shape how spiky demand is absorbed at the capacity level"],
+        "failureModes": ["Assuming Fabric Warehouse behaves like a fixed-size cluster and sizing capacity as if scale-out has zero latency, when new-node acquisition still takes a few seconds with no SLA"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     },
     {
-      "id": "step-5",
-      "label": "ordering policies)",
-      "summary": "ordering policies) in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the ordering policies) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through ordering policies): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "cache-affinity outcomes across scale-out/scale-in/node-failure even…",
-      "summary": "cache-affinity outcomes across scale-out/scale-in/node-failure events in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
+      "id": "cache-affinity-outcomes",
+      "label": "Cache affinity under topology change",
+      "summary": "Scale-out preserves existing caches; scale-in loses only removed nodes' caches; node failure redistributes tasks.",
+      "detail": "Task placement in Polaris is affinitized to compute by consistently assigning the same data cells to the same nodes, preserving SQL Server buffer-pool and local SSD caches across topology changes. This produces three distinct, sourced outcomes: growing the topology preserves all existing node caches while only new nodes warm up from cold; shrinking the topology loses only the caches of the removed nodes; and if a backend node becomes unhealthy, the operations running on it are redistributed to healthy nodes for completion rather than failing the query — though that redistributed work necessarily runs cache-cold on its new node.",
+      "whyItMatters": "Understanding which of these three outcomes applies explains an otherwise confusing performance pattern: a warehouse that just scaled out or recovered from a node failure runs measurably slower for a period even though nothing about the query itself changed — the caches simply have not rebuilt yet.",
       "classification": "warning",
-      "layers": [
-        "orchestration"
+      "layers": ["compute", "observability"],
+      "evidence": [
+        { "sourceKey": "polaris-vldb-paper", "note": "Task placement in Polaris is affinitized to compute by consistently assigning the same data cells to the same nodes, preserving SQL Server buffer-pool and local SSD caches across topology changes: shrinking the topology loses only the caches of removed nodes, and growing it preserves all existing caches while only new nodes warm up." },
+        { "sourceKey": "warehouse-workload-management", "note": "The engine is fault tolerant at the task level: if a backend node becomes unhealthy, the operations running on it are redistributed to healthy nodes for completion rather than failing the query." },
+        { "sourceKey": "warehouse-workload-management", "note": "Scaling of the warehouse backend is an online operation — in-flight query processing continues uninterrupted while nodes are added — and when pressure subsides the topology scales back down and returns compute to the region." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
+      "tags": ["Polaris", "Caching", "DataAffinity", "FaultTolerance"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the cache-affinity outcomes across scale-out/scale-in/node-failure events responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through cache-affinity outcomes across scale-out/scale-in/node-failure events: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A topology-change event: scale-out, scale-in, or an unhealthy node detected"],
+        "processing": ["Scale-out: assign new nodes to new data cells, leave existing node-to-cell assignments untouched", "Scale-in: remove selected nodes and their cell assignments, redistribute only those cells", "Node failure: redistribute the failed node's in-flight tasks to healthy nodes, which run them without the prior warm cache"],
+        "outputs": ["A topology where most existing caches survive the change, but some fraction of work runs cache-cold until it rewarms"],
+        "example": "A warehouse scales out from 8 to 12 nodes to absorb a reporting-hour spike; queries hitting cells already assigned to the original 8 nodes keep their warm buffer-pool and SSD caches, while queries touching cells newly assigned to the 4 new nodes run measurably slower until those caches warm up.",
+        "controls": ["No direct user control over cell-to-node assignment — data affinity is managed internally by Polaris"],
+        "failureModes": ["Interpreting the post-scale-out or post-failure slowdown as a regression and escalating a support case, when it is expected cache-rewarming behavior that resolves once the new or recovering nodes warm up", "Benchmarking warehouse performance immediately after a scale event and drawing conclusions from cache-cold numbers"]
       }
     },
     {
-      "id": "step-7",
-      "label": "and the hierarchical task-level fault-tolerance state machine with…",
-      "summary": "and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "observability"
+      "id": "fault-tolerance-state-machine",
+      "label": "Hierarchical fault-tolerance state machine",
+      "summary": "Transient failures retry at task granularity; only non-retriable failures escalate to the parent query.",
+      "detail": "Polaris orchestrates execution as a hierarchical composition of finite state machines over entities — the query DAG, task templates, and individual tasks — with simple states like Ready/Failed/Success and composite states like Run/Blocked. Transient failures are retried at task granularity and escalate to the parent state machine only if they are not retriable; all transitions are logged for reproducibility and resumable execution. This is enabled architecturally by Polaris's stateless compute: because durable state (data, metadata, transaction logs) is externalized to remote storage and only rebuildable caches live on compute nodes, losing a node's cache never fails in-flight work, which is what makes partial query restarts and online topology changes safe.",
+      "whyItMatters": "This is the mechanism that keeps a single transient node hiccup from failing an entire multi-hour distributed query — retries are scoped to the smallest unit that actually failed, not the whole query, and the logged transitions make the recovery path auditable rather than a black box.",
+      "classification": "fact",
+      "layers": ["compute", "orchestration"],
+      "evidence": [
+        { "sourceKey": "polaris-vldb-paper", "note": "Polaris orchestrates execution as a hierarchical composition of finite state machines over entities (query DAG, task templates, tasks) with simple and composite states; transient failures are retried at task granularity and escalate to the parent state machine only if not retriable, and all transitions are logged for reproducibility and resumable execution." },
+        { "sourceKey": "polaris-vldb-paper", "note": "Polaris compute is stateless because all durable state is externalized to remote storage and centralized services; only caches live on compute nodes, and since caches can be rebuilt lazily their loss never fails in-flight work, enabling partial query restarts and online topology changes." },
+        { "sourceKey": "warehouse-workload-management", "note": "The engine is fault tolerant at the task level: if a backend node becomes unhealthy, the operations running on it are redistributed to healthy nodes for completion rather than failing the query." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
-      ],
+      "tags": ["Polaris", "FaultTolerance", "StateMachines"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate bran… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "polaris",
-        "label": "Open polaris"
+        "inputs": ["A task, task template, or the overall query DAG entering a Failed state after some execution event"],
+        "processing": ["Classify the failure as retriable (e.g., a transient node issue) or not", "If retriable: retry at task granularity on a healthy node, logging the transition", "If not retriable: escalate the failure to the parent state machine (task template, then query DAG) up to eventual query failure"],
+        "outputs": ["Either a successfully retried task with no visible query impact, or an escalated, logged failure surfaced to the caller"],
+        "example": "One task in a 40-task query DAG fails because its assigned node became unhealthy mid-execution; the state machine retries just that task on a healthy node using externally persisted state, and the query completes with no user-visible error — only the query's total duration reflects the retry.",
+        "controls": ["No user-facing retry configuration — retry-vs-escalate classification and retry execution are autonomous"],
+        "failureModes": ["Misreading a retried-and-recovered query's longer duration as evidence of instability, when the logged state transitions would show a normal transient-failure recovery", "A genuinely non-retriable failure (e.g., a data error, not an infrastructure issue) escalating all the way to query failure, which is correct behavior but can look identical to a transient issue without inspecting the logged transitions"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "observability",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-compile-fuse", "from": "task-dag-compile", "to": "fuse-vs-enforcer", "label": "per join, check hash alignment", "layer": "compute", "kind": "flow" },
+    { "id": "e-fuse-taskdag", "from": "fuse-vs-enforcer", "to": "task-dag", "label": "fused or enforcer-bounded tasks assembled", "layer": "compute", "kind": "flow" },
+    { "id": "e-taskdag-scheduler", "from": "task-dag", "to": "workload-graph-scheduler", "label": "DAG joins the global workload graph", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-scheduler-cache", "from": "workload-graph-scheduler", "to": "cache-affinity-outcomes", "label": "task placement is cache-affinitized", "layer": "compute", "kind": "flow" },
+    { "id": "e-scheduler-faulttolerance", "from": "workload-graph-scheduler", "to": "fault-tolerance-state-machine", "label": "placed tasks execute under the state machine", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-faulttolerance-scheduler", "from": "fault-tolerance-state-machine", "to": "workload-graph-scheduler", "label": "retried task re-enters scheduling", "layer": "orchestration", "kind": "feedback" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. polaris boundary",
-      "explanation": "polaris boundary in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture."
+      "nodeId": "task-dag-compile",
+      "title": "1. Two-phase compilation begins",
+      "explanation": "The Cascades optimizer builds the logical search space, then a distributed cost-based phase decides the physical plan and where task boundaries fall."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Decision/internals diagram: Polaris query execution internals",
-      "explanation": "Decision/internals diagram: Polaris query execution internals in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture."
+      "nodeId": "fuse-vs-enforcer",
+      "title": "2. Per join: fuse or enforce",
+      "explanation": "Hash-aligned joins fuse into the current task and run as native T-SQL; misaligned joins get a blocking data-move enforcer that opens a new task boundary."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision)",
-      "explanation": "Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision) in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture."
+      "nodeId": "task-dag",
+      "title": "3. The plan becomes a task DAG",
+      "explanation": "Task templates with dataflow and precedence edges — the structure that lets independent tasks run in parallel once scheduled."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. workload-graph scheduling decisions (FIFO vs best-fit",
-      "explanation": "workload-graph scheduling decisions (FIFO vs best-fit in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture."
+      "nodeId": "workload-graph-scheduler",
+      "title": "4. Scheduling: FIFO, best-fit, or scale-out",
+      "explanation": "The task DAG joins a global workload graph shared by every active query; the scheduler picks FIFO or best-fit placement and triggers autonomous online scale-out under pressure."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. ordering policies)",
-      "explanation": "ordering policies) in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture."
+      "nodeId": "cache-affinity-outcomes",
+      "title": "5. Warning: topology change has three different cache outcomes",
+      "explanation": "Scale-out preserves existing caches, scale-in loses only removed nodes' caches, and node failure redistributes work to run cache-cold — mistaking this for a regression is a real diagnostic trap."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. cache-affinity outcomes across scale-out/scale-in/node-failure even…",
-      "explanation": "cache-affinity outcomes across scale-out/scale-in/node-failure events in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture."
-    },
-    {
-      "nodeId": "step-7",
-      "title": "7. and the hierarchical task-level fault-tolerance state machine with…",
-      "explanation": "and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching in the Decision/internals diagram: Polaris query execution internals — Cascades two-phase task-DAG compilation (fuse-vs-enforcer decision), workload-graph scheduling decisions (FIFO vs best-fit, ordering policies), cache-affinity outcomes across scale-out/scale-in/node-failure events, and the hierarchical task-level fault-tolerance state machine with retry-vs-escalate branching architecture."
+      "nodeId": "fault-tolerance-state-machine",
+      "title": "6. Retry at task granularity, escalate only when necessary",
+      "explanation": "A hierarchical state machine retries transient task failures without touching the rest of the query, and only escalates to the parent when a failure genuinely cannot be retried — a retried task can even feed back into scheduling on a healthy node."
     }
   ]
 }

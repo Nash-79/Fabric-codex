@@ -3,6 +3,8 @@ import { TierBadge } from "@/components/Badges";
 export type Citation = {
   label: string;
   source?: {
+    source_key?: string;
+    slug?: string;
     url?: string;
     title?: string;
     tier?: number;

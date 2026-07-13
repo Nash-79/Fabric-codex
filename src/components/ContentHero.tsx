@@ -30,7 +30,9 @@ export function ContentHero({
   hasPreview: boolean;
 }) {
   return (
-    <div className="relative -mx-6 px-6 pb-2 pt-2 sm:-mx-8 sm:px-8">
+    // Bleed only from sm up — at phone widths the column already fills the viewport, so a
+    // negative margin overflows the page sideways.
+    <div className="relative pb-2 pt-2 sm:-mx-8 sm:px-8">
       <div className="flex items-center gap-2">
         <KindBadge kind={item.kind} />
         {item.tags?.length ? (

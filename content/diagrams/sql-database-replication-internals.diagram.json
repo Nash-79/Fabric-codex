@@ -1,437 +1,189 @@
 {
   "id": "sql-database-replication-internals",
-  "title": "SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID…",
-  "purpose": "Internals diagram: SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Internals diagram: SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface",
-  "type": "decision",
+  "title": "SQL Database in Fabric: From OLTP Write to Analytics Endpoint Visibility",
+  "purpose": "Trace a write from the transactional engine through Entra ID authentication, Hyperscale's storage/compute separation, automatic near-real-time replication into OneLake as Delta, and out to the read-only SQL analytics endpoint and cross-item federated queries — with the consistency gap between the two sides made explicit.",
+  "accessibleSummary": "An internals diagram. A client authenticates via Entra ID (the only supported method) and writes to the primary compute node of the Hyperscale-architected transactional engine, which is durable and strongly consistent immediately. Independently, Fabric continuously replicates that data into OneLake, converting it to Delta Parquet, which powers a read-only SQL analytics endpoint with eventual, near-real-time consistency. The analytics endpoint can federate across other Fabric items using three-part naming with no data movement. A warning node calls out the resulting consistency gap: a query against the analytics endpoint immediately after a write can return stale data, and it must not be relied on for read-your-writes correctness.",
+  "longDescription": "This is an internals diagram tracing one write through SQL database in Fabric's replication architecture, sourced from Microsoft's SQL database in Fabric overview and the Hyperscale distributed-functions architecture reference the overview page explicitly shares with SQL database in Fabric. A client connects and authenticates exclusively via Microsoft Entra ID — SQL authentication is not supported — and must hold at least Read item permission before any connection succeeds. The write lands on Hyperscale's single primary compute node, which architecturally separates the relational query-processing engine from durable page storage: page servers own the actual data pages, a log service fans out transaction log records to both page servers and secondary compute replicas, and Azure Storage persists everything durably. Because compute and storage scale independently and HA/named replicas share the same underlying storage as the primary, the OLTP write path is fast and strongly consistent without waiting on any replica. Independently of that transactional path, Fabric continuously and automatically replicates the database's data into OneLake in near-real time, converting it to Parquet as it lands — no manual export step, no separate ETL job. This is what powers the automatically-provisioned, read-only SQL analytics endpoint, which lets Spark, notebooks, Power BI, and pipelines consume the same data without touching the transactional engine, eliminating read/write contention. Because the replicated data is Delta in OneLake, the analytics endpoint can federate across other Fabric items — warehouses, mirrored databases, other SQL databases — using standard three-part T-SQL naming, with no data movement. The warning node captures the real cost of this architecture: the analytics endpoint is eventually consistent relative to the OLTP engine. A write that just committed is not guaranteed to be visible on the analytics endpoint immediately, so any workload requiring read-your-writes correctness must query the transactional engine directly, not the analytics endpoint.",
+  "type": "internals",
   "topicSlug": "sql-database",
-  "capabilityIds": [
-    "sql-database"
-  ],
-  "revision": "1",
+  "capabilityIds": ["sql-database"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/sql-database-replication-internals.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "sql database boundary",
-      "summary": "sql database boundary in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
+      "id": "entra-auth-gate",
+      "label": "Entra ID authentication gate",
+      "summary": "Every connection authenticates via Microsoft Entra ID; SQL authentication is not supported.",
+      "detail": "Authentication to a SQL database in Fabric is exclusively via Microsoft Entra ID — SQL authentication is not supported at all. A user, service principal, or group must hold at least the Read item permission on the database in Fabric before any connection succeeds, meaning authorization is enforced at the Fabric item level before a single query can run.",
+      "whyItMatters": "This is a hard architectural constraint, not a configuration choice: any client, connection string, or legacy tool that expects SQL logins simply cannot connect, and the Fabric item permission model is the actual access control layer, not database-level logins.",
+      "classification": "fact",
+      "layers": ["security"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "Authentication to a SQL database in Fabric is exclusively via Microsoft Entra ID; SQL authentication is not supported. A user, service principal, or group must hold at least the Read item permission on the database in Fabric before any connection succeeds." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["SQLDatabase", "EntraID", "Security"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the sql database boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through sql database boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A connection attempt from a client, application, or orchestration tool"],
+        "processing": ["Authenticate the caller's identity via Microsoft Entra ID (user, service principal, or group)", "Check Fabric item permission (at least Read) on the target database", "Reject the connection if either check fails"],
+        "outputs": ["An authenticated, Fabric-permission-checked connection to the transactional engine"],
+        "example": "A legacy application built with SQL Server authentication connection strings fails to connect entirely and must be re-architected to acquire an Entra ID token, even for a simple read.",
+        "controls": ["Fabric item-level permission grants (Read, Contribute, etc.)", "Entra ID conditional access and service principal management"],
+        "failureModes": ["Assuming SQL authentication is available as a fallback for legacy tooling — it is not supported at all in SQL database in Fabric", "Granting workspace-level access without realizing item-level Read permission is independently required"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "sql-database",
-        "label": "Open sql database"
+      "drillTarget": { "kind": "capability", "slug": "sql-database", "label": "SQL database" }
+    },
+    {
+      "id": "hyperscale-primary-write",
+      "label": "Hyperscale primary compute: durable OLTP write",
+      "summary": "Write lands on the single primary compute node; storage and compute scale independently.",
+      "detail": "SQL database in Fabric is built on the Hyperscale distributed-functions architecture — the same Microsoft Learn reference explicitly covers SQL database in Fabric alongside Azure SQL Database. Hyperscale separates the relational query-processing engine (compute nodes) from durable page storage (page servers plus Azure Storage): the primary compute node handles all read-write transactions, each compute node keeps a local SSD RBPEX cache for hot pages, and the log service fans transaction log records out to page servers and secondary replicas. This separation is what lets storage scale to 128 TB and lets compute and storage scale independently.",
+      "whyItMatters": "Because the transactional write path never waits on OneLake replication or on secondary replicas to acknowledge, the OLTP side of a translytical application stays fast and strongly consistent regardless of how much analytical read traffic or replication activity is happening elsewhere.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "SQL database in Fabric is a developer-oriented transactional database engine that shares the same underlying SQL Database Engine as Azure SQL Database, making it the designated home for OLTP workloads within the Fabric platform." },
+        { "sourceKey": "sql-database-hyperscale-architecture", "note": "Microsoft Learn's Hyperscale architecture reference is versioned to explicitly cover SQL database in Fabric alongside Azure SQL Database, Managed Instance, and SQL Server on Azure VMs, confirming this is the same underlying engine design." },
+        { "sourceKey": "sql-database-hyperscale-architecture", "note": "The engine is composed of four cooperating component types — compute nodes, page servers, a log service, and Azure Storage — rather than a single process handling query, log, and storage duties together." },
+        { "sourceKey": "sql-database-hyperscale-architecture", "note": "The architectural separation of compute and storage means the two dimensions scale independently of each other, which is the structural reason SQL database in Fabric can grow storage or add read compute without impacting the primary OLTP engine's write path." }
+      ],
+      "tags": ["SQLDatabase", "Hyperscale", "OLTP"],
+      "drill": {
+        "inputs": ["An authenticated write transaction from the OLTP application"],
+        "processing": ["Execute the transaction on the primary compute node against RBPEX-cached and page-server-backed data", "Commit the transaction log record via the log service", "Fan the log record out to page servers and any secondary/HA replicas"],
+        "outputs": ["A durably committed, strongly consistent write, immediately visible to subsequent reads against the primary"],
+        "example": "An order-placement transaction commits on the primary compute node and is immediately visible to the same application's next read against the transactional engine, well before that same order has propagated into OneLake.",
+        "controls": ["Compute tier sizing, which governs RBPEX cache size and query throughput", "Named/HA replica configuration for read-scale-out, independent of the OneLake replication path"],
+        "failureModes": ["Assuming OneLake replication is part of the transactional commit path — it is architecturally independent and lags behind", "Under-sizing the compute tier and starving RBPEX cache, increasing round-trips to page servers"]
       }
     },
     {
-      "id": "step-2",
-      "label": "SQL database in Fabric replication path from OLTP write to read-onl…",
-      "summary": "SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
+      "id": "onelake-parquet-replication",
+      "label": "Continuous replication to OneLake as Parquet/Delta",
+      "summary": "Fabric automatically and continuously replicates data into OneLake in near-real time, converted to Parquet.",
+      "detail": "When a SQL database is created in Fabric, the platform automatically and continuously replicates its data into OneLake in near-real time, converting it to Parquet format so downstream analytical services — Spark, notebooks, Power BI, data engineering pipelines — can consume it without any manual export step. This replication path is architecturally independent of the OLTP write path described in the Hyperscale reference, which is separately designed to propagate changes to consumers other than the primary compute node without disrupting it.",
+      "whyItMatters": "This is what makes SQL database in Fabric translytical rather than just transactional: analytical consumers get governed, no-ETL access to live operational data, without a single custom pipeline having to be built or maintained.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "When a SQL database is created in Fabric, the platform automatically and continuously replicates its data into OneLake in near-real time, converting it to Parquet format so that downstream analytical services can consume it without any manual export step." },
+        { "sourceKey": "sql-database-hyperscale-architecture", "note": "This Hyperscale-derived separation of the transactional compute engine from durable storage is architecturally consistent with SQL database in Fabric's separate replication path that mirrors data changes into Delta Parquet in OneLake, since the underlying engine is already designed to propagate changes to consumers other than the primary compute node." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["SQLDatabase", "OneLake", "AutomaticReplication", "DeltaLake"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint v… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "Entra ID auth gate",
-      "summary": "Entra ID auth gate in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Entra ID auth gate responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Entra ID auth gate: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "automatic Parquet/Delta conversion into OneLake",
-      "summary": "automatic Parquet/Delta conversion into OneLake in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the automatic Parquet/Delta conversion into OneLake responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through automatic Parquet/Delta conversion into OneLake: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "near-real-time freshness decision gate",
-      "summary": "near-real-time freshness decision gate in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the near-real-time freshness decision gate responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through near-real-time freshness decision gate: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "zero write/read contention isolation",
-      "summary": "zero write/read contention isolation in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the zero write/read contention isolation responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through zero write/read contention isolation: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "and consistency semantics (strong on OLTP",
-      "summary": "and consistency semantics (strong on OLTP in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "observability"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and consistency semantics (strong on OLTP responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and consistency semantics (strong on OLTP: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Committed transaction data on the primary compute node's durable storage"],
+        "processing": ["Continuously replicate changed data out of the transactional engine", "Convert the replicated data to Parquet as it lands in OneLake", "Register it as a Delta table available to the SQL analytics endpoint and other Fabric engines"],
+        "outputs": ["A near-real-time Delta table in OneLake, mirroring the transactional database with no manual export step"],
+        "example": "A row inserted into the OLTP orders table is picked up by the replication path and appears as a new Delta row in OneLake within the near-real-time replication window, with no export job, pipeline, or manual trigger involved.",
+        "controls": ["No user-facing replication configuration — this path is automatic and enabled by default whenever a SQL database is created"],
+        "failureModes": ["Building a custom ETL pipeline to move SQL database data into OneLake, duplicating a replication path Fabric already provides automatically", "Not accounting for the near-real-time lag when a downstream job assumes OneLake reflects the very latest OLTP state"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "sql-database",
-        "label": "Open sql database"
+      "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
+    },
+    {
+      "id": "analytics-endpoint",
+      "label": "SQL analytics endpoint (read-only)",
+      "summary": "Auto-provisioned, read-only analytical access to the replicated OneLake data — isolated from OLTP write traffic.",
+      "detail": "Provisioning a SQL database in a Fabric workspace also automatically creates a companion SQL analytics endpoint, giving read-only analytical access to the replicated OneLake data without affecting the transactional workload. This is the mechanism behind Fabric's translytical pattern: write traffic goes through the transactional engine and read/analytics traffic goes through the analytics endpoint, eliminating contention between the two.",
+      "whyItMatters": "Analysts and BI tools can run heavy analytical queries against live operational data without any risk of slowing down or locking the OLTP application — the two workloads are physically isolated by construction, not by careful scheduling.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "Provisioning a SQL database in a Fabric workspace also automatically creates a companion SQL analytics endpoint, giving read-only analytical access to the replicated OneLake data without affecting the transactional workload." },
+        { "sourceKey": "sql-database-fabric-overview", "note": "SQL database in Fabric enables translytical application patterns by separating write traffic (through the transactional engine) from read/analytics traffic (through the SQL analytics endpoint backed by OneLake), eliminating contention between the two workloads." }
+      ],
+      "tags": ["SQLDatabase", "SQLAnalyticsEndpoint", "HTAP", "Translytical"],
+      "drill": {
+        "inputs": ["The replicated Delta table(s) in OneLake"],
+        "processing": ["Serve read-only T-SQL queries directly against the OneLake Delta data", "Route via the SQL analytics endpoint, entirely separate from the transactional compute path"],
+        "outputs": ["Analytical query results with no impact on OLTP write throughput or latency"],
+        "example": "A BI report queries daily order totals through the SQL analytics endpoint during peak checkout traffic; the transactional engine handling live order writes experiences zero contention from that analytical load.",
+        "controls": ["No write access — the endpoint is read-only by design, so any write attempt must go to the transactional engine"],
+        "failureModes": ["Attempting to write through the analytics endpoint and hitting a read-only restriction, rather than understanding the endpoint was never meant to accept writes", "Building a health-check or maintenance job against the endpoint expecting it to run OPTIMIZE-style operations, when the endpoint only exposes diagnostics such as sp_get_table_health_metrics rather than performing fixes itself"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "sql-database", "label": "SQL database" }
+    },
+    {
+      "id": "cross-item-federation",
+      "label": "Cross-item federated queries",
+      "summary": "Three-part T-SQL naming joins other Fabric items (warehouses, mirrored DBs, SQL databases) with no data movement.",
+      "detail": "Because the replicated OneLake data is stored as Delta tables, a SQL analytics endpoint on one database can join data from other Fabric items — warehouses, mirrored databases, or other SQL databases — using standard three-part T-SQL naming, enabling cross-database federated queries without data movement.",
+      "whyItMatters": "This lets a single T-SQL query span multiple Fabric items as if they were local tables, avoiding a whole class of custom cross-database integration work that would otherwise require its own pipeline or linked-server setup.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "Because the replicated OneLake data is stored as Delta tables, a SQL analytics endpoint on one database can join data from other Fabric items — warehouses, mirrored databases, or other SQL databases — using standard three-part T-SQL naming, enabling cross-database federated queries without data movement." }
+      ],
+      "tags": ["SQLDatabase", "Federation", "CrossDatabaseQuery"],
+      "drill": {
+        "inputs": ["A T-SQL query referencing tables from more than one Fabric item via three-part naming"],
+        "processing": ["Resolve each referenced item's Delta tables in OneLake", "Execute the join across items with no explicit data copy or linked-server configuration"],
+        "outputs": ["A single result set spanning multiple Fabric items, computed with no data movement between them"],
+        "example": "A T-SQL query joins the SQL database's replicated customer table against a separate Fabric Warehouse's sales fact table using three-part naming, producing a combined report with no ETL step moving either dataset.",
+        "controls": ["Fabric permissions on each referenced item — the caller needs read access to every item in the federated query, not just the one they connected to"],
+        "failureModes": ["Assuming federated queries move or cache data locally — they read the underlying OneLake Delta tables directly each time, so source-item freshness and permission changes take effect immediately"]
+      }
+    },
+    {
+      "id": "consistency-gap-warning",
+      "label": "Warning: eventual consistency on the analytics endpoint",
+      "summary": "A write just committed is not guaranteed visible on the analytics endpoint immediately — no read-your-writes guarantee.",
+      "detail": "The transactional engine is strongly consistent: a committed write is immediately visible to the next read against the primary compute node. The SQL analytics endpoint, by contrast, depends on the near-real-time OneLake replication path, which is architecturally independent of the OLTP commit path. This means there is a real, sourced gap between when a write commits and when that same data becomes visible through the analytics endpoint — a gap that is not zero and is not guaranteed by any documented SLA.",
+      "whyItMatters": "Any workload that needs read-your-writes correctness — for example, an application that writes a record and then immediately displays it back to the user via an analytical query — must query the transactional engine directly, not the analytics endpoint, or it risks showing stale or missing data.",
+      "classification": "warning",
+      "layers": ["data", "observability"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "When a SQL database is created in Fabric, the platform automatically and continuously replicates its data into OneLake in near-real time — 'near-real time' is not the same guarantee as the transactional engine's immediate read-after-write consistency." },
+        { "sourceKey": "sql-database-fabric-overview", "note": "SQL database in Fabric enables translytical application patterns by separating write traffic (through the transactional engine) from read/analytics traffic (through the SQL analytics endpoint backed by OneLake), eliminating contention between the two workloads — a separation that necessarily implies the two paths are not synchronously coupled." }
+      ],
+      "tags": ["SQLDatabase", "Consistency", "AntiPattern"],
+      "drill": {
+        "inputs": ["An application flow that writes data and then immediately needs to read it back"],
+        "processing": ["Identify which reads genuinely require read-your-writes correctness versus which are fine with near-real-time freshness", "Route read-your-writes-sensitive reads to the transactional engine directly", "Route tolerant analytical reads to the SQL analytics endpoint as normal"],
+        "outputs": ["Correct application behavior for write-then-immediately-read flows, with analytical load still isolated from the OLTP engine for everything else"],
+        "example": "A checkout confirmation page that writes an order and immediately displays its status must query the transactional engine for that confirmation read, not the analytics endpoint — querying the endpoint risks a false 'order not found' if replication has not caught up yet.",
+        "controls": ["Explicit routing logic in the application: transactional engine for read-your-writes paths, analytics endpoint for everything else", "Monitoring or testing that surfaces actual replication lag under load, since no fixed SLA number is documented"],
+        "failureModes": ["Building a single data-access layer that always queries the analytics endpoint for 'reads', silently introducing intermittent staleness bugs in write-then-read flows", "Diagnosing an intermittent 'missing row' bug as an application defect when it is actually a replication-lag race condition"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "observability",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-auth-write", "from": "entra-auth-gate", "to": "hyperscale-primary-write", "label": "authenticated connection", "layer": "security", "kind": "flow" },
+    { "id": "e-write-replicate", "from": "hyperscale-primary-write", "to": "onelake-parquet-replication", "label": "committed data replicated near-real-time", "layer": "data", "kind": "flow" },
+    { "id": "e-replicate-endpoint", "from": "onelake-parquet-replication", "to": "analytics-endpoint", "label": "Delta tables power the endpoint", "layer": "data", "kind": "flow" },
+    { "id": "e-endpoint-federation", "from": "analytics-endpoint", "to": "cross-item-federation", "label": "three-part naming joins other items", "layer": "data", "kind": "flow" },
+    { "id": "e-endpoint-warning", "from": "analytics-endpoint", "to": "consistency-gap-warning", "label": "if queried immediately after a write", "layer": "data", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. sql database boundary",
-      "explanation": "sql database boundary in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture."
+      "nodeId": "entra-auth-gate",
+      "title": "1. Authenticate via Entra ID",
+      "explanation": "Every connection, transactional or analytical, must clear the Entra ID authentication and Fabric item permission gate before anything else happens — SQL authentication is not an option."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. SQL database in Fabric replication path from OLTP write to read-onl…",
-      "explanation": "SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture."
+      "nodeId": "hyperscale-primary-write",
+      "title": "2. The write commits on Hyperscale's primary node",
+      "explanation": "Storage and compute are architecturally separated, so the write is fast and strongly consistent without waiting on OneLake replication or read replicas."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. Entra ID auth gate",
-      "explanation": "Entra ID auth gate in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture."
+      "nodeId": "onelake-parquet-replication",
+      "title": "3. Continuous, automatic replication to OneLake",
+      "explanation": "Independently of the transactional path, Fabric replicates the data into OneLake as Parquet/Delta in near-real time, with no manual export step."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. automatic Parquet/Delta conversion into OneLake",
-      "explanation": "automatic Parquet/Delta conversion into OneLake in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture."
+      "nodeId": "analytics-endpoint",
+      "title": "4. Read-only analytics endpoint, isolated from OLTP",
+      "explanation": "The auto-provisioned SQL analytics endpoint serves analytical queries against the replicated data with zero contention against the live transactional workload."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. near-real-time freshness decision gate",
-      "explanation": "near-real-time freshness decision gate in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture."
+      "nodeId": "cross-item-federation",
+      "title": "5. Federate across other Fabric items",
+      "explanation": "Three-part T-SQL naming lets the analytics endpoint join warehouses, mirrored databases, and other SQL databases directly, with no data movement."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. zero write/read contention isolation",
-      "explanation": "zero write/read contention isolation in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture."
-    },
-    {
-      "nodeId": "step-7",
-      "title": "7. and consistency semantics (strong on OLTP",
-      "explanation": "and consistency semantics (strong on OLTP in the SQL database in Fabric replication path from OLTP write to read-only analytics endpoint visibility — Entra ID auth gate, automatic Parquet/Delta conversion into OneLake, near-real-time freshness decision gate, zero write/read contention isolation, and consistency semantics (strong on OLTP, eventual on the analytics endpoint) plus cross-item federation surface architecture."
+      "nodeId": "consistency-gap-warning",
+      "title": "6. Warning: no read-your-writes guarantee on the endpoint",
+      "explanation": "Because replication is near-real-time, not synchronous, a query against the analytics endpoint immediately after a write can miss it — read-your-writes flows must query the transactional engine directly."
     }
   ]
 }

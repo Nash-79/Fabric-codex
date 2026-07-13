@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { allInteractiveDiagrams } from "@/diagrams/catalog";
+import { allAuthoredDiagrams } from "@/diagrams/catalog";
 
 // In-app bootstrap (admin-triggered) that replays the bundled content/ files straight into
 // Supabase for no-backend deploys. NOTE: the local/legacy version-aware path is the Python backend —
@@ -311,7 +311,7 @@ export const seedFromContent = createServerFn({ method: "POST" })
       await supabaseAdmin.from("diagrams").upsert(diagRows, { onConflict: "slug" });
       summary.diagramRowsUpserted = diagRows.length;
     }
-    const diagramNodes = allInteractiveDiagrams().flatMap((diagram) =>
+    const diagramNodes = allAuthoredDiagrams().flatMap((diagram) =>
       diagram.nodes.map((node) => ({
         diagram_slug: diagram.id,
         node_id: node.id,

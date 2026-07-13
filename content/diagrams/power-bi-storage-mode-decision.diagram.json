@@ -1,437 +1,187 @@
 {
   "id": "power-bi-storage-mode-decision",
-  "title": "choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshnes…",
-  "purpose": "Decision diagram: choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Decision diagram: choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers",
+  "title": "Choosing a Power BI Semantic Model Storage Mode",
+  "purpose": "Decide per table whether a Power BI semantic model should use Import, DirectQuery, or Direct Lake, then resolve the Direct Lake sub-choice between OneLake and SQL flavors, and flag the SQL-view trap that silently forces DirectQuery fallback.",
+  "accessibleSummary": "A decision tree. The root question asks what a table needs: a full copy loaded into memory routes to Import; always-current source-of-truth queries route to DirectQuery; and OneLake Delta data with no refresh routes to Direct Lake. Direct Lake then branches again into Direct Lake on OneLake, the default for most models, versus Direct Lake on SQL, needed only for SQL-endpoint security under delegated identity or when DirectQuery fallback is required. A warning node describes a real trap: basing a Direct Lake on SQL table on a SQL view forces every query against it into DirectQuery fallback without changing the model's displayed mode.",
+  "longDescription": "This is a decision tree, not a pipeline. The root question routes each table to one of three storage modes based on freshness need and data location. Import copies data into an in-memory VertiPaq model and needs a refresh schedule to stay current; it is capped at 1 GB by default, or up to the size of the Fabric capacity with the large semantic model storage format enabled, and stays capped at a 10 GB upload limit from Desktop regardless. DirectQuery forwards every query to the source so results always reflect current data, at the cost of query latency, and both Import and DirectQuery need an on-premises data gateway when the source is not reachable directly. Direct Lake reads Delta tables in OneLake on demand with no import copy and no refresh schedule, and it branches again: Direct Lake on OneLake is the default, chosen for OneLake security, richer modelling features (including composite models that mix Direct Lake facts with Import dimensions), and faster queries; Direct Lake on SQL is chosen specifically when SQL analytics endpoint security rules under delegated identity are required, or when a governed DirectQuery fallback path is needed. The warning node captures a sourced, specific trap: a Direct Lake on SQL table built on a SQL view forces every query against that table into DirectQuery fallback, and because the model still displays as Direct Lake, the resulting slowdown is easy to misdiagnose as a capacity problem rather than a modelling defect.",
   "type": "decision",
   "topicSlug": "power-bi",
-  "capabilityIds": [
-    "power-bi"
-  ],
-  "revision": "1",
+  "capabilityIds": ["power-bi", "semantic-model", "direct-lake"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/power-bi-storage-mode-decision.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "power bi boundary",
-      "summary": "power bi boundary in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
+      "id": "mode-question",
+      "label": "What does this table need?",
+      "summary": "Root question: pick a storage mode per table from freshness need and data location.",
+      "detail": "Power BI Desktop and the service support Import, DirectQuery, and Direct Lake (plus Composite models that mix them), distinguished by whether data is copied into the model or read from the source at query time. The right mode is decided per table against two questions: does this table need to stay perfectly current with its source, and does it live in OneLake as Delta or somewhere else? A single semantic model can answer this question differently for different tables via a composite model.",
+      "whyItMatters": "Getting this decision right per table is what determines refresh operations, query latency, and memory footprint for the whole semantic model — it is not a one-time platform setting, it is a modelling decision made table by table.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "Power BI Desktop supports three model storage modes — Import, DirectQuery, and Composite — distinguished by whether data is copied into the model or left in the underlying source at query time." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
-      ],
+      "tags": ["SemanticModel", "PowerBI", "decision-root"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the power bi boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through power bi boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A table or set of tables to be modelled", "A stated freshness requirement (real-time vs periodic refresh acceptable)", "Where the data physically lives (OneLake Delta vs an external source)"],
+        "processing": ["Ask whether the table must reflect the source at query time or a refreshed snapshot is acceptable", "Ask whether the table's data is Delta in OneLake or lives outside Fabric", "Route to Import, DirectQuery, or Direct Lake per table, allowing a composite mix"],
+        "outputs": ["A storage mode assignment per table, feeding the rest of the decision tree"],
+        "example": "A finance team models a billion-row OneLake sales fact (route to Direct Lake) alongside a small external currency-rates table that must reflect the vendor API in real time (route to DirectQuery) in one composite model.",
+        "controls": ["Per-table mode assignment in a composite model rather than one mode for the whole model", "Explicit freshness requirement documented before modelling starts"],
+        "failureModes": ["Defaulting an entire model to Import out of habit and inheriting a refresh window nobody actually needed", "Treating storage mode as a one-time platform setting instead of a per-table modelling decision"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "power-bi",
-        "label": "Open power bi"
-      }
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic model" }
     },
     {
-      "id": "step-2",
-      "label": "choosing a Power BI semantic model storage mode",
-      "summary": "choosing a Power BI semantic model storage mode in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
+      "id": "import-mode",
+      "label": "Import",
+      "summary": "Data copied into an in-memory VertiPaq model; needs a refresh schedule to stay current.",
+      "detail": "An Import-mode model must be loaded entirely into memory before it can answer queries, and it serves a snapshot that only updates through scheduled or on-demand refresh. Model size defaults to a 1 GB ceiling; enabling the large semantic model storage format raises that ceiling to the size of the Fabric capacity (or an admin-set maximum), though the Power BI Desktop upload limit stays fixed at 10 GB regardless — a model only grows past 10 GB inside the service through refresh, typically via an incremental refresh policy.",
+      "whyItMatters": "Import buys the most DAX and transformation freedom and the fastest query response for models that fit in memory, but it makes the team the operator of a refresh schedule and caps how current the data can be between refreshes.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "An Import-mode model hosted in the Power BI service must be loaded entirely into memory before it can answer queries; Import-mode models serve a snapshot and rely on scheduled or on-demand refresh to stay current." },
+        { "sourceKey": "semantic-model-large-format", "note": "Default model size limit without the large storage format is 1 GB; enabling it raises the ceiling to the size of the Fabric capacity or an admin-set maximum, while the Desktop upload limit stays at 10 GB regardless — growth past that happens in-service via refresh, typically incremental refresh." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
+      "tags": ["Import", "SemanticModel", "VertiPaq"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the choosing a Power BI semantic model storage mode responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through choosing a Power BI semantic model storage mode: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Source data to be copied in on a defined schedule", "A refresh cadence (scheduled or on-demand)"],
+        "processing": ["Load all required columns into the in-memory VertiPaq engine", "Run scheduled or on-demand refresh to replace the snapshot", "Optionally apply incremental refresh to limit how much of the table reloads each cycle"],
+        "outputs": ["A fast, fully in-memory model bounded by the size ceiling and the refresh cadence"],
+        "example": "A regional sales model imports 400 MB of aggregated daily data and refreshes twice a day; analysts get sub-second query response, at the cost of the data being up to 12 hours stale between refreshes.",
+        "controls": ["Refresh schedule and incremental refresh policy", "Enabling the large storage format when XMLA write tools will target the model, since it also improves XMLA write performance"],
+        "failureModes": ["Refreshing a model whose size approaches half the capacity's memory, risking an out-of-memory failure mid-refresh", "Relying on full refreshes instead of incremental refresh or the enhanced refresh API as the model grows"]
       }
     },
     {
-      "id": "step-3",
-      "label": "Import vs DirectQuery vs Direct Lake",
-      "summary": "Import vs DirectQuery vs Direct Lake in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
+      "id": "directquery-mode",
+      "label": "DirectQuery",
+      "summary": "Every query forwards to the source, so results always reflect current data — at a latency cost.",
+      "detail": "DirectQuery models forward each report query to the underlying source instead of copying data in, so results always reflect current source data rather than a refresh snapshot. Both Import and DirectQuery models need an on-premises data gateway whenever their source is not reachable directly over the internet.",
+      "whyItMatters": "DirectQuery is the right default when the source itself must remain the single source of truth at query time — no refresh lag is acceptable — but every visual pays the round-trip latency to the source on every interaction.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "Import-mode models rely on scheduled or on-demand refresh to stay current, whereas DirectQuery models forward queries to the source so results always reflect current source data; both need an on-premises data gateway when source data isn't reachable directly." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
+      "tags": ["DirectQuery", "SemanticModel"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Import vs DirectQuery vs Direct Lake responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Import vs DirectQuery vs Direct Lake: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A source that must remain authoritative at query time", "A network path to the source (direct, or via an on-premises data gateway)"],
+        "processing": ["Forward each visual's query to the source engine at interaction time", "Return live results with no local cache maintained by the model"],
+        "outputs": ["Always-current results with no refresh operation to schedule or monitor"],
+        "example": "A currency-conversion table pulls live rates from an external API-backed database; every report visual using it queries the source directly so rates are never more than a few seconds stale.",
+        "controls": ["On-premises data gateway configuration where the source is not directly reachable", "Query folding and source-side indexing to keep round-trip latency acceptable"],
+        "failureModes": ["Building a DAX-heavy model over DirectQuery and discovering the source engine cannot execute the generated queries efficiently", "Underestimating gateway capacity and creating a bottleneck under concurrent report load"]
       }
     },
     {
-      "id": "step-4",
-      "label": "branching on freshness need and data location",
-      "summary": "branching on freshness need and data location in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
+      "id": "direct-lake-mode",
+      "label": "Direct Lake",
+      "summary": "Reads Delta tables in OneLake directly, on demand, with no import copy and no refresh schedule.",
+      "detail": "Direct Lake lets Power BI query data sitting in OneLake directly, without importing it into the model or maintaining a separate cache; a semantic model in Direct Lake mode loads columns from Delta tables in OneLake on demand rather than importing all data. Direct Lake on OneLake also supports composite models, so very large fact tables can stay in Direct Lake (avoiding refresh cost) while dimension tables use Import or DirectQuery in the same model.",
+      "whyItMatters": "Direct Lake removes the refresh operation entirely for OneLake Delta data while still delivering near-Import query speed once columns are resident in memory, which is why it is the default choice whenever the data already lives in OneLake as Delta.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "evidence": [
+        { "sourceKey": "power-bi-overview", "note": "Direct Lake mode, available to Power BI through Fabric, lets reports query data sitting in OneLake directly, without importing it into the model or maintaining a separate cache." },
+        { "sourceKey": "example-direct-lake", "note": "A semantic model in Direct Lake mode loads columns from Delta tables in OneLake on demand rather than importing all data." },
+        { "sourceKey": "direct-lake-develop", "note": "Direct Lake on OneLake supports composite models, so very large fact tables can stay in Direct Lake mode (avoiding refresh cost) while dimension tables use Import or DirectQuery in the same model." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
+      "tags": ["DirectLake", "OneLake", "SemanticModel", "PowerBI"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the branching on freshness need and data location responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through branching on freshness need and data location: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Delta tables already published in OneLake by a lakehouse or warehouse"],
+        "processing": ["Read Delta table columns from OneLake into memory on demand as queries request them", "Reframe periodically to pick up new Delta commits without a manual refresh job", "Route the flavor sub-decision (OneLake vs SQL) based on security and fallback needs"],
+        "outputs": ["A semantic model with no refresh schedule, reading current OneLake data at near-Import query speed once warm"],
+        "example": "A lakehouse gold sales table is queried directly by a Direct Lake model with no separate import job; when the Spark job that writes the gold table commits a new version, the next report query sees it after the model reframes.",
+        "controls": ["Choice between Direct Lake on OneLake and Direct Lake on SQL", "Table file layout (row group sizing, V-Order) that governs how fast columns transcode into memory"],
+        "failureModes": ["Assuming Direct Lake needs zero capacity planning because there is no refresh — it still consumes SKU memory for resident columns", "Not knowing which Direct Lake flavor a model uses, which hides why fallback behavior differs between two apparently identical models"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
+    },
+    {
+      "id": "flavor-question",
+      "label": "Which Direct Lake flavor?",
+      "summary": "Sub-decision: Direct Lake on OneLake (default) vs Direct Lake on SQL (security/fallback needs).",
+      "detail": "Direct Lake comes in two flavors. Direct Lake on OneLake gives OneLake security, richer modelling features, and faster queries, and is the mode Power BI Desktop and the service create by default. Direct Lake on SQL is needed specifically when SQL-endpoint security rules under delegated identity apply, or when a governed DirectQuery fallback path through the SQL analytics endpoint is required; it is only offered as a choice from the SQL analytics endpoint creation page, where the dialog defaults to OneLake under user identity and to SQL under delegated identity mode.",
+      "whyItMatters": "Picking the wrong flavor either forfeits Direct Lake on SQL's fallback and delegated-identity security benefits, or needlessly gives up Direct Lake on OneLake's faster path when neither of those requirements actually applies.",
+      "classification": "fact",
+      "layers": ["compute", "security"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "Direct Lake comes in two storage-mode flavors: Direct Lake on OneLake (OneLake security, richer modeling features, faster queries) and Direct Lake on SQL (needed for SQL-endpoint security rules under delegated identity, or when DirectQuery fallback is required)." },
+        { "sourceKey": "direct-lake-develop", "note": "When creating a model from the SQL analytics endpoint, the type dialog defaults to Direct Lake on OneLake if the endpoint runs in user identity mode and to Direct Lake on SQL if it runs in delegated identity mode." }
+      ],
+      "tags": ["DirectLake", "OneLake", "Security"],
+      "drill": {
+        "inputs": ["A Direct Lake-routed table", "The SQL analytics endpoint's identity mode (user vs delegated)", "Whether a governed DirectQuery fallback is a stated requirement"],
+        "processing": ["Default to Direct Lake on OneLake unless a specific reason says otherwise", "Switch to Direct Lake on SQL only for delegated-identity SQL-endpoint security or required fallback", "Confirm the flavor via the model's M expression connector (Azure Data Lake Storage vs SQL Server/OneLake.SqlAnalytics) in TMDL view"],
+        "outputs": ["A deliberately chosen Direct Lake flavor with the reason recorded"],
+        "example": "A workspace using delegated-identity SQL endpoint security for row-level access control creates its model from the SQL analytics endpoint page, which defaults to Direct Lake on SQL — the right outcome for that security requirement, not an accident of which page was used.",
+        "controls": ["Check the SQL analytics endpoint's identity mode before creating the model", "Verify flavor after creation via the TMDL connector rather than assuming"],
+        "failureModes": ["Ending up on Direct Lake on SQL by accident because the model was created from the SQL analytics endpoint page, and losing OneLake's faster path for no reason", "Not knowing which flavor is in use, which makes the view-based fallback trap invisible until reports slow down"]
       }
     },
     {
-      "id": "step-5",
-      "label": "a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with Di…",
-      "summary": "a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
+      "id": "fallback-trap",
+      "label": "Trap: SQL views force DirectQuery fallback",
+      "summary": "A Direct Lake on SQL table built on a SQL view silently forces every query into DirectQuery fallback.",
+      "detail": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down — the fix is to base model tables on base tables, not views. A Direct Lake on SQL table's fallback behavior is governed by the model's Direct Lake behavior property, and the model still displays as Direct Lake mode after falling back, so the regression is invisible from the mode label alone.",
+      "whyItMatters": "This is a silent performance cliff: the model is labelled Direct Lake, query latency degrades toward DirectQuery levels, and nothing in the mode name reveals that a specific table is actually always falling back — teams routinely misdiagnose the resulting slowness as a capacity problem and scale the SKU instead of fixing the source table.",
       "classification": "warning",
-      "layers": [
-        "orchestration"
+      "layers": ["compute", "data"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode." },
+        { "sourceKey": "semantic-model-direct-lake-reporting", "note": "A Direct Lake on SQL table can fall back to DirectQuery through the SQL analytics endpoint when Direct Lake mode cannot be used, and this fallback is governed by the model's Direct Lake behavior property." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
+      "tags": ["DirectLake", "DirectQuery", "AntiPattern"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback tri… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "a query-speed/freshness/footprint/operational-lever tradeoff scorec…",
-      "summary": "a query-speed/freshness/footprint/operational-lever tradeoff scorecard in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the a query-speed/freshness/footprint/operational-lever tradeoff scorecard responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through a query-speed/freshness/footprint/operational-lever tradeoff scorecard: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "and guardrails covering Block Public Internet Access incompatibility",
-      "summary": "and guardrails covering Block Public Internet Access incompatibility in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "observability"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and guardrails covering Block Public Internet Access incompatibility responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and guardrails covering Block Public Internet Access incompatibility: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "power-bi",
-        "label": "Open power bi"
+        "inputs": ["A Direct Lake on SQL model with one or more tables sourced from a SQL view instead of a base table"],
+        "processing": ["Audit each model table's M expression source for view vs base table", "Repoint view-based tables at the underlying base Delta table", "Push any transformation logic the view performed back into a materialized silver/gold table upstream instead"],
+        "outputs": ["Model tables that read directly from OneLake instead of silently falling back to DirectQuery"],
+        "example": "A convenience SQL view joining two warehouse tables for a report is replaced by a materialized gold table; the model table is repointed at it and query latency for that table drops back to Direct Lake speed.",
+        "controls": ["Prefer base tables for every Direct Lake model table", "Treat any view in a Direct Lake on SQL model as a defect requiring justification, not a default choice", "Check the model's Direct Lake behavior property to see whether fallback is silently permitted"],
+        "failureModes": ["Diagnosing the resulting slowness as a capacity problem and scaling the SKU rather than fixing the view", "Adding more views for modelling convenience over time and progressively converting the whole model to DirectQuery without noticing"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "metadata",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "observability",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-mode-import", "from": "mode-question", "to": "import-mode", "label": "snapshot acceptable, needs full DAX freedom", "layer": "compute", "kind": "branch" },
+    { "id": "e-mode-directquery", "from": "mode-question", "to": "directquery-mode", "label": "source must stay authoritative at query time", "layer": "compute", "kind": "branch" },
+    { "id": "e-mode-directlake", "from": "mode-question", "to": "direct-lake-mode", "label": "OneLake Delta data, no refresh wanted", "layer": "compute", "kind": "branch" },
+    { "id": "e-directlake-flavor", "from": "direct-lake-mode", "to": "flavor-question", "label": "resolve OneLake vs SQL", "layer": "compute", "kind": "flow" },
+    { "id": "e-flavor-warning", "from": "flavor-question", "to": "fallback-trap", "label": "if the model table is built on a SQL view", "layer": "data", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. power bi boundary",
-      "explanation": "power bi boundary in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture."
+      "nodeId": "mode-question",
+      "title": "1. Ask what each table needs",
+      "explanation": "Storage mode is a per-table decision driven by freshness need and where the data lives, not a single platform setting for the whole model."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. choosing a Power BI semantic model storage mode",
-      "explanation": "choosing a Power BI semantic model storage mode in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture."
+      "nodeId": "import-mode",
+      "title": "2. Import: a managed copy with full modelling freedom",
+      "explanation": "Data is copied into memory and refreshed on a schedule — fastest queries, most DAX freedom, but the team now owns a refresh operation and a size ceiling."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. Import vs DirectQuery vs Direct Lake",
-      "explanation": "Import vs DirectQuery vs Direct Lake in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture."
+      "nodeId": "directquery-mode",
+      "title": "3. DirectQuery: always current, at a latency cost",
+      "explanation": "Every query forwards to the source, so there is no staleness — but every visual interaction pays the round trip."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. branching on freshness need and data location",
-      "explanation": "branching on freshness need and data location in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture."
+      "nodeId": "direct-lake-mode",
+      "title": "4. Direct Lake: no import, no refresh, OneLake native",
+      "explanation": "For data already in OneLake as Delta, Direct Lake reads columns on demand with no refresh job at all, at near-Import query speed once warm."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with Di…",
-      "explanation": "a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture."
+      "nodeId": "flavor-question",
+      "title": "5. Resolve the Direct Lake flavor",
+      "explanation": "Direct Lake on OneLake is the default for speed and richer modelling; Direct Lake on SQL is chosen deliberately for delegated-identity SQL-endpoint security or a required fallback path."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. a query-speed/freshness/footprint/operational-lever tradeoff scorec…",
-      "explanation": "a query-speed/freshness/footprint/operational-lever tradeoff scorecard in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture."
-    },
-    {
-      "nodeId": "step-7",
-      "title": "7. and guardrails covering Block Public Internet Access incompatibility",
-      "explanation": "and guardrails covering Block Public Internet Access incompatibility in the choosing a Power BI semantic model storage mode — Import vs DirectQuery vs Direct Lake, branching on freshness need and data location; a Direct Lake on OneLake vs Direct Lake on SQL sub-decision with DirectQuery fallback triggers; a query-speed/freshness/footprint/operational-lever tradeoff scorecard; and guardrails covering Block Public Internet Access incompatibility, framing point-in-time semantics, and V-Order/BinSize write-side levers architecture."
+      "nodeId": "fallback-trap",
+      "title": "6. Avoid the silent view-based fallback",
+      "explanation": "In Direct Lake on SQL, a model table built on a SQL view forces every query into DirectQuery fallback without changing the model's displayed mode — a trap that gets misdiagnosed as a capacity problem."
     }
   ]
 }

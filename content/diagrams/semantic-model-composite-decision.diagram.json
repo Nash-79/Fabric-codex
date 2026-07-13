@@ -1,379 +1,211 @@
 {
   "id": "semantic-model-composite-decision",
-  "title": "composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level sec…",
-  "purpose": "Decision diagram: composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation",
-  "accessibleSummary": "An interactive decision infographic with 6 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Decision diagram: composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation",
+  "title": "Composite Semantic Model: Per-Table Storage Mode and Refresh Risk",
+  "purpose": "Show how a composite semantic model routes each table to Direct Lake, Import, or DirectQuery, how row-level security is chosen per table, and the specific out-of-memory risk that a wrong Import-refresh choice creates.",
+  "accessibleSummary": "A decision tree: for each table in a composite model, ask whether it must stay live and large (route to Direct Lake), needs full DAX/transformation freedom on a small volume (route to Import), or must keep the source authoritative (route to DirectQuery). A second question picks dynamic or static row-level security depending on whether filtering must vary per viewer. A third node names the five capacity-footprint levers the routing decisions move, and a warning branch covers the out-of-memory risk of refreshing an Import table whose size approaches half the capacity's memory, with the XMLA/enhanced-refresh mitigation.",
+  "longDescription": "This is a decision tree, not a pipeline. It starts from the fact that a composite model can mix storage modes per table rather than committing the whole model to one mode. The first question routes each table: large, frequently changing fact tables go to Direct Lake to avoid refresh entirely; small tables that need calculated columns, complex M transforms, or other Import-only features go to Import; tables where the source system must remain the single point of truth go to DirectQuery. A second question addresses row-level security per table: dynamic RLS filters by the viewer's identity and is chosen when different users must see different rows of the same table; static RLS applies one fixed filter and is chosen when the split is structural rather than per-viewer. A capacity-footprint node names the five levers that determine how much of a capacity's memory and CPU the model consumes. The tree ends in a warning: refreshing an Import-mode table whose size approaches roughly half of the capacity's total memory risks an out-of-memory failure mid-refresh, and the sourced mitigation is to refresh through the enhanced refresh REST API or the XMLA endpoint with fine-grained partition-level refreshes instead of a full-model refresh.",
   "type": "decision",
   "topicSlug": "semantic-model",
-  "capabilityIds": [
-    "semantic-model"
-  ],
-  "revision": "1",
+  "capabilityIds": ["semantic-model", "direct-lake", "lakehouse"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/semantic-model-composite-decision.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "semantic model boundary",
-      "summary": "semantic model boundary in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "id": "composite-model-root",
+      "label": "Composite model: route this table",
+      "summary": "The root decision, repeated per table: which storage mode should this specific table use?",
+      "detail": "Power BI Desktop supports three model storage modes — Import, DirectQuery, and Composite — distinguished by whether data is copied into the model or left at the source at query time. A Composite model applies that choice per table rather than once for the whole model, so the real decision an author makes is not 'which mode for this model' but 'which mode for this table'.",
+      "whyItMatters": "Treating storage mode as a single model-wide setting throws away the main advantage of a composite model: routing a huge fact table to Direct Lake while a small, heavily transformed dimension stays in Import, inside the same model.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["SemanticModel", "CompositeModel"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "Power BI Desktop supports three model storage modes — Import, DirectQuery, and Composite — distinguished by whether data is copied into the model or left in the underlying source at query time." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the semantic model boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through semantic model boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A table to be added to the composite model, with its size, change frequency, and required DAX/transform features known"],
+        "processing": ["Classify the table by size and volatility", "Classify the table by whether it needs Import-only modelling features", "Route to Direct Lake, Import, or DirectQuery accordingly"],
+        "outputs": ["A per-table storage-mode assignment recorded in the model"],
+        "example": "A billion-row sales fact and three small, heavily transformed reference dimensions sit in the same composite model, each routed independently rather than forcing one mode on the whole model.",
+        "controls": ["Per-table storage mode setting in the model designer", "A written rationale for any table that deviates from the Direct Lake default"],
+        "failureModes": ["Defaulting every table to Import out of habit, inheriting a refresh window nobody needed for tables that could have avoided it entirely"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "semantic-model",
-        "label": "Open semantic model"
-      }
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic Model" }
     },
     {
-      "id": "step-2",
-      "label": "composite semantic model per-table storage-mode routing (Direct Lak…",
-      "summary": "composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import) in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "id": "route-direct-lake",
+      "label": "Direct Lake: large, live table",
+      "summary": "Large or frequently changing tables route to Direct Lake to avoid refresh cost entirely.",
+      "detail": "A semantic model in Direct Lake mode loads columns from Delta tables in OneLake on demand rather than importing all data, so there is no scheduled refresh to operate or wait on. This is the default choice for large fact tables where freshness matters and a copy-and-refresh cycle would be expensive or slow.",
+      "whyItMatters": "Direct Lake removes the single biggest recurring operational cost of a large Import model — the refresh job — while still giving near-Import query speed for the columns actually queried.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["DirectLake"],
+      "evidence": [
+        { "sourceKey": "example-direct-lake", "note": "A semantic model in Direct Lake mode loads columns from Delta tables in OneLake on demand rather than importing all data." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Im… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A large or fast-changing Delta table already conformed in a lakehouse or warehouse"],
+        "processing": ["Add the table to the model in Direct Lake mode", "Columns are loaded into memory on demand as queries touch them, not on a refresh schedule"],
+        "outputs": ["A model table that reflects the underlying Delta table with no scheduled refresh"],
+        "example": "A billion-row order-line fact stays in Direct Lake so intraday sales dashboards reflect same-hour data with no refresh job to schedule or monitor.",
+        "controls": ["Choice between Direct Lake on OneLake vs Direct Lake on SQL depending on security and fallback needs"],
+        "failureModes": ["Basing a Direct Lake on SQL table on a view instead of a base table, silently forcing DirectQuery fallback on every query"]
       }
     },
     {
-      "id": "step-3",
-      "label": "row-level security dynamic-vs-static role decision",
-      "summary": "row-level security dynamic-vs-static role decision in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "route-import",
+      "label": "Import: small table, full DAX freedom",
+      "summary": "Small tables needing calculated columns or complex transforms route to Import.",
+      "detail": "An Import-mode model hosted in the Power BI service must be loaded entirely into memory before it can answer queries, and it relies on scheduled or on-demand refresh to stay current. In exchange it offers the full range of DAX calculated columns and Power Query transformation features that Direct Lake tables do not support, which is why small reference and lookup tables commonly stay in Import inside an otherwise Direct Lake-heavy composite model.",
+      "whyItMatters": "Import is still the right tool for small tables that need transformation flexibility Direct Lake can't provide — the risk is only in applying Import's refresh model to a table too large for it, which the warning node below covers.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["SemanticModel"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "An Import-mode model hosted in the Power BI service must be loaded entirely into memory before it can answer queries. Import-mode models serve a snapshot of data and rely on scheduled or on-demand refresh to stay current." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the row-level security dynamic-vs-static role decision responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through row-level security dynamic-vs-static role decision: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A small, relatively static table needing calculated columns or Power Query transforms not available in Direct Lake"],
+        "processing": ["Import the table into the model on a refresh schedule", "Apply DAX calculated columns and Power Query steps freely"],
+        "outputs": ["A fully in-memory table with complete DAX/transform capability, refreshed on a schedule"],
+        "example": "A small currency-conversion lookup table with calculated columns for historical rate bands stays in Import while the large fact table it joins to uses Direct Lake in the same composite model.",
+        "controls": ["Refresh schedule cadence", "Which transformations genuinely require Import vs could move upstream into the Delta table itself"],
+        "failureModes": ["Growing an Import table past a size where its refresh becomes a capacity risk — the exact scenario in the refresh-risk warning node"]
       }
     },
     {
-      "id": "step-4",
-      "label": "the five capacity-footprint levers",
-      "summary": "the five capacity-footprint levers in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "id": "route-directquery",
+      "label": "DirectQuery: source stays authoritative",
+      "summary": "Where the source system must remain the single point of truth, route to DirectQuery.",
+      "detail": "DirectQuery models forward queries to the source so results always reflect current source data, at the cost of query latency compared to Direct Lake or Import. It is chosen when a table's data must never diverge from the live source system, even momentarily, or when a Direct Lake on SQL table falls back to it because it cannot serve the query directly.",
+      "whyItMatters": "DirectQuery is the deliberate choice when correctness against a live source outweighs query speed — but it is also the silent destination of an unintended fallback, which is why the trap this diagram warns about matters.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["DirectQuery"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "DirectQuery models forward queries to the source so results always reflect current source data, whereas Import-mode models serve a snapshot and rely on refresh." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the the five capacity-footprint levers responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through the five capacity-footprint levers: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A table whose source must remain the single point of truth, or a Direct Lake table that cannot serve a given query directly"],
+        "processing": ["Every query is forwarded live to the source system", "No local copy of the data is held in the model"],
+        "outputs": ["Query results that always reflect the current source state, at DirectQuery latency"],
+        "example": "A regulatory reporting table must never show data that diverges from the OLTP system of record even momentarily, so it stays DirectQuery despite the latency cost.",
+        "controls": ["Deliberate, documented choice — not a silent fallback from Direct Lake"],
+        "failureModes": ["Diagnosing DirectQuery slowness as a capacity problem and scaling the SKU instead of checking whether it was an unintended Direct Lake fallback"]
       }
     },
     {
-      "id": "step-5",
-      "label": "and refresh memory-risk internals with the ~50%-of-capacity OOM zon…",
-      "summary": "and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
+      "id": "rls-question",
+      "label": "Row-level security: dynamic or static?",
+      "summary": "Second decision per table: does filtering vary by viewer, or is it a fixed structural split?",
+      "detail": "Row-level security roles in a semantic model are either dynamic, filtering data based on the identity of the report user, or static, applying one fixed filter to every user assigned to the role. This choice is independent of storage mode and is made per table or per role, not once for the whole model.",
+      "whyItMatters": "Choosing the wrong RLS shape either forces unnecessary per-user role proliferation (using static where dynamic was needed) or adds identity-lookup complexity where a simple fixed filter would have worked.",
+      "classification": "fact",
+      "layers": ["governance", "compute"],
+      "tags": ["RowLevelSecurity"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "Row-level security roles in a semantic model are either dynamic, filtering data based on the identity of the report user, or static, applying one fixed filter to every user assigned to the role." }
+      ],
+      "drill": {
+        "inputs": ["A table requiring row-level access restriction, and the shape of the audience it must restrict for"],
+        "processing": ["Ask whether the filter must vary by who is viewing (route dynamic) or is fixed per named group of users (route static)", "Implement via a USERPRINCIPALNAME()-driven dynamic filter, or a static DAX filter tied to a role"],
+        "outputs": ["An RLS role attached to the table, correctly shaped for the access pattern"],
+        "example": "A sales-by-region fact uses dynamic RLS so each regional manager automatically sees only their region via their signed-in identity, while a finance-only cost table uses a static role assigned to a fixed finance security group.",
+        "controls": ["Role assignment process (who gets added to which role)", "Testing RLS with View As Roles before publishing"],
+        "failureModes": ["Using static RLS for a per-user filtering need, forcing a new role per user as the audience grows", "Dynamic RLS breaking silently when the identity-lookup table it depends on goes stale"]
+      }
+    },
+    {
+      "id": "capacity-footprint-levers",
+      "label": "Five capacity-footprint levers",
+      "summary": "Model hosting location, storage mode, gateway dependency, imported data volume, and refresh type/frequency set the capacity load.",
+      "detail": "The main levers that determine a semantic model's impact on capacity resources are where the model is hosted, its storage mode, gateway dependencies, the volume of imported data, and the type and frequency of refresh. Composite models make this concrete: choosing Direct Lake for the fact table removes it from the 'imported data volume' and 'refresh frequency' levers entirely, while any Import table still contributes to both.",
+      "whyItMatters": "Naming the actual levers turns capacity planning from guesswork into a checklist — each per-table storage-mode decision earlier in this tree directly moves one or more of these five levers.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Capacity"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "The main levers that determine a semantic model's impact on capacity resources are where the model is hosted, its storage mode, gateway dependencies, the volume of imported data, and the type and frequency of refresh." }
+      ],
+      "drill": {
+        "inputs": ["The per-table storage-mode routing already decided for this composite model"],
+        "processing": ["Tally which tables still contribute imported-data volume and refresh load", "Check gateway dependency for any on-premises source", "Confirm the model's hosting capacity has headroom for the resulting load"],
+        "outputs": ["An estimated capacity footprint for the model as designed"],
+        "example": "Converting the largest fact table from Import to Direct Lake removes it from both the imported-data-volume and refresh-frequency levers, measurably lowering the model's capacity footprint without touching the smaller Import dimensions.",
+        "controls": ["Periodic review of which tables still use Import as data volume grows over time"],
+        "failureModes": ["Leaving a table in Import long after it has grown past the size where Direct Lake would have been the safer choice"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "refresh-oom-risk",
+      "label": "Refresh OOM risk near ~50% capacity memory",
+      "summary": "Refreshing an Import table approaching half the capacity's memory risks running out of memory mid-refresh.",
+      "detail": "Refreshing a model whose size approaches half the capacity's memory (for example a 12 GB model on a 25 GB capacity) risks running out of memory mid-refresh, because a full refresh must briefly hold both the old and new versions of data in memory during the swap. The sourced mitigation is to issue fine-grained refreshes through the enhanced refresh REST API or the XMLA endpoint instead of full refreshes, so only changed partitions are rebuilt rather than the whole model.",
+      "whyItMatters": "This is a real, specific capacity trap that only bites Import (and Import portions of composite) tables — it is exactly the kind of risk a Direct Lake table on the same data would have avoided by not needing a refresh at all.",
       "classification": "warning",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
+      "layers": ["compute", "governance"],
+      "tags": ["SemanticModel", "Capacity"],
+      "evidence": [
+        { "sourceKey": "semantic-model-large-format", "note": "Refreshing a model whose size approaches half the capacity's memory (for example a 12 GB model on a 25 GB capacity) risks running out of memory mid-refresh; mitigate by issuing fine-grained refreshes through the enhanced refresh REST API or the XMLA endpoint instead of full refreshes." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-re… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh miti…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "semantic model governed outcome",
-      "summary": "semantic model governed outcome in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the semantic model governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through semantic model governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "semantic-model",
-        "label": "Open semantic model"
+        "inputs": ["An Import-mode table or model approaching roughly half the hosting capacity's total memory"],
+        "processing": ["A full refresh attempts to hold both old and new data versions in memory simultaneously during the swap", "Available headroom shrinks as the model's imported data volume grows over time"],
+        "outputs": ["Either a successful refresh with shrinking safety margin, or an out-of-memory failure mid-refresh"],
+        "example": "A 12 GB Import model on a 25 GB capacity refreshes successfully for months as data grows, then fails mid-refresh with an out-of-memory error the first month it crosses the danger threshold, with no warning beforehand.",
+        "controls": ["Switch from full refresh to fine-grained partition-level refresh via the enhanced refresh REST API or XMLA endpoint", "Monitor model size trend against capacity memory, not just current size"],
+        "failureModes": ["Discovering the OOM failure only in production during a scheduled refresh window, with no prior alerting on the approaching threshold", "Treating the failure as a capacity-sizing problem and scaling the SKU instead of switching to fine-grained refresh, when the underlying table might have been a better fit for Direct Lake"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "metadata",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "security",
-      "kind": "branch"
-    }
+    { "id": "e-root-directlake", "from": "composite-model-root", "to": "route-direct-lake", "label": "large, frequently changing", "layer": "compute", "kind": "branch" },
+    { "id": "e-root-import", "from": "composite-model-root", "to": "route-import", "label": "small, needs full DAX/transform freedom", "layer": "compute", "kind": "branch" },
+    { "id": "e-root-directquery", "from": "composite-model-root", "to": "route-directquery", "label": "source must stay authoritative", "layer": "compute", "kind": "branch" },
+    { "id": "e-directlake-rls", "from": "route-direct-lake", "to": "rls-question", "label": "then decide row-level security", "layer": "governance", "kind": "flow" },
+    { "id": "e-import-rls", "from": "route-import", "to": "rls-question", "label": "then decide row-level security", "layer": "governance", "kind": "flow" },
+    { "id": "e-directquery-rls", "from": "route-directquery", "to": "rls-question", "label": "then decide row-level security", "layer": "governance", "kind": "flow" },
+    { "id": "e-rls-footprint", "from": "rls-question", "to": "capacity-footprint-levers", "label": "routing decisions roll up into capacity load", "layer": "compute", "kind": "flow" },
+    { "id": "e-import-oom", "from": "route-import", "to": "refresh-oom-risk", "label": "risk grows as the Import table's size climbs", "layer": "compute", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. semantic model boundary",
-      "explanation": "semantic model boundary in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture."
+      "nodeId": "composite-model-root",
+      "title": "1. Route per table, not per model",
+      "explanation": "A composite model's real decision is made table by table: which storage mode fits this specific table's size, volatility, and feature needs."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. composite semantic model per-table storage-mode routing (Direct Lak…",
-      "explanation": "composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import) in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture."
+      "nodeId": "route-direct-lake",
+      "title": "2a. Direct Lake for large, live tables",
+      "explanation": "Large or fast-changing fact tables route to Direct Lake, loading columns from OneLake on demand and skipping the refresh cycle entirely."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. row-level security dynamic-vs-static role decision",
-      "explanation": "row-level security dynamic-vs-static role decision in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture."
+      "nodeId": "route-import",
+      "title": "2b. Import for small tables needing full DAX",
+      "explanation": "Small tables that need calculated columns or complex Power Query transforms stay in Import — the tradeoff is a refresh cycle, which becomes risky if the table grows too large, as the warning node later shows."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. the five capacity-footprint levers",
-      "explanation": "the five capacity-footprint levers in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture."
+      "nodeId": "route-directquery",
+      "title": "2c. DirectQuery when the source must stay authoritative",
+      "explanation": "Tables that must never diverge from a live source, even momentarily, route to DirectQuery."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. and refresh memory-risk internals with the ~50%-of-capacity OOM zon…",
-      "explanation": "and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture."
+      "nodeId": "rls-question",
+      "title": "3. Choose dynamic or static row-level security",
+      "explanation": "Independent of storage mode, each table's RLS role is either dynamic (filters by viewer identity) or static (one fixed filter per role) — a second, orthogonal decision."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. semantic model governed outcome",
-      "explanation": "semantic model governed outcome in the composite semantic model per-table storage-mode routing (Direct Lake vs DirectQuery vs Import), row-level security dynamic-vs-static role decision, the five capacity-footprint levers, and refresh memory-risk internals with the ~50%-of-capacity OOM zone and XMLA/enhanced-refresh mitigation architecture."
+      "nodeId": "capacity-footprint-levers",
+      "title": "4. The five levers the routing decisions move",
+      "explanation": "Hosting location, storage mode, gateway dependency, imported data volume, and refresh type/frequency are the five named levers — the per-table routing above directly changes several of them."
+    },
+    {
+      "nodeId": "refresh-oom-risk",
+      "title": "5. Warning: refresh OOM near ~50% capacity memory",
+      "explanation": "An Import table that grows to approach half the hosting capacity's memory risks an out-of-memory failure mid-refresh; the mitigation is fine-grained refresh via the enhanced refresh API or XMLA endpoint rather than a full refresh."
     }
   ]
 }

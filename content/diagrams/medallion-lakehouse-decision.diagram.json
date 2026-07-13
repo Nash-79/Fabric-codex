@@ -1,263 +1,237 @@
 {
   "id": "medallion-lakehouse-decision",
-  "title": "decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pi…",
-  "purpose": "Original diagram: decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline, plus the V-Order-per-zone file-layout rule",
-  "accessibleSummary": "An interactive decision infographic with 4 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline, plus the V-Order-per-zone file-layout rule",
+  "title": "Choosing the Engine per Medallion Zone",
+  "purpose": "Guide the choice of ingestion and transform engine at each medallion stage — pipeline Copy activity, Dataflow Gen2, Spark, or a OneLake shortcut — and pair it with the V-Order-per-zone file-layout rule that follows from each zone's read/write balance.",
+  "accessibleSummary": "A decision tree. The first question asks whether the source data already lives in a governed location elsewhere in OneLake or an external store: if so, a zero-copy shortcut replaces ingestion entirely. If not, a second question asks whether the load is bulk/recurring at scale or needs low-code shaping before landing: bulk and recurring routes to a Data Factory pipeline Copy activity, low-code shaping routes to Dataflow Gen2. Both land in bronze, where Spark takes over for silver and gold transformation, since that stage always needs code-first, arbitrarily complex logic. A final branch applies the V-Order file-layout rule: bronze and silver are write-heavy so V-Order should stay off, while gold is read-heavy and V-Order should be turned on. A warning node flags that leaving V-Order on for write-dominated zones pays a real write-time cost for no read benefit.",
+  "longDescription": "This is a decision tree over the medallion pipeline's engine choices, not a pipeline itself. The first branch point is whether the source is already governed data sitting elsewhere in OneLake or in an external ADLS/S3/GCS store — if so, a OneLake shortcut is the right answer and ingestion is skipped entirely, since the shortcut is a zero-copy, live reference. If the data genuinely needs to be landed, the second branch asks whether the workload is a bulk or recurring large-scale load versus one that needs low-code shaping before it lands: Microsoft's own division of labour routes orchestration- and volume-heavy problems to a Data Factory pipeline Copy activity, and shaping-heavy problems to Dataflow Gen2's Power Query surface. Both routes converge on bronze. From bronze onward the path is not really a decision — Spark is the documented, code-first engine for the transform work that produces silver and gold, because that stage requires arbitrarily complex logic (de-duplication, conforming joins, aggregation) that neither a bulk-copy tool nor a low-code shaping tool is built for. The final decision point is the V-Order file-layout rule: V-Order is disabled by default because it trades roughly 15% longer writes for improved reads, so it should stay off in bronze and silver, which are write-heavy zones churned by every ingestion and transform run, and be turned on in gold, which is the read-heavy zone serving BI and repeated scans. A warning node captures the specific, sourced trap of getting this backwards: leaving V-Order on through write-dominated ingestion pays the write penalty on every job while the read-side benefit is never used, because nothing reads bronze or silver repeatedly the way gold is read.",
   "type": "decision",
   "topicSlug": "medallion-lakehouse",
-  "capabilityIds": [
-    "lakehouse"
-  ],
-  "revision": "1",
+  "capabilityIds": ["lakehouse", "spark"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/medallion-lakehouse-decision.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "medallion lakehouse boundary",
-      "summary": "medallion lakehouse boundary in the decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline, plus the V-Order-per-zone file-layout rule architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
+      "id": "already-governed-question",
+      "label": "Is the data already governed elsewhere?",
+      "summary": "Root question: does the source already live in OneLake or an external store you can reference in place?",
+      "detail": "Where data already lives in another store, a shortcut can replace a copy. OneLake shortcuts mount existing external storage such as ADLS, Amazon S3, and Google Cloud Storage as zero-copy references, so cross-cloud data can be analysed in Fabric without ETL.",
+      "whyItMatters": "Asking this first avoids re-ingesting data that is already trustworthy and accessible, which would create an unnecessary duplicate copy and an ongoing sync burden for no benefit.",
       "classification": "pattern",
-      "layers": [
-        "data"
-      ],
+      "layers": ["data"],
+      "tags": ["decision-root", "OneLake", "Shortcuts"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "drill": {
+        "inputs": ["A candidate source system or dataset", "Its current storage location and governance status"],
+        "processing": ["Check whether the source is already a governed Fabric item or an ADLS/S3/GCS location reachable by shortcut", "If yes, evaluate whether a live reference meets the freshness need instead of a landed copy"],
+        "outputs": ["A routed decision: shortcut (no ingestion) or proceed to the ingestion-route question"],
+        "example": "A partner team's already-governed sales dataset sits in another Fabric workspace's lakehouse; instead of copying it into bronze, it is referenced with a shortcut and treated as if it were local.",
+        "controls": ["Whether the consuming pipeline needs write access (shortcuts are read-only references)"],
+        "failureModes": ["Re-ingesting data that a shortcut could reference live, doubling storage and creating two copies to keep in sync"]
+      }
+    },
+    {
+      "id": "shortcut-bronze",
+      "label": "OneLake shortcut (zero-copy reference)",
+      "summary": "Reference already-governed data in place instead of ingesting it into bronze.",
+      "detail": "A OneLake shortcut points from a shortcut path to a target path in another location, behaving like a symbolic link, so deleting the shortcut leaves the target untouched. In a lakehouse's Tables folder, when a shortcut target holds Delta Parquet data the lakehouse automatically syncs the metadata and registers the folder as a table.",
+      "whyItMatters": "A shortcut is often the right 'bronze' for data that is already governed elsewhere — you reference it in place rather than re-ingesting it, and the reference is live, not a stale snapshot.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["OneLake", "Shortcuts"],
+      "evidence": [
+        { "sourceKey": "onelake-shortcuts", "note": "A OneLake shortcut is an object that points from a shortcut path to a target path in another storage location; it behaves like a symbolic link, so deleting the shortcut leaves the target untouched." },
+        { "sourceKey": "onelake-shortcuts", "note": "In a lakehouse's Tables folder, shortcuts are allowed only at the top level, and when a shortcut target holds Delta Parquet data the lakehouse automatically syncs the metadata and registers the folder as a table." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the medallion lakehouse boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through medallion lakehouse boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A target path already holding Delta Parquet data, internal to OneLake or in an external ADLS/S3/GCS store"],
+        "processing": ["Create the shortcut in the lakehouse's Tables area (top level)", "Fabric auto-syncs metadata and registers the target as a table"],
+        "outputs": ["A live, read-only bronze-equivalent table with no duplicated storage"],
+        "example": "A shortcut into a partner workspace's certified customer table appears as an ordinary table in this lakehouse's Tables area and is queried by Spark exactly like a native bronze table.",
+        "controls": ["Read permission at the shortcut target", "Shortcut placement (top level only, or schema shortcuts in schema-enabled lakehouses)"],
+        "failureModes": ["Naming a table shortcut with a space, which Delta does not allow, so OneLake will not recognise it as a Delta table", "Assuming the shortcut is writable — it is a read-only reference"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "medallion-lakehouse",
-        "label": "Open medallion lakehouse"
+      "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake shortcuts" }
+    },
+    {
+      "id": "ingestion-route-question",
+      "label": "Bulk/recurring load, or low-code shaping?",
+      "summary": "Second question: does the workload need orchestration and scale, or shaping before landing?",
+      "detail": "Fabric Data Factory deliberately supports both ETL and ELT: shape data in Dataflow Gen2 before loading when quality and standardisation matter up front, or land raw data first and push transformation down to Spark over OneLake for large cloud-scale datasets. A practical division of labour: use pipelines when the problem is orchestration and large-scale movement, use Dataflow Gen2 when the problem is low-code data shaping.",
+      "whyItMatters": "Picking the wrong tool here means either hand-rolling low-code transformation logic in a pipeline, or trying to push a genuinely large bulk load through Dataflow Gen2's Power Query engine, both of which fight the tool.",
+      "classification": "pattern",
+      "layers": ["orchestration", "data"],
+      "tags": ["DataFactory", "DataflowGen2"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["The workload's scale (bulk/recurring vs modest) and whether business-analyst-owned shaping is required before landing"],
+        "processing": ["Classify the workload as orchestration/volume-driven or shaping-driven", "Route accordingly"],
+        "outputs": ["A chosen ingestion engine for this source"],
+        "example": "A 500 GB nightly CDC extract is classified as bulk/recurring and routed to a pipeline Copy activity; a business analyst's ad-hoc CSV cleanup with column renames and type fixes is classified as shaping-driven and routed to Dataflow Gen2.",
+        "controls": ["Team ownership (data engineers vs business analysts)", "Whether the transformation needs to happen before or after landing"],
+        "failureModes": ["Forcing a large bulk load through Dataflow Gen2's Power Query engine where a pipeline Copy activity would be far more cost-effective at scale", "Hand-rolling low-code-style shaping logic inside a pipeline when Dataflow Gen2 already does it declaratively"]
       }
     },
     {
-      "id": "step-2",
-      "label": "decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark…",
-      "summary": "decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline in the decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline, plus the V-Order-per-zone file-layout rule architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "pipeline-copy",
+      "label": "Pipeline Copy activity",
+      "summary": "Microsoft's recommended engine for large-scale, one-time or recurring bulk ingestion.",
+      "detail": "Data Factory pipeline Copy activity is Microsoft's recommended mechanism for large-scale one-time migrations into OneLake and for high-volume recurring ingestion, on the grounds that the engine is serverless, performant at scale, and cost-effective. It exposes parallelism at three levels: many concurrent copy activities, per-activity intelligent throughput optimisation, and multi-threaded read/write within a single activity.",
+      "whyItMatters": "This is the engine built for scale — its three levels of parallelism are what let it land large bronze datasets fast and cost-effectively, which a low-code shaping tool is not optimised for.",
+      "classification": "fact",
+      "layers": ["orchestration", "data"],
+      "tags": ["DataFactory", "CopyActivity"],
+      "evidence": [
+        { "sourceKey": "copy-activity-performance-and-scalability", "note": "Data Factory pipeline Copy activity is Microsoft's recommended mechanism for large-scale one-time migrations into OneLake and for high-volume recurring ingestion, on the grounds that the engine is serverless, performant at scale, and cost-effective; it exposes parallelism at three levels: many concurrent copy activities, per-activity intelligent throughput optimisation, and multi-threaded read/write within a single activity." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut a… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a me…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Bulk source files, database extracts, or recurring CDC feeds"],
+        "processing": ["Configure the Copy activity's source/sink and parallelism settings", "Optionally wrap in a ForEach loop for many concurrent copies"],
+        "outputs": ["Raw data landed as bronze Delta in OneLake"],
+        "example": "A ForEach loop runs 20 concurrent Copy activities to land 20 regional CSV extracts into bronze tables in under ten minutes.",
+        "controls": ["Parallelism/throughput settings per activity", "Trigger/recurrence schedule"],
+        "failureModes": ["Under-parallelising a genuinely large load and leaving throughput on the table", "Using Copy activity for shaping logic it was never built to do declaratively"]
       }
     },
     {
-      "id": "step-3",
-      "label": "plus the V-Order-per-zone file-layout rule",
-      "summary": "plus the V-Order-per-zone file-layout rule in the decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline, plus the V-Order-per-zone file-layout rule architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "dataflow-gen2",
+      "label": "Dataflow Gen2",
+      "summary": "Low-code Power Query shaping, recommended when data must be cleansed before it lands.",
+      "detail": "Dataflow Gen2 is Fabric's low-code data-preparation item built on Power Query, offering more than 300 transformations over hundreds of connectors, and Microsoft's recommended tool when data must be shaped before it is loaded (classic ETL). It can write transformed output to Lakehouse tables and files among other destinations.",
+      "whyItMatters": "This is the tool for business-analyst-owned cleansing where writing Spark code is undesirable — quality and standardisation happen before the data ever lands, rather than as a separate Spark pass afterward.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["DataflowGen2", "PowerQuery"],
+      "evidence": [
+        { "sourceKey": "dataflow-gen2-overview", "note": "Dataflow Gen2 is Fabric's low-code data-preparation item built on Power Query, offering more than 300 transformations over hundreds of connectors, and can write transformed output to Lakehouse tables and files among other destinations." },
+        { "sourceKey": "data-factory-overview", "note": "Microsoft's recommended tool when data must be shaped before it is loaded (classic ETL) is Dataflow Gen2; use pipelines when the problem is orchestration and large-scale movement, use Dataflow Gen2 when the problem is low-code data shaping." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the plus the V-Order-per-zone file-layout rule responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through plus the V-Order-per-zone file-layout rule: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Source data needing quality checks, standardisation, or shaping before landing"],
+        "processing": ["Build the transformation visually in Power Query", "Set the Lakehouse table as the output destination"],
+        "outputs": ["A shaped, standardised bronze (or bronze-equivalent) Delta table"],
+        "example": "A business analyst uses Dataflow Gen2 to standardise inconsistent date formats and trim whitespace from a vendor CSV feed before it lands as a bronze table, with no code written.",
+        "controls": ["Which of the 300+ transformations are applied and in what order", "Output destination configuration"],
+        "failureModes": ["Using Dataflow Gen2 for a genuinely large bulk load, where its engine is not the cost-effective choice a pipeline Copy activity is", "Business logic accumulating in dataflow steps with no version control, unlike code-first Spark"]
       }
     },
     {
-      "id": "step-4",
-      "label": "lakehouse governed outcome",
-      "summary": "lakehouse governed outcome in the decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline, plus the V-Order-per-zone file-layout rule architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "spark-transform",
+      "label": "Spark (silver & gold transformation)",
+      "summary": "The code-first engine for all silver and gold transformation, regardless of the bronze route taken.",
+      "detail": "Spark notebooks and Spark job definitions are the code-first, large-scale transform path once raw data has landed, and one of the documented lakehouse ingestion/transform routes with Spark job definitions for compiled production ETL. Regardless of whether bronze arrived via Copy activity, Dataflow Gen2, or a shortcut, Spark is the engine that performs the de-duplication, conforming, and aggregation logic that produces silver and gold.",
+      "whyItMatters": "This is the point where the three ingestion paths converge — no matter how bronze got there, silver and gold transformation needs arbitrarily complex, code-first logic that only Spark is built to express at this stage.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Spark", "Lakehouse"],
+      "evidence": [
+        { "sourceKey": "lakehouse-overview", "note": "Data can enter a lakehouse through several routes including Spark job definitions for compiled production ETL, one of the documented lakehouse ingestion/transform routes." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the lakehouse governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through lakehouse governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A bronze Delta table, landed via any of the three routes above"],
+        "processing": ["Run de-duplication, typing, and conforming joins to produce silver", "Run aggregation and star-schema shaping to produce gold"],
+        "outputs": ["Silver and gold Delta tables in the same lakehouse Tables area"],
+        "example": "Regardless of whether bronze_orders arrived via Copy activity or a shortcut, the same Spark notebook reads it, conforms it, and writes silver_orders and gold_revenue with identical logic.",
+        "controls": ["Notebook vs Spark job definition (interactive development vs compiled production ETL)", "Pool sizing and autoscale settings"],
+        "failureModes": ["Trying to express complex conforming/aggregation logic in Dataflow Gen2 or a pipeline instead of Spark, fighting the tool", "Skipping this stage and serving bronze directly, losing the cleansing and conforming the medallion pattern exists to provide"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "lakehouse",
-        "label": "Open lakehouse"
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark" }
+    },
+    {
+      "id": "vorder-question",
+      "label": "Is this zone write-heavy or read-heavy?",
+      "summary": "Final decision: V-Order off for write-heavy bronze/silver, on for read-heavy gold.",
+      "detail": "V-Order is a write-time optimisation for Parquet that improves downstream read performance across Fabric engines, paying off most in read-heavy patterns like dashboarding and repeated scans. It is disabled by default in newly created workspaces, a deliberate choice favouring write-heavy ingestion and transformation over read optimisation. The typical tradeoff is writes roughly 15% longer in exchange for reads that can improve significantly.",
+      "whyItMatters": "Getting this backwards means paying a real, measured write-time cost on every ingestion or transform job for a read benefit that zone never uses — or leaving the read-heavy serving layer slower than it needs to be.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["VOrder", "DeltaLake"],
+      "evidence": [
+        { "sourceKey": "delta-optimization-and-v-order", "note": "V-Order is disabled by default in all newly created Fabric workspaces, a deliberate default that favors write-heavy ingestion and transformation pipelines over read optimization." },
+        { "sourceKey": "delta-optimization-and-v-order", "note": "Microsoft states the typical V-Order tradeoff as writes taking roughly 15% longer on average, in exchange for reads that can improve significantly depending on the workload." }
+      ],
+      "drill": {
+        "inputs": ["The zone's read/write balance: bronze and silver are churned by every ingestion/transform run, gold is read repeatedly by BI and reporting"],
+        "processing": ["Leave V-Order off (the default) for bronze and silver", "Enable V-Order for gold, via session config, table property, or a read-heavy Spark resource profile"],
+        "outputs": ["Bronze/silver optimised for write throughput; gold optimised for repeated read/scan performance"],
+        "example": "A team leaves V-Order at its default (off) for the bronze and silver transformation jobs, then enables it specifically on the Spark session that writes gold_revenue_by_region, since that table is scanned by dozens of dashboards daily.",
+        "controls": ["Session-level spark.sql.parquet.vorder.default", "Delta table property delta.parquet.vorder.enabled for a specific gold table", "readHeavyforSpark resource profile as a shortcut for read-heavy sessions"],
+        "failureModes": ["Leaving V-Order on globally and paying the write penalty on every bronze/silver job for no benefit — see the warning node", "Forgetting that toggling the table property alone does not rewrite existing files; applying V-Order to already-written gold data requires a compaction pass"]
+      }
+    },
+    {
+      "id": "vorder-write-heavy-warning",
+      "label": "Trap: V-Order left on for write-heavy zones",
+      "summary": "Enabling V-Order on bronze/silver pays the write penalty every job for a read benefit never used.",
+      "detail": "Leaving V-Order enabled on write-dominated ingestion or transformation pipelines is counterproductive: the write penalty is paid on every job while the read-side benefit goes unused, since bronze and silver are not read repeatedly the way gold is. The recommendation is to disable it at session level for such workloads.",
+      "whyItMatters": "This is a real, measured cost that compounds silently — every bronze landing and every silver transform job pays roughly 15% longer writes for a read speedup that only matters on the zone nobody scans repeatedly.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "tags": ["VOrder", "AntiPattern"],
+      "evidence": [
+        { "sourceKey": "delta-optimization-and-v-order", "note": "Leaving V-Order enabled on write-dominated ingestion or transformation pipelines is counterproductive: the write penalty is paid on every job while the read-side benefit goes unused; disable it at session level for such workloads." }
+      ],
+      "drill": {
+        "inputs": ["A Spark session or workspace where V-Order was enabled globally instead of per read-heavy workload"],
+        "processing": ["Audit which sessions/tables have V-Order enabled", "Disable it for bronze/silver ingestion and transformation sessions, keep it only where reads dominate"],
+        "outputs": ["Write-heavy zones running at full write speed; V-Order cost paid only where gold's read benefit actually justifies it"],
+        "example": "A team enabled V-Order tenant-wide after reading about its read-speed benefit, then noticed nightly bronze/silver Spark jobs running 15% slower with no corresponding read-side win, since nothing repeatedly scans those zones.",
+        "controls": ["Scope V-Order enablement to the session or table, not a blanket workspace default", "Re-check after Fabric Runtime upgrades, since legacy vorder.enable settings were removed in 1.3"],
+        "failureModes": ["Runtime cost creeping up unnoticed because the write penalty shows up as 'Spark is just slower' rather than being traced to V-Order", "Applying V-Order to gold via the table property alone and assuming it retroactively rewrote existing files — it did not, without a compaction pass"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "orchestration",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-start-shortcut", "from": "already-governed-question", "to": "shortcut-bronze", "label": "yes — already governed elsewhere", "layer": "data", "kind": "branch" },
+    { "id": "e-start-route", "from": "already-governed-question", "to": "ingestion-route-question", "label": "no — needs to be landed", "layer": "data", "kind": "branch" },
+    { "id": "e-route-pipeline", "from": "ingestion-route-question", "to": "pipeline-copy", "label": "bulk / recurring at scale", "layer": "orchestration", "kind": "branch" },
+    { "id": "e-route-dataflow", "from": "ingestion-route-question", "to": "dataflow-gen2", "label": "low-code shaping needed first", "layer": "compute", "kind": "branch" },
+    { "id": "e-shortcut-spark", "from": "shortcut-bronze", "to": "spark-transform", "label": "referenced bronze-equivalent read by Spark", "layer": "compute", "kind": "flow" },
+    { "id": "e-pipeline-spark", "from": "pipeline-copy", "to": "spark-transform", "label": "landed bronze read by Spark", "layer": "compute", "kind": "flow" },
+    { "id": "e-dataflow-spark", "from": "dataflow-gen2", "to": "spark-transform", "label": "shaped bronze read by Spark", "layer": "compute", "kind": "flow" },
+    { "id": "e-spark-vorder", "from": "spark-transform", "to": "vorder-question", "label": "now set the file-layout rule per zone", "layer": "compute", "kind": "flow" },
+    { "id": "e-vorder-warning", "from": "vorder-question", "to": "vorder-write-heavy-warning", "label": "risk if left on for bronze/silver", "layer": "compute", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. medallion lakehouse boundary",
-      "explanation": "medallion lakehouse boundary in the decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline, plus the V-Order-per-zone file-layout rule architecture."
+      "nodeId": "already-governed-question",
+      "title": "1. Is the data already governed elsewhere?",
+      "explanation": "Before choosing an ingestion engine, check whether the source can be referenced in place with a shortcut instead of copied at all."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark…",
-      "explanation": "decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline in the decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline, plus the V-Order-per-zone file-layout rule architecture."
+      "nodeId": "shortcut-bronze",
+      "title": "2a. Shortcut: skip ingestion entirely",
+      "explanation": "A zero-copy OneLake shortcut becomes the bronze-equivalent table, with no landing job to build or maintain."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. plus the V-Order-per-zone file-layout rule",
-      "explanation": "plus the V-Order-per-zone file-layout rule in the decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline, plus the V-Order-per-zone file-layout rule architecture."
+      "nodeId": "ingestion-route-question",
+      "title": "2b. Bulk/recurring, or low-code shaping?",
+      "explanation": "If the data must be landed, the choice between a pipeline Copy activity and Dataflow Gen2 follows Microsoft's own orchestration-vs-shaping division of labour."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. lakehouse governed outcome",
-      "explanation": "lakehouse governed outcome in the decision guide for Pipeline Copy activity vs Dataflow Gen2 vs Spark vs OneLake shortcut across a medallion pipeline, plus the V-Order-per-zone file-layout rule architecture."
+      "nodeId": "pipeline-copy",
+      "title": "3a. Pipeline Copy activity for bulk/recurring loads",
+      "explanation": "Three levels of parallelism make this the cost-effective choice for large-scale, one-time or recurring ingestion."
+    },
+    {
+      "nodeId": "dataflow-gen2",
+      "title": "3b. Dataflow Gen2 for low-code shaping",
+      "explanation": "Business-analyst-owned cleansing happens here, before the data ever lands, using Power Query's 300+ transformations."
+    },
+    {
+      "nodeId": "spark-transform",
+      "title": "4. All three routes converge on Spark",
+      "explanation": "Regardless of how bronze arrived, Spark is the code-first engine that performs the de-duplication, conforming, and aggregation logic producing silver and gold."
+    },
+    {
+      "nodeId": "vorder-question",
+      "title": "5. Apply the V-Order rule per zone",
+      "explanation": "Bronze and silver are write-heavy and should leave V-Order off; gold is read-heavy and should turn it on."
+    },
+    {
+      "nodeId": "vorder-write-heavy-warning",
+      "title": "6. Warning: don't leave V-Order on everywhere",
+      "explanation": "Enabling V-Order globally pays a real ~15% write-time cost on every bronze/silver job for a read benefit only gold actually uses."
     }
   ]
 }

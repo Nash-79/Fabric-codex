@@ -1,197 +1,218 @@
 {
   "id": "rti-flow",
-  "title": "Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions",
-  "purpose": "Original diagram: Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions",
-  "accessibleSummary": "An interactive architecture infographic with 3 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions",
-  "type": "architecture",
+  "title": "Real-Time Intelligence Flow: Sources to Eventhouse to Actions",
+  "purpose": "Trace how events move from external sources through Eventstream ingestion and transformation into Eventhouse storage, with Activator branching off to fire automated actions on matching conditions, plus the cross-workspace security boundary that governs consumption.",
+  "accessibleSummary": "A flow diagram starting at external event sources feeding into Eventstream, which applies stream-processing operators before routing to two destinations: Eventhouse KQL databases for durable, queryable storage, and Activator, which watches for threshold, pattern, or KQL-defined conditions and fires actions like notifications, pipeline runs, or Copy job execution. Eventhouse data mirrors into OneLake in Delta format for other engines to query, and Real-Time hub sits alongside as the organization-wide catalog surfacing all of this as discoverable streams. A security node covers Workspace Outbound Access Protection, which blocks cross-workspace event consumption by default unless explicitly allowed, and a warning node covers the adaptive-batching delay between Eventhouse and its OneLake mirror.",
+  "longDescription": "This is a flow diagram of Real-Time Intelligence in Microsoft Fabric, from event sources to automated action. External sources — Kafka, Event Hubs, MQTT, CDC feeds, and dozens of other connector types — feed into Eventstream, a no-code pipeline that applies stream-processing operators (filtering, windowed aggregation, deduplication, routing) before sending events onward. From there the flow branches: one path lands events durably in an Eventhouse KQL database, organized by arrival time for fast indexed queries and mirrored into OneLake as Delta so other Fabric engines can read the same data without copying it; the other path feeds Activator, which continuously evaluates threshold, pattern, or KQL-defined conditions against the stream and fires actions — notifications, pipeline or Spark job runs, User Data Function calls, Power Automate flows, or as of a recent GA, directly invoking a Copy job with no pipeline in between. Real-Time hub sits alongside as the organization-wide catalog that surfaces every active stream, Microsoft-managed source, and workspace item event across the tenant. A security node captures Workspace Outbound Access Protection, which — when enabled on a consuming workspace — blocks cross-workspace event consumption by default unless a data connection rule explicitly allows it, while same-workspace consumption is always permitted regardless. A warning node captures the adaptive-batching delay OneLake mirroring introduces, which trades some freshness for well-sized Parquet files.",
+  "type": "flow",
   "topicSlug": "rti",
-  "capabilityIds": [
-    "rti"
-  ],
-  "revision": "1",
+  "capabilityIds": ["rti", "eventhouse-kql"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/rti-flow.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "rti boundary",
-      "summary": "rti boundary in the Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "event-sources",
+      "label": "Event sources",
+      "summary": "Kafka, Event Hubs, MQTT, CDC feeds, and other streaming or change-data sources.",
+      "detail": "Eventstreams support a broad range of source connectors, including Apache Kafka, AWS Kinesis, Google Cloud Pub/Sub, MQTT v3.1/v3.1.1, and a zero-configuration Real-Time Weather connector. Real-Time hub separately surfaces Microsoft-managed CDC feeds from Azure SQL DB, Cosmos DB, and PostgreSQL, plus Fabric workspace item events, as additional discoverable sources.",
+      "whyItMatters": "The breadth and low-friction nature of source connectors (some requiring zero configuration) is what makes RTI viable for many small, distributed sources at once, not just a single high-volume feed.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["RTI", "Eventstream", "Kafka"],
+      "evidence": [
+        { "sourceKey": "rti-overview", "note": "Eventstreams provide a no-code pipeline for collecting, transforming, and routing high-volume real-time data; supported sources include Apache Kafka, AWS Kinesis, Google Cloud Pub/Sub, MQTT v3.1/v3.1.1, and a Real-Time Weather connector." },
+        { "sourceKey": "fabric-blog-eventstream-weather-ai", "note": "The Real-Time Weather Eventstream source is a zero-configuration source requiring only a location name or coordinates, with no Azure subscription, Event Hub provisioning, or connection credentials needed; Eventstream supports 25 source types in total." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the rti boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through rti boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "rti",
-        "label": "Open rti"
+        "inputs": ["A Kafka topic, MQTT broker, CDC-enabled database, cloud pub/sub queue, or a zero-config source like Real-Time Weather"],
+        "processing": ["Configure connection details for the chosen source type (credentials, endpoint, or none for zero-config sources)", "Fabric establishes the streaming connection and begins receiving events"],
+        "outputs": ["A raw event stream entering the Eventstream item"],
+        "example": "A retailer's 11 stores each stream point-of-sale events over MQTT into one Eventstream, alongside a Real-Time Weather source per store location requiring no credentials at all — 12 concurrent sources feeding one pipeline.",
+        "controls": ["Source connector type and authentication method (SASL_SSL, mTLS, custom CA)", "Private network connectivity via a Streaming virtual network data gateway for sources inside a vNet or on-premises"],
+        "failureModes": ["Choosing a source connector still in preview (e.g. Oracle CDC, enhanced IoT Hub metadata) for a production-critical path without accounting for preview support boundaries", "Exposing a source over the public internet when private network connectivity was available and appropriate"]
       }
     },
     {
-      "id": "step-2",
-      "label": "Real-Time Intelligence flow from sources through Eventstreams and E…",
-      "summary": "Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions in the Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "eventstream",
+      "label": "Eventstream",
+      "summary": "No-code ingestion pipeline: collects, transforms, and routes events to multiple destinations.",
+      "detail": "Eventstreams provide a no-code pipeline for collecting, transforming, and routing high-volume real-time data to multiple destinations simultaneously. Built-in stream processing operators — filtering, cleansing, windowed aggregations, deduplication, and content-based routing — shape data before it lands at a destination, and derived eventstreams can package these transformations as reusable, shareable outputs.",
+      "whyItMatters": "Eventstream is the single control point where raw, heterogeneous source events become a shaped, routable stream — without it, every source-to-destination pairing would need its own bespoke transformation and fan-out logic.",
+      "classification": "fact",
+      "layers": ["data", "orchestration"],
+      "tags": ["RTI", "Eventstream", "StreamProcessing"],
+      "evidence": [
+        { "sourceKey": "rti-overview", "note": "Eventstreams provide a no-code pipeline for collecting, transforming, and routing high-volume real-time data to multiple destinations simultaneously." },
+        { "sourceKey": "rti-overview", "note": "Eventstreams expose built-in stream processing operators — filtering, cleansing, windowed aggregations, deduplication, and content-based routing — so data can be shaped before landing at a destination; derived eventstreams can be produced as reusable, shareable outputs." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["One or more raw event source connections"],
+        "processing": ["Apply stream operators: filter, cleanse, window-aggregate, deduplicate, route by content", "Fan out the resulting shaped stream to one or more destinations concurrently", "Optionally publish a derived eventstream as a reusable output of the transformation"],
+        "outputs": ["A shaped, routed event stream delivered to every configured destination in parallel"],
+        "example": "The weather-monitoring pattern applies a single humidity-threshold Filter operator across 11 parallel city sources, routing only matching events into one shared Eventhouse KQL table tagged by originating city — one filter definition instead of 11.",
+        "controls": ["Which operators are applied and in what order", "Number and type of destinations wired from the same Eventstream"],
+        "failureModes": ["Manually wiring each source through dozens of repetitive portal steps instead of using a repeatable pattern or AI-assisted authoring, which does not scale past a handful of sources", "Applying no deduplication on a source prone to at-least-once delivery, letting duplicate events reach Eventhouse"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "rti", "label": "Real-Time Intelligence" }
+    },
+    {
+      "id": "eventhouse-kql-db",
+      "label": "Eventhouse KQL database",
+      "summary": "Durable, indexed storage organized by arrival time, queryable via KQL or T-SQL.",
+      "detail": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale. Data is queryable through native KQL, a managed T-SQL analytics endpoint, and KQL querysets, so BI tools and analysts can connect without learning KQL.",
+      "whyItMatters": "This is the durable, queryable home for events after Eventstream shapes them — it is what turns a transient stream into a dataset that can be joined, aggregated, and investigated historically, not just observed as it passes.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "tags": ["Eventhouse", "KQL", "RTI"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "An Eventhouse is a workspace-level container that can host multiple KQL databases, allowing them to share underlying capacity and resources so cost and performance are jointly optimized." },
+        { "sourceKey": "rti-overview", "note": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale." }
+      ],
+      "drill": {
+        "inputs": ["A shaped event stream from Eventstream, or direct ingestion via Azure Event Hubs"],
+        "processing": ["Ingest and index records by arrival time", "Apply caching policy (hot tier) and retention policy (standard tier) per table", "Serve queries via native KQL, the managed T-SQL endpoint, or KQL querysets"],
+        "outputs": ["A durable, indexed table queryable by KQL, T-SQL, or notebooks, and native anomaly detection over the live data in place"],
+        "example": "Point-of-sale events land in a KQL table partitioned implicitly by arrival time; an analyst runs a KQL query for the last hour's transaction volume by store, and a data scientist opens the same table from a notebook using Spark with no data movement.",
+        "controls": ["Caching policy window (hot cache size vs. cost)", "Retention policy duration (how long data stays queryable at all)"],
+        "failureModes": ["Query demand exceeding capacity, triggering escalating throttling (proactive, reactive, extreme-reactive) that can eventually risk data loss if sustained", "Assuming a cold Eventhouse compute node responds instantly — a 5-10 second cold-start warm-up applies after idle periods"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "eventhouse-kql", "label": "Eventhouse & KQL Database" }
+    },
+    {
+      "id": "onelake-mirror",
+      "label": "OneLake Delta mirror",
+      "summary": "Eventhouse data mirrors into OneLake as Delta, queryable by every other Fabric engine.",
+      "detail": "Data stored in an Eventhouse is mirrored to OneLake as a single logical copy for use by other Fabric experiences. Enabling OneLake availability exposes KQL table data in Delta Lake format, directly queryable by Power BI Direct Lake, Warehouse, Lakehouse, and Spark notebooks with no data movement or copy, and at no additional storage charge beyond the standard OneLake tier.",
+      "whyItMatters": "This is what breaks Eventhouse out of being a siloed KQL-only store — the same event history becomes available to every other engine in Fabric through the identical one-copy OneLake model the rest of the platform relies on.",
+      "classification": "fact",
+      "layers": ["data", "metadata"],
+      "tags": ["Eventhouse", "OneLake", "DeltaLake"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "Enabling OneLake availability exposes KQL table data in Delta Lake format, making it directly queryable by Power BI Direct Lake mode, Warehouse, Lakehouse, and Spark notebooks without any data movement or copy, at no additional storage charge." }
+      ],
+      "drill": {
+        "inputs": ["A KQL table with OneLake availability enabled (database-level or table-level)"],
+        "processing": ["Adaptive batching accumulates enough data to produce optimally-sized Parquet files (typically 200-256 MB) before writing", "Data is written to OneLake in Delta format under the item's canonical path"],
+        "outputs": ["A Delta-format mirror of the KQL table, directly queryable by Power BI Direct Lake, Warehouse, Lakehouse, and Spark with no extra copy"],
+        "example": "A retention-tagged sensor table with OneLake availability enabled at the table level lets a separate Spark notebook read the same event history directly as a Delta table, joining it against lakehouse reference data with no export step.",
+        "controls": ["Database-level vs. table-level OneLake availability scope", "Mirroring policy's maximum delay setting (default up to 3 hours, lowerable to 5 minutes)"],
+        "failureModes": ["Lowering the mirroring delay aggressively to chase freshness, producing many small Parquet files that degrade downstream query performance", "Attempting DDL operations (rename, type change, RLS, row delete) on a table with OneLake availability enabled — these are blocked and require temporarily disabling it, which triggers a full historic backfill on re-enable"]
       }
     },
     {
-      "id": "step-3",
-      "label": "rti governed outcome",
-      "summary": "rti governed outcome in the Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "activator",
+      "label": "Activator",
+      "summary": "Watches the stream for threshold, pattern, or KQL-defined conditions and fires actions.",
+      "detail": "Activator monitors data flowing through Real-Time hub, KQL queries, or Power BI reports and fires automated actions — notifications, launching pipeline/Spark job/Dataflow executions, calling User Data Functions, or triggering Power Automate workflows — when threshold, pattern, or KQL-defined conditions are met. Fabric events and Azure Blob Storage events exposed in Real-Time hub can also trigger Activator rules, enabling fully event-driven orchestration with no polling schedule.",
+      "whyItMatters": "This is the branch that turns passive monitoring into action — instead of every consumer polling Eventhouse or a dashboard, Activator evaluates conditions continuously and pushes only the actions that matter, replacing schedule-based polling with genuine event-driven triggers.",
+      "classification": "fact",
+      "layers": ["orchestration", "observability"],
+      "tags": ["Activator", "RTI", "EventDriven"],
+      "evidence": [
+        { "sourceKey": "rti-overview", "note": "Activator monitors data flowing through Real-Time hub, KQL queries, or Power BI reports and fires automated actions when threshold, pattern, or KQL-defined conditions are met." },
+        { "sourceKey": "fabric-blog-activator-copy-job", "note": "Fabric Activator can now directly invoke a Copy job as a rule action, without requiring an intermediate Data Factory pipeline, and this capability is Generally Available." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the rti governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through rti governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A live stream from Real-Time hub, a KQL query result, a Power BI report metric, or a Fabric/Azure Blob Storage event"],
+        "processing": ["Evaluate the defined rule condition continuously (threshold, pattern match, or KQL query result)", "On match, invoke the configured action"],
+        "outputs": ["A notification, a pipeline/Spark job/Dataflow run, a User Data Function call, a Power Automate flow trigger, or a directly invoked Copy job"],
+        "example": "An Activator rule watches a OneLake table-updated event and, the moment new rows land, directly invokes a Copy job to move them onward — replacing what used to require a scheduled pipeline polling for changes on a fixed interval.",
+        "controls": ["Rule condition definition (threshold value, pattern expression, or KQL query)", "Which action type the rule invokes on match"],
+        "failureModes": ["Relying on Power Automate as an Activator action target inside a workspace with Outbound Access Protection enabled — this is blocked outright with no current override", "Defining an overly broad pattern condition that fires far more often than intended, generating alert fatigue or runaway downstream job executions"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "rti",
-        "label": "Open rti"
+      "drillTarget": { "kind": "capability", "slug": "rti", "label": "Real-Time Intelligence" }
+    },
+    {
+      "id": "realtime-hub",
+      "label": "Real-Time hub",
+      "summary": "Organization-wide catalog surfacing every active stream and event source to every workload.",
+      "detail": "Real-Time hub functions as an organization-wide catalog of data in motion, surfacing active data streams, Microsoft-managed sources (including CDC feeds from Azure SQL DB, Cosmos DB, and PostgreSQL), and Fabric workspace item events — all accessible to every Fabric workload.",
+      "whyItMatters": "Without a shared catalog, discovering which streams already exist across a tenant would require asking around workspace by workspace; Real-Time hub makes every stream a discoverable, reusable asset rather than a private pipeline.",
+      "classification": "fact",
+      "layers": ["metadata", "governance"],
+      "tags": ["RTI", "RealTimeHub"],
+      "evidence": [
+        { "sourceKey": "rti-overview", "note": "Real-Time hub functions as an organization-wide catalog of data in motion, surfacing active data streams, Microsoft-managed sources, and Fabric workspace item events, all accessible to every Fabric workload." }
+      ],
+      "drill": {
+        "inputs": ["Every active Eventstream, Microsoft-managed CDC source, and Fabric workspace item event across the tenant"],
+        "processing": ["Catalog and index each stream/source as a discoverable entry", "Expose them for connection by any workload (Activator, Eventstream, notebooks)"],
+        "outputs": ["A single searchable surface of every stream in motion across the tenant"],
+        "example": "A new team building an alerting workflow searches Real-Time hub, finds an existing OneLake table-updated event stream already produced by another team's pipeline, and wires an Activator rule to it instead of building a duplicate ingestion path.",
+        "controls": ["Which streams are published/discoverable versus kept private to their producing workspace"],
+        "failureModes": ["Building a duplicate Eventstream for a source that's already cataloged in Real-Time hub, simply because nobody checked first"]
+      }
+    },
+    {
+      "id": "oap-security",
+      "label": "Outbound Access Protection",
+      "summary": "Cross-workspace event consumption is default-deny unless explicitly allowed.",
+      "detail": "Fabric Events and Azure Events in Real-Time hub support Workspace Outbound Access Protection (OAP). When enabled on a workspace, an Activator alert or Eventstream in that workspace can no longer consume Job or OneLake events emitted from a different workspace unless a data connection rule for the Real-Time Events connector explicitly allows it. Event consumption between items within the same workspace is always allowed regardless of the setting; OAP only affects cross-workspace consumption, and it is enforced only on the consuming workspace's own configuration.",
+      "whyItMatters": "This is the security boundary that governs every cross-workspace arrow in this diagram — a stream published to Real-Time hub is not automatically reachable by every workspace once OAP is turned on, which architects must design for explicitly rather than assume open access.",
+      "classification": "fact",
+      "layers": ["security", "governance"],
+      "tags": ["RTI", "Security", "OAP"],
+      "evidence": [
+        { "sourceKey": "fabric-blog-oap-event-flows", "note": "Fabric Events and Azure Events in Real-Time hub now support Workspace Outbound Access Protection, and with OAP enabled on a workspace, an Activator alert or Eventstream in that workspace can no longer consume Job or OneLake events from a different workspace unless a data connection rule explicitly allows it." },
+        { "sourceKey": "fabric-blog-oap-event-flows", "note": "Event consumption between items within the same workspace is always allowed regardless of OAP; OAP is enforced only on the consumer's workspace, and the producing workspace's own OAP setting has no bearing on the flow." }
+      ],
+      "drill": {
+        "inputs": ["A cross-workspace event consumer (an Activator rule or Eventstream reading a Job/OneLake event from another workspace)"],
+        "processing": ["Check whether the consuming workspace has OAP enabled", "If enabled, check for a matching data connection rule for the Real-Time Events connector", "Allow the flow only if a rule permits it; otherwise block it"],
+        "outputs": ["Either an allowed cross-workspace event flow, or a blocked one requiring an explicit data connection rule"],
+        "example": "A security team enables OAP on a finance workspace that already has an Activator rule consuming OneLake events from a shared operations workspace; the rule is automatically moved to a Paused state rather than deleted, with a seven-day retention window to add the missing data connection rule before events start dropping.",
+        "controls": ["Data connection rules permitting the Real-Time Events connector for specific cross-workspace sources"],
+        "failureModes": ["Enabling OAP without auditing existing cross-workspace consumers first, causing them to pause and silently stop delivering after the seven-day retention window lapses", "Assuming a paused consumer resumes automatically once the rule is added — it must be deleted and recreated instead"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-sources-eventstream", "from": "event-sources", "to": "eventstream", "label": "raw events ingested", "layer": "data", "kind": "flow" },
+    { "id": "e-eventstream-eventhouse", "from": "eventstream", "to": "eventhouse-kql-db", "label": "shaped stream, durable path", "layer": "data", "kind": "flow" },
+    { "id": "e-eventstream-activator", "from": "eventstream", "to": "activator", "label": "shaped stream, alerting path", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-eventhouse-onelake", "from": "eventhouse-kql-db", "to": "onelake-mirror", "label": "adaptive-batched Delta write", "layer": "data", "kind": "flow" },
+    { "id": "e-eventhouse-activator", "from": "eventhouse-kql-db", "to": "activator", "label": "KQL-defined condition evaluated against", "layer": "observability", "kind": "flow" },
+    { "id": "e-eventstream-hub", "from": "eventstream", "to": "realtime-hub", "label": "published as a discoverable stream", "layer": "metadata", "kind": "flow" },
+    { "id": "e-hub-activator", "from": "realtime-hub", "to": "activator", "label": "catalog source for rule conditions", "layer": "metadata", "kind": "flow" },
+    { "id": "e-hub-oap", "from": "realtime-hub", "to": "oap-security", "label": "cross-workspace consumption governed by", "layer": "security", "kind": "branch" },
+    { "id": "e-activator-oap", "from": "activator", "to": "oap-security", "label": "cross-workspace action targets governed by", "layer": "security", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. rti boundary",
-      "explanation": "rti boundary in the Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions architecture."
+      "nodeId": "event-sources",
+      "title": "Start: events arrive from many source types",
+      "explanation": "Kafka, MQTT, CDC feeds, and zero-configuration connectors like Real-Time Weather all feed into the same ingestion entry point."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Real-Time Intelligence flow from sources through Eventstreams and E…",
-      "explanation": "Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions in the Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions architecture."
+      "nodeId": "eventstream",
+      "title": "Eventstream shapes and fans out the stream",
+      "explanation": "Filtering, deduplication, and windowed aggregation happen here, once, before the shaped stream is routed to every destination in parallel."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. rti governed outcome",
-      "explanation": "rti governed outcome in the Real-Time Intelligence flow from sources through Eventstreams and Eventhouse to actions architecture."
+      "nodeId": "eventhouse-kql-db",
+      "title": "Branch: durable storage in Eventhouse",
+      "explanation": "One path lands events in a KQL database, organized by arrival time for fast indexed queries via KQL, T-SQL, or notebooks."
+    },
+    {
+      "nodeId": "onelake-mirror",
+      "title": "Eventhouse mirrors into OneLake as Delta",
+      "explanation": "An adaptive-batched write exposes the same event history to Power BI Direct Lake, Warehouse, Lakehouse, and Spark with no separate copy."
+    },
+    {
+      "nodeId": "activator",
+      "title": "Branch: Activator watches for conditions",
+      "explanation": "The other path from Eventstream, plus KQL-defined conditions evaluated against Eventhouse directly, feed Activator's continuous rule evaluation."
+    },
+    {
+      "nodeId": "realtime-hub",
+      "title": "Real-Time hub catalogs everything",
+      "explanation": "Every published stream becomes discoverable tenant-wide, and Activator can source rule conditions from anything cataloged there."
+    },
+    {
+      "nodeId": "oap-security",
+      "title": "Security boundary: cross-workspace consumption is default-deny",
+      "explanation": "Once Outbound Access Protection is enabled on a consuming workspace, both Real-Time hub streams and Activator's cross-workspace action targets require an explicit data connection rule — same-workspace flows are unaffected."
     }
   ]
 }

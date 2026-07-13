@@ -9,34 +9,48 @@ import { Maximize2, Minimize2, Move, Plus, Minus, RotateCcw, X, ZoomIn } from "l
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { InteractiveDiagram } from "@/components/InteractiveDiagram";
-import { getInteractiveDiagram } from "@/diagrams/catalog";
+import { AuthoredSvg } from "@/components/AuthoredSvg";
+import type { Citation } from "@/components/CitationSidebar";
+import type { AuthoredDiagram } from "@/diagrams/types";
 
 // Module-level cache of natural aspect ratios so revisiting an image doesn't
 // re-run the reflow after decode.
 const ratioCache = new Map<string, number>();
+
+function ratioFromSvg(markup?: string) {
+  if (!markup) return null;
+  const match = /<svg\b[^>]*\bviewBox=["']\s*[-.\d]+\s+[-.\d]+\s+([.\d]+)\s+([.\d]+)\s*["']/i.exec(
+    markup,
+  );
+  const width = Number(match?.[1]);
+  const height = Number(match?.[2]);
+  return width > 0 && height > 0 ? width / height : null;
+}
 
 export function DiagramLightbox({
   src,
   alt,
   caption,
   figureIndex,
+  svgMarkup,
+  definition,
+  citations,
 }: {
   src: string;
   alt: string;
   caption?: string;
   figureIndex?: number;
+  svgMarkup?: string;
+  definition?: AuthoredDiagram;
+  citations?: Citation[];
 }) {
-  const slug = src
-    .split("/")
-    .pop()
-    ?.replace(/\.(svg|mmd)$/i, "");
-  const interactive = slug ? getInteractiveDiagram(slug) : undefined;
   const [open, setOpen] = useState(false);
-  const [ratio, setRatio] = useState<number | null>(() => ratioCache.get(src) ?? null);
+  const [ratio, setRatio] = useState<number | null>(
+    () => ratioCache.get(src) ?? ratioFromSvg(svgMarkup),
+  );
   const [inView, setInView] = useState(false);
   const imgRef = useRef<HTMLImageElement | null>(null);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const img = imgRef.current;
@@ -79,27 +93,6 @@ export function DiagramLightbox({
   const describeId = figId ? `${figId}-desc` : undefined;
   const captionText = caption || alt;
 
-  if (interactive) {
-    return (
-      <figure
-        id={figId}
-        data-diagram-slug={interactive.id}
-        className="not-prose article-figure my-10 scroll-mt-24"
-        aria-labelledby={captionText && captionId ? captionId : undefined}
-      >
-        <InteractiveDiagram definition={interactive} />
-        {captionText && (
-          <figcaption
-            id={captionId}
-            className="mx-auto mt-3 max-w-[72ch] text-center text-sm italic leading-relaxed text-muted-foreground"
-          >
-            {captionText}
-          </figcaption>
-        )}
-      </figure>
-    );
-  }
-
   return (
     <>
       <figure
@@ -111,16 +104,19 @@ export function DiagramLightbox({
         aria-labelledby={captionText && captionId ? captionId : undefined}
         aria-label={!captionText ? alt || "Diagram" : undefined}
       >
-        <button
+        <div
           ref={triggerRef}
-          type="button"
-          onClick={() => setOpen(true)}
-          aria-label={`Open diagram${figureIndex ? ` ${figureIndex}` : ""}: ${alt || caption || "diagram"} in zoom view`}
-          aria-haspopup="dialog"
-          className="relative block w-full cursor-zoom-in overflow-hidden rounded-2xl border border-border bg-card shadow-lg shadow-black/20 transition-colors hover:border-teal-500/50 focus-visible:border-teal-500/60"
+          className="relative block w-full overflow-hidden rounded-2xl border border-border bg-card shadow-lg shadow-black/20 transition-colors hover:border-teal-500/50"
           style={{ aspectRatio: `${aspectRatio}` }}
         >
-          {inView ? (
+          {inView && svgMarkup && definition ? (
+            <AuthoredSvg
+              markup={svgMarkup}
+              definition={definition}
+              citations={citations}
+              className="h-full w-full"
+            />
+          ) : inView ? (
             <img
               ref={imgRef}
               src={src}
@@ -142,15 +138,21 @@ export function DiagramLightbox({
           ) : (
             <div aria-hidden className="h-full w-full animate-pulse bg-muted/50" />
           )}
-          <span
-            aria-hidden
-            className="pointer-events-none absolute right-3 top-3 flex items-center gap-1.5 rounded-full border border-border bg-background/85 px-2.5 py-1 text-[11px] font-medium text-muted-foreground backdrop-blur-sm"
+          <noscript>
+            <img src={src} alt={alt} className="h-full w-full object-contain" />
+          </noscript>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            aria-label={`Open diagram${figureIndex ? ` ${figureIndex}` : ""}: ${alt || caption || "diagram"} in zoom view`}
+            aria-haspopup="dialog"
+            className="absolute right-3 top-3 z-20 flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ZoomIn className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Click to zoom · pan</span>
             <span className="sm:hidden">Tap to zoom</span>
-          </span>
-        </button>
+          </button>
+        </div>
         {captionText && (
           <figcaption
             id={captionId}
@@ -181,6 +183,9 @@ export function DiagramLightbox({
             alt={alt}
             caption={caption}
             figureIndex={figureIndex}
+            svgMarkup={svgMarkup}
+            definition={definition}
+            citations={citations}
             onClose={() => setOpen(false)}
           />
         </DialogContent>
@@ -194,12 +199,18 @@ function LightboxViewer({
   alt,
   caption,
   figureIndex,
+  svgMarkup,
+  definition,
+  citations,
   onClose,
 }: {
   src: string;
   alt: string;
   caption?: string;
   figureIndex?: number;
+  svgMarkup?: string;
+  definition?: AuthoredDiagram;
+  citations?: Citation[];
   onClose: () => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -277,12 +288,21 @@ function LightboxViewer({
                 justifyContent: "center",
               }}
             >
-              <img
-                src={src}
-                alt={alt}
-                className="max-h-[100dvh] max-w-full select-none object-contain sm:max-h-[88dvh]"
-                draggable={false}
-              />
+              {svgMarkup && definition ? (
+                <AuthoredSvg
+                  markup={svgMarkup}
+                  definition={definition}
+                  citations={citations}
+                  className="max-h-[100dvh] max-w-full select-none sm:max-h-[88dvh]"
+                />
+              ) : (
+                <img
+                  src={src}
+                  alt={alt}
+                  className="max-h-[100dvh] max-w-full select-none object-contain sm:max-h-[88dvh]"
+                  draggable={false}
+                />
+              )}
             </TransformComponent>
             <OrientationRefit />
             {caption && (

@@ -1,379 +1,136 @@
 {
   "id": "streaming-analytics-decision",
-  "title": "hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost…",
-  "purpose": "Original diagram: hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both",
-  "accessibleSummary": "An interactive decision infographic with 6 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both",
+  "title": "Hot Path, Cold Path, or Both? Routing a Streaming Workload",
+  "purpose": "Decide, per streaming workload, whether events need Eventhouse's hot path, OneLake availability's cold path, or both — based on latency, retention, query pattern, and cost.",
+  "accessibleSummary": "A decision tree that starts by asking what latency the workload actually needs. Sub-second alerting or live dashboards route to the Eventhouse hot path. Daily-freshness historical reporting or cross-domain joins route to the cold path via OneLake availability, and a workload needing both routes to both simultaneously since they're the same underlying table. A warning node covers the common mistake of keeping a hot event path running for a workload that only ever needed daily freshness, incurring streaming operational cost for no latency benefit a lakehouse or warehouse pipeline couldn't have delivered more cheaply.",
+  "longDescription": "This is a decision tree for a question the streaming analytics pattern forces on every workload: which path, or both? The root question asks what latency the workload genuinely requires. A true operational need — an alert that must fire in seconds, or a live dashboard someone is watching in real time — routes to the Eventhouse hot path, where arrival-time indexing and in-place anomaly detection deliver that speed. A workload whose real requirement is historical trend analysis, cross-domain joins with warehouse or lakehouse dimensions, or reporting that only needs to be current within hours routes to the cold path via OneLake availability, which is not a separate pipeline but the same KQL table exposed as Delta. Because both paths share one underlying table, a workload that genuinely needs both — live alerting now and historical analysis later — gets both without extra ingestion work. A warning node names the cost trap of routing a purely daily-freshness workload through the hot path anyway, paying for an always-on Eventhouse and a caching policy tuned for query speed nobody needed, when a lakehouse or warehouse pipeline would have served the same daily requirement more cheaply.",
   "type": "decision",
   "topicSlug": "streaming-analytics-pattern",
-  "capabilityIds": [
-    "rti"
-  ],
-  "revision": "1",
+  "capabilityIds": ["rti", "eventhouse-kql", "lakehouse"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/streaming-analytics-decision.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "streaming analytics pattern boundary",
-      "summary": "streaming analytics pattern boundary in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
+      "id": "start-question",
+      "label": "What latency does this workload actually need?",
+      "summary": "Root question: sub-second operational need, hours-scale historical need, or both.",
+      "detail": "The first question in routing a streaming workload is not which Fabric item to use, but what latency the business requirement actually demands. Operational monitoring, anomaly investigation, and alerting genuinely need low latency; historical reporting and cross-domain joins do not, even though both can technically be served from the same Eventhouse-ingested data.",
+      "whyItMatters": "Answering this honestly before building anything prevents the most common streaming cost trap: defaulting every workload onto the hot path because the data happens to already be streaming, regardless of what the business actually asked for.",
       "classification": "pattern",
-      "layers": [
-        "data"
-      ],
+      "layers": ["data"],
+      "tags": ["decision-root", "StreamingAnalytics"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "drill": {
+        "inputs": ["The stated business requirement for this specific workload, not the data source's technical capability", "Who consumes the result and how they use it (live monitoring vs periodic report)"],
+        "processing": ["State the actual latency requirement in concrete terms (seconds, minutes, hours, daily)", "Separate the requirement from the fact that the source happens to be a continuous event stream"],
+        "outputs": ["A routed decision toward the hot path, the cold path, or both"],
+        "example": "A safety-alert workload genuinely needs sub-minute detection and routes to the hot path; a weekly utilization trend report built from the same vehicle telemetry only needs the cold path, even though both read from the same Eventhouse."
+      ,
+        "controls": ["Write the latency requirement down in business terms before choosing an implementation path"],
+        "failureModes": ["Routing every workload through the hot path because the data source is already streaming, rather than asking what each specific workload needs"]
+      }
+    },
+    {
+      "id": "hot-path-route",
+      "label": "Eventhouse hot path",
+      "summary": "Sub-second, event-driven: live dashboards, anomaly detection, alerting conditions.",
+      "detail": "Workloads with a genuine operational latency need route to the Eventhouse KQL database, which auto-organizes ingested records by arrival time for fast indexed queries and runs native anomaly detection in place against live time-series data, with no data copy or export required. This is also the path Activator watches to fire alerts and automated actions.",
+      "whyItMatters": "This is the path that actually delivers the sub-second responsiveness an operational requirement demands — the arrival-time indexing and in-place anomaly detection are specifically what make that speed possible without a separate real-time processing layer.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "tags": ["Eventhouse", "KQL"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "KQL database storage is split into a premium cache tier that holds the hot dataset governed by the caching policy, and a standard tier that holds the full retention window; configuring a shorter cache window reduces premium-tier spend without affecting total queryable history." },
+        { "sourceKey": "rti-overview", "note": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale. Eventhouse includes native anomaly detection that evaluates live time-series and event datasets in place." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the streaming analytics pattern boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through streaming analytics pattern boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["An event stream with a genuine sub-second-to-minutes latency requirement"],
+        "processing": ["Route the eventstream to an Eventhouse KQL database", "Size the caching policy's hot-cache window to cover exactly what live queries need", "Connect Activator rules or a Real-Time Dashboard against the hot data"],
+        "outputs": ["Live-queryable data supporting dashboards, alerting, and in-place anomaly detection"],
+        "example": "A fleet-safety monitor needs to detect a stopped vehicle within a minute; it queries the Eventhouse hot cache directly rather than waiting on any batch or cold-path materialization.",
+        "controls": ["Caching policy window sized to the actual query need, not maximized by default"],
+        "failureModes": ["Sizing the hot cache window larger than any live query actually needs, paying premium-tier cost for data nobody queries at low latency"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "streaming-analytics-pattern",
-        "label": "Open streaming analytics pattern"
+      "drillTarget": { "kind": "capability", "slug": "eventhouse-kql", "label": "Eventhouse / KQL" }
+    },
+    {
+      "id": "cold-path-route",
+      "label": "OneLake availability (cold path)",
+      "summary": "Hours-scale freshness: historical trends, cross-domain joins, daily/weekly reporting.",
+      "detail": "Workloads whose real requirement is historical analysis, cross-domain joins with lakehouse or warehouse data, or reporting that's acceptable within hours route to OneLake availability — the same KQL table adaptively batched into Delta Parquet, queryable by lakehouse, warehouse, Spark, and Power BI Direct Lake with no data movement and no additional storage charge.",
+      "whyItMatters": "This is the cheaper, simpler path for anything that doesn't genuinely need sub-second freshness: no separate cold-path pipeline to build, since it's the same table the hot path already populated, just exposed as Delta.",
+      "classification": "fact",
+      "layers": ["data", "metadata"],
+      "tags": ["Eventhouse", "OneLake"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "Enabling OneLake availability exposes KQL table data in Delta Lake format, making it directly queryable by other Fabric engines — including Power BI Direct Lake mode, Warehouse, Lakehouse, and Spark notebooks — without any data movement or copy, with no additional storage charge beyond standard OneLake storage." },
+        { "sourceKey": "eventhouse-overview", "note": "An adaptive batching mechanism delays writes to OneLake until enough data accumulates to produce optimally-sized Parquet files. The default maximum delay is up to 3 hours; it can be lowered to as little as 5 minutes via the mirroring policy." }
+      ],
+      "drill": {
+        "inputs": ["The same Eventhouse KQL table already receiving the event stream"],
+        "processing": ["Enable OneLake availability at the table or database level", "Adaptive batching writes Delta files on a delay tuned between 5 minutes and 3 hours", "Downstream engines query the resulting Delta table like any other OneLake data"],
+        "outputs": ["Historical, cross-engine-queryable data at whatever freshness the batching delay is tuned to"],
+        "example": "A weekly fleet-utilization report joins the OneLake-available vehicle telemetry table with warehouse maintenance and contract dimensions, needing nothing faster than the default 3-hour batching delay.",
+        "controls": ["Mirroring policy delay setting, tuned to the actual freshness requirement rather than minimized by default"],
+        "failureModes": ["Tuning the delay far below what the reporting cadence actually needs, producing many small files that degrade downstream query performance for no freshness benefit anyone uses"]
       }
     },
     {
-      "id": "step-2",
-      "label": "hot-path vs cold-path routing decision for streaming workloads - la…",
-      "summary": "hot-path vs cold-path routing decision for streaming workloads - latency in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
+      "id": "both-paths-route",
+      "label": "Both paths, same table",
+      "summary": "A workload needing live alerting now and historical analysis later gets both with no extra ingestion.",
+      "detail": "Because OneLake availability is a feature of the same KQL table rather than a separate ingestion pipeline, a workload that genuinely needs both live operational response and historical cross-domain analysis is served by enabling both the hot cache and OneLake availability on one table — no duplicated ingestion, no reconciliation between two copies.",
+      "whyItMatters": "This is the case that makes the hot/cold split a genuine architectural advantage rather than a compromise: the two latency profiles don't require choosing, or building and maintaining two separate pipelines that could drift apart.",
       "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
+      "layers": ["data", "compute"],
+      "tags": ["Eventhouse", "OneLake"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the hot-path vs cold-path routing decision for streaming workloads - latency responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through hot-path vs cold-path routing decision for streaming workloads - latency: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A workload with both a genuine live-response requirement and a genuine historical/cross-domain requirement"],
+        "processing": ["Keep the Eventhouse hot cache sized for the live query need", "Enable OneLake availability on the same table for the historical/cross-engine need", "Route Activator and dashboards against the hot cache; route reporting and joins against the OneLake Delta copy"],
+        "outputs": ["One ingested table serving both a live alerting surface and a historical reporting surface"],
+        "example": "A logistics team both alerts in real time when a vehicle goes offline (hot path) and builds a monthly on-time-delivery trend report joining the same telemetry with warehouse order data (cold path), from one Eventhouse table with both features enabled.",
+        "controls": ["Independent tuning of caching policy (hot) and mirroring policy delay (cold) on the same table"],
+        "failureModes": ["Assuming enabling both paths doubles storage or ingestion cost, when OneLake availability adds no additional storage charge beyond standard OneLake storage"]
       }
     },
     {
-      "id": "step-3",
-      "label": "query-pattern",
-      "summary": "query-pattern in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "cost-trap-warning",
+      "label": "Trap: hot path for a daily-freshness workload",
+      "summary": "Running an always-on hot path for a workload that only ever needed daily freshness wastes operational cost.",
+      "detail": "Streaming adds cost and operational shape that batch workloads do not need. If the actual business requirement is daily freshness, a lakehouse or warehouse pipeline is usually a better fit than keeping a hot event path running — the hot path's premium cache tier and always-on Eventhouse capacity buy a latency benefit nobody asked for.",
+      "whyItMatters": "This is the most common streaming-analytics cost mistake: routing a workload onto the hot path by default because the source is already streaming, then paying for operational infrastructure that delivers no benefit over a much simpler scheduled pipeline.",
+      "classification": "warning",
+      "layers": ["data", "compute"],
+      "tags": ["Eventhouse", "AntiPattern"],
+      "evidence": [
+        { "sourceKey": "rti-overview", "note": "Streaming adds cost and operational shape that batch workloads do not need; if the business requirement is daily freshness, a lakehouse or warehouse pipeline is usually a better fit than keeping a hot event path." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the query-pattern responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through query-pattern: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "and cost factors that send events to Eventhouse",
-      "summary": "and cost factors that send events to Eventhouse in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and cost factors that send events to Eventhouse responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and cost factors that send events to Eventhouse: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "the lakehouse",
-      "summary": "the lakehouse in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the the lakehouse responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through the lakehouse: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "rti governed outcome",
-      "summary": "rti governed outcome in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the rti governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through rti governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "rti",
-        "label": "Open rti"
+        "inputs": ["A workload with a stated daily (or slower) freshness requirement, currently routed through the Eventhouse hot path"],
+        "processing": ["Re-examine the actual business requirement against the current implementation", "Estimate the ongoing Eventhouse hot-cache cost versus an equivalent lakehouse/warehouse scheduled pipeline", "Migrate the workload off the hot path if no genuine sub-daily need exists"],
+        "outputs": ["Either a justified hot-path workload, or one correctly migrated to a cheaper scheduled pipeline"],
+        "example": "A monthly compliance report was originally built on the Eventhouse hot path because the source data happened to be streaming; a review finds no consumer ever needed faster than daily freshness, and the workload is moved to a nightly lakehouse pipeline, eliminating the always-on premium cache cost.",
+        "controls": ["Periodic review of hot-path workloads against their actual stated freshness requirement, not just their data source's technical shape"],
+        "failureModes": ["Nobody revisits the original routing decision after the workload ships, so the unnecessary cost persists indefinitely"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "orchestration",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-start-hot", "from": "start-question", "to": "hot-path-route", "label": "sub-second/minutes operational need", "layer": "data", "kind": "branch" },
+    { "id": "e-start-cold", "from": "start-question", "to": "cold-path-route", "label": "hours-scale historical or cross-domain need", "layer": "data", "kind": "branch" },
+    { "id": "e-start-both", "from": "start-question", "to": "both-paths-route", "label": "needs both live response and history", "layer": "data", "kind": "branch" },
+    { "id": "e-hot-both", "from": "hot-path-route", "to": "both-paths-route", "label": "same table, add OneLake availability", "layer": "metadata", "kind": "flow" },
+    { "id": "e-cold-both", "from": "cold-path-route", "to": "both-paths-route", "label": "same table, hot cache already present", "layer": "metadata", "kind": "flow" },
+    { "id": "e-hot-cost-warning", "from": "hot-path-route", "to": "cost-trap-warning", "label": "if the real need was only daily", "layer": "compute", "kind": "branch" },
+    { "id": "e-warning-cold-feedback", "from": "cost-trap-warning", "to": "cold-path-route", "label": "migrate to a cheaper scheduled pipeline", "layer": "data", "kind": "feedback" }
   ],
   "walkthrough": [
-    {
-      "nodeId": "step-1",
-      "title": "1. streaming analytics pattern boundary",
-      "explanation": "streaming analytics pattern boundary in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture."
-    },
-    {
-      "nodeId": "step-2",
-      "title": "2. hot-path vs cold-path routing decision for streaming workloads - la…",
-      "explanation": "hot-path vs cold-path routing decision for streaming workloads - latency in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture."
-    },
-    {
-      "nodeId": "step-3",
-      "title": "3. query-pattern",
-      "explanation": "query-pattern in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture."
-    },
-    {
-      "nodeId": "step-4",
-      "title": "4. and cost factors that send events to Eventhouse",
-      "explanation": "and cost factors that send events to Eventhouse in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture."
-    },
-    {
-      "nodeId": "step-5",
-      "title": "5. the lakehouse",
-      "explanation": "the lakehouse in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture."
-    },
-    {
-      "nodeId": "step-6",
-      "title": "6. rti governed outcome",
-      "explanation": "rti governed outcome in the hot-path vs cold-path routing decision for streaming workloads - latency, retention, query-pattern, and cost factors that send events to Eventhouse, the lakehouse, or both architecture."
-    }
+    { "nodeId": "start-question", "title": "1. Ask what latency the workload needs, not what the source offers", "explanation": "The source being a continuous event stream doesn't mean every workload built on it needs hot-path latency." },
+    { "nodeId": "hot-path-route", "title": "2. Hot path for genuine operational needs", "explanation": "Live dashboards, anomaly detection, and alerting conditions that must fire in seconds belong on the Eventhouse hot cache." },
+    { "nodeId": "cold-path-route", "title": "3. Cold path for historical and cross-domain needs", "explanation": "OneLake availability serves hours-scale freshness at lower cost, since it's the same table exposed as Delta rather than a second pipeline." },
+    { "nodeId": "both-paths-route", "title": "4. Both, when both are genuinely needed", "explanation": "A workload needing live response now and historical analysis later gets both from one table, with no duplicated ingestion." },
+    { "nodeId": "cost-trap-warning", "title": "5. Warning: don't default to the hot path", "explanation": "A workload that only ever needed daily freshness pays ongoing hot-cache cost for a latency benefit nobody uses — the fix is migrating it to a scheduled pipeline." }
   ]
 }

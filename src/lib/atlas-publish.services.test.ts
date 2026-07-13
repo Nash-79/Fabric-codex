@@ -162,6 +162,18 @@ describe("publishDiagram", () => {
       kind: "architecture",
     });
     expect(rows[1]).toMatchObject({ slug: "direct-lake-internals", kind: "internals" });
+    expect(opsFor(ops, "diagrams", "select")).toHaveLength(0);
+  });
+
+  it("preserves an explicitly supplied remote diagram path", async () => {
+    const { sb, ops } = makeStub({ diagrams: [{ data: null }] });
+    await publishDiagram(sb, {
+      slug: "externally-hosted-reference",
+      path: "https://example.com/reference.svg",
+      caption: "Reference",
+    });
+    const rows = opsFor(ops, "diagrams", "upsert")[0].args[0] as Array<Record<string, unknown>>;
+    expect(rows[0].path).toBe("https://example.com/reference.svg");
   });
 
   it("rejects an empty manifest", async () => {

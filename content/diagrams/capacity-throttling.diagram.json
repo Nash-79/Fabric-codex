@@ -1,197 +1,323 @@
 {
   "id": "capacity-throttling",
-  "title": "Fabric capacity smoothing and throttling thresholds",
-  "purpose": "Original diagram: Fabric capacity smoothing and throttling thresholds",
-  "accessibleSummary": "An interactive architecture infographic with 3 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Fabric capacity smoothing and throttling thresholds",
-  "type": "architecture",
+  "title": "How Fabric Capacity Smoothing and Throttling Actually Work",
+  "purpose": "Trace one operation's Capacity Unit cost from submission through bursting, smoothing, and the four-stage throttling ladder, showing why a sustained overage escalates from invisible to rejected.",
+  "accessibleSummary": "A flow diagram: an operation is submitted and classified as interactive or background, then allowed to burst above its SKU's steady-state CU rate so it finishes quickly. The bursted cost is smoothed by spreading it across future 30-second timepoints — 5 to 64 minutes for interactive operations, 24 hours for background ones. If accumulated future usage stays under 10 minutes, nothing is throttled. Beyond that, usage escalates through three progressively worse stages: delayed interactive operations, then rejected interactive operations, then rejected background operations too, with carryforward CUs draining only when idle capacity exists at later timepoints. A warning node covers Autoscale Billing for Spark bypassing bursting and smoothing entirely, and a second warning covers Block Public Internet Access breaking Direct Lake regardless of throttling state.",
+  "longDescription": "This flow starts at operation submission and ends at one of four outcomes on the throttling ladder. Fabric classifies every operation as interactive or background at submission time (before it has actually run), lets it burst above the SKU's steady-state CU allowance so it completes quickly, then smooths that bursted cost across future timepoints — a fixed 30-second unit, 2,880 per day — rather than charging it all at once. Smoothing changes accounting, not wall-clock time: the operation still finishes at normal speed. What smoothing produces is a growing pool of future-committed CU. As long as that future commitment stays under a 10-minute overage-protection window, nothing is throttled. Past that, Fabric escalates in three further stages keyed to how much future capacity is consumed: interactive operations are delayed, then interactive operations are rejected outright, then background operations are rejected too. Carryforward CUs recorded during throttling drain only at timepoints where idle capacity exists, and operations already in flight are always allowed to finish regardless of stage. Two warning nodes cover real traps: Autoscale Billing for Spark removes bursting and smoothing entirely in favor of flat pay-as-you-go metering, and Block Public Internet Access breaks Direct Lake connections independent of any throttling state, which teams sizing a capacity for Direct Lake sometimes miss.",
+  "type": "flow",
   "topicSlug": "capacity",
-  "capabilityIds": [
-    "capacity"
-  ],
-  "revision": "1",
+  "capabilityIds": ["capacity"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/capacity-throttling.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "capacity boundary",
-      "summary": "capacity boundary in the Fabric capacity smoothing and throttling thresholds architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "op-submit",
+      "label": "Operation submitted to capacity",
+      "summary": "Every workload draws Capacity Units from one dedicated resource pool.",
+      "detail": "A capacity is a dedicated pool of resources that performs work in Fabric; capacity units (CUs) are the single unit of compute measurement, and every workload and operation submitted against that capacity draws CUs from its available pool. Throttling is enforced at the capacity level, not the tenant level, so a saturated capacity only affects the workspaces assigned to it — other capacities keep operating normally.",
+      "whyItMatters": "Because enforcement is per-capacity, the blast radius of a busy workload is a design lever: isolating a noisy pipeline on its own capacity protects everything else on the tenant.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Capacity", "CapacityUnits"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-terminology", "note": "A capacity is a dedicated pool of resources that performs work in Fabric; capacity units (CUs) are the single unit of compute measurement, drawn from the available pool by every workload and operation." },
+        { "sourceKey": "capacity-throttling", "note": "Fabric enforces throttling at the capacity level rather than the tenant level, so a saturated capacity only affects the workspaces assigned to it." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the capacity boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through capacity boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A user or scheduled action: a report query, a pipeline run, a Spark job, a semantic model refresh"],
+        "processing": ["Operation is attributed to the workspace's assigned capacity", "CU cost begins accruing against that capacity's pool"],
+        "outputs": ["An operation queued for classification"],
+        "example": "A scheduled semantic model refresh on Workspace A (capacity C1) begins consuming CUs from C1 only; Workspace B on capacity C2 sees no effect even if C1 is saturated.",
+        "controls": ["Which capacity a workspace is assigned to", "SKU size, which sets the steady-state CU pool"],
+        "failureModes": ["Assigning many unrelated high-load workspaces to one capacity, concentrating throttling risk that per-capacity isolation was meant to avoid"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "capacity",
-        "label": "Open capacity"
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "classify",
+      "label": "Classify: interactive vs background",
+      "summary": "Fabric classifies the operation before it runs, which sets its smoothing window.",
+      "detail": "The throttling system classifies operations at submission time, before execution begins, so classification can change once runtime information becomes available; in ambiguous cases the system defaults toward the more conservative classification. This classification determines everything downstream: interactive operations get a short smoothing window, background operations get a full day.",
+      "whyItMatters": "The classification is what makes a report query behave differently from a pipeline run under load — it is the fork that decides how quickly an operation's cost gets absorbed versus deferred.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Throttling", "Smoothing"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "The throttling system classifies operations at submission time before execution begins, so classification can change once runtime information becomes available; ambiguous cases default toward the conservative classification." }
+      ],
+      "drill": {
+        "inputs": ["The submitted operation and its declared/inferred type"],
+        "processing": ["Determine interactive (DAX query, report view, on-demand refresh) vs background (scheduled refresh, pipeline, Spark batch job)", "Default to the conservative classification when ambiguous"],
+        "outputs": ["An interactive or background label that sets the smoothing window used downstream"],
+        "example": "A user opening a Power BI report is classified interactive; the same report's overnight scheduled refresh is classified background, even though both eventually touch the same semantic model.",
+        "controls": ["No direct admin control over classification; it follows from the operation type itself"],
+        "failureModes": ["Assuming a mixed workload is uniformly interactive, then being surprised when its background component smooths over 24 hours instead of minutes"]
       }
     },
     {
-      "id": "step-2",
-      "label": "Fabric capacity smoothing and throttling thresholds",
-      "summary": "Fabric capacity smoothing and throttling thresholds in the Fabric capacity smoothing and throttling thresholds architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
+      "id": "bursting",
+      "label": "Bursting",
+      "summary": "The operation is allowed to consume more CUs than steady-state SKU size allows, to finish quickly.",
+      "detail": "Fabric uses two complementary mechanisms: bursting lets an operation consume more CUs than the SKU's steady-state provision allows, so it completes quickly, and smoothing spreads that consumed CU cost across future timepoints rather than charging it all in the moment. Bursting is what happens first, at execution time; smoothing is the accounting mechanism that follows.",
+      "whyItMatters": "Bursting is why a spike in demand doesn't immediately slow down the operation itself — the cost of the spike is deferred, not the operation.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Bursting", "Throttling"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Fabric uses two complementary mechanisms — bursting (letting an operation consume more CUs than the SKU provision allows so it completes quickly) and smoothing (spreading that consumed CU cost across future timepoints)." }
+      ],
+      "drill": {
+        "inputs": ["A classified operation whose demand exceeds the SKU's steady-state CU rate"],
+        "processing": ["Allow the operation to draw above the steady-state CU allowance", "Complete execution at normal wall-clock speed"],
+        "outputs": ["A completed operation and a bursted CU cost handed to smoothing for accounting"],
+        "example": "A large ad-hoc DAX query on an F64 briefly draws well above F64's steady-state CU rate to return in a couple of seconds instead of stalling — the accounting for that extra draw is deferred to smoothing.",
+        "controls": ["No admin toggle for bursting itself; it applies automatically unless Autoscale Billing for Spark is enabled (see the warning node)"],
+        "failureModes": ["Reading 'no visible slowdown' as 'no cost' — the bursted CU cost still has to be paid back through smoothing"]
+      }
+    },
+    {
+      "id": "smoothing",
+      "label": "Smoothing (30-second timepoints)",
+      "summary": "Bursted CU cost is spread across future timepoints instead of charged all at once.",
+      "detail": "A Fabric timepoint is 30 seconds long, with 2,880 timepoints in a 24-hour window; smoothing distributes an operation's CU cost across those future timepoints rather than charging the full amount immediately. Interactive operations are smoothed over a minimum of 5 minutes and up to 64 minutes depending on total CU consumption, while background operations are always smoothed over a full 24-hour window.",
+      "whyItMatters": "Smoothing only changes how CU consumption is accounted for over the window, not the wall-clock execution time of the operation — the query still finishes fast; what smoothing manages is the future capacity commitment that determines whether throttling kicks in next.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Smoothing", "Timepoint"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "A Fabric timepoint is 30 seconds long, with 2,880 timepoints in a 24-hour window; smoothing distributes an operation's CU cost across future timepoints." },
+        { "sourceKey": "capacity-throttling", "note": "Interactive operations are smoothed over a minimum of 5 minutes and up to 64 minutes depending on total CU consumption; background operations are always smoothed over a full 24-hour window." },
+        { "sourceKey": "ultimateinfoguide-capacity-optimization", "note": "Smoothing only changes how Capacity Unit consumption is accounted for over the smoothing window, not the wall-clock execution time of the underlying operation." }
+      ],
+      "drill": {
+        "inputs": ["A bursted operation's CU cost", "Its interactive/background classification"],
+        "processing": ["Spread the CU cost across 30-second timepoints out to 5–64 minutes (interactive) or 24 hours (background)", "Accumulate the spread cost into the capacity's future-usage ledger"],
+        "outputs": ["A future-usage commitment that the overage-protection window checks next"],
+        "example": "A background pipeline job's burst cost is spread evenly across the next 24 hours of 30-second timepoints, so its accounting impact on any single timepoint is small even though the job itself finished in minutes.",
+        "controls": ["No direct admin control over the smoothing window length; it follows from the interactive/background classification and total CU consumed"],
+        "failureModes": ["Not realizing that many smoothed operations stacking on the same future timepoints is what eventually triggers throttling, even though each individual operation looked fine in isolation"]
+      }
+    },
+    {
+      "id": "overage-check",
+      "label": "Overage-protection check (10-minute window)",
+      "summary": "The decision point: is accumulated future usage under or over the 10-minute threshold?",
+      "detail": "Throttling is staged progressively across four thresholds keyed to how much future capacity has been consumed: up to 10 minutes of future usage triggers no throttling at all (overage protection). Past that window, Fabric moves through three further stages of increasing severity. This is the branch point in the ladder — everything before it is invisible to users; everything after it is not.",
+      "whyItMatters": "This threshold is the line between a capacity that looks completely normal and one that starts visibly delaying or rejecting work — understanding it is what turns capacity monitoring from guesswork into a leading indicator.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Throttling", "OverageProtection"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Throttling is staged progressively across four thresholds keyed to how much future capacity has been consumed: up to 10 minutes of future usage triggers no throttling (overage protection)." }
+      ],
+      "drill": {
+        "inputs": ["The capacity's accumulated future-usage ledger from smoothing"],
+        "processing": ["Compare accumulated future CU commitment against the 10-minute overage-protection threshold", "Route to no-throttling or to the escalating stages based on the result"],
+        "outputs": ["A throttling stage decision applied to new operation submissions"],
+        "example": "A capacity with three concurrent heavy background jobs accumulates 14 minutes of future usage, crossing the 10-minute threshold and entering the first throttling stage for any new interactive request.",
+        "controls": ["Reducing concurrent load, rescheduling background jobs off-peak, or scaling the SKU before the threshold is crossed"],
+        "failureModes": ["Monitoring only current CPU/CU usage and missing that the future-usage ledger, not current load, is what determines throttling"]
+      }
+    },
+    {
+      "id": "stage-none",
+      "label": "No throttling",
+      "summary": "Under the 10-minute overage window: operations proceed normally with no visible impact.",
+      "detail": "When accumulated future-capacity usage stays within the 10-minute overage-protection window, no throttling is applied at all. This is the steady state for a well-sized capacity most of the time.",
+      "whyItMatters": "This is the outcome a correctly sized capacity should live in almost always — seeing it escalate past this stage regularly is the signal that the SKU or workload distribution needs attention.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Throttling"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Up to 10 minutes of future usage triggers no throttling (overage protection)." }
+      ],
+      "drill": {
+        "inputs": ["An overage-protection check result under 10 minutes of future usage"],
+        "processing": ["No delay or rejection applied", "New operations submit and execute normally"],
+        "outputs": ["Normal operation submission and execution"],
+        "example": "A steady daytime workload of report queries and small scheduled refreshes keeps future usage around 3–4 minutes on an F64, never approaching the threshold.",
+        "controls": ["Right-sizing the SKU to average sustained load, per Microsoft's own capacity-optimization guidance"],
+        "failureModes": ["Sizing for this comfortable steady state without headroom for real bursts, so a single busy month-end pushes straight past it"]
+      }
+    },
+    {
+      "id": "stage-delay",
+      "label": "Stage 2: interactive delay",
+      "summary": "Between 10 minutes and further thresholds: new interactive operations are delayed, not rejected.",
+      "detail": "Past the 10-minute overage-protection window, the first escalation stage delays new interactive operation submissions rather than rejecting them outright. Operations already in flight when a capacity enters a throttling state are always allowed to run to completion — only new submissions are subject to delay or rejection at any stage.",
+      "whyItMatters": "This is usually the first sign users notice: reports feel sluggish to open, but nothing fails outright yet — a warning stage, not a hard failure.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Throttling", "InteractiveDelay"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Throttling is staged progressively; between the overage-protection window and further thresholds, new interactive operations are delayed." },
+        { "sourceKey": "capacity-throttling", "note": "Operations that were already in flight when a capacity enters a throttling state are always allowed to run to completion; only new operation submissions are subject to delay or rejection." }
+      ],
+      "drill": {
+        "inputs": ["An overage-protection check result past the 10-minute threshold, first escalation band"],
+        "processing": ["New interactive operation submissions are held before executing", "In-flight operations continue unaffected"],
+        "outputs": ["Slower-feeling but still-succeeding interactive requests"],
+        "example": "A user opening a report during a month-end batch surge experiences a multi-second delay before the visuals render, while the batch job that was already running finishes on schedule.",
+        "controls": ["Rescheduling background jobs off-peak", "Splitting workloads across multiple capacities"],
+        "failureModes": ["Dismissing delayed-but-successful queries as 'just slow today' instead of reading them as an early throttling signal"]
+      }
+    },
+    {
+      "id": "stage-reject-interactive",
+      "label": "Stage 3: interactive rejection",
+      "summary": "Further past threshold: new interactive requests are rejected with CapacityLimitExceeded.",
+      "detail": "As accumulated future usage grows further past the overage-protection window, Fabric escalates to rejecting new interactive operation submissions. When a capacity rejects requests, users receive HTTP status code CapacityLimitExceeded along with error messages indicating that compute capacity limits have been reached.",
+      "whyItMatters": "This is the stage where users start seeing visible errors instead of slowness — the point at which throttling stops being a performance annoyance and becomes an outage for interactive work.",
       "classification": "warning",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "layers": ["compute"],
+      "tags": ["Throttling", "CapacityLimitExceeded"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "When a capacity rejects requests, users receive HTTP status code CapacityLimitExceeded along with error messages indicating that compute capacity limits have been reached." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Fabric capacity smoothing and throttling thresholds responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Fabric capacity smoothing and throttling thresholds: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Future usage escalated well past the overage-protection window with no relief"],
+        "processing": ["New interactive submissions are rejected at the API level", "In-flight operations still run to completion"],
+        "outputs": ["CapacityLimitExceeded errors surfaced to users attempting new interactive actions"],
+        "example": "During a sustained overload, a user opening a new report gets a CapacityLimitExceeded error while an already-open report's visuals, mid-render before the stage escalated, still complete.",
+        "controls": ["Emergency SKU scale-up", "Pausing non-critical background jobs to let carryforward CUs drain"],
+        "failureModes": ["No alerting on the delay stage means this rejection stage is the first anyone notices a problem, well after the leading indicator was available"]
       }
     },
     {
-      "id": "step-3",
-      "label": "capacity governed outcome",
-      "summary": "capacity governed outcome in the Fabric capacity smoothing and throttling thresholds architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "stage-reject-all",
+      "label": "Stage 4: background rejection too",
+      "summary": "Worst stage: background operations are rejected as well, in addition to interactive ones.",
+      "detail": "The final and most severe throttling stage rejects new background operation submissions in addition to interactive ones. Carryforward CUs recorded during throttling drain at each subsequent timepoint that has idle capacity, so recovery from this stage depends on demand actually easing rather than any manual reset.",
+      "whyItMatters": "At this stage nothing new can start on the capacity — it is the clearest signal that the SKU is undersized for its workload, not just experiencing a transient spike.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "tags": ["Throttling", "CarryforwardCU"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Throttling escalates through further thresholds until background operations are rejected in addition to interactive ones." },
+        { "sourceKey": "capacity-throttling", "note": "When accumulated future-capacity usage exceeds the overage protection window, the excess is recorded as carryforward CUs; each subsequent timepoint with idle capacity reduces this carryforward." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the capacity governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through capacity governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Sustained accumulated future usage that never eased through the delay or interactive-rejection stages"],
+        "processing": ["New background submissions rejected alongside interactive ones", "Carryforward CU balance drains only at timepoints with idle capacity"],
+        "outputs": ["A capacity that accepts no new work of either kind until carryforward drains"],
+        "example": "A capacity running a multi-hour Spark backfill alongside heavy report traffic hits stage 4; new pipeline triggers and new report opens both fail until the backfill finishes and carryforward CUs drain over subsequent idle timepoints.",
+        "controls": ["Splitting the offending workload onto a separate capacity", "Scaling the SKU up before recurring peak windows"],
+        "failureModes": ["Treating this as a bug to retry through, when the actual fix is reducing load or increasing capacity so carryforward can drain"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "capacity",
-        "label": "Open capacity"
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "autoscale-spark-warning",
+      "label": "Autoscale Billing for Spark bypasses this entirely",
+      "summary": "When enabled, Spark drops bursting and smoothing for flat pay-as-you-go metering.",
+      "detail": "Bursting and smoothing do not apply when a capacity admin has enabled Autoscale Billing for Spark; in that configuration Spark usage operates in pay-as-you-go mode only, metered separately from the standard capacity's smoothing ladder.",
+      "whyItMatters": "A team that assumes all Spark load shares the same throttling ladder as everything else on the capacity will misdiagnose Spark cost and contention once Autoscale Billing is turned on — it is a genuinely separate metering path, not a variant of the same one.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "tags": ["Spark", "AutoscaleBilling"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Bursting and smoothing do not apply when a capacity admin has enabled Autoscale Billing for Spark; in that configuration Spark usage operates in pay-as-you-go mode only." }
+      ],
+      "drill": {
+        "inputs": ["A capacity with Autoscale Billing for Spark enabled by an admin"],
+        "processing": ["Spark jobs are metered as pay-as-you-go compute, independent of the capacity's bursting/smoothing ledger"],
+        "outputs": ["Spark cost and contention that never appears in the throttling stages diagrammed above"],
+        "example": "A capacity shows no throttling stage escalation despite heavy concurrent Spark notebooks, because Autoscale Billing routes that Spark usage around the smoothing ladder entirely — the cost shows up as separate pay-as-you-go billing instead.",
+        "controls": ["Deciding per capacity whether Autoscale Billing for Spark is worth trading smoothing protection for predictable per-job billing"],
+        "failureModes": ["Assuming Spark contention will show up as capacity throttling like everything else, and missing a real cost/performance signal because it is routed elsewhere"]
+      }
+    },
+    {
+      "id": "private-link-warning",
+      "label": "Block Public Internet Access breaks Direct Lake regardless",
+      "summary": "A network-isolation setting, not throttling, that silently forces Direct Lake off public endpoints.",
+      "detail": "Direct Lake connections fail when the Block Public Internet Access tenant setting is active, because semantic models relying on Direct Lake mode must route through public endpoints — a constraint that applies independent of any throttling stage on the capacity itself.",
+      "whyItMatters": "Teams sizing a capacity purely against the throttling ladder can miss that a separate, unrelated tenant network setting can break Direct Lake outright — the failure looks capacity-related but isn't.",
+      "classification": "warning",
+      "layers": ["compute", "security"],
+      "tags": ["DirectLake", "PrivateLink", "BlockPublicInternetAccess"],
+      "evidence": [
+        { "sourceKey": "bradcoles-fabric-private-links", "note": "Direct Lake connections fail when the Block Public Internet Access tenant setting is active. Semantic models relying on Direct Lake mode must route through public endpoints." }
+      ],
+      "drill": {
+        "inputs": ["A tenant with Block Public Internet Access enabled", "Semantic models configured for Direct Lake"],
+        "processing": ["Direct Lake attempts to route through the public endpoint that is now blocked", "Connection fails, independent of the capacity's CU or throttling state"],
+        "outputs": ["Direct Lake models that fail to connect even on an otherwise healthy, unthrottled capacity"],
+        "example": "A capacity shows no throttling and plenty of headroom, yet Direct Lake reports fail to load after a tenant admin enables Block Public Internet Access for network isolation — the two problems are unrelated but easy to conflate during troubleshooting.",
+        "controls": ["Evaluate private-link and network-isolation settings and Direct Lake dependency together before enabling Block Public Internet Access"],
+        "failureModes": ["Diagnosing a Direct Lake outage as a capacity or throttling problem and scaling the SKU, when the actual cause is a network setting"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-submit-classify", "from": "op-submit", "to": "classify", "label": "operation submitted", "layer": "compute", "kind": "flow" },
+    { "id": "e-classify-burst", "from": "classify", "to": "bursting", "label": "interactive or background", "layer": "compute", "kind": "flow" },
+    { "id": "e-burst-smooth", "from": "bursting", "to": "smoothing", "label": "bursted CU cost", "layer": "compute", "kind": "flow" },
+    { "id": "e-smooth-check", "from": "smoothing", "to": "overage-check", "label": "future-usage ledger updated", "layer": "compute", "kind": "flow" },
+    { "id": "e-check-none", "from": "overage-check", "to": "stage-none", "label": "under 10 minutes", "layer": "compute", "kind": "branch" },
+    { "id": "e-check-delay", "from": "overage-check", "to": "stage-delay", "label": "past 10 minutes", "layer": "compute", "kind": "branch" },
+    { "id": "e-delay-reject-interactive", "from": "stage-delay", "to": "stage-reject-interactive", "label": "usage keeps growing", "layer": "compute", "kind": "flow" },
+    { "id": "e-reject-interactive-all", "from": "stage-reject-interactive", "to": "stage-reject-all", "label": "usage keeps growing further", "layer": "compute", "kind": "flow" },
+    { "id": "e-rejectall-drain", "from": "stage-reject-all", "to": "overage-check", "label": "carryforward CUs drain at idle timepoints", "layer": "compute", "kind": "feedback" },
+    { "id": "e-burst-autoscale-warning", "from": "bursting", "to": "autoscale-spark-warning", "label": "bypassed if Autoscale Billing for Spark is on", "layer": "compute", "kind": "branch" },
+    { "id": "e-submit-privatelink-warning", "from": "op-submit", "to": "private-link-warning", "label": "independent risk: network isolation, not load", "layer": "security", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. capacity boundary",
-      "explanation": "capacity boundary in the Fabric capacity smoothing and throttling thresholds architecture."
+      "nodeId": "op-submit",
+      "title": "Start: an operation draws CUs from one capacity",
+      "explanation": "Throttling is enforced per capacity, so understanding one capacity's ladder is enough to reason about the blast radius of any workload assigned to it."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Fabric capacity smoothing and throttling thresholds",
-      "explanation": "Fabric capacity smoothing and throttling thresholds in the Fabric capacity smoothing and throttling thresholds architecture."
+      "nodeId": "classify",
+      "title": "Classification sets the smoothing window",
+      "explanation": "Interactive vs background is decided at submission time and determines whether the operation smooths over minutes or a full day."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. capacity governed outcome",
-      "explanation": "capacity governed outcome in the Fabric capacity smoothing and throttling thresholds architecture."
+      "nodeId": "bursting",
+      "title": "Bursting lets the operation finish fast",
+      "explanation": "The operation can draw above the SKU's steady-state CU rate so it completes quickly — the cost of that overage is deferred, not avoided."
+    },
+    {
+      "nodeId": "smoothing",
+      "title": "Smoothing spreads the deferred cost",
+      "explanation": "The bursted cost is spread across 30-second timepoints — 5 to 64 minutes for interactive work, a full day for background work."
+    },
+    {
+      "nodeId": "overage-check",
+      "title": "The 10-minute decision point",
+      "explanation": "This is the branch: under 10 minutes of accumulated future usage, nothing is throttled; past it, escalation begins."
+    },
+    {
+      "nodeId": "stage-none",
+      "title": "The steady state most capacities should live in",
+      "explanation": "No visible impact — this is where a correctly sized capacity spends most of its time."
+    },
+    {
+      "nodeId": "stage-delay",
+      "title": "First escalation: interactive operations slow down",
+      "explanation": "New interactive requests are delayed, not rejected — the first user-visible sign of pressure."
+    },
+    {
+      "nodeId": "stage-reject-interactive",
+      "title": "Second escalation: interactive requests fail outright",
+      "explanation": "New interactive submissions now return CapacityLimitExceeded, though anything already running still completes."
+    },
+    {
+      "nodeId": "stage-reject-all",
+      "title": "Worst case: nothing new can start",
+      "explanation": "Background submissions are rejected too; recovery depends on carryforward CUs draining at future idle timepoints, not a manual reset."
+    },
+    {
+      "nodeId": "autoscale-spark-warning",
+      "title": "Warning: Spark can opt out of this whole ladder",
+      "explanation": "Autoscale Billing for Spark routes Spark usage to flat pay-as-you-go metering, bypassing bursting and smoothing entirely — a separate cost and contention path."
+    },
+    {
+      "nodeId": "private-link-warning",
+      "title": "Warning: a network setting can look like a capacity problem",
+      "explanation": "Block Public Internet Access breaks Direct Lake independent of throttling — an easy misdiagnosis during an outage."
     }
   ]
 }

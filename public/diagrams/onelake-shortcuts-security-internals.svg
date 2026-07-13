@@ -1,4 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" font-family="Segoe UI, -apple-system, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 860" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="onelake-shortcuts-security-internals-title onelake-shortcuts-security-internals-desc" data-diagram-id="onelake-shortcuts-security-internals">
+  <title id="onelake-shortcuts-security-internals-title">OneLake Shortcut Identity, Delete Semantics, and Security Internals</title>
+  <desc id="onelake-shortcuts-security-internals-desc">An internals diagram that starts at a shortcut read request and branches on shortcut type: internal shortcuts pass the calling user&apos;s own identity through to the target, while external ADLS/S3 shortcuts and delegated shortcuts route through a bound connection or configured identity instead. A warning node flags that DirectLake-over-SQL and T-SQL delegated identity mode silently use the item owner&apos;s identity rather than the end user&apos;s. Delegated-shortcut access is computed as an intersection of the delegated identity&apos;s own grant and the end user&apos;s OneLake security grant. A second branch covers delete semantics: deleting the shortcut object itself leaves the target untouched, while deleting through the shortcut path writes through to the target if the caller has write permission there. A security-role node explains that OneLake security roles only constrain Viewers and Read-permission holders — workspace Admins, Members, and Contributors bypass OneLake security entirely, a second documented trap. The diagram ends at documented operating limits on shortcut counts and chaining.</desc>
   <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-06.
        Grounded in OneLake claims (capability_id=onelake, verified set, June 2026):
        shortcut symbolic-link semantics + write-through deletes (8422b0a1, 7240e8f6),
@@ -71,13 +73,13 @@
   <!-- internal outcome -->
   <line x1="480" y1="140" x2="520" y2="140" stroke="#2AAC94" stroke-width="1.5" marker-end="url(#arr2)"/>
   <rect x="520" y="116" width="290" height="48" rx="7" fill="url(#okGrad)"/>
-  <text x="665" y="136" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Calling user's own identity</text>
+  <text x="665" y="136" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF" data-node-id="internal-shortcut" tabindex="0" aria-label="Internal shortcut (pass-through)"><title data-node-tooltip="true">Internal shortcut (pass-through) — Points at another Fabric item; authorized with the calling user&apos;s own identity.</title>Calling user's own identity</text>
   <text x="665" y="152" text-anchor="middle" font-size="9.5" fill="#E8FBF5">must hold read permission at the target item</text>
 
   <!-- external outcome: cloud connection -->
   <line x1="480" y1="192" x2="520" y2="192" stroke="#8A8886" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#arrGray2)"/>
   <rect x="520" y="170" width="290" height="48" rx="7" fill="#FFFFFF" stroke="#9AD2C5"/>
-  <text x="665" y="190" text-anchor="middle" font-size="11" font-weight="600" fill="#063D3B">Bound cloud connection's identity</text>
+  <text x="665" y="190" text-anchor="middle" font-size="11" font-weight="600" fill="#063D3B" data-node-id="external-shortcut" tabindex="0" aria-label="External shortcut (ADLS/S3)"><title data-node-tooltip="true">External shortcut (ADLS/S3) — Points outside Fabric; authorization delegates to a cloud connection bound at creation.</title>Bound cloud connection's identity</text>
   <text x="665" y="206" text-anchor="middle" font-size="9.5" fill="#3F6259">connection is a privileged asset, set at creation time</text>
 
   <!-- delegated identity caveat -->
@@ -85,27 +87,27 @@
   <text x="985" y="148" text-anchor="middle" font-size="11.5" font-weight="650" fill="#FFE9C8">Caveat: delegated identity modes</text>
   <text x="860" y="170" font-size="10" fill="#FFE9C8">Power BI DirectLake-over-SQL and T-SQL</text>
   <text x="860" y="184" font-size="10" fill="#FFE9C8">delegated identity mode pass the calling</text>
-  <text x="860" y="198" font-size="10" fill="#FFE9C8">item owner's identity — NOT the end user's.</text>
+  <text x="860" y="198" font-size="10" fill="#FFE9C8" data-node-id="delegated-shortcut" tabindex="0" aria-label="Delegated shortcut"><title data-node-tooltip="true">Delegated shortcut — Routes through one configured identity chosen at creation, not the signed-in user.</title>item owner's identity — NOT the end user's.</text>
   <line x1="860" y1="210" x2="1110" y2="210" stroke="#FFE9C8" stroke-opacity="0.4"/>
   <text x="860" y="228" font-size="10" font-weight="600" fill="#FFFFFF">Fix: use DirectLake-over-OneLake mode</text>
-  <text x="860" y="242" font-size="10" font-weight="600" fill="#FFFFFF">or T-SQL user-identity mode to restore</text>
+  <text x="860" y="242" font-size="10" font-weight="600" fill="#FFFFFF" data-node-id="identity-passthrough-trap" tabindex="0" aria-label="DirectLake-over-SQL identity trap"><title data-node-tooltip="true">DirectLake-over-SQL identity trap — DirectLake-over-SQL and T-SQL delegated mode silently use the item owner&apos;s identity, not the end user&apos;s.</title>or T-SQL user-identity mode to restore</text>
   <text x="860" y="256" font-size="10" font-weight="600" fill="#FFFFFF">per-user identity passthrough.</text>
   <text x="860" y="275" font-size="9" fill="#FFE9C8" font-style="italic">Easy to misconfigure — verify per engine.</text>
 
   <!-- ═══════════════════════════════════════════════
        PANEL 2: DELETE SEMANTICS
        ═══════════════════════════════════════════ -->
-  <text x="40" y="350" font-size="11" letter-spacing="1.5" fill="#8A8886">DECISION 2 — DELETING THE SHORTCUT vs. DELETING THROUGH THE SHORTCUT</text>
+  <text x="40" y="350" font-size="11" letter-spacing="1.5" fill="#8A8886" data-node-id="shortcut-read-request" tabindex="0" aria-label="Shortcut read request"><title data-node-tooltip="true">Shortcut read request — A caller (Spark, T-SQL, RTI, Analysis Services, or an ADLS-compatible client) reads through a shortcut path.</title>DECISION 2 — DELETING THE SHORTCUT vs. DELETING THROUGH THE SHORTCUT</text>
 
   <rect x="40" y="360" width="546" height="130" rx="9" fill="#EAF7F2" stroke="#117865"/>
-  <text x="60" y="386" font-size="12.5" font-weight="650" fill="#063D3B">Delete the shortcut OBJECT</text>
+  <text x="60" y="386" font-size="12.5" font-weight="650" fill="#063D3B" data-node-id="delete-shortcut" tabindex="0" aria-label="Delete the shortcut object"><title data-node-tooltip="true">Delete the shortcut object — Removing the shortcut link leaves the target data untouched.</title>Delete the shortcut OBJECT</text>
   <text x="60" y="406" font-size="10.5" fill="#3F6259">Behaves like removing a symbolic link.</text>
   <text x="60" y="424" font-size="10.5" fill="#3F6259">The reference disappears from OneLake;</text>
   <text x="60" y="442" font-size="10.5" fill="#3F6259">the target data is left completely untouched.</text>
   <text x="60" y="468" font-size="10" font-weight="600" fill="#0B5E50">Safe — non-destructive to source data</text>
 
   <rect x="616" y="360" width="546" height="130" rx="9" fill="#FBEFEA" stroke="#B5421F"/>
-  <text x="636" y="386" font-size="12.5" font-weight="650" fill="#8A2E1E">Delete a FILE/FOLDER beneath the shortcut path</text>
+  <text x="636" y="386" font-size="12.5" font-weight="650" fill="#8A2E1E" data-node-id="delete-through-shortcut" tabindex="0" aria-label="Delete through the shortcut path"><title data-node-tooltip="true">Delete through the shortcut path — Deleting a file or folder beneath the shortcut path writes through to the target.</title>Delete a FILE/FOLDER beneath the shortcut path</text>
   <text x="636" y="406" font-size="10.5" fill="#6B2A1A">Writes through to the target store. If the caller</text>
   <text x="636" y="424" font-size="10.5" fill="#6B2A1A">has write permission at the target, the delete</text>
   <text x="636" y="442" font-size="10.5" fill="#6B2A1A">propagates and the source data is actually removed.</text>
@@ -130,7 +132,7 @@
   <text x="74" y="591" font-size="10" fill="#6B2A1A">Workspace Admin / Member / Contributor</text>
   <text x="300" y="591" font-size="10" fill="#424242">Read + write ALL item data (control plane implies data plane)</text>
   <rect x="900" y="572" width="234" height="28" rx="5" fill="#B5421F" fill-opacity="0.12"/>
-  <text x="912" y="591" font-size="10" font-weight="650" fill="#8A2E1E">NO — these roles bypass OneLake security entirely</text>
+  <text x="912" y="591" font-size="10" font-weight="650" fill="#8A2E1E" data-node-id="security-role-matrix" tabindex="0" aria-label="OneLake security role restriction matrix"><title data-node-tooltip="true">OneLake security role restriction matrix — Roles restrict Viewers and Read-permission holders only — Admins, Members, and Contributors bypass OneLake security entirely.</title>NO — these roles bypass OneLake security entirely</text>
 
   <!-- row: viewer -->
   <rect x="64" y="606" width="220" height="28" rx="5" fill="#EAF7F2"/>
@@ -149,7 +151,7 @@
   <!-- ═══════════════════════════════════════════════
        PANEL 4: LIMITS, CACHE, OBSERVABILITY STRIP
        ═══════════════════════════════════════════ -->
-  <text x="40" y="710" font-size="11" letter-spacing="1.5" fill="#8A8886">OPERATING LIMITS &amp; OBSERVABILITY GAPS TO DESIGN AROUND</text>
+  <text x="40" y="710" font-size="11" letter-spacing="1.5" fill="#8A8886" data-node-id="operating-limits" tabindex="0" aria-label="Documented operating limits"><title data-node-tooltip="true">Documented operating limits — Hard ceilings on shortcut counts, chaining, and naming bound every path through the model.</title>OPERATING LIMITS &amp; OBSERVABILITY GAPS TO DESIGN AROUND</text>
 
   <rect x="40" y="720" width="270" height="110" rx="8" fill="#FFFFFF" stroke="#9AD2C5"/>
   <text x="58" y="742" font-size="11" font-weight="650" fill="#063D3B">Shortcut structural limits</text>

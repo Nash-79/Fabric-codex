@@ -1,313 +1,205 @@
 {
   "id": "dw-migration-architecture",
-  "title": "data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse…",
-  "purpose": "Original diagram: data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover",
-  "accessibleSummary": "An interactive architecture infographic with 5 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover",
+  "title": "Data Warehouse to Fabric: Migration Architecture",
+  "purpose": "Trace a legacy data warehouse's migration into Fabric through landing, transformation, warehouse storage, and semantic-layer cutover, including the branch between SQL-first and Spark-first transformation paths.",
+  "accessibleSummary": "An architecture flow starting at the legacy source warehouse and Copy activity landing its extracts into OneLake. From there the flow branches: SQL-first workloads move directly into Fabric Warehouse tables, while Spark-heavy or semi-structured workloads land first in a lakehouse for transformation before becoming warehouse-ready. Both paths converge on Warehouse tables stored as Delta in OneLake, cached transparently by the query engine, and served through a certified semantic model to Power BI reports. A feedback edge shows validation queries comparing source and target row counts before cutover, and a warning node covers keeping duplicated extracts alive after migration instead of consolidating on OneLake.",
+  "longDescription": "This is a migration architecture flow, not a decision tree: it traces the concrete path data takes from a legacy warehouse into Fabric. Data Factory Copy activity lands source extracts into OneLake at scale. From there the architecture branches based on workload shape: SQL-first marts and reporting tables move into Fabric Warehouse directly, while file-heavy, semi-structured, or Spark-owned transformation logic lands in a lakehouse first and is promoted to warehouse-ready tables afterward. Both paths converge because both stores persist Delta in OneLake underneath. Warehouse queries are accelerated by a transparent, always-on in-memory-then-SSD cache layer the engine manages autonomously. The final hop publishes a certified semantic model that Power BI reports consume, completing the cutover. A feedback edge captures the validation step — comparing source and target aggregates — that runs before old source access is retired, and a warning node names the common failure of leaving duplicated extracts running after migration instead of consolidating on the OneLake-backed stores.",
   "type": "architecture",
   "topicSlug": "dw-migration",
-  "capabilityIds": [
-    "warehouse"
-  ],
-  "revision": "1",
+  "capabilityIds": ["warehouse", "lakehouse", "data-factory", "semantic-model"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/dw-migration-architecture.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "dw migration boundary",
-      "summary": "dw migration boundary in the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
+      "id": "legacy-source",
+      "label": "Legacy source warehouse",
+      "summary": "The existing on-prem or cloud data warehouse being migrated.",
+      "detail": "The migration begins with an inventory of the legacy warehouse: source tables, transformation logic (stored procedures, ETL jobs), security rules, and downstream report dependencies. This inventory determines which workloads are SQL-first candidates for direct Warehouse migration and which are better served by first landing in a lakehouse for Spark-based rework.",
+      "whyItMatters": "Skipping this inventory is the most common way migrations go over budget: transformation logic and report dependencies discovered mid-migration force rework that proper upfront profiling would have caught.",
       "classification": "pattern",
-      "layers": [
-        "data"
-      ],
+      "layers": ["data"],
+      "tags": ["Migration"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
-      ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the dw migration boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through dw migration boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Source schema, stored procedures, ETL/ELT job definitions", "Downstream report and dashboard dependency list", "Security/permission model at the source"],
+        "processing": ["Inventory source tables and their transformation logic", "Classify each workload as SQL-first (direct Warehouse fit) or Spark/file-heavy (lakehouse fit first)", "Map source security rules to the target Fabric governance model"],
+        "outputs": ["A workload classification driving the Warehouse-direct vs lakehouse-first routing decision"],
+        "example": "A legacy Synapse dedicated SQL pool with mostly star-schema marts and T-SQL stored procedures is classified largely SQL-first, while its semi-structured staging area is routed through a lakehouse instead.",
+        "controls": ["Profiling depth and time budget before movement begins"],
+        "failureModes": ["Treating migration as pure schema conversion and missing that Fabric capacity, workload management, caching, and file layout also affect the migrated experience"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "dw-migration",
-        "label": "Open dw migration"
-      }
+      "drillTarget": { "kind": "topic", "slug": "dw-migration", "label": "DW Migration" }
     },
     {
-      "id": "step-2",
-      "label": "data-warehouse-to-Fabric migration phases - source DW to landing/mi…",
-      "summary": "data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake in the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "copy-activity",
+      "label": "Data Factory Copy activity",
+      "summary": "Scalable, parallelized movement of source extracts into OneLake.",
+      "detail": "Data Factory pipelines with Copy activity are Microsoft's recommended mechanism for large-scale one-time migrations, such as moving a data lake or enterprise data warehouse into OneLake, on the grounds that the engine is serverless, performant at scale, and cost-effective. Copy activity exposes parallelism at three levels: many activities running concurrently, per-activity throughput scaling, and multi-threaded reads/writes within one activity.",
+      "whyItMatters": "This is the landing mechanism that makes a large one-time migration tractable: without its parallelism controls, moving a multi-terabyte legacy warehouse would take an impractically long single-threaded copy.",
+      "classification": "fact",
+      "layers": ["data", "orchestration"],
+      "tags": ["DataFactory", "CopyActivity"],
+      "evidence": [
+        { "sourceKey": "copy-activity-performance-and-scalability", "note": "Data Factory pipelines with Copy activity are Microsoft's recommended mechanism for large-scale one-time migrations (data lake or enterprise data warehouse into OneLake) and for high-volume recurring ingestion, on the grounds that the engine is serverless, performant at scale, and cost-effective." },
+        { "sourceKey": "copy-activity-performance-and-scalability", "note": "The Copy activity exposes parallelism at three distinct levels: control flow can launch many copy activities concurrently, each activity can scale its own compute via intelligent throughput optimization, and within one activity multiple threads read from the source and write to the destination in parallel." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "to Fabric Warehouse on OneLake Delta",
-      "summary": "to Fabric Warehouse on OneLake Delta in the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the to Fabric Warehouse on OneLake Delta responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through to Fabric Warehouse on OneLake Delta: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "to semantic layer and cutover",
-      "summary": "to semantic layer and cutover in the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the to semantic layer and cutover responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through to semantic layer and cutover: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "warehouse governed outcome",
-      "summary": "warehouse governed outcome in the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the warehouse governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through warehouse governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Source connection details for the legacy warehouse", "A partitioning scheme (by table or file range) for fan-out via ForEach"],
+        "processing": ["Launch parallel Copy activities per partition from a ForEach loop", "Each activity scales compute via intelligent throughput optimization", "Land extracts as files/tables in OneLake"],
+        "outputs": ["Source data landed in OneLake, ready for either direct Warehouse load or lakehouse transformation"],
+        "example": "A 5 TB legacy warehouse migration partitions by table and runs 20 Copy activities in parallel from a ForEach loop, cutting a multi-day single-threaded copy down to a few hours.",
+        "controls": ["Degree of copy parallelism (thread cap per activity)", "Intelligent throughput optimization preset (Auto/Standard/Balanced/Maximum)"],
+        "failureModes": ["Tuning throughput settings without first identifying whether the source, destination, or network is the actual bottleneck — raising settings can't exceed an external limit"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "warehouse",
-        "label": "Open warehouse"
+      "drillTarget": { "kind": "capability", "slug": "data-factory", "label": "Data Factory" }
+    },
+    {
+      "id": "lakehouse-transform",
+      "label": "Lakehouse (Spark transformation)",
+      "summary": "Spark-first path for file-heavy, semi-structured, or complex transformation workloads.",
+      "detail": "Choose a lakehouse over direct Warehouse loading when Spark is the primary transformation tool over heterogeneous, largely unstructured data. Data modified through Spark lands as Delta tables, and every lakehouse automatically provisions a read-only SQL analytics endpoint on the same engine as the Warehouse, so the transformed tables become immediately queryable in T-SQL without a separate export.",
+      "whyItMatters": "Not every legacy workload maps cleanly to T-SQL; complex transformation logic or semi-structured inputs are often faster and more maintainable rewritten in Spark than force-fit into warehouse stored procedures.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["Lakehouse", "Spark"],
+      "evidence": [
+        { "sourceKey": "warehouse-overview", "note": "Choose a warehouse over a lakehouse when you want enterprise-scale T-SQL-first work over structured or semi-structured data with minimal setup; choose a lakehouse when Spark is the primary tool over heterogeneous, largely unstructured data. Both run the same SQL engine for T-SQL queries." },
+        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "Every lakehouse automatically provisions a SQL analytics endpoint at creation time with no setup, exposing the lakehouse's Delta tables through a read-only T-SQL query surface that runs on the same engine as Fabric Data Warehouse." }
+      ],
+      "drill": {
+        "inputs": ["Landed OneLake extracts requiring complex, semi-structured, or Spark-native transformation logic"],
+        "processing": ["Spark notebooks or jobs transform the raw extracts into curated Delta tables", "Tables land in the lakehouse Tables area and auto-register", "SQL analytics endpoint auto-syncs metadata, exposing the tables to T-SQL"],
+        "outputs": ["Curated Delta tables, queryable via both Spark and the read-only SQL analytics endpoint"],
+        "example": "A legacy nested-JSON staging feed is flattened and conformed with PySpark into a lakehouse gold table, something the original warehouse's T-SQL stored procedures struggled to express cleanly.",
+        "controls": ["Whether transformed output is promoted into the Warehouse or left served via the SQL analytics endpoint directly"],
+        "failureModes": ["Only Delta tables under the lakehouse /tables area are discoverable by the SQL analytics endpoint; tables referencing /files or external Delta tables created via Spark code stay invisible without a Tables-section shortcut"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
+    },
+    {
+      "id": "warehouse-tables",
+      "label": "Fabric Warehouse tables (Delta on OneLake)",
+      "summary": "The T-SQL analytical target: star/snowflake schemas physically stored as Delta in OneLake.",
+      "detail": "Fabric Data Warehouse is an enterprise-scale relational warehouse aimed at star/snowflake schemas, curated corporate data marts, and governed semantic models for BI. Warehouse tables are physically Delta (Parquet plus a transaction log) and are automatically published to OneLake Files, making them readable by other engines without export jobs. Loading routes include COPY INTO, Data Factory pipelines, Spark bulk writes, and cross-database CTAS/INSERT..SELECT.",
+      "whyItMatters": "This is the convergence point for both migration paths: whether data arrived via direct Copy activity load or via lakehouse transformation, it lands here as the same open Delta format, so the target isn't a proprietary black box.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "tags": ["Warehouse", "DeltaLake"],
+      "evidence": [
+        { "sourceKey": "warehouse-overview", "note": "Fabric Data Warehouse is an enterprise-scale relational warehouse built on a data lake foundation, aimed at star/snowflake schemas, curated corporate data marts, and governed semantic models for BI. Warehouse tables are physically stored as Delta tables and are automatically published to OneLake Files in Delta format." },
+        { "sourceKey": "warehouse-overview", "note": "A warehouse can be loaded through several routes: the COPY INTO T-SQL command, Data Factory pipelines, Dataflows, Spark bulk writes directly to the Delta tables, or cross-database CTAS / INSERT..SELECT / SELECT INTO statements." }
+      ],
+      "drill": {
+        "inputs": ["Landed OneLake extracts (SQL-first path) or curated lakehouse Delta tables (Spark-first path)"],
+        "processing": ["Load via COPY INTO, pipeline, or cross-database CTAS depending on source shape", "Rewrite legacy stored-procedure transformation logic as Warehouse T-SQL where the workload is SQL-first", "Validate row counts and business totals against the source before cutover"],
+        "outputs": ["Curated star-schema Warehouse tables, physically Delta in OneLake, queryable via full T-SQL including multi-table ACID transactions"],
+        "example": "A legacy FactSales stored procedure is rewritten as a Warehouse T-SQL CTAS pulling from newly landed OneLake extracts, with the resulting table validated against the source system's daily totals before the old warehouse is decommissioned.",
+        "controls": ["Choice of load route per table based on source shape and existing tooling"],
+        "failureModes": ["Assuming source-system SQL tuning rules transfer unchanged, when warehouse query behavior instead depends on the distributed engine, cache state, and workload management controls"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
+    },
+    {
+      "id": "warehouse-cache",
+      "label": "Transparent query cache",
+      "summary": "Always-on in-memory and SSD caching over Warehouse and SQL analytics endpoint queries.",
+      "detail": "Reading from the data lake is the dominant I/O cost for warehouse queries, so the engine layers local memory and SSD caches over remote storage. Caching is fully transparent and always on: queries cache whatever data they touch, including OneLake shortcuts. Anything loaded into memory is also serialized to SSD as a larger second tier, and eviction is recency-based. Users cannot disable, configure, or manually clear these caches.",
+      "whyItMatters": "This is why post-migration query performance often improves without any manual tuning: repeated access patterns from the migrated workload get progressively faster as the transparent cache warms, with no cache-management work for the migration team to do.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Warehouse", "Caching"],
+      "evidence": [
+        { "sourceKey": "warehouse-caching", "note": "Reading from the data lake is the dominant I/O cost for warehouse queries, so the engine layers local caches (memory and SSD) over remote storage to cut the number of remote reads. Caching is fully transparent and always on, and anything loaded into the in-memory cache is also serialized to a local SSD disk cache." },
+        { "sourceKey": "warehouse-caching", "note": "Users cannot disable, configure, or manually clear the warehouse caches; Microsoft Fabric orchestrates cache management entirely, and disabling it would visibly degrade query performance." }
+      ],
+      "drill": {
+        "inputs": ["Warehouse query workload against newly migrated Delta tables"],
+        "processing": ["First access transcodes data from Parquet into a compressed columnar in-memory representation", "Data is simultaneously serialized to SSD as a second tier", "Recency-based eviction removes the longest-unused objects under memory pressure"],
+        "outputs": ["Progressively faster repeat queries as the working set warms into memory and SSD"],
+        "example": "The first run of a newly migrated month-end report reads cold from OneLake; the same report the next day runs noticeably faster because its scanned columns are still resident in the SSD cache tier.",
+        "controls": ["None user-facing — cache behavior is fully autonomous"],
+        "failureModes": ["Assuming a slow first query after migration reflects a permanent performance regression, when it's simply the expected cold-cache cost before the transparent cache warms"]
+      }
+    },
+    {
+      "id": "validation-feedback",
+      "label": "Row-count / totals validation",
+      "summary": "Compare source and target aggregates before cutover, feeding back into the load step if mismatched.",
+      "detail": "A migration validation step runs equivalent aggregate queries against the source and target to compare row counts and business totals before the old source is retired. Where a mismatch is found, the load step is revisited rather than proceeding to cutover on unverified data.",
+      "whyItMatters": "This is the checkpoint that catches a silent transformation error or partial load before it reaches the semantic model and downstream reports, rather than after users notice wrong numbers.",
+      "classification": "pattern",
+      "layers": ["governance", "data"],
+      "tags": ["Migration", "Validation"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Source system aggregate query results (row counts, business totals per key dimension)", "Equivalent aggregate queries run against the newly migrated Warehouse tables"],
+        "processing": ["Run matching aggregate queries against source and target", "Compare row counts and totals within an agreed tolerance", "Flag and re-investigate any mismatch before proceeding"],
+        "outputs": ["A go/no-go signal for cutover, or a routed fix back into the load/transform step"],
+        "example": "A validation query comparing daily net sales by date between the legacy warehouse and the new Fabric Warehouse table surfaces a discrepancy traced to a currency-conversion step that wasn't carried over in the rewritten T-SQL, which is fixed before cutover proceeds.",
+        "controls": ["Tolerance threshold for acceptable variance", "Which dimensions/aggregates are checked as the validation surface"],
+        "failureModes": ["Validating only row counts and missing a transformation-logic error that preserves row counts but corrupts values"]
+      }
+    },
+    {
+      "id": "semantic-model-cutover",
+      "label": "Certified semantic model",
+      "summary": "The governed consumption layer published over the validated Warehouse tables.",
+      "detail": "The migration's final hop publishes a certified semantic model over the validated Warehouse tables, which Power BI reports then consume. This is the governed consumption layer where measures, relationships, and security are centralized rather than recreated per report.",
+      "whyItMatters": "This is the point at which the migration becomes visible to end users; completing it correctly is what allows the legacy source and its reports to actually be retired.",
+      "classification": "pattern",
+      "layers": ["compute", "governance"],
+      "tags": ["SemanticModel", "PowerBI"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Validated, cutover-ready Warehouse tables"],
+        "processing": ["Publish a semantic model over the warehouse tables with centralized measures and relationships", "Certify the model as the governed source for this domain", "Point existing report consumers at the new model, retiring old report data sources"],
+        "outputs": ["A certified semantic model serving Power BI reports against the migrated data"],
+        "example": "A finance team's legacy reporting-warehouse-connected reports are repointed to a newly certified semantic model built over the migrated Fabric Warehouse tables, and the legacy connection is decommissioned once report parity is confirmed.",
+        "controls": ["Certification/endorsement policy for the new model", "Cutover sequencing: parallel-run period before decommissioning the legacy source"],
+        "failureModes": ["Keeping duplicated extracts and legacy report connections alive indefinitely instead of consolidating on the migrated OneLake-backed stores — see the warning node"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic Model" }
+    },
+    {
+      "id": "duplicated-extracts-warning",
+      "label": "Trap: duplicated extracts left running",
+      "summary": "Keeping old extract jobs alive after migration recreates the duplication Fabric was meant to eliminate.",
+      "detail": "A common migration failure is treating the project as complete once the new Warehouse and semantic model are live, while legacy extract jobs, duplicate copies, and old report connections keep running in parallel indefinitely. This recreates the ownership overhead and duplication that consolidating on OneLake-backed stores was meant to eliminate.",
+      "whyItMatters": "Every extract left running is a second, silently diverging copy of the truth: it consumes cost, and any report still pointed at it can quietly disagree with the new certified semantic model.",
+      "classification": "warning",
+      "layers": ["data", "governance"],
+      "tags": ["Migration", "AntiPattern"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["A migration marked complete with the new Warehouse and semantic model live", "Legacy extract jobs and report connections still scheduled"],
+        "processing": ["Audit for any remaining scheduled jobs feeding the old source or duplicate copies", "Confirm every downstream report has been repointed to the new certified semantic model", "Decommission legacy jobs and connections on an explicit schedule, not indefinitely"],
+        "outputs": ["A single consolidated source of truth in OneLake-backed stores, with no lingering duplicate extracts"],
+        "example": "Six months after a warehouse migration, an old nightly extract job is discovered still running, feeding a handful of reports nobody repointed — those reports have quietly drifted from the certified numbers the rest of the organization sees.",
+        "controls": ["An explicit decommissioning date/checklist as part of the migration plan, not an open-ended 'eventually'"],
+        "failureModes": ["Nobody owns turning off the legacy jobs, so cost and drift accumulate silently after the migration is declared done"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-source-copy", "from": "legacy-source", "to": "copy-activity", "label": "profiled extracts scheduled for movement", "layer": "data", "kind": "flow" },
+    { "id": "e-copy-lakehouse", "from": "copy-activity", "to": "lakehouse-transform", "label": "Spark-first / semi-structured workloads", "layer": "data", "kind": "flow" },
+    { "id": "e-copy-warehouse", "from": "copy-activity", "to": "warehouse-tables", "label": "SQL-first workloads, direct load", "layer": "data", "kind": "flow" },
+    { "id": "e-lakehouse-warehouse", "from": "lakehouse-transform", "to": "warehouse-tables", "label": "curated Delta tables promoted", "layer": "data", "kind": "flow" },
+    { "id": "e-warehouse-cache", "from": "warehouse-tables", "to": "warehouse-cache", "label": "queries populate transparent cache", "layer": "compute", "kind": "flow" },
+    { "id": "e-warehouse-validation", "from": "warehouse-tables", "to": "validation-feedback", "label": "aggregates compared against source", "layer": "governance", "kind": "flow" },
+    { "id": "e-validation-source-feedback", "from": "validation-feedback", "to": "warehouse-tables", "label": "mismatch routes back to load/transform", "layer": "data", "kind": "feedback" },
+    { "id": "e-validation-semantic", "from": "validation-feedback", "to": "semantic-model-cutover", "label": "validated, cutover-ready", "layer": "compute", "kind": "flow" },
+    { "id": "e-cutover-warning", "from": "semantic-model-cutover", "to": "duplicated-extracts-warning", "label": "if legacy jobs aren't decommissioned", "layer": "governance", "kind": "branch" }
   ],
   "walkthrough": [
-    {
-      "nodeId": "step-1",
-      "title": "1. dw migration boundary",
-      "explanation": "dw migration boundary in the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover architecture."
-    },
-    {
-      "nodeId": "step-2",
-      "title": "2. data-warehouse-to-Fabric migration phases - source DW to landing/mi…",
-      "explanation": "data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake in the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover architecture."
-    },
-    {
-      "nodeId": "step-3",
-      "title": "3. to Fabric Warehouse on OneLake Delta",
-      "explanation": "to Fabric Warehouse on OneLake Delta in the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover architecture."
-    },
-    {
-      "nodeId": "step-4",
-      "title": "4. to semantic layer and cutover",
-      "explanation": "to semantic layer and cutover in the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover architecture."
-    },
-    {
-      "nodeId": "step-5",
-      "title": "5. warehouse governed outcome",
-      "explanation": "warehouse governed outcome in the data-warehouse-to-Fabric migration phases - source DW to landing/mirroring into OneLake, to Fabric Warehouse on OneLake Delta, to semantic layer and cutover architecture."
-    }
+    { "nodeId": "legacy-source", "title": "1. Inventory before moving anything", "explanation": "Classify workloads as SQL-first or Spark-first before choosing a movement path, so transformation logic and report dependencies aren't discovered mid-migration." },
+    { "nodeId": "copy-activity", "title": "2. Land extracts at scale", "explanation": "Data Factory Copy activity's parallelism is what makes a large one-time migration into OneLake tractable in a reasonable window." },
+    { "nodeId": "lakehouse-transform", "title": "3. Branch: Spark-first for complex or semi-structured work", "explanation": "Workloads that don't map cleanly to T-SQL land in a lakehouse first, where Spark handles the transformation before promotion." },
+    { "nodeId": "warehouse-tables", "title": "4. Converge: Fabric Warehouse tables in Delta", "explanation": "Both the SQL-first and Spark-first paths converge here, since both stores persist the same open Delta format in OneLake." },
+    { "nodeId": "warehouse-cache", "title": "5. Performance improves automatically", "explanation": "The transparent, always-on cache layer means query performance improves as the migrated workload's access patterns warm the cache, with no manual tuning." },
+    { "nodeId": "validation-feedback", "title": "6. Validate before cutover, with a path back", "explanation": "Row-count and totals validation against the source is the checkpoint before cutover; a mismatch routes back into the load or transform step rather than proceeding blind." },
+    { "nodeId": "semantic-model-cutover", "title": "7. Publish the certified semantic model", "explanation": "This is the governed consumption layer that lets legacy report connections finally be retired." },
+    { "nodeId": "duplicated-extracts-warning", "title": "8. Warning: decommission the legacy jobs explicitly", "explanation": "Migrations that don't schedule an explicit decommissioning step leave duplicate extracts running, recreating the duplication Fabric was meant to eliminate." }
   ]
 }

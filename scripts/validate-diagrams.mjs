@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { basename, join, resolve } from "node:path";
 const root = resolve(import.meta.dirname, ".."),
   dir = join(root, "content/diagrams");
@@ -27,13 +28,25 @@ for (const asset of assets) {
     failures.push(`${slug}: missing/invalid viewBox`);
   if (/<script\b|<foreignObject\b|\son[a-z]+\s*=\s*["']|javascript:/i.test(markup))
     failures.push(`${slug}: unsafe executable SVG content`);
+  const publicPath = join(root, "public", "diagrams", `${slug}.svg`);
+  if (!existsSync(publicPath)) failures.push(`${slug}: missing public/diagrams/${slug}.svg mirror`);
+  else if (readFileSync(publicPath, "utf8") !== svg)
+    failures.push(`${slug}: content/public SVG mirrors are not byte-identical`);
+  const hash = createHash("sha256").update(svg).digest("hex");
+  if (asset.static_hash !== hash) failures.push(`${slug}: static_hash does not match SVG bytes`);
+  if (!/<title\b[^>]*\bid=["'][^"']+-title["'][^>]*>/i.test(svg))
+    failures.push(`${slug}: SVG root needs an identified <title>`);
+  if (!/<desc\b[^>]*\bid=["'][^"']+-desc["'][^>]*>/i.test(svg))
+    failures.push(`${slug}: SVG root needs an identified <desc>`);
+  if (!/<svg\b[^>]*\brole=["']img["'][^>]*\baria-labelledby=["'][^"']+["']/i.test(svg))
+    failures.push(`${slug}: SVG root needs role="img" and aria-labelledby`);
 }
 for (const name of readdirSync(dir).filter((name) => name.endsWith(".svg")))
   if (!paths.has(`content/diagrams/${name}`)) failures.push(`orphan SVG: ${name}`);
 
 /**
- * Authored sidecars (content/diagrams/<slug>.diagram.json) are the source of truth for the
- * interactive renderer. Enforce the contract in src/diagrams/types.ts — most importantly the
+ * Authored sidecars (content/diagrams/<slug>.diagram.json) are the semantic/evidence contract for
+ * the primary SVG infographic. Enforce src/diagrams/types.ts — most importantly the
  * honesty rule: a node classified `fact` asserts sourced product behaviour, so it must cite
  * evidence, exactly like any other claim in the knowledge base.
  */
@@ -103,6 +116,19 @@ for (const name of sidecarNames) {
     if (!drill?.example) failures.push(`${label}: node "${node.id}" drill needs a worked example`);
   }
 
+  const svg = readFileSync(join(dir, `${slug}.svg`), "utf8");
+  const regionIds = [...svg.matchAll(/\bdata-node-id=["']([^"']+)["']/g)].map((match) => match[1]);
+  for (const id of ids) {
+    const count = regionIds.filter((candidate) => candidate === id).length;
+    if (count !== 1)
+      failures.push(`${label}: node "${id}" must map to exactly one SVG region (found ${count})`);
+  }
+  for (const id of regionIds)
+    if (!ids.has(id)) failures.push(`${label}: SVG region references unknown node "${id}"`);
+  for (const match of svg.matchAll(/<[^>]+\bdata-node-id=["']([^"']+)["'][^>]*>/g))
+    if (!/\btabindex=["']0["']/.test(match[0]) || !/\baria-label=["'][^"']+["']/.test(match[0]))
+      failures.push(`${label}: SVG region "${match[1]}" must be focusable and labelled`);
+
   for (const edge of edges) {
     if (!ids.has(edge.from))
       failures.push(`${label}: edge "${edge.id}" from unknown node "${edge.from}"`);
@@ -129,6 +155,6 @@ if (failures.length) {
 }
 console.log(
   `Diagram validation passed: ${assets.length} registered diagrams, ` +
-    `${authored} with authored interactive sidecars, ` +
-    `${assets.length - authored} still on caption-derived fallback.`,
+    `${authored} with authored evidence sidecars, ` +
+    `${assets.length - authored} missing sidecars.`,
 );

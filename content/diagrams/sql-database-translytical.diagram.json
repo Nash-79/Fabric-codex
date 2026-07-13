@@ -1,197 +1,294 @@
 {
   "id": "sql-database-translytical",
-  "title": "SQL database in Fabric translytical path into OneLake and analytics workloads",
-  "purpose": "Original diagram: SQL database in Fabric translytical path into OneLake and analytics workloads",
-  "accessibleSummary": "An interactive architecture infographic with 3 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: SQL database in Fabric translytical path into OneLake and analytics workloads",
+  "title": "SQL Database in Fabric: The Translytical Path into OneLake",
+  "purpose": "Show how SQL database in Fabric separates OLTP write traffic from analytics read traffic by automatically replicating into OneLake, and what that separation enables — federated queries, GraphQL, AI/vector search, and app backends via Rayfin.",
+  "accessibleSummary": "An architecture diagram starting at an application's transactional writes into SQL database's OLTP engine, which automatically and continuously replicates into OneLake as Delta Parquet. A companion SQL analytics endpoint reads that replicated copy read-only, isolated from the transactional workload. From the analytics endpoint, three consumption paths branch off: cross-database federated T-SQL queries joining other Fabric items, a GraphQL API auto-generated over the database, and downstream Spark/Power BI/notebook consumption of the same OneLake Delta data. A separate branch shows the OLTP engine also serving AI/vector search workloads directly and Rayfin application backends provisioning a SQL database as part of a code-first deployment. A warning node covers the replication lag between a write and its visibility on the analytics endpoint.",
+  "longDescription": "This is an architecture diagram of the translytical pattern SQL database in Fabric enables. Application writes land in the OLTP engine, which shares the same SQL Database Engine as Azure SQL Database and is built on the Hyperscale distributed-functions architecture, separating compute from durable storage so read replicas and storage scale independently of the primary write path. From that OLTP engine, Fabric automatically and continuously replicates data into OneLake in near-real time, converting it to Parquet as it lands — no manual export step exists. A companion SQL analytics endpoint, auto-provisioned alongside the database, gives read-only analytical access to that replicated OneLake copy, structurally isolated from the transactional workload so analytics queries cannot contend with OLTP writes. From the analytics endpoint, the diagram branches three ways: cross-database federated T-SQL queries joining other Fabric items via standard three-part naming; an auto-generated GraphQL API exposed directly over the database; and downstream consumption by Spark, Power BI, and notebooks reading the same Delta files with no additional copy. A separate branch shows the OLTP engine itself serving AI/vector search workloads (RAG, semantic search) directly, and Rayfin — a code-first application-backend tool — provisioning a SQL database automatically as part of deploying a full app. A warning node captures the one real freshness caveat in this design: replication into OneLake is near-real-time, not instantaneous, so a write is not immediately visible on the analytics endpoint or any downstream consumer.",
   "type": "architecture",
   "topicSlug": "sql-database",
-  "capabilityIds": [
-    "sql-database"
-  ],
-  "revision": "1",
+  "capabilityIds": ["sql-database"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/sql-database-translytical.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "sql database boundary",
-      "summary": "sql database boundary in the SQL database in Fabric translytical path into OneLake and analytics workloads architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "app-writes",
+      "label": "Application OLTP writes",
+      "summary": "Transactional writes from applications hit the SQL database's OLTP engine.",
+      "detail": "SQL database in Fabric is a developer-oriented transactional database engine that shares the same underlying SQL Database Engine as Azure SQL Database, making it the designated home for OLTP workloads within the Fabric platform. Authentication is exclusively via Microsoft Entra ID; a caller must hold at least Read item permission on the database before any connection succeeds.",
+      "whyItMatters": "This is the entry point for every transactional workload in the diagram — everything downstream (replication, analytics endpoint, federation, AI) exists because this engine handles writes with full OLTP guarantees first.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["SQLDatabase", "OLTP", "AzureSQL"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "SQL database in Fabric is a developer-oriented transactional database engine that shares the same underlying SQL Database Engine as Azure SQL Database, making it the designated home for OLTP workloads within the Fabric platform." },
+        { "sourceKey": "sql-database-fabric-overview", "note": "Authentication to a SQL database in Fabric is exclusively via Microsoft Entra ID; SQL authentication is not supported. A caller must hold at least the Read item permission on the database before any connection succeeds." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the sql database boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through sql database boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Application transaction requests (insert/update/delete) over Entra ID-authenticated connections"],
+        "processing": ["Route the write through the primary compute node's relational engine", "Apply automatic tuning (including auto-index creation) without manual DBA intervention", "Commit the transaction with full OLTP durability guarantees"],
+        "outputs": ["A committed transactional state, immediately consistent for subsequent OLTP reads against the primary"],
+        "example": "An order-management application writes a new order row via Entra ID service-principal auth; the write commits with standard OLTP guarantees, and automatic tuning has already created a supporting index without a DBA being asked.",
+        "controls": ["Row-level security (RLS) and object-level security (OLS) policies", "Workspace-level customer-managed keys and SQL auditing configuration"],
+        "failureModes": ["Attempting SQL authentication instead of Entra ID — not supported at all", "Assuming a caller with workspace access automatically has database access without an explicit Read item permission grant"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "sql-database",
-        "label": "Open sql database"
+      "drillTarget": { "kind": "capability", "slug": "sql-database", "label": "SQL Database" }
+    },
+    {
+      "id": "hyperscale-engine",
+      "label": "Hyperscale compute/storage split",
+      "summary": "Compute and durable storage scale independently, so replicas add with no data copy.",
+      "detail": "SQL database in Fabric is built on the Hyperscale distributed-functions architecture, which architecturally separates the relational query-processing engine from long-term data storage. High-availability and named read replicas share the same underlying storage as the primary, so spinning up a new replica requires no data-copy step, and the architectural separation is what lets storage grow or read compute scale without disrupting the primary OLTP write path.",
+      "whyItMatters": "This underlying engine design is why the OneLake replication path in this diagram can exist without disrupting the primary: the engine is already built to propagate changes to consumers other than the primary compute node without slowing it down.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["SQLDatabase", "Hyperscale"],
+      "evidence": [
+        { "sourceKey": "sql-database-hyperscale-architecture", "note": "SQL database in Microsoft Fabric is built on the Hyperscale distributed-functions architecture: Microsoft Learn's Hyperscale architecture reference is versioned to explicitly cover SQL database in Fabric alongside Azure SQL Database." },
+        { "sourceKey": "sql-database-hyperscale-architecture", "note": "This Hyperscale-derived separation of the transactional compute engine from durable storage is architecturally consistent with SQL database in Fabric's separate replication path that mirrors data changes into Delta Parquet in OneLake." }
+      ],
+      "drill": {
+        "inputs": ["Transaction log records from the primary compute node's writes"],
+        "processing": ["The log service fans out log records to page servers (which apply them to owned pages) and to secondary compute replicas", "Log records persist durably to Azure Storage, treated as virtually infinite"],
+        "outputs": ["A durable, replicated storage layer that both HA/read replicas and the OneLake replication path can draw from without touching the primary's write path"],
+        "example": "Adding a named read replica for reporting requires no data-copy step, because it shares the same page-server storage as the primary — only a geo-secondary replica maintains genuinely separate storage components.",
+        "controls": ["Replica topology: up to 4 HA secondaries, up to 30 named replicas, one optional geo-secondary"],
+        "failureModes": ["Assuming replica creation is a slow, copy-based operation and over-provisioning lead time for it unnecessarily"]
       }
     },
     {
-      "id": "step-2",
-      "label": "SQL database in Fabric translytical path into OneLake and analytics…",
-      "summary": "SQL database in Fabric translytical path into OneLake and analytics workloads in the SQL database in Fabric translytical path into OneLake and analytics workloads architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "onelake-replication",
+      "label": "Automatic OneLake replication",
+      "summary": "Continuous, near-real-time replication into OneLake as Delta Parquet, no manual export.",
+      "detail": "When a SQL database is created in Fabric, the platform automatically and continuously replicates its data into OneLake in near-real time, converting it to Parquet format so that downstream analytical services — Spark, notebooks, Power BI, data engineering pipelines — can consume it without any manual export step.",
+      "whyItMatters": "This is the mechanism that turns a plain OLTP database into a translytical platform component: application data becomes analytics-ready the moment it's written, with no ETL pipeline for anyone to build or maintain.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["SQLDatabase", "OneLake", "Replication"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "When a SQL database is created in Fabric, the platform automatically and continuously replicates its data into OneLake in near-real time, converting it to Parquet format so downstream analytical services can consume it without any manual export step." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the SQL database in Fabric translytical path into OneLake and analytics workloads responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through SQL database in Fabric translytical path into OneLake and analytics workloads: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Committed transactional writes from the OLTP engine"],
+        "processing": ["Convert committed rows into Delta Parquet format", "Land the converted data into OneLake under the database item's canonical path", "Repeat continuously as new writes commit"],
+        "outputs": ["A near-real-time Delta Parquet copy of the transactional data, resident in OneLake"],
+        "example": "A new order row committed by the OLTP engine appears as a new row in the OneLake Delta copy within the platform's near-real-time replication window, with no export job, notebook, or pipeline involved on the team's part.",
+        "controls": ["None directly configurable by the user — this replication is a platform-managed, always-on behavior of the item"],
+        "failureModes": ["Assuming replication is instantaneous rather than near-real-time — see the warning node on replication lag for the specific consequence"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "sql-database", "label": "SQL Database" }
+    },
+    {
+      "id": "sql-analytics-endpoint",
+      "label": "SQL analytics endpoint",
+      "summary": "Auto-provisioned, read-only T-SQL surface over the OneLake replica, isolated from OLTP.",
+      "detail": "Provisioning a SQL database in a Fabric workspace also automatically creates a companion SQL analytics endpoint, giving read-only analytical access to the replicated OneLake data without affecting the transactional workload. SQL database in Fabric enables translytical application patterns by separating write traffic (through the transactional engine) from read/analytics traffic (through the SQL analytics endpoint), eliminating contention between the two workloads.",
+      "whyItMatters": "This is the structural payoff of the whole architecture: analysts and BI tools query this endpoint as hard as they want without ever slowing down the application's transactional writes, because the two paths share no compute.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["SQLDatabase", "SQLAnalyticsEndpoint", "HTAP"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "Provisioning a SQL database in a Fabric workspace also automatically creates a companion SQL analytics endpoint, giving read-only analytical access to the replicated OneLake data without affecting the transactional workload." },
+        { "sourceKey": "sql-database-fabric-overview", "note": "SQL database in Fabric enables translytical application patterns by separating write traffic (through the transactional engine) from read/analytics traffic (through the SQL analytics endpoint backed by OneLake), eliminating contention between the two workloads." }
+      ],
+      "drill": {
+        "inputs": ["The OneLake Delta Parquet replica of the transactional data"],
+        "processing": ["Serve read-only T-SQL queries directly against the Delta files", "Diagnostic tooling like sp_get_table_health_metrics is available to check the physical health of the underlying table layout"],
+        "outputs": ["Analytical query results with zero impact on the OLTP engine's write throughput"],
+        "example": "A BI team runs heavy ad-hoc aggregation queries against the analytics endpoint all day; meanwhile the application's OLTP write throughput is completely unaffected, since the two paths never share compute.",
+        "controls": ["Read-only by design — no write path exists through this endpoint back into the table"],
+        "failureModes": ["Assuming the analytics endpoint can perform table maintenance (e.g. OPTIMIZE) itself — it is read-only, so a detected physical-health issue still requires a fix in Spark or the Lakehouse engine, not through this endpoint"]
       }
     },
     {
-      "id": "step-3",
-      "label": "sql database governed outcome",
-      "summary": "sql database governed outcome in the SQL database in Fabric translytical path into OneLake and analytics workloads architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "federated-queries",
+      "label": "Cross-database federation",
+      "summary": "T-SQL joins across warehouses, mirrored databases, and other SQL databases via three-part naming.",
+      "detail": "Because the replicated OneLake data is stored as Delta tables, a SQL analytics endpoint on one database can join data from other Fabric items — warehouses, mirrored databases, or other SQL databases — using standard three-part T-SQL naming, enabling cross-database federated queries without data movement.",
+      "whyItMatters": "This turns every SQL database's analytics endpoint into a queryable citizen of the whole OneLake estate, not an isolated silo — a query can join transactional data against a warehouse's curated facts without any data movement step.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "tags": ["SQLDatabase", "Federation", "CrossDatabaseQuery"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "Because the replicated OneLake data is stored as Delta tables, a SQL analytics endpoint on one database can join data from other Fabric items using standard three-part T-SQL naming, enabling cross-database federated queries without data movement." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the sql database governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through sql database governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A T-SQL query referencing tables in multiple Fabric items via three-part naming (database.schema.table)"],
+        "processing": ["Resolve each referenced item's Delta table location in OneLake", "Execute the join across items with no intermediate copy or ETL step"],
+        "outputs": ["A single result set spanning multiple Fabric items' data, computed live"],
+        "example": "An analyst joins the SQL database's order table against a separate Fabric warehouse's curated customer-dimension table in one T-SQL query, using three-part naming, with neither dataset copied anywhere for the join to work.",
+        "controls": ["Read permissions on each referenced item, evaluated independently per item"],
+        "failureModes": ["Assuming federation implies data movement or a materialized copy — it queries the live Delta files in place each time"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "sql-database",
-        "label": "Open sql database"
+      "drillTarget": { "kind": "capability", "slug": "sql-database", "label": "SQL Database" }
+    },
+    {
+      "id": "graphql-endpoint",
+      "label": "Auto-generated GraphQL API",
+      "summary": "The Fabric portal generates a GraphQL API directly over the SQL database.",
+      "detail": "The Fabric portal can generate a GraphQL API directly over a SQL database, and the database also integrates with Fabric's built-in git-based source control for CI/CD-style workflows.",
+      "whyItMatters": "This gives application developers a modern, typed query surface over transactional data without hand-building an API layer — the same database that serves OLTP writes and T-SQL analytics also exposes itself to app clients through GraphQL with no separate service to build.",
+      "classification": "fact",
+      "layers": ["compute", "metadata"],
+      "tags": ["SQLDatabase", "GraphQLAPI"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "The Fabric portal can generate a GraphQL API directly over a SQL database, and the database also integrates with Fabric's built-in git-based source control for CI/CD-style workflows." }
+      ],
+      "drill": {
+        "inputs": ["The SQL database's existing schema"],
+        "processing": ["Fabric portal generates a GraphQL schema and resolvers directly over the database tables", "Resolvers push query execution down to the database engine"],
+        "outputs": ["A typed GraphQL endpoint an app client can query without hand-written API code"],
+        "example": "A mobile app team queries the auto-generated GraphQL endpoint for a customer's recent orders instead of standing up a bespoke REST API layer in front of the same SQL database.",
+        "controls": ["Schema exposure scope (which tables/fields the generated API surfaces)"],
+        "failureModes": ["Exposing the full database schema through the generated API by default without reviewing which fields should actually be client-visible"]
+      }
+    },
+    {
+      "id": "downstream-engines",
+      "label": "Spark / Power BI / notebooks",
+      "summary": "Other Fabric engines read the same OneLake Delta replica with no extra copy.",
+      "detail": "Because the SQL database's replicated data lands in OneLake as open Delta Parquet, the same one-copy model that governs the rest of Fabric applies here too: Spark, Power BI (including Direct Lake), and notebooks can all read the replicated data directly, with the SQL analytics endpoint being just one of several consumption surfaces over the identical files.",
+      "whyItMatters": "The translytical pattern is not just 'OLTP plus one read replica' — it plugs the transactional database into the entire Fabric engine ecosystem through the same OneLake substrate every other item uses.",
+      "classification": "inference",
+      "layers": ["compute", "data"],
+      "tags": ["SQLDatabase", "OneLake", "MultiEngine"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["The OneLake Delta Parquet replica produced by automatic replication"],
+        "processing": ["Spark reads/transforms the replica alongside other lakehouse data", "Power BI models query it via Direct Lake or Import", "Notebooks explore it interactively"],
+        "outputs": ["Analytics, ML features, or reports built directly on transactional data with no separate export pipeline"],
+        "example": "A data scientist's notebook reads the SQL database's OneLake replica alongside a lakehouse's product catalog to build a churn feature set, with both datasets accessed through the same OneLake path convention.",
+        "controls": ["OneLake security roles governing which engines/users can read the replicated path"],
+        "failureModes": ["Building a redundant Spark-based export pipeline out of habit, duplicating data that automatic replication already made available"]
+      }
+    },
+    {
+      "id": "ai-vector-search",
+      "label": "AI / vector search",
+      "summary": "The OLTP engine itself supports vector types for RAG and semantic search.",
+      "detail": "SQL database supports vector data types and integrates with Azure OpenAI and orchestration frameworks such as LangChain and Semantic Kernel, positioning it as a store for Retrieval-Augmented Generation (RAG) and semantic search workloads inside Fabric.",
+      "whyItMatters": "This is a separate branch from the analytics path — it shows the OLTP engine itself, not its OneLake replica, serving a modern AI workload pattern directly against transactional data.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["SQLDatabase", "AI", "VectorSearch"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "SQL database supports vector data types and integrates with Azure OpenAI and orchestration frameworks such as LangChain and Semantic Kernel, positioning it as a store for Retrieval-Augmented Generation (RAG) and semantic search workloads inside Fabric." }
+      ],
+      "drill": {
+        "inputs": ["Text or embedding data to be vectorized and stored, plus a similarity-search query at retrieval time"],
+        "processing": ["Store vector embeddings using the database's vector data type", "Orchestrate retrieval via LangChain, Semantic Kernel, or direct Azure OpenAI integration", "Run similarity search against stored vectors as part of a RAG pipeline"],
+        "outputs": ["Retrieved context passed to an LLM for grounded generation"],
+        "example": "A support-ticket RAG application stores embeddings of resolved tickets directly in SQL database's vector columns, retrieving the most similar past resolutions at query time to ground an LLM's suggested response.",
+        "controls": ["Embedding model choice and vector column indexing strategy"],
+        "failureModes": ["Treating vector search as a bolt-on without considering it competes for the same OLTP compute as transactional writes"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "sql-database", "label": "SQL Database" }
+    },
+    {
+      "id": "rayfin-app-backend",
+      "label": "Rayfin app backend",
+      "summary": "A code-first deployment tool provisions a SQL database as part of a full app stack.",
+      "detail": "Rayfin is an open-source SDK and CLI that provisions a complete application backend onto Microsoft Fabric capacity from a single command. Deploying a Rayfin application provisions a Fabric SQL Database whose schema is generated automatically from TypeScript decorator-annotated data model classes, alongside a GraphQL API and Entra ID authentication, and routes application data into OneLake as part of the managed deployment with no separate ETL pipeline.",
+      "whyItMatters": "This shows SQL database in Fabric being consumed programmatically as infrastructure, not just hand-authored — an app framework can stand up the whole translytical path (OLTP engine, GraphQL, OneLake landing) as a side effect of a normal app deployment.",
+      "classification": "fact",
+      "layers": ["compute", "orchestration"],
+      "tags": ["SQLDatabase", "Rayfin", "FabricApps"],
+      "evidence": [
+        { "sourceKey": "ultimateinfoguide-rayfin-apps-guide", "note": "Deploying a Rayfin application provisions a Fabric SQL Database whose schema is generated automatically from TypeScript decorator-annotated data model classes rather than hand-written DDL, alongside a GraphQL API and Entra ID authentication." },
+        { "sourceKey": "ultimateinfoguide-rayfin-apps-guide", "note": "Rayfin routes application data into OneLake as part of its managed deployment, without requiring a separate ETL pipeline to move transactional data into the analytics layer." }
+      ],
+      "drill": {
+        "inputs": ["A TypeScript data model with decorator-annotated classes describing the app's schema and RLS policies"],
+        "processing": ["Rayfin CLI provisions a SQL database with schema generated from the model", "Provisions Entra ID auth and a GraphQL endpoint as sibling managed services", "Wires the resulting database into OneLake automatically"],
+        "outputs": ["A running application backend (database, auth, API) with its data already flowing into OneLake for analytics"],
+        "example": "A developer runs a single Rayfin deploy command for a new internal tool; minutes later a SQL database, GraphQL API, and Entra ID auth are live, and the app's transactional data is already replicating into OneLake without a separate analytics onboarding step.",
+        "controls": ["Fabric capacity tier (a lower F-SKU is suggested for development, higher for production) and tenant-admin enablement"],
+        "failureModes": ["Treating Rayfin-provisioned resources as unmanaged, one-off infrastructure rather than the same governed SQL database item the rest of this diagram describes"]
+      }
+    },
+    {
+      "id": "replication-lag-warning",
+      "label": "Replication is near-real-time, not instant",
+      "summary": "A write is not immediately visible on the analytics endpoint or downstream engines.",
+      "detail": "Data is replicated into OneLake in near-real time, not synchronously with the transaction commit. Every downstream consumer of the replicated copy — the SQL analytics endpoint, federated queries, GraphQL over replicated views, Spark, and Power BI — inherits this same small lag rather than seeing the write the instant it commits on the OLTP engine.",
+      "whyItMatters": "Designs that assume the analytics endpoint reflects the exact current transactional state can be subtly wrong immediately after a write — this is the one freshness caveat every other branch in this diagram shares.",
+      "classification": "warning",
+      "layers": ["data"],
+      "tags": ["SQLDatabase", "Replication", "Freshness"],
+      "evidence": [
+        { "sourceKey": "sql-database-fabric-overview", "note": "When a SQL database is created in Fabric, the platform automatically and continuously replicates its data into OneLake in near-real time — not synchronously with commit." }
+      ],
+      "drill": {
+        "inputs": ["A just-committed OLTP write and a near-simultaneous read against the analytics endpoint or a downstream engine"],
+        "processing": ["The OLTP commit completes with full transactional durability", "Replication into OneLake proceeds asynchronously, on its own near-real-time cadence"],
+        "outputs": ["A brief window in which the OLTP engine has the write but the analytics endpoint and downstream engines do not yet"],
+        "example": "An application writes an order, then immediately queries the SQL analytics endpoint expecting to see it for a confirmation report; if the query lands inside the replication window, the row is briefly absent from the analytics-side result even though the OLTP write already succeeded.",
+        "controls": ["Design read-after-write-sensitive flows to read from the OLTP engine directly rather than the analytics endpoint when immediate consistency is required"],
+        "failureModes": ["Building a confirmation or validation step that reads from the analytics endpoint immediately after a write and treats a momentary miss as a data-loss bug", "Assuming GraphQL or federated queries built on the replicated copy are transactionally consistent with the OLTP engine at all times"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-app-oltp", "from": "app-writes", "to": "hyperscale-engine", "label": "processed by", "layer": "compute", "kind": "flow" },
+    { "id": "e-oltp-onelake", "from": "hyperscale-engine", "to": "onelake-replication", "label": "log-service fan-out replicates continuously", "layer": "data", "kind": "flow" },
+    { "id": "e-onelake-endpoint", "from": "onelake-replication", "to": "sql-analytics-endpoint", "label": "read-only surface over the replica", "layer": "compute", "kind": "flow" },
+    { "id": "e-endpoint-federation", "from": "sql-analytics-endpoint", "to": "federated-queries", "label": "three-part naming joins other items", "layer": "data", "kind": "branch" },
+    { "id": "e-endpoint-graphql", "from": "sql-analytics-endpoint", "to": "graphql-endpoint", "label": "auto-generated over the schema", "layer": "compute", "kind": "branch" },
+    { "id": "e-endpoint-downstream", "from": "sql-analytics-endpoint", "to": "downstream-engines", "label": "same Delta files, no extra copy", "layer": "data", "kind": "branch" },
+    { "id": "e-oltp-ai", "from": "hyperscale-engine", "to": "ai-vector-search", "label": "vector types queried directly on OLTP engine", "layer": "compute", "kind": "branch" },
+    { "id": "e-rayfin-oltp", "from": "rayfin-app-backend", "to": "app-writes", "label": "provisions the database that receives writes", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-onelake-warning", "from": "onelake-replication", "to": "replication-lag-warning", "label": "consumers inherit this lag", "layer": "data", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. sql database boundary",
-      "explanation": "sql database boundary in the SQL database in Fabric translytical path into OneLake and analytics workloads architecture."
+      "nodeId": "app-writes",
+      "title": "Start: an application writes transactionally",
+      "explanation": "SQL database's OLTP engine, sharing Azure SQL Database's engine, handles the write with full transactional guarantees."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. SQL database in Fabric translytical path into OneLake and analytics…",
-      "explanation": "SQL database in Fabric translytical path into OneLake and analytics workloads in the SQL database in Fabric translytical path into OneLake and analytics workloads architecture."
+      "nodeId": "hyperscale-engine",
+      "title": "The Hyperscale split makes replication cheap",
+      "explanation": "Because compute and storage are already architecturally separated, propagating changes onward to OneLake doesn't compete with the primary's write path."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. sql database governed outcome",
-      "explanation": "sql database governed outcome in the SQL database in Fabric translytical path into OneLake and analytics workloads architecture."
+      "nodeId": "onelake-replication",
+      "title": "Continuous, automatic replication into OneLake",
+      "explanation": "Every write flows into OneLake as Delta Parquet in near-real time, with no manual export step for anyone to build."
+    },
+    {
+      "nodeId": "sql-analytics-endpoint",
+      "title": "A read-only analytics surface, structurally isolated",
+      "explanation": "This is the translytical payoff: analytics queries here can never contend with OLTP writes, because they never share compute."
+    },
+    {
+      "nodeId": "federated-queries",
+      "title": "Branch: join across the whole OneLake estate",
+      "explanation": "Three-part T-SQL naming lets a query span warehouses, mirrored databases, and other SQL databases with no data movement."
+    },
+    {
+      "nodeId": "graphql-endpoint",
+      "title": "Branch: an auto-generated GraphQL API",
+      "explanation": "App clients get a typed query surface over the same database with no hand-built API layer."
+    },
+    {
+      "nodeId": "downstream-engines",
+      "title": "Branch: every other Fabric engine reads the same files",
+      "explanation": "Spark, Power BI, and notebooks consume the identical OneLake Delta replica through the platform's one-copy model."
+    },
+    {
+      "nodeId": "ai-vector-search",
+      "title": "Separate branch: AI workloads on the OLTP engine directly",
+      "explanation": "Vector data types let the transactional engine itself serve RAG and semantic-search retrieval, not just its OneLake replica."
+    },
+    {
+      "nodeId": "rayfin-app-backend",
+      "title": "Provisioning entry point: Rayfin stands up the whole stack",
+      "explanation": "A code-first app deployment can create the SQL database this entire diagram describes as a side effect of a single deploy command."
+    },
+    {
+      "nodeId": "replication-lag-warning",
+      "title": "Warning: near-real-time is not instant",
+      "explanation": "Every branch reading the OneLake replica — analytics endpoint, federation, GraphQL, downstream engines — shares the same small replication lag after a write."
     }
   ]
 }

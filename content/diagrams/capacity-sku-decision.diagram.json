@@ -1,437 +1,281 @@
 {
   "id": "capacity-sku-decision",
-  "title": "Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split…",
-  "purpose": "Original diagram: Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold",
+  "title": "Fabric Capacity Sizing: Scale Up, Autoscale Spark, or Split Workloads?",
+  "purpose": "Give a capacity owner facing throttling or contention a concrete decision path — diagnose which workload is the actual problem, then choose between scaling the SKU, isolating it on Autoscale Billing for Spark, or splitting workloads across separate capacities — grounded in the F-SKU ladder, the per-capacity throttling boundary, and the resource ceilings each engine actually draws against.",
+  "accessibleSummary": "A decision tree that starts by asking which workload is driving contention on a capacity. A bursty, unpredictable Spark workload branches toward enabling Autoscale Billing for Spark, which moves that workload to pay-as-you-go and out of the shared CU pool. A workload that's merely CU-hungry but predictable branches toward evaluating a SKU increase, checked against the Spark vCore and Direct Lake memory ceilings that scale with SKU size, and the F64 licensing threshold. A workload that is fine on CUs but needs isolation from another workload's throttling risk branches toward splitting across capacities, since throttling is enforced per capacity, not per tenant. A warning node covers the trap of assuming Autoscale Billing still gets bursting and smoothing protection.",
+  "longDescription": "This is a decision tree, not a pipeline: a capacity is showing throttling or contention symptoms, and the owner must decide what to do about it. The root question separates three situations by workload shape. If the CU-hungry workload is specifically Spark and its load is bursty or unpredictable, the tree branches to enabling Autoscale Billing for Spark, which removes that Spark usage from the smoothed CU pool entirely and bills it pay-as-you-go — a warning node attached to this branch flags that bursting and smoothing protections stop applying once Autoscale Billing is on, which surprises teams expecting the usual spike absorption. If the workload is predictable but the capacity is consistently CU-constrained, the tree branches to evaluating a SKU increase, gated by three concrete ceilings that actually change with SKU size: the Spark vCore ceiling (2 vCores per CU times a 3x burst multiplier), the Direct Lake model memory ceiling, and the F64 threshold that gates free-license Power BI viewing. If the real problem is that one workload's throttling risk threatens another's SLA — for example a bursty exploration notebook sharing a capacity with an executive dashboard — the tree branches to splitting workloads across separate capacities, since Fabric enforces throttling at the capacity level, so an isolated capacity's saturation never touches a different capacity's budget. All three branches converge on a shared sizing checklist that should be checked before committing to any of them.",
   "type": "decision",
   "topicSlug": "capacity",
-  "capabilityIds": [
-    "capacity"
-  ],
-  "revision": "1",
+  "capabilityIds": ["capacity", "spark", "direct-lake", "warehouse"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/capacity-sku-decision.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "capacity boundary",
-      "summary": "capacity boundary in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
+      "id": "contention-question",
+      "label": "What's driving capacity contention?",
+      "summary": "Root question: identify which workload shape is causing throttling before picking a remedy.",
+      "detail": "Before reaching for a bigger SKU, identify what's actually driving contention: a bursty, unpredictable Spark workload; a CU-hungry but predictable workload of any kind; or one workload's throttling risk threatening a different workload's SLA on the same capacity. Each of these has a different, cheaper fix than an across-the-board SKU increase.",
+      "whyItMatters": "Fabric Capacity Metrics data shows which operations actually consume CUs; skipping this diagnosis and jumping straight to a SKU increase risks paying for headroom that a workload split or an Autoscale Billing change would have solved for less.",
       "classification": "pattern",
-      "layers": [
-        "data"
-      ],
+      "layers": ["data", "observability"],
+      "tags": ["decision-root", "Capacity", "Throttling"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
-      ],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
+          "Fabric Capacity Metrics app showing per-operation CU consumption",
+          "Throttling state (overage protection, delay, or rejection) observed on the capacity",
+          "Whether the offending workload is Spark, warehouse, Direct Lake, or a mix"
         ],
         "processing": [
-          "Apply the capacity boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Profile the Capacity Metrics app to find the top CU-consuming operations",
+          "Classify the dominant workload: bursty Spark, steady predictable load, or a workload whose failures threaten another workload's SLA",
+          "Route to the matching branch below rather than defaulting to a SKU increase"
         ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through capacity boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
+        "outputs": ["A workload classification that selects one of the three remedy branches"],
+        "example": "A capacity shows repeated 20-second interactive delays; the metrics app reveals the CU spikes coincide exactly with ad-hoc Spark notebook sessions, not with the warehouse batch or the Power BI reports — routing this case to the Spark-specific branch rather than a blanket SKU increase.",
+        "controls": ["Review the Capacity Metrics app before choosing a remedy, not after"],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Scaling the SKU without profiling first, which often just delays the same contention at a higher price point",
+          "Misattributing throttling to the wrong workload because interactive delay chains obscure which operation actually triggered it"
         ]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "capacity",
-        "label": "Open capacity"
-      }
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
     },
     {
-      "id": "step-2",
-      "label": "Fabric capacity sizing decision tree - when to scale up the SKU",
-      "summary": "Fabric capacity sizing decision tree - when to scale up the SKU in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "autoscale-spark-branch",
+      "label": "Enable Autoscale Billing for Spark",
+      "summary": "Move bursty, unpredictable Spark usage to pay-as-you-go, outside the shared smoothed CU pool.",
+      "detail": "When a capacity admin enables Autoscale Billing for Spark, Spark usage on that capacity switches to pay-as-you-go billing and stops drawing from the standard smoothed CU pool that bursting and smoothing otherwise manage. This is the right lever specifically when Spark load is the bursty, unpredictable driver of contention on an otherwise stable capacity.",
+      "whyItMatters": "Isolating unpredictable Spark load this way protects every other workload sharing the capacity from Spark's burst pattern without requiring a full capacity split or a SKU increase that would also inflate the cost of the stable workloads.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Spark", "Autoscale", "Billing", "Capacity"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Bursting and smoothing do not apply when a capacity admin has enabled Autoscale Billing for Spark; in that configuration Spark usage operates in pay-as-you-go mode only." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
+        "inputs": ["A capacity where Spark is confirmed (via profiling) as the bursty, unpredictable CU driver"],
         "processing": [
-          "Apply the Fabric capacity sizing decision tree - when to scale up the SKU responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Capacity admin enables Autoscale Billing for Spark at the capacity level",
+          "Subsequent Spark sessions on that capacity bill pay-as-you-go instead of drawing the smoothed CU pool",
+          "Non-Spark workloads on the same capacity keep normal bursting/smoothing behavior"
         ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Fabric capacity sizing decision tree - when to scale up the SKU: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "outputs": ["Spark usage isolated from the shared CU pool's smoothing accounting, billed separately"],
+        "example": "A team running ad-hoc exploration notebooks alongside a steady warehouse ELT schedule enables Autoscale Billing for Spark; the notebooks' unpredictable spikes stop pushing the capacity toward the 60-minute rejection threshold that was previously delaying the warehouse's interactive dashboard queries.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Enable this only after confirming Spark specifically (not the warehouse or Direct Lake) is the bursty driver",
+          "Track pay-as-you-go Spark cost separately once enabled, since it no longer shares the capacity's fixed-cost pool"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Enabling it and assuming the usual spike-absorption still applies — see the warning node below",
+          "Turning it on capacity-wide when only one workspace's Spark jobs are actually the bursty driver, losing cost predictability for the rest"
         ]
       }
     },
     {
-      "id": "step-3",
-      "label": "enable Autoscale Billing for Spark",
-      "summary": "enable Autoscale Billing for Spark in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "autoscale-smoothing-warning",
+      "label": "Trap: Autoscale Billing drops smoothing protection",
+      "summary": "Bursting and smoothing stop applying once Autoscale Billing for Spark is enabled — a real billing-behavior surprise.",
+      "detail": "Teams that enable Autoscale Billing for Spark expecting the usual bursting and smoothing protection to keep absorbing spikes are surprised: that protection specifically does not apply once Autoscale Billing is on, because Spark usage moves to pay-as-you-go accounting instead.",
+      "whyItMatters": "This is a genuine billing-behavior trap, not just a performance nuance: a team enables Autoscale Billing to solve a throttling problem and can be caught off guard by cost variability they assumed smoothing would still be managing.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "tags": ["Spark", "Autoscale", "Billing"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Bursting and smoothing do not apply when a capacity admin has enabled Autoscale Billing for Spark; in that configuration Spark usage operates in pay-as-you-go mode only." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
+        "inputs": ["A capacity that just enabled Autoscale Billing for Spark"],
         "processing": [
-          "Apply the enable Autoscale Billing for Spark responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Spark sessions run and bill pay-as-you-go with no smoothing window spreading the cost",
+          "A cost or usage spike that would previously have been smoothed over minutes-to-hours now lands as immediate pay-as-you-go consumption"
         ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through enable Autoscale Billing for Spark: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "outputs": ["Unsmoothed, directly-billed Spark cost that can surprise teams expecting bursting/smoothing coverage"],
+        "example": "A team enables Autoscale Billing expecting their occasional large backfill job to be smoothed the way it was before; instead the backfill's cost lands immediately and in full, because smoothing no longer applies to Spark usage under Autoscale Billing.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Read the billing-mode change carefully before enabling Autoscale Billing, not after the first invoice",
+          "Model expected pay-as-you-go cost for the bursty Spark workload before switching"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Assuming Autoscale Billing is purely a performance feature with no billing-model change attached",
+          "Discovering the billing shift only when a monthly cost review flags an unexplained spike"
         ]
       }
     },
     {
-      "id": "step-4",
-      "label": "or split workloads across capacities",
-      "summary": "or split workloads across capacities in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "id": "sku-scale-branch",
+      "label": "Evaluate a SKU increase",
+      "summary": "For predictable but genuinely CU-constrained load, move up the doubling F-SKU ladder.",
+      "detail": "Fabric F SKUs run from F2 up to F2048, and the SKU number equals its capacity units — an F64 supplies 64 CUs — with each step up the ladder doubling the compute of the step before it. A SKU increase is the right remedy when the contention is from predictable, sustained load rather than a bursty single workload, and profiling confirms there's no cheaper isolation fix available.",
+      "whyItMatters": "Because each SKU step doubles compute, and F64 is also a licensing cutover point, a SKU decision has both a cost and a Power BI licensing consequence — it should follow, not precede, the sizing checklist that checks the concrete resource ceilings each engine draws against.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Capacity", "SKU", "FabricCapacity"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-licenses-capacities", "note": "Fabric F SKUs run from F2 up to F2048, and the SKU number equals its capacity units — an F64 supplies 64 CUs — with each step up the ladder doubling the compute of the previous size." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
+        "inputs": ["A capacity confirmed (via profiling) to have sustained, predictable CU-constrained load, not a single bursty workload"],
         "processing": [
-          "Apply the or split workloads across capacities responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Identify the current SKU and the next step up the doubling ladder (e.g. F32 to F64)",
+          "Check the sizing checklist's three ceilings before committing",
+          "Apply the SKU change and monitor whether throttling incidents actually stop"
         ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through or split workloads across capacities: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "outputs": ["A larger F-SKU capacity with proportionally more CUs, Spark vCores, and Direct Lake memory headroom"],
+        "example": "A capacity running steady nightly warehouse ELT plus growing daytime Direct Lake report traffic consistently hits the 10-minute overage-protection ceiling; profiling shows no single bursty workload to isolate, so the team moves the capacity from F32 to F64, doubling CUs and crossing the F64 licensing threshold in the same step.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Confirm the load is sustained, not a single isolatable bursty workload, before scaling",
+          "Check the sizing checklist ceilings so the new SKU is chosen for a real constraint, not guessed"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "with a sizing checklist covering Spark vCore ceilings",
-      "summary": "with a sizing checklist covering Spark vCore ceilings in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the with a sizing checklist covering Spark vCore ceilings responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through with a sizing checklist covering Spark vCore ceilings: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "Direct Lake memory bounds",
-      "summary": "Direct Lake memory bounds in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Direct Lake memory bounds responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Direct Lake memory bounds: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "and the F64 licensing threshold",
-      "summary": "and the F64 licensing threshold in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "observability"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and the F64 licensing threshold responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and the F64 licensing threshold: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Scaling the SKU as a first response instead of profiling, masking an isolation problem that recurs at the next growth increment",
+          "Jumping straight to F128 when F64 alone would have cleared the constraint, because the doubling ladder was not checked against the actual ceiling that was binding"
         ]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "capacity",
-        "label": "Open capacity"
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "sizing-checklist",
+      "label": "Sizing checklist: three ceilings",
+      "summary": "Check the Spark vCore ceiling, Direct Lake memory ceiling, and F64 licensing threshold before finalizing a SKU.",
+      "detail": "Three concrete, sourced ceilings scale with SKU size and should be checked before finalizing any SKU choice: each Fabric CU grants two Spark vCores with a 3x burst multiplier on top (so F64 exposes up to 384 burst Spark vCores, the ceiling for a custom Spark pool's size); the capacity SKU sets the maximum memory available to each Direct Lake semantic model, bounding how many columns can stay resident; and F64 specifically is the threshold at which free-license Power BI viewers can consume shared content without a Pro or PPU license.",
+      "whyItMatters": "These are the concrete numbers that turn 'we're low on CUs' into an actual sizing decision — without checking them, a SKU increase is a guess rather than a targeted fix for the ceiling that was actually binding.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["Capacity", "Spark", "DirectLake", "Licensing"],
+      "evidence": [
+        { "sourceKey": "spark-compute-pools", "note": "Each Fabric capacity unit grants two Spark vCores, and a 3x burst multiplier applies on top; an F64 SKU therefore exposes 384 Spark vCores (64 CU x 2 x 3), which caps the total vCores a custom Spark pool can be configured with." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once." },
+        { "sourceKey": "fabric-platform-licenses-capacities", "note": "F64 is the licensing threshold for broad report consumption: on an F64 or larger capacity, users holding only a free Fabric license can view Power BI content if they have a workspace viewer role, whereas on smaller F SKUs every viewer needs a Pro or PPU license." }
+      ],
+      "drill": {
+        "inputs": ["A candidate target SKU from the scale-up branch"],
+        "processing": [
+          "Compute the Spark vCore burst ceiling for the candidate SKU (CU x 2 x 3) and compare to actual custom-pool sizing needs",
+          "Check whether the candidate SKU's Direct Lake memory ceiling covers the largest Direct Lake model's resident column footprint",
+          "Check whether crossing F64 changes the Power BI licensing plan for viewers"
+        ],
+        "outputs": ["A validated SKU choice, or a signal that a different remedy (split or Autoscale) actually addresses the binding ceiling"],
+        "example": "A team evaluating F32 to F64 discovers their largest Direct Lake model is already hitting memory-driven cold reads at F32; the memory ceiling, not raw CU count, was the binding constraint, confirming F64 (not a workload split) is the right fix.",
+        "controls": [
+          "Always compute the burst ceiling, not the sustained one, since custom Spark pool sizing is capped by the burst number",
+          "Treat F64 as a licensing decision point, not just a compute one, when consumers include free-license viewers"
+        ],
+        "failureModes": [
+          "Sizing a custom Spark pool against the sustained (non-burst) vCore number and being surprised the pool can't be configured that large",
+          "Crossing F64 for compute reasons without realizing it also changes who can view Power BI content for free"
+        ],
+        "metrics": [
+          { "label": "Spark vCore burst ceiling on F64", "value": "384 vCores (64 CU x 2 x 3)", "sourceKey": "spark-compute-pools" }
+        ]
+      }
+    },
+    {
+      "id": "split-capacity-branch",
+      "label": "Split workloads across capacities",
+      "summary": "Isolate a bursty or risky workload onto its own capacity so its throttling never reaches another workload's SLA.",
+      "detail": "Fabric enforces throttling at the capacity level, not the tenant level, so a saturated capacity only affects the workspaces assigned to it — every other capacity in the tenant keeps running normally. Splitting workloads across capacities is the right remedy when the actual problem is that one workload's throttling risk threatens a different workload's SLA, regardless of whether either workload is individually CU-constrained.",
+      "whyItMatters": "This turns the capacity boundary into a deliberate isolation control rather than an accident of whichever workspace happened to be assigned first — the isolation is structural, not a matter of scaling a shared pool bigger.",
+      "classification": "fact",
+      "layers": ["governance", "compute"],
+      "tags": ["Capacity", "Isolation", "Throttling"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Fabric enforces throttling at the capacity level rather than the tenant level, so a saturated capacity only affects the workspaces assigned to it; other capacities continue operating normally." },
+        { "sourceKey": "fabric-platform-licenses-capacities", "note": "Each Fabric capacity is a distinct resource pool living inside a Microsoft Entra tenant; the SKU size determines how much compute power the pool provides, and a tenant can hold as many capacities as the organization needs — often aligned to geography or business unit." }
+      ],
+      "drill": {
+        "inputs": ["Two or more workloads sharing one capacity where one workload's risk profile threatens another's SLA"],
+        "processing": [
+          "Identify the SLA-bound workload that must be protected (e.g. an executive dashboard)",
+          "Provision or reassign a separate capacity for the riskier workload (e.g. ad-hoc Spark exploration, a large batch job)",
+          "Move the corresponding workspace(s) to the new capacity"
+        ],
+        "outputs": ["Two independently throttled capacities where a saturation event on one cannot delay or reject requests on the other"],
+        "example": "An executive Power BI dashboard and an unpredictable Spark exploration workload share one F64 capacity; the exploration workload is moved to its own smaller capacity, so a runaway notebook can throttle itself into rejection without ever touching the dashboard's CU budget.",
+        "controls": [
+          "Decide the isolation boundary by SLA risk, not just by team or project organizationally",
+          "Reassign workspaces deliberately rather than leaving new workspaces on the shared default capacity"
+        ],
+        "failureModes": [
+          "Splitting capacities by org chart instead of by actual risk exposure, so the SLA-bound workload still shares a capacity with something bursty",
+          "Forgetting that new workspaces default to the tenant's shared capacity, quietly reintroducing the contention the split was meant to fix"
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "throttling-boundary",
+      "label": "Per-capacity throttling boundary",
+      "summary": "The four-stage throttling ladder (overage, delay, rejection, hard rejection) applies independently to each capacity.",
+      "detail": "Throttling is staged progressively across four thresholds keyed to how much future capacity has been consumed by smoothed operations: up to 10 minutes triggers no throttling, 10 to 60 minutes triggers a 20-second delay on new interactive submissions, 60 minutes to 24 hours rejects interactive operations outright while background operations may still start, and beyond 24 hours everything is rejected. This ladder is what a capacity split actually isolates — each capacity runs its own independent throttling state.",
+      "whyItMatters": "Understanding the ladder is what makes the split-vs-scale decision concrete: a workload pushing its capacity into the 60-minute rejection zone is a strong signal for either isolation (split) or a SKU increase, whereas one that never leaves the 10-minute overage-protection zone doesn't need either.",
+      "classification": "fact",
+      "layers": ["compute", "observability"],
+      "tags": ["Capacity", "Throttling"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Throttling is staged progressively across four thresholds keyed to how much future capacity has been consumed: up to 10 minutes of future usage triggers no throttling (overage protection); between 10 and 60 minutes triggers a 20-second delay on new interactive operations; between 60 minutes and 24 hours causes interactive operations to be rejected outright while background operations may still start; beyond 24 hours all new requests are rejected." }
+      ],
+      "drill": {
+        "inputs": ["Capacity Metrics data showing how far into the throttling ladder a capacity is running"],
+        "processing": [
+          "Read the current throttling stage from the Capacity Metrics app's overages view",
+          "Map the stage to urgency: overage-protection is informational, delay and rejection stages need a remedy",
+          "Feed that urgency back into whether a split or a SKU increase is the appropriate branch"
+        ],
+        "outputs": ["A concrete severity read that justifies (or rules out) the chosen remedy"],
+        "example": "A capacity spends most of its time in the 10-60 minute delay stage during business hours; that's enough to justify action, but not severe enough alone to justify a full SKU jump — it first prompts checking whether a single workload can be split off instead.",
+        "controls": ["Use the throttling stage, not just raw CU percentage, to judge severity"],
+        "failureModes": [
+          "Treating any throttling event as an emergency requiring an immediate SKU increase, when the 10-minute overage-protection zone is a normal, harmless absorption of a spike"
+        ]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "orchestration",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "observability",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-question-autoscale", "from": "contention-question", "to": "autoscale-spark-branch", "label": "bursty, unpredictable Spark load", "layer": "compute", "kind": "branch" },
+    { "id": "e-question-sku", "from": "contention-question", "to": "sku-scale-branch", "label": "predictable, sustained CU-constrained load", "layer": "compute", "kind": "branch" },
+    { "id": "e-question-split", "from": "contention-question", "to": "split-capacity-branch", "label": "one workload's risk threatens another's SLA", "layer": "governance", "kind": "branch" },
+    { "id": "e-autoscale-warning", "from": "autoscale-spark-branch", "to": "autoscale-smoothing-warning", "label": "billing-behavior trap", "layer": "compute", "kind": "branch" },
+    { "id": "e-sku-checklist", "from": "sku-scale-branch", "to": "sizing-checklist", "label": "check before committing", "layer": "compute", "kind": "flow" },
+    { "id": "e-split-boundary", "from": "split-capacity-branch", "to": "throttling-boundary", "label": "isolation works because throttling is per-capacity", "layer": "compute", "kind": "flow" },
+    { "id": "e-boundary-question", "from": "throttling-boundary", "to": "contention-question", "label": "severity read informs which branch to take", "layer": "observability", "kind": "feedback" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. capacity boundary",
-      "explanation": "capacity boundary in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture."
+      "nodeId": "contention-question",
+      "title": "1. Diagnose before you scale",
+      "explanation": "Profile the Capacity Metrics app to find which workload is actually driving contention — the answer determines which of the three remedies below is worth pursuing."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Fabric capacity sizing decision tree - when to scale up the SKU",
-      "explanation": "Fabric capacity sizing decision tree - when to scale up the SKU in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture."
+      "nodeId": "autoscale-spark-branch",
+      "title": "2a. Bursty Spark: isolate with Autoscale Billing",
+      "explanation": "If Spark specifically is the bursty, unpredictable driver, enabling Autoscale Billing for Spark moves it to pay-as-you-go and out of the shared smoothed CU pool."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. enable Autoscale Billing for Spark",
-      "explanation": "enable Autoscale Billing for Spark in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture."
+      "nodeId": "autoscale-smoothing-warning",
+      "title": "2b. Warning: smoothing stops applying",
+      "explanation": "Autoscale Billing for Spark is a genuine billing-behavior change, not just a performance toggle — bursting and smoothing protection stops applying to Spark usage once it's on."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. or split workloads across capacities",
-      "explanation": "or split workloads across capacities in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture."
+      "nodeId": "sku-scale-branch",
+      "title": "3a. Predictable load: evaluate a SKU increase",
+      "explanation": "For sustained, predictable CU constraint with no single isolatable workload, moving up the doubling F-SKU ladder is the right lever — but check the sizing checklist first."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. with a sizing checklist covering Spark vCore ceilings",
-      "explanation": "with a sizing checklist covering Spark vCore ceilings in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture."
+      "nodeId": "sizing-checklist",
+      "title": "3b. Check three concrete ceilings",
+      "explanation": "The Spark vCore burst ceiling, the Direct Lake memory ceiling, and the F64 licensing threshold all scale with SKU size — checking them turns a guess into a targeted decision."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. Direct Lake memory bounds",
-      "explanation": "Direct Lake memory bounds in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture."
+      "nodeId": "split-capacity-branch",
+      "title": "4a. SLA risk: split across capacities",
+      "explanation": "When one workload's throttling risk threatens another workload's SLA, isolating it on a separate capacity is structural protection, not just more compute."
     },
     {
-      "nodeId": "step-7",
-      "title": "7. and the F64 licensing threshold",
-      "explanation": "and the F64 licensing threshold in the Fabric capacity sizing decision tree - when to scale up the SKU, enable Autoscale Billing for Spark, or split workloads across capacities, with a sizing checklist covering Spark vCore ceilings, Direct Lake memory bounds, and the F64 licensing threshold architecture."
+      "nodeId": "throttling-boundary",
+      "title": "4b. Why splitting actually works",
+      "explanation": "Throttling runs through four stages independently per capacity — a saturated capacity never touches another capacity's throttling state, which is exactly what a split isolates."
     }
   ]
 }

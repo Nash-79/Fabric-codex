@@ -1,437 +1,240 @@
 {
   "id": "data-factory-ingestion-decision-matrix",
-  "title": "Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenar…",
-  "purpose": "Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options",
+  "title": "Choosing an Ingestion Tool: Copy Activity vs Dataflow Gen2 vs Notebook",
+  "purpose": "Give an ingestion scenario a concrete tool choice — Pipeline Copy Activity, Dataflow Gen2, or a Notebook Activity — scored on the axes that actually differ between them, then route the chosen tool into the right one of Copy job, Copy activity, or Mirroring for the underlying data movement.",
+  "accessibleSummary": "A decision tree that starts by asking what the ingestion scenario needs: raw high-volume movement with controllable parallelism routes to Pipeline Copy Activity; low-code shaping with joins and cleansing before landing routes to Dataflow Gen2; complex procedural logic such as API pagination, streaming, or nested-data handling routes to a Notebook Activity. Each tool node carries its own strength, authoring surface, and orchestration role, plus a watch-out. A second decision, nested under Copy Activity, chooses among Copy job, Copy activity, and Mirroring depending on whether the need is simplified scheduled movement, fully customizable high-throughput movement, or near-real-time database replication. A warning node flags the antipattern of tuning throughput settings without first identifying whether the source, destination, or network is the actual bottleneck.",
+  "longDescription": "This is a decision tree over Fabric's ingestion tool choices, not a pipeline. The root question asks what the scenario actually needs: raw movement of data at volume with control over parallelism, low-code shaping of the data before it lands, or complex procedural logic no declarative tool expresses well. Each answer branches to a tool node carrying its own strength, its authoring surface, and its role inside pipeline orchestration. The Pipeline Copy Activity branch leads to a second decision: which of the three underlying data-movement primitives — Copy job, Copy activity, or Mirroring — actually fits, since 'use Copy Activity' still leaves three quite different mechanisms to choose between depending on whether the goal is simplified built-in delivery styles, fully customizable parallel movement, or near-real-time database replication into OneLake. A feedback edge shows Copy activity's own internal tuning loop: intelligent throughput optimization and degree-of-parallelism settings can be adjusted after a run, but only usefully once the actual bottleneck (source, destination, or network) is known — which the warning node calls out explicitly, because tuning blind is documented as wasted effort. The diagram closes on the orchestration layer that ties every branch together: all three tools are chained, sequenced, and monitored from the same pipeline surface, so the decision is about which tool does the work inside a step, not which system owns the run.",
   "type": "decision",
   "topicSlug": "data-factory",
-  "capabilityIds": [
-    "data-factory"
-  ],
-  "revision": "1",
+  "capabilityIds": ["data-factory", "dataflow-gen2", "spark"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/data-factory-ingestion-decision-matrix.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "data factory boundary",
-      "summary": "data factory boundary in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
+      "id": "scenario-question",
+      "label": "What does the ingestion scenario need?",
+      "summary": "The root question: raw movement, low-code shaping, or complex procedural logic.",
+      "detail": "Before picking a tool, classify the scenario by what it actually requires. Fabric deliberately supports both ETL and ELT in the same solution — shape data before loading when quality and standardization matter up front, or land raw data first and push transformation downstream — and the three ingestion tools map cleanly onto three different needs: raw high-volume movement, low-code shaping, or procedural logic too complex for a declarative surface.",
+      "whyItMatters": "Picking the tool before naming the actual need is how teams end up forcing complex procedural logic into Dataflow Gen2 or hand-rolling parallelism logic in a notebook that Copy Activity already does natively.",
       "classification": "pattern",
-      "layers": [
-        "data"
-      ],
+      "layers": ["orchestration"],
+      "tags": ["DataFactory", "DecisionRoot"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "drill": {
+        "inputs": ["The source system(s) and their access pattern (bulk, incremental, CDC, API)", "Whether the data needs shaping/cleansing before landing", "Whether the logic is expressible declaratively or requires procedural code"],
+        "processing": ["Classify the scenario as movement-only, shape-before-land, or procedurally complex", "Check data volume and required parallelism control", "Check whether existing team skills favor low-code or code-first authoring"],
+        "outputs": ["A routed decision toward Copy Activity, Dataflow Gen2, or a Notebook Activity"],
+        "example": "A nightly bulk load of 40 tables from an on-prem SQL Server with no transformation needed routes to Copy Activity; the same load, if it also needs currency conversion and null-standardization before landing, routes to Dataflow Gen2 instead.",
+        "controls": ["Write the scenario classification down before choosing a tool, so the choice can be reviewed"],
+        "failureModes": ["Defaulting to whichever tool the team used last time regardless of scenario fit", "Choosing Dataflow Gen2 for its low-code convenience on a workload that actually needs Copy Activity's parallelism control"]
+      }
+    },
+    {
+      "id": "pipeline-copy-activity",
+      "label": "Pipeline Copy Activity",
+      "summary": "Fully customizable movement with manual control of parallelism — the default for raw, high-volume movement.",
+      "detail": "Copy activity is one of Data Factory's three data-movement options: fully customizable movement with manual control of parallelism, in contrast to Copy job's simplified built-in delivery styles and Mirroring's near-real-time database replication. Data Factory pipelines with Copy activity are Microsoft's recommended mechanism for large-scale one-time migrations and high-volume recurring ingestion, on the grounds that the engine is serverless, performant at scale, and cost-effective.",
+      "whyItMatters": "This is the workhorse for moving bytes at scale without writing custom code — its authoring surface is a low-code designer, and its orchestration role is a first-class pipeline activity that chains with everything else in the pipeline.",
+      "classification": "fact",
+      "layers": ["data", "orchestration"],
+      "tags": ["CopyActivity", "DataFactory", "DataMovement"],
+      "evidence": [
+        { "sourceKey": "data-factory-overview", "note": "Data Factory offers three distinct data-movement options: Copy job for simplified movement with built-in delivery styles, Copy activity for fully customizable movement with manual control of parallelism, and Mirroring for near-real-time database replication into OneLake." },
+        { "sourceKey": "copy-activity-performance-and-scalability", "note": "Data Factory pipelines with Copy activity are Microsoft's recommended mechanism for large-scale one-time migrations and for high-volume recurring ingestion, on the grounds that the engine is serverless, performant at scale, and cost-effective." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the data factory boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through data factory boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A source and destination connection", "Expected data volume and desired parallelism", "Whether the workload is one-time migration or recurring ingestion"],
+        "processing": ["Author the Copy activity in the low-code pipeline designer, mapping source to destination", "Configure intelligent throughput optimization and degree of parallelism as needed", "Chain the activity inside a pipeline alongside other activities and control-flow constructs"],
+        "outputs": ["Data landed at the destination (typically OneLake) with configurable, scalable parallelism"],
+        "example": "A one-time migration of a 12 TB on-prem data warehouse into OneLake uses a single Copy activity per table, driven from a ForEach loop over the table list, with intelligent throughput optimization set to Maximum for the migration window.",
+        "controls": ["Choice of intelligent throughput optimization preset (Auto, Standard, Balanced, Maximum) or explicit numeric value", "Degree of copy parallelism as a thread cap"],
+        "failureModes": ["Using Copy activity for a scenario that actually needs transformation logic, forcing a second tool downstream anyway", "Not fanning out at the orchestration layer (ForEach) when one activity's throughput ceiling is reached"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "data-factory",
-        "label": "Open data factory"
-      }
+      "drillTarget": { "kind": "capability", "slug": "data-factory", "label": "Data Factory" }
     },
     {
-      "id": "step-2",
-      "label": "Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs…",
-      "summary": "Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "dataflow-gen2-node",
+      "label": "Dataflow Gen2",
+      "summary": "Low-code Power Query transformation surface — shape data with joins, cleansing, and custom logic before it lands.",
+      "detail": "Dataflow Gen2 is Data Factory's low-code transformation surface, offering over 300 transformations including joins, aggregations, data cleansing, and custom logic, and is the tool Microsoft recommends when data must be shaped before it is loaded (classic ETL).",
+      "whyItMatters": "This is the right tool when the requirement is shaping, not just moving — its authoring surface is the visual Power Query editor, which lets non-Spark-fluent teams express real transformation logic without writing code.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "tags": ["DataflowGen2", "PowerQuery", "ETL"],
+      "evidence": [
+        { "sourceKey": "data-factory-overview", "note": "Dataflow Gen2 is Data Factory's low-code transformation surface, offering over 300 transformations including joins, aggregations, data cleansing, and custom logic, and is the tool Microsoft recommends when data must be shaped before it is loaded (classic ETL)." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingest…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "scored across strength",
-      "summary": "scored across strength in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the scored across strength responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through scored across strength: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "parallelism control",
-      "summary": "parallelism control in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the parallelism control responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through parallelism control: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "authoring surface",
-      "summary": "authoring surface in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the authoring surface responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through authoring surface: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "orchestration role",
-      "summary": "orchestration role in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the orchestration role responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through orchestration role: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "and watch-outs",
-      "summary": "and watch-outs in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "observability"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and watch-outs responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and watch-outs: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A source connection plus a defined shaping requirement (joins, cleansing, standardization, aggregation)"],
+        "processing": ["Author a Power Query mashup in the low-code Dataflow Gen2 editor", "Apply the required transformations from the 300+ available step types", "Route the shaped output to a Fabric or external destination"],
+        "outputs": ["A transformed, standardized dataset ready to land as a table, without a separate downstream transformation step"],
+        "example": "Regional sales extracts arrive with inconsistent currency codes and null region fields; a Dataflow Gen2 mashup standardizes currency, fills known-default regions, and joins in a lookup dimension before writing to the lakehouse.",
+        "controls": ["Which of the 300+ transformation steps are applied, and in what order", "Destination choice (Fabric-native or external)"],
+        "failureModes": ["Building deeply complex, hard-to-review transformation chains in Power Query when the logic would be clearer and more testable as SQL or Spark", "Using Dataflow Gen2 for pure high-volume movement with no shaping need, when Copy activity would move the same data faster"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "data-factory",
-        "label": "Open data factory"
+      "drillTarget": { "kind": "capability", "slug": "dataflow-gen2", "label": "Dataflow Gen2" }
+    },
+    {
+      "id": "notebook-activity",
+      "label": "Notebook Activity",
+      "summary": "Procedural Spark code for logic no declarative tool expresses well — APIs, streaming, ML, nested data.",
+      "detail": "A pipeline can chain transformation activities including Fabric notebooks alongside movement and control-flow constructs. Procedural PySpark notebooks are well suited to genuinely complex logic — API ingestion, streaming workloads, ML inference, iterative algorithms, and deeply nested data structures — where declarative SQL expressions would be insufficient or unnatural; declarative frameworks deliberately do not try to replace notebooks in these domains.",
+      "whyItMatters": "This is the escape hatch when a scenario's logic genuinely can't be expressed declaratively — its authoring surface is full PySpark/Scala code, and its orchestration role is a pipeline activity like any other, so it composes with Copy activity and Dataflow Gen2 rather than replacing them wholesale.",
+      "classification": "pattern",
+      "layers": ["compute", "orchestration"],
+      "tags": ["Notebook", "Spark", "PySpark"],
+      "evidence": [
+        { "sourceKey": "data-factory-overview", "note": "Pipelines are the orchestration layer: a single pipeline can chain data movement, transformation activities (Fabric notebooks, Spark job definitions, HDInsight, stored procedures, SQL scripts, dbt jobs), and control-flow constructs such as loops and conditionals." },
+        { "sourceKey": "bradcoles-declarative-transformation", "note": "Procedural PySpark notebooks are well suited to genuinely complex logic — API ingestion, streaming workloads, ML inference, iterative algorithms, and deeply nested data structures — where declarative SQL expressions would be insufficient or unnatural. Declarative frameworks deliberately do not try to replace notebooks in these domains." }
+      ],
+      "drill": {
+        "inputs": ["A scenario requiring procedural logic: paginated API calls, streaming reads, ML scoring, iterative computation, or deeply nested JSON/XML"],
+        "processing": ["Author the logic as a PySpark or Scala notebook", "Attach the notebook as a Notebook Activity inside the pipeline", "Pass parameters in from upstream activities and return results/status for downstream steps"],
+        "outputs": ["Transformed or ingested data handled by logic no low-code tool could express, still orchestrated inside the same pipeline"],
+        "example": "A vendor API paginates results with a cursor token and rate-limits at 100 requests/minute; a notebook implements the pagination loop with backoff, something neither Copy activity's connector model nor Dataflow Gen2's step-based editor can express directly.",
+        "controls": ["Parameterize the notebook so the same logic serves multiple pipeline invocations", "Keep procedural logic isolated to genuinely complex cases rather than defaulting to notebooks for simple movement"],
+        "failureModes": ["Reimplementing what Copy activity already does natively (simple parallel bulk movement) inside a notebook, adding maintenance burden for no benefit", "Notebook logic with no dependency validation at compile time — errors only surface at run time, unlike declarative alternatives"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark" }
+    },
+    {
+      "id": "movement-primitive-question",
+      "label": "Which data-movement primitive?",
+      "summary": "Inside Copy Activity's territory: Copy job, Copy activity proper, or Mirroring.",
+      "detail": "Choosing 'Pipeline Copy Activity' as the tool still leaves a further choice among Data Factory's three data-movement options: Copy job for simplified movement with built-in delivery styles (bulk, incremental, and change-data-capture replication), Copy activity for fully customizable movement with manual control of parallelism, and Mirroring for near-real-time database replication into OneLake. Microsoft publishes a data-movement decision guide specifically to help choose between them.",
+      "whyItMatters": "Conflating these three is a common early mistake — 'Copy activity' as a pipeline step and 'Copy job' as a simplified movement surface are genuinely different mechanisms, and Mirroring is a distinct near-real-time replication path, not a movement mode of either.",
+      "classification": "inference",
+      "layers": ["data", "orchestration"],
+      "tags": ["CopyJob", "CopyActivity", "Mirroring", "DataMovement"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["A confirmed need for Copy-Activity-class movement", "Freshness requirement (batch vs near-real-time)", "Preference for simplified built-in delivery styles vs manual parallelism control"],
+        "processing": ["Check if near-real-time database replication is the actual need — if so, route to Mirroring instead", "Check if bulk/incremental/CDC delivery styles cover the case with less configuration — if so, prefer Copy job", "Otherwise use Copy activity proper for full manual control over parallelism and connectors"],
+        "outputs": ["A specific movement primitive chosen: Copy job, Copy activity, or Mirroring"],
+        "example": "A team migrating an operational database initially reaches for Copy activity on a schedule, then realizes Mirroring's near-real-time replication into OneLake removes the scheduling problem entirely and switches.",
+        "controls": ["Consult Microsoft's published data-movement decision guide before defaulting to Copy activity out of habit"],
+        "failureModes": ["Building a scheduled Copy activity to approximate near-real-time replication when Mirroring already does this natively", "Manually configuring parallelism in Copy activity for a simple bulk/incremental case that Copy job's built-in delivery styles would cover with less setup"]
+      }
+    },
+    {
+      "id": "copy-job",
+      "label": "Copy job",
+      "summary": "Simplified movement with built-in delivery styles: bulk, incremental, and change-data-capture.",
+      "detail": "Copy job is described as Fabric's simplest and most scalable mechanism for moving data across multiple clouds and tenants, offering built-in delivery styles — bulk load, incremental load, and change-data-capture replication — without hand-configuring parallelism or throughput settings. Copy job can also be invoked directly by a Fabric Activator rule as an event-driven action, without an intermediate pipeline.",
+      "whyItMatters": "Copy job trades some manual control for simplicity, and its Activator integration means it can react to events like a file landing or a table changing, replacing fixed-schedule polling that wastes compute on empty runs.",
+      "classification": "fact",
+      "layers": ["data", "orchestration"],
+      "tags": ["CopyJob", "DataFactory"],
+      "evidence": [
+        { "sourceKey": "fabric-blog-activator-copy-job", "note": "Copy job is described as Fabric's simplest and most scalable mechanism for moving data across multiple clouds and tenants." },
+        { "sourceKey": "data-factory-overview", "note": "Copy job offers simplified movement with built-in delivery styles: bulk, incremental, and change-data-capture replication." },
+        { "sourceKey": "fabric-blog-activator-copy-job", "note": "Fabric Activator can now directly invoke a Copy job as a rule action, without requiring an intermediate Data Factory pipeline, and this capability is Generally Available." }
+      ],
+      "drill": {
+        "inputs": ["A source and destination, plus a chosen delivery style (bulk, incremental, or CDC)"],
+        "processing": ["Configure the Copy job with source, destination, and delivery style — no manual parallelism tuning", "Optionally attach an Activator rule (file-created, table-updated, or metric-threshold condition) as the trigger instead of a fixed schedule"],
+        "outputs": ["Data moved on the chosen delivery cadence, either scheduled or event-triggered"],
+        "example": "A Copy job configured for incremental load from an S3 bucket is triggered by an Activator rule watching for new files, replacing a 15-minute fixed-schedule poll that previously ran mostly empty.",
+        "controls": ["Delivery style selection (bulk, incremental, CDC)", "Event trigger condition when paired with Activator, instead of a fixed schedule"],
+        "failureModes": ["Keeping a fixed-schedule trigger by default when an Activator event trigger would eliminate empty runs and reduce latency"]
+      }
+    },
+    {
+      "id": "mirroring-node",
+      "label": "Mirroring",
+      "summary": "Near-real-time database replication directly into OneLake.",
+      "detail": "Mirroring is surfaced from Data Factory as a data-movement method that keeps a near-real-time replica of an operational database inside OneLake, so analytics and reporting can run against the replica instead of the source system.",
+      "whyItMatters": "Mirroring removes the batch-scheduling problem entirely for supported operational databases — there is no interval to tune, because replication is continuous by design rather than triggered.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["Mirroring", "OneLake"],
+      "evidence": [
+        { "sourceKey": "data-factory-overview", "note": "Mirroring is surfaced from Data Factory as a data-movement method that keeps a near-real-time replica of an operational database inside OneLake, so analytics and reporting can run against the replica instead of the source system." }
+      ],
+      "drill": {
+        "inputs": ["A supported operational database as the source"],
+        "processing": ["Configure Mirroring against the source database", "Fabric maintains a continuously updated Delta replica in OneLake"],
+        "outputs": ["A near-real-time OneLake replica queryable by Spark, SQL, Direct Lake, and KQL without further movement configuration"],
+        "example": "An operational orders database is mirrored into OneLake so a Direct Lake semantic model reflects order status within seconds of a change, with no Copy activity or Dataflow Gen2 step involved at all.",
+        "controls": ["Source database eligibility for Mirroring (only certain database engines are supported)"],
+        "failureModes": ["Reaching for scheduled Copy activity/Copy job for an eligible operational database when Mirroring would remove the scheduling problem entirely"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "mirroring", "label": "Mirroring" }
+    },
+    {
+      "id": "bottleneck-warning",
+      "label": "Trap: tuning throughput without finding the bottleneck",
+      "summary": "Raising ITO or parallelism cannot exceed the source, destination, or network ceiling.",
+      "detail": "Tuning copy throughput without first measuring the bottleneck is wasted effort: if the constraint is the source store's IOPS or the network path, raising intelligent throughput optimization or parallelism settings on the Copy activity cannot push throughput past that external limit. Because copy fully utilizes network bandwidth plus source and destination IOPS/bandwidth, achievable end-to-end throughput is bounded by the minimum of what the source can serve, what the destination can absorb, and the network bandwidth between them.",
+      "whyItMatters": "This is the single most common wasted-effort pattern in copy tuning: raising compute-side knobs when the actual ceiling is outside the Copy activity's control entirely, burning time and capacity for no throughput gain.",
+      "classification": "warning",
+      "layers": ["data", "compute"],
+      "tags": ["CopyActivity", "Performance", "AntiPattern"],
+      "evidence": [
+        { "sourceKey": "copy-activity-performance-and-scalability", "note": "Tuning copy throughput without first measuring the bottleneck is wasted effort: if the constraint is the source store's IOPS or the network path, raising intelligent throughput optimization or parallelism settings on the Copy activity cannot push throughput past that external limit." },
+        { "sourceKey": "copy-activity-performance-and-scalability", "note": "Because copy fully utilizes network bandwidth plus source and destination IOPS/bandwidth, achievable end-to-end throughput can be estimated as the minimum of three numbers: what the source store can serve, what the destination store can absorb, and the network bandwidth between them." }
+      ],
+      "drill": {
+        "inputs": ["A Copy activity run with throughput below expectations", "Source store IOPS/bandwidth, destination store IOPS/bandwidth, and network bandwidth between them"],
+        "processing": ["Measure actual achieved throughput against each of the three ceilings independently", "Identify which of the three is the binding constraint", "Only raise ITO or parallelism if compute, not one of the three external ceilings, is the bottleneck"],
+        "outputs": ["Either a justified compute-side tuning change, or confirmation that no Copy activity setting can improve throughput further"],
+        "example": "A team raises intelligent throughput optimization from Balanced to Maximum expecting faster ingestion, but the source is a rate-limited SaaS API; throughput stays flat because the API's own IOPS ceiling, not compute, was the binding constraint the whole time.",
+        "controls": ["Profile source, destination, and network throughput independently before adjusting ITO or parallelism", "Use degree-of-parallelism reduction deliberately to protect a fragile source, not just to increase it blindly for speed"],
+        "failureModes": ["Repeatedly raising ITO presets on every slow run without measuring where the actual ceiling sits", "Fanning out more parallel Copy activities from a ForEach loop against a source that is already IOPS-saturated, worsening contention instead of improving throughput"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "orchestration",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "observability",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-scenario-copy", "from": "scenario-question", "to": "pipeline-copy-activity", "label": "raw high-volume movement, controllable parallelism", "layer": "orchestration", "kind": "branch" },
+    { "id": "e-scenario-dataflow", "from": "scenario-question", "to": "dataflow-gen2-node", "label": "low-code shaping before landing", "layer": "orchestration", "kind": "branch" },
+    { "id": "e-scenario-notebook", "from": "scenario-question", "to": "notebook-activity", "label": "complex procedural logic (API, streaming, ML, nested data)", "layer": "orchestration", "kind": "branch" },
+    { "id": "e-copy-primitive", "from": "pipeline-copy-activity", "to": "movement-primitive-question", "label": "which movement primitive fits?", "layer": "data", "kind": "flow" },
+    { "id": "e-primitive-copyjob", "from": "movement-primitive-question", "to": "copy-job", "label": "simplified built-in delivery style suffices", "layer": "data", "kind": "branch" },
+    { "id": "e-primitive-copyactivity", "from": "movement-primitive-question", "to": "pipeline-copy-activity", "label": "need full manual parallelism control", "layer": "data", "kind": "feedback" },
+    { "id": "e-primitive-mirroring", "from": "movement-primitive-question", "to": "mirroring-node", "label": "need near-real-time database replication", "layer": "data", "kind": "branch" },
+    { "id": "e-copyactivity-bottleneck", "from": "pipeline-copy-activity", "to": "bottleneck-warning", "label": "risk when tuning throughput blindly", "layer": "compute", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. data factory boundary",
-      "explanation": "data factory boundary in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture."
+      "nodeId": "scenario-question",
+      "title": "1. Name the actual need first",
+      "explanation": "Raw movement, low-code shaping, and complex procedural logic are three different jobs — classify the scenario before picking a tool."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs…",
-      "explanation": "Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture."
+      "nodeId": "pipeline-copy-activity",
+      "title": "2. Copy Activity: raw, high-volume, parallel movement",
+      "explanation": "Fully customizable movement with manual parallelism control — Microsoft's recommended mechanism for large-scale migration and recurring ingestion."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. scored across strength",
-      "explanation": "scored across strength in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture."
+      "nodeId": "movement-primitive-question",
+      "title": "3. Copy Activity still forks three ways",
+      "explanation": "Choosing Copy Activity as the tool leaves a further choice: Copy job's simplicity, Copy activity's manual control, or Mirroring's near-real-time replication."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. parallelism control",
-      "explanation": "parallelism control in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture."
+      "nodeId": "copy-job",
+      "title": "4. Copy job: simplicity and event-driven triggers",
+      "explanation": "Built-in bulk/incremental/CDC delivery styles, and now directly invokable by an Activator rule instead of a fixed schedule."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. authoring surface",
-      "explanation": "authoring surface in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture."
+      "nodeId": "mirroring-node",
+      "title": "5. Mirroring: no schedule to tune at all",
+      "explanation": "For eligible operational databases, continuous near-real-time replication into OneLake removes the batch-scheduling problem entirely."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. orchestration role",
-      "explanation": "orchestration role in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture."
+      "nodeId": "bottleneck-warning",
+      "title": "6. Warning: tuning without measuring is wasted effort",
+      "explanation": "Raising throughput settings cannot exceed whichever of source, destination, or network is the actual bottleneck — profile first."
     },
     {
-      "nodeId": "step-7",
-      "title": "7. and watch-outs",
-      "explanation": "and watch-outs in the Decision guide: choosing Pipeline Copy Activity vs Dataflow Gen2 vs Notebook Activity for an ingestion scenario, scored across strength, parallelism control, authoring surface, orchestration role, and watch-outs, plus the Copy job / Copy activity / Mirroring data-movement options architecture."
+      "nodeId": "dataflow-gen2-node",
+      "title": "7. Dataflow Gen2: shape it before it lands",
+      "explanation": "Over 300 low-code transformations make this the right tool when the scenario needs real shaping, not just movement."
+    },
+    {
+      "nodeId": "notebook-activity",
+      "title": "8. Notebook: the escape hatch for procedural logic",
+      "explanation": "APIs, streaming, ML, and nested data are exactly the cases declarative tools deliberately don't try to replace — and the notebook still runs as an ordinary pipeline activity."
     }
   ]
 }

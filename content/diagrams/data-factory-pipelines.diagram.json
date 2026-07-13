@@ -1,255 +1,578 @@
 {
   "id": "data-factory-pipelines",
-  "title": "Fabric Data Factory pipeline runs, triggers, activities, and copy behavior",
-  "purpose": "Original diagram: Fabric Data Factory pipeline runs, triggers, activities, and copy behavior",
-  "accessibleSummary": "An interactive architecture infographic with 4 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Fabric Data Factory pipeline runs, triggers, activities, and copy behavior",
-  "type": "architecture",
+  "title": "Fabric Data Factory: Pipeline Runs, Triggers, and Copy Paths",
+  "purpose": "Trace how a Fabric Data Factory pipeline actually gets triggered and moves data — three trigger paths converging on one run, three parallelism levels inside a Copy activity, and the two other data-movement primitives (Copy job, Mirroring) that compete with a full pipeline for the same job.",
+  "accessibleSummary": "An architecture diagram in two connected parts. On the trigger side, three paths — on-demand, schedule, and storage event — all start a pipeline run; the event path is shown feeding through Fabric's eventstream and Data Activator plumbing rather than a bespoke trigger system. The pipeline run then executes a Copy activity, whose three independent parallelism levers (control-flow fan-out, Intelligent Throughput Optimization, and thread-level parallelism) are shown as sub-steps. A parallel branch shows Copy job and Mirroring as separate, lighter-weight data-movement primitives that bypass the pipeline entirely for simpler cases, including the GA pattern where a Data Activator rule invokes a Copy job directly with no pipeline in between. A warning node flags that tuning ITO or parallelism cannot exceed the true bottleneck of source, destination, or network throughput, and another flags the private-link incompatibility with Warehouse and Eventhouse Copy destinations.",
+  "longDescription": "This diagram separates two things that are easy to conflate: how a pipeline run starts, and how it moves data once started. Three trigger paths converge on the same pipeline run: an on-demand manual run, a time-based schedule (up to 20 per pipeline, each requiring both a start and end date), and a storage event trigger. The event trigger path is drawn as flowing through Fabric's existing eventstream and Data Activator (Reflex) plumbing rather than a separate trigger subsystem, because that is literally how it is implemented — defining a storage event trigger creates an eventstream object plus a Reflex alert in the workspace. Once a run starts, the pipeline executes a Copy activity, which exposes three independently tunable parallelism levels (control-flow fan-out via ForEach, Intelligent Throughput Optimization for per-activity compute sizing, and a thread-count cap within one activity). A second, parallel path shows that a pipeline is not the only way to move data: Copy job and Mirroring are lighter-weight primitives that can run independently of a full pipeline, and the newer GA pattern lets a Data Activator rule invoke a Copy job directly with no pipeline in between at all — the same eventing plumbing driving both the pipeline trigger and this Copy-job-only path. Two warning nodes capture real, sourced traps: tuning throughput settings past the actual source/destination/network bottleneck has no effect, and Warehouse and Eventhouse are unsupported Copy destinations under private-link configurations.",
+  "type": "flow",
   "topicSlug": "data-factory",
   "capabilityIds": [
-    "data-factory"
+    "data-factory",
+    "rti",
+    "mirroring"
   ],
-  "revision": "1",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/data-factory-pipelines.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "data factory boundary",
-      "summary": "data factory boundary in the Fabric Data Factory pipeline runs, triggers, activities, and copy behavior architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
+      "id": "trigger-ondemand",
+      "label": "On-demand run",
+      "summary": "A manual pipeline run started from the editor.",
+      "detail": "The simplest of the three ways to start a pipeline run: triggered manually from the pipeline editor, with no schedule or event involved. Useful for testing and ad-hoc execution.",
+      "whyItMatters": "On-demand runs are how pipelines get validated during development, but they carry an operational gap worth knowing before relying on them in production diagnostics: failure email notifications don't fire for them.",
+      "classification": "fact",
       "layers": [
-        "data"
+        "orchestration"
       ],
-      "evidence": [],
       "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+        "DataFactory",
+        "Pipelines"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "pipeline-runs",
+          "note": "A pipeline run is one execution instance of a pipeline and can be started three ways: on demand from the editor, on a time-based schedule, or from an event trigger that fires on occurrences such as files arriving in storage."
+        }
       ],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
+          "A user manually invoking Run in the pipeline editor"
         ],
         "processing": [
-          "Apply the data factory boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Pipeline executes immediately with the parameter values supplied at invocation, or defaults if none are supplied"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "A pipeline run instance, visible in the Monitor hub like any other run"
         ],
-        "example": "Trace one representative data product through data factory boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A developer manually runs a newly authored pipeline to validate a Copy activity's mapping before wiring up a schedule.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Parameter values supplied at manual invocation"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Assuming a manual test run will alert on failure the same way a scheduled run would — it will not, since email notifications only fire for scheduled runs"
+        ]
+      }
+    },
+    {
+      "id": "trigger-schedule",
+      "label": "Time-based schedule",
+      "summary": "Up to 20 schedules per pipeline, each with its own cadence, requiring a start and end date.",
+      "detail": "Fabric pipeline schedules have no open-ended option — every schedule requires both a start and an end date, so a long-running pipeline stays alive by setting an end date far in the future. A single pipeline can carry up to 20 schedules at once, each with its own frequency, dates, and time zone, letting one pipeline serve multiple delivery cadences without duplicating the pipeline itself.",
+      "whyItMatters": "Because schedule parameters must match the pipeline's parameter names exactly and mismatches fail silently, schedule configuration is a common, hard-to-notice source of runs executing on default values instead of the intended ones.",
+      "classification": "fact",
+      "layers": [
+        "orchestration"
+      ],
+      "tags": [
+        "DataFactory",
+        "Scheduling"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "pipeline-runs",
+          "note": "Fabric pipeline schedules have no open-ended option: every schedule requires both a start and an end date. A single pipeline can carry up to 20 schedules, each with its own frequency, start/end dates, and time zone."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "A defined cadence, start/end date range, time zone, and optional parameter bindings (static or variable-library reference)"
+        ],
+        "processing": [
+          "Fabric fires the pipeline at each scheduled occurrence within the active date range",
+          "Parameter values are bound from the schedule config into the pipeline run"
+        ],
+        "outputs": [
+          "A scheduled pipeline run, with email failure notification support if configured"
+        ],
+        "example": "A nightly ELT pipeline runs on a schedule from 01:00 to 01:00 daily, with an end date set five years out so it doesn't silently stop; a second schedule on the same pipeline handles a weekly full-refresh variant.",
+        "controls": [
+          "Schedule frequency, start/end date, time zone",
+          "Parameter binding: static value vs. variable-library reference"
+        ],
+        "failureModes": [
+          "A schedule parameter name that doesn't exactly match the pipeline's parameter name silently runs on defaults instead of erroring",
+          "Interval-based schedules (preview) can't be edited or disabled after creation and lack backfill support"
+        ]
+      }
+    },
+    {
+      "id": "trigger-event",
+      "label": "Storage event trigger",
+      "summary": "A file/table event fires the pipeline via eventstream and Data Activator plumbing.",
+      "detail": "Event-based pipeline triggers are not a bespoke trigger subsystem: defining a storage event trigger creates an eventstream object plus a Data Activator alert stored as a Reflex item in the workspace. Triggers can respond to file events, job events, and workspace events on OneLake or Azure Blob Storage. Events follow the CloudEvents schema, and filtering on file name or folder path targets the event's Subject field, since those aren't exposed as separate properties.",
+      "whyItMatters": "Because the trigger is built on general Fabric eventing/alerting primitives rather than a separate implementation, understanding eventstreams and Activator directly explains how pipeline event triggers behave — including why trigger metadata needs null-safe expression syntax during manual test runs.",
+      "classification": "fact",
+      "layers": [
+        "orchestration",
+        "observability"
+      ],
+      "tags": [
+        "DataFactory",
+        "Eventstream",
+        "DataActivator",
+        "RTI"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "pipeline-runs",
+          "note": "Event-based pipeline triggers are built on Fabric platform plumbing rather than a bespoke trigger service: defining a storage event trigger creates an eventstream object plus a Data Activator alert stored as a Reflex item in the workspace, and triggers can respond to file events, job events, and workspace events."
+        },
+        {
+          "sourceKey": "pipeline-runs",
+          "note": "Trigger metadata such as the triggering file name reaches pipeline expressions via parameters parsed from the event's Subject and Topic fields, referenced with null-safe syntax like @pipeline()?.TriggerEvent?.FileName, because during a manual test run these values are NULL and an unguarded reference would fail."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "A file-created, file-deleted, or other OneLake/Blob Storage event matching the configured Subject filter"
+        ],
+        "processing": [
+          "Fabric provisions an eventstream plus a Reflex (Data Activator) alert behind the trigger definition",
+          "Event delivered in CloudEvents schema (source, subject, type, time, id, data payload)",
+          "Trigger metadata (e.g. file name) parsed from Subject/Topic and exposed via null-safe pipeline expressions"
+        ],
+        "outputs": [
+          "A pipeline run started with trigger-derived parameters, e.g. the arriving file's name"
+        ],
+        "example": "A blob-created event on a sales-files container fires the trigger; the pipeline's FileName parameter binds to @pipeline()?.TriggerEvent?.FileName so a Copy activity can scope to exactly the arriving file, while the null-safe syntax keeps a manual test run from failing on the NULL trigger context.",
+        "controls": [
+          "Subject-field filter expression",
+          "Which event types (file/job/workspace) the trigger subscribes to"
+        ],
+        "failureModes": [
+          "Filtering on a filename property that doesn't exist separately from Subject, silently matching nothing",
+          "Omitting the null-safe `?.` operators and breaking manual test runs"
         ]
       },
       "drillTarget": {
-        "kind": "topic",
-        "slug": "data-factory",
-        "label": "Open data factory"
+        "kind": "capability",
+        "slug": "rti",
+        "label": "Real-Time Intelligence"
       }
     },
     {
-      "id": "step-2",
-      "label": "Fabric Data Factory pipeline runs",
-      "summary": "Fabric Data Factory pipeline runs in the Fabric Data Factory pipeline runs, triggers, activities, and copy behavior architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
+      "id": "pipeline-run",
+      "label": "Pipeline run (orchestration layer)",
+      "summary": "The started run executes the pipeline's chained activities — Copy, notebooks, stored procedures, conditionals.",
+      "detail": "Pipelines sit above individual data-movement activities and act as the orchestration layer. A single pipeline can chain Copy activities, Fabric notebook runs, Spark job definitions, HDInsight tasks, stored procedures, SQL scripts, and dbt jobs, wired together with loops and conditionals, authored in a low-code visual designer — or expressed as Python DAGs via the Apache Airflow integration for code-first teams.",
+      "whyItMatters": "This is the layer that turns a single Copy step into a real workflow: retries, conditionals, and multi-activity sequencing all live here, which is exactly what separates a pipeline from a bare Copy job.",
+      "classification": "fact",
       "layers": [
         "orchestration"
       ],
-      "evidence": [],
       "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+        "DataFactory",
+        "Pipelines",
+        "Orchestration"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "Pipelines are the orchestration layer: a single pipeline can chain data movement, transformation activities (Fabric notebooks, Spark job definitions, HDInsight, stored procedures, SQL scripts, dbt jobs), and control-flow constructs such as loops and conditionals, all authored in a low-code designer."
+        }
       ],
       "drill": {
         "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
+          "A trigger event (on-demand, schedule, or storage event) carrying bound parameters"
         ],
         "processing": [
-          "Apply the Fabric Data Factory pipeline runs responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
+          "Execute the pipeline's activity graph in order, respecting loops and conditionals",
+          "Branch to Copy activities for data movement, or other activity types for transformation/orchestration"
         ],
         "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
+          "Completed run with per-activity status, row counts, and duration visible in the Monitor hub"
         ],
-        "example": "Trace one representative data product through Fabric Data Factory pipeline runs: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
+        "example": "A nightly pipeline run executes a Lookup (read watermark), a parameterized Copy activity (pull only newer rows), and a Stored Procedure (write the new watermark back only on success) — three chained activities in one orchestrated run.",
         "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
+          "Activity ordering, conditionals (If-Condition, Until, ForEach)",
+          "Retry policy per activity"
         ],
         "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "and copy behavior",
-      "summary": "and copy behavior in the Fabric Data Factory pipeline runs, triggers, activities, and copy behavior architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and copy behavior responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and copy behavior: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "data factory governed outcome",
-      "summary": "data factory governed outcome in the Fabric Data Factory pipeline runs, triggers, activities, and copy behavior architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the data factory governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through data factory governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
+          "Chaining activities without a success-gated write-back step, risking a corrupted watermark on partial failure"
         ]
       },
       "drillTarget": {
         "kind": "capability",
         "slug": "data-factory",
-        "label": "Open data factory"
+        "label": "Data Factory"
+      }
+    },
+    {
+      "id": "copy-activity",
+      "label": "Copy activity",
+      "summary": "Fully customizable data movement inside a pipeline, with three independent parallelism levers.",
+      "detail": "The Copy activity runs on a serverless architecture exposing parallelism at three distinct levels: control-flow concurrency (many Copy activities launched at once, e.g. from a ForEach loop), Intelligent Throughput Optimization (a per-activity compute-sizing lever with Auto/Standard/Balanced/Maximum presets or a 4-256 numeric value), and degree of copy parallelism (a thread cap within one activity). All three are independently tunable and by default the service picks parallelism dynamically.",
+      "whyItMatters": "Understanding that these three levers are orthogonal — and which one actually addresses a given bottleneck — is the difference between tuning that helps and tuning that just adds cost for no throughput gain.",
+      "classification": "fact",
+      "layers": [
+        "data",
+        "compute"
+      ],
+      "tags": [
+        "DataFactory",
+        "CopyActivity"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "copy-activity-performance-and-scalability",
+          "note": "The Copy activity runs on a serverless architecture that exposes parallelism at three distinct levels: control flow can launch many copy activities concurrently, each activity can scale its own compute via intelligent throughput optimization, and within one activity multiple threads read from the source and write to the destination in parallel."
+        },
+        {
+          "sourceKey": "copy-activity-performance-and-scalability",
+          "note": "Intelligent throughput optimization (ITO) accepts the presets Auto, Standard, Balanced, and Maximum, or an explicit numeric value between 4 and 256; degree of copy parallelism is an orthogonal thread cap, and by default the service chooses parallelism dynamically."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "Source connection, destination connection, column mappings, and optional ITO/parallelism overrides"
+        ],
+        "processing": [
+          "Control-flow concurrency: multiple Copy activities run in parallel if orchestrated that way",
+          "ITO sizes the activity's own compute (CPU/memory/network) per the chosen preset",
+          "Degree-of-parallelism caps concurrent reader/writer threads inside the single activity"
+        ],
+        "outputs": [
+          "Data written to the destination, with per-activity row counts and skipped-row counts visible in the Monitor hub"
+        ],
+        "example": "A migration Copy activity moving a large table leaves ITO on Auto and lets the service pick dynamic parallelism, while a separate Copy activity against a small on-prem SQL source is explicitly capped to 2 threads to avoid overwhelming it during business hours.",
+        "controls": [
+          "ITO preset or explicit 4-256 value",
+          "Degree of copy parallelism (integer, minimum 1)",
+          "ForEach fan-out at the orchestration layer for scale-out beyond one activity"
+        ],
+        "failureModes": [
+          "Raising ITO or parallelism when the real bottleneck is source IOPS or network bandwidth — see the throughput-ceiling warning below",
+          "Leaving parallelism uncapped against a fragile source system"
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "data-factory",
+        "label": "Data Factory"
+      }
+    },
+    {
+      "id": "throughput-ceiling-warning",
+      "label": "Trap: tuning past the real bottleneck",
+      "summary": "Throughput is bounded by the minimum of source, destination, and network capacity — tuning can't exceed it.",
+      "detail": "Achievable end-to-end throughput can be estimated as the minimum of three numbers: what the source store can serve, what the destination store can absorb, and the network bandwidth between them. If the constraint is the source store's IOPS or the network path, raising Intelligent Throughput Optimization or parallelism settings on the Copy activity cannot push throughput past that external limit — it just adds cost for no gain.",
+      "whyItMatters": "This is the single most common wasted-effort pattern in Copy activity tuning: teams raise ITO to Maximum and add parallelism against a throttled REST API source, paying more for identical throughput, because the ceiling was never the Copy activity's own settings.",
+      "classification": "warning",
+      "layers": [
+        "data",
+        "compute"
+      ],
+      "tags": [
+        "DataFactory",
+        "CopyActivity",
+        "Performance"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "copy-activity-performance-and-scalability",
+          "note": "Tuning copy throughput without first measuring the bottleneck is wasted effort: if the constraint is the source store's IOPS or the network path, raising intelligent throughput optimization or parallelism settings on the Copy activity cannot push throughput past that external limit."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "A Copy activity whose throughput is below expectations despite high ITO/parallelism settings"
+        ],
+        "processing": [
+          "Measure actual throughput per side using activity monitoring, not assumption",
+          "Identify which of source, destination, or network is the binding constraint",
+          "Only then adjust the setting that actually addresses that constraint, if any setting can"
+        ],
+        "outputs": [
+          "Either a correctly targeted tuning change, or confirmation that no Copy-activity setting can help and the constraint must be addressed upstream/downstream"
+        ],
+        "example": "A team raises ITO to Maximum and parallelCopies to 32 against a rate-limited REST API source and sees no throughput change, because the API's own rate limit — not Fabric's compute — was always the ceiling; reverting to Balanced and parallelCopies of 4 produces identical throughput at lower cost.",
+        "controls": [
+          "Measure via Monitor hub activity detail before changing any setting"
+        ],
+        "failureModes": [
+          "Escalating ITO/parallelism repeatedly with no throughput gain, mistaking the lack of effect for a Fabric limitation instead of an external one"
+        ]
+      }
+    },
+    {
+      "id": "copy-job",
+      "label": "Copy job & Mirroring",
+      "summary": "Two lighter-weight data-movement primitives that bypass a full pipeline: Copy job's built-in delivery modes, and Mirroring's continuous database replication.",
+      "detail": "Copy job is described as Fabric's simplest and most scalable mechanism for moving data across multiple clouds and tenants, with built-in delivery styles: bulk load, incremental load, and change-data-capture replication. It runs independently of a full pipeline, trading some of the Copy activity's manual control for a much smaller build-and-maintenance surface. Mirroring is a separate, complementary primitive surfaced from Data Factory: it keeps a near-real-time replica of an operational database inside OneLake, so analytics and reporting can run against the replica instead of the source system, without building a separate ingestion pipeline.",
+      "whyItMatters": "Copy job is the right choice when the job really is just moving data with one of its built-in delivery styles — building a full pipeline around it adds orchestration overhead with no benefit if there's no other activity to chain. Mirroring covers a different shape again — a continuously-replicated operational database rather than a scheduled or triggered movement — so picking between Copy job and Mirroring depends on whether the source is a database needing continuous sync or a discrete dataset needing a delivery-mode copy.",
+      "classification": "fact",
+      "layers": [
+        "data"
+      ],
+      "tags": [
+        "DataFactory",
+        "CopyJob",
+        "Mirroring",
+        "OneLake"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "Data Factory offers three distinct data-movement options: Copy job for simplified movement with built-in delivery styles (bulk, incremental, and change-data-capture replication), Copy activity for fully customizable movement with manual control of parallelism, and Mirroring for near-real-time database replication into OneLake."
+        },
+        {
+          "sourceKey": "fabric-blog-activator-copy-job",
+          "note": "Copy job is described as Fabric's simplest and most scalable mechanism for moving data across multiple clouds and tenants."
+        },
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "Mirroring is surfaced from Data Factory as a data-movement method that keeps a near-real-time replica of an operational database inside OneLake, so analytics and reporting can run against the replica instead of the source system."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "Source, destination, delivery mode (bulk/incremental/CDC), and column mappings",
+          "A supported operational database (e.g. Azure SQL Database, Fabric SQL database) as a Mirroring source, as an alternative to a Copy job's dataset source"
+        ],
+        "processing": [
+          "Copy job runs its configured delivery mode without a surrounding pipeline",
+          "Can be scheduled directly, or invoked as an Activator rule's action (see the event-driven branch)",
+          "Mirroring separately establishes and maintains a near-real-time OneLake replica of a source database's changes, with no hand-authored pipeline"
+        ],
+        "outputs": [
+          "Data moved to the destination on the chosen delivery cadence or event",
+          "Mirroring output: a continuously updated OneLake Delta replica, queryable by Spark, SQL, and Direct Lake"
+        ],
+        "example": "A team replicating a handful of source tables into a lakehouse on a nightly incremental cadence uses Copy job directly rather than building a pipeline wrapper, since there's no other orchestration step needed. Separately, a team needing near-real-time analytical access to an operational Azure SQL Database uses Mirroring instead, since the source is a live database rather than a discrete dataset to copy.",
+        "controls": [
+          "Delivery mode selection (bulk vs incremental vs CDC)"
+        ],
+        "failureModes": [
+          "Choosing Copy job when the scenario actually needs pipeline-level control flow (conditionals, multi-activity retries), then hitting its smaller feature surface mid-build",
+          "Building a redundant hand-rolled CDC pipeline for a source that Mirroring already covers, duplicating maintenance effort"
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "data-factory",
+        "label": "Data Factory"
+      }
+    },
+    {
+      "id": "activator-copyjob-event",
+      "label": "Activator rule invokes Copy job directly",
+      "summary": "GA: an Activator rule condition triggers a Copy job as its action, with no pipeline in between.",
+      "detail": "Fabric Activator can now directly invoke a Copy job as a rule action, without requiring an intermediate Data Factory pipeline, and this capability is Generally Available. The documented pattern is a two-step build: define the Copy job first (source, destination, mode, mappings), then create an Activator rule whose condition — file-created, table-updated, or metric-threshold — triggers that Copy job as its action.",
+      "whyItMatters": "This removes an orchestration layer that was previously required just to get event-driven behavior out of a Copy job, which matters specifically for teams managing large numbers of scheduled tables where empty runs and schedule sprawl were a real, accumulating operational cost.",
+      "classification": "fact",
+      "layers": [
+        "orchestration",
+        "observability"
+      ],
+      "tags": [
+        "DataActivator",
+        "CopyJob",
+        "RTI",
+        "EventDriven"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-blog-activator-copy-job",
+          "note": "Fabric Activator can now directly invoke a Copy job as a rule action, without requiring an intermediate Data Factory pipeline, and this capability is Generally Available."
+        },
+        {
+          "sourceKey": "fabric-blog-activator-copy-job",
+          "note": "The recommended pattern for event-driven data movement is: define a Copy job first, then create an Activator rule whose condition triggers that Copy job as its action, replacing a scheduled trigger with an event trigger."
+        },
+        {
+          "sourceKey": "fabric-blog-activator-copy-job",
+          "note": "Fixed-schedule data movement is characterized as having three recurring costs: computing waste from empty runs when no data changed, a latency-versus-cost tradeoff tied to schedule frequency, and operational overhead from managing many schedules across large table counts."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "A pre-defined Copy job, and an Activator rule condition (file-created, table-updated, or metric-threshold)"
+        ],
+        "processing": [
+          "Activator continuously monitors the defined condition",
+          "When the condition is met, Activator invokes the Copy job directly as the rule's action"
+        ],
+        "outputs": [
+          "The Copy job runs only when the real-world event actually occurs, with no empty scheduled runs"
+        ],
+        "example": "Instead of a Copy job scheduled hourly against a table that changes a few times a day, an Activator rule watches for the table-updated event on that OneLake table and invokes the Copy job only when a change actually lands — eliminating the empty hourly runs entirely.",
+        "controls": [
+          "Which Activator condition type drives the rule (file/table/metric)"
+        ],
+        "failureModes": [
+          "Underestimating event volume and getting far more Copy job invocations than the old fixed schedule would have produced, if the source changes more often than expected"
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "rti",
+        "label": "Real-Time Intelligence"
+      }
+    },
+    {
+      "id": "private-link-copy-warning",
+      "label": "Trap: private links block Warehouse/Eventhouse Copy targets",
+      "summary": "Copy activity to/from Warehouse, and Copy to Eventhouse, are unsupported under private-link configurations.",
+      "detail": "Pipeline Copy activity to and from Fabric Data Warehouse is unsupported when private links are enabled, and Eventhouse is unsupported as a direct Copy pipeline destination under both tenant-level and workspace-level private link configurations.",
+      "whyItMatters": "Teams that adopt private links tenant-wide for compliance reasons can discover this constraint only after designing a pipeline around a Warehouse or Eventhouse Copy destination — retrofitting around it after the fact is expensive.",
+      "classification": "warning",
+      "layers": [
+        "data",
+        "security"
+      ],
+      "tags": [
+        "DataFactory",
+        "PrivateLinks",
+        "Warehouse",
+        "Eventhouse"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "bradcoles-fabric-private-links",
+          "note": "Pipeline copy activity to and from Fabric Data Warehouse is unsupported when private links are enabled. Eventhouse is also unsupported as a direct pipeline copy destination under both tenant-level and workspace-level private link configurations."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "A tenant or workspace with private links enabled, and a planned Copy activity targeting Warehouse or Eventhouse"
+        ],
+        "processing": [
+          "Confirm Copy destination support against the private-link configuration before pipeline design begins",
+          "If unsupported, redesign the data path (e.g. land in a lakehouse first, or use a supported destination) rather than discovering the gap during build"
+        ],
+        "outputs": [
+          "A pipeline design that accounts for the private-link Copy-destination constraint from the start"
+        ],
+        "example": "A team designing a private-link-enabled tenant plans a Copy activity landing directly into a Warehouse; confirming this constraint during design (not during a failed pipeline run) redirects the design to land in a lakehouse and promote to Warehouse via a supported path instead.",
+        "controls": [
+          "Verify Copy destination support against the specific private-link scope (tenant vs workspace) in use"
+        ],
+        "failureModes": [
+          "Designing the full pipeline before checking destination support, then discovering the constraint only when the Copy activity fails at runtime"
+        ]
       }
     }
   ],
   "edges": [
     {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
+      "id": "e-ondemand-run",
+      "from": "trigger-ondemand",
+      "to": "pipeline-run",
+      "label": "manual invocation",
       "layer": "orchestration",
       "kind": "flow"
     },
     {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "compute",
+      "id": "e-schedule-run",
+      "from": "trigger-schedule",
+      "to": "pipeline-run",
+      "label": "scheduled occurrence",
+      "layer": "orchestration",
       "kind": "flow"
     },
     {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
+      "id": "e-event-run",
+      "from": "trigger-event",
+      "to": "pipeline-run",
+      "label": "event fires (via eventstream + Reflex)",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-run-copy",
+      "from": "pipeline-run",
+      "to": "copy-activity",
+      "label": "executes a Copy activity step",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-copy-warning",
+      "from": "copy-activity",
+      "to": "throughput-ceiling-warning",
+      "label": "risk when tuning without measuring",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-copy-privatelink-warning",
+      "from": "copy-activity",
+      "to": "private-link-copy-warning",
+      "label": "risk under private-link config",
       "layer": "security",
+      "kind": "branch"
+    },
+    {
+      "id": "e-copyjob-alt",
+      "from": "trigger-schedule",
+      "to": "copy-job",
+      "label": "or skip the pipeline entirely",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-event-copyjob",
+      "from": "trigger-event",
+      "to": "activator-copyjob-event",
+      "label": "same eventing plumbing, no pipeline needed",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-activator-copyjob",
+      "from": "activator-copyjob-event",
+      "to": "copy-job",
+      "label": "invokes directly as rule action",
+      "layer": "orchestration",
       "kind": "flow"
     }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. data factory boundary",
-      "explanation": "data factory boundary in the Fabric Data Factory pipeline runs, triggers, activities, and copy behavior architecture."
+      "nodeId": "trigger-ondemand",
+      "title": "1. Three ways to start a run",
+      "explanation": "A pipeline run starts on demand, on a schedule, or from an event — all three converge on the same pipeline run."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Fabric Data Factory pipeline runs",
-      "explanation": "Fabric Data Factory pipeline runs in the Fabric Data Factory pipeline runs, triggers, activities, and copy behavior architecture."
+      "nodeId": "trigger-schedule",
+      "title": "2. Schedules: bounded, plentiful, exact-match parameters",
+      "explanation": "Up to 20 schedules per pipeline, each requiring a start and end date — and each one's parameter names must exactly match the pipeline's or the mismatch is silently ignored."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. and copy behavior",
-      "explanation": "and copy behavior in the Fabric Data Factory pipeline runs, triggers, activities, and copy behavior architecture."
+      "nodeId": "trigger-event",
+      "title": "3. Event triggers ride existing eventing plumbing",
+      "explanation": "A storage event trigger isn't a bespoke system — it provisions an eventstream and a Data Activator Reflex alert behind the scenes, the same machinery Real-Time Intelligence uses."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. data factory governed outcome",
-      "explanation": "data factory governed outcome in the Fabric Data Factory pipeline runs, triggers, activities, and copy behavior architecture."
+      "nodeId": "pipeline-run",
+      "title": "4. The orchestration layer",
+      "explanation": "Once started, the pipeline run chains whatever activities it was authored with — Copy, notebooks, stored procedures, conditionals — not just data movement."
+    },
+    {
+      "nodeId": "copy-activity",
+      "title": "5. Three independent parallelism levers",
+      "explanation": "Copy activity's control-flow fan-out, Intelligent Throughput Optimization, and thread-level parallelism are all independently tunable — but only one may actually be the bottleneck."
+    },
+    {
+      "nodeId": "throughput-ceiling-warning",
+      "title": "6. Warning: you can't tune past the real ceiling",
+      "explanation": "Throughput is bounded by the minimum of source, destination, and network capacity — raising ITO or parallelism past that ceiling adds cost with no gain."
+    },
+    {
+      "nodeId": "private-link-copy-warning",
+      "title": "7. Warning: private links block some Copy targets",
+      "explanation": "Warehouse and Eventhouse are unsupported Copy destinations under private-link configurations — a constraint worth checking during design, not after a failed run."
+    },
+    {
+      "nodeId": "copy-job",
+      "title": "8. Or skip the pipeline: Copy job & Mirroring",
+      "explanation": "For scenarios that are genuinely just data movement, Copy job runs standalone with built-in bulk/incremental/CDC delivery modes; for continuous replication of an operational database, Mirroring keeps a near-real-time OneLake replica — neither needs a hand-built pipeline."
+    },
+    {
+      "nodeId": "activator-copyjob-event",
+      "title": "9. GA: event-driven Copy job with no pipeline at all",
+      "explanation": "An Activator rule can now invoke a Copy job directly as its action — the same eventing plumbing that drives pipeline triggers, but skipping the pipeline layer entirely for pure data-movement scenarios."
     }
   ]
 }

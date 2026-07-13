@@ -1,313 +1,213 @@
 {
   "id": "medallion-lakehouse-architecture",
-  "title": "bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spa…",
-  "purpose": "Original diagram: bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake",
-  "accessibleSummary": "An interactive architecture infographic with 5 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake",
+  "title": "Medallion Lakehouse: Bronze, Silver, Gold on One OneLake",
+  "purpose": "Show how raw data lands once, is progressively curated by Spark into bronze, silver, and gold Delta tables in a single Fabric lakehouse, and is served read-only through the SQL analytics endpoint and Direct Lake — without ever leaving OneLake.",
+  "accessibleSummary": "An internals diagram: source systems land via pipeline copy, Dataflow Gen2, or a shortcut into a bronze Delta table in the lakehouse's managed Tables area. Spark reads bronze and writes a cleansed, conformed silver Delta table, then Spark aggregates silver into business-ready gold Delta tables shaped for consumption. Gold is exposed two ways: the auto-provisioned SQL analytics endpoint for read-only T-SQL, and Direct Lake for Power BI semantic models that read the Delta files directly with no import. A warning node flags that endpoint-level SQL permissions do not apply to the same data read through Spark or OneLake directly, so securing gold requires both the write and read paths.",
+  "longDescription": "This is an internals diagram of the medallion pattern as it is actually implemented on Fabric: three zones are not three storage systems, they are three sets of Delta tables inside one OneLake namespace. Data enters bronze through whichever ingestion engine fits the source workload — a Data Factory pipeline copy activity for bulk and recurring loads, Dataflow Gen2 for low-code shaping, or a OneLake shortcut that references data already governed elsewhere without copying it. Bronze lands in the lakehouse's managed Tables area, where Fabric auto-validates the Delta format and registers the table in the metastore with no manual DDL. Spark then reads bronze and writes silver: de-duplication, type enforcement, and conforming joins, protected by Delta's ACID transactions and schema enforcement so the transform is safe and replayable. A second Spark pass aggregates silver into gold: curated, business-ready, typically star-schema-shaped tables. Both promotions are ordinary Delta commits within the same OneLake, not copies between systems. Gold is then served two ways in parallel: the SQL analytics endpoint, auto-provisioned at lakehouse creation with no setup, gives read-only T-SQL access to the same Delta files; Direct Lake gives Power BI semantic models the same data with import-mode speed and no refresh, loading columns lazily as queries touch them. A warning node captures a real security trap: SQL-endpoint-level GRANT/DENY permissions only apply when data is read through that endpoint — the same Delta files reached through Spark or OneLake directly bypass those rules entirely, so gold's read path and write path must both be secured, not just one.",
   "type": "internals",
   "topicSlug": "medallion-lakehouse",
-  "capabilityIds": [
-    "lakehouse"
-  ],
-  "revision": "1",
+  "capabilityIds": ["lakehouse", "spark", "onelake"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/medallion-lakehouse-architecture.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "medallion lakehouse boundary",
-      "summary": "medallion lakehouse boundary in the bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "source-ingestion",
+      "label": "Source ingestion (pipeline / Dataflow / shortcut)",
+      "summary": "Data enters the lakehouse through pipeline copy, Dataflow Gen2, or a OneLake shortcut.",
+      "detail": "Data can enter a lakehouse through several routes: Spark notebooks, pipeline copy activities, Spark job definitions for compiled production ETL, Dataflows Gen2 for low-code preparation, or OneLake shortcuts that reference external data in place without copying it.",
+      "whyItMatters": "Choosing the right ingestion route per workload — bulk copy, low-code shaping, or a zero-copy shortcut — determines whether bronze is a real copy that must be maintained or a live reference to data already governed elsewhere.",
+      "classification": "fact",
+      "layers": ["data", "orchestration"],
+      "tags": ["DataFactory", "OneLake", "Ingestion"],
+      "evidence": [
+        { "sourceKey": "lakehouse-overview", "note": "Data can enter a lakehouse through several routes: Spark notebooks, pipeline copy activities, Spark job definitions for compiled production ETL, Dataflows Gen2 for low-code preparation, or OneLake shortcuts that reference external data in place." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the medallion lakehouse boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through medallion lakehouse boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Source system extracts, files, or an already-governed dataset elsewhere in OneLake or an external store"],
+        "processing": ["Route bulk/recurring loads through a pipeline Copy activity", "Route low-code shaping needs through Dataflow Gen2", "Route already-governed external data through a OneLake shortcut instead of copying it"],
+        "outputs": ["Raw or lightly-shaped data ready to land as a bronze Delta table"],
+        "example": "A nightly CDC extract from an order-management system lands via a pipeline Copy activity, while a partner's already-governed ADLS dataset is referenced with a shortcut instead of being re-ingested.",
+        "controls": ["Choice of ingestion route per source workload", "Recurrence/trigger schedule for pipeline-based loads"],
+        "failureModes": ["Re-ingesting data that is already governed elsewhere instead of shortcutting it, creating an unnecessary duplicate copy", "Choosing Dataflow Gen2 for very large bulk loads where a pipeline Copy activity would be far more cost-effective at scale"]
+      }
+    },
+    {
+      "id": "bronze",
+      "label": "Bronze: raw Delta landing (Tables area)",
+      "summary": "Raw data auto-registers as a Delta table in the lakehouse's managed Tables area.",
+      "detail": "A lakehouse splits its storage into a managed Tables area reserved for Delta tables and a Files area for unstructured or non-Delta data. When data lands in the managed Tables area, Fabric automatically validates the Delta format, extracts column names, types, compression, and partitioning metadata, and registers the table in the metastore so it is immediately queryable from Spark SQL or T-SQL with no manual CREATE TABLE.",
+      "whyItMatters": "Because bronze is auto-registered Delta the moment it lands, the silver transform that follows can read it directly with no format-conversion or DDL step — the curation work starts immediately at the schema and value level.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["Lakehouse", "DeltaLake"],
+      "evidence": [
+        { "sourceKey": "lakehouse-overview", "note": "A lakehouse splits its storage into two top-level areas: a managed Tables area reserved for Delta tables and a Files area for unstructured or non-Delta data." },
+        { "sourceKey": "lakehouse-overview", "note": "When data lands in the managed Tables area, Fabric automatically validates the format (Delta only at present), extracts column names, types, compression, and partitioning metadata, and registers the table in the metastore so it is immediately queryable from Spark SQL or T-SQL." }
+      ],
+      "drill": {
+        "inputs": ["Landed writes from pipeline Copy, Dataflow Gen2, or a shortcut target"],
+        "processing": ["Fabric validates the write is Delta format", "Extracts and registers schema/partition metadata in the metastore"],
+        "outputs": ["A queryable bronze Delta table, visible immediately to Spark SQL and the SQL analytics endpoint"],
+        "example": "A raw bronze_orders table appears in the lakehouse explorer the moment the nightly Copy activity commits, with no DDL run by hand.",
+        "controls": ["Landing target inside the managed Tables area (not Files) so auto-registration applies", "Partition column choice on first write"],
+        "failureModes": ["Landing non-Delta formats (CSV/Parquet) directly and expecting auto-registration — only Delta is auto-discovered in Tables", "Schema drift on the source silently changing bronze column types between loads"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "medallion-lakehouse",
-        "label": "Open medallion lakehouse"
-      }
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
     {
-      "id": "step-2",
-      "label": "and gold zones as layered Delta tables in one OneLake - ingestion e…",
-      "summary": "and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze in the bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "spark-silver",
+      "label": "Spark: cleanse & conform to silver",
+      "summary": "Spark de-duplicates, types, and joins bronze into validated, query-ready silver Delta tables.",
+      "detail": "Silver is where Spark applies de-duplication, type enforcement, and conforming joins to produce validated, query-ready Delta tables. All managed lakehouse tables use the Delta Lake format, which supplies ACID transactions, schema enforcement, and time travel over the underlying Parquet files — the properties that make repeatable, correctable transformations safe.",
+      "whyItMatters": "Delta's ACID guarantees are what let a silver job be re-run safely after a failure without producing a half-written or duplicated table — the transform is a transaction, not a best-effort overwrite.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["Spark", "DeltaLake"],
+      "evidence": [
+        { "sourceKey": "lakehouse-overview", "note": "All managed lakehouse tables use the Delta Lake storage format, which supplies ACID transactions, schema enforcement, and time travel over the underlying Parquet files." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "Spark promotes bronze to silver to gold",
-      "summary": "Spark promotes bronze to silver to gold in the bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Spark promotes bronze to silver to gold responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Spark promotes bronze to silver to gold: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "and gold is served read-only via the SQL analytics endpoint and Dir…",
-      "summary": "and gold is served read-only via the SQL analytics endpoint and Direct Lake in the bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and gold is served read-only via the SQL analytics endpoint and Direct Lake responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and gold is served read-only via the SQL analytics endpoint and Direct Lake: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "lakehouse governed outcome",
-      "summary": "lakehouse governed outcome in the bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the lakehouse governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through lakehouse governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Raw bronze Delta table(s)"],
+        "processing": ["De-duplicate and enforce consistent types", "Apply conforming joins/business keys across sources", "Write the result as a new silver Delta table via a Delta MERGE or overwrite"],
+        "outputs": ["A cleansed, conformed silver Delta table, still in the same lakehouse Tables area"],
+        "example": "A Spark job reads bronze_orders, resolves inconsistent customer key formats across two source systems, and writes silver_orders with ACID guarantees so a mid-job failure never leaves a half-updated table.",
+        "controls": ["The Spark transformation logic (notebook or Spark job definition)", "Schema-evolution policy for the silver table"],
+        "failureModes": ["Silent type coercion during cleansing that truncates or nulls malformed values instead of failing loud", "Skipping de-duplication and letting downstream gold aggregations double-count"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "lakehouse",
-        "label": "Open lakehouse"
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark" }
+    },
+    {
+      "id": "spark-gold",
+      "label": "Spark: aggregate to gold",
+      "summary": "Spark aggregates silver into curated, business-ready gold Delta tables.",
+      "detail": "Gold holds curated, aggregated, typically star-schema-shaped tables optimised for consumption. Because only Delta tables under the lakehouse Tables area surface through the SQL analytics endpoint, gold tables must be managed Delta tables in the Tables area to be queryable in T-SQL and by Direct Lake.",
+      "whyItMatters": "Landing gold outside the managed Tables area — for example only in Files, or as an external Delta table created purely in Spark code — makes it invisible to the SQL analytics endpoint and to Direct Lake, silently breaking the serving layer this zone exists to feed.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["Spark", "DeltaLake", "Lakehouse"],
+      "evidence": [
+        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "Only Delta tables whose data lives under the lakehouse /tables area are discoverable by the endpoint; tables that reference data in /files, and external Delta tables created with Spark code, are invisible to it — the documented workaround is a shortcut placed in the Tables area." }
+      ],
+      "drill": {
+        "inputs": ["Cleansed, conformed silver Delta table(s)"],
+        "processing": ["Aggregate and reshape silver into business-ready fact/dimension tables", "Write to the lakehouse's managed Tables area as Delta"],
+        "outputs": ["Gold Delta tables ready for read-only T-SQL and Direct Lake serving"],
+        "example": "A Spark job aggregates silver_orders and silver_customers into gold_revenue_by_region, written to the Tables area so both the SQL analytics endpoint and a Direct Lake semantic model can see it immediately.",
+        "controls": ["Star-schema/grain design for the gold table", "Ensuring the write target is the managed Tables area, not Files or an unregistered external Delta path"],
+        "failureModes": ["Writing gold as an external Delta table outside the Tables area, making it invisible to the SQL analytics endpoint and Direct Lake", "Mixing grains in one gold fact table, silently double-counting additive measures"]
+      }
+    },
+    {
+      "id": "sql-endpoint",
+      "label": "SQL analytics endpoint (read-only T-SQL)",
+      "summary": "Auto-provisioned at lakehouse creation; exposes gold Delta tables to read-only T-SQL.",
+      "detail": "Every lakehouse automatically provisions a SQL analytics endpoint at creation time with no setup, exposing the lakehouse's Delta tables through a read-only T-SQL query surface. The endpoint is strictly read-only for data — INSERT, UPDATE, and DELETE are not possible through it, and data modification must happen via Spark — though T-SQL views, inline functions, and stored procedures can be created and persisted on it.",
+      "whyItMatters": "This is what lets SQL-first analysts and BI tools query gold with familiar T-SQL the moment Spark writes it, with no separate export or copy step — but it also means anyone expecting to write data back through T-SQL will find the endpoint refuses.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["Warehouse", "SQLEndpoint"],
+      "evidence": [
+        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "Every lakehouse automatically provisions a SQL analytics endpoint at creation time with no setup, exposing the lakehouse's Delta tables through a read-only T-SQL query surface." },
+        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "The endpoint is strictly read-only for data: INSERT, UPDATE, and DELETE are not possible through it, and data modification must happen via Spark in the lakehouse — yet T-SQL views, inline functions, and stored procedures can still be created and persisted on it." }
+      ],
+      "drill": {
+        "inputs": ["Gold Delta tables registered in the lakehouse Tables area"],
+        "processing": ["Endpoint detects new/changed Delta tables and refreshes its own SQL metadata automatically", "Serves T-SQL SELECT queries, views, functions, and stored procedures over the same Delta files"],
+        "outputs": ["Read-only T-SQL query results for BI tools, ad-hoc analysts, and reporting jobs"],
+        "example": "A reporting analyst queries gold_revenue_by_region via T-SQL through the endpoint minutes after the Spark aggregation job commits, with no manual refresh triggered.",
+        "controls": ["Views/stored procedures built on top for reusable reporting logic", "SQL granular (object/column/row) permissions on the endpoint itself"],
+        "failureModes": ["Expecting write access through the endpoint and hitting a hard read-only wall", "Assuming endpoint-level SQL permissions are the only security boundary — see the warning node"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse SQL analytics endpoint" }
+    },
+    {
+      "id": "direct-lake-serving",
+      "label": "Direct Lake (Power BI semantic model)",
+      "summary": "Power BI reads gold Delta files straight from OneLake, lazily, with no import or refresh.",
+      "detail": "Direct Lake mode in the Analysis Services engine lets Power BI semantic models read Delta Parquet data straight from OneLake, delivering import-mode speed without maintaining a copied dataset. Direct Lake loads column data from OneLake lazily — nothing is read until a query first touches a column, and the load set includes columns needed by relationships and measures, not just the ones the query names.",
+      "whyItMatters": "This is what removes the refresh schedule entirely for gold-layer BI: reports query the same Delta files Spark just wrote, and only the columns actually touched by a query are ever loaded into memory.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["DirectLake", "SemanticModel", "PowerBI"],
+      "evidence": [
+        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes not just columns the query names but also those needed by relationships and measures." }
+      ],
+      "drill": {
+        "inputs": ["Gold Delta tables in the lakehouse Tables area"],
+        "processing": ["Semantic model binds to the current Delta table version via framing", "Columns are transcoded into memory lazily as queries first touch them"],
+        "outputs": ["Import-mode-speed DAX query results with no scheduled refresh"],
+        "example": "A revenue dashboard built on gold_revenue_by_region queries Direct Lake; the region and revenue columns load into memory on first use, and later Spark writes to the table become visible after the next automatic framing.",
+        "controls": ["Automatic-updates setting controlling whether framing happens on every change or is pinned deliberately", "Capacity SKU, which bounds how much column data can be resident at once"],
+        "failureModes": ["Framing failing when a Delta table exceeds 10,000 Parquet files, a capacity guardrail", "Assuming Direct Lake always reflects live data — it reflects the state as of the last successful framing, not the live table"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
+    },
+    {
+      "id": "endpoint-security-warning",
+      "label": "Trap: endpoint permissions don't cover Spark/OneLake reads",
+      "summary": "SQL-endpoint GRANT/DENY only applies through that endpoint; Spark and OneLake reads bypass it.",
+      "detail": "SQL granular permissions (object-, column-, and row-level security) defined on the SQL analytics endpoint are enforced only for access through that endpoint; the same data reached through Spark or other paths bypasses those rules, so workspace roles must secure the underlying data separately. Treating endpoint-level GRANT/DENY as the sole security boundary for lakehouse data is unsafe.",
+      "whyItMatters": "A team that locks down gold with SQL-endpoint permissions and stops there has secured only one of two read paths — anyone with Spark or OneLake access to the same Delta files reads the unfiltered data regardless of what the endpoint's GRANT/DENY says.",
+      "classification": "warning",
+      "layers": ["security", "governance"],
+      "tags": ["SQLEndpoint", "Security", "AntiPattern"],
+      "evidence": [
+        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "Treating endpoint-level GRANT/DENY as the sole security boundary for lakehouse data is unsafe, because users with Spark or OneLake access read the underlying Delta files without the SQL rules applying." }
+      ],
+      "drill": {
+        "inputs": ["A gold table with row/column-level SQL permissions defined only on the SQL analytics endpoint"],
+        "processing": ["Audit whether workspace roles or OneLake security roles also restrict the same table's Spark/OneLake read path", "Apply access controls on both the endpoint and the underlying workspace/OneLake permissions"],
+        "outputs": ["A gold table genuinely secured on every read path, not just the T-SQL one"],
+        "example": "Row-level security on the endpoint hides HR salary rows from most analysts in T-SQL, but the same analysts still have Spark access to the underlying lakehouse and can read every row directly — the SQL rule never applied there.",
+        "controls": ["Workspace-role and OneLake security-role restrictions on the write/Spark path", "Treat SQL-endpoint GRANT/DENY as one layer, not the whole boundary"],
+        "failureModes": ["A compliance review discovering sensitive gold data was fully readable via Spark the whole time", "Adding ever more granular SQL rules while the actual leak is a Spark/OneLake permission gap"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-source-bronze", "from": "source-ingestion", "to": "bronze", "label": "lands as raw Delta table", "layer": "data", "kind": "flow" },
+    { "id": "e-bronze-silver", "from": "bronze", "to": "spark-silver", "label": "read for cleansing", "layer": "compute", "kind": "flow" },
+    { "id": "e-silver-gold", "from": "spark-silver", "to": "spark-gold", "label": "conformed silver table", "layer": "compute", "kind": "flow" },
+    { "id": "e-gold-endpoint", "from": "spark-gold", "to": "sql-endpoint", "label": "auto-detected, no refresh step", "layer": "data", "kind": "flow" },
+    { "id": "e-gold-directlake", "from": "spark-gold", "to": "direct-lake-serving", "label": "read directly, no import", "layer": "data", "kind": "flow" },
+    { "id": "e-endpoint-warning", "from": "sql-endpoint", "to": "endpoint-security-warning", "label": "risk if treated as the only boundary", "layer": "security", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. medallion lakehouse boundary",
-      "explanation": "medallion lakehouse boundary in the bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake architecture."
+      "nodeId": "source-ingestion",
+      "title": "Start: pick the ingestion route per workload",
+      "explanation": "Bulk/recurring loads use a pipeline Copy activity, low-code shaping uses Dataflow Gen2, and data already governed elsewhere uses a zero-copy OneLake shortcut instead of ingestion at all."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. and gold zones as layered Delta tables in one OneLake - ingestion e…",
-      "explanation": "and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze in the bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake architecture."
+      "nodeId": "bronze",
+      "title": "Bronze: auto-registered raw Delta",
+      "explanation": "Landing in the managed Tables area gets the raw data auto-validated and registered as Delta with no manual DDL — it is immediately queryable."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. Spark promotes bronze to silver to gold",
-      "explanation": "Spark promotes bronze to silver to gold in the bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake architecture."
+      "nodeId": "spark-silver",
+      "title": "Spark cleanses bronze into silver",
+      "explanation": "De-duplication, typing, and conforming joins run as a Delta transaction, so the transform is safe to re-run after a failure."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. and gold is served read-only via the SQL analytics endpoint and Dir…",
-      "explanation": "and gold is served read-only via the SQL analytics endpoint and Direct Lake in the bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake architecture."
+      "nodeId": "spark-gold",
+      "title": "Spark aggregates silver into gold",
+      "explanation": "Business-ready, typically star-schema-shaped tables are written back into the same managed Tables area — landing gold anywhere else breaks downstream serving."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. lakehouse governed outcome",
-      "explanation": "lakehouse governed outcome in the bronze, silver, and gold zones as layered Delta tables in one OneLake - ingestion engines land to bronze, Spark promotes bronze to silver to gold, and gold is served read-only via the SQL analytics endpoint and Direct Lake architecture."
+      "nodeId": "sql-endpoint",
+      "title": "Serve gold: read-only T-SQL",
+      "explanation": "The auto-provisioned SQL analytics endpoint exposes gold to T-SQL analysts and BI tools the moment Spark commits, with no separate refresh or export."
+    },
+    {
+      "nodeId": "direct-lake-serving",
+      "title": "Serve gold: Direct Lake for Power BI",
+      "explanation": "Power BI semantic models read the same Delta files with import-mode speed and lazy column loading, avoiding a refresh schedule entirely."
+    },
+    {
+      "nodeId": "endpoint-security-warning",
+      "title": "Warning: secure both read paths, not just one",
+      "explanation": "SQL-endpoint permissions only govern T-SQL access — the same gold data reached through Spark or OneLake directly bypasses those rules, so both paths need real access controls."
     }
   ]
 }

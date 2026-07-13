@@ -1,429 +1,269 @@
 {
   "id": "fabric-iq-ontology-architecture",
-  "title": "Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, m…",
-  "purpose": "Original diagram: Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps",
-  "accessibleSummary": "An interactive architecture infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps",
+  "title": "Fabric IQ Ontology: From OneLake Data to Shared Business Meaning",
+  "purpose": "Show how an ontology's logical vocabulary (entity types, properties, relationships) binds to real OneLake data and materializes as a queryable instance graph that data agents, Power BI, and apps all query through the same governed meaning.",
+  "accessibleSummary": "An architecture flow: a modeler declares entity types, properties, and relationships as a logical vocabulary layer. A data-binding layer maps that vocabulary onto real OneLake sources — lakehouse tables, eventhouse streams, and semantic models — carrying schema-evolution rules, quality checks, and provenance. The bindings materialize into a queryable instance graph, a dependent Fabric item built on Graph in Microsoft Fabric that requires a tenant setting to be enabled. NL2Ontology translates natural-language questions into structured queries constrained to the published ontology's definitions, and the ontology layer routes execution to whichever backend actually holds the data. Data agents, Power BI, and apps all consume the same materialized graph. A warning node flags that upstream data changes are not automatically reflected — the graph needs an explicit refresh.",
+  "longDescription": "This is a layered architecture flow, not a straight pipeline: the logical vocabulary layer (entity types, properties, relationships) is authored independently of any single data source, then bound to concrete OneLake data through a separate data-binding layer that maps columns to properties and keys to relationship links. That binding materializes into an instance graph — a distinct, dependent Fabric item built on Graph in Microsoft Fabric, storing actual nodes and edges with lineage, not a virtual view computed on the fly, and it requires the tenant's Graph capability to be enabled before it works. Two branches feed from there: NL2Ontology takes a natural-language business question and translates it into a structured query constrained to the ontology's published definitions (units, join paths, validity windows), while the ontology layer itself routes any query's execution down to whichever backend actually holds the data — GQL against Graph, KQL against Eventhouse. Both data agents and Power BI/apps consume the resulting graph, sharing one definition of what a 'customer' or 'shipment' means instead of each redefining it. A warning node captures a genuine architectural gap: upstream source changes are not automatically reflected in the bound data or graph and require an explicit manual or scheduled refresh.",
   "type": "architecture",
   "topicSlug": "fabric-iq",
-  "capabilityIds": [
-    "fabric-iq"
-  ],
-  "revision": "1",
+  "capabilityIds": ["fabric-iq", "onelake"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/fabric-iq-ontology-architecture.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "fabric iq boundary",
-      "summary": "fabric iq boundary in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "onelake-sources",
+      "label": "OneLake data (lakehouse, eventhouse, semantic model)",
+      "summary": "The concrete data an ontology binds to — lakehouse tables, eventhouse streams, and Power BI semantic models.",
+      "detail": "OneLake underlies Fabric IQ as the unifying data layer across clouds and on-premises sources, using shortcuts, mirroring, and the OneLake catalog so the same governed data grounds semantic models, ontologies, and agents. An ontology's data binding attaches to lakehouse tables, eventhouse streams, or Power BI semantic models sitting on this shared substrate.",
+      "whyItMatters": "Because every source is already on OneLake, an ontology doesn't require a separate data-movement step to bind to it — the same governed data that reports and pipelines already use is what the ontology maps its vocabulary onto.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["OneLake", "FabricIQ"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-overview", "note": "OneLake underlies Fabric IQ as the unifying layer across clouds and on-premises sources, using shortcuts, mirroring, and the OneLake catalog so the same governed data grounds semantic models, ontologies, and agents." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the fabric iq boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through fabric iq boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Lakehouse Delta tables, Eventhouse KQL streams, and Power BI semantic models already registered in OneLake"],
+        "processing": ["Data lands and is governed on OneLake through normal ingestion, mirroring, or shortcut mechanisms", "No ontology-specific movement or copy step occurs at this stage"],
+        "outputs": ["A set of queryable OneLake sources available for an ontology's data-binding layer to map onto"],
+        "example": "A retailer's order and shipment lakehouse tables, already used by existing Power BI reports, become the source data an ontology later binds its Order and Shipment entity types to — with no new copy of the data created.",
+        "controls": ["Which OneLake sources are exposed for ontology binding", "Existing OneLake security and governance controls apply unchanged"],
+        "failureModes": ["Assuming ontology binding requires a data export or duplication step it does not"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "fabric-iq",
-        "label": "Open fabric iq"
+      "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
+    },
+    {
+      "id": "entity-vocabulary",
+      "label": "Entity types, properties, relationships",
+      "summary": "The logical vocabulary layer: reusable business concepts with facts and typed connections, defined above any single table.",
+      "detail": "An ontology is composed of entity types (the things), properties (their facts), and relationships (how they connect), together with constraints and rules that keep those representations consistent across teams. An entity type is a reusable logical model of a real-world concept — deliberately elevated above any single table so inconsistent per-source column definitions don't fragment the concept's meaning. Relationships are typed, directional links that can carry their own attributes (distance, confidence, effective-at) and cardinality rules.",
+      "whyItMatters": "Elevating the vocabulary above any single table is what lets the same 'Customer' concept stay singular even when three different source systems define a customer row differently — the fragmentation problem lives in the binding layer, not the vocabulary.",
+      "classification": "fact",
+      "layers": ["metadata"],
+      "tags": ["FabricIQ", "Ontology"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "An ontology in Fabric IQ is composed of entity types (the things), properties (their facts), and relationships (how they connect), together with constraints and rules that keep those representations consistent across teams." },
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "An entity type is a reusable logical model of a real-world concept, deliberately elevated above any single table so that inconsistent per-source column definitions don't fragment the concept's meaning." },
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "Relationships are typed, directional links between entity types or instances that can carry their own attributes (distance, confidence, effective-at) and cardinality rules." }
+      ],
+      "drill": {
+        "inputs": ["Business requirements for the concepts and relationships an organization needs to reason about"],
+        "processing": ["Declare entity types (e.g. Customer, Order, Shipment) with their standardized names, identifiers, and constraints", "Declare properties as the facts each entity type carries", "Declare typed, directional relationships between entity types, including their own attributes and cardinality rules"],
+        "outputs": ["A logical vocabulary — entity types, properties, relationships — independent of any single data source"],
+        "example": "A Shipment entity type declares a 'delivers-to' relationship to a Customer entity type and a 'contains' relationship to Order, each carrying its own effective-at attribute, before any data binding is attached.",
+        "controls": ["Naming and constraint conventions for entity types, so the same concept isn't redeclared under different names", "Which properties and relationships are mandatory vs optional for a given entity type"],
+        "failureModes": ["Declaring near-duplicate entity types for the same real-world concept because teams didn't coordinate", "Under-specifying cardinality rules, allowing relationship data that violates the intended business rule"]
       }
     },
     {
-      "id": "step-2",
-      "label": "Fabric IQ ontology as a semantic layer",
-      "summary": "Fabric IQ ontology as a semantic layer in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "id": "data-binding",
+      "label": "Data binding layer",
+      "summary": "Maps the logical vocabulary onto real OneLake sources — columns to properties, keys to relationships.",
+      "detail": "Data binding connects an ontology's entity types, properties, and relationships to concrete OneLake data — lakehouse tables, eventhouse streams, or Power BI semantic models — by mapping columns to properties and keys to relationship links, while carrying schema-evolution rules, data-quality checks, and provenance at the concept level.",
+      "whyItMatters": "This is the layer that actually resolves the 'same concept, different columns per source' problem: the vocabulary stays singular while the binding absorbs per-source variation, and it's also where schema-evolution and data-quality rules live so the graph doesn't silently break when a source table changes.",
+      "classification": "fact",
+      "layers": ["metadata", "data"],
+      "tags": ["FabricIQ", "Ontology", "OneLake"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "Data binding connects an ontology's entity types, properties, and relationships to concrete OneLake data — lakehouse tables, eventhouse streams, or Power BI semantic models — by mapping columns to properties and keys to relationship links, while carrying schema-evolution rules, data-quality checks, and provenance at the concept level." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Fabric IQ ontology as a semantic layer responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Fabric IQ ontology as a semantic layer: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["The declared entity-type vocabulary", "Concrete OneLake lakehouse tables, eventhouse streams, or semantic models to bind against"],
+        "processing": ["Map source columns to declared properties", "Map source keys to declared relationship links", "Attach schema-evolution rules, data-quality checks, and provenance metadata at the concept level"],
+        "outputs": ["A concept-level mapping from vocabulary to concrete data, ready to materialize into an instance graph"],
+        "example": "The Customer entity type's 'email' property is bound to a CustomerEmail column in one lakehouse table and to a different column name in a mirrored CRM source, with both bindings resolving to the same standardized property.",
+        "controls": ["Which source is authoritative when the same property is bound from multiple sources", "Data-quality checks enforced at bind time (e.g. required fields, format checks)"],
+        "failureModes": ["Binding a property to a source column whose meaning has silently drifted, without a data-quality check catching it", "No provenance tracking, making it hard to trace an instance graph value back to its source row"]
       }
     },
     {
-      "id": "step-3",
-      "label": "entity types",
-      "summary": "entity types in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "instance-graph",
+      "label": "Ontology instance graph",
+      "summary": "A materialized, queryable graph of entity instances and relationship edges, built on Graph in Microsoft Fabric.",
+      "detail": "The ontology graph is a queryable instance graph — nodes as entity instances, edges as asserted or derived links with metadata — built on top of the separate Graph in Microsoft Fabric item, which must be enabled as a tenant setting before an ontology's graph features work. An entity instance is a concrete, timestamped occurrence of an entity type populated from a data binding; it retains which source created it and when it was true.",
+      "whyItMatters": "This is a materialized, dependent Fabric item — not a virtual view computed at query time — so its freshness is a real operational concern (see the refresh warning) rather than something that's automatically always current.",
+      "classification": "fact",
+      "layers": ["metadata", "data"],
+      "tags": ["FabricIQ", "Ontology", "Graph"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "The ontology graph is a queryable instance graph — nodes as entity instances, edges as asserted or derived links with metadata — built on top of the separate Graph in Microsoft Fabric item, which must be enabled as a tenant setting before an ontology's graph features work." },
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "An entity instance is a concrete, timestamped occurrence of an entity type populated from a data binding; it retains which source created it and when it was true." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the entity types responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through entity types: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "and relationships bound to OneLake data",
-      "summary": "and relationships bound to OneLake data in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and relationships bound to OneLake data responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and relationships bound to OneLake data: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "materialized as an instance graph",
-      "summary": "materialized as an instance graph in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the materialized as an instance graph responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through materialized as an instance graph: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "consumed by data agents",
-      "summary": "consumed by data agents in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the consumed by data agents responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through consumed by data agents: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "fabric iq governed outcome",
-      "summary": "fabric iq governed outcome in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the fabric iq governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through fabric iq governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["The concept-level data binding mapping from the previous stage"],
+        "processing": ["Populate entity instances (nodes) from bound source rows, timestamped and provenance-tagged", "Populate relationship edges from bound relationship links, carrying their declared attributes", "Persist nodes and edges as a dependent Fabric item on top of Graph in Microsoft Fabric"],
+        "outputs": ["A materialized, queryable instance graph — the concrete node/edge structure that NL2Ontology and routed queries traverse"],
+        "example": "The Shipment-to-Customer 'delivers-to' relationship materializes as an edge between a specific Shipment instance and a specific Customer instance, timestamped to when that delivery relationship was true.",
+        "controls": ["Whether Graph in Microsoft Fabric is enabled as a tenant setting (a prerequisite)", "Refresh cadence for keeping the graph in sync with bound source changes"],
+        "failureModes": ["Attempting to use ontology graph features before Graph in Microsoft Fabric is enabled at the tenant level", "Treating the graph as always-current when it is a materialized snapshot — see the refresh warning node"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "fabric-iq",
-        "label": "Open fabric iq"
+      "drillTarget": { "kind": "capability", "slug": "fabric-iq", "label": "Fabric IQ" }
+    },
+    {
+      "id": "refresh-warning",
+      "label": "Warning: no automatic refresh",
+      "summary": "Upstream source changes are not automatically reflected — the graph needs an explicit manual or scheduled refresh.",
+      "detail": "Upstream data source changes — new, updated, or deleted rows — are not automatically reflected in an ontology's bound data or graph. They require an explicit manual or scheduled refresh of the graph model before they become visible to queries or agents reading it.",
+      "whyItMatters": "A team that assumes the instance graph is always current risks agents and reports answering from stale business state — this is a real operational gap that must be planned for with an explicit refresh schedule, not an edge case.",
+      "classification": "warning",
+      "layers": ["metadata", "orchestration"],
+      "tags": ["FabricIQ", "Ontology", "Graph"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "Upstream data source changes (new, updated, or deleted rows) are not automatically reflected in an ontology's bound data or graph — they require an explicit manual or scheduled refresh of the graph model before they become visible." }
+      ],
+      "drill": {
+        "inputs": ["An instance graph populated from a data binding at some point in time", "Upstream source data that has since changed (new, updated, or deleted rows)"],
+        "processing": ["Detect that the source has changed since the last graph materialization", "Trigger a manual or scheduled refresh of the graph model", "Re-materialize affected nodes and edges from the current bound data"],
+        "outputs": ["An updated instance graph reflecting current source state, or a stale graph if refresh was skipped"],
+        "example": "A shipment is marked delivered in the source lakehouse table, but an operations agent querying the ontology graph before the next scheduled refresh still sees it as in-transit, because the graph is a materialized snapshot, not a live view.",
+        "controls": ["Explicit refresh schedule for the graph model, sized to how time-sensitive the concept is", "Monitoring for refresh failures so staleness doesn't go unnoticed"],
+        "failureModes": ["Agents or reports acting on stale graph state believing it is live", "No alerting on refresh failures, so staleness compounds silently over multiple missed cycles"]
+      }
+    },
+    {
+      "id": "nl2ontology",
+      "label": "NL2Ontology",
+      "summary": "Translates a natural-language business question into a structured query constrained to the ontology's definitions.",
+      "detail": "NL2Ontology converts natural-language business questions into structured ontology queries and constrains the generated filters, joins, units, and validity windows to the definitions published in the ontology, rather than letting a model infer them freely from raw schema.",
+      "whyItMatters": "Constraining generation to the published ontology definitions is what prevents an LLM from inventing a join path or unit conversion that happens to look plausible but doesn't match governed business meaning — the same trap that makes raw NL2SQL over ungoverned schema risky.",
+      "classification": "fact",
+      "layers": ["metadata", "governance"],
+      "tags": ["FabricIQ", "Ontology", "AI"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "NL2Ontology converts natural-language business questions into structured ontology queries and constrains the generated filters, joins, units, and validity windows to the definitions published in the ontology, rather than letting a model infer them freely from raw schema." }
+      ],
+      "drill": {
+        "inputs": ["A natural-language business question", "The published ontology's entity types, properties, relationships, and constraints"],
+        "processing": ["Parse the question against the ontology's vocabulary rather than raw table schema", "Generate a structured query constrained to the ontology's declared filters, joins, units, and validity windows", "Pass the structured query to ontology query routing for execution"],
+        "outputs": ["A structured, ontology-constrained query ready to execute against the instance graph"],
+        "example": "\"Which shipments to customers in the cold-chain program were delayed last week?\" is translated into a structured traversal of the Shipment-to-Customer relationship filtered by the ontology's declared 'cold-chain program' property and validity window, rather than a raw guess at table joins.",
+        "controls": ["Which ontology is the target for a given natural-language surface (a data agent, Copilot, an app)", "Fallback behavior when a question references a concept not present in the ontology"],
+        "failureModes": ["A question referencing a concept outside the published ontology producing a poor or unanswerable translation instead of a clear refusal", "Treating NL2Ontology as infallible and skipping human review for high-stakes generated queries"]
+      }
+    },
+    {
+      "id": "query-routing",
+      "label": "Federated query routing",
+      "summary": "Routes a business-level query to whichever backend actually holds the data — GQL against Graph, KQL against Eventhouse.",
+      "detail": "Ontology queries start from an entity type and let a caller filter by property, traverse relationships, and aggregate over time using business terminology; the ontology layer then routes execution to whichever backend holds the data, such as GQL for Graph in Microsoft Fabric or KQL for Eventhouse.",
+      "whyItMatters": "The caller writes one business-level query without needing to know or care whether the underlying data lives in the graph store or an eventhouse — the ontology layer is what makes that engine choice invisible.",
+      "classification": "fact",
+      "layers": ["metadata", "compute"],
+      "tags": ["FabricIQ", "Ontology", "Graph", "EventhouseKQL"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "Ontology queries start from an entity type and let a caller filter by property, traverse relationships, and aggregate over time using business terminology; the ontology layer then routes execution to whichever backend holds the data, such as GQL for Graph in Microsoft Fabric or KQL for Eventhouse." }
+      ],
+      "drill": {
+        "inputs": ["A structured, ontology-level query (from NL2Ontology or authored directly)"],
+        "processing": ["Determine which backend holds the data for the entity types and properties referenced", "Translate the ontology-level query into the backend's native query language (GQL for Graph, KQL for Eventhouse)", "Execute against the appropriate backend and return results in ontology terms"],
+        "outputs": ["Query results expressed in business-level ontology terms, regardless of which backend actually executed them"],
+        "example": "A query traversing Shipment-to-sensor-reading relationships is routed to KQL against the bound Eventhouse data, while a query traversing Customer-to-Order relationships is routed to GQL against Graph — both expressed identically to the caller as ontology traversals.",
+        "controls": ["Which backend is authoritative when an entity type's data binding spans multiple backends"],
+        "failureModes": ["Cross-backend queries (e.g. joining a graph-bound entity with an eventhouse-bound entity) performing poorly if the routing layer can't push down efficiently"]
+      }
+    },
+    {
+      "id": "data-agent-consumer",
+      "label": "Fabric data agent",
+      "summary": "A conversational agent grounded in the ontology, answering natural-language questions with consistent business meaning.",
+      "detail": "A Fabric data agent is described as a virtual analyst connected to Fabric data sources that answers natural-language questions for a specific domain, grounded in semantic models and ontologies, and publishable across Microsoft 365, Foundry, Copilot Studio, and custom apps.",
+      "whyItMatters": "Grounding the agent in the ontology rather than raw schema is what gives it the same consistent 'customer' and 'shipment' meaning across every surface it's published to, instead of redefining those concepts per deployment.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["FabricDataAgent", "FabricIQ", "AI"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-overview", "note": "A Fabric data agent is described as a virtual analyst connected to Fabric data sources that answers natural-language questions for a specific domain, grounded in semantic models and ontologies, and publishable across Microsoft 365, Foundry, Copilot Studio, and custom apps." }
+      ],
+      "drill": {
+        "inputs": ["A user's natural-language question submitted through a published surface (Microsoft 365, Foundry, Copilot Studio, a custom app)", "The ontology's NL2Ontology-translated, routed query results"],
+        "processing": ["Submit the question through NL2Ontology and routed query execution", "Assemble a natural-language answer grounded in the returned, ontology-governed data"],
+        "outputs": ["A conversational answer consistent with the same business definitions used by every other ontology consumer"],
+        "example": "A supply-chain analyst asks a data agent embedded in Teams \"which shipments are at risk this week,\" and the agent's answer traces the same Shipment/Customer ontology definitions a Power BI report built independently also uses.",
+        "controls": ["Which ontology(ies) and data sources a given agent is scoped to", "Publishing surface and authentication mode for the agent"],
+        "failureModes": ["An agent scoped to stale or unrefreshed graph data giving confidently wrong answers (see the refresh warning)"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "fabric-data-agent", "label": "Fabric Data Agent" }
+    },
+    {
+      "id": "bi-app-consumer",
+      "label": "Power BI & applications",
+      "summary": "Reports and custom apps querying the same ontology, sharing one definition of business concepts with agents.",
+      "detail": "Power BI semantic models and custom applications consume the same materialized instance graph and routed query layer as data agents, so a report's 'customer' means exactly what an agent's 'customer' means — both trace back to the same entity-type vocabulary and data binding.",
+      "whyItMatters": "This is the governance payoff of the whole architecture: business terms and KPIs stay consistent across reports, agents, and applications instead of being redefined per experience.",
+      "classification": "fact",
+      "layers": ["compute", "governance"],
+      "tags": ["PowerBI", "FabricIQ"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-overview", "note": "Ontologies in Fabric IQ can be generated or aligned directly from Power BI semantic models already in production, so business terms and KPIs stay consistent across reports, agents, and applications instead of being redefined per experience." }
+      ],
+      "drill": {
+        "inputs": ["Routed query results from the ontology layer", "Power BI report authoring or custom application logic"],
+        "processing": ["Query the ontology's instance graph through the same routing layer data agents use", "Present results in a report or application UI"],
+        "outputs": ["Reports and applications whose business terms match every other ontology consumer exactly"],
+        "example": "A Power BI report and a data agent both surface 'total at-risk shipments this week,' and because both trace to the same ontology definition of 'at-risk,' the two numbers agree without manual reconciliation.",
+        "controls": ["Which ontology a given report or app is bound to", "Access governance on who can query which entity types"],
+        "failureModes": ["A report built against raw tables instead of the ontology silently diverging from an agent's ontology-grounded answer for the same business question"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-vocab-binding", "from": "entity-vocabulary", "to": "data-binding", "label": "vocabulary to bind against data", "layer": "metadata", "kind": "flow" },
+    { "id": "e-onelake-binding", "from": "onelake-sources", "to": "data-binding", "label": "columns and keys to map", "layer": "data", "kind": "flow" },
+    { "id": "e-binding-graph", "from": "data-binding", "to": "instance-graph", "label": "materialize as nodes and edges", "layer": "metadata", "kind": "flow" },
+    { "id": "e-onelake-graph-warning", "from": "onelake-sources", "to": "refresh-warning", "label": "source changes not auto-reflected", "layer": "metadata", "kind": "branch" },
+    { "id": "e-graph-refresh-loop", "from": "refresh-warning", "to": "instance-graph", "label": "explicit manual/scheduled refresh", "layer": "orchestration", "kind": "feedback" },
+    { "id": "e-graph-nl2o", "from": "instance-graph", "to": "nl2ontology", "label": "business question to translate", "layer": "metadata", "kind": "flow" },
+    { "id": "e-nl2o-routing", "from": "nl2ontology", "to": "query-routing", "label": "structured, ontology-constrained query", "layer": "compute", "kind": "flow" },
+    { "id": "e-graph-routing-direct", "from": "instance-graph", "to": "query-routing", "label": "direct structured query (non-NL)", "layer": "compute", "kind": "flow" },
+    { "id": "e-routing-agent", "from": "query-routing", "to": "data-agent-consumer", "label": "routed results, ontology terms", "layer": "compute", "kind": "flow" },
+    { "id": "e-routing-bi", "from": "query-routing", "to": "bi-app-consumer", "label": "routed results, ontology terms", "layer": "compute", "kind": "flow" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. fabric iq boundary",
-      "explanation": "fabric iq boundary in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture."
+      "nodeId": "onelake-sources",
+      "title": "1. Start: data already governed on OneLake",
+      "explanation": "Lakehouse tables, eventhouse streams, and semantic models sitting on OneLake are the concrete data an ontology will bind its vocabulary to — no separate copy step needed."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Fabric IQ ontology as a semantic layer",
-      "explanation": "Fabric IQ ontology as a semantic layer in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture."
+      "nodeId": "entity-vocabulary",
+      "title": "2. Declare the vocabulary independently of any table",
+      "explanation": "Entity types, properties, and relationships are defined as reusable business concepts, deliberately elevated above any single source's column definitions."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. entity types",
-      "explanation": "entity types in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture."
+      "nodeId": "data-binding",
+      "title": "3. Bind the vocabulary to real data",
+      "explanation": "Columns map to properties, keys map to relationship links, carrying schema-evolution rules, quality checks, and provenance at the concept level."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. and relationships bound to OneLake data",
-      "explanation": "and relationships bound to OneLake data in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture."
+      "nodeId": "instance-graph",
+      "title": "4. Materialize the instance graph",
+      "explanation": "Bindings populate a queryable graph of entity instances and relationship edges — a real, persisted Fabric item built on Graph in Microsoft Fabric, not a virtual view."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. materialized as an instance graph",
-      "explanation": "materialized as an instance graph in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture."
+      "nodeId": "refresh-warning",
+      "title": "5. Warning: refresh is not automatic",
+      "explanation": "Upstream source changes don't propagate to the graph on their own — an explicit manual or scheduled refresh is required, a real operational gap to plan for."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. consumed by data agents",
-      "explanation": "consumed by data agents in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture."
+      "nodeId": "nl2ontology",
+      "title": "6. Translate natural language into a governed query",
+      "explanation": "NL2Ontology constrains generated filters, joins, units, and validity windows to the published ontology, rather than letting a model infer them from raw schema."
     },
     {
-      "nodeId": "step-7",
-      "title": "7. fabric iq governed outcome",
-      "explanation": "fabric iq governed outcome in the Fabric IQ ontology as a semantic layer — entity types, properties, and relationships bound to OneLake data, materialized as an instance graph, consumed by data agents, Power BI, and apps architecture."
+      "nodeId": "query-routing",
+      "title": "7. Route to whichever backend holds the data",
+      "explanation": "The same business-level query executes as GQL against Graph or KQL against Eventhouse — the caller never has to know which."
+    },
+    {
+      "nodeId": "data-agent-consumer",
+      "title": "8. Data agents answer with governed meaning",
+      "explanation": "A conversational agent grounded in the ontology answers questions with the same business definitions everywhere it's published."
+    },
+    {
+      "nodeId": "bi-app-consumer",
+      "title": "9. Power BI and apps share the same definitions",
+      "explanation": "Reports and applications query the identical ontology layer, so 'customer' and 'shipment' mean the same thing whether a human or an agent is asking."
     }
   ]
 }

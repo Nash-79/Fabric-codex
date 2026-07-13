@@ -1,429 +1,262 @@
 {
   "id": "fabric-data-agent-architecture",
-  "title": "how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources…",
-  "purpose": "Original diagram: how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps)",
-  "accessibleSummary": "An interactive architecture infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps)",
+  "title": "Fabric Data Agent: From Question to Governed Answer",
+  "purpose": "Show how a Fabric data agent sits between a natural-language question and governed OneLake data — the attached sources it can combine, the instruction layer that shapes its behaviour, source-specific query generation, the governance precedence that can override it, and the surfaces that consume the answer.",
+  "accessibleSummary": "An architecture diagram: a user's natural-language question enters a data agent configured with up to five attached data sources (lakehouse, warehouse, semantic model, KQL database) plus agent- and source-level instructions and example queries. The agent picks a source and routes generation to NL2SQL, NL2DAX, or NL2KQL depending on source type. The query executes under the user's own credentials, then passes through a four-layer governance precedence gate — tenant policy, workspace governance, developer instructions, user prompt — that can restrict or block the answer. The result is capped at 25 rows/25 columns and reaches the user through Fabric chat, Copilot, Azure AI Foundry, or a multi-agent application. A second warning node covers the region-mismatch failure where agent and source capacities sit in different geographies.",
+  "longDescription": "This is an architecture diagram of a Fabric data agent's request path. It starts at a natural-language question and ends at one of several consumption surfaces. In between: the agent's configuration layer (attached sources plus instructions/example queries) constrains how the question is interpreted; a source-selection step picks which of up to five attached sources is relevant; a source-specific generator (NL2SQL, NL2DAX, or NL2KQL) turns the question into an executable query; the query runs under the requesting user's own credentials so results never exceed what that user could already see; and a governance precedence layer applies tenant, workspace, and Purview DLP policy on top of that user-level access before the capped result reaches a consumption surface. Two nodes carry a warning classification: the 25x25 result cap (a deliberate design limit, not a bug, but a real constraint on heavy analytical use) and the region-mismatch failure mode where an agent's capacity and its data source's capacity sit in different Azure regions and every query fails outright.",
   "type": "architecture",
   "topicSlug": "fabric-data-agent",
-  "capabilityIds": [
-    "fabric-data-agent"
-  ],
-  "revision": "1",
+  "capabilityIds": ["fabric-data-agent", "fabric-iq"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/fabric-data-agent-architecture.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "fabric data agent boundary",
-      "summary": "fabric data agent boundary in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "user-question",
+      "label": "User's natural-language question",
+      "summary": "The entry point: a plain-English business question posed to the agent.",
+      "detail": "A data agent's request path starts with a natural-language question from a person or an external orchestrator. The agent is a standalone, highly configurable artifact — distinct from Fabric's in-product Copilots, which are preconfigured and scoped to tasks like generating notebook code — precisely so it can be invoked this way from multiple surfaces.",
+      "whyItMatters": "Everything downstream exists to turn this unstructured question into a governed, structured query without the asker needing to know SQL, DAX, KQL, or which of several attached sources holds the answer.",
+      "classification": "fact",
+      "layers": ["orchestration"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "A data agent is a standalone, highly configurable artifact that can query across OneLake and semantic models and be invoked by external orchestrators, distinguishing it from Fabric Copilots that are preconfigured and scoped to in-product tasks." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the fabric data agent boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through fabric data agent boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A plain-English question typed into Fabric chat, Copilot, an Azure AI Foundry app, or sent via the published agent's API endpoint"],
+        "processing": ["Question is received by the data agent artifact", "No parsing happens yet — this is the raw entry point"],
+        "outputs": ["The question, forwarded to the agent's configuration layer for interpretation"],
+        "example": "An analyst asks in Fabric chat: 'What were our top 5 products by revenue last quarter?' with no indication of which lakehouse, warehouse, or semantic model holds that data.",
+        "controls": ["Which surfaces are allowed to invoke this agent (chat, Copilot, Foundry, custom apps)"],
+        "failureModes": ["Ambiguous questions with no source hint, forcing the routing step to guess between multiple plausible sources"]
+      }
+    },
+    {
+      "id": "agent-config",
+      "label": "Agent configuration: sources + instructions",
+      "summary": "Up to five attached data sources plus agent- and source-level instructions and example queries shape every answer.",
+      "detail": "A single data agent can combine up to five data sources in any mix of lakehouses, warehouses, KQL databases, Power BI semantic models, ontologies, and Microsoft Graph. Configuration operates on four surfaces: agent-level instructions (overall objective, source priority, terminology, response format), data-source-level instructions (source-specific guidance on tables/columns/relationships), data-source descriptions (what a source contains, used for routing), and data-source example queries (few-shot pairs of question and validated SQL/KQL).",
+      "whyItMatters": "This configuration is the single biggest lever on answer accuracy — community side-by-side demos show a minimally-instructed agent silently returning wrong answers on complex queries while an identically-sourced agent with full instructions answers correctly.",
+      "classification": "fact",
+      "layers": ["metadata", "governance"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "A single data agent can combine up to five data sources in any mix of lakehouses, warehouses, KQL databases, Power BI semantic models, ontologies, and Microsoft Graph." },
+        { "sourceKey": "fabric-data-agent-configuration", "note": "A Fabric data agent exposes four distinct configuration surfaces: agent-level instructions, data-source-level instructions, data source descriptions, and data-source example queries." },
+        { "sourceKey": "fabricdataagent-community-hub", "note": "Agent instructions and data-model documentation are the biggest lever for answer accuracy, per multiple independent community write-ups; a minimally-instructed agent silently returned wrong answers on complex SCD2/bridge-table queries while an identically-sourced, fully-instructed agent answered correctly." }
+      ],
+      "drill": {
+        "inputs": ["Up to 5 attached sources (lakehouse, warehouse, semantic model, KQL database, ontology, Graph)", "Agent-level instructions (up to 15,000 characters)", "Per-source instructions, descriptions, and example queries"],
+        "processing": ["Load attached source metadata and descriptions", "Load agent-level instructions (objective, source priority, terminology, response format)", "Load per-source instructions and up to 100 example queries per source"],
+        "outputs": ["A configured routing and generation context the agent uses for every incoming question"],
+        "example": "A retail data agent attaches a sales warehouse and a customer lakehouse; agent-level instructions state 'prefer the warehouse for revenue questions,' and the warehouse's source instructions define what 'net revenue' excludes.",
+        "controls": ["Which sources are attached and in what priority order", "Whether example queries are curated per source (semantic models don't support this mechanism)"],
+        "failureModes": ["Leaving instructions and example queries mostly blank and relying on schema alone, which is the documented cause of silently wrong answers on complex queries"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "fabric-data-agent",
-        "label": "Open fabric data agent"
+      "drillTarget": { "kind": "capability", "slug": "fabric-data-agent", "label": "Fabric Data Agent" }
+    },
+    {
+      "id": "source-routing",
+      "label": "Source selection & routing",
+      "summary": "The agent picks the relevant attached source using its description, schema, and example queries together.",
+      "detail": "The routing decision for which data source to use factors in each source's description, schema, and example queries together, not any single signal in isolation. Once a source is selected, its top three most relevant example queries are automatically retrieved as few-shot context for the generation step.",
+      "whyItMatters": "This is the step that lets one agent meaningfully span five heterogeneous sources instead of forcing the asker to pre-select which system holds the answer.",
+      "classification": "fact",
+      "layers": ["orchestration"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-configuration", "note": "The routing decision for which data source to use factors in each source's description, schema, and example queries together; data source example queries are a few-shot mechanism — when a source is selected, the top three most relevant example queries are passed into query generation." }
+      ],
+      "drill": {
+        "inputs": ["The user's question", "Descriptions, schemas, and example-query sets for all attached sources"],
+        "processing": ["Score each attached source's description and schema against the question", "Select the most relevant source", "Retrieve that source's top 3 matching example queries"],
+        "outputs": ["A selected source plus its top-3 example queries, ready for query generation"],
+        "example": "Given 'top 5 products by revenue last quarter,' the router scores the warehouse's description ('sales and revenue facts') above the lakehouse's ('raw customer event logs') and selects the warehouse.",
+        "controls": ["Source description quality (a vague description degrades routing accuracy)", "Agent-level source priority instructions that bias routing toward a preferred source"],
+        "failureModes": ["Two sources with overlapping descriptions causing the router to pick the wrong one for a given question"]
       }
     },
     {
-      "id": "step-2",
-      "label": "how a Fabric data agent sits between a natural-language question an…",
-      "summary": "how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "query-generation",
+      "label": "Source-specific query generation",
+      "summary": "NL2SQL, NL2DAX, or NL2KQL turns the question into an executable, read-only query.",
+      "detail": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases, or a Microsoft Graph query for organizational data. The agent only ever generates read queries and never create, update, or delete statements, and it cannot directly query unstructured files unless first ingested or exposed as tables.",
+      "whyItMatters": "This is the mechanism that makes a data agent safe by construction for read access — there is no generator path that produces a write statement, regardless of how the question is phrased.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases, or a Microsoft Graph query for organizational data." },
+        { "sourceKey": "fabric-data-agent-concept", "note": "The agent only ever generates read queries (SQL, DAX, or KQL) and never create, update, or delete statements, and it cannot directly query unstructured files such as PDF, DOCX, or TXT unless first ingested or exposed as tables." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the how a Fabric data agent sits between a natural-language question and governed OneLake dat… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through how a Fabric data agent sits between a natural-language question and governed OneLake data - attach…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["The selected source's schema, the question, up to 3 few-shot example queries"],
+        "processing": ["Assemble a prompt to the underlying Azure OpenAI Assistant from the question, fetched schema metadata, and instructions/examples", "Select the query-generation tool matching the source type (NL2SQL/NL2DAX/NL2KQL/Graph)", "Generate a syntactically valid, read-only query"],
+        "outputs": ["An executable read-only query (SQL, DAX, or KQL) scoped to the selected source"],
+        "example": "For the warehouse-routed revenue question, the agent generates a T-SQL SELECT with TOP 5, GROUP BY product, and ORDER BY revenue DESC — never an INSERT or UPDATE, regardless of phrasing.",
+        "controls": ["Which generator applies (fixed by source type, not configurable)", "Custom critic prompts affect evaluation, not generation, so they don't change this step directly"],
+        "failureModes": ["A community field report on graph-backed ontology agents found the generator omits a required dbo. prefix on SQL objects unless explicitly instructed", "Complex multi-step questions or ambiguous schema references producing an incorrect query despite valid syntax"]
       }
     },
     {
-      "id": "step-3",
-      "label": "semantic model",
-      "summary": "semantic model in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "id": "identity-scoped-execution",
+      "label": "Execution under the user's own credentials",
+      "summary": "The generated query runs as the requesting user, so results never exceed what that user could already see.",
+      "detail": "The agent enforces read-only, least-privilege access by executing under the requesting user's own credentials and permissions, so each query only reaches data that user is already authorized to view. For Power BI semantic model sources, only Read permission on the model is required for the agent to retrieve schema and run queries; Row-Level and Column-Level Security still apply.",
+      "whyItMatters": "This is the architectural guarantee that makes a data agent safe to expose broadly: it can never be used to escalate a user's access, because it never runs with any identity other than the asker's own.",
+      "classification": "fact",
+      "layers": ["security"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "The agent enforces read-only, least-privilege access by executing under the requesting user's own credentials and permissions, so each query only reaches data that user is already authorized to view." },
+        { "sourceKey": "fabric-data-agent-concept", "note": "For Power BI semantic model sources, only Read permission on the model is required for the agent to retrieve schema and run queries; Build permission is not needed, though Row-Level and Column-Level Security still apply." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the semantic model responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through semantic model: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["The generated query", "The requesting user's Entra ID identity and existing permissions on the target source"],
+        "processing": ["Execute the query against the source using the requesting user's credentials, not a service identity", "RLS/CLS defined on the source is enforced automatically as part of this execution"],
+        "outputs": ["A result set scoped to exactly what the requesting user is already permitted to see"],
+        "example": "Two analysts ask the same question against a semantic model with row-level security by region; each receives only their own region's rows because the query ran under their own identity, not a shared agent identity.",
+        "controls": ["The user's existing workspace/item permissions and RLS/CLS rules — nothing agent-specific to configure here"],
+        "failureModes": ["Assuming a data agent needs Build permission on a semantic model when Read suffices — over-granting Build access when it wasn't required"]
       }
     },
     {
-      "id": "step-4",
-      "label": "Eventhouse KQL database)",
-      "summary": "Eventhouse KQL database) in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "governance-precedence",
+      "label": "Four-layer governance precedence",
+      "summary": "Tenant policy, workspace governance, developer instructions, and user prompt apply in that override order; Purview DLP can block or redact the result.",
+      "detail": "Agent behavior is governed by a four-layer precedence model, from highest to lowest: tenant-wide organizational policy, workspace/role-based governance settings, developer-supplied instructions and example queries, and finally end-user prompts; higher layers always override lower ones. Purview Data Loss Prevention and access-restriction policies apply directly to data agent queries, and can block a query from running or strip sensitive results from an agent's response even when the agent is technically permitted to read the source.",
+      "whyItMatters": "This is the layer that keeps a data agent inside organizational policy even when a developer's instructions or a user's prompt tries to push past it — no configuration surface below tenant policy can override it.",
+      "classification": "fact",
+      "layers": ["governance", "security"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "Agent behavior is governed by a four-layer precedence model, from highest to lowest: tenant-wide organizational policy, workspace/role-based governance settings, developer-supplied instructions and example queries, and finally end-user prompts; higher layers always override lower ones." },
+        { "sourceKey": "fabric-data-agent-concept", "note": "Purview Data Loss Prevention and access-restriction policies apply directly to data agent queries, and can block a query from running or strip sensitive results from an agent's response even when the agent is technically permitted to read the source." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Eventhouse KQL database) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Eventhouse KQL database): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "the instruction/example-query configuration layer",
-      "summary": "the instruction/example-query configuration layer in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the the instruction/example-query configuration layer responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through the instruction/example-query configuration layer: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph)",
-      "summary": "source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph) in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "governance precedence",
-      "summary": "governance precedence in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the governance precedence responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through governance precedence: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["The query result from identity-scoped execution", "Tenant policy, workspace governance settings, developer instructions, Purview DLP rules"],
+        "processing": ["Apply tenant-wide policy first (highest precedence)", "Apply workspace/role-based governance settings", "Apply developer instructions, then user prompt (lowest precedence)", "Run Purview DLP scanning on the result; block or strip sensitive content if triggered"],
+        "outputs": ["A governance-compliant result, or a blocked/redacted response with no data returned"],
+        "example": "A developer's instruction tells the agent to 'always show full customer PII,' but a tenant-wide DLP policy strips a detected credit-card-number pattern from the response regardless — tenant policy wins.",
+        "controls": ["Tenant-wide organizational policy (set by Fabric admins)", "Workspace governance settings", "Purview DLP policy scope and sensitivity detection rules"],
+        "failureModes": ["Assuming developer instructions are the final word on agent behavior when tenant policy silently overrides them", "A DLP block being mistaken for an agent malfunction rather than a working governance control"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "fabric-data-agent",
-        "label": "Open fabric data agent"
+      "drillTarget": { "kind": "capability", "slug": "purview", "label": "Governance & Purview" }
+    },
+    {
+      "id": "result-cap-warning",
+      "label": "25-row / 25-column response cap",
+      "summary": "A deliberate design limit for conversational use, not a bug — and it persists across follow-up questions in the same session.",
+      "detail": "Agent responses are capped at a maximum of 25 rows and 25 columns, and because prior chat turns can influence later answers, a request like asking for all rows for a year will still be limited to 25 rows even in follow-up questions within the same session. This cap is framed as a deliberate design choice for conversational use rather than a temporary limitation, and heavy analytical workloads are explicitly discouraged from relying on it.",
+      "whyItMatters": "Teams that treat a data agent as a bulk-export mechanism will silently get truncated results instead of an error — this is the single most common way a data agent surprises a new user.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "Agent responses are capped at a maximum of 25 rows and 25 columns, and because prior chat turns can influence later answers, a request like asking for all rows for a year will still be limited to 25 rows even in follow-up questions within the same session." },
+        { "sourceKey": "ultimateinfoguide-data-agent-tutorial", "note": "The post frames a data agent's 25-row/25-column response cap as a deliberate design choice for conversational use rather than a temporary limitation, explicitly recommending against relying on it for heavy analytical workloads." }
+      ],
+      "drill": {
+        "inputs": ["The governance-compliant result set, potentially larger than 25x25"],
+        "processing": ["Truncate the result to at most 25 rows and 25 columns before returning it to the consumption surface"],
+        "outputs": ["A capped result, with no built-in signal in the conversational response that truncation occurred"],
+        "example": "A user asks for 'all orders for the year' expecting thousands of rows; the agent returns 25, and a follow-up 'show me the rest' in the same chat still returns only 25 because the session-level cap doesn't reset per turn.",
+        "controls": ["None — this is a fixed platform limit, not a configurable setting"],
+        "failureModes": ["Building a reporting or export workflow on top of a data agent instead of a semantic model or SQL endpoint that has no such cap", "Mistaking a truncated 25-row answer for a complete result set"]
       }
+    },
+    {
+      "id": "region-mismatch-warning",
+      "label": "Cross-region capacity failure",
+      "summary": "An agent and its data source in different Azure regions fail every query outright.",
+      "detail": "A data agent cannot execute queries when its workspace capacity and its data source's workspace capacity are in different regions, so a lakehouse in one region paired with a data agent capacity in another region will fail.",
+      "whyItMatters": "This is an outright failure, not a degraded experience — an org that provisions a data agent workspace in a different region than its data sources will find every query fails, often discovered only after configuration is otherwise complete.",
+      "classification": "warning",
+      "layers": ["governance", "orchestration"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "A data agent cannot execute queries when its workspace capacity and its data source's workspace capacity are in different regions, so a lakehouse in one region paired with a data agent capacity in another region will fail." }
+      ],
+      "drill": {
+        "inputs": ["The data agent's workspace capacity region", "Each attached data source's workspace capacity region"],
+        "processing": ["Compare regions at query time (or configuration time)", "Reject the query if any mismatch is detected"],
+        "outputs": ["A hard failure with no partial or degraded result"],
+        "example": "An org provisions its Fabric IQ workspace in West Europe but its sales lakehouse's capacity is in East US; every query against that lakehouse fails until the agent or the source is moved to a matching region.",
+        "controls": ["Provision the data agent's workspace capacity in the same region as every attached data source before configuration"],
+        "failureModes": ["Discovering the mismatch only after full agent configuration, requiring a workspace or capacity move to fix"]
+      }
+    },
+    {
+      "id": "consumption-surfaces",
+      "label": "Consumption: chat, Copilot, Foundry, apps",
+      "summary": "The capped, governed answer reaches the user through Fabric chat, Copilot, Azure AI Foundry, or a custom multi-agent application.",
+      "detail": "Within multi-agent application architectures on Fabric, a data agent functions as the conversational analytics component, connecting to governed OneLake data through lakehouses, warehouses, semantic models, and KQL databases. A published data agent exposes a callable API endpoint identified by a workspace_id and an artifact_id, the mechanism external orchestrators use to invoke it outside the Fabric chat UI; Microsoft Foundry integrates via a named MicrosoftFabricAgentTool (same-tenant requirement), and Copilot Studio consumes a data agent as a registered plugin.",
+      "whyItMatters": "This is what makes a data agent reusable infrastructure rather than a single-surface chatbot: the same governed, capped answer is reachable from Fabric's own chat, from Microsoft 365 Copilot experiences, from Azure AI Foundry agent orchestration, and from custom applications built with the client SDKs.",
+      "classification": "fact",
+      "layers": ["orchestration"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "Within multi-agent application architectures on Fabric, a data agent functions as the conversational analytics component, connecting to governed OneLake data through lakehouses, warehouses, semantic models, and KQL databases." },
+        { "sourceKey": "ultimateinfoguide-data-agent-tutorial", "note": "A published Fabric data agent exposes a callable API endpoint identified by a workspace_id and an artifact_id; Microsoft Foundry integrates via a named MicrosoftFabricAgentTool requiring the Foundry project and Fabric workspace in the same tenant; Copilot Studio consumes a data agent as a registered plugin." }
+      ],
+      "drill": {
+        "inputs": ["The capped, governed answer from the governance-precedence step"],
+        "processing": ["Route the response back to whichever surface originated the question (chat, Copilot, Foundry tool call, or custom app via SDK/API)", "Render or relay the answer in that surface's native format"],
+        "outputs": ["A rendered answer in Fabric chat, a Copilot response, a Foundry agent turn, or a JSON payload to a custom app"],
+        "example": "A Teams-embedded Copilot Studio bot forwards a customer's question to a published data agent as a registered plugin; the capped answer returns through Copilot Studio into the same Teams conversation.",
+        "controls": ["Which surfaces are permitted to invoke the published (vs. draft) version of the agent", "Client SDK choice: Python, TypeScript, or JavaScript for programmatic callers"],
+        "failureModes": ["Querying the still-editable draft version from a production integration instead of the separately published, stable version"]
+      },
+      "drillTarget": { "kind": "topic", "slug": "fabric-data-agent", "label": "Fabric Data Agent" }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-question-config", "from": "user-question", "to": "agent-config", "label": "interpreted against configured sources/instructions", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-config-routing", "from": "agent-config", "to": "source-routing", "label": "sources, descriptions, example queries", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-routing-generation", "from": "source-routing", "to": "query-generation", "label": "selected source + top-3 examples", "layer": "compute", "kind": "flow" },
+    { "id": "e-generation-identity", "from": "query-generation", "to": "identity-scoped-execution", "label": "generated read-only query", "layer": "compute", "kind": "flow" },
+    { "id": "e-identity-governance", "from": "identity-scoped-execution", "to": "governance-precedence", "label": "user-scoped result", "layer": "security", "kind": "flow" },
+    { "id": "e-governance-cap", "from": "governance-precedence", "to": "result-cap-warning", "label": "governance-compliant result, before truncation", "layer": "compute", "kind": "branch" },
+    { "id": "e-cap-consumption", "from": "result-cap-warning", "to": "consumption-surfaces", "label": "capped answer", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-routing-region-warning", "from": "source-routing", "to": "region-mismatch-warning", "label": "risk if agent and source capacities differ by region", "layer": "governance", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. fabric data agent boundary",
-      "explanation": "fabric data agent boundary in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture."
+      "nodeId": "user-question",
+      "title": "Start: a natural-language question",
+      "explanation": "A person or an external orchestrator poses a plain-English question — the entry point that distinguishes a data agent from Fabric's fixed, in-product Copilots."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. how a Fabric data agent sits between a natural-language question an…",
-      "explanation": "how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture."
+      "nodeId": "agent-config",
+      "title": "The configuration layer shapes everything downstream",
+      "explanation": "Up to five attached sources plus agent- and source-level instructions and example queries are the biggest lever on whether the eventual answer is right."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. semantic model",
-      "explanation": "semantic model in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture."
+      "nodeId": "source-routing",
+      "title": "Pick the source using description, schema, and examples together",
+      "explanation": "No single signal decides which of the attached sources answers the question — it's a joint decision, then the winning source's best example queries are pulled forward."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. Eventhouse KQL database)",
-      "explanation": "Eventhouse KQL database) in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture."
+      "nodeId": "query-generation",
+      "title": "Generate a read-only, source-specific query",
+      "explanation": "NL2SQL, NL2DAX, or NL2KQL — the generator is fixed by source type and can never produce a write statement, regardless of how the question is phrased."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. the instruction/example-query configuration layer",
-      "explanation": "the instruction/example-query configuration layer in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture."
+      "nodeId": "identity-scoped-execution",
+      "title": "Execute as the asking user, not a service identity",
+      "explanation": "The query runs under the requesting user's own credentials, so the agent can never see or return more than that user is already permitted to see."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph)",
-      "explanation": "source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph) in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture."
+      "nodeId": "governance-precedence",
+      "title": "Tenant policy and Purview DLP have the last word",
+      "explanation": "A four-layer precedence model — tenant, workspace, developer instructions, user prompt — governs behaviour, and Purview DLP can still block or redact a result even from a technically-permitted source."
     },
     {
-      "nodeId": "step-7",
-      "title": "7. governance precedence",
-      "explanation": "governance precedence in the how a Fabric data agent sits between a natural-language question and governed OneLake data - attached sources (lakehouse, warehouse, semantic model, Eventhouse KQL database), the instruction/example-query configuration layer, source-specific query generation (NL2SQL/NL2DAX/NL2KQL/Graph), governance precedence, and consumption surfaces (Fabric chat, Copilot, Azure AI Foundry, multi-agent apps) architecture."
+      "nodeId": "result-cap-warning",
+      "title": "Warning: every answer is capped at 25x25",
+      "explanation": "This is a deliberate conversational-use limit, not a bug — and it persists across follow-up turns in the same session, so it can silently truncate what looks like a complete answer."
+    },
+    {
+      "nodeId": "region-mismatch-warning",
+      "title": "Warning: region mismatch fails outright",
+      "explanation": "If the agent's workspace capacity and a data source's capacity sit in different Azure regions, queries against that source fail completely rather than degrading."
+    },
+    {
+      "nodeId": "consumption-surfaces",
+      "title": "End: one governed answer, many surfaces",
+      "explanation": "The same capped, governed answer reaches the user through Fabric chat, Copilot, Azure AI Foundry, or a custom multi-agent application built on the published API."
     }
   ]
 }

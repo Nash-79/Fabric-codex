@@ -1,437 +1,212 @@
 {
   "id": "semantic-layer-storage-mode-decision",
-  "title": "decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per t…",
-  "purpose": "Original diagram: decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks",
+  "title": "Choosing a Storage Mode Per Table: Direct Lake, Import, or DirectQuery",
+  "purpose": "Walk the per-table storage-mode decision for a Power BI semantic model — Direct Lake on OneLake vs on SQL, Import, or DirectQuery — including the DirectQuery-fallback triggers, capacity sizing guardrails, and the SQL-view trap that silently forces fallback.",
+  "accessibleSummary": "A decision tree that starts by asking whether a table's data lives in OneLake Delta and should avoid a refresh copy. If yes, it asks whether the SQL-endpoint security model or delegated identity is required, branching to Direct Lake on SQL or Direct Lake on OneLake. If the table needs full DAX transformation freedom on a small dataset, it branches to Import. If the source must remain query-time authoritative, it branches to DirectQuery, which can be composed with Direct Lake tables in the same composite model. A warning node covers the documented DirectQuery-fallback triggers for Direct Lake on SQL, including the SQL-view trap, and a sizing node covers the capacity memory ceiling that bounds any single model regardless of mode.",
+  "longDescription": "This is a per-table decision tree, not a whole-model choice: Fabric explicitly supports composite models mixing storage modes by table. The root question asks whether the table's authoritative data already lives in OneLake as Delta and whether refresh cost should be avoided; a yes leads to a second question about which Direct Lake flavor is needed. Direct Lake on SQL is required specifically when SQL-endpoint security rules under delegated identity apply, or when DirectQuery fallback capability is required; otherwise Direct Lake on OneLake is faster and never falls back. Where full DAX/M transformation freedom is needed on a small table, Import is the branch. Where the source itself must remain the query-time source of truth, DirectQuery is the branch. A warning node documents the specific, sourced DirectQuery-fallback triggers for Direct Lake on SQL — a SQL-endpoint view, SQL-endpoint row-level security, or a Delta table breaching the 10,000-Parquet-file guardrail — with the view trap called out because the model still displays as Direct Lake while silently degrading every query. A sizing node captures the capacity memory ceiling that bounds any single resident model regardless of which mode is chosen.",
   "type": "decision",
   "topicSlug": "semantic-layer-strategy",
-  "capabilityIds": [
-    "semantic-model"
-  ],
-  "revision": "1",
+  "capabilityIds": ["semantic-model", "direct-lake", "capacity"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/semantic-layer-storage-mode-decision.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "semantic layer strategy boundary",
-      "summary": "semantic layer strategy boundary in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
+      "id": "start-question",
+      "label": "Does the table live in OneLake Delta?",
+      "summary": "Root question: is the source already OneLake Delta, and should refresh be avoided?",
+      "detail": "The per-table storage mode decision starts by checking whether the table's authoritative data already lives in OneLake as Delta and whether the design goal is to avoid the refresh cost and staleness window that Import introduces. This is a per-table question because Fabric supports composite models mixing storage modes within one semantic model.",
+      "whyItMatters": "Getting this question right first prevents defaulting an entire model to Import out of habit and inheriting a refresh window nobody actually needed for tables that could have read OneLake directly.",
       "classification": "pattern",
-      "layers": [
-        "data"
-      ],
+      "layers": ["data"],
+      "tags": ["decision-root", "SemanticModel"],
       "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "drill": {
+        "inputs": ["The table's physical location (OneLake Delta vs an external/non-Delta source)", "Whether near-zero refresh latency is a stated requirement"],
+        "processing": ["Check whether the table is backed by a Delta table in OneLake (lakehouse or warehouse)", "Decide whether avoiding a scheduled refresh is a real requirement for this table"],
+        "outputs": ["A routed decision toward Direct Lake, Import, or DirectQuery for this specific table"],
+        "example": "A billion-row sales fact already lands as Delta in the lakehouse gold layer with no transformation needed at the model layer — a clear candidate for Direct Lake rather than an Import copy.",
+        "controls": ["Evaluate storage mode per table, not once for the whole model"],
+        "failureModes": ["Deciding storage mode once at the model level and applying it uniformly, missing cases where a composite mix would serve better"]
+      }
+    },
+    {
+      "id": "flavor-question",
+      "label": "Which Direct Lake flavor?",
+      "summary": "Direct Lake on SQL only when delegated-identity security or fallback is required; otherwise Direct Lake on OneLake.",
+      "detail": "Direct Lake comes in two flavors. Direct Lake on OneLake offers OneLake security, richer modeling features, and faster queries, and it never falls back to DirectQuery. Direct Lake on SQL is needed specifically when SQL-endpoint security rules under delegated identity apply, or when DirectQuery fallback capability is required as a safety net.",
+      "whyItMatters": "Choosing Direct Lake on SQL without actually needing its security model or fallback trades away the faster, simpler OneLake path for nothing — this is the fork that determines whether the fallback trap below is even reachable.",
+      "classification": "fact",
+      "layers": ["compute", "security"],
+      "tags": ["DirectLake", "OneLake"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "Direct Lake comes in two storage-mode flavors: Direct Lake on OneLake (OneLake security, richer modeling features, faster queries) and Direct Lake on SQL (needed for SQL-endpoint security rules under delegated identity, or when DirectQuery fallback is required)." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake on OneLake never falls back to DirectQuery and skips SQL-endpoint coupling entirely, enabling more efficient DAX query plans since no SQL security check is needed." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the semantic layer strategy boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through semantic layer strategy boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Whether the SQL analytics endpoint runs in delegated identity mode for this workspace", "Whether a DirectQuery safety net is a stated requirement"],
+        "processing": ["Default to Direct Lake on OneLake for speed and simpler security", "Switch to Direct Lake on SQL only if delegated-identity SQL-endpoint security rules must apply, or fallback is explicitly required"],
+        "outputs": ["A chosen Direct Lake flavor, identifiable in TMDL by its connector: ADLS for OneLake, SQL Server/OneLake.SqlAnalytics for SQL"],
+        "example": "A finance model created from the SQL analytics endpoint page in an endpoint running user identity mode defaults to Direct Lake on OneLake; the same creation flow on a delegated-identity endpoint defaults to Direct Lake on SQL.",
+        "controls": ["Creation path: Power BI Desktop/service only creates Direct Lake on OneLake; the SQL analytics endpoint page is the only place offering the choice"],
+        "failureModes": ["Choosing Direct Lake on SQL by default without needing delegated identity or fallback, losing the OneLake flavor's faster query plans for no benefit"]
+      }
+    },
+    {
+      "id": "direct-lake-onelake",
+      "label": "Direct Lake on OneLake",
+      "summary": "Reads Delta straight from OneLake with no SQL-endpoint coupling and no DirectQuery fallback.",
+      "detail": "Direct Lake on OneLake's shared expression points straight at the OneLake storage location; OneLake APIs handle schema discovery, security checks, and data loading with no SQL endpoint involved. It never falls back to DirectQuery, which enables more efficient DAX query plans since no SQL security check is needed.",
+      "whyItMatters": "This is the fastest, simplest Direct Lake path when SQL-endpoint delegated-identity security isn't a requirement — no fallback risk exists because there's no SQL endpoint in the query path to fall back to.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "tags": ["DirectLake", "OneLake"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "In Direct Lake on OneLake, the shared expression points straight at the OneLake storage location, and OneLake APIs handle schema discovery, security checks, and data loading with no SQL endpoint involved." }
+      ],
+      "drill": {
+        "inputs": ["A Delta table in OneLake, referenced via the ADLS connector in the model's shared expression"],
+        "processing": ["Model reads column data lazily from OneLake on first query touch", "Loads columns needed by relationships and measures, not just those the query names directly", "Frames (rebinds to latest Delta commit) on a schedule or on data change"],
+        "outputs": ["Query results served from resident or freshly transcoded OneLake column data, with no SQL-endpoint round trip"],
+        "example": "A gold sales fact table read via Direct Lake on OneLake answers a DAX query by transcoding the needed Parquet columns directly, skipping any SQL analytics endpoint security check.",
+        "controls": ["Automatic-updates model setting controls whether framing happens on every data change or is manually/scheduled"],
+        "failureModes": ["Assuming this flavor behaves identically to Direct Lake on SQL when debugging — the two use different connectors and different fallback semantics entirely"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "semantic-layer-strategy",
-        "label": "Open semantic layer strategy"
-      }
+      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
     },
     {
-      "id": "step-2",
-      "label": "decision tree for choosing Direct Lake on OneLake",
-      "summary": "decision tree for choosing Direct Lake on OneLake in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the decision tree for choosing Direct Lake on OneLake responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through decision tree for choosing Direct Lake on OneLake: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
+      "id": "direct-lake-sql",
       "label": "Direct Lake on SQL",
-      "summary": "Direct Lake on SQL in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "summary": "Routes through the SQL analytics endpoint for schema/security discovery, with DirectQuery fallback available.",
+      "detail": "In Direct Lake on SQL, the shared expression points at the SQL analytics endpoint, which is consulted only for schema and security discovery — actual data is still read straight from OneLake unless the query falls back to DirectQuery. This flavor is required when SQL-endpoint security rules under delegated identity apply, or when a DirectQuery safety net is needed.",
+      "whyItMatters": "This is the flavor that supports delegated-identity SQL-endpoint security and a fallback safety net, at the cost of introducing the specific fallback triggers documented in the warning node.",
+      "classification": "fact",
+      "layers": ["compute", "security"],
+      "tags": ["DirectLake", "SQLAnalyticsEndpoint"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "In Direct Lake on SQL, the shared expression points at the SQL analytics endpoint, which is consulted only for schema and security discovery — actual data is still read straight from OneLake unless the query falls back to DirectQuery." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "Fallback behavior for Direct Lake on SQL models is governed by the model's DirectLakeBehavior property; the property has no effect on Direct Lake on OneLake models." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Direct Lake on SQL responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Direct Lake on SQL: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A Delta table exposed via the SQL analytics endpoint in delegated identity mode"],
+        "processing": ["SQL endpoint is consulted for schema and security discovery on query", "Data is read directly from OneLake in the normal case", "On a documented trigger condition, the query falls back to querying the SQL analytics endpoint directly instead"],
+        "outputs": ["Normal case: OneLake-sourced query results with SQL-endpoint security enforced; fallback case: SQL-endpoint-sourced results with fresher but slower data"],
+        "example": "A model in delegated identity mode enforces row-level security defined at the SQL endpoint; most queries transcode from OneLake, but one query against a row-level-secured table falls back to DirectQuery to enforce that security correctly.",
+        "controls": ["DirectLakeBehavior model property governs whether/how fallback is allowed"],
+        "failureModes": ["See the fallback-triggers warning node for the specific, documented conditions that force this fallback"]
       }
     },
     {
-      "id": "step-4",
-      "label": "or DirectQuery/composite per table",
-      "summary": "or DirectQuery/composite per table in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the or DirectQuery/composite per table responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through or DirectQuery/composite per table: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "with the DirectQuery-fallback triggers plus framing",
-      "summary": "with the DirectQuery-fallback triggers plus framing in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
+      "id": "fallback-triggers-warning",
+      "label": "Trap: DirectQuery fallback triggers",
+      "summary": "SQL views, SQL-endpoint RLS, and the 10,000-Parquet-file guardrail force silent fallback in Direct Lake on SQL.",
+      "detail": "DirectQuery fallback exists only in Direct Lake on SQL, and it has three documented triggers: querying a table based on a SQL-endpoint view, querying a table with SQL-endpoint row-level security, and a Delta table breaching capacity guardrails such as exceeding 10,000 Parquet files. A fallen-back query reads the SQL analytics endpoint directly, returning the latest data but typically performing slower — and the model still displays as Direct Lake, so the regression is invisible on the surface.",
+      "whyItMatters": "This is a silent performance cliff specific to the SQL flavor: nothing in the mode label reveals that every query against an affected table has quietly started reading through DirectQuery instead of transcoding from OneLake.",
       "classification": "warning",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "layers": ["compute"],
+      "tags": ["DirectLake", "DirectQuery", "AntiPattern"],
+      "evidence": [
+        { "sourceKey": "direct-lake-how-it-works", "note": "DirectQuery fallback exists only in Direct Lake on SQL; documented triggers are querying a SQL-endpoint view, querying a table with SQL-endpoint row-level security, and a Delta table exceeding capacity guardrails. A fallen-back query reads the SQL analytics endpoint directly and returns the latest data at the cost of typically slower performance." },
+        { "sourceKey": "direct-lake-develop", "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "Framing can fail when a Delta table breaches capacity guardrails, such as exceeding 10,000 Parquet files in a single table." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the with the DirectQuery-fallback triggers plus framing responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through with the DirectQuery-fallback triggers plus framing: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A Direct Lake on SQL model with tables sourced from SQL views, RLS-secured tables, or tables with high Parquet file counts"],
+        "processing": ["Audit each model table for whether it points at a SQL view versus a base table", "Check whether SQL-endpoint row-level security applies to any Direct Lake table", "Monitor Delta table Parquet file counts against the 10,000-file guardrail"],
+        "outputs": ["Either a table that transcodes cleanly from OneLake, or one silently falling back to DirectQuery on every query"],
+        "example": "A convenience SQL view joining two tables is used as a model table's source; every query against it falls back to DirectQuery, and the team spends a week investigating 'random' slowness in a report labelled Direct Lake before finding the view.",
+        "processing_note": null,
+        "controls": ["Prefer base tables over views for every Direct Lake on SQL model table", "Keep Delta table file counts well under 10,000 via regular compaction", "Switch to Direct Lake on OneLake if delegated-identity security isn't actually required, removing the fallback path entirely"],
+        "failureModes": ["Diagnosing the resulting slowness as a capacity problem and scaling the SKU instead of fixing the view or RLS setup", "Table file counts creeping past the guardrail unnoticed without a compaction job"]
       }
     },
     {
-      "id": "step-6",
-      "label": "and sizing checks",
-      "summary": "and sizing checks in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "import-path",
+      "label": "Import",
+      "summary": "A refreshed, fully in-memory copy — full DAX/M transformation freedom, bounded by model size.",
+      "detail": "An Import-mode model must be loaded entirely into memory before it can answer queries, serving a snapshot of data that relies on scheduled or on-demand refresh to stay current. The default model size limit without the large storage format is 1 GB; enabling the large semantic model storage format raises the ceiling to the size of the Fabric capacity itself.",
+      "whyItMatters": "Import buys full DAX and Power Query transformation freedom and predictable in-memory query speed, at the cost of a refresh schedule and the staleness window between refreshes — the right trade for smaller tables where transformation logic genuinely belongs in the model.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["SemanticModel", "Import"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "An Import-mode model hosted in the Power BI service must be loaded entirely into memory before it can answer queries. Import-mode models serve a snapshot of data and rely on scheduled or on-demand refresh to stay current." },
+        { "sourceKey": "semantic-model-large-format", "note": "Semantic models hold data in a highly compressed in-memory cache; the default model size limit without the large storage format is 1 GB. Enabling the large semantic model storage format raises the ceiling to the size of the Fabric capacity itself." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and sizing checks responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and sizing checks: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A source table or query needing Power Query transformation before landing in the model"],
+        "processing": ["Power Query shapes and loads the data into the VertiPaq in-memory store", "Scheduled or on-demand refresh re-pulls and re-loads the data", "Queries answer entirely from the in-memory compressed cache"],
+        "outputs": ["A fully resident, transformation-ready model table, current as of the last refresh"],
+        "example": "A small currency-conversion lookup table with custom Power Query logic is Imported into an otherwise Direct Lake composite model, since it needs transformation the lake tables don't.",
+        "controls": ["Refresh schedule/frequency", "Large semantic model storage format toggle for models approaching or exceeding 1 GB"],
+        "failureModes": ["Refreshing a model whose size approaches half the capacity's memory risks running out of memory mid-refresh; mitigate with fine-grained refreshes via the enhanced refresh REST API or XMLA endpoint instead of full refreshes"]
       }
     },
     {
-      "id": "step-7",
-      "label": "semantic model governed outcome",
-      "summary": "semantic model governed outcome in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "directquery-path",
+      "label": "DirectQuery",
+      "summary": "Queries forward to the source engine at query time; always current, source load and latency apply.",
+      "detail": "DirectQuery models forward queries to the source so results always reflect current source data, at the cost of query latency and load placed on the source engine. DirectQuery tables can combine with Direct Lake and Import tables in the same composite model.",
+      "whyItMatters": "This is the branch for sources that must remain the query-time authority — no copy, no framing lag — accepted specifically where freshness matters more than interactive query speed.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["SemanticModel", "DirectQuery"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "DirectQuery models forward queries to the source so results always reflect current source data, unlike Import-mode's refreshed snapshot." },
+        { "sourceKey": "direct-lake-develop", "note": "Direct Lake on OneLake supports composite models, so very large fact tables can stay in Direct Lake mode while dimension tables use Import or DirectQuery in the same model." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the semantic model governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through semantic model governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "semantic-model",
-        "label": "Open semantic model"
+        "inputs": ["A source that must remain query-time authoritative, or a table not eligible for Direct Lake (non-Delta, non-OneLake)"],
+        "processing": ["Each report query is forwarded to the source engine at query time", "Source engine executes and returns results, with no local materialization"],
+        "outputs": ["Always-current query results, at the latency and load cost of the source engine"],
+        "example": "A live operational dashboard needs to reflect an external transactional database's current state exactly; that table is left in DirectQuery while the rest of the model uses Direct Lake against OneLake gold tables.",
+        "controls": ["Composite model composition: which tables are DirectQuery vs Direct Lake vs Import"],
+        "failureModes": ["Placing a high-traffic table on DirectQuery against an already-loaded operational source, adding report query load on top of transactional load"]
+      }
+    },
+    {
+      "id": "capacity-sizing-guardrail",
+      "label": "Capacity memory ceiling",
+      "summary": "The SKU's memory bounds how much of any single model can be resident, regardless of storage mode.",
+      "detail": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, bounding how much column data can be resident at once; the same SKU-driven memory bound applies to Import models sized to the capacity via the large storage format. Dynamic memory management can evict inactive models to let combined model size exceed the SKU's memory, but a single model is still bound by the SKU limit.",
+      "whyItMatters": "This is a sizing guardrail that applies across every storage mode: a model's design still has to fit inside whatever capacity SKU it's licensed on, whether that memory is consumed by Direct Lake residency or a full Import load.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Capacity", "SemanticModel"],
+      "evidence": [
+        { "sourceKey": "direct-lake-how-it-works", "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once." },
+        { "sourceKey": "semantic-model-large-format", "note": "The service uses dynamic memory management to evict inactive semantic models from capacity memory, letting the combined size of all models far exceed the SKU's memory; a single model, however, is still bound by the SKU memory limit." },
+        { "sourceKey": "fabric-platform-licenses-capacities", "note": "F64 is the licensing threshold for broad report consumption: on an F64 or larger capacity, users holding only a free Fabric license can view Power BI content with a workspace viewer role, whereas smaller F SKUs require every viewer to hold a Pro or PPU license." }
+      ],
+      "drill": {
+        "inputs": ["The chosen storage mode(s) per table and the resulting model footprint", "The capacity SKU the workspace is assigned to"],
+        "processing": ["Estimate resident memory needs for Direct Lake tables plus fully-loaded memory for Import tables", "Compare against the SKU's memory ceiling, accounting for other models sharing the capacity", "Check whether F64 licensing thresholds affect who can view the resulting reports"],
+        "outputs": ["A sizing decision: fits comfortably, needs SKU upsizing, or needs storage-mode adjustments to shrink the footprint"],
+        "example": "A 40 GB composite model with several Direct Lake fact tables and one Import dimension is checked against an F64 capacity's memory before go-live, since resident data plus other tenant models could otherwise exceed the ceiling under concurrent load.",
+        "controls": ["Capacity SKU sizing", "Column pruning and table layout choices that reduce Direct Lake resident footprint"],
+        "failureModes": ["Sizing a model without accounting for other models sharing the same capacity's memory pool under concurrent load", "Assuming Direct Lake avoids memory pressure entirely because it avoids refresh — residency still consumes capacity memory"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "orchestration",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-start-flavor", "from": "start-question", "to": "flavor-question", "label": "yes, avoid refresh copy", "layer": "data", "kind": "branch" },
+    { "id": "e-start-import", "from": "start-question", "to": "import-path", "label": "needs full DAX/M transformation, small table", "layer": "compute", "kind": "branch" },
+    { "id": "e-start-directquery", "from": "start-question", "to": "directquery-path", "label": "source must stay query-time authoritative", "layer": "compute", "kind": "branch" },
+    { "id": "e-flavor-onelake", "from": "flavor-question", "to": "direct-lake-onelake", "label": "no delegated-identity/fallback need", "layer": "compute", "kind": "branch" },
+    { "id": "e-flavor-sql", "from": "flavor-question", "to": "direct-lake-sql", "label": "delegated-identity security or fallback required", "layer": "security", "kind": "branch" },
+    { "id": "e-sql-fallback-warning", "from": "direct-lake-sql", "to": "fallback-triggers-warning", "label": "view, RLS, or file-count trigger", "layer": "compute", "kind": "branch" },
+    { "id": "e-onelake-sizing", "from": "direct-lake-onelake", "to": "capacity-sizing-guardrail", "label": "residency still bounded by SKU memory", "layer": "compute", "kind": "flow" },
+    { "id": "e-import-sizing", "from": "import-path", "to": "capacity-sizing-guardrail", "label": "full load bounded by SKU memory", "layer": "compute", "kind": "flow" },
+    { "id": "e-directquery-composite", "from": "directquery-path", "to": "capacity-sizing-guardrail", "label": "can compose with sized tables in one model", "layer": "compute", "kind": "flow" }
   ],
   "walkthrough": [
-    {
-      "nodeId": "step-1",
-      "title": "1. semantic layer strategy boundary",
-      "explanation": "semantic layer strategy boundary in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture."
-    },
-    {
-      "nodeId": "step-2",
-      "title": "2. decision tree for choosing Direct Lake on OneLake",
-      "explanation": "decision tree for choosing Direct Lake on OneLake in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture."
-    },
-    {
-      "nodeId": "step-3",
-      "title": "3. Direct Lake on SQL",
-      "explanation": "Direct Lake on SQL in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture."
-    },
-    {
-      "nodeId": "step-4",
-      "title": "4. or DirectQuery/composite per table",
-      "explanation": "or DirectQuery/composite per table in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture."
-    },
-    {
-      "nodeId": "step-5",
-      "title": "5. with the DirectQuery-fallback triggers plus framing",
-      "explanation": "with the DirectQuery-fallback triggers plus framing in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture."
-    },
-    {
-      "nodeId": "step-6",
-      "title": "6. and sizing checks",
-      "explanation": "and sizing checks in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture."
-    },
-    {
-      "nodeId": "step-7",
-      "title": "7. semantic model governed outcome",
-      "explanation": "semantic model governed outcome in the decision tree for choosing Direct Lake on OneLake, Direct Lake on SQL, Import, or DirectQuery/composite per table, with the DirectQuery-fallback triggers plus framing, guardrail, and sizing checks architecture."
-    }
+    { "nodeId": "start-question", "title": "1. Ask per table, not per model", "explanation": "Fabric supports composite models, so the storage-mode question is answered separately for each table based on where its data lives and whether refresh should be avoided." },
+    { "nodeId": "flavor-question", "title": "2. Choose the Direct Lake flavor deliberately", "explanation": "Default to OneLake for speed; move to SQL only when delegated-identity security rules or a fallback safety net are genuinely required." },
+    { "nodeId": "direct-lake-onelake", "title": "3. Direct Lake on OneLake: no fallback path exists", "explanation": "Reads straight from OneLake with no SQL-endpoint coupling, so there's no fallback trigger to worry about at all." },
+    { "nodeId": "direct-lake-sql", "title": "4. Direct Lake on SQL: fallback is available but has triggers", "explanation": "Routes through the SQL endpoint for schema/security discovery, which introduces the specific fallback conditions covered next." },
+    { "nodeId": "fallback-triggers-warning", "title": "5. Warning: three triggers force silent fallback", "explanation": "A SQL view, SQL-endpoint RLS, or breaching the 10,000-Parquet-file guardrail all force DirectQuery fallback while the model still displays as Direct Lake." },
+    { "nodeId": "import-path", "title": "6. Import: transformation freedom, refresh cost", "explanation": "The right choice when a table genuinely needs DAX/M transformation logic and is small enough to fit comfortably in memory." },
+    { "nodeId": "directquery-path", "title": "7. DirectQuery: always current, can compose", "explanation": "Reserved for sources that must remain query-time authoritative; can sit alongside Direct Lake and Import tables in one composite model." },
+    { "nodeId": "capacity-sizing-guardrail", "title": "8. Every path still answers to the SKU memory ceiling", "explanation": "Whatever mix of modes is chosen, the resulting model footprint has to fit inside the capacity SKU's memory, shared with every other model on that capacity." }
   ]
 }

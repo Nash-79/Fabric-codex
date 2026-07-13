@@ -349,13 +349,7 @@ async function diagramRow(sb: SupabaseAdmin, entry: DiagramPayload) {
       .pop()!
       .replace(/\.(svg|mmd)$/i, "");
   if (!slug) throw new Error("Diagram entry needs a slug or a path.");
-  const { data: existing } = await sb
-    .from("diagrams")
-    .select("path")
-    .eq("slug", slug)
-    .maybeSingle();
-  const existingPath = existing?.path ?? "";
-  const path = /^https?:\/\//i.test(existingPath) ? existingPath : `/diagrams/${slug}.svg`;
+  const path = /^https?:\/\//i.test(rawPath) ? rawPath : `/diagrams/${slug}.svg`;
   return {
     slug,
     path,

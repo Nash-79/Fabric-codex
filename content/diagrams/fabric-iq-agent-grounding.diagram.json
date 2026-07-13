@@ -1,255 +1,212 @@
 {
   "id": "fabric-iq-agent-grounding",
-  "title": "Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric I…",
-  "purpose": "Original diagram: Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology grounding and federated query routing",
-  "accessibleSummary": "An interactive architecture infographic with 4 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology grounding and federated query routing",
+  "title": "Grounding a Data Agent: Raw-Schema NL2SQL vs Ontology-Grounded NL2Ontology",
+  "purpose": "Contrast how a Fabric data agent answers the same business question when it translates directly against raw source schema versus when it is grounded in a Fabric IQ ontology, and show where each path's accuracy risk actually lives.",
+  "accessibleSummary": "A contrast diagram with two paths from the same natural-language question. The raw-schema path has the agent's source-specific generator (NL2SQL, NL2DAX, or NL2KQL) translate directly against lakehouse, warehouse, or semantic model schema, relying on developer-authored instructions and example queries to disambiguate business terms — a lever community practitioners repeatedly identify as the biggest driver of answer accuracy, and one that degrades as schema and business vocabulary drift apart. The ontology-grounded path has NL2Ontology translate the same question against a published ontology's entity types and relationships first, then federated query routing pushes the resulting structured query down to whichever backend holds the data. Both paths converge on the same governed, read-only execution and layered precedence controls a Fabric data agent always enforces.",
+  "longDescription": "This is a two-path contrast converging on shared execution controls, not a straight pipeline. The same natural-language question enters both paths. On the raw-schema path, the agent's source-specific generator — NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases — translates the question directly against the underlying source schema, and disambiguating business vocabulary from table/column names depends entirely on developer-authored instructions and example queries attached to the agent configuration. Community practitioners converge on this being the single biggest lever for answer accuracy, and by the same token the biggest source of fragility: as schema evolves or business vocabulary diverges from column names, instructions have to be hand-maintained to keep up. On the ontology-grounded path, NL2Ontology translates the same question against a published ontology's entity types, properties, and relationships — constraining filters, joins, units, and validity windows to governed definitions — before federated query routing pushes the resulting structured query down to whichever backend (Graph, Eventhouse, semantic model) actually holds the data. Both paths converge on the same execution guardrails every Fabric data agent enforces regardless of path: read-only, least-privilege execution under the requesting user's own credentials, and a four-layer governance precedence from tenant policy down to developer instructions.",
   "type": "architecture",
   "topicSlug": "fabric-iq",
-  "capabilityIds": [
-    "fabric-iq"
-  ],
-  "revision": "1",
+  "capabilityIds": ["fabric-iq", "fabric-data-agent"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/fabric-iq-agent-grounding.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "fabric iq boundary",
-      "summary": "fabric iq boundary in the Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology grounding and federated query routing architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "business-question",
+      "label": "Natural-language business question",
+      "summary": "The same question enters either the raw-schema or the ontology-grounded translation path.",
+      "detail": "A user asks a plain-English business question through a data agent's conversational surface. From this single starting point, the agent's configuration determines which translation path the question takes — direct source-specific generation against raw schema, or ontology-grounded translation through NL2Ontology.",
+      "whyItMatters": "The question itself doesn't change between the two paths; what changes is how much of the burden of correctly interpreting business meaning falls on hand-maintained instructions versus a governed, reusable ontology layer.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["FabricDataAgent", "AI"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "Within multi-agent application architectures on Fabric, a data agent functions as the conversational analytics component, connecting to governed OneLake data through lakehouses, warehouses, semantic models, and other sources." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the fabric iq boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through fabric iq boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A user's plain-English question submitted to a configured data agent"],
+        "processing": ["The agent identifies which configured data source(s) the question is likely relevant to", "The agent's configuration (ontology-bound or not) determines the translation path taken next"],
+        "outputs": ["A question routed to either raw-schema source-specific generation or ontology-grounded NL2Ontology"],
+        "example": "\"Which customers had shipments delayed last week?\" is submitted to an agent configured against a lakehouse with no ontology binding, so it proceeds down the raw-schema NL2SQL path.",
+        "controls": ["Whether the agent's data sources include a published ontology", "Which sources (lakehouse, warehouse, KQL database, semantic model, ontology) the agent is configured against — up to five in any mix"],
+        "failureModes": ["A question ambiguous about which of several configured sources it targets, producing a query against the wrong source"]
+      }
+    },
+    {
+      "id": "raw-schema-nl2x",
+      "label": "Source-specific generator (NL2SQL / NL2DAX / NL2KQL)",
+      "summary": "Translates the question directly against raw source schema — NL2SQL for lakehouse/warehouse, NL2DAX for semantic models, NL2KQL for KQL databases.",
+      "detail": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases. This generator works directly against the source's actual schema — table and column names — with no intermediate business-vocabulary layer to translate through.",
+      "whyItMatters": "This is the direct, no-ontology-required path, and it works well when schema and business vocabulary already line up closely; the gap it leaves is entirely filled by instructions and examples, not by any structural business-meaning layer.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["FabricDataAgent", "AI"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases." }
+      ],
+      "drill": {
+        "inputs": ["The natural-language question", "Raw source schema (table names, column names, relationships as declared in the source)"],
+        "processing": ["Parse the question against the source's actual schema, with no ontology-level business vocabulary to mediate", "Generate a query in the source's native language (SQL, DAX, or KQL) directly from that schema mapping"],
+        "outputs": ["A generated SQL, DAX, or KQL query, correct only insofar as the schema and business vocabulary already align"],
+        "example": "\"Delayed shipments\" is mapped directly to a ShipmentStatus column value of 'DELAYED' in a lakehouse table, because that's the literal column the schema exposes — there is no ontology concept mediating what 'delayed' means.",
+        "controls": ["Developer-authored instructions and example queries attached to the agent configuration"],
+        "failureModes": ["Business vocabulary that doesn't map cleanly to column names producing a wrong or unanswerable query", "Schema changes silently breaking previously-working translations with no ontology layer to insulate against it"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "fabric-iq",
-        "label": "Open fabric iq"
+      "drillTarget": { "kind": "capability", "slug": "fabric-data-agent", "label": "Fabric Data Agent" }
+    },
+    {
+      "id": "instructions-examples",
+      "label": "Instructions & example queries",
+      "summary": "The single biggest lever for raw-schema answer accuracy — and a hand-maintained one that degrades as schema drifts.",
+      "detail": "Multiple independent community write-ups converge on the same conclusion: agent instructions and data-model documentation are the biggest lever for answer accuracy on the raw-schema path. This is pattern guidance from field practice, not a documented Fabric platform behaviour — it reflects how disambiguation actually gets done when there's no ontology layer doing it structurally.",
+      "whyItMatters": "This node makes the raw-schema path's real cost visible: accuracy is bought with ongoing manual maintenance effort, and it's fragile exactly where the ontology path is structural — when schema and business vocabulary diverge over time.",
+      "classification": "pattern",
+      "layers": ["governance", "compute"],
+      "tags": ["FabricDataAgent", "AI"],
+      "evidence": [
+        { "sourceKey": "fabricdataagent-community-hub", "note": "Multiple independent community write-ups converge on the same conclusion: agent instructions and data-model documentation are the biggest lever for answer accuracy." }
+      ],
+      "drill": {
+        "inputs": ["Business vocabulary that doesn't map cleanly to raw schema (ambiguous column names, business terms not reflected as columns)"],
+        "processing": ["A developer writes instructions and example question/query pairs to disambiguate terms the schema alone doesn't clarify", "Instructions are hand-maintained as schema or business vocabulary evolves"],
+        "outputs": ["Improved answer accuracy for the raw-schema path, proportional to how thorough and current the instructions are"],
+        "example": "A developer adds an instruction clarifying that 'delayed' means ShipmentStatus = 'DELAYED' AND ActualDelivery > PromisedDelivery, because the schema's status column alone doesn't capture the business definition.",
+        "controls": ["Instruction and example-query maintenance cadence", "Git integration for version-controlling instructions, so drift is at least visible in history"],
+        "failureModes": ["Instructions going stale after a schema change, silently degrading accuracy until someone notices a wrong answer", "No single owner for instruction maintenance, so disambiguation knowledge lives in one person's head"]
       }
     },
     {
-      "id": "step-2",
-      "label": "Contrast infographic",
-      "summary": "Contrast infographic in the Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology grounding and federated query routing architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "nl2ontology-path",
+      "label": "NL2Ontology",
+      "summary": "Translates the same question against a published ontology's entity types and relationships, not raw schema.",
+      "detail": "NL2Ontology converts natural-language business questions into structured ontology queries and constrains the generated filters, joins, units, and validity windows to the definitions published in the ontology, rather than letting a model infer them freely from raw schema.",
+      "whyItMatters": "This is the structural alternative to hand-maintained instructions: business vocabulary is disambiguated once, centrally, in the ontology's declared definitions, rather than re-derived per agent configuration.",
+      "classification": "fact",
+      "layers": ["metadata", "governance"],
+      "tags": ["FabricIQ", "Ontology", "AI"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "NL2Ontology converts natural-language business questions into structured ontology queries and constrains the generated filters, joins, units, and validity windows to the definitions published in the ontology, rather than letting a model infer them freely from raw schema." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Contrast infographic responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Contrast infographic: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["The natural-language question", "The published ontology's entity types, properties, relationships, and constraints"],
+        "processing": ["Parse the question against the ontology's declared vocabulary instead of raw table schema", "Generate a structured query constrained to the ontology's declared filters, joins, units, and validity windows"],
+        "outputs": ["A structured, ontology-constrained query ready for federated query routing"],
+        "example": "\"Delayed shipments\" resolves against the ontology's declared 'delayed' rule on the Shipment entity type — the same governed definition every other ontology consumer uses — rather than a developer's hand-written instruction reproduced per agent.",
+        "controls": ["Which ontology is bound to the agent as a data source"],
+        "failureModes": ["A question referencing a concept outside the published ontology producing a poor or unanswerable translation instead of a clear refusal"]
       }
     },
     {
-      "id": "step-3",
-      "label": "a data agent answering via fragile prompt plus raw-schema NL2SQL ve…",
-      "summary": "a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology groun… in the Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology grounding and federated query routing architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "id": "query-routing",
+      "label": "Federated query routing",
+      "summary": "Pushes the ontology-constrained query down to whichever backend actually holds the data.",
+      "detail": "The ontology layer routes execution of a structured query to whichever backend holds the data, such as GQL for Graph in Microsoft Fabric or KQL for Eventhouse, so the caller never has to know or specify the storage engine.",
+      "whyItMatters": "This is what completes the ontology path's advantage: not only is the business vocabulary disambiguation centralized, but the engine-selection complexity is also abstracted away, unlike the raw-schema path where the source-specific generator is tied to one source type per query.",
+      "classification": "fact",
+      "layers": ["metadata", "compute"],
+      "tags": ["FabricIQ", "Ontology", "Graph"],
+      "evidence": [
+        { "sourceKey": "fabric-iq-ontology-concepts", "note": "Ontology queries start from an entity type and let a caller filter by property, traverse relationships, and aggregate over time using business terminology; the ontology layer then routes execution to whichever backend holds the data, such as GQL for Graph in Microsoft Fabric or KQL for Eventhouse." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ o… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology wi…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A structured, ontology-constrained query from NL2Ontology"],
+        "processing": ["Determine which backend holds the data for the entity types referenced", "Translate to the backend's native query language and execute"],
+        "outputs": ["Query results expressed in business-level ontology terms"],
+        "example": "A query traversing Shipment-to-sensor-reading relationships routes to KQL against Eventhouse, while the same conversation's next question about Shipment-to-Customer routes to GQL against Graph, with no source-selection step visible to the user.",
+        "controls": ["Backend authority when an entity type's binding spans multiple backends"],
+        "failureModes": ["Cross-backend traversals performing poorly if the routing layer can't push down efficiently"]
       }
     },
     {
-      "id": "step-4",
-      "label": "fabric iq governed outcome",
-      "summary": "fabric iq governed outcome in the Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology grounding and federated query routing architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "governed-execution",
+      "label": "Governed, read-only execution",
+      "summary": "Both paths converge here: least-privilege execution under the requester's own credentials, read-only only.",
+      "detail": "The agent enforces read-only, least-privilege access by executing under the requesting user's own credentials and permissions, so each query only reaches data that user is already authorized to view. The agent only ever generates read queries (SQL, DAX, or KQL) and never create, update, or delete statements.",
+      "whyItMatters": "Regardless of which translation path produced the query, execution never escalates the user's own access and never mutates data — this is the shared safety floor both the raw-schema and ontology-grounded paths inherit identically.",
+      "classification": "fact",
+      "layers": ["security", "compute"],
+      "tags": ["FabricDataAgent", "Security"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "The agent enforces read-only, least-privilege access by executing under the requesting user's own credentials and permissions, so each query only reaches data that user is already authorized to view." },
+        { "sourceKey": "fabric-data-agent-concept", "note": "The agent only ever generates read queries (SQL, DAX, or KQL) and never create, update, or delete statements, and it cannot directly query unstructured files such as PDF, DOCX, or TXT, or standalone lakehouse files." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the fabric iq governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through fabric iq governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A generated query from either the raw-schema or ontology-grounded path", "The requesting user's own Fabric credentials and permissions"],
+        "processing": ["Execute the generated query under the requesting user's identity, not a service or elevated identity", "Enforce read-only semantics — no CREATE, UPDATE, or DELETE is ever generated or executed"],
+        "outputs": ["Query results limited to what the requesting user is already authorized to see, with no data mutation possible"],
+        "example": "Two different users asking the identical question through the same agent get different result sets because each query executes under their own permissions, not a shared service identity — true whether the query came from NL2SQL or NL2Ontology.",
+        "controls": ["Row-Level and Column-Level Security defined on the underlying source, enforced transparently at execution"],
+        "failureModes": ["Assuming agent execution runs with elevated privileges rather than the requester's own — it does not, by design"]
+      }
+    },
+    {
+      "id": "precedence-governance",
+      "label": "Four-layer governance precedence",
+      "summary": "Tenant policy, then workspace governance, then developer instructions — applied identically regardless of translation path.",
+      "detail": "Agent behavior is governed by a four-layer precedence model, from highest to lowest: tenant-wide organizational policy, workspace/role-based governance settings, developer-supplied instructions and examples, and the model's own generation choices. Purview Data Loss Prevention and access-restriction policies apply directly to data agent queries and can block a query or strip sensitive results even when the requesting user's own permissions would otherwise allow them.",
+      "whyItMatters": "This is the second convergence point: whichever path generated the query, the same governance stack — tenant policy down through Purview DLP — gets the final say over what's actually returned.",
+      "classification": "fact",
+      "layers": ["governance", "security"],
+      "tags": ["FabricDataAgent", "Purview", "Governance"],
+      "evidence": [
+        { "sourceKey": "fabric-data-agent-concept", "note": "Agent behavior is governed by a four-layer precedence model, from highest to lowest: tenant-wide organizational policy, workspace/role-based governance settings, developer-supplied instructions and examples, and the model's own generation choices." },
+        { "sourceKey": "fabric-data-agent-concept", "note": "Purview Data Loss Prevention and access-restriction policies apply directly to data agent queries, and can block a query from running or strip sensitive results from an agent's response even when the requesting user's own permissions would otherwise allow it." }
+      ],
+      "drill": {
+        "inputs": ["A query result about to be returned to the user, from either translation path", "Tenant policy, workspace governance settings, and Purview DLP rules"],
+        "processing": ["Apply tenant-wide organizational policy first, as the highest-precedence layer", "Apply workspace/role-based governance settings next", "Apply Purview DLP and access-restriction policies, which can block or redact results independent of the requester's own permissions"],
+        "outputs": ["A final response that has passed every governance layer, regardless of which translation path produced the underlying query"],
+        "example": "A query correctly generated by either NL2SQL or NL2Ontology returns a result set that Purview DLP then strips a sensitive column from, because a tenant-wide DLP policy applies to that column regardless of how the query was produced.",
+        "controls": ["Tenant policy configuration", "Purview DLP policy scope and sensitivity labels"],
+        "failureModes": ["Assuming a correctly-translated query guarantees a correct final answer — governance layers can still block or alter it after generation"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "fabric-iq",
-        "label": "Open fabric iq"
-      }
+      "drillTarget": { "kind": "capability", "slug": "purview", "label": "Purview" }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-question-rawschema", "from": "business-question", "to": "raw-schema-nl2x", "label": "no ontology bound to this agent", "layer": "compute", "kind": "branch" },
+    { "id": "e-question-ontology", "from": "business-question", "to": "nl2ontology-path", "label": "ontology bound as a data source", "layer": "metadata", "kind": "branch" },
+    { "id": "e-rawschema-instructions", "from": "raw-schema-nl2x", "to": "instructions-examples", "label": "disambiguation depends on this", "layer": "governance", "kind": "flow" },
+    { "id": "e-instructions-execution", "from": "instructions-examples", "to": "governed-execution", "label": "generated query, accuracy variable", "layer": "compute", "kind": "flow" },
+    { "id": "e-ontology-routing", "from": "nl2ontology-path", "to": "query-routing", "label": "structured, ontology-constrained query", "layer": "metadata", "kind": "flow" },
+    { "id": "e-routing-execution", "from": "query-routing", "to": "governed-execution", "label": "routed query, backend-resolved", "layer": "compute", "kind": "flow" },
+    { "id": "e-execution-governance", "from": "governed-execution", "to": "precedence-governance", "label": "results before final return", "layer": "governance", "kind": "flow" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. fabric iq boundary",
-      "explanation": "fabric iq boundary in the Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology grounding and federated query routing architecture."
+      "nodeId": "business-question",
+      "title": "1. One question, two possible paths",
+      "explanation": "The same natural-language question can take either the raw-schema or the ontology-grounded translation path, depending on the agent's configuration."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Contrast infographic",
-      "explanation": "Contrast infographic in the Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology grounding and federated query routing architecture."
+      "nodeId": "raw-schema-nl2x",
+      "title": "2a. Raw-schema path: translate directly against source schema",
+      "explanation": "NL2SQL, NL2DAX, or NL2KQL maps the question straight onto table and column names, with no business-vocabulary layer in between."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. a data agent answering via fragile prompt plus raw-schema NL2SQL ve…",
-      "explanation": "a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology groun… in the Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology grounding and federated query routing architecture."
+      "nodeId": "instructions-examples",
+      "title": "3a. Accuracy is bought with hand-maintained instructions",
+      "explanation": "Community practice converges on instructions and example queries as the biggest lever for raw-schema accuracy — and the biggest maintenance burden as schema drifts."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. fabric iq governed outcome",
-      "explanation": "fabric iq governed outcome in the Contrast infographic — a data agent answering via fragile prompt plus raw-schema NL2SQL versus via a Fabric IQ ontology with NL2Ontology grounding and federated query routing architecture."
+      "nodeId": "nl2ontology-path",
+      "title": "2b. Ontology-grounded path: translate against governed vocabulary",
+      "explanation": "NL2Ontology constrains the translation to the published ontology's entity types and relationships instead of raw schema."
+    },
+    {
+      "nodeId": "query-routing",
+      "title": "3b. Federated routing hides the backend entirely",
+      "explanation": "The structured query is pushed to whichever backend actually holds the data — GQL against Graph or KQL against Eventhouse — invisibly to the caller."
+    },
+    {
+      "nodeId": "governed-execution",
+      "title": "4. Both paths converge: read-only, least-privilege execution",
+      "explanation": "Regardless of translation path, every query executes under the requesting user's own credentials and can never mutate data."
+    },
+    {
+      "nodeId": "precedence-governance",
+      "title": "5. Both paths converge again: four-layer governance has final say",
+      "explanation": "Tenant policy, workspace governance, and Purview DLP apply identically to results from either path, independent of how the query was generated."
     }
   ]
 }

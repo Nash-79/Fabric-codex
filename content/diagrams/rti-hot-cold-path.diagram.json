@@ -1,437 +1,189 @@
 {
   "id": "rti-hot-cold-path",
-  "title": "Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision f…",
-  "purpose": "Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths",
-  "accessibleSummary": "An interactive decision infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths",
+  "title": "Real-Time Intelligence: Hot Path vs Cold Path Routing",
+  "purpose": "Show the routing decision an Eventstream makes for every event — Activator's sub-second, event-driven hot path versus the Eventhouse KQL database's durable, queryable cold path — and how the same event can travel both paths at once.",
+  "accessibleSummary": "A decision/internals diagram. An Eventstream receives an event and routes it to two paths simultaneously, not exclusively. The hot path sends the event to Activator, which evaluates threshold, pattern, or KQL-defined conditions and fires an action (notification, pipeline, Copy job, Power Automate) within seconds, with no polling schedule. The cold path writes the event into an Eventhouse KQL database, where it becomes durable, queryable, and available to notebooks, Power BI, and Fabric data agents, at the cost of ingestion and indexing latency the hot path does not pay. A warning node covers Eventhouse's three-stage capacity throttling ladder, and a worked example traces one vehicle-offline event through both paths.",
+  "longDescription": "This diagram is grounded in Microsoft's own description of Real-Time Intelligence as a single event-driven pipeline that branches, not two separate systems. An Eventstream ingests an event from a source (Kafka, MQTT, IoT Hub, CDC feed, or a Fabric/OneLake event) and can route it to multiple destinations simultaneously via built-in stream-processing operators. One destination is Activator, which monitors the stream for threshold, pattern, or KQL-defined conditions and fires an action — a notification, a Fabric pipeline or Spark job run, a User Data Function call, a Power Automate workflow, or (as of a recent GA feature) a Copy job invoked directly with no intermediate pipeline — the moment the condition is met, with no fixed polling schedule. This is the hot path: sub-second to low-second reaction, but the event itself is not durably retained by Activator once evaluated. The other destination is an Eventhouse KQL database, which organizes ingested records by arrival time for fast indexed queries and is also mirrored to OneLake as Delta, exposing the same data to Power BI Direct Lake, Spark notebooks, Warehouse, and Fabric data agents with no data movement. This is the cold path: durable, joinable, and queryable days or months later, but ingestion, indexing, and (if OneLake availability is enabled) adaptive-batched mirroring add latency the hot path never incurs. A warning node covers Eventhouse's three-stage capacity throttling ladder, which can silently degrade the cold path under sustained overload. The walkthrough traces one concrete event — a connected vehicle going offline — through both paths at once: Activator fires a dispatcher alert within seconds while the same event lands in the Eventhouse KQL database for later fleet-uptime analysis.",
   "type": "decision",
   "topicSlug": "rti",
-  "capabilityIds": [
-    "rti"
-  ],
-  "revision": "1",
+  "capabilityIds": ["rti", "eventhouse-kql"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/rti-hot-cold-path.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "rti boundary",
-      "summary": "rti boundary in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
+      "id": "eventstream-source",
+      "label": "Eventstream ingest & routing",
+      "summary": "Events arrive from Kafka, MQTT, CDC, or Fabric/OneLake sources and route to one or more destinations.",
+      "detail": "Eventstreams provide a no-code pipeline for collecting, transforming, and routing high-volume real-time data to multiple destinations simultaneously, from sources including Apache Kafka, AWS Kinesis, Google Cloud Pub/Sub, MQTT, and CDC feeds. Built-in stream-processing operators — filtering, cleansing, windowed aggregations, deduplication, content-based routing — shape events before they land, and the same event can be routed to more than one destination at once rather than being forced down a single exclusive path.",
+      "whyItMatters": "This is the fan-out point that makes 'hot path vs cold path' a routing decision rather than an either/or architecture choice — the same event commonly needs both an immediate reaction and a durable record.",
+      "classification": "fact",
+      "layers": ["data", "orchestration"],
+      "evidence": [
+        { "sourceKey": "rti-overview", "note": "Eventstreams provide a no-code pipeline for collecting, transforming, and routing high-volume real-time data to multiple destinations simultaneously, with sources including Apache Kafka, AWS Kinesis, Google Cloud Pub/Sub, MQTT, and a Real-Time Weather connector." },
+        { "sourceKey": "rti-overview", "note": "Eventstreams expose built-in stream processing operators — filtering, cleansing, windowed aggregations, deduplication, and content-based routing — so data can be shaped before landing at a destination." },
+        { "sourceKey": "fabric-blog-eventstream-connectors", "note": "Private network support, the GA Apache Kafka and Azure Service Bus source connectors, and custom CA/mTLS support broaden which real-world sources an Eventstream can securely ingest from in production." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
-      ],
+      "tags": ["Eventstream", "RealTimeIntelligence", "Streaming"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the rti boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through rti boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Raw events from Kafka, MQTT, CDC feeds, IoT Hub, or Fabric/OneLake item events"],
+        "processing": ["Apply stream-processing operators (filter, cleanse, window, dedupe)", "Evaluate content-based routing rules per event", "Emit the (possibly transformed) event to one or more destinations concurrently"],
+        "outputs": ["Zero or more destination-bound event copies: Activator, an Eventhouse KQL database, a lakehouse, or a derived eventstream"],
+        "example": "A connected-vehicle telemetry eventstream applies a filter to drop heartbeat-only messages, then routes every remaining event to both an Activator rule and an Eventhouse KQL database in the same eventstream definition.",
+        "controls": ["Which stream-processing operators are applied and in what order", "Which destinations a given event type is routed to"],
+        "failureModes": ["Routing every event to every destination by default, paying ingestion cost for data nobody queries", "A misconfigured filter silently dropping events before they reach either path"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "rti",
-        "label": "Open rti"
+      "drillTarget": { "kind": "capability", "slug": "rti", "label": "Real-Time Intelligence" }
+    },
+    {
+      "id": "hot-path-question",
+      "label": "Does this event need an immediate reaction?",
+      "summary": "Routing decision: does the event need to trigger an action now, or be queried later, or both?",
+      "detail": "Real-Time Intelligence purpose-builds two different consumption models for the same event stream. Activator is described explicitly as a real-time engine that monitors data and reacts to events, in contrast to fixed-schedule execution models — the hot path exists for cases where a threshold, pattern, or condition being met must trigger an action within seconds. The Eventhouse cold path exists for cases where the event needs to be durably retained, joined with historical data, or queried on demand later. Most production scenarios need both, not one or the other.",
+      "whyItMatters": "Framing this as a routing decision rather than a technology choice is what keeps teams from over-engineering a single path to do both jobs — Activator is not built to be a queryable store, and an Eventhouse query is not built to fire in milliseconds.",
+      "classification": "pattern",
+      "layers": ["orchestration"],
+      "evidence": [],
+      "tags": ["decision-root", "RealTimeIntelligence"],
+      "drill": {
+        "inputs": ["An event already routed by the Eventstream", "A stated latency requirement and a stated retention/query requirement"],
+        "processing": ["Ask whether an action must fire within seconds of this event occurring", "Ask whether this event (or its aggregate) must be queryable later, joined with other data, or fed to ML/agents", "Route to Activator, to an Eventhouse KQL database, or to both"],
+        "outputs": ["A routing decision that sends the event down the hot path, the cold path, or both concurrently"],
+        "example": "A fleet-management event needs both: dispatch must be alerted within seconds if a vehicle goes offline (hot path), and the event must still be queryable next month for a fleet-uptime report (cold path) — so the eventstream routes it to both.",
+        "controls": ["Per-event-type routing configuration in the eventstream, not a single global choice for the whole system"],
+        "failureModes": ["Building only the cold path and trying to approximate real-time alerting with scheduled KQL queries, reintroducing the polling latency RTI exists to remove", "Building only the hot path and losing the durable record needed for later investigation or reporting"]
       }
     },
     {
-      "id": "step-2",
-      "label": "Decision/internals diagram: Real-Time Intelligence hot path vs cold…",
-      "summary": "Decision/internals diagram: Real-Time Intelligence hot path vs cold path in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
+      "id": "activator-hot-path",
+      "label": "Activator (hot path)",
+      "summary": "Monitors threshold, pattern, or KQL-defined conditions and fires an action within seconds, no polling.",
+      "detail": "Activator monitors data flowing through Real-Time hub, KQL queries, or Power BI reports and fires automated actions — sending notifications, launching a Fabric pipeline, Spark job, or Dataflow execution, calling User Data Functions, or triggering Power Automate workflows — when threshold, pattern, or KQL-defined conditions are met. Fabric events and Azure Blob Storage events exposed in Real-Time hub can trigger these rules, enabling fully event-driven orchestration with no polling schedule. A recent GA capability lets an Activator rule invoke a Copy job directly as its action, removing the need for an intermediate pipeline for the specific case of event-driven data movement.",
+      "whyItMatters": "This is what actually removes the fixed-schedule tax from operational alerting and data movement — actions fire the moment a condition is true instead of on the next scheduled check, which is both faster and cheaper than polling.",
+      "classification": "fact",
+      "layers": ["orchestration", "compute"],
+      "evidence": [
+        { "sourceKey": "rti-overview", "note": "Activator monitors data flowing through Real-Time hub, KQL queries, or Power BI reports and fires automated actions — notifications, pipeline/Spark job/Dataflow executions, User Data Functions, or Power Automate workflows — when threshold, pattern, or KQL-defined conditions are met." },
+        { "sourceKey": "rti-overview", "note": "Fabric events and Azure Blob Storage events exposed in Real-Time hub can trigger Activator rules to start Spark jobs or Dataflows, enabling fully event-driven orchestration that requires no polling schedule." },
+        { "sourceKey": "fabric-blog-activator-copy-job", "note": "Fabric Activator can now directly invoke a Copy job as a rule action, without requiring an intermediate Data Factory pipeline, and this capability is Generally Available; trigger conditions include file-created, table-updated, and metric-threshold events." }
       ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
+      "tags": ["Activator", "RealTimeIntelligence", "EventDriven"],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Decision/internals diagram: Real-Time Intelligence hot path vs cold path responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Decision/internals diagram: Real-Time Intelligence hot path vs cold path: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "the Eventstream routing decision fanning events to Activator's thre…",
-      "summary": "the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map ti… in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defi… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined condit…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "event-driven",
-      "summary": "event-driven in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the event-driven responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through event-driven: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "no polling) versus the Eventhouse KQL database write feeding multi-…",
-      "summary": "no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the no polling) versus the Eventhouse KQL database write feeding multi-language notebook quer… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "ML training",
-      "summary": "ML training in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the ML training responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through ML training: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "and data-agent Q&A (durable",
-      "summary": "and data-agent Q&A (durable in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture.",
-      "detail": "This element makes the observability responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this observability boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "observability"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "observability"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "observability service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and data-agent Q&A (durable responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and data-agent Q&A (durable: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Events from Real-Time hub, live KQL query results, or Power BI report data"],
+        "processing": ["Continuously evaluate defined threshold, pattern, or KQL conditions against incoming data", "On a match, execute the configured action (notification, pipeline/Spark/Dataflow run, User Data Function, Power Automate flow, or direct Copy job invocation)"],
+        "outputs": ["A fired action within seconds of the triggering condition being met, with no query result set retained by Activator itself"],
+        "example": "An Activator rule watches a vehicle-telemetry eventstream for a 'no heartbeat for 60 seconds' pattern and, when matched, sends a Teams notification to dispatch and calls a User Data Function that logs the incident — both within seconds of the last heartbeat.",
+        "controls": ["Rule condition type: threshold, pattern, or KQL-defined", "Which action type the rule invokes"],
+        "failureModes": ["Treating Activator as a durable event store — it reacts to conditions, it does not retain a queryable history of every event it evaluated", "Overly sensitive thresholds firing repeated actions (alert fatigue) instead of being tuned with debounce/pattern windows"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "rti",
-        "label": "Open rti"
+      "drillTarget": { "kind": "capability", "slug": "rti", "label": "Real-Time Intelligence" }
+    },
+    {
+      "id": "eventhouse-cold-path",
+      "label": "Eventhouse KQL database (cold path)",
+      "summary": "Durable, indexed, queryable storage — feeds notebooks, ML, Power BI, and data agents.",
+      "detail": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale, and are queryable through native KQL or a governed T-SQL analytics endpoint. Fabric notebooks can operate directly over Eventhouse data using KQL, T-SQL, Python, or Spark without data movement, and RTI integrates with Fabric data agents for conversational, reasoning-based Q&A over the same live and historical data — capabilities the hot path does not offer.",
+      "whyItMatters": "This is where an event stops being a transient signal and becomes durable, joinable history — the foundation for trend analysis, ML training, and any question that needs 'what happened over the last N days', not just 'what is happening right now'.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "Eventhouse data is queryable through native KQL, a T-SQL analytics endpoint managed and governed within Fabric, and KQL querysets — a dual-surface approach that lets BI tools and analysts connect without learning KQL." },
+        { "sourceKey": "rti-overview", "note": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale; data stored is also mirrored to OneLake as a single logical copy." },
+        { "sourceKey": "rti-overview", "note": "Fabric notebooks can operate directly over Eventhouse data using KQL, T-SQL, Python, or Spark without requiring data movement, unifying exploration, transformation, and machine learning in a single authoring surface." },
+        { "sourceKey": "rti-overview", "note": "RTI integrates with Fabric data agents to enable conversational analytics and workflow orchestration over Eventhouse data, complementing Activator's threshold-based alert automation with reasoning over live and historical datasets." }
+      ],
+      "tags": ["Eventhouse", "KQL", "RealTimeIntelligence"],
+      "drill": {
+        "inputs": ["Events routed from the eventstream to the KQL database's ingestion endpoint"],
+        "processing": ["Ingest and index records by arrival time", "Apply the caching and retention policies (hot cache tier vs standard tier)", "Optionally mirror to OneLake as Delta for cross-engine access"],
+        "outputs": ["A durable, indexed, queryable table available via KQL, T-SQL, notebooks, Power BI, and data agents"],
+        "example": "The same vehicle-offline events land in a KQL database's VehicleEvents table; a month later a fleet analyst runs a KQL query joining VehicleEvents against a maintenance-log table to correlate offline incidents with prior service history — a query Activator was never built to answer.",
+        "controls": ["Caching policy (hot-cache duration) and retention policy (total queryable window)", "Whether OneLake availability is enabled for cross-engine access"],
+        "failureModes": ["Expecting Eventhouse queries to answer in the same sub-second window Activator does — ingestion, indexing, and query planning add latency the hot path skips entirely", "Enabling OneLake availability with an aggressively short mirroring delay, producing many small Parquet files that degrade downstream query performance"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "eventhouse-kql", "label": "Eventhouse & KQL" }
+    },
+    {
+      "id": "onelake-mirror",
+      "label": "OneLake Delta mirror",
+      "summary": "Adaptive-batched write exposes KQL data as Delta, queryable by Direct Lake, Warehouse, Lakehouse, Spark.",
+      "detail": "When OneLake availability is enabled, an Eventhouse KQL database exposes its table data in Delta Lake format via an adaptive batching mechanism that delays writes until enough data accumulates to produce optimally-sized Parquet files, with a default maximum delay of up to 3 hours (configurable down to as little as 5 minutes, at the cost of more, smaller files). This makes the same cold-path data directly queryable by Power BI Direct Lake, Warehouse, Lakehouse, and Spark notebooks with no additional storage charge and no data movement job.",
+      "whyItMatters": "This is what turns Eventhouse data into a first-class citizen of the rest of the Fabric estate rather than a silo only KQL users can reach — a single write path feeds both real-time KQL analytics and standard Fabric BI/engineering tooling.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "When OneLake availability is active, an adaptive batching mechanism delays writes to OneLake until enough data accumulates to produce optimally-sized Parquet files (typically 200–256 MB); default maximum delay is up to 3 hours, configurable down to 5 minutes." },
+        { "sourceKey": "eventhouse-overview", "note": "Enabling OneLake availability exposes KQL table data in Delta Lake format, directly queryable by Power BI Direct Lake mode, Warehouse, Lakehouse, and Spark notebooks with no data movement, and no additional storage charge beyond standard OneLake billing." }
+      ],
+      "tags": ["Eventhouse", "OneLake", "DeltaLake", "DirectLake"],
+      "drill": {
+        "inputs": ["KQL database table data already written to the standard storage tier"],
+        "processing": ["Accumulate data until an optimally-sized Parquet batch is ready (or the configured maximum delay elapses)", "Write the batch to OneLake as Delta", "Retire aged-out data from OneLake in step with the KQL retention policy"],
+        "outputs": ["A live Delta mirror of the KQL table, queryable by any Fabric engine with no separate copy job"],
+        "example": "A KQL database with OneLake availability enabled and the default 3-hour mirroring delay produces a new batch of well-sized Delta files roughly every few hours; a Power BI Direct Lake report built on the mirrored table reflects data up to that delay, while the KQL database itself remains queryable with sub-minute freshness.",
+        "controls": ["Mirroring policy delay (default up to 3 hours, adjustable to 5 minutes)", "Whether OneLake availability is enabled at the database level or per table"],
+        "failureModes": ["Assuming the OneLake mirror is as fresh as the KQL database itself — it lags by the mirroring delay, which matters for Direct Lake reports expecting near-real-time data", "Enabling certain DDL operations (rename, type change, RLS, row deletes) while OneLake availability is on, which are blocked and require temporarily disabling it, triggering a full historic backfill on re-enable"]
+      }
+    },
+    {
+      "id": "throttling-warning",
+      "label": "Warning: three-stage capacity throttling",
+      "summary": "Sustained overload degrades the cold path in three escalating stages, up to data-loss risk.",
+      "detail": "When query demand exceeds capacity, an Eventhouse applies throttling in three escalating stages: proactive (queries are slowed but ingestion is unaffected), reactive (both queries and ingestion are paused, but no data is lost), and extreme-reactive (ingestion and queries are paused with a risk of data loss after a holding period). This is a real, sourced failure mode specific to the cold path — the hot path's Activator evaluation is not described as subject to this same escalation ladder.",
+      "whyItMatters": "Teams sizing an Eventhouse purely for average ingestion volume can be surprised by a sustained spike escalating all the way to the extreme-reactive stage, where continued overload risks actual data loss rather than just slower queries.",
+      "classification": "warning",
+      "layers": ["compute", "observability"],
+      "evidence": [
+        { "sourceKey": "eventhouse-overview", "note": "When query demand exceeds capacity, an Eventhouse applies throttling in three escalating stages: proactive (queries slowed, ingestion unaffected), reactive (both queries and ingestion paused but no data lost), and extreme-reactive (ingestion and queries paused with a risk of data loss after a holding period)." }
+      ],
+      "tags": ["Eventhouse", "Throttling", "Capacity"],
+      "drill": {
+        "inputs": ["Sustained query or ingestion demand exceeding the Eventhouse's allocated capacity"],
+        "processing": ["Stage 1 (proactive): slow queries while ingestion continues normally", "Stage 2 (reactive): pause both queries and ingestion, holding data with no loss", "Stage 3 (extreme-reactive): pause both with a risk of data loss if the holding period is exceeded"],
+        "outputs": ["Degraded query and ingestion service, escalating in severity if the underlying pressure is not relieved"],
+        "example": "An unplanned ingestion spike from a misconfigured retry loop pushes an under-sized Eventhouse from proactive throttling into the reactive stage within minutes; ingestion pauses but resumes without loss once the capacity administrator scales the underlying capacity.",
+        "controls": ["Right-sizing the Fabric capacity backing the Eventhouse for peak, not average, ingestion volume", "Workspace-level surge protection to cap runaway consumption before it reaches other workspaces"],
+        "failureModes": ["Sizing capacity for average load and discovering the throttling ladder only during a real incident", "Ignoring proactive-stage query slowdowns as a minor annoyance when they are an early warning of an approaching reactive-stage pause"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "orchestration",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "orchestration",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "then evaluate",
-      "layer": "observability",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "orchestration",
-      "kind": "branch"
-    }
+    { "id": "e-source-question", "from": "eventstream-source", "to": "hot-path-question", "label": "routed event(s) evaluated", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-question-hot", "from": "hot-path-question", "to": "activator-hot-path", "label": "needs a reaction within seconds", "layer": "orchestration", "kind": "branch" },
+    { "id": "e-question-cold", "from": "hot-path-question", "to": "eventhouse-cold-path", "label": "needs durable, queryable history", "layer": "data", "kind": "branch" },
+    { "id": "e-cold-mirror", "from": "eventhouse-cold-path", "to": "onelake-mirror", "label": "OneLake availability enabled", "layer": "data", "kind": "flow" },
+    { "id": "e-cold-warning", "from": "eventhouse-cold-path", "to": "throttling-warning", "label": "under sustained overload", "layer": "compute", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. rti boundary",
-      "explanation": "rti boundary in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture."
+      "nodeId": "eventstream-source",
+      "title": "1. One event, routed by the eventstream",
+      "explanation": "An Eventstream ingests and shapes the event, then can route it to more than one destination at once — this fan-out is what makes hot and cold paths a routing decision, not an either/or system choice."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Decision/internals diagram: Real-Time Intelligence hot path vs cold…",
-      "explanation": "Decision/internals diagram: Real-Time Intelligence hot path vs cold path in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture."
+      "nodeId": "hot-path-question",
+      "title": "2. Immediate reaction, durable record, or both?",
+      "explanation": "The routing question: does this event need to trigger an action within seconds, be queryable later, or both — most production scenarios genuinely need both."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. the Eventstream routing decision fanning events to Activator's thre…",
-      "explanation": "the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map ti… in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture."
+      "nodeId": "activator-hot-path",
+      "title": "3. Hot path: Activator reacts within seconds",
+      "explanation": "Activator evaluates threshold, pattern, or KQL-defined conditions continuously and fires an action — notification, pipeline run, or a directly invoked Copy job — with no polling schedule."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. event-driven",
-      "explanation": "event-driven in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture."
+      "nodeId": "eventhouse-cold-path",
+      "title": "4. Cold path: Eventhouse makes it durable and queryable",
+      "explanation": "The event lands in a KQL database, indexed by arrival time, queryable via KQL or T-SQL, and reachable from notebooks and Fabric data agents for reasoning over history the hot path never retains."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. no polling) versus the Eventhouse KQL database write feeding multi-…",
-      "explanation": "no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture."
+      "nodeId": "onelake-mirror",
+      "title": "5. The cold path also feeds the rest of Fabric",
+      "explanation": "An adaptive-batched OneLake Delta mirror exposes the same KQL data to Direct Lake, Warehouse, Lakehouse, and Spark with no separate copy job, at the cost of a mirroring delay."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. ML training",
-      "explanation": "ML training in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture."
-    },
-    {
-      "nodeId": "step-7",
-      "title": "7. and data-agent Q&A (durable",
-      "explanation": "and data-agent Q&A (durable in the Decision/internals diagram: Real-Time Intelligence hot path vs cold path — the Eventstream routing decision fanning events to Activator's threshold/pattern/KQL-defined conditions and live Map tiles (sub-second, event-driven, no polling) versus the Eventhouse KQL database write feeding multi-language notebook queries, ML training, and data-agent Q&A (durable, queryable, joinable), with a characteristics-at-a-glance comparison strip and a worked vehicle-offline example showing the same event routed to both paths architecture."
+      "nodeId": "throttling-warning",
+      "title": "6. Warning: the cold path degrades in three stages under overload",
+      "explanation": "Sustained demand beyond capacity escalates from slowed queries, to paused ingestion, to a genuine data-loss risk — a failure mode specific to the cold path that capacity sizing must account for."
     }
   ]
 }

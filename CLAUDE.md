@@ -179,12 +179,13 @@ reads it, with content/queue.md as the offline fallback.
 
 **Diagram coverage is enforced, not optional** (mirror these in `AGENTS.md` for Codex):
 
-- Generated diagrams use the typed interactive React/SVG contract: keyboard/touch-selectable
-  nodes, evidence, layers, path tracing, walkthrough, and Atlas drill targets. The committed SVG is
-  a script-free print/no-JavaScript fallback whose hash must match the registered revision.
-- Each diagram requires a matching `.diagram.json` authored topology: labelled edges, evidence for
-  fact nodes, and node-specific drill infographics covering inputs, processing, outputs, a worked
-  example, controls, and failure modes. Caption-derived fallback diagrams are not publishable.
+- Generated diagrams use the rich authored SVG contract: the original script-free SVG is the
+  primary article, print, and no-JavaScript artifact, with keyboard-focusable regions and
+  sidecar-backed evidence tooltips. Its hash must match the registered revision.
+- Each diagram requires a matching `.diagram.json` semantic topology: labelled edges, evidence for
+  fact nodes, node-specific drill metadata covering inputs, processing, outputs, a worked example,
+  controls, and failure modes, and exactly one focusable SVG region per node. Caption-derived
+  fallback diagrams are not publishable.
 
 - `/publish-topic` commissions **≥2** original diagrams before the blog-author runs — an
   architecture diagram and a decision/internals diagram.

@@ -1,379 +1,271 @@
 {
   "id": "onelake-shortcuts-security-internals",
-  "title": "OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role res…",
-  "purpose": "Original diagram: OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits",
-  "accessibleSummary": "An interactive decision infographic with 6 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits",
-  "type": "decision",
+  "title": "OneLake Shortcut Identity, Delete Semantics, and Security Internals",
+  "purpose": "Show how a OneLake shortcut read is actually authorized — the pass-through vs delegated identity fork, the DirectLake-over-SQL identity trap, delete-vs-write-through semantics, and where the OneLake security role matrix does and does not restrict access — plus the documented operating limits that bound the whole model.",
+  "accessibleSummary": "An internals diagram that starts at a shortcut read request and branches on shortcut type: internal shortcuts pass the calling user's own identity through to the target, while external ADLS/S3 shortcuts and delegated shortcuts route through a bound connection or configured identity instead. A warning node flags that DirectLake-over-SQL and T-SQL delegated identity mode silently use the item owner's identity rather than the end user's. Delegated-shortcut access is computed as an intersection of the delegated identity's own grant and the end user's OneLake security grant. A second branch covers delete semantics: deleting the shortcut object itself leaves the target untouched, while deleting through the shortcut path writes through to the target if the caller has write permission there. A security-role node explains that OneLake security roles only constrain Viewers and Read-permission holders — workspace Admins, Members, and Contributors bypass OneLake security entirely, a second documented trap. The diagram ends at documented operating limits on shortcut counts and chaining.",
+  "longDescription": "This is an internals diagram over how OneLake actually authorizes and constrains a shortcut, not a linear pipeline. It opens at a shortcut read request and immediately forks on shortcut type, because the identity used downstream depends entirely on that choice: an internal shortcut (to another Fabric item) passes the calling user's own identity, which must independently hold read permission at the target; an external shortcut (ADLS Gen2 or S3) delegates authorization to a cloud connection bound at creation time; and a delegated shortcut routes through one configured connection identity — an organizational account, service principal, or workspace identity — chosen explicitly at creation instead of the signed-in user. A warning node captures a specific, sourced trap: DirectLake-over-SQL and T-SQL's delegated identity mode both authorize shortcut reads as the calling item's owner, not as whoever is actually running the query, silently changing who effectively has access unless the design explicitly uses DirectLake-over-OneLake or T-SQL user-identity mode. For delegated shortcuts specifically, the diagram shows the intersection security model: an end user's effective access is the intersection of what the delegated identity itself was granted and what OneLake security separately grants that user, so the delegated identity can never become a backdoor to broader access. A second branch covers delete semantics, because 'delete the shortcut' and 'delete through the shortcut' are opposite operations with opposite consequences: removing the shortcut object leaves the target untouched, while deleting a file or folder beneath the shortcut path writes through and removes it from the target store if the caller has write permission there. A security-role node explains the restriction matrix: OneLake security roles compose table/folder/row/column scope, permission, and members, but they only ever constrain Viewers and users holding item Read permission — workspace Admins, Members, and Contributors bypass OneLake security entirely and can read and write all item data regardless of any role defined against them. The diagram converges on documented operating limits (shortcut counts per item and per path, shortcut-chain depth, and naming restrictions) that bound every path through the model.",
+  "type": "internals",
   "topicSlug": "onelake",
-  "capabilityIds": [
-    "onelake"
-  ],
-  "revision": "1",
+  "capabilityIds": ["onelake"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/onelake-shortcuts-security-internals.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "onelake boundary",
-      "summary": "onelake boundary in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "shortcut-read-request",
+      "label": "Shortcut read request",
+      "summary": "A caller (Spark, T-SQL, RTI, Analysis Services, or an ADLS-compatible client) reads through a shortcut path.",
+      "detail": "Any Fabric engine reading through the OneLake API treats a shortcut exactly like an ordinary folder — Spark, T-SQL, Real-Time Intelligence, Analysis Services, and non-Fabric ADLS-compatible applications all query through it with no shortcut-specific logic. What differs, invisibly to the caller, is which identity OneLake actually authorizes the read against, which depends entirely on how the shortcut was created.",
+      "whyItMatters": "The caller's experience is identical across every shortcut type, which is exactly why the identity fork downstream matters — nothing in the query itself reveals whether the read is being authorized as the caller, a delegated identity, or a bound cloud connection.",
+      "classification": "fact",
+      "layers": ["data", "security"],
+      "tags": ["OneLake", "Shortcuts"],
+      "evidence": [
+        { "sourceKey": "onelake-shortcuts", "note": "Shortcuts are transparent to consumers: through the OneLake API they look like ordinary folders, so Spark, SQL, Real-Time Intelligence, Analysis Services, and non-Fabric ADLS-compatible applications can all query shortcut data without shortcut-specific logic." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the onelake boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through onelake boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A query or file read issued against a shortcut path inside a lakehouse or KQL database"],
+        "processing": ["OneLake resolves the shortcut path to its target", "OneLake determines the shortcut's authorization mode (internal pass-through, external cloud connection, or delegated identity)", "The resolved identity is checked against the target's permissions before data is returned"],
+        "outputs": ["Data returned if the resolved identity is authorized at the target; otherwise an authorization failure"],
+        "example": "A Spark notebook runs spark.read.load() against Tables/sales_shortcut/; the read looks identical whether that shortcut is internal, external, or delegated, but the identity OneLake checks against the target differs completely between the three.",
+        "controls": ["Which shortcut type is created in the first place — this is decided once, at creation"],
+        "failureModes": ["Assuming every shortcut authorizes the same way because every read looks the same from the caller's side"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "onelake",
-        "label": "Open onelake"
-      }
+      "drillTarget": { "kind": "topic", "slug": "onelake", "label": "OneLake" }
     },
     {
-      "id": "step-2",
-      "label": "OneLake shortcut identity passthrough decisions",
-      "summary": "OneLake shortcut identity passthrough decisions in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "id": "internal-shortcut",
+      "label": "Internal shortcut (pass-through)",
+      "summary": "Points at another Fabric item; authorized with the calling user's own identity.",
+      "detail": "Internal OneLake shortcuts can target data in other Fabric items — lakehouses, warehouses, KQL databases, SQL databases, mirrored databases, semantic models — across items and workspaces, and access through them is authorized with the calling user's own identity, which must independently hold read permission at the target.",
+      "whyItMatters": "This is the default, most predictable authorization mode: whoever is running the query needs their own permission at the target, so access can never silently exceed what that specific person is allowed to see.",
+      "classification": "fact",
+      "layers": ["data", "security"],
+      "tags": ["OneLake", "Shortcuts", "Passthrough"],
+      "evidence": [
+        { "sourceKey": "onelake-shortcuts", "note": "Internal OneLake shortcuts can target data in other Fabric items across items and workspaces, and access through them is authorized with the calling user's own identity, which must hold read permission at the target." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the OneLake shortcut identity passthrough decisions responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through OneLake shortcut identity passthrough decisions: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A shortcut created between two Fabric items (e.g. two lakehouses)", "The calling user's own Entra ID identity"],
+        "processing": ["OneLake checks the calling user's identity directly against the target item's permissions", "No intermediate identity is substituted"],
+        "outputs": ["Access granted only if the calling user independently holds read permission at the target"],
+        "example": "An analyst with Viewer plus a OneLake ReadAll role on lakehouse-finance can read finance_gl through an internal shortcut from lakehouse-analytics; a colleague without that role on the source gets denied even though both can see the shortcut path.",
+        "controls": ["Grant target-side permission explicitly to each user who needs shortcut access, not just workspace-level roles"],
+        "failureModes": ["Assuming shortcut visibility implies data access — the shortcut path being visible does not mean the target grants the caller anything"]
       }
     },
     {
-      "id": "step-3",
-      "label": "delete-vs-write-through semantics",
-      "summary": "delete-vs-write-through semantics in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "external-shortcut",
+      "label": "External shortcut (ADLS/S3)",
+      "summary": "Points outside Fabric; authorization delegates to a cloud connection bound at creation.",
+      "detail": "ADLS and S3 shortcuts delegate authorization to a cloud connection bound at shortcut creation; binding is a privileged operation, so a user without permission on the connection cannot create new shortcuts that use it. External shortcuts to non-Fabric stores are themselves categorized as a form of delegated shortcut, where the delegated identity is typically an account key or system identity native to the external system rather than a Fabric organizational account or service principal.",
+      "whyItMatters": "Every reader through an external shortcut inherits the same fixed external credential, so restricting who can bind or rebind that connection is the actual access-control lever — not per-user grants on the shortcut itself.",
+      "classification": "fact",
+      "layers": ["data", "security"],
+      "tags": ["OneLake", "Shortcuts", "ExternalShortcuts"],
+      "evidence": [
+        { "sourceKey": "onelake-shortcuts", "note": "ADLS and S3 shortcuts delegate authorization to a cloud connection bound at shortcut creation; binding is a privileged operation, so a user without permission on the connection cannot create new shortcuts that use it." },
+        { "sourceKey": "fabric-blog-zero-copy-security-shortcuts", "note": "External shortcuts to non-Fabric stores such as AWS S3 and Google Cloud Storage are themselves a form of delegated shortcut, where the delegated identity is typically an account key or system identity native to the external system rather than a Fabric organizational account or service principal." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the delete-vs-write-through semantics responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through delete-vs-write-through semantics: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A cloud connection to ADLS Gen2 or S3, created and bound by a privileged user", "Any downstream reader of the resulting shortcut"],
+        "processing": ["OneLake authenticates to the external store using the bound connection's credential (account key, SAS, or service identity)", "Every reader's access is limited only by whatever the connection itself can see — not by per-reader identity at the external store"],
+        "outputs": ["Data returned from the external store using the connection's own permissions, not the caller's"],
+        "example": "A workspace identity with the Storage Blob Data Reader role on a target ADLS Gen2 account is bound to a shortcut; every Fabric user who can read the shortcut path gets that same reader-level access, regardless of their own ADLS permissions.",
+        "controls": ["Restrict who can create or rebind the cloud connection, since that is the real gatekeeper", "Prefer a scoped workspace identity or service principal over a long-lived SAS/account key"],
+        "failureModes": ["Using a broad, long-lived SAS or account key as the connection credential, over-granting every downstream reader", "External ADLS Gen2 shortcuts failing authorization when a SAS token or account key credential expires or rotates"]
       }
     },
     {
-      "id": "step-4",
+      "id": "delegated-shortcut",
+      "label": "Delegated shortcut",
+      "summary": "Routes through one configured identity chosen at creation, not the signed-in user.",
+      "detail": "Delegated OneLake Shortcuts add a second shortcut authentication mode where access to the target flows through one configured connection identity — an organizational account, a service principal, or a workspace identity — instead of each individual signed-in user's identity. Delegation is optional per shortcut; shortcuts default to pass-through authentication unless delegation is explicitly selected at creation time. Delegated shortcuts also support cross-tenant sharing through the same mechanism.",
+      "whyItMatters": "This is the lever that makes distribution to large or external audiences tractable: instead of provisioning every downstream consumer individually at the source, one configured identity stands in for all of them, with the intersection model (see the security-role node) preventing that from becoming an open door.",
+      "classification": "fact",
+      "layers": ["data", "security"],
+      "tags": ["OneLake", "Shortcuts", "DelegatedIdentity"],
+      "evidence": [
+        { "sourceKey": "fabric-blog-delegated-shortcuts", "note": "Delegated OneLake Shortcuts add a second shortcut authentication mode where access to the target flows through one configured connection identity instead of each individual signed-in user's identity; delegation is optional per shortcut and shortcuts default to pass-through unless delegation is explicitly selected." },
+        { "sourceKey": "fabric-blog-delegated-shortcuts", "note": "Delegated shortcuts support cross-tenant sharing: a Fabric tenant can shortcut to OneLake data in a different tenant, authenticating with an identity from that other tenant." }
+      ],
+      "drill": {
+        "inputs": ["A shortcut explicitly created with 'Delegated identity' as the connection method", "An organizational account, service principal, or workspace identity chosen at creation"],
+        "processing": ["OneLake authenticates every read through the configured delegated identity, regardless of who the actual caller is", "The delegated identity's own OneLake security grant is checked, then intersected with the end user's own grant (see the security-role node)"],
+        "outputs": ["Data returned only where both the delegated identity and the specific end user are independently authorized"],
+        "example": "spn-emea-reader is scoped via OneLake security to EMEA-only rows at the source; any EMEA team member reading through the delegated shortcut sees only the intersection of what spn-emea-reader can see and what their own OneLake role additionally grants them.",
+        "controls": ["Scope the delegated identity narrowly at the source using table- and column-level OneLake security", "Choose delegation deliberately at creation — switching modes later requires deleting and recreating the shortcut"],
+        "failureModes": ["Treating the delegated identity as a blanket grant instead of narrowing it at the source, which caps how tightly downstream access can ever be scoped", "Discovering mid-project that pass-through was chosen and now needs to become delegated, requiring a full delete-and-recreate"]
+      }
+    },
+    {
+      "id": "identity-passthrough-trap",
+      "label": "DirectLake-over-SQL identity trap",
+      "summary": "DirectLake-over-SQL and T-SQL delegated mode silently use the item owner's identity, not the end user's.",
+      "detail": "When shortcuts are reached via Power BI semantic models in DirectLake-over-SQL mode, or via T-SQL in delegated identity mode, the identity passed to the shortcut target is the calling item owner's, not the end user's; using DirectLake-over-OneLake or T-SQL user identity mode restores per-user identity passthrough. This is easy to overlook because nothing about the query or the report surface signals which identity is actually being checked at the shortcut target.",
+      "whyItMatters": "A report author may assume row-level restrictions at the shortcut target apply per viewer, when in fact every viewer is silently authorized as the semantic model's owner — a gap that can grant broader access than intended, or fail confusingly if the owner lacks target permission that individual viewers actually hold.",
+      "classification": "warning",
+      "layers": ["security"],
+      "tags": ["OneLake", "Shortcuts", "DirectLake", "Security"],
+      "evidence": [
+        { "sourceKey": "onelake-shortcuts", "note": "When shortcuts are reached via Power BI semantic models in DirectLake-over-SQL mode or via T-SQL in delegated identity mode, the identity passed to the shortcut target is the calling item owner's, not the end user's; DirectLake-over-OneLake or T-SQL user identity mode restores per-user identity passthrough." }
+      ],
+      "drill": {
+        "inputs": ["A Direct Lake semantic model in DirectLake-over-SQL mode, or a T-SQL client in delegated identity mode, reading through a shortcut"],
+        "processing": ["OneLake substitutes the calling item's owner identity for the actual report viewer or query caller", "Target-side authorization is evaluated against that owner identity instead"],
+        "outputs": ["Every viewer effectively reads with the owner's permissions at the shortcut target, not their own"],
+        "example": "A Direct Lake-over-SQL model owned by a service account reads through a shortcut to a restricted finance lakehouse; every report viewer sees the finance data the owning service account can see, regardless of whether that individual viewer holds permission there themselves.",
+        "controls": ["Switch to DirectLake-over-OneLake, or T-SQL user identity mode, whenever true per-user passthrough is required", "Audit which semantic models use DirectLake-over-SQL against shortcut-backed sources and confirm the owner's access level is intentional"],
+        "failureModes": ["Assuming per-user row-level security at the shortcut target is being enforced when it is actually the owner's identity being checked", "The owner's account being over-privileged, so every viewer inherits access they individually should not have"]
+      }
+    },
+    {
+      "id": "delete-shortcut",
+      "label": "Delete the shortcut object",
+      "summary": "Removing the shortcut link leaves the target data untouched.",
+      "detail": "Shortcut deletion does not cascade: removing the shortcut object leaves target data intact. A OneLake shortcut behaves like a symbolic link, so deleting it severs the reference without touching what it pointed to.",
+      "whyItMatters": "This is the safe, expected delete path — it lets a consumer stop referencing a dataset without any risk of destroying the source, which is central to why shortcuts are usable for cross-team distribution at all.",
+      "classification": "fact",
+      "layers": ["data"],
+      "tags": ["OneLake", "Shortcuts", "Deletes"],
+      "evidence": [
+        { "sourceKey": "onelake-shortcuts", "note": "Shortcut deletion does not cascade: removing the shortcut object leaves target data intact." },
+        { "sourceKey": "onelake-shortcuts", "note": "A OneLake shortcut behaves like a symbolic link, so deleting the shortcut leaves the target untouched, while moving, renaming, or deleting the target can break the shortcut." }
+      ],
+      "drill": {
+        "inputs": ["A request to delete a shortcut object (e.g. right-click delete in the lakehouse explorer, or a REST API delete call)"],
+        "processing": ["OneLake removes only the shortcut object and its metadata pointer", "No delete operation is issued against the target path"],
+        "outputs": ["The shortcut path no longer resolves; the target data is unchanged and remains reachable by any other path or shortcut pointing at it"],
+        "example": "An analytics team deletes their internal shortcut to lakehouse-finance after a project ends; the finance team's underlying gl_curated table is completely unaffected and remains available to any other consumer.",
+        "controls": ["None needed beyond normal delete permissions on the shortcut object itself"],
+        "failureModes": ["Assuming deleting the shortcut is destructive to the source and avoiding needed cleanup out of unwarranted caution"]
+      }
+    },
+    {
+      "id": "delete-through-shortcut",
+      "label": "Delete through the shortcut path",
+      "summary": "Deleting a file or folder beneath the shortcut path writes through to the target.",
+      "detail": "Deletes made through a shortcut do write through: deleting a file or folder beneath the shortcut path removes it from the target store if the caller has write permission there. This is the opposite operation from deleting the shortcut object itself, and the two are easy to confuse.",
+      "whyItMatters": "This is a real data-loss risk if a consumer treats their shortcut view as disposable: deleting inside the shortcut path is not a local, reversible action — it is a write against someone else's data, gated only by whether the caller happens to have write permission at the target.",
+      "classification": "warning",
+      "layers": ["data", "security"],
+      "tags": ["OneLake", "Shortcuts", "Deletes", "WriteThrough"],
+      "evidence": [
+        { "sourceKey": "onelake-shortcuts", "note": "Deletes made through a shortcut do write through: deleting a file or folder beneath the shortcut path removes it from the target store if the caller has write permission there." }
+      ],
+      "drill": {
+        "inputs": ["A delete operation issued against a file or folder path beneath a shortcut (not the shortcut object itself)"],
+        "processing": ["OneLake resolves the path through the shortcut to the actual target location", "If the caller holds write permission at the target, the delete is executed there"],
+        "outputs": ["The file or folder is removed from the target store, visible to every other consumer of that data, not just the one who issued the delete"],
+        "example": "A consumer with write access mistakenly deletes a subfolder while browsing through an internal shortcut, believing it only affects their local view; the delete propagates to the source lakehouse and every other team shortcutting the same data loses that subfolder too.",
+        "controls": ["Grant read-only (not write) permission at the target to consumers who should never be able to delete through a shortcut", "Treat shortcut-path deletes with the same caution as a direct delete against the source item"],
+        "failureModes": ["A consumer with unintended write permission at the target deleting data through a shortcut, believing the action is scoped to their own view", "No distinction communicated to users between 'delete the shortcut' and 'delete through the shortcut' in tooling, inviting exactly this mistake"]
+      }
+    },
+    {
+      "id": "security-role-matrix",
       "label": "OneLake security role restriction matrix",
-      "summary": "OneLake security role restriction matrix in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
+      "summary": "Roles restrict Viewers and Read-permission holders only — Admins, Members, and Contributors bypass OneLake security entirely.",
+      "detail": "A OneLake security role is composed of the data (tables or folders) in scope, the permission granted, the member users, and optional constraints carving out specific rows or columns — enabling table, folder, row-level, and column-level security. But relying on OneLake security roles to restrict workspace Admins, Members, or Contributors is a documented antipattern: those workspace roles bypass OneLake security entirely and can read and write all item data, so granular OneLake security roles only ever constrain Viewers and users holding item Read permission.",
+      "whyItMatters": "This is the single most consequential gap to understand before designing any access-restriction scheme on lake data: a finely scoped OneLake security role gives a false sense of restriction if any of the users it's meant to constrain actually hold a workspace role that bypasses it.",
+      "classification": "warning",
+      "layers": ["security", "governance"],
+      "tags": ["OneLake", "Security", "OneLakeSecurity", "Governance"],
+      "evidence": [
+        { "sourceKey": "onelake-security", "note": "A OneLake security role is composed of the data in scope, the permission granted, the member users, and optional row/column constraints, enabling table, folder, row-level, and column-level security on lake data." },
+        { "sourceKey": "onelake-security", "note": "Relying on OneLake security roles to restrict workspace Admins, Members, or Contributors is an antipattern: those roles bypass OneLake security entirely and can read and write all item data, so granular roles only constrain Viewers and users holding item Read permission." },
+        { "sourceKey": "onelake-security", "note": "Of the four workspace roles, Admin, Member, and Contributor can read and write OneLake data, while Viewer cannot read OneLake data unless explicitly granted access through OneLake security roles." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the OneLake security role restriction matrix responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through OneLake security role restriction matrix: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "and operating limits",
-      "summary": "and operating limits in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and operating limits responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and operating limits: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "onelake governed outcome",
-      "summary": "onelake governed outcome in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the onelake governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through onelake governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A defined OneLake security role scoped to specific tables/folders, with row or column constraints", "The workspace role (Admin/Member/Contributor/Viewer) held by each candidate user"],
+        "processing": ["Check whether the user holds a workspace role of Admin, Member, or Contributor — if so, OneLake security has no effect on them", "For Viewers or item-Read holders, evaluate the OneLake security role's scope, permission, and row/column constraints normally"],
+        "outputs": ["Effective restriction only for Viewers and Read-permission holders; no restriction at all for Admins/Members/Contributors regardless of role definitions"],
+        "example": "A 'finance-restricted' OneLake security role scopes Tables/gl_sensitive to two named analysts; a workspace Contributor with no explicit membership in that role can still read and write gl_sensitive freely, because Contributor bypasses OneLake security entirely.",
+        "controls": ["Move genuinely sensitive data into a separate item with its own sharing permissions rather than relying on a OneLake security role to wall it off from Contributors", "Audit workspace role membership before treating a OneLake security role as a real restriction boundary"],
+        "failureModes": ["Believing a scoped OneLake security role protects sensitive data from a Contributor or Member, when it silently does not", "Every lakehouse shipping a built-in DefaultReader role that grants all lakehouse data to any ReadAll holder, left un-tightened"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "onelake",
-        "label": "Open onelake"
+      "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
+    },
+    {
+      "id": "operating-limits",
+      "label": "Documented operating limits",
+      "summary": "Hard ceilings on shortcut counts, chaining, and naming bound every path through the model.",
+      "detail": "Fabric publishes hard shortcut ceilings: an item can hold up to 100,000 shortcuts, a single OneLake path supports at most 10 shortcuts, chains of direct shortcut-to-shortcut links max out at 5, and shortcut names or paths cannot contain '%', '+', or non-Latin characters. Naming a table shortcut with a space is a related antipattern: the Delta format does not allow spaces in table names, so OneLake will not recognize such a shortcut as a Delta table.",
+      "whyItMatters": "These are the hard boundaries a large-scale distribution design (many delegated shortcuts, deep shortcut-of-shortcut chains) will eventually hit, and they apply uniformly regardless of which identity or delete-semantics path was used to reach this point.",
+      "classification": "fact",
+      "layers": ["data", "governance"],
+      "tags": ["OneLake", "Shortcuts", "Limits"],
+      "evidence": [
+        { "sourceKey": "onelake-shortcuts", "note": "Documented shortcut limits: an item can hold up to 100,000 shortcuts, a single OneLake path supports at most 10 shortcuts, chains of direct shortcut-to-shortcut links max out at 5, and shortcut names or paths cannot contain '%', '+', or non-Latin characters." },
+        { "sourceKey": "onelake-shortcuts", "note": "Naming a table shortcut with a space character is an antipattern: the Delta format does not allow spaces in table names, so OneLake will not recognize such a shortcut as a Delta table in the lakehouse." }
+      ],
+      "drill": {
+        "inputs": ["Any of the shortcut types and identity/delete paths shown earlier, once a design scales up"],
+        "processing": ["Count planned shortcuts per item and per path against the 100,000-per-item and 10-per-path ceilings", "Check any shortcut-of-shortcut design against the 5-link chain-depth cap", "Validate shortcut names contain no '%', '+', non-Latin characters, or spaces"],
+        "outputs": ["A design that stays inside documented limits, or an early signal to restructure before hitting a hard ceiling in production"],
+        "example": "A migration plan chaining shortcut-to-shortcut-to-shortcut across four hops to reach an original ADLS target is one hop under the 5-link cap; a fifth planned hop for a future reorg would need to collapse an intermediate link instead.",
+        "controls": ["Track shortcut counts and chain depth as a design-time checklist item, not something discovered at creation-time failure"],
+        "failureModes": ["A deep migration or multi-tenant sharing design silently exceeding the 5-link chain cap and failing at creation", "A shortcut named with a space silently failing table auto-discovery, appearing as a Files-only artifact instead of a queryable table"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "yes — follow this criterion",
-      "layer": "security",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "then evaluate",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "then evaluate",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "then evaluate",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-alternative",
-      "from": "step-1",
-      "to": "step-3",
-      "label": "no — follow the alternative",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-request-internal", "from": "shortcut-read-request", "to": "internal-shortcut", "label": "shortcut targets another Fabric item", "layer": "security", "kind": "branch" },
+    { "id": "e-request-external", "from": "shortcut-read-request", "to": "external-shortcut", "label": "shortcut targets ADLS/S3 outside Fabric", "layer": "security", "kind": "branch" },
+    { "id": "e-request-delegated", "from": "shortcut-read-request", "to": "delegated-shortcut", "label": "delegation explicitly chosen at creation", "layer": "security", "kind": "branch" },
+    { "id": "e-internal-trap", "from": "internal-shortcut", "to": "identity-passthrough-trap", "label": "risk if reached via DirectLake-over-SQL or T-SQL delegated mode", "layer": "security", "kind": "branch" },
+    { "id": "e-delegated-security", "from": "delegated-shortcut", "to": "security-role-matrix", "label": "intersect with the end user's OneLake security grant", "layer": "security", "kind": "flow" },
+    { "id": "e-internal-delete", "from": "internal-shortcut", "to": "delete-shortcut", "label": "remove the shortcut object", "layer": "data", "kind": "branch" },
+    { "id": "e-internal-delete-through", "from": "internal-shortcut", "to": "delete-through-shortcut", "label": "delete a file/folder beneath the path", "layer": "data", "kind": "branch" },
+    { "id": "e-role-matrix-limits", "from": "security-role-matrix", "to": "operating-limits", "label": "same limits apply regardless of role scope", "layer": "governance", "kind": "flow" },
+    { "id": "e-external-limits", "from": "external-shortcut", "to": "operating-limits", "label": "bound by the same shortcut ceilings", "layer": "governance", "kind": "flow" },
+    { "id": "e-delete-through-limits", "from": "delete-through-shortcut", "to": "operating-limits", "label": "delete risk compounds with chain depth", "layer": "governance", "kind": "flow" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. onelake boundary",
-      "explanation": "onelake boundary in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture."
+      "nodeId": "shortcut-read-request",
+      "title": "1. Every shortcut read looks the same to the caller",
+      "explanation": "Spark, T-SQL, RTI, and Analysis Services all query a shortcut like an ordinary folder — the identity fork that matters is invisible from the caller's side."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. OneLake shortcut identity passthrough decisions",
-      "explanation": "OneLake shortcut identity passthrough decisions in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture."
+      "nodeId": "internal-shortcut",
+      "title": "2. Internal shortcuts pass the caller's own identity",
+      "explanation": "Access to another Fabric item through an internal shortcut is authorized with the calling user's own identity, which must independently hold read permission at the target."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. delete-vs-write-through semantics",
-      "explanation": "delete-vs-write-through semantics in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture."
+      "nodeId": "identity-passthrough-trap",
+      "title": "3. Warning: DirectLake-over-SQL breaks that passthrough",
+      "explanation": "Reached via DirectLake-over-SQL or T-SQL delegated identity mode, the identity checked at the target is silently the item owner's, not the actual viewer's."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. OneLake security role restriction matrix",
-      "explanation": "OneLake security role restriction matrix in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture."
+      "nodeId": "external-shortcut",
+      "title": "4. External shortcuts delegate to a bound cloud connection",
+      "explanation": "ADLS/S3 shortcuts authorize through a connection bound at creation — every reader inherits that connection's access, not their own."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. and operating limits",
-      "explanation": "and operating limits in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture."
+      "nodeId": "delegated-shortcut",
+      "title": "5. Delegated shortcuts route through one configured identity",
+      "explanation": "Chosen explicitly at creation, a delegated shortcut lets a service principal or workspace identity stand in for every downstream consumer, including across tenants."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. onelake governed outcome",
-      "explanation": "onelake governed outcome in the OneLake shortcut identity passthrough decisions, delete-vs-write-through semantics, OneLake security role restriction matrix, and operating limits architecture."
+      "nodeId": "security-role-matrix",
+      "title": "6. Intersection security, and a real restriction gap",
+      "explanation": "Delegated access is the intersection of the delegated identity's grant and the end user's OneLake security grant — but OneLake security roles only ever constrain Viewers and Read-permission holders, never Admins, Members, or Contributors."
+    },
+    {
+      "nodeId": "delete-shortcut",
+      "title": "7. Deleting the shortcut object is safe",
+      "explanation": "Removing the shortcut link itself leaves the target data completely untouched — this is the non-destructive delete path."
+    },
+    {
+      "nodeId": "delete-through-shortcut",
+      "title": "8. Warning: deleting through the path writes through",
+      "explanation": "Deleting a file or folder beneath the shortcut path is a different operation entirely — it removes the data from the target store if the caller has write permission there."
+    },
+    {
+      "nodeId": "operating-limits",
+      "title": "9. Every path is bounded by the same hard limits",
+      "explanation": "100,000 shortcuts per item, 10 per path, a 5-link chain-depth cap, and naming restrictions apply uniformly, regardless of which identity or delete path was taken to get here."
     }
   ]
 }

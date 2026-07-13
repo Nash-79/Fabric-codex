@@ -1,429 +1,231 @@
 {
   "id": "graphql-api-architecture",
-  "title": "Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Wareho…",
-  "purpose": "Original diagram: Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption",
-  "accessibleSummary": "An interactive architecture infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption",
+  "title": "Fabric API for GraphQL: Sources to a Single Endpoint",
+  "purpose": "Show how Fabric API for GraphQL turns connected data sources into an auto-generated schema and a single live endpoint — the portal setup workflow, what backends it supports, how schema evolution avoids versioned endpoints, and the human/AI-agent consumption paths on the other side.",
+  "accessibleSummary": "An architecture diagram: connected data sources — Warehouse, SQL database, Lakehouse via its SQL analytics endpoint, Azure SQL Database, and Fabric mirrored databases — feed a portal-driven setup workflow where tables, views, and relationships are selected and modeled. Fabric auto-generates a GraphQL schema, resolvers, and a live endpoint from that configuration, with no custom backend code and no separate deployment step. The endpoint is queried by human application developers through an interactive portal editor and by AI agents through the Model Context Protocol. A built-in performance monitoring dashboard observes usage. A warning node covers schema evolution: Fabric favors additive, non-breaking changes over versioned v1/v2/v3 endpoints, and getting this wrong by treating GraphQL like a versioned REST API defeats the model's main advantage.",
+  "longDescription": "This is an architecture diagram of Fabric API for GraphQL, tracing from connected data sources to consumption. It starts with the five documented supported source types, all reached through a SQL analytics endpoint of some kind, flowing into a portal-driven setup workflow (connect sources, choose tables/views/stored procedures, optionally model relationships, configure permissions). That configuration feeds automatic schema and resolver generation, producing a single live GraphQL endpoint with no deployment step. Two consumption paths fan out from the endpoint: the interactive portal editor for human developers testing queries, and an AI-agent path via the Model Context Protocol. A built-in performance monitoring dashboard observes the endpoint's usage. A warning node addresses schema evolution directly, because it is the one place a team can accidentally reintroduce the REST versioning problem GraphQL's field-selection model was meant to avoid.",
   "type": "architecture",
   "topicSlug": "graphql-api",
-  "capabilityIds": [
-    "graphql-api"
-  ],
-  "revision": "1",
+  "capabilityIds": ["graphql-api"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/graphql-api-architecture.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "graphql api boundary",
-      "summary": "graphql api boundary in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "supported-sources",
+      "label": "Connected data sources",
+      "summary": "Warehouse, SQL database, Lakehouse, Azure SQL Database, and mirrored databases — all reached through a SQL analytics endpoint.",
+      "detail": "Supported data sources for the GraphQL API include Fabric Data Warehouse, Fabric SQL database, Fabric Lakehouse (via its SQL analytics endpoint), Azure SQL Database, and Fabric mirrored databases (including Azure SQL DB, Azure SQL Managed Instance, Cosmos DB, Fabric SQL Database, Azure Databricks, Snowflake, and open mirrored databases) accessed through their SQL analytics endpoints.",
+      "whyItMatters": "The common thread across every supported source is that it routes through a SQL analytics endpoint — this is what lets one GraphQL item generate a consistent schema and resolver layer regardless of which of Fabric's item types is actually attached.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "api-graphql-overview", "note": "Supported data sources for the GraphQL API include Fabric Data Warehouse, Fabric SQL database, Fabric Lakehouse (via its SQL analytics endpoint), Azure SQL Database, and Fabric mirrored databases (including Azure SQL DB, Azure SQL Managed Instance, Cosmos DB, Fabric SQL Database, Azure Databricks, Snowflake, and open mirrored databases) accessed through their SQL analytics endpoints." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the graphql api boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through graphql api boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Data already landed in a Fabric Warehouse, SQL database, Lakehouse, Azure SQL Database, or mirrored database"],
+        "processing": ["No transformation at this node — represents the eligible source estate as-is", "Each source is reached via its SQL analytics endpoint rather than a source-specific driver"],
+        "outputs": ["A pool of connectable sources available to a GraphQL item during setup"],
+        "example": "A team has customer data in a Warehouse and order data in a mirrored Azure SQL Database; both are eligible GraphQL sources because both expose a SQL analytics endpoint.",
+        "controls": ["Which sources exist and are network-reachable to the GraphQL item's setup workflow"],
+        "failureModes": ["Assuming an unsupported source type (e.g. a raw Lakehouse Files folder with no Delta table) can be connected directly"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "graphql-api",
-        "label": "Open graphql api"
+      "drillTarget": { "kind": "capability", "slug": "graphql-api", "label": "API for GraphQL" }
+    },
+    {
+      "id": "portal-setup",
+      "label": "Portal setup workflow",
+      "summary": "Create the item, connect sources, choose what to expose, model relationships, configure permissions — no deployment step.",
+      "detail": "Setting up a GraphQL item in Fabric is a portal-driven workflow: create the item, connect data sources, choose which tables/views/stored procedures to expose, optionally model relationships, and configure access permissions, after which the endpoint is immediately queryable with no separate deployment step.",
+      "whyItMatters": "This is what makes GraphQL API a configuration-driven access layer rather than a service teams have to build, package, and deploy — the moment configuration finishes, the endpoint exists.",
+      "classification": "fact",
+      "layers": ["orchestration", "metadata"],
+      "evidence": [
+        { "sourceKey": "api-graphql-overview", "note": "Setting up a GraphQL item in Fabric is a portal-driven workflow: create the item, connect data sources, choose which tables/views/stored procedures to expose, optionally model relationships, and configure access permissions, after which the endpoint is immediately queryable with no separate deployment step." }
+      ],
+      "drill": {
+        "inputs": ["The pool of connectable Fabric/Azure sources", "Decisions about which tables/views/stored procedures to expose"],
+        "processing": ["Create the GraphQL item", "Connect one or more data sources", "Choose exposed tables, views, or stored procedures", "Optionally model one-to-one, one-to-many, or many-to-many relationships between them", "Configure access permissions"],
+        "outputs": ["A fully configured GraphQL item, ready for schema generation"],
+        "example": "A developer connects a Warehouse's Customers table and a mirrored database's Orders table, models a one-to-many Customer-to-Orders relationship, and sets read permissions for the application's service principal — all inside the portal, no code written.",
+        "controls": ["Which tables/views/procedures are exposed (narrower is safer than exposing everything by default)", "Access permission configuration"],
+        "failureModes": ["Exposing every table in a connected source by default instead of deliberately selecting the minimal set an application actually needs"]
       }
     },
     {
-      "id": "step-2",
-      "label": "Fabric API for GraphQL architecture - auto-generated schema and res…",
-      "summary": "Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
+      "id": "schema-generation",
+      "label": "Auto-generated schema, resolvers, endpoint",
+      "summary": "No custom backend code — the schema, resolvers, and live endpoint are all generated from the setup configuration.",
+      "detail": "Fabric API for GraphQL automatically generates a GraphQL schema, resolvers, and a live endpoint from connected data sources, so no custom backend code is required to expose the data. GraphQL items support fan-out queries across multiple attached data sources and can model one-to-one, one-to-many, and many-to-many relationships between exposed entities.",
+      "whyItMatters": "This is the architectural core of the product: the item you create isn't a shell to fill in with resolver logic — it's the finished artifact once sources, exposed tables, relationships, and permissions are configured.",
+      "classification": "fact",
+      "layers": ["compute", "metadata"],
+      "evidence": [
+        { "sourceKey": "api-graphql-overview", "note": "Fabric API for GraphQL automatically generates a GraphQL schema, resolvers, and a live endpoint from connected data sources, so no custom backend code is required to expose the data." },
+        { "sourceKey": "api-graphql-overview", "note": "GraphQL items support fan-out queries across multiple attached data sources and can model one-to-one, one-to-many, and many-to-many relationships between exposed entities." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported… responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sourc…: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["The configured GraphQL item: exposed tables/views/procedures, modeled relationships, permissions"],
+        "processing": ["Generate a GraphQL schema (types and fields) from the exposed tables/views", "Generate resolvers that fan out across attached sources following the modeled relationships", "Publish the schema and resolvers as a live endpoint"],
+        "outputs": ["A queryable GraphQL schema and a live endpoint URL, with no service deployed by the team"],
+        "example": "The Customer/Orders configuration from the setup step generates a schema where a Customer type has an orders field that fans out, at query time, to the mirrored database via the modeled relationship.",
+        "processing_note": null,
+        "controls": ["The exposed tables/views/relationships from setup are the only inputs this step has — no separate resolver customization"],
+        "failureModes": ["Expecting to hand-write custom resolver logic the way a typical GraphQL server allows — Fabric's is generated, not user-authored"]
       }
     },
     {
-      "id": "step-3",
-      "label": "SQL database",
-      "summary": "SQL database in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
+      "id": "field-selection-model",
+      "label": "Field-selection query model",
+      "summary": "A client names only the fields and relationships it needs, in one round trip — no over-fetching, no N+1.",
+      "detail": "The API for GraphQL is built so a single query can request only the specific fields a client needs and traverse defined relationships in one round trip, avoiding both over-fetching and the N+1 query pattern common to REST.",
+      "whyItMatters": "This is the client-facing payoff of the whole architecture: a mobile app that only needs a customer's name and their last three orders makes one call instead of a cascade of follow-up calls per related record.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "api-graphql-overview", "note": "The API for GraphQL is built so a single query can request only the specific fields a client needs and traverse defined relationships in one round trip, avoiding both over-fetching and the N+1 query pattern common to REST." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the SQL database responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through SQL database: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "Azure SQL Database",
-      "summary": "Azure SQL Database in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the Azure SQL Database responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through Azure SQL Database: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "mirrored databases)",
-      "summary": "mirrored databases) in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the mirrored databases) responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through mirrored databases): record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "exposed through a single GraphQL endpoint",
-      "summary": "exposed through a single GraphQL endpoint in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the exposed through a single GraphQL endpoint responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through exposed through a single GraphQL endpoint: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "with the portal setup workflow",
-      "summary": "with the portal setup workflow in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the with the portal setup workflow responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through with the portal setup workflow: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["A client-issued GraphQL query naming specific fields and relationship traversals"],
+        "processing": ["Parse the query against the generated schema", "Resolve only the named fields and relationships, fanning out to underlying sources as needed", "Assemble a single typed JSON response"],
+        "outputs": ["One response payload shaped exactly like the client's query, in one round trip"],
+        "example": "A mobile app requests { customer(id: X) { name orders(last: 3) { placedAt total } } } and gets back exactly those fields in one call, instead of a REST GET for the customer plus three follow-up GETs per order.",
+        "controls": ["What fields and relationships the client chooses to request — the model naturally scopes cost to actual need"],
+        "failureModes": ["A poorly modeled deep relationship chain letting a client's single query fan out to an unexpectedly large number of underlying source calls"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "graphql-api",
-        "label": "Open graphql api"
+      "drillTarget": { "kind": "topic", "slug": "graphql-api", "label": "API for GraphQL" }
+    },
+    {
+      "id": "interactive-editor",
+      "label": "Interactive portal editor",
+      "summary": "Human developers build and test queries in-browser with a results pane, parameterized queries, and Intellisense.",
+      "detail": "The GraphQL API includes an interactive editor in the Fabric portal with a results pane, parameterized query/mutation support, and schema-aware Intellisense for building and testing queries.",
+      "whyItMatters": "This gives an application developer a way to iterate on and validate a query against the live schema before writing any client-side integration code.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "api-graphql-overview", "note": "The GraphQL API includes an interactive editor in the Fabric portal with a results pane, parameterized query/mutation support, and schema-aware Intellisense for building and testing queries." }
+      ],
+      "drill": {
+        "inputs": ["The live, generated GraphQL schema"],
+        "processing": ["Offer schema-aware Intellisense as a developer types a query", "Execute parameterized queries or mutations against the live endpoint", "Render results in an in-portal results pane"],
+        "outputs": ["A validated query a developer can copy directly into an application"],
+        "example": "A developer drafts the RecentOrders query shape in the portal editor, sees the actual JSON response in the results pane, then pastes the finished query into their mobile app's GraphQL client.",
+        "controls": ["Which permissions the developer's own identity has when testing in the editor"],
+        "failureModes": ["Testing successfully in the editor under a privileged identity, then discovering a production caller's narrower permissions can't reach the same fields"]
+      }
+    },
+    {
+      "id": "ai-agent-mcp",
+      "label": "AI-agent access via MCP",
+      "summary": "AI agents connect to the same endpoint through the Model Context Protocol, not only human application developers.",
+      "detail": "Microsoft now documents a path to connect AI agents to Fabric data through the GraphQL endpoint using the Model Context Protocol (MCP), positioning the API as an agent-facing data access layer in addition to a human application API.",
+      "whyItMatters": "The same schema-and-resolver layer built for a mobile app's data needs is also the interface an AI agent uses to reach into Warehouse, Lakehouse, or mirrored-database data — one modeled item can plausibly serve both audiences without duplicating access logic.",
+      "classification": "fact",
+      "layers": ["compute", "orchestration"],
+      "evidence": [
+        { "sourceKey": "api-graphql-overview", "note": "Microsoft now documents a path to connect AI agents to Fabric data through the GraphQL endpoint using the Model Context Protocol (MCP), positioning the API as an agent-facing data access layer in addition to a human application API." }
+      ],
+      "drill": {
+        "inputs": ["The live GraphQL endpoint and its schema", "An AI agent framework speaking MCP"],
+        "processing": ["Agent connects to the GraphQL endpoint as an MCP tool", "Agent issues field-scoped GraphQL queries the same way a human-facing client would"],
+        "outputs": ["Structured, typed data returned to the agent for reasoning or response generation"],
+        "example": "An AI agent answering a support question calls the same GraphQL endpoint a mobile app uses, requesting only the customer and order fields relevant to the question via MCP.",
+        "controls": ["Access permissions configured on the GraphQL item apply identically to MCP callers as to human-facing clients"],
+        "failureModes": ["Exposing a broader, unshaped schema to an agent than would be given to a deliberately scoped human-facing application"]
+      }
+    },
+    {
+      "id": "performance-monitoring",
+      "label": "Performance monitoring dashboard",
+      "summary": "Built-in request logging tracks endpoint usage and behavior over time.",
+      "detail": "Fabric exposes a built-in performance monitoring dashboard with request logging for GraphQL API items, intended to track API usage and behavior over time.",
+      "whyItMatters": "This gives a platform team visibility into how an endpoint is actually being used and behaving in production without instrumenting a custom logging service themselves.",
+      "classification": "fact",
+      "layers": ["observability"],
+      "evidence": [
+        { "sourceKey": "api-graphql-overview", "note": "Fabric exposes a built-in performance monitoring dashboard with request logging for GraphQL API items, intended to track API usage and behavior over time." }
+      ],
+      "drill": {
+        "inputs": ["Requests flowing through the live GraphQL endpoint, from both human clients and AI agents"],
+        "processing": ["Log each request", "Aggregate usage and behavior into the performance monitoring dashboard"],
+        "outputs": ["Visibility into query patterns and endpoint behavior over time, without a custom-built observability layer"],
+        "example": "A platform team notices via the dashboard that a specific deeply-nested query pattern from the mobile app is issued far more often than expected, prompting a review of the client's query design.",
+        "controls": ["No configuration required — this is a built-in capability of any GraphQL API item"],
+        "failureModes": ["Relying on this dashboard alone for quantified latency or throughput numbers, which it does not provide — see the performance-characteristics gap noted in the article"]
+      }
+    },
+    {
+      "id": "warning-schema-versioning",
+      "label": "Anti-pattern: versioned endpoints (v1/v2/v3)",
+      "summary": "Fabric's schema evolution favors additive change and deprecation — minting versioned endpoints defeats the model's advantage.",
+      "detail": "Fabric's GraphQL schema evolution favors additive, non-breaking changes and field deprecation over issuing versioned endpoints (v1/v2/v3), since clients only receive fields they explicitly request.",
+      "whyItMatters": "Because clients only ever receive the fields they explicitly request, a new field cannot break an existing client that never queries it — reaching for a versioned endpoint on every schema change reintroduces exactly the migration overhead GraphQL's request-what-you-need shape was meant to avoid.",
+      "classification": "warning",
+      "layers": ["metadata"],
+      "evidence": [
+        { "sourceKey": "api-graphql-overview", "note": "Fabric's GraphQL schema evolution favors additive, non-breaking changes and field deprecation over issuing versioned endpoints (v1/v2/v3), since clients only receive fields they explicitly request." }
+      ],
+      "drill": {
+        "inputs": ["A schema change request — for example, adding a new field or renaming an existing one"],
+        "processing": ["Correct approach: add the new field alongside the old one, mark the old field @deprecated with a reason", "Anti-pattern: stand up a new versioned endpoint (/graphql/v2) and require all clients to migrate wholesale"],
+        "outputs": ["Correct approach: existing clients keep working unmodified; new clients opt into the new field when ready", "Anti-pattern: every client, including ones that never needed the change, must migrate on a forced timeline"],
+        "example": "A team adds loyaltyTierV2 alongside the existing loyaltyTier field and deprecates the old one with a reason string; a mobile app querying only { name orders { ... } } is entirely unaffected by the change.",
+        "controls": ["Discipline to design new fields as additive and use field deprecation instead of reaching for a new endpoint version"],
+        "failureModes": ["A team used to REST versioning habits reflexively minting v2/v3 GraphQL endpoints, splitting the client base and losing the additive-change advantage entirely"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "hands governed output to",
-      "layer": "orchestration",
-      "kind": "flow"
-    }
+    { "id": "e-sources-setup", "from": "supported-sources", "to": "portal-setup", "label": "connected in the portal", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-setup-schema", "from": "portal-setup", "to": "schema-generation", "label": "exposed tables, relationships, permissions", "layer": "metadata", "kind": "flow" },
+    { "id": "e-schema-field-selection", "from": "schema-generation", "to": "field-selection-model", "label": "generated schema enables field-scoped queries", "layer": "compute", "kind": "flow" },
+    { "id": "e-field-selection-editor", "from": "field-selection-model", "to": "interactive-editor", "label": "tested in-browser by developers", "layer": "compute", "kind": "flow" },
+    { "id": "e-field-selection-mcp", "from": "field-selection-model", "to": "ai-agent-mcp", "label": "queried by AI agents via MCP", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-editor-monitoring", "from": "interactive-editor", "to": "performance-monitoring", "label": "requests logged for observability", "layer": "observability", "kind": "flow" },
+    { "id": "e-mcp-monitoring", "from": "ai-agent-mcp", "to": "performance-monitoring", "label": "requests logged for observability", "layer": "observability", "kind": "flow" },
+    { "id": "e-schema-warning", "from": "schema-generation", "to": "warning-schema-versioning", "label": "risk if evolved via versioned endpoints instead of additive fields", "layer": "metadata", "kind": "branch" }
   ],
   "walkthrough": [
     {
-      "nodeId": "step-1",
-      "title": "1. graphql api boundary",
-      "explanation": "graphql api boundary in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture."
+      "nodeId": "supported-sources",
+      "title": "Start: five source types, one common thread",
+      "explanation": "Warehouse, SQL database, Lakehouse, Azure SQL Database, and mirrored databases are all reached through a SQL analytics endpoint, which is what lets one generation layer serve them all."
     },
     {
-      "nodeId": "step-2",
-      "title": "2. Fabric API for GraphQL architecture - auto-generated schema and res…",
-      "explanation": "Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture."
+      "nodeId": "portal-setup",
+      "title": "Configuration, not deployment",
+      "explanation": "Connecting sources, exposing tables, modeling relationships, and setting permissions is entirely portal-driven — there is no build-and-deploy cycle."
     },
     {
-      "nodeId": "step-3",
-      "title": "3. SQL database",
-      "explanation": "SQL database in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture."
+      "nodeId": "schema-generation",
+      "title": "The schema and resolvers are generated, not written",
+      "explanation": "This is the architectural core: the finished GraphQL item is the output of configuration, with no custom backend code required."
     },
     {
-      "nodeId": "step-4",
-      "title": "4. Azure SQL Database",
-      "explanation": "Azure SQL Database in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture."
+      "nodeId": "field-selection-model",
+      "title": "One round trip, exactly the fields needed",
+      "explanation": "The field-selection query model is what avoids both over-fetching and the N+1 pattern common to REST."
     },
     {
-      "nodeId": "step-5",
-      "title": "5. mirrored databases)",
-      "explanation": "mirrored databases) in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture."
+      "nodeId": "interactive-editor",
+      "title": "Human developers test in the portal",
+      "explanation": "The in-portal editor with Intellisense and a results pane lets a developer validate a query against the live schema before writing client code."
     },
     {
-      "nodeId": "step-6",
-      "title": "6. exposed through a single GraphQL endpoint",
-      "explanation": "exposed through a single GraphQL endpoint in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture."
+      "nodeId": "ai-agent-mcp",
+      "title": "AI agents reach the same endpoint via MCP",
+      "explanation": "The same schema-and-resolver layer is positioned as an agent-facing data access surface, not only a human application API."
     },
     {
-      "nodeId": "step-7",
-      "title": "7. with the portal setup workflow",
-      "explanation": "with the portal setup workflow in the Fabric API for GraphQL architecture - auto-generated schema and resolvers over supported data sources (Warehouse, SQL database, Lakehouse, Azure SQL Database, mirrored databases), exposed through a single GraphQL endpoint, with the portal setup workflow, performance monitoring, and client/AI-agent (MCP) consumption architecture."
+      "nodeId": "performance-monitoring",
+      "title": "Usage is observable out of the box",
+      "explanation": "A built-in dashboard with request logging tracks how the endpoint is actually used, without a custom-built observability layer."
+    },
+    {
+      "nodeId": "warning-schema-versioning",
+      "title": "Warning: don't reach for versioned endpoints",
+      "explanation": "Fabric's schema evolution model is built around additive change; minting v1/v2/v3 endpoints on every change defeats the field-selection model's main advantage."
     }
   ]
 }

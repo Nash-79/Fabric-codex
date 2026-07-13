@@ -1,429 +1,221 @@
 {
   "id": "investment-medallion-architecture",
-  "title": "the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones…",
-  "purpose": "Original diagram: the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below",
-  "accessibleSummary": "An interactive architecture infographic with 7 selectable elements. Every element drills into inputs, processing, outputs, a worked example, controls, and failure modes.",
-  "longDescription": "Read from the first architecture boundary through each labelled relationship to the governed outcome. Select any element for a detailed end-to-end infographic, then trace upstream or downstream to understand the complete implementation path. Original diagram: the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below",
+  "title": "Investment Analytics Medallion: Three Ingestion Paths to Direct Lake",
+  "purpose": "Show how Data Factory Copy, Mirroring, and Data Factory API pulls converge on one lakehouse's bronze+silver, how dbt builds warehouse gold, and how Direct Lake serves Power BI, with telemetry and metadata rails kept apart from business data.",
+  "accessibleSummary": "An architecture diagram with three ingestion paths on the left — file Copy, database Mirroring, and API pulls — all landing in one lakehouse that holds both bronze and silver schemas. A dbt project, orchestrated by Airflow inside Data Factory, reads silver and builds a star schema in a Fabric Warehouse as gold. Power BI reads gold through Direct Lake with no refresh. Two side rails run underneath: a SQL database control plane recording every run, and an Eventhouse capturing high-volume operational telemetry. A warning node calls out the blast-radius cost of merging bronze and silver into one lakehouse.",
+  "longDescription": "This is an architecture diagram for an investment analytics platform, not a generic pipeline. Three ingestion paths feed the same lakehouse: a Data Factory Copy pipeline for custodian files, Mirroring for the live portfolio/transactions operational database (surfaced into the lakehouse via a OneLake shortcut, not a copy), and a second Data Factory pipeline pulling market-data and risk-engine APIs. All three write into lh_analytics, which holds bronze and silver as schemas in one item rather than two lakehouses — a deliberate simplification with a real blast-radius trade-off called out in the warning node. dbt, targeting the warehouse through the community dbt-fabric adapter and scheduled by Airflow inside Data Factory, reads silver and builds a conventional star schema (facts and dimensions) in wh_gold. Power BI consumes wh_gold through Direct Lake, reading Delta columns from OneLake with no import refresh. Two rails run beneath the main flow: sqldb_meta, a Fabric SQL database used as a transactional control plane recording every pipeline and dbt run, and eh_ops, an Eventhouse absorbing high-volume, arrival-ordered operational telemetry that would overwhelm a relational table.",
   "type": "architecture",
   "topicSlug": "medallion-lakehouse",
-  "capabilityIds": [
-    "lakehouse"
-  ],
-  "revision": "1",
+  "capabilityIds": ["lakehouse", "data-factory", "mirroring", "warehouse", "direct-lake"],
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/investment-medallion-architecture.svg",
   "nodes": [
     {
-      "id": "step-1",
-      "label": "medallion lakehouse boundary",
-      "summary": "medallion lakehouse boundary in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture.",
-      "detail": "This element makes the data responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this data boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "data"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "data"
+      "id": "file-copy-pipeline",
+      "label": "Data Factory Copy (custodian files)",
+      "summary": "A metadata-driven pipeline copies custodian/administrator files into bronze.",
+      "detail": "One Data Factory pipeline, driven by a control-plane registry rather than one pipeline per file source, uses Copy activity to land custodian and administrator files into the lakehouse's bronze schema. Copy activity is one of Data Factory's three documented data-movement options, offering fully customizable movement with manual control of parallelism.",
+      "whyItMatters": "Files are the least uniform of the three source shapes — different custodians deliver on different schedules and layouts — so a metadata-driven pattern (one pipeline, many registry rows) avoids building and maintaining a bespoke pipeline per file source.",
+      "classification": "fact",
+      "layers": ["data", "orchestration"],
+      "evidence": [
+        { "sourceKey": "data-factory-overview", "note": "Data Factory offers three distinct data-movement options: Copy job for simplified movement with built-in delivery styles, Copy activity for fully customizable movement with manual control of parallelism, and Mirroring for near-real-time database replication into OneLake." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "data service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the medallion lakehouse boundary responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through medallion lakehouse boundary: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Flat files from custodians/administrators (positions, transactions, instruments)"],
+        "processing": ["Lookup active file entities from the control-plane registry", "ForEach entity, Copy activity moves new files into bronze", "Stored procedure records the run and advances the watermark"],
+        "outputs": ["Append-only bronze Delta tables under bronze_files/, tagged with run id and watermark"],
+        "example": "A nightly positions file from a custodian lands in bronze_files/positions; the same pipeline definition, driven by a different registry row, also lands the instruments file with no separate pipeline built.",
+        "controls": ["Registry-driven entity list rather than hardcoded pipeline logic", "Watermark column choice per entity"],
+        "failureModes": ["A custodian changing file layout without notice, breaking the Copy activity's schema expectations", "Registry drift where an entity is added to the source but never registered, silently never ingesting"]
       },
-      "drillTarget": {
-        "kind": "topic",
-        "slug": "medallion-lakehouse",
-        "label": "Open medallion lakehouse"
-      }
+      "drillTarget": { "kind": "capability", "slug": "data-factory", "label": "Data Factory" }
     },
     {
-      "id": "step-2",
-      "label": "the investment analytics medallion on Fabric",
-      "summary": "the investment analytics medallion on Fabric in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture.",
-      "detail": "This element makes the orchestration responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this orchestration boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "orchestration"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "orchestration"
+      "id": "mirroring-portfolio-db",
+      "label": "Mirroring (portfolio/transactions DB)",
+      "summary": "The operational portfolio/transactions database replicates continuously into OneLake, no pipeline required.",
+      "detail": "Mirroring is Data Factory's third movement option: a near-real-time database replication path into OneLake, distinct from the scheduled Copy pipelines used for files and APIs. The operational system of record for portfolios and transactions is mirrored rather than pipelined, so analytics run against a continuously fresh replica instead of hitting the source database directly.",
+      "whyItMatters": "The portfolio/transactions database is the system of record and must stay authoritative for trading operations; mirroring gets a fresh analytical copy without adding pipeline load or lag to the operational system.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "data-factory-overview", "note": "Mirroring is surfaced from Data Factory as a data-movement method that keeps a near-real-time replica of an operational database inside OneLake, so analytics and reporting can run against the replica instead of the source system." }
       ],
       "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "orchestration service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the the investment analytics medallion on Fabric responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through the investment analytics medallion on Fabric: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-3",
-      "label": "three ingestion paths feed one lakehouse's bronze+silver zones",
-      "summary": "three ingestion paths feed one lakehouse's bronze+silver zones in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the three ingestion paths feed one lakehouse's bronze+silver zones responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through three ingestion paths feed one lakehouse's bronze+silver zones: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-4",
-      "label": "dbt builds warehouse gold",
-      "summary": "dbt builds warehouse gold in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture.",
-      "detail": "This element makes the compute responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this compute boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "compute"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "compute"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "compute service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the dbt builds warehouse gold responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through dbt builds warehouse gold: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-5",
-      "label": "and Direct Lake serves Power BI",
-      "summary": "and Direct Lake serves Power BI in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture.",
-      "detail": "This element makes the governance responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this governance boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "governance"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "governance"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "governance service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the and Direct Lake serves Power BI responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through and Direct Lake serves Power BI: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-6",
-      "label": "with telemetry and metadata rails separated below",
-      "summary": "with telemetry and metadata rails separated below in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture.",
-      "detail": "This element makes the metadata responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this metadata boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "metadata"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "metadata"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "metadata service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the with telemetry and metadata rails separated below responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through with telemetry and metadata rails separated below: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
-      }
-    },
-    {
-      "id": "step-7",
-      "label": "lakehouse governed outcome",
-      "summary": "lakehouse governed outcome in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture.",
-      "detail": "This element makes the security responsibility explicit. Follow its incoming and outgoing relationships to verify the complete hand-off rather than treating it as an isolated decorative box.",
-      "whyItMatters": "Implementation ownership, recovery, and evidence must be visible at this security boundary before the pattern is reused.",
-      "classification": "pattern",
-      "layers": [
-        "security"
-      ],
-      "evidence": [],
-      "tags": [
-        "MicrosoftFabric",
-        "DataArchitecture",
-        "security"
-      ],
-      "drill": {
-        "inputs": [
-          "Upstream data or metadata contract",
-          "security service objective",
-          "Named owner and recovery expectation"
-        ],
-        "processing": [
-          "Apply the lakehouse governed outcome responsibility",
-          "Record state, quality, and evidence",
-          "Make retries deterministic before handing off"
-        ],
-        "outputs": [
-          "Versioned downstream contract",
-          "Observable completion signal",
-          "Reconciliation or failure record"
-        ],
-        "example": "Trace one representative data product through lakehouse governed outcome: record what arrives, the exact Fabric responsibility applied, the output contract, and how an operator safely retries a failed run.",
-        "controls": [
-          "Identity and access boundary",
-          "Configuration and schema version",
-          "Quality, replay, and recovery policy"
-        ],
-        "failureModes": [
-          "Implicit ownership or undocumented hand-off",
-          "Product behavior asserted without a cited source",
-          "A partial failure has no replay or reconciliation path"
-        ]
+        "inputs": ["Change events from the operational portfolio/transactions database"],
+        "processing": ["Mirroring replicator polls and merges incremental changes into OneLake as Delta Parquet", "No ETL pipeline is authored or maintained for this path"],
+        "outputs": ["A continuously updated Delta replica of portfolios/transactions in OneLake"],
+        "example": "A portfolio rebalance posted in the operational system appears in the mirrored replica shortly after, without any Data Factory pipeline run being triggered.",
+        "controls": ["Which tables/entities are included in the mirror configuration"],
+        "failureModes": ["Treating the mirrored replica as if it were the transactional source and attempting writes against it — it is a read replica", "Silver logic assuming file-pipeline-style watermarks exist for mirrored data when none do"]
       },
-      "drillTarget": {
-        "kind": "capability",
-        "slug": "lakehouse",
-        "label": "Open lakehouse"
+      "drillTarget": { "kind": "capability", "slug": "mirroring", "label": "Mirroring" }
+    },
+    {
+      "id": "api-pull-pipeline",
+      "label": "Data Factory API pulls (market data, risk engine)",
+      "summary": "A second metadata-driven pipeline polls market-data and risk-engine REST APIs on a schedule.",
+      "detail": "A parallel Data Factory pipeline uses the same registry-driven Lookup-ForEach-Copy pattern as the file path, but with a REST source instead of a file source, pulling market-data and risk-engine results on a per-entity schedule defined in the control plane.",
+      "whyItMatters": "API sources need scheduled polling with auth handled through a linked service rather than hardcoded credentials; reusing the file path's orchestration shape keeps one operational pattern instead of two.",
+      "classification": "fact",
+      "layers": ["data", "orchestration"],
+      "evidence": [
+        { "sourceKey": "data-factory-overview", "note": "Data Factory connects to data sources, moves data, transforms it, and orchestrates movement and transformation tasks from a single place, with connectivity to more than 170 data sources spanning cloud, multicloud, and on-premises systems." }
+      ],
+      "drill": {
+        "inputs": ["Market-data and risk-engine REST endpoints, one registry row per entity"],
+        "processing": ["Lookup active API entities", "ForEach entity, Copy activity issues a REST GET with pagination and a linked-service-held auth token", "Result lands in bronze, run recorded in the control plane"],
+        "outputs": ["Bronze tables for market_data and risk_engine_results, refreshed on each entity's own schedule"],
+        "example": "A risk-engine results feed polled every 15 minutes lands new VaR calculations into bronze_api/risk_engine_results, driven by the same pipeline that also pulls hourly market-data snapshots on a different schedule.",
+        "controls": ["Per-entity schedule_cron in the control-plane registry", "Auth via Data Factory linked service, never hardcoded"],
+        "failureModes": ["An API rate limit throttling a poorly-scheduled pull and silently truncating results", "Pagination logic missing a page on a large result set, undercounting rows with no error raised"]
+      }
+    },
+    {
+      "id": "lakehouse-bronze-silver",
+      "label": "Lakehouse (bronze + silver schemas)",
+      "summary": "One lakehouse holds both bronze and silver as schemas, all files and the mirrored replica landing here.",
+      "detail": "All three ingestion paths converge on lh_analytics: bronze from the two Data Factory pipelines, and the mirrored operational data surfaced via a OneLake shortcut rather than a copy. Bronze and silver are schemas within this one lakehouse item, a deliberate simplification versus running two separate lakehouses.",
+      "whyItMatters": "This is the convergence point where three genuinely different source shapes become one governed set of Delta tables — every downstream step (conforming, gold modelling, serving) reads from this single place.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "onelake-overview", "note": "All Fabric data items, including lakehouses and warehouses, automatically persist their tabular data in OneLake using the open Delta Parquet format, regardless of which engine wrote the data." }
+      ],
+      "drill": {
+        "inputs": ["Bronze writes from the file Copy pipeline", "Bronze writes from the API Copy pipeline", "A OneLake shortcut pointing at the mirrored portfolio/transactions replica"],
+        "processing": ["Fabric auto-registers Delta writes into the Tables area metastore", "A Spark conform notebook dedupes, standardizes, and merges bronze into silver per entity"],
+        "outputs": ["Conformed silver Delta tables (positions, transactions, instruments, portfolios, returns, risk measures)"],
+        "example": "silver.positions is built by merging deduplicated file-sourced position records with instrument reference data, ready for dbt to read as a staging source.",
+        "controls": ["Schema/schema-evolution policy per silver table", "Business-key definition per entity used in the conform merge"],
+        "failureModes": ["See the blast-radius warning node — one shared Tables namespace means an over-broad grant or runaway job in bronze can reach silver too"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
+    },
+    {
+      "id": "blast-radius-warning",
+      "label": "Blast-radius risk of merged bronze/silver",
+      "summary": "One shared Tables namespace means bronze and silver no longer have item-level isolation.",
+      "detail": "Merging bronze and silver into one lakehouse buys real simplicity — one shortcut set, one workspace boundary, one SQL analytics endpoint — but costs blast-radius isolation. A lakehouse's Tables area is one shared namespace, so a runaway Spark job, an accidental DROP TABLE, or an over-broad workspace-role grant that would previously have been scoped to bronze only can now reach silver tables too.",
+      "whyItMatters": "This is a deliberate simplicity-over-isolation trade the team should revisit if bronze and silver ever need materially different access populations or diverging retention/compliance requirements — not a Fabric limitation, but a consequence of this design's own schema layout.",
+      "classification": "warning",
+      "layers": ["data", "governance"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["A single lakehouse item hosting both bronze_* and silver schemas as folders/tables in one Tables area"],
+        "processing": ["Workspace roles and item-level grants apply to the whole lakehouse, not per-schema", "A destructive operation in bronze has no item boundary preventing it from reaching silver"],
+        "outputs": ["Access control degrading from item-level isolation to a schema/folder-naming convention rather than a Fabric-enforced boundary"],
+        "example": "A workspace-role grant intended to let an engineering contractor write to bronze_files also gives them write access to silver, because both live in the same lakehouse item with no separate grant surface.",
+        "controls": ["Revisit the merged layout if bronze and silver need different access populations", "Compensate with folder-naming discipline and row-level auditing until/unless a split is warranted"],
+        "failureModes": ["An accidental DROP TABLE in a bronze cleanup script reaching a silver table with no item boundary to stop it", "Compliance requirements diverging between raw and conformed data with no structural separation to enforce them"]
+      }
+    },
+    {
+      "id": "dbt-gold-build",
+      "label": "dbt-built warehouse gold (Airflow orchestrated)",
+      "summary": "dbt, run by Airflow inside Data Factory, reads silver and builds a star schema in the warehouse.",
+      "detail": "dbt targets Fabric Warehouse through the community-maintained dbt-fabric PyPI adapter rather than a Fabric-native integration, connecting via a profiles.yml type: fabric output against the SQL analytics endpoint host. Fabric documents pairing dbt with Apache Airflow inside Data Factory for scheduled runs, since there is no native dbt scheduler in Fabric.",
+      "whyItMatters": "The warehouse gives gold full multi-table ACID transactions, which the lakehouse's read-only SQL analytics endpoint cannot offer — that matters for a dbt MERGE-heavy incremental build competing with concurrent reads.",
+      "classification": "fact",
+      "layers": ["compute", "orchestration"],
+      "evidence": [
+        { "sourceKey": "dbt-fabric-warehouse", "note": "Fabric Data Warehouse is supported as a dbt target via the dbt-fabric adapter, a Python package published on PyPI, rather than through a Fabric-native dbt integration; Fabric documents pairing dbt with Apache Airflow inside Fabric Data Factory for scheduled runs rather than a native dbt scheduler." },
+        { "sourceKey": "warehouse-overview", "note": "Development is primarily in T-SQL on a large SQL Database Engine surface area, including full multi-table ACID transactions, materialized views, functions, and stored procedures." }
+      ],
+      "drill": {
+        "inputs": ["Silver Delta tables read via dbt sources.yml using three-part cross-database names"],
+        "processing": ["dbt staging models build stg_positions/stg_returns views over silver", "dbt dimension models build dim_date/dim_portfolio/dim_benchmark and an SCD Type 2 dim_instrument", "dbt incremental fact models build fact_positions/fact_returns_daily/fact_risk_measures/fact_transactions", "Airflow DAG inside Data Factory triggers dbt run then dbt test on a schedule"],
+        "outputs": ["A star schema in wh_gold: facts joined to conformed dimensions"],
+        "example": "The nightly Airflow DAG runs dbt run then dbt test against wh_gold; a failed test on fact_positions_daily's uniqueness constraint blocks the DAG from marking the run successful.",
+        "controls": ["Incremental vs full-refresh materialization per model", "Test coverage on facts (uniqueness, not-null) as a build gate"],
+        "failureModes": ["dbt issuing a T-SQL operation the warehouse doesn't natively support (ALTER, full MERGE, TRUNCATE) — the adapter works around this via CTAS+DROP/CREATE, which the team must understand rather than assume is free", "Airflow DAG failures not surfacing to the same control-plane audit trail as the ingestion pipelines"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
+    },
+    {
+      "id": "direct-lake-power-bi",
+      "label": "Power BI via Direct Lake",
+      "summary": "Power BI reads wh_gold's Delta tables straight from OneLake with no import refresh.",
+      "detail": "Because warehouse tables are physically Delta and automatically published to OneLake Files, Power BI's Direct Lake mode reads the gold star schema's columns straight from OneLake, loading data lazily as queries and relationships need it, with no separate import or refresh cycle.",
+      "whyItMatters": "This is the payoff of the whole pipeline: analysts see gold data as current as the last dbt run, without anyone operating an import refresh schedule on top of it.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "warehouse-overview", "note": "Warehouse data is automatically published to OneLake Files in Delta format, making the same tables readable by external engines and other Fabric workloads without export jobs." }
+      ],
+      "drill": {
+        "inputs": ["wh_gold's Delta fact and dimension tables"],
+        "processing": ["Direct Lake mode reads column data straight from OneLake, lazily loading only the columns a query and its measures/relationships touch"],
+        "outputs": ["Power BI reports and dashboards reflecting the latest completed dbt gold build"],
+        "example": "A risk analyst's VaR dashboard reflects last night's dbt run as soon as it completes, with no scheduled semantic-model refresh in between.",
+        "controls": ["Framing/refresh cadence tied to the dbt build schedule, not a separate Power BI refresh"],
+        "failureModes": ["A partially failed dbt run leaving gold tables mid-update while Direct Lake queries continue reading them, if no completion gate is enforced"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
+    },
+    {
+      "id": "control-plane-sqldb",
+      "label": "sqldb_meta control plane",
+      "summary": "A Fabric SQL database records every pipeline and dbt run for cross-path audit.",
+      "detail": "sqldb_meta is a Fabric SQL database — a transactional OLTP engine — holding the entity registry, watermarks, and run/run-step audit tables that every ingestion pipeline and the Airflow DAG write to, giving one queryable answer to 'what ran, when, how much, did it fail' across all three ingestion paths and the gold build.",
+      "whyItMatters": "Without a shared control plane, each ingestion path would need its own ad hoc monitoring, and there would be no single place to answer an operational question spanning files, mirroring, and API pulls.",
+      "classification": "pattern",
+      "layers": ["orchestration", "observability"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["Run-start and run-completion writes from the file pipeline, API pipeline, and Airflow DAG"],
+        "processing": ["Stored procedures insert etl_run/etl_run_step rows and advance etl_watermark", "Mirrored entities get an inventory-only registry row with no pipeline firing for them"],
+        "outputs": ["A queryable run history joinable across all ingestion paths and the gold build"],
+        "example": "An operator queries etl_run_step for all failed steps in the last 24 hours across file, API, and dbt runs in one T-SQL statement.",
+        "controls": ["Which pipelines/DAGs are required to write to the control plane", "Retention policy on run history"],
+        "failureModes": ["A pipeline or DAG failing before it writes its own audit row, leaving a silent gap in the run history rather than a visible failure"]
+      }
+    },
+    {
+      "id": "telemetry-eventhouse",
+      "label": "eh_ops Eventhouse (operational telemetry)",
+      "summary": "High-volume, per-event telemetry from ingestion functions lands in an Eventhouse, not the control-plane database.",
+      "detail": "Granular, high-cardinality operational telemetry — one event per API call attempt, retry, or validation failure — goes to an Eventhouse rather than sqldb_meta, because an Eventhouse automatically organizes ingested records by arrival time for fast indexed queries at any scale, which fits bursty function-level logs far better than a table tuned for a handful of run rows per day.",
+      "whyItMatters": "Routing high-cardinality event data into the transactional control-plane database would overwhelm it; keeping the two telemetry lanes separate matches each store to the query shape it's actually built for.",
+      "classification": "fact",
+      "layers": ["observability"],
+      "evidence": [
+        { "sourceKey": "onelake-overview", "note": "All Fabric data items, including lakehouses and warehouses, automatically persist their tabular data in OneLake using the open Delta Parquet format, regardless of which engine wrote the data — the same open-storage foundation an Eventhouse's KQL tables also sit on when OneLake availability is enabled." }
+      ],
+      "drill": {
+        "inputs": ["Per-event telemetry from ingestion functions: API call attempts, retries, validation failures"],
+        "processing": ["Events land via Eventstream or direct Kusto ingestion into KQL tables", "Records are organized by arrival time for fast indexed queries"],
+        "outputs": ["A queryable, arrival-ordered event log independent of the low-cardinality run audit in sqldb_meta"],
+        "example": "An operator queries eh_ops for every retry attempt on the API pull pipeline in a 5-minute window, a query shape sqldb_meta's run-level tables were never designed for.",
+        "controls": ["Which functions/pipelines emit telemetry events, and at what granularity"],
+        "failureModes": ["Conflating the two telemetry lanes — trying to answer a run-level audit question from Eventhouse or a per-event volume question from sqldb_meta — is a query-shape mismatch, not a missing feature"]
       }
     }
   ],
   "edges": [
-    {
-      "id": "edge-1",
-      "from": "step-1",
-      "to": "step-2",
-      "label": "hands governed output to",
-      "layer": "orchestration",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-2",
-      "from": "step-2",
-      "to": "step-3",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-3",
-      "from": "step-3",
-      "to": "step-4",
-      "label": "hands governed output to",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-4",
-      "from": "step-4",
-      "to": "step-5",
-      "label": "hands governed output to",
-      "layer": "governance",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-5",
-      "from": "step-5",
-      "to": "step-6",
-      "label": "hands governed output to",
-      "layer": "metadata",
-      "kind": "flow"
-    },
-    {
-      "id": "edge-6",
-      "from": "step-6",
-      "to": "step-7",
-      "label": "hands governed output to",
-      "layer": "security",
-      "kind": "flow"
-    }
+    { "id": "e-file-lakehouse", "from": "file-copy-pipeline", "to": "lakehouse-bronze-silver", "label": "bronze file writes", "layer": "data", "kind": "flow" },
+    { "id": "e-mirror-lakehouse", "from": "mirroring-portfolio-db", "to": "lakehouse-bronze-silver", "label": "shortcut to mirrored replica", "layer": "data", "kind": "flow" },
+    { "id": "e-api-lakehouse", "from": "api-pull-pipeline", "to": "lakehouse-bronze-silver", "label": "bronze API writes", "layer": "data", "kind": "flow" },
+    { "id": "e-lakehouse-warning", "from": "lakehouse-bronze-silver", "to": "blast-radius-warning", "label": "risk of shared Tables namespace", "layer": "governance", "kind": "branch" },
+    { "id": "e-lakehouse-dbt", "from": "lakehouse-bronze-silver", "to": "dbt-gold-build", "label": "silver read via dbt sources", "layer": "compute", "kind": "flow" },
+    { "id": "e-dbt-directlake", "from": "dbt-gold-build", "to": "direct-lake-power-bi", "label": "gold star schema", "layer": "compute", "kind": "flow" },
+    { "id": "e-file-controlplane", "from": "file-copy-pipeline", "to": "control-plane-sqldb", "label": "run + watermark audit", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-api-controlplane", "from": "api-pull-pipeline", "to": "control-plane-sqldb", "label": "run + watermark audit", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-dbt-controlplane", "from": "dbt-gold-build", "to": "control-plane-sqldb", "label": "DAG run status", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-file-telemetry", "from": "file-copy-pipeline", "to": "telemetry-eventhouse", "label": "per-event function telemetry", "layer": "observability", "kind": "flow" },
+    { "id": "e-api-telemetry", "from": "api-pull-pipeline", "to": "telemetry-eventhouse", "label": "per-event function telemetry", "layer": "observability", "kind": "flow" }
   ],
   "walkthrough": [
-    {
-      "nodeId": "step-1",
-      "title": "1. medallion lakehouse boundary",
-      "explanation": "medallion lakehouse boundary in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture."
-    },
-    {
-      "nodeId": "step-2",
-      "title": "2. the investment analytics medallion on Fabric",
-      "explanation": "the investment analytics medallion on Fabric in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture."
-    },
-    {
-      "nodeId": "step-3",
-      "title": "3. three ingestion paths feed one lakehouse's bronze+silver zones",
-      "explanation": "three ingestion paths feed one lakehouse's bronze+silver zones in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture."
-    },
-    {
-      "nodeId": "step-4",
-      "title": "4. dbt builds warehouse gold",
-      "explanation": "dbt builds warehouse gold in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture."
-    },
-    {
-      "nodeId": "step-5",
-      "title": "5. and Direct Lake serves Power BI",
-      "explanation": "and Direct Lake serves Power BI in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture."
-    },
-    {
-      "nodeId": "step-6",
-      "title": "6. with telemetry and metadata rails separated below",
-      "explanation": "with telemetry and metadata rails separated below in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture."
-    },
-    {
-      "nodeId": "step-7",
-      "title": "7. lakehouse governed outcome",
-      "explanation": "lakehouse governed outcome in the the investment analytics medallion on Fabric — three ingestion paths feed one lakehouse's bronze+silver zones, dbt builds warehouse gold, and Direct Lake serves Power BI, with telemetry and metadata rails separated below architecture."
-    }
+    { "nodeId": "file-copy-pipeline", "title": "Files: metadata-driven Copy", "explanation": "A single registry-driven pipeline copies every custodian file source into bronze, instead of one pipeline per source." },
+    { "nodeId": "mirroring-portfolio-db", "title": "The operational DB: mirrored, not pipelined", "explanation": "The live portfolio/transactions system of record is mirrored continuously into OneLake, keeping the source database untouched by analytics load." },
+    { "nodeId": "api-pull-pipeline", "title": "APIs: the same pattern, a REST source", "explanation": "Market-data and risk-engine pulls reuse the file path's registry-driven orchestration shape with a REST source instead of a file source." },
+    { "nodeId": "lakehouse-bronze-silver", "title": "Convergence: one lakehouse, bronze and silver", "explanation": "All three paths land in lh_analytics, where bronze and silver are schemas in one item rather than two separate lakehouses." },
+    { "nodeId": "blast-radius-warning", "title": "The trade-off of merging bronze and silver", "explanation": "That simplification costs item-level isolation — a shared Tables namespace means bronze and silver no longer have separate access or blast-radius boundaries." },
+    { "nodeId": "dbt-gold-build", "title": "dbt builds gold, Airflow schedules it", "explanation": "dbt reads silver and builds a star schema in the warehouse, orchestrated by an Airflow DAG running inside Data Factory." },
+    { "nodeId": "direct-lake-power-bi", "title": "Power BI reads gold with no refresh", "explanation": "Direct Lake reads the warehouse's Delta gold tables straight from OneLake, as current as the last completed dbt run." },
+    { "nodeId": "control-plane-sqldb", "title": "One control plane for run audit", "explanation": "A Fabric SQL database records every pipeline and dbt run, giving one place to ask what ran and whether it succeeded." },
+    { "nodeId": "telemetry-eventhouse", "title": "High-volume telemetry gets its own store", "explanation": "Per-event function telemetry goes to an Eventhouse built for arrival-ordered event scale, kept separate from the low-cardinality run audit." }
   ]
 }

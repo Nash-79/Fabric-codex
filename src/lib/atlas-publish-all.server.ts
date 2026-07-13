@@ -51,7 +51,7 @@ function stem(path: string) {
     .replace(/\.json$/, "");
 }
 
-function stableJson(value: unknown): string {
+export function stableJson(value: unknown): string {
   // Deterministic stringify so key order in the source file doesn't cause false "changed" diffs.
   if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
   if (value && typeof value === "object") {
@@ -59,6 +59,15 @@ function stableJson(value: unknown): string {
     return `{${keys.map((k) => `${JSON.stringify(k)}:${stableJson((value as any)[k])}`).join(",")}}`;
   }
   return JSON.stringify(value);
+}
+
+export function contentPublishDocument<T extends Record<string, unknown>>(
+  kind: "article" | "design" | "lesson",
+  payload: T,
+): T & { kind: "article" | "design" | "lesson" } {
+  // publishContentItem persists the dispatched kind inside `document`. Compare against that exact
+  // shape or every Publish all run sees all content as changed and creates another version.
+  return { ...payload, kind };
 }
 
 type JsonValue = string | number | boolean | null | JsonValue[] | { [k: string]: JsonValue };
@@ -124,31 +133,41 @@ export async function publishAllBundled(
 
   // --- Diagrams next: articles may embed them, and registration is a plain upsert-by-slug. ---
   const diagramManifest = Object.values(diagramAssets)[0]?.default ?? [];
-  for (const entry of diagramManifest) {
+  const diagramEntries = diagramManifest.flatMap((entry) => {
     const slug = (entry.path ?? entry.slug ?? "")
       .split("/")
       .pop()
       ?.replace(/\.(svg|mmd)$/i, "");
-    if (!slug) continue;
-    // Diagram registration is a cheap upsert with no "unchanged" fast-path worth the complexity —
-    // caption/kind edits should always take, and re-upserting an identical row is a no-op in Postgres.
+    return slug ? [{ entry, slug }] : [];
+  });
+  if (diagramEntries.length) {
+    // Register the manifest in one upsert. The old per-entry path made hundreds of sequential
+    // PostgREST round trips and routinely exhausted the server-function publish window.
     try {
-      const result = await publishFromFile(sb, "diagram", entry);
-      items.push({
-        kind: "diagram",
-        slug,
-        file: "content/diagrams/assets.json",
-        action: "published",
-        detail: result,
-      });
+      await publishFromFile(
+        sb,
+        "diagram",
+        diagramEntries.map(({ entry }) => entry),
+      );
+      for (const { slug } of diagramEntries) {
+        items.push({
+          kind: "diagram",
+          slug,
+          file: "content/diagrams/assets.json",
+          action: "published",
+          detail: { registered: 1, slug },
+        });
+      }
     } catch (err: any) {
-      items.push({
-        kind: "diagram",
-        slug,
-        file: "content/diagrams/assets.json",
-        action: "failed",
-        reason: err?.message ?? String(err),
-      });
+      for (const { slug } of diagramEntries) {
+        items.push({
+          kind: "diagram",
+          slug,
+          file: "content/diagrams/assets.json",
+          action: "failed",
+          reason: err?.message ?? String(err),
+        });
+      }
     }
   }
 
@@ -166,7 +185,7 @@ export async function publishAllBundled(
 
     for (const [path, mod] of Object.entries(jsons)) {
       const slug = mod.default?.slug ?? stem(path);
-      const payload = { ...mod.default, slug };
+      const payload = contentPublishDocument(kind, { ...mod.default, slug });
       const citedKeys: string[] = payload.cited_source_keys ?? [];
       const missingSources = citedKeys.filter((k) => !publishedSourceSlugs.has(k));
       if (missingSources.length) {

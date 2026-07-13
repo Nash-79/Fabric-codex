@@ -48,8 +48,8 @@ export type DiagramDrill = {
 
 /**
  * What the diagram-author agent writes into content/diagrams/<slug>.diagram.json.
- * Deliberately carries NO x/y/width/height — geometry is derived by the layout engine, so an
- * author never hand-places boxes and the topology always reflects the edges.
+ * Carries the evidence and semantic topology paired to regions in the authored SVG. Geometry
+ * belongs in the SVG itself; the sidecar never duplicates x/y/width/height coordinates.
  */
 export type AuthoredDiagramNode = {
   id: string;
@@ -100,62 +100,9 @@ export type AuthoredDiagram = {
   capabilityIds: string[];
   revision: string;
   qaStatus: "draft" | "passed" | "failed";
-  /** The hand-drawn SVG kept as the print / no-JavaScript fallback. */
+  /** The authored infographic used for reading, print, and no-JavaScript fallback. */
   staticPath: string;
   nodes: AuthoredDiagramNode[];
   edges: AuthoredDiagramEdge[];
   walkthrough: DiagramWalkthroughStep[];
 };
-
-/* ------------------------------------------------------------------ *
- * Laid-out shapes — what the renderer consumes.
- * ------------------------------------------------------------------ */
-
-export type DiagramNode = AuthoredDiagramNode & {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-export type DiagramEdge = AuthoredDiagramEdge & {
-  /** Orthogonal route through the canvas, not a straight centre-to-centre line. */
-  path: string;
-  /** Where to anchor the edge label. */
-  labelX: number;
-  labelY: number;
-};
-
-/** A titled horizontal band grouping nodes of the same rank (architecture/flow diagrams). */
-export type DiagramLane = {
-  id: string;
-  label: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-export type InteractiveDiagramDefinition = Omit<AuthoredDiagram, "nodes" | "edges"> & {
-  viewBox: { width: number; height: number };
-  nodes: DiagramNode[];
-  edges: DiagramEdge[];
-  lanes: DiagramLane[];
-};
-
-export function drillHref(target: DiagramDrillTarget): string {
-  switch (target.kind) {
-    case "topic":
-      return `/topics/${target.slug}`;
-    case "capability":
-      return `/registry/${target.slug}`;
-    case "article":
-      return `/blogs/article/${target.slug}`;
-    case "design":
-      return `/design/${target.slug}`;
-    case "lesson":
-      return `/blogs/lesson/${target.slug}`;
-    case "diagram":
-      return `#diagram-${target.slug}`;
-  }
-}
