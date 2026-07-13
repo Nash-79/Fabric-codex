@@ -115,9 +115,7 @@ for (const name of sidecarNames) {
       if (!item.sourceKey) {
         failures.push(`${label}: node "${node.id}" has evidence with no sourceKey`);
       } else if (!existsSync(join(root, "content", "sources", `${item.sourceKey}.json`))) {
-        failures.push(
-          `${label}: node "${node.id}" cites unknown sourceKey "${item.sourceKey}"`,
-        );
+        failures.push(`${label}: node "${node.id}" cites unknown sourceKey "${item.sourceKey}"`);
       }
     }
 

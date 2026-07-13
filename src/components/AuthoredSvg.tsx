@@ -89,9 +89,7 @@ export function AuthoredSvg({
           role="tooltip"
           className={cn(
             "pointer-events-auto absolute z-30 max-h-[min(18rem,calc(100%-1rem))] w-[min(22rem,calc(100%-1rem))] -translate-x-1/2 overflow-y-auto rounded-xl border border-border bg-popover p-3 text-left text-popover-foreground shadow-xl",
-            active.placement === "above"
-              ? "-translate-y-[calc(100%+0.5rem)]"
-              : "translate-y-2",
+            active.placement === "above" ? "-translate-y-[calc(100%+0.5rem)]" : "translate-y-2",
           )}
           style={{ left: active.left, top: active.top }}
         >
