@@ -35,8 +35,10 @@ Every registered slug has three synchronized artifacts:
 3. `public/diagrams/<slug>.svg` — byte-identical served mirror.
 
 `npm run validate:diagrams` verifies safe SVG markup, `viewBox`, root accessibility metadata,
-content/public equality, manifest hash, sidecar structure, evidence on facts, labelled edges,
-decision branching, and one focusable SVG region per sidecar node.
+content/public equality, manifest hash, sidecar/revision parity, resolvable evidence keys, complete
+drill controls and failure modes, labelled edges, decision branching, and one focusable SVG region
+per sidecar node. An asset cannot move to `passed` while any node is mapped to an incidental SVG
+element instead of a semantic `<g>` region.
 
 ## Authoring and QA
 
@@ -67,9 +69,18 @@ move from `draft` to `passed`; validation proves structural integrity, not visua
   SVG roots, and empty interactive regions.
 - The rendered audit exposed malformed Polaris roots plus real clipping/collision defects that the
   structural validator could not see. These are now part of the normal acceptance gate.
-- New diagrams must map nodes to complete semantic `<g>` regions. Legacy text-only hit targets
-  remain `draft` until each capability-family visual review expands them to its complete card or
-  stage; CSS bounding-box targeting and clamped tooltips provide a safe interim reader experience.
+- Every registered diagram now maps nodes to complete semantic `<g>` regions. All 566 node targets
+  cover their complete card, stage, question, warning, or operating panel; no text-only mappings
+  remain.
+- The first composition-redesign wave replaced all 12 repeated strategy templates: architecture
+  strategy, data modelling, architecture implementation, event-driven, metadata-driven, and
+  silver-layer modelling. Their 86 nodes now map to complete semantic visual groups. Sidecar
+  revision alone is still not evidence that the remaining visuals meet the Direct Lake infographic
+  standard.
+- The cross-site migration then upgraded the remaining 66 SVGs without flattening their existing
+  subject-specific compositions. All 78 content/public mirrors are synchronized, all registered
+  diagrams are embedded by at least one article, design, or lesson, and the Medallion Lakehouse
+  article now uses its dedicated architecture and decision pair.
 
 No new article is required solely to close diagram coverage: every legacy asset is already embedded
 in an article, design, or lesson. Prefer strengthening the existing topic before creating another

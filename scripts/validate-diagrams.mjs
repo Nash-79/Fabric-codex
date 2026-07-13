@@ -56,6 +56,8 @@ const sidecarNames = readdirSync(dir).filter((name) => name.endsWith(".diagram.j
 const kinds = new Set(["architecture", "decision", "flow", "model", "internals"]);
 const classifications = new Set(["fact", "pattern", "inference", "warning"]);
 let authored = 0;
+let semanticRegions = 0;
+let mappedRegions = 0;
 
 for (const name of sidecarNames) {
   const slug = name.replace(/\.diagram\.json$/, "");
@@ -143,9 +145,18 @@ for (const name of sidecarNames) {
   }
   for (const id of regionIds)
     if (!ids.has(id)) failures.push(`${label}: SVG region references unknown node "${id}"`);
-  for (const match of svg.matchAll(/<[^>]+\bdata-node-id=["']([^"']+)["'][^>]*>/g))
+  for (const match of svg.matchAll(
+    /<([a-z][\w:-]*)\b[^>]*\bdata-node-id=["']([^"']+)["'][^>]*>/gi,
+  )) {
+    mappedRegions += 1;
+    if (match[1].toLowerCase() === "g") semanticRegions += 1;
     if (!/\btabindex=["']0["']/.test(match[0]) || !/\baria-label=["'][^"']+["']/.test(match[0]))
-      failures.push(`${label}: SVG region "${match[1]}" must be focusable and labelled`);
+      failures.push(`${label}: SVG region "${match[2]}" must be focusable and labelled`);
+    if (assetsBySlug.get(slug)?.qa_status === "passed" && match[1].toLowerCase() !== "g")
+      failures.push(
+        `${label}: passed asset region "${match[2]}" must be a semantic <g>, not <${match[1]}>`,
+      );
+  }
 
   for (const edge of edges) {
     if (!ids.has(edge.from))
@@ -174,5 +185,6 @@ if (failures.length) {
 console.log(
   `Diagram validation passed: ${assets.length} registered diagrams, ` +
     `${authored} with authored evidence sidecars, ` +
-    `${assets.length - authored} missing sidecars.`,
+    `${assets.length - authored} missing sidecars; ` +
+    `${semanticRegions}/${mappedRegions} node regions use semantic groups.`,
 );
