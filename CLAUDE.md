@@ -101,6 +101,11 @@ diagram entry); no separate "delete then re-add" step exists or is needed.
   URL + caption + **attribution** only, never re-hosted (copyright). `generated` = an **original**
   Mermaid/SVG diagram authored by the diagram-author agent, stored in `content/diagrams/`. Prefer
   generated originals over referenced copies. Claude makes vector diagrams, not raster art.
+  Generated diagrams may include official Microsoft architecture icons under Microsoft's
+  diagram/documentation terms, provided they are obtained from an official collection, used
+  unchanged with an adjacent product label, and tracked as required by
+  `docs/official-icon-policy.md`. Never use a Microsoft icon as the Fabric Atlas brand or to
+  represent a non-Microsoft product; unofficial and unlicensed logos remain prohibited.
 
 ## Running the backend
 

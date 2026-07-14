@@ -30,7 +30,8 @@ For each **due** commission:
 
 2. Use the **diagram-author** subagent on the item's `target_slug` (a topic or capability): fetch
    the relevant verified claims for grounding, author an ORIGINAL `<slug>.diagram.json` topology
-   plus a detailed SVG fallback (never a copy, no third-party logos). Every node drills into
+   plus a detailed SVG fallback (never a copied source diagram; official Microsoft architecture
+   icons are allowed only under `docs/official-icon-policy.md`). Every node drills into
    inputs, processing, outputs, a worked example, controls, and failure modes; every edge is
    labelled and decision diagrams branch. Save both under `content/diagrams/`, mirror the SVG to
    `public/diagrams/`, run `npm run validate:diagrams`, and

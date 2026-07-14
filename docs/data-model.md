@@ -182,7 +182,10 @@ Assets can attach to a source, claim, design, or (v0.4) blog via `blog_id`. Blog
 only `generated` originals — referenced screenshots stay on source cards with attribution.
 
 Prefer `generated` originals over `referenced` copies. The platform produces vector
-diagram-as-code (SVG/Mermaid), not raster art, and never embeds third-party logos/IP.
+diagram-as-code (SVG/Mermaid), not raster art. Generated diagrams may embed unchanged official
+Microsoft architecture icons for the Microsoft product they identify, subject to the source,
+labelling, provenance, and non-branding requirements in `docs/official-icon-policy.md`. Unofficial
+and unlicensed logos/IP remain prohibited.
 
 ## Authoring vs API mode
 

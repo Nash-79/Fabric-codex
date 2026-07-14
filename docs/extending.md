@@ -122,9 +122,11 @@ All theming is in **`frontend/src/theme.js`**:
 - `frontend/index.html` sets `data-theme` before first paint (no flash); keep its two
   background rules in sync if you change `bg`.
 
-Licensing note: Microsoft's icon terms allow Fabric icons inside architecture diagrams
-but **not** as a third-party app's logo — that's why the header uses an original mark
-(`AtlasMark` in App.jsx) drawn with the brand palette.
+Licensing note: Microsoft's official terms allow Fabric icons inside architecture diagrams,
+training materials, slide decks, and documentation, but not as a third-party app's logo. Follow
+`docs/official-icon-policy.md`: use the official asset unchanged, label it with the product/item
+name, and record provenance. The header therefore continues to use an original mark (`AtlasMark`
+in App.jsx) drawn with the brand palette.
 
 ## 4. Add a view (tab)
 

@@ -13,7 +13,10 @@ an internals cutaway, a lifecycle, or a labelled comparison—rather than the sh
 diamond templates. Include explanatory panels, evidence markers, warnings, and operational guidance
 where the subject supports them. Map every node to one focusable semantic
 `<g data-node-id="…">` containing its complete visual hit area; never attach mappings to incidental
-header, footer, legend, or control text. Mirror the SVG byte-for-byte to `public/diagrams/`, then
+header, footer, legend, or control text. Official Microsoft architecture icons are allowed only
+under `docs/official-icon-policy.md`: source them from the official collection, use them unchanged
+with the matching product label, and record provenance. Mirror the SVG byte-for-byte to
+`public/diagrams/`, then
 register it by appending an entry to `content/diagrams/assets.json`
 (agents have no Supabase write access; the manifest replays into Supabase at the next
 bootstrap/publish). Manifest entries must include both `topic_slug` and `capability_id`; for a

@@ -25,8 +25,10 @@ For each **due** commission:
    `kind=diagram`, `status=queued` items.
 
 2. Use the **diagram-author** subagent on the item's `target_slug` (a topic or capability): fetch
-   the relevant verified claims for grounding, author an ORIGINAL Mermaid/SVG diagram (never a copy,
-   no third-party logos), save it under `content/diagrams/`, mirror it to `public/diagrams/`, and
+   the relevant verified claims for grounding, author an ORIGINAL Mermaid/SVG diagram (never a
+   copied source diagram; official Microsoft architecture icons are allowed only under
+   `docs/official-icon-policy.md`), save it under `content/diagrams/`, mirror it to
+   `public/diagrams/`, and
    append the asset entry to `content/diagrams/assets.json` with both `topic_slug` and
    `capability_id` (the `target_slug` from the commission is a topic slug unless the queue notes
    explicitly say otherwise).

@@ -30,6 +30,16 @@ for (const asset of assets) {
     failures.push(`${slug}: missing/invalid viewBox`);
   if (/<script\b|<foreignObject\b|\son[a-z]+\s*=\s*["']|javascript:/i.test(markup))
     failures.push(`${slug}: unsafe executable SVG content`);
+  const officialIconUses = [
+    ...svg.matchAll(/<[^>]+\bdata-official-icon=["']microsoft["'][^>]*>/gi),
+  ];
+  for (const match of officialIconUses)
+    if (!/\bdata-icon-name=["'][^"']+["']/i.test(match[0]))
+      failures.push(`${slug}: official Microsoft icon use is missing data-icon-name`);
+  if (officialIconUses.length > 0 && !existsSync(join(dir, "icons", "microsoft", "NOTICE.md")))
+    failures.push(
+      `${slug}: official Microsoft icons require content/diagrams/icons/microsoft/NOTICE.md`,
+    );
   const publicPath = join(root, "public", "diagrams", `${slug}.svg`);
   if (!existsSync(publicPath)) failures.push(`${slug}: missing public/diagrams/${slug}.svg mirror`);
   else if (readFileSync(publicPath, "utf8") !== svg)

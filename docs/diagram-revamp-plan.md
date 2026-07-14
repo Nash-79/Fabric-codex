@@ -22,8 +22,9 @@ contains `<title>` and `<desc>` descriptions.
 - `AuthoredSvg` provides lightweight delegated hover/focus tooltips. It does not calculate layout,
   select graph paths, filter layers, or replace the author-designed composition.
 - The source catalog contains only authored sidecars. There is no caption-synthesized fallback.
-- SVGs use original, product-neutral glyphs; no external icon package or third-party logo bundle is
-  part of the renderer.
+- SVG compositions remain original. They may combine original product-neutral glyphs with unchanged
+  official Microsoft architecture icons under `docs/official-icon-policy.md`; unofficial icon
+  bundles and runtime logo inference remain outside the renderer.
 
 ## Asset and publication contract
 

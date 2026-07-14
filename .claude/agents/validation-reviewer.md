@@ -40,6 +40,11 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
      are a copyright guardrail breach; flag as antipattern, severity warning or critical
      by extent. Unlabelled inference (synthesis not marked `*Inference:*`) is a grounding
      warning.
+   - **official-icon compliance** — when a diagram uses a Microsoft architecture icon, confirm it
+     comes from an official collection, remains visually unchanged, has the corresponding product
+     or item label nearby, records provenance, and is not used as Fabric Atlas branding or to
+     represent a non-Microsoft service. Apply `docs/official-icon-policy.md`; unverified icon
+     sources or modified official marks are copyright/brand warnings.
    - **Internals section (articles and designs).** Confirm `## Internals` exists with all three
      required sub-headings (`### Architecture & design`, `### How it works internally`,
      `### Performance characteristics`). Missing the section or a sub-heading entirely is a

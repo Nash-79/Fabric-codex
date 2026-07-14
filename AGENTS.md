@@ -66,7 +66,11 @@ in the same run.
   Python, …) in addition to the capability id.
 - External source images are `referenced` assets: store URL + caption + **attribution**, never
   re-host (copyright). Prefer authoring an **original** Mermaid/SVG diagram (`generated` asset) via
-  `/prompts:fa-diagram`. Diagrams are vector diagram-as-code, not raster art; no third-party logos.
+  `/prompts:fa-diagram`. Diagrams are vector diagram-as-code, not raster art. Official Microsoft
+  architecture icons are allowed under their published diagram/documentation terms when sourced,
+  labelled, and used unchanged according to `docs/official-icon-policy.md`; they must never become
+  the Fabric Atlas brand or represent a non-Microsoft product. Unofficial and unlicensed logos are
+  prohibited.
 - Generated diagrams use the rich authored SVG contract: the original script-free SVG is the
   primary article, print, and no-JavaScript artifact, with keyboard-focusable regions and
   sidecar-backed evidence tooltips. Its hash must match the registered revision.
