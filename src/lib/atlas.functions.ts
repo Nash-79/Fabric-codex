@@ -526,20 +526,31 @@ export const listSources = createServerFn({ method: "GET" }).handler(async () =>
 export type RoadmapItem = {
   id: string;
   guid: string;
+  release_item_id: string | null;
   title: string;
+  feature_name: string;
   link: string;
   status: string;
   release_type: string;
+  release_status: string;
   target_release: string;
+  release_date: string | null;
+  product_id: string | null;
+  product_name: string;
+  feature_description: string | null;
+  blog_title: string | null;
+  blog_url: string | null;
+  last_modified: string | null;
+  active: boolean;
   categories: string[];
   description_html: string;
   pub_date: string | null;
   capability_id: string | null;
 };
 
-// Roadmap items are synced verbatim from fabric-gps.com (see settings.functions.ts
-// pollFabricRoadmap) — never routed through the claims/curator pipeline, so there is no
-// bundled-content fallback here; an empty list just means nobody has synced yet.
+// Roadmap items are synced from the Fabric GPS community API (see pollFabricRoadmap). The rows
+// remain separate from claims; only canonical blog URLs enter the curator queue. There is no
+// bundled-content fallback here, so an empty list means nobody has synced yet.
 export const listRoadmapItems = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const sb = await admin();
@@ -548,8 +559,9 @@ export const listRoadmapItems = createServerFn({ method: "GET" }).handler(async 
     const { data, error } = await (sb as any)
       .from("roadmap_items")
       .select(
-        "id,guid,title,link,status,release_type,target_release,categories,description_html,pub_date,capability_id",
+        "id,guid,release_item_id,title,feature_name,link,status,release_type,release_status,target_release,release_date,product_id,product_name,feature_description,blog_title,blog_url,last_modified,active,categories,description_html,pub_date,capability_id",
       )
+      .eq("active", true)
       .order("pub_date", { ascending: false });
     if (error) throw new Error(error.message);
     return (data ?? []) as RoadmapItem[];

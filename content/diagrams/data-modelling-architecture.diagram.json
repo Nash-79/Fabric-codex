@@ -1,300 +1,343 @@
 {
   "id": "data-modelling-architecture",
-  "title": "Data Modelling in Microsoft Fabric — from business concept to semantic contract",
-  "purpose": "Shows how a Fabric data-modelling effort moves from a conceptual business model through a logical modelling technique choice, into a physical layer that branches Lakehouse vs Warehouse, and converges on a semantic model — including where Direct Lake changes the storage-mode trade-off and where mixed-grain design breaks the whole chain.",
-  "accessibleSummary": "A branching architecture diagram with nine nodes. It starts at a conceptual business model, moves to a logical model decision point that splits into dimensional (star/snowflake) and data-vault modelling techniques, then both feed a physical-layer choice between a Fabric Lakehouse and a Fabric Warehouse. Both physical options converge on a semantic model, which can run in Direct Lake mode for near-real-time queries without a separate import refresh. A ninth node, marked as a warning, calls out mixed-grain fact tables and Direct Lake fallback to DirectQuery as the two concrete failure modes that break this chain in production.",
-  "longDescription": "This diagram traces the Fabric-recommended data-modelling path end to end. It begins with a conceptual business model — the bounded entities and grain a team agrees on before touching any Fabric item, which is pattern guidance rather than a product feature. That flows into a logical modelling decision: teams choose between a dimensional (star/snowflake) design optimised for BI query patterns, or a data-vault design optimised for auditability and slowly-changing source integration. Either logical technique is then implemented physically in one of two Fabric items that share the same underlying Delta-on-OneLake storage and SQL engine: a Lakehouse (Spark-first, handles unstructured data, single-table writes) or a Warehouse (T-SQL-first, full multi-table ACID transactions). Both physical items expose their Delta tables to a semantic model, the actual BI consumption contract, which can be built in Import, DirectQuery, or Direct Lake storage mode. Direct Lake is called out as its own node because it changes the trade-off materially: it reads Parquet files directly from OneLake without a memory-resident import copy, but it has two documented flavors (Direct Lake on OneLake vs Direct Lake on SQL) with different security and fallback behaviour. The diagram's warning node names the two real failure modes that break this path: mixing multiple grains in a single fact table, which corrupts the dimensional model long before it reaches the semantic layer, and a Direct Lake model silently falling back to slower DirectQuery execution when its tables are built on SQL views instead of base tables.",
+  "title": "Data Modelling in Microsoft Fabric: From Raw Sources to Star Schema to Semantic Model",
+  "purpose": "Show how conceptual, logical, and physical data modelling decisions map onto concrete Fabric layers — medallion lakehouse staging, a dimensional (star schema) gold layer in Warehouse or Lakehouse, and a Direct Lake composite semantic model — so a designer can place data-vault-style staging, dimensional load order, and security decisions at the right layer.",
+  "accessibleSummary": "An architecture diagram tracing data modelling from source systems through a medallion lakehouse into a dimensional gold layer and up into a Power BI semantic model. Source systems land in a Bronze lakehouse layer unchanged. A Silver layer cleanses and conforms that data; an inference callout notes that teams needing full historical traceability sometimes insert a data-vault-style raw staging structure (hubs, links, satellites) at this point, though Fabric has no dedicated data-vault product feature. From Silver, a fixed ETL order — stage, then dimensions, then facts, then post-processing — loads a Gold-layer dimensional model built as a star schema: dimension tables radiating around central fact tables, built either as a Warehouse or as Lakehouse materialized views. A dimension-table detail node explains surrogate keys and slowly changing dimension handling; a fact-table detail node explains grain, foreign keys to dimension surrogate keys, and the practitioner heuristic that a fact table with more than roughly 50 columns is usually hiding a dimension. The star schema feeds a Direct Lake semantic model, which can build a composite model keeping large fact tables in Direct Lake mode while smaller dimension tables use Import or DirectQuery. Two warning nodes flag real failure modes: applying row-level security at the Warehouse T-SQL layer forces Direct Lake semantic models built on that table into DirectQuery fallback, and Fabric Warehouse does not enforce foreign keys, so referential integrity between fact and dimension surrogate keys is the ETL process's responsibility, not the database's.",
+  "longDescription": "This diagram grounds the conceptual/logical/physical modelling progression in the concrete Fabric implementation path Microsoft documents for dimensional modelling: source systems feed a medallion lakehouse (Bronze raw, Silver cleansed), which stages a dimensional ETL that loads dimension tables before fact tables into a Gold-layer star schema, which in turn backs a Direct Lake semantic model consumed by Power BI. It also marks where a data-vault-style raw layer is an architectural option Fabric Atlas infers from common practice (not a Microsoft Fabric product feature), and calls out two sourced failure modes: RLS-layer mismatch causing Direct Lake fallback, and Fabric Warehouse's lack of enforced foreign keys shifting referential-integrity responsibility onto the ETL layer.",
   "type": "architecture",
   "topicSlug": "data-modelling",
   "capabilityIds": ["lakehouse", "warehouse", "semantic-model", "direct-lake"],
-  "revision": "3",
+  "revision": "1",
   "qaStatus": "draft",
-  "staticPath": "/diagrams/data-modelling-architecture.svg",
+  "staticPath": "content/diagrams/data-modelling-architecture.svg",
   "nodes": [
     {
-      "id": "conceptual-model",
-      "label": "Conceptual business model",
-      "summary": "Bounded entities, grain, and ownership agreed before any Fabric item is created.",
-      "detail": "The conceptual model is the plain-language agreement on what a business entity is, what one row of a fact represents (the grain), and who owns that definition. Microsoft's Fabric guidance does not prescribe this step as a product feature — it is authored pattern advice recommending a bounded data product be scoped explicitly, including owners, source contract, and quality rules, before generalising into implementation.",
-      "whyItMatters": "Every downstream failure mode in this diagram — mixed grain, wrong storage mode, brittle semantic model — traces back to a grain or ownership decision that was never made explicit here.",
-      "classification": "pattern",
-      "layers": ["governance"],
-      "evidence": [],
-      "tags": ["modelling", "governance"],
-      "drill": {
-        "inputs": ["Stakeholder interviews", "Existing source-system entity definitions", "Reporting requirements"],
-        "processing": [
-          "Name the bounded business entities (e.g. Customer, Order, Shipment)",
-          "Agree the grain of each fact (one row = one what?)",
-          "Assign an owner and a source-of-truth contract per entity",
-          "Write down quality rules and the security boundary before build starts"
-        ],
-        "outputs": ["A written entity/grain glossary", "An owner map used to gate the logical model review"],
-        "example": "A retail team agrees 'one Order fact row = one order line, not one order' before any table is built, avoiding a grain mismatch that would otherwise surface only after the semantic model is in front of report authors.",
-        "controls": ["Grain definition sign-off", "Entity ownership register", "Source-of-truth contract per entity"],
-        "failureModes": ["Framework-first delivery that skips this step and starts with tables, leaving grain implicit and undocumented until it breaks a report"]
-      }
-    },
-    {
-      "id": "logical-model",
-      "label": "Logical model: dimensional vs vault",
-      "summary": "The design technique decision point — star/snowflake vs data vault vs plain canonical.",
-      "detail": "The logical model translates the conceptual entities into a normalized or semi-normalized structure independent of any specific Fabric item. Fabric does not mandate a modelling technique here; teams choose based on query pattern (BI-facing dimensional) versus source-integration and audit needs (data vault), or a plain canonical/3NF model when neither specialised technique is warranted. This is architectural interpretation informed by the recommended conceptual-to-physical flow in the topic's own guidance, not a Fabric product feature.",
-      "whyItMatters": "This is the branch point that determines whether the physical Lakehouse/Warehouse tables end up query-optimised for BI (dimensional) or integration-optimised for change tracking and lineage (vault) — retrofitting the wrong choice later means re-loading history.",
+      "id": "source-systems",
+      "label": "Source systems",
+      "summary": "Operational databases, SaaS APIs, files, and events that carry the raw data a dimensional model will eventually describe.",
+      "detail": "Source systems are outside Fabric's modelling scope but define the conceptual model implicitly: their entities and relationships (customers, orders, products) are what the star schema will later formalize as dimensions and facts. They arrive with source-native shapes — normalized OLTP schemas, semi-structured JSON, flat files — none of which is yet a dimensional model.",
+      "whyItMatters": "Getting the conceptual model right starts here: before any Fabric item exists, the business entities and events a warehouse needs to describe must be identified from these sources, or the star schema built downstream will describe the wrong things.",
       "classification": "inference",
-      "layers": ["data", "governance"],
-      "evidence": [],
-      "tags": ["modelling", "logical-model"],
-      "drill": {
-        "inputs": ["Conceptual entity/grain glossary", "Known query patterns (BI dashboards vs audit/lineage needs)"],
-        "processing": [
-          "Evaluate whether the primary consumer is BI reporting (favours dimensional) or multi-source integration with change history (favours vault)",
-          "Pick dimensional, vault, or a plain canonical/3NF structure per subject area — the choice can vary by subject area within one platform",
-          "Define conformed dimensions or hub/link/satellite structures at this logical layer, before physical tables exist"
-        ],
-        "outputs": ["A logical schema handed to the physical Lakehouse or Warehouse build", "A documented rationale for the chosen technique per subject area"],
-        "example": "A finance subject area with strict audit requirements is logically modelled as data vault (hubs for GL account, links for transactions, satellites for changing attributes), while the adjacent sales subject area is modelled dimensionally for the BI team's star-schema reports.",
-        "controls": ["Technique choice recorded per subject area", "Conformed dimension registry for dimensional designs", "Hub/link/satellite naming standard for vault designs"],
-        "failureModes": ["Picking dimensional for a highly volatile, multi-source integration area and then having to bolt on ad-hoc history tracking later", "Picking vault for a small, stable BI-only subject area and paying unnecessary join complexity at query time"]
-      }
-    },
-    {
-      "id": "dimensional-technique",
-      "label": "Dimensional (star / snowflake)",
-      "summary": "Fact + conformed dimension tables optimised for BI query patterns.",
-      "detail": "Dimensional modelling organises data into fact tables (measurements at an agreed grain) and dimension tables (descriptive attributes), joined in a star or snowflake shape. It is a modelling technique, not a Fabric product behaviour — Fabric's own topic guidance recommends validating the technique against workload-specific constraints rather than treating it as a guarantee.",
-      "whyItMatters": "This is the structure the semantic model layer is built to consume efficiently — most Direct Lake and Import-mode performance guidance assumes a dimensional shape underneath.",
-      "classification": "pattern",
       "layers": ["data"],
       "evidence": [],
-      "tags": ["modelling", "star-schema"],
+      "tags": ["ConceptualModel", "SourceSystems"],
       "drill": {
-        "inputs": ["Logical schema for a BI-facing subject area"],
+        "inputs": ["OLTP database change feeds", "SaaS/REST API extracts", "Flat files and event streams"],
         "processing": [
-          "Define one fact table per business process at a single, explicit grain",
-          "Build conformed dimension tables shared across fact tables (e.g. one Date dimension for Sales and Returns)",
-          "Choose star (denormalized dimensions) or snowflake (normalized dimension hierarchies) per dimension based on volatility and size"
+          "Identify candidate business entities (conceptual model) before any physical design",
+          "Classify each source as batch, CDC, or streaming to decide ingestion pattern",
+          "Hand off to Bronze ingestion via pipelines, Spark, Dataflows Gen2, or shortcuts"
         ],
-        "outputs": ["Fact and dimension table definitions ready to physicalise in Lakehouse or Warehouse Delta tables"],
-        "example": "A Sales fact table at grain 'one row per order line' joins to Date, Product, and Customer dimensions; a separate Returns fact reuses the same Date and Product dimensions so both facts roll up consistently.",
-        "controls": ["One documented grain per fact table", "Shared/conformed dimension list", "Slowly changing dimension (SCD) type per dimension attribute"],
-        "failureModes": ["A fact table that silently mixes two grains (e.g. order-line rows and order-header rows in one table) — this is the platform's most common and hardest-to-detect modelling defect, called out separately in this diagram's warning node"]
+        "outputs": ["Raw extracts landing in the Bronze medallion layer"],
+        "example": "A retail chain's order-management OLTP database, a third-party pricing API, and daily point-of-sale CSV exports are the three source systems that will eventually populate a Sales star schema's Order fact and Product, Store, and Date dimensions.",
+        "controls": ["Ingestion cadence (batch vs. CDC vs. streaming)", "Which Fabric ingestion route: pipeline copy, Spark notebook, Dataflow Gen2, or shortcut"],
+        "failureModes": ["Skipping conceptual modelling and jumping straight to physical tables produces a schema that mirrors source system quirks instead of business meaning."]
       },
-      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse capability" }
+      "rank": 0
     },
     {
-      "id": "vault-technique",
-      "label": "Data vault (hub / link / satellite)",
-      "summary": "Auditable, insert-only structure for multi-source integration and history.",
-      "detail": "Data vault splits entities into hubs (business keys), links (relationships/transactions), and satellites (descriptive, time-stamped attributes), all loaded insert-only. It is a modelling technique choice, not a Fabric product feature, and suits environments with multiple volatile source systems and a hard audit requirement.",
-      "whyItMatters": "Vault's insert-only satellites give a full audit trail that a dimensional model does not provide by default, at the cost of more joins at query time — a trade-off the physical layer (Lakehouse vs Warehouse) inherits directly.",
-      "classification": "pattern",
-      "layers": ["data", "governance"],
+      "id": "bronze-layer",
+      "label": "Bronze layer (Lakehouse)",
+      "summary": "Raw data stored exactly as received, with no transformation, inside a Fabric Lakehouse.",
+      "detail": "Bronze is the first medallion layer: source data lands unchanged so it can always be reprocessed if downstream logic changes. Microsoft's medallion guidance recommends linking source data into Bronze via a OneLake shortcut rather than physically copying it where possible, and treats small files here as acceptable given the raw, high-frequency nature of ingestion.",
+      "whyItMatters": "Keeping Bronze byte-faithful to the source is what makes Silver and Gold reprocessable without re-extracting from the source system — a foundational reliability property for any dimensional model built on top.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "onelake-medallion-lakehouse-architecture", "note": "The three medallion layers are bronze (raw, stored exactly as received with no changes), silver (enriched), and gold (curated for reporting)." },
+        { "sourceKey": "onelake-medallion-lakehouse-architecture", "note": "For the bronze layer, source data should be linked via a OneLake shortcut rather than physically copied into the lakehouse." }
+      ],
+      "tags": ["MedallionArchitecture", "Lakehouse", "Bronze"],
+      "drill": {
+        "inputs": ["Raw extracts from source systems"],
+        "processing": [
+          "Land data as-is, no schema changes or cleansing",
+          "Prefer OneLake shortcuts over physical copies for external sources",
+          "Accept smaller, more frequent files given the raw ingestion pattern"
+        ],
+        "outputs": ["Untouched raw tables/files available for Silver processing"],
+        "example": "Daily point-of-sale CSV exports land in a Bronze lakehouse folder exactly as delivered, including any malformed rows, so Silver cleansing logic can be re-run later without re-pulling from the source.",
+        "controls": ["Shortcut vs. physical copy for external sources", "Ingestion frequency and partitioning of raw files"],
+        "failureModes": ["Applying transformation logic in Bronze defeats its purpose as a faithful, replayable raw copy."]
+      },
+      "rank": 1
+    },
+    {
+      "id": "silver-layer",
+      "label": "Silver layer (cleansed)",
+      "summary": "Errors fixed, formats standardized, duplicates removed — data conformed but not yet dimensionally modelled.",
+      "detail": "Silver enriches Bronze data: fixing errors, standardizing formats, removing duplicates. It is the conformed, trustworthy layer that both a warehouse ETL process and ad hoc Spark analysis can build on. Microsoft's dimensional-modelling guidance explicitly treats a lakehouse's bronze, silver, or gold layer as a valid ETL source for a warehouse dimensional model, which can remove the need for a separate staging step inside the warehouse.",
+      "whyItMatters": "Silver is where source-system quirks are resolved once, centrally, instead of being re-solved inside every downstream fact/dimension load — and it is the layer a data-vault-style raw staging structure would sit alongside if a team chooses that pattern.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
+      "evidence": [
+        { "sourceKey": "onelake-medallion-lakehouse-architecture", "note": "Silver layer: enriched — errors fixed, formats standardized, duplicates removed." },
+        { "sourceKey": "dimensional-modeling-load-tables", "note": "When a Fabric lakehouse already implements a medallion architecture, its bronze, silver, or gold layer can serve directly as the ETL source for a warehouse dimensional model, making a separate staging step in the warehouse unnecessary." }
+      ],
+      "tags": ["MedallionArchitecture", "Lakehouse", "Silver", "SilverLayerModelling"],
+      "drill": {
+        "inputs": ["Raw Bronze tables"],
+        "processing": [
+          "Fix data-quality errors and standardize formats/types",
+          "Deduplicate and conform records across sources",
+          "Optionally structure as data-vault-style hubs/links/satellites for full historical traceability"
+        ],
+        "outputs": ["Conformed Silver tables usable as staging input for the Gold dimensional load"],
+        "example": "Point-of-sale rows with inconsistent date formats and duplicate transaction IDs from three regional systems are standardized and deduplicated into one conformed Silver Sales table.",
+        "controls": ["Cleansing/deduplication rules", "Whether to introduce a data-vault-style raw staging structure before conforming"],
+        "failureModes": ["Silver output errors propagate directly into dimensional load logic downstream — the load-tables guidance depends on Silver already being trustworthy."]
+      },
+      "rank": 2
+    },
+    {
+      "id": "data-vault-option",
+      "label": "Data vault staging (optional pattern)",
+      "summary": "Hub/link/satellite modelling as an architectural option for teams needing full historical auditability before dimensional modelling.",
+      "detail": "Data vault is a modelling technique — hubs for business keys, links for relationships, satellites for descriptive/historical attributes — that some teams insert between Silver and Gold when regulatory or audit requirements demand every source change be traceable. Fabric has no dedicated data-vault product feature; this is Fabric Atlas's architectural interpretation of where the pattern would fit against Fabric's own medallion and dimensional-modelling guidance, not a Microsoft-documented behavior.",
+      "whyItMatters": "Teams sometimes assume Fabric provides data-vault tooling out of the box; it doesn't — data vault here is table design discipline layered onto ordinary Delta tables in a Lakehouse, positioned deliberately outside the sourced medallion/dimensional path.",
+      "classification": "inference",
+      "layers": ["data"],
       "evidence": [],
-      "tags": ["modelling", "data-vault"],
+      "tags": ["DataVault", "ConceptualModel", "LogicalModel"],
       "drill": {
-        "inputs": ["Logical schema for a multi-source, audit-sensitive subject area"],
+        "inputs": ["Conformed Silver tables"],
         "processing": [
-          "Identify business keys and model one hub table per key",
-          "Model transactions/relationships between business keys as link tables",
-          "Model descriptive, time-varying attributes as satellite tables, loaded insert-only with load-date and source metadata"
+          "Model business keys as hub tables",
+          "Model relationships between keys as link tables",
+          "Model descriptive/historical attributes as satellite tables with load timestamps"
         ],
-        "outputs": ["Hub/link/satellite table definitions ready to physicalise as Delta tables"],
-        "example": "A GL Account hub, a Transaction link connecting Account and Cost Centre hubs, and a satellite recording account status changes over time — every change is a new satellite row, never an update.",
-        "controls": ["Business key standard per hub", "Load-date and record-source columns on every satellite", "No update/delete on satellite rows"],
-        "failureModes": ["Treating satellites as mutable and updating rows in place, which destroys the audit trail vault exists to provide"]
+        "outputs": ["A fully auditable historical layer that a dimensional Gold model can be built from"],
+        "example": "A financial-services team storing every historical version of a customer's KYC attributes uses hub/link/satellite tables in a Lakehouse before deriving the Gold-layer dimensional model, satisfying an audit requirement that plain SCD Type 2 dimensions alone would not.",
+        "controls": ["Whether the audit/compliance requirement justifies the added modelling and load complexity"],
+        "failureModes": ["Adopting data vault without a genuine historical-auditability requirement adds ETL and query complexity with no offsetting benefit over a direct medallion-to-star-schema path."]
       },
-      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse capability" }
+      "rank": 2
     },
     {
-      "id": "lakehouse-physical",
-      "label": "Lakehouse physical layer",
-      "summary": "Delta tables on OneLake, Spark-first, handles unstructured data alongside structured tables.",
-      "detail": "A Fabric Lakehouse stores all managed tables as Delta Lake format over Parquet on OneLake, giving ACID transactions, schema enforcement, and time travel. It splits storage into a managed Tables area (Delta only) and a Files area for unstructured or non-Delta data, and every lakehouse auto-provisions a read-only SQL analytics endpoint over its Delta tables for T-SQL exploration.",
-      "whyItMatters": "This is where the dimensional or vault logical model becomes physical rows — the choice of Lakehouse here means Spark is the primary write path and single-table operations only, no multi-table transactions.",
+      "id": "dimensional-etl-order",
+      "label": "Dimensional ETL: stage → dimensions → facts → post-process",
+      "summary": "A fixed load order: staging tables, then dimension tables, then fact tables, then post-processing such as semantic-model refresh.",
+      "detail": "Microsoft's load-tables guidance specifies a strict ETL order: optionally load staging tables, process dimension tables next (so surrogate keys exist), then process fact tables (which reference those surrogate keys), then run post-processing tasks like semantic-model refresh. Surrogate keys must never be regenerated via truncate-and-reload once fact tables reference them, and source deletions become soft deletes rather than physical removals.",
+      "whyItMatters": "This ordering is a hard dependency, not a style preference: a fact table load requires the dimension surrogate keys it references to already exist, and getting that order wrong silently breaks foreign-key lookups.",
+      "classification": "fact",
+      "layers": ["orchestration", "data"],
+      "evidence": [
+        { "sourceKey": "dimensional-modeling-load-tables", "note": "A dimensional model ETL process should run in a fixed order: optionally load staging tables, then process dimension tables, then process fact tables, then run post-processing tasks like semantic model refresh." },
+        { "sourceKey": "dimensional-modeling-load-tables", "note": "Surrogate keys on dimension tables should never be regenerated via a full truncate-and-reload once fact tables reference them." }
+      ],
+      "tags": ["ETL", "DimensionalModelling", "SilverLayerModelling"],
+      "drill": {
+        "inputs": ["Conformed Silver tables (or data-vault satellites)"],
+        "processing": [
+          "Stage (optional): mirror source columns/types, truncate at each run",
+          "Process dimensions: apply SCD type 1/2/3 logic, assign/preserve surrogate keys",
+          "Process facts: incremental load via watermark/CDC, look up dimension surrogate keys",
+          "Post-process: refresh dependent semantic models"
+        ],
+        "outputs": ["Loaded Gold-layer dimension and fact tables ready for the semantic model"],
+        "example": "A nightly job truncates staging tables, applies SCD Type 2 logic to the Customer dimension so surrogate keys are stable, then incrementally loads new Order fact rows using a high-watermark on OrderModifiedDate, then triggers a semantic-model refresh.",
+        "controls": ["SCD type per dimension (1 overwrite, 2 versioned, 3 limited history)", "Fact incremental-load mechanism: watermark, CDC, or change tracking"],
+        "failureModes": [
+          "Loading facts before dimensions causes dimension-key lookups to fail or resolve to stale surrogate keys.",
+          "Truncate-and-reload on a dimension table after facts already reference its surrogate keys invalidates existing fact-to-dimension relationships."
+        ]
+      },
+      "rank": 3
+    },
+    {
+      "id": "gold-star-schema",
+      "label": "Gold layer: star schema (dimensions + facts)",
+      "summary": "A central fact table surrounded by dimension tables, Microsoft's recommended default design for a Fabric Warehouse.",
+      "detail": "The Gold layer implements the physical dimensional model: dimension tables describe business entities (products, people, places, dates), fact tables store measurable events (orders, stock balances) plus the dimension keys relating them, and a warehouse commonly contains multiple fact tables forming multiple stars. It can be built either as a Fabric Warehouse or as Lakehouse materialized views/lakehouses, per Fabric's two documented medallion deployment patterns.",
+      "whyItMatters": "Star schema is called out as Microsoft's recommended default, not one option among several — it minimizes joins, benefits from indexing, and keeps future schema growth (a new attribute, fact, or dimension) structurally simple.",
       "classification": "fact",
       "layers": ["data", "compute"],
       "evidence": [
-        { "sourceKey": "lakehouse-overview", "note": "All managed lakehouse tables use the Delta Lake storage format, supplying ACID transactions, schema enforcement, and time travel over Parquet, and storage splits into a managed Tables area and a Files area." }
+        { "sourceKey": "dimensional-modeling-overview", "note": "Microsoft recommends star schema (fact and dimension tables) as the design approach for building a Fabric Warehouse." },
+        { "sourceKey": "dimensional-modeling-overview", "note": "A star schema is named for its shape: one fact table sits at the center with related dimension tables radiating outward like points of a star, and a warehouse commonly contains multiple fact tables forming multiple stars." },
+        { "sourceKey": "onelake-medallion-lakehouse-architecture", "note": "Fabric offers two medallion deployment patterns: all three layers as separate lakehouses, or bronze/silver as lakehouses with gold implemented as a Fabric Warehouse." }
       ],
-      "tags": ["lakehouse", "delta-lake"],
+      "tags": ["StarSchema", "DimensionalModelling", "Warehouse", "Gold", "PhysicalModel"],
       "drill": {
-        "inputs": ["Dimensional or vault table definitions from the logical model"],
+        "inputs": ["Dimension and fact tables loaded by the dimensional ETL"],
         "processing": [
-          "Land tables via Spark notebooks, pipeline copy activities, Spark job definitions, Dataflows Gen2, or OneLake shortcuts",
-          "Fabric auto-validates Delta format on write to the managed Tables area and registers the table in the metastore",
-          "SQL analytics endpoint auto-provisions read-only T-SQL access over the same Delta tables"
+          "Dimension tables radiate around a central fact table (or multiple fact tables forming multiple stars)",
+          "Fact tables carry measures plus dimension surrogate keys, at one consistent grain",
+          "Built as Warehouse T-SQL tables or Lakehouse materialized lake views"
         ],
-        "outputs": ["Delta tables on OneLake, immediately queryable from Spark SQL or T-SQL with no manual CREATE TABLE"],
-        "example": "A gold-layer dimensional fact table is written by a Spark notebook as a managed Delta table; it appears in the SQL analytics endpoint moments later with no separate registration step.",
-        "controls": ["Choice of ingestion route (notebook, pipeline, Dataflow Gen2, shortcut)", "Tables vs Files area placement"],
-        "failureModes": ["Landing non-Delta formats (Parquet, CSV) into the Tables area expecting SQL-endpoint visibility — only Delta tables surface there, including via shortcuts"],
-        "metrics": []
+        "outputs": ["A queryable dimensional model consumed by the semantic model and direct SQL clients"],
+        "example": "A Sales star schema has one Order fact table at a line-item grain plus Customer, Product, Store, and Date dimension tables, all reachable from the fact table by a single join hop.",
+        "controls": ["Warehouse vs. Lakehouse materialized-view implementation of Gold", "Fact table grain definition"],
+        "failureModes": ["A fact table growing past roughly 50 columns is usually carrying dimension-like attributes that should be split out, per the practitioner heuristic."]
       },
-      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse capability" }
+      "rank": 4
     },
     {
-      "id": "warehouse-physical",
-      "label": "Warehouse physical layer",
-      "summary": "Delta tables on OneLake, T-SQL-first, full multi-table ACID transactions.",
-      "detail": "A Fabric Warehouse is an enterprise-scale relational warehouse also built on Delta tables over OneLake, but development is primarily T-SQL with a large SQL Database Engine surface: multi-table ACID transactions, materialized views, stored procedures. Storage and compute are separated, allowing near-instant scaling, and the query engine is autonomously managed with no user-facing tuning knobs.",
-      "whyItMatters": "Warehouse is the physical choice when the logical model needs multi-table transactional writes or a T-SQL-first team — a capability the Lakehouse branch of this same diagram does not offer.",
+      "id": "dimension-table-detail",
+      "label": "Dimension table: surrogate keys + SCD",
+      "summary": "Business entities with a surrogate key and slowly changing dimension (SCD) history handling.",
+      "detail": "Dimension tables use a surrogate key (not the source system's natural key) as the join target for fact tables, because natural keys can change or collide across sources. Slowly changing dimension type determines how attribute changes are handled: Type 1 overwrites in place, Type 2 versions the row with new surrogate keys and validity dates, Type 3 keeps limited prior-value history alongside the current value.",
+      "whyItMatters": "SCD type is a modelling decision with real consequences: Type 2 is the only one of the three that preserves point-in-time historical reporting accuracy, and it can only be built reliably in a warehouse ETL — not in Power Query alone.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "dimensional-modeling-load-tables", "note": "Slowly changing dimension handling differs by type: SCD type 1 updates existing attribute values in place, SCD type 2 expires the current row version and inserts a new versioned row, and SCD type 3 updates attributes in place but preserves limited prior-value history." },
+        { "sourceKey": "power-bi-star-schema-guidance", "note": "Power Query alone cannot implement a Type 2 slowly changing dimension; that change-detection logic must run upstream, typically in a data warehouse ETL/load process." }
+      ],
+      "tags": ["DimensionalModelling", "SurrogateKey", "SlowlyChangingDimension"],
+      "drill": {
+        "inputs": ["Conformed Silver attribute data for one business entity"],
+        "processing": [
+          "Assign or reuse a stable surrogate key independent of source natural keys",
+          "Detect attribute changes against the current dimension row",
+          "Apply SCD Type 1 (overwrite), Type 2 (new versioned row), or Type 3 (limited history) logic per attribute"
+        ],
+        "outputs": ["A dimension table joinable to fact tables via surrogate key"],
+        "example": "A Customer dimension tracks region changes with SCD Type 2: when a customer moves region, the old row is expired and a new row with a new surrogate key and updated region is inserted, preserving historical sales-by-region accuracy.",
+        "controls": ["SCD type chosen per attribute or per dimension", "Late-arriving/inferred-member handling"],
+        "failureModes": ["Regenerating surrogate keys via truncate-and-reload after facts reference them breaks existing fact-to-dimension relationships and can make SCD Type 2 history unrecoverable."]
+      },
+      "rank": 5
+    },
+    {
+      "id": "fact-table-detail",
+      "label": "Fact table: grain + foreign keys",
+      "summary": "Measurable events at one consistent grain, referencing dimension surrogate keys — with no enforced foreign keys in Fabric Warehouse.",
+      "detail": "Fact tables store measures (order amounts, quantities) at one fixed grain plus the dimension surrogate keys needed to relate them. Fabric Warehouse does not enforce foreign key constraints, so referential integrity between fact rows and dimension surrogate keys is the ETL process's responsibility, not the database engine's. A practitioner heuristic holds that a fact table with more than roughly 50 columns is usually carrying attributes that belong in a dimension instead.",
+      "whyItMatters": "Because the warehouse itself won't catch a broken fact-to-dimension reference, ETL-level integrity checks (or an explicit 'Unknown member' fallback row) are the only real safety net against silently orphaned fact rows.",
+      "classification": "fact",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "dimensional-modeling-load-tables", "note": "Because Fabric Warehouse does not enforce foreign keys, the ETL process itself is responsible for referential integrity checks when loading fact rows against dimension surrogate keys." },
+        { "sourceKey": "dimensional-modeling-load-tables", "note": "When a fact row's dimension key lookup fails, the row should still be inserted using a special 'Unknown' dimension member rather than being dropped." },
+        { "sourceKey": "power-bi-star-schema-guidance", "note": "A well-structured Power BI model should not mix dimension and fact roles in a single table, and fact tables should always load data at a consistent grain." }
+      ],
+      "tags": ["DimensionalModelling", "FactTable", "DataQuality"],
+      "drill": {
+        "inputs": ["Dimension tables with resolved surrogate keys", "Incremental source deltas (watermark/CDC)"],
+        "processing": [
+          "Define and hold to one fixed grain (e.g. one row per order line)",
+          "Look up dimension surrogate keys for each fact row",
+          "Insert an 'Unknown member' row rather than dropping rows on a failed key lookup",
+          "Load incrementally via watermark, CDC, or change tracking rather than full reload"
+        ],
+        "outputs": ["A fact table joinable to every related dimension via surrogate keys"],
+        "example": "An Order fact table loads at order-line grain; a line item whose Product surrogate-key lookup fails is still inserted, pointed at an 'Unknown Product' dimension row, so the sale isn't silently dropped from revenue totals.",
+        "controls": ["Fact grain definition", "Unknown-member fallback behavior on failed key lookups"],
+        "failureModes": [
+          "A fact table exceeding roughly 50 columns is a practitioner signal that dimension-like attributes should be split out.",
+          "Because Fabric Warehouse enforces no foreign keys, a missing ETL integrity check lets orphaned fact rows accumulate silently."
+        ]
+      },
+      "rank": 5
+    },
+    {
+      "id": "semantic-model-direct-lake",
+      "label": "Semantic model (Direct Lake composite)",
+      "summary": "A Power BI semantic model reading the star schema directly from OneLake via Direct Lake, with large fact tables in Direct Lake and small dimensions optionally in Import mode.",
+      "detail": "A dimensional model built in a Fabric Warehouse or Lakehouse Gold layer is the recommended prerequisite for an enterprise-grade Power BI semantic model. Direct Lake on OneLake supports composite models: very large fact tables stay in Direct Lake mode to avoid refresh cost, while smaller dimension tables can use Import or DirectQuery in the same model, and table type (fact vs. dimension) in the model is determined by relationship cardinality, not any explicit property.",
+      "whyItMatters": "Composite modelling lets the physical star schema map cleanly onto the semantic layer without forcing every table into the same storage mode — the large fact table gets Direct Lake's no-import freshness while small, frequently-joined dimensions can still use Import for maximum interactivity.",
       "classification": "fact",
       "layers": ["data", "compute"],
       "evidence": [
-        { "sourceKey": "warehouse-overview", "note": "Warehouse tables are physically stored as Delta tables on OneLake; development is primarily T-SQL with full multi-table ACID transactions, materialized views, and stored procedures, and storage/compute are separated for near-instant scaling." }
+        { "sourceKey": "dimensional-modeling-overview", "note": "A dimensional model built in a Fabric Warehouse is the recommended prerequisite for an enterprise-grade Power BI semantic model." },
+        { "sourceKey": "direct-lake-develop", "note": "Direct Lake on OneLake supports composite models, so very large fact tables can stay in Direct Lake mode (avoiding refresh cost) while dimension tables use Import or DirectQuery in the same model." },
+        { "sourceKey": "power-bi-star-schema-guidance", "note": "In a Power BI semantic model, whether a table behaves as a dimension or a fact table is determined entirely by relationship cardinality, not by any explicit table property." }
       ],
-      "tags": ["warehouse", "delta-lake", "t-sql"],
+      "tags": ["SemanticModel", "DirectLake", "CompositeModel", "LogicalModel"],
       "drill": {
-        "inputs": ["Dimensional or vault table definitions from the logical model"],
+        "inputs": ["Gold-layer star schema (Delta tables in OneLake)"],
         "processing": [
-          "Load via COPY INTO, Data Factory pipelines, Dataflows, Spark bulk writes, or cross-database CTAS/INSERT SELECT",
-          "Warehouse engine commits multi-table transactions as a single ACID unit",
-          "Data auto-publishes to OneLake Files in Delta format for external/other-workload reads"
+          "Load large fact tables in Direct Lake mode, reading Delta columns from OneLake on demand",
+          "Optionally load small dimension tables in Import mode for maximum interactivity",
+          "Resolve one active relationship per table pair; role-playing dimensions get their own table"
         ],
-        "outputs": ["Delta tables on OneLake queryable via T-SQL with a SQL analytics endpoint, and readable by other Fabric workloads with no export job"],
-        "example": "A vault load inserts a new hub row and its related link row for a transaction as one multi-table T-SQL transaction, which the Lakehouse's single-table write model cannot guarantee atomically.",
-        "controls": ["Ingestion route (COPY INTO, pipeline, Spark bulk write, cross-database CTAS)", "Materialized views for pre-aggregated reporting"],
-        "failureModes": ["Choosing Warehouse for a workload that is actually Spark-first and unstructured-data-heavy, where T-SQL-centric tooling adds friction the Lakehouse would not"]
+        "outputs": ["A composite semantic model consumed by Power BI reports and DAX queries"],
+        "example": "A 500-million-row Order fact table stays in Direct Lake mode while the 200-row Store dimension is switched to Import, giving instant slicer interactions on Store without losing Direct Lake freshness on the fact table.",
+        "controls": ["Per-table storage mode in a composite model", "Which relationship is active per table pair (USERELATIONSHIP for alternates)"],
+        "failureModes": ["Applying row-level security at the Warehouse T-SQL layer on a table this model reads forces the model into DirectQuery fallback instead of Direct Lake."]
       },
-      "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse capability" }
+      "rank": 6
     },
     {
-      "id": "semantic-model-layer",
-      "label": "Semantic model (consumption contract)",
-      "summary": "The Analysis Services tabular model report authors actually query — Import, DirectQuery, or Direct Lake.",
-      "detail": "A semantic model is a data model built on Analysis Services tabular technology (apart from streaming models) that report authors query. It supports three storage modes distinguished by whether data is copied into memory (Import) or left at the source at query time (DirectQuery), plus Composite models mixing both. Row-level security roles can be dynamic (filtered by the querying user's identity) or static.",
-      "whyItMatters": "This is the single consumption contract both the Lakehouse and Warehouse physical branches converge on — the storage-mode choice made here, not the physical layer underneath, is what determines whether report queries hit fresh data or a scheduled snapshot.",
-      "classification": "fact",
-      "layers": ["data", "security"],
-      "evidence": [
-        { "sourceKey": "semantic-model-understand", "note": "Semantic models are Analysis Services tabular models supporting Import, DirectQuery, and Composite storage modes, with dynamic or static row-level security roles." }
-      ],
-      "tags": ["semantic-model", "power-bi"],
-      "drill": {
-        "inputs": ["Delta tables from either the Lakehouse or Warehouse physical layer"],
-        "processing": [
-          "Choose storage mode: Import (loaded fully into memory, refreshed on a schedule), DirectQuery (forwards queries to source live), or Composite (mixes both per table)",
-          "Define row-level security roles as dynamic (filtered by report-user identity) or static (one fixed filter for all assigned users)",
-          "Publish the model as the governed contract report authors build against"
-        ],
-        "outputs": ["A published semantic model consumed by Power BI reports"],
-        "example": "A finance semantic model uses a dynamic RLS role so a regional controller only sees their region's GL transactions, sourced from the same Warehouse Delta tables every controller's report queries.",
-        "controls": ["Storage mode per table (Import/DirectQuery/Composite)", "RLS role type (dynamic/static)", "Refresh schedule for Import-mode tables"],
-        "failureModes": ["Import-mode models serving a stale snapshot because a scheduled refresh silently failed, while DirectQuery models forward every query to source and stay current but pay per-query latency"]
-      },
-      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic model capability" }
-    },
-    {
-      "id": "direct-lake-consumption",
-      "label": "Direct Lake mode",
-      "summary": "Reads Parquet straight from OneLake without an Import-mode memory copy — two flavors with different security paths.",
-      "detail": "Direct Lake is a semantic-model storage mode that reads data directly from OneLake instead of importing a copy into memory. It has two flavors: Direct Lake on OneLake (OneLake security, richer modelling features, faster queries, the default for Power BI Desktop/service-created models) and Direct Lake on SQL (needed when SQL-endpoint security rules under delegated identity apply, or when DirectQuery fallback is required). Direct Lake on OneLake also supports composite models, keeping large fact tables in Direct Lake while dimension tables use Import or DirectQuery.",
-      "whyItMatters": "Direct Lake is the mode that makes the dimensional fact table from this diagram's logical-model branch queryable near-live without a refresh job — but the flavor chosen changes which security model and fallback behaviour apply.",
-      "classification": "fact",
-      "layers": ["data", "security"],
-      "evidence": [
-        { "sourceKey": "direct-lake-develop", "note": "Direct Lake has two flavors — Direct Lake on OneLake and Direct Lake on SQL — distinguished by security model, modelling features, and DirectQuery-fallback support; Direct Lake on OneLake also supports composite models mixing Direct Lake fact tables with Import/DirectQuery dimensions." }
-      ],
-      "tags": ["direct-lake", "semantic-model"],
-      "drill": {
-        "inputs": ["Delta tables from the Lakehouse or Warehouse physical layer, via the SQL analytics endpoint or OneLake directly"],
-        "processing": [
-          "Create the model from the SQL analytics endpoint page, which offers a choice of Direct Lake flavor",
-          "Direct Lake on OneLake: shared expression points straight at OneLake storage; OneLake APIs handle schema discovery, security, and data loading, no SQL endpoint involved",
-          "Direct Lake on SQL: shared expression points at the SQL analytics endpoint, consulted only for schema/security discovery — data still reads from OneLake unless a query falls back to DirectQuery"
-        ],
-        "outputs": ["A Direct Lake semantic model with near-real-time queries against the physical Delta tables, no scheduled refresh required"],
-        "example": "A Warehouse's dimensional fact table is exposed through Direct Lake on SQL because the SQL analytics endpoint runs in delegated identity mode, so every query is authorised through SQL-endpoint security rules rather than OneLake security directly.",
-        "controls": ["Flavor selection at model creation (OneLake vs SQL)", "Base-table vs SQL-view sourcing for each Direct Lake table", "Composite model mixing for very large fact tables"],
-        "failureModes": ["Basing a Direct Lake on SQL table on a SQL view instead of a base table, forcing every query on that table into slower DirectQuery fallback"]
-      },
-      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake capability" }
-    },
-    {
-      "id": "mixed-grain-failure",
-      "label": "Mixed grain & fallback failures",
-      "summary": "The two concrete ways this modelling chain breaks: mixed-grain fact tables, and Direct Lake view-based fallback.",
-      "detail": "Two documented failure modes recur along this path. First, a fact table that mixes rows of different grain (e.g. order-header and order-line rows in one table) corrupts every downstream dimensional aggregation, and it is a logical-model defect that Fabric's tooling will not detect for you. Second, a Direct Lake on SQL table built on a SQL view rather than a base table forces every query against it into DirectQuery fallback, silently degrading the near-real-time performance the semantic-model layer was chosen for.",
-      "whyItMatters": "Both failures are invisible until report authors notice wrong numbers or slow dashboards — neither is caught by schema validation, because both tables remain structurally valid Delta tables.",
+      "id": "rls-layer-warning",
+      "label": "Warning: RLS at the wrong layer breaks Direct Lake",
+      "summary": "T-SQL row-level security on a Warehouse table forces dependent Direct Lake semantic models into DirectQuery fallback.",
+      "detail": "Row-level security is recommended at the semantic-model layer for Power BI consumption; T-SQL-layer row-level security in the Warehouse is reserved for direct Warehouse access by non-Power-BI clients, because applying RLS at the T-SQL layer on a table causes Power BI Direct Lake semantic models built on that table to fall back to DirectQuery mode.",
+      "whyItMatters": "Choosing the wrong security layer silently degrades every Direct Lake model built on that table to DirectQuery performance — a real, sourced trap for teams that reflexively apply RLS at the database layer out of habit.",
       "classification": "warning",
-      "layers": ["data", "observability"],
+      "layers": ["security", "data"],
       "evidence": [
-        { "sourceKey": "direct-lake-develop", "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode." }
+        { "sourceKey": "ultimateinfoguide-lakehouse-vs-warehouse", "note": "Row-level security is recommended at the semantic-model layer for Power BI consumption, while T-SQL-layer row-level security in the Warehouse is reserved for direct Warehouse access by non-Power-BI clients." },
+        { "sourceKey": "direct-lake-develop", "note": "Applying row-level security at the T-SQL layer on a Fabric Warehouse table causes Power BI Direct Lake semantic models built on that table to fall back to DirectQuery mode; the recommended fix is to implement RLS at the semantic-model layer instead." }
       ],
-      "tags": ["anti-pattern", "failure-mode"],
+      "tags": ["RowLevelSecurity", "DirectLake", "Warehouse", "Antipattern"],
       "drill": {
-        "inputs": ["A fact table with an undocumented or inconsistent grain", "A Direct Lake on SQL table sourced from a SQL view"],
+        "inputs": ["A Gold-layer Warehouse table backing a Direct Lake semantic model"],
         "processing": [
-          "Mixed grain: aggregations silently double-count or under-count because two different row meanings are summed together as if they were one",
-          "View-based fallback: the Direct Lake engine detects the underlying object is a view, not a base table, and routes every query for that table through DirectQuery instead of direct Parquet reads"
+          "T-SQL RLS predicate applied at the Warehouse table",
+          "Direct Lake semantic model detects the incompatible security layer at query time",
+          "Model falls back silently to DirectQuery against the SQL analytics endpoint"
         ],
-        "outputs": ["Wrong report totals (mixed grain) or degraded query latency (fallback) — both reaching end users before the root cause is diagnosed"],
-        "example": "A Sales fact table accidentally receives both order-line rows from one pipeline and order-header summary rows from a second backfill job; a 'total revenue' measure silently overstates revenue because header rows double-count the line rows already present.",
-        "controls": ["Grain assertion checks in the load pipeline (row-count or key-uniqueness tests per load)", "Preferring base tables over views for every Direct Lake on SQL source table", "Reviewing TMDL/M expressions to confirm which Direct Lake flavor and source object type is actually in use"],
-        "failureModes": ["Both failures pass Delta schema validation and produce a structurally valid table, so they are only caught by grain/row-count testing or by report authors noticing wrong or slow results"]
-      }
+        "outputs": ["A working but permanently slower DirectQuery model instead of Direct Lake"],
+        "example": "A team adds T-SQL RLS to a Sales fact table so non-Power-BI SQL clients see only their region's rows; every Power BI report built on that table's Direct Lake model silently drops into DirectQuery performance.",
+        "controls": ["Choose semantic-model RLS for Power BI consumers; reserve T-SQL RLS for direct non-Power-BI SQL access"],
+        "failureModes": ["The fallback is silent — nothing errors, reports just get slower — so teams often don't notice until performance complaints surface."]
+      },
+      "rank": 6
+    },
+    {
+      "id": "fk-integrity-warning",
+      "label": "Warning: no enforced foreign keys in Warehouse",
+      "summary": "Fabric Warehouse does not enforce foreign key constraints, so fact-to-dimension referential integrity is the ETL's job.",
+      "detail": "Because Fabric Warehouse does not enforce foreign keys, the ETL process itself is responsible for referential integrity checks when loading fact rows against dimension surrogate keys. Unlike a traditional RDBMS where a bad foreign key insert simply fails, an unmatched fact-to-dimension key silently produces an orphaned or dropped row unless the ETL explicitly checks for it.",
+      "whyItMatters": "Teams migrating from a database that enforces foreign keys can assume Warehouse gives the same safety net; it doesn't, so integrity checking has to be built into the dimensional ETL rather than assumed as a platform guarantee.",
+      "classification": "warning",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "dimensional-modeling-load-tables", "note": "Because Fabric Warehouse does not enforce foreign keys, the ETL process itself is responsible for referential integrity checks when loading fact rows against dimension surrogate keys." }
+      ],
+      "tags": ["DataQuality", "Warehouse", "Antipattern"],
+      "drill": {
+        "inputs": ["Fact rows with dimension surrogate-key references"],
+        "processing": [
+          "ETL performs its own key-existence check against dimension tables",
+          "No database-level constraint rejects an unmatched key",
+          "Failed lookups routed to an 'Unknown member' row rather than silently dropped"
+        ],
+        "outputs": ["Fact rows guaranteed to reference a valid (possibly 'Unknown') dimension row"],
+        "example": "A late-arriving Order row references a ProductId not yet present in the Product dimension; without an explicit ETL check, that row could silently vanish from revenue reports instead of being flagged or mapped to 'Unknown Product'.",
+        "controls": ["Explicit referential-integrity check step in the dimensional ETL", "Unknown-member fallback design"],
+        "failureModes": ["Assuming Warehouse enforces foreign keys the way a traditional RDBMS does leads to silently missing fact rows with no error raised."]
+      },
+      "rank": 4
     }
   ],
   "edges": [
-    { "id": "e-concept-logical", "from": "conceptual-model", "to": "logical-model", "label": "translated into a logical design", "layer": "governance", "kind": "flow" },
-    { "id": "e-logical-dimensional", "from": "logical-model", "to": "dimensional-technique", "label": "BI-facing subject area", "layer": "data", "kind": "branch" },
-    { "id": "e-logical-vault", "from": "logical-model", "to": "vault-technique", "label": "multi-source, audit-sensitive area", "layer": "data", "kind": "branch" },
-    { "id": "e-dimensional-lakehouse", "from": "dimensional-technique", "to": "lakehouse-physical", "label": "Spark-first physicalisation", "layer": "compute", "kind": "flow" },
-    { "id": "e-dimensional-warehouse", "from": "dimensional-technique", "to": "warehouse-physical", "label": "T-SQL-first physicalisation", "layer": "compute", "kind": "flow" },
-    { "id": "e-vault-lakehouse", "from": "vault-technique", "to": "lakehouse-physical", "label": "insert-only Spark loads", "layer": "compute", "kind": "flow" },
-    { "id": "e-vault-warehouse", "from": "vault-technique", "to": "warehouse-physical", "label": "multi-table transactional loads", "layer": "compute", "kind": "flow" },
-    { "id": "e-lakehouse-semantic", "from": "lakehouse-physical", "to": "semantic-model-layer", "label": "SQL analytics endpoint exposes Delta tables", "layer": "data", "kind": "flow" },
-    { "id": "e-warehouse-semantic", "from": "warehouse-physical", "to": "semantic-model-layer", "label": "SQL analytics endpoint exposes Delta tables", "layer": "data", "kind": "flow" },
-    { "id": "e-semantic-directlake", "from": "semantic-model-layer", "to": "direct-lake-consumption", "label": "storage mode = Direct Lake", "layer": "data", "kind": "flow" },
-    { "id": "e-dimensional-warning", "from": "dimensional-technique", "to": "mixed-grain-failure", "label": "undocumented grain risk", "layer": "observability", "kind": "feedback" },
-    { "id": "e-directlake-warning", "from": "direct-lake-consumption", "to": "mixed-grain-failure", "label": "view-sourced table risk", "layer": "observability", "kind": "feedback" }
+    { "id": "e-src-bronze", "from": "source-systems", "to": "bronze-layer", "label": "raw ingestion (shortcut or copy)", "layer": "data", "kind": "flow" },
+    { "id": "e-bronze-silver", "from": "bronze-layer", "to": "silver-layer", "label": "cleanse, standardize, deduplicate", "layer": "data", "kind": "flow" },
+    { "id": "e-silver-vault", "from": "silver-layer", "to": "data-vault-option", "label": "optional: model as hub/link/satellite", "layer": "data", "kind": "flow" },
+    { "id": "e-silver-etl", "from": "silver-layer", "to": "dimensional-etl-order", "label": "used as staging source", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-vault-etl", "from": "data-vault-option", "to": "dimensional-etl-order", "label": "derive dimensional model from vault", "layer": "orchestration", "kind": "flow" },
+    { "id": "e-etl-gold", "from": "dimensional-etl-order", "to": "gold-star-schema", "label": "load dimensions then facts", "layer": "data", "kind": "flow" },
+    { "id": "e-gold-dim", "from": "gold-star-schema", "to": "dimension-table-detail", "label": "contains", "layer": "data", "kind": "flow" },
+    { "id": "e-gold-fact", "from": "gold-star-schema", "to": "fact-table-detail", "label": "contains", "layer": "data", "kind": "flow" },
+    { "id": "e-dim-fact", "from": "dimension-table-detail", "to": "fact-table-detail", "label": "referenced by surrogate key", "layer": "data", "kind": "flow" },
+    { "id": "e-fact-fk-warn", "from": "fact-table-detail", "to": "fk-integrity-warning", "label": "no enforced FK constraint", "layer": "data", "kind": "feedback" },
+    { "id": "e-gold-semantic", "from": "gold-star-schema", "to": "semantic-model-direct-lake", "label": "backs composite Direct Lake model", "layer": "data", "kind": "flow" },
+    { "id": "e-semantic-rls-warn", "from": "semantic-model-direct-lake", "to": "rls-layer-warning", "label": "T-SQL RLS breaks Direct Lake", "layer": "security", "kind": "feedback" }
   ],
   "walkthrough": [
-    {
-      "nodeId": "conceptual-model",
-      "title": "1. Start with the business concept, not the table",
-      "explanation": "Before any Fabric item exists, agree the bounded entities, the grain of each fact, and who owns that definition. This is pattern guidance, not a Fabric feature — but every failure later in this diagram traces back to a decision skipped here."
-    },
-    {
-      "nodeId": "logical-model",
-      "title": "2. Choose the logical modelling technique",
-      "explanation": "Translate the conceptual entities into a logical design. The path branches here: a BI-facing subject area favours dimensional modelling; a multi-source, audit-sensitive area favours data vault. Both are valid Fabric-agnostic techniques — Fabric does not prescribe either."
-    },
-    {
-      "nodeId": "dimensional-technique",
-      "title": "3a. Dimensional: facts and conformed dimensions",
-      "explanation": "Star or snowflake schema, built around an explicit fact grain and shared dimensions. This is the branch most semantic-model and Direct Lake performance guidance assumes underneath it."
-    },
-    {
-      "nodeId": "vault-technique",
-      "title": "3b. Data vault: hubs, links, satellites",
-      "explanation": "Insert-only structure for auditability and multi-source integration. Trades query-time join complexity for a full change history that dimensional models don't provide by default."
-    },
-    {
-      "nodeId": "lakehouse-physical",
-      "title": "4a. Physicalise in a Lakehouse",
-      "explanation": "Either logical technique can land as managed Delta tables in a Lakehouse — Spark-first, handles unstructured Files alongside Tables, single-table writes only."
-    },
-    {
-      "nodeId": "warehouse-physical",
-      "title": "4b. Physicalise in a Warehouse",
-      "explanation": "Or land as Delta tables in a Warehouse — T-SQL-first, full multi-table ACID transactions, the same underlying Delta-on-OneLake storage as the Lakehouse branch."
-    },
-    {
-      "nodeId": "semantic-model-layer",
-      "title": "5. Converge on the semantic model",
-      "explanation": "Both physical branches expose their Delta tables through a SQL analytics endpoint that becomes the source for a single semantic model — the actual contract report authors build against, in Import, DirectQuery, or Composite storage mode."
-    },
-    {
-      "nodeId": "direct-lake-consumption",
-      "title": "6. Direct Lake changes the storage-mode trade-off",
-      "explanation": "Instead of importing a memory copy, Direct Lake reads Parquet straight from OneLake. Two flavors exist — Direct Lake on OneLake and Direct Lake on SQL — with different security paths and fallback behaviour."
-    },
-    {
-      "nodeId": "mixed-grain-failure",
-      "title": "7. Where this chain actually breaks",
-      "explanation": "Two real failure modes recur: a fact table mixing grains corrupts aggregations invisibly, and a Direct Lake on SQL table built on a view silently falls back to slower DirectQuery. Neither is caught by schema validation — both look like structurally valid Delta tables."
-    }
+    { "nodeId": "source-systems", "title": "1. Source systems define the conceptual model", "explanation": "Before any Fabric item exists, the business entities and events worth modelling are identified from source systems — this is the conceptual model, done in your head or on a whiteboard, not in a Fabric item." },
+    { "nodeId": "bronze-layer", "title": "2. Bronze: land raw data unchanged", "explanation": "Source data lands in a Lakehouse Bronze layer exactly as received, ideally via a OneLake shortcut, so it stays replayable if downstream logic changes." },
+    { "nodeId": "silver-layer", "title": "3. Silver: cleanse and conform", "explanation": "Errors are fixed, formats standardized, duplicates removed — Silver becomes the trustworthy staging source for the dimensional ETL, and Microsoft explicitly allows Silver to serve as that staging layer directly." },
+    { "nodeId": "data-vault-option", "title": "3b. Optional: data-vault staging for full auditability", "explanation": "Teams with strict historical-auditability requirements sometimes insert hub/link/satellite modelling here — an architectural option Fabric Atlas infers from common practice, not a Microsoft Fabric feature." },
+    { "nodeId": "dimensional-etl-order", "title": "4. Load in a fixed order: stage, dimensions, facts, post-process", "explanation": "Microsoft's documented load order matters because fact rows need dimension surrogate keys to already exist — get this order wrong and key lookups fail." },
+    { "nodeId": "gold-star-schema", "title": "5. Gold: the physical star schema", "explanation": "The Gold layer is the physical model: dimension tables radiating around central fact tables, Microsoft's recommended default design for a Fabric Warehouse." },
+    { "nodeId": "dimension-table-detail", "title": "5a. Dimension tables: surrogate keys + SCD", "explanation": "Dimension tables use surrogate keys and slowly changing dimension logic to track historical attribute changes accurately." },
+    { "nodeId": "fact-table-detail", "title": "5b. Fact tables: grain + unenforced foreign keys", "explanation": "Fact tables hold measures at one grain plus dimension surrogate keys — but Fabric Warehouse enforces none of those foreign keys, so integrity checking is the ETL's job." },
+    { "nodeId": "fk-integrity-warning", "title": "Warning: no database-level referential integrity", "explanation": "A missing ETL integrity check on fact loads lets orphaned fact rows accumulate silently, since the Warehouse itself won't reject them." },
+    { "nodeId": "semantic-model-direct-lake", "title": "6. Semantic model: composite Direct Lake", "explanation": "The star schema backs a Power BI semantic model; large fact tables can stay in Direct Lake mode while small dimensions optionally use Import, in one composite model." },
+    { "nodeId": "rls-layer-warning", "title": "Warning: security at the wrong layer breaks Direct Lake", "explanation": "T-SQL row-level security on the underlying Warehouse table silently forces the Direct Lake model into DirectQuery fallback — row-level security belongs at the semantic-model layer instead." }
   ]
 }

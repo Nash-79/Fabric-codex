@@ -1,0 +1,120 @@
+{
+  "url": "https://learn.microsoft.com/en-us/power-bi/guidance/star-schema",
+  "title": "Understand star schema and the importance for Power BI",
+  "tier": 1,
+  "summary": "Microsoft's practitioner guidance on star schema design specifically for Power BI semantic models, covering normalization vs. denormalization, measures, surrogate keys, snowflake dimensions, slowly changing dimensions (Type 1/Type 2), role-playing dimensions, junk dimensions, degenerate dimensions, and factless fact tables.",
+  "audience": "Power BI Desktop data modelers building semantic models who need to translate classic dimensional-modeling theory into Power BI-specific relationship and DAX design decisions.",
+  "why_it_matters": "It's the bridge document between generic Kimball-style dimensional modeling and the concrete constraints of Power BI's relationship engine — such as the single-active-relationship limitation — which materially changes how patterns like role-playing dimensions and Type 2 SCDs must be implemented in a semantic model versus a warehouse.",
+  "takeaways": [
+    "Power BI's single-active-relationship-per-table-pair rule is the key constraint that shapes several modeling patterns, especially role-playing dimensions.",
+    "Power Query alone cannot construct a Type 2 slowly changing dimension from source data; that logic must live upstream in a data warehouse ETL process.",
+    "Table type (fact vs. dimension) in a Power BI model is determined by relationship cardinality, not by any explicit table property.",
+    "Several named patterns (junk dimensions, degenerate dimensions, factless fact tables) exist specifically to control model storage size and Data pane clutter.",
+    "Denormalizing snowflake dimensions into a single table is generally preferred in Power BI for storage and usability, with hierarchy support as a bonus."
+  ],
+  "tags": ["MicrosoftFabric", "DataModelling", "StarSchema", "PowerBI", "SemanticModel"],
+  "claims": [
+    {
+      "capability_id": "semantic-model",
+      "text": "In a Power BI semantic model, whether a table behaves as a dimension or a fact table is determined entirely by relationship cardinality, not by any explicit table property; the 'one' side of a one-to-many relationship is always the dimension.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["DataModelling", "StarSchema", "SemanticModel"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "A well-structured Power BI model should not mix dimension and fact roles in a single table, and fact tables should always load data at a consistent grain.",
+      "depth": 2,
+      "type": "antipattern",
+      "tags": ["DataModelling", "StarSchema", "SemanticModel"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "Snowflake dimensions (normalized into multiple related tables, e.g. category/subcategory/product) can be denormalized into a single Power BI model table; Microsoft generally recommends this because it reduces model tables, shortens relationship filter-propagation chains, and enables cross-column hierarchies that a snowflake design cannot support.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataModelling", "StarSchema", "SemanticModel", "Snowflake"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "A Power BI semantic model can only have one active relationship between any two tables; alternate relationships must be set inactive and can only be invoked in DAX via the USERELATIONSHIP function, which forces manual measure creation for each alternate role.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["DataModelling", "StarSchema", "SemanticModel", "DAX"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "For role-playing dimensions (e.g. a date table used for order date, ship date, and delivery date), the recommended Power BI pattern is to create a separate dimension table per role using a referenced Power Query or DAX calculated table, each with its own single active relationship, rather than relying on inactive relationships and USERELATIONSHIP.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataModelling", "StarSchema", "SemanticModel", "RolePlayingDimension"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "Power Query alone cannot implement a Type 2 slowly changing dimension (versioned dimension rows with start/end date validity); that change-detection logic must run upstream, typically in a data warehouse ETL/load process, and the semantic model then loads the pre-built SCD Type 2 table.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["DataModelling", "SlowlyChangingDimension", "SemanticModel", "PowerQuery"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "A Type 1 slowly changing dimension is achieved in Power BI simply by a non-incremental table refresh, which overwrites dimension rows with the latest source values and discards prior state.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["DataModelling", "SlowlyChangingDimension", "SemanticModel"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "A surrogate key is a unique identifier added to a dimension table (not present in source data) so it can serve as the 'one' side of a Power BI model relationship; when source data lacks a unique column, a Power Query index column can generate one.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["DataModelling", "SurrogateKey", "SemanticModel", "PowerQuery"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "A junk dimension consolidates several small, low-cardinality dimensions (such as order status or demographic flags) into one table — typically the Cartesian product of all attribute values plus a surrogate key — to reduce model storage size and Data pane clutter.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataModelling", "JunkDimension", "SemanticModel"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "A degenerate dimension is a fact-table attribute (such as a sales order number) needed for filtering that is kept directly on the fact table rather than split into its own dimension table, as an accepted exception to the fact/dimension separation rule.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataModelling", "DegenerateDimension", "SemanticModel"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "A factless fact table contains only dimension keys and no measures; Microsoft's recommended use of this pattern in Power BI is as a bridging table to implement many-to-many relationships between two dimensions.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataModelling", "FactlessFact", "SemanticModel", "ManyToMany"]
+    },
+    {
+      "capability_id": "semantic-model",
+      "text": "Explicit DAX measures are required (rather than relying on implicit column summarization) whenever report authors will query via MDX (including Analyze in Excel or the paginated-report MDX query designer), or when the modeler needs to restrict a column to specific aggregation types.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["DataModelling", "DAX", "SemanticModel", "MDX"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/power-bi/guidance/media/star-schema/star-schema-example-1.svg",
+      "caption": "Microsoft's illustration of a basic star schema with a central fact table surrounded by dimension tables",
+      "attribution": "Microsoft Learn (c) Microsoft",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "semantic-model"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/power-bi/guidance/media/star-schema/slowly-changing-dimension-type-2.svg",
+      "caption": "Microsoft's illustration of a Type 2 slowly changing dimension where a new row version is created when an employee's sales region changes",
+      "attribution": "Microsoft Learn (c) Microsoft",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "semantic-model"
+    }
+  ]
+}

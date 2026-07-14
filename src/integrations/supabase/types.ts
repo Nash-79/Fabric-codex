@@ -1029,16 +1029,28 @@ export type Database = {
       }
       roadmap_items: {
         Row: {
+          active: boolean
+          blog_title: string | null
+          blog_url: string | null
           capability_id: string | null
           categories: string[]
           created_at: string
           description_html: string
+          feature_description: string | null
+          feature_name: string
           first_seen_at: string
           guid: string
           id: string
+          last_modified: string | null
           last_seen_at: string
           link: string
           pub_date: string | null
+          product_id: string | null
+          product_name: string
+          raw_payload: Json
+          release_date: string | null
+          release_item_id: string | null
+          release_status: string
           release_type: string
           status: string
           target_release: string
@@ -1046,16 +1058,28 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          active?: boolean
+          blog_title?: string | null
+          blog_url?: string | null
           capability_id?: string | null
           categories?: string[]
           created_at?: string
           description_html?: string
+          feature_description?: string | null
+          feature_name?: string
           first_seen_at?: string
           guid: string
           id?: string
+          last_modified?: string | null
           last_seen_at?: string
           link: string
           pub_date?: string | null
+          product_id?: string | null
+          product_name?: string
+          raw_payload?: Json
+          release_date?: string | null
+          release_item_id?: string | null
+          release_status?: string
           release_type?: string
           status?: string
           target_release?: string
@@ -1063,16 +1087,28 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          active?: boolean
+          blog_title?: string | null
+          blog_url?: string | null
           capability_id?: string | null
           categories?: string[]
           created_at?: string
           description_html?: string
+          feature_description?: string | null
+          feature_name?: string
           first_seen_at?: string
           guid?: string
           id?: string
+          last_modified?: string | null
           last_seen_at?: string
           link?: string
           pub_date?: string | null
+          product_id?: string | null
+          product_name?: string
+          raw_payload?: Json
+          release_date?: string | null
+          release_item_id?: string | null
+          release_status?: string
           release_type?: string
           status?: string
           target_release?: string

@@ -1,0 +1,89 @@
+{
+  "url": "https://learn.microsoft.com/en-us/fabric/data-engineering/delta-lake-schema-evolution",
+  "title": "Schema evolution for Delta tables",
+  "tier": 1,
+  "summary": "Microsoft's how-to for evolving a Delta table's schema in Fabric without rewriting existing data: merge schema for additive changes, overwrite schema for full schema replacement, column mapping for rename/drop, type widening for compatible type promotions, ALTER TABLE for explicit changes, MERGE INTO WITH SCHEMA EVOLUTION, and the downstream impact of each change type.",
+  "audience": "Data engineers building Spark/PySpark ingestion and transformation pipelines into Delta tables, particularly those maintaining silver-layer tables whose upstream sources add or change columns over time.",
+  "why_it_matters": "Silver layer tables sit between an evolving bronze source and consumers (SQL analytics endpoint, Direct Lake semantic models, notebooks) that expect a stable contract; this source is the mechanical reference for changing that contract safely instead of breaking readers or silently corrupting data.",
+  "takeaways": [
+    "Delta enforces schema on write by default and rejects mismatched writes rather than silently altering the table -- schema evolution is an explicit opt-in, not default behavior.",
+    "mergeSchema only adds new columns; it never removes columns or changes existing column types, making it the safe default for additive silver-layer changes.",
+    "overwriteSchema replaces the table's schema contract entirely and is called out as high-impact/destructive to downstream consumers.",
+    "Column mapping must be enabled before rename/drop operations become possible, and type widening is versioned by Fabric Spark runtime.",
+    "Every schema change type has a distinct downstream blast radius across the SQL analytics endpoint, Direct Lake Power BI models, notebooks, and Spark jobs."
+  ],
+  "tags": ["SilverLayerModelling", "MicrosoftFabric", "DeltaLake", "SchemaEvolution", "Spark", "PySpark"],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "Delta Lake enforces schema on write by default, rejecting any write whose data doesn't match the target table's schema instead of silently altering the table to accommodate it.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["SilverLayerModelling", "DeltaLake", "SchemaEvolution", "DataQuality"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The mergeSchema write option supports only additive schema changes: it adds columns present in the source but absent from the target table, and it never removes existing columns or changes existing column types.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["SilverLayerModelling", "DeltaLake", "SchemaEvolution", "PySpark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Setting spark.databricks.delta.schema.autoMerge.enabled at the session level allows subsequent writes and merge operations to add new source columns automatically wherever Delta supports the change, without repeating the mergeSchema option on every write.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "DeltaLake", "SchemaEvolution", "Spark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The overwriteSchema write option replaces the entire table schema definition to match an incoming DataFrame and is explicitly described as more disruptive than mergeSchema because downstream consumers expecting the old schema can break.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["SilverLayerModelling", "DeltaLake", "SchemaEvolution", "DataQuality"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Column mapping (delta.columnMapping.mode set to 'name') must be enabled on a Delta table before rename or drop operations can be performed via ALTER TABLE without rewriting all existing data files.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["SilverLayerModelling", "DeltaLake", "SchemaEvolution", "ColumnMapping"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Type widening (e.g. int to bigint, float to double) is a Delta table feature introduced in Fabric Spark Runtime 1.3 with an expanded set of supported conversions in Runtime 2.0+, and enabling it sets a reader/writer protocol feature that blocks older Delta clients from reading or writing the table.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["SilverLayerModelling", "DeltaLake", "SchemaEvolution", "Internals"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Integer-to-decimal and integer-to-double type changes are deliberately excluded from automatic schema evolution and must be applied manually via ALTER TABLE ALTER COLUMN, to avoid accidentally promoting integer values to decimals.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["SilverLayerModelling", "DeltaLake", "SchemaEvolution", "DataQuality"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The MERGE WITH SCHEMA EVOLUTION SQL clause lets a MERGE INTO upsert operation add new source columns to the target table as part of the same statement, rather than requiring a separate schema-altering step beforehand.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "DeltaLake", "SchemaEvolution", "SQL"]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "Schema changes to a Delta table propagate to every downstream reader, including the SQL analytics endpoint and Power BI in Direct Lake mode; renamed or dropped columns can break existing queries, notebooks, semantic models, and reports that still reference the old schema.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "DirectLake", "SchemaEvolution", "PowerBI"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Best practice guidance is to use mergeSchema for routine additive ETL changes, enable column mapping proactively if renames or drops are anticipated, and test schema changes in a development environment before applying them to production tables.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "DeltaLake", "SchemaEvolution", "DataEngineering"]
+    }
+  ],
+  "assets": []
+}

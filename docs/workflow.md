@@ -78,6 +78,15 @@ Codex call path:
 For the latest RSS entries, first run **Settings → RSS Feeds → Poll now**, then rerun the
 orchestrator so it plans against the newly queued links.
 
+The same scheduled feed hook syncs the complete paginated Fabric GPS JSON roadmap API. Roadmap
+rows preserve every current API field plus the raw release object; Fabric GPS remains identified
+as a community mirror, not a Microsoft-authored source. When a release supplies a canonical blog
+URL, the poller deduplicates it against approved sources and open queue items. Explicitly trusted
+Microsoft Learn, Fabric/Power BI blog, Fabric Updates Blog, and Microsoft GitHub URLs are assigned
+their domain trust tier and inserted as `claimed`; any other host is tier 6 and remains `queued`.
+This reservation does not verify claims: ingestion still fetches the canonical post, paraphrases
+it, publishes through the normal services path, and requires the usual claim verification gate.
+
 Website watchers are always auto-mapped. Creation performs a server-side validation poll, then
 stores the successful mode and resolved endpoint as a retained hint. Later polls try that hint
 first and fall back through RSS/JSON Feed → sitemap → listing → single-page fingerprint. Empty,

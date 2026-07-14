@@ -1,0 +1,121 @@
+{
+  "url": "https://learn.microsoft.com/en-us/fabric/data-warehouse/dimensional-modeling-load-tables",
+  "title": "Load Tables in a Dimensional Model",
+  "tier": 1,
+  "summary": "Microsoft's guidance for loading dimension and fact tables in a Fabric Warehouse dimensional model: staging strategy, ETL orchestration order, transformation types, surrogate key handling, slowly changing dimension (SCD) processing logic, and fact table incremental load and integrity patterns.",
+  "audience": "Data warehouse developers and architects building or maintaining a star-schema dimensional model on Fabric Warehouse, and engineers designing the silver-to-gold ETL that feeds it.",
+  "why_it_matters": "The staging-then-dimensions-then-facts ordering, SCD type 1/2/3 mechanics, and surrogate key rules described here are the load-time counterpart to silver layer cleansing -- silver output is frequently the staging source for exactly this dimensional load process, so getting the silver contract wrong breaks these downstream rules.",
+  "takeaways": [
+    "ETL for a dimensional model has a strict order: stage, then dimensions, then facts, then post-processing such as semantic model refresh.",
+    "Dimension changes are handled by SCD type (1 overwrite, 2 versioned history, 3 limited attribute history), each with distinct load logic.",
+    "Surrogate keys must never be regenerated via truncate-and-reload once fact tables reference them.",
+    "Fact loads should be incremental wherever possible, using watermarks, CDC, or change tracking rather than full reloads.",
+    "Deletions in source systems should be handled as soft deletes in both dimension and fact tables, not physically removed."
+  ],
+  "tags": ["SilverLayerModelling", "MicrosoftFabric", "DataWarehouse", "DimensionalModelling", "ETL"],
+  "claims": [
+    {
+      "capability_id": "warehouse",
+      "text": "A dimensional model ETL process should run in a fixed order: optionally load staging tables, then process dimension tables, then process fact tables, then run post-processing tasks like semantic model refresh.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "DimensionalModelling", "ETL", "DataWarehouse"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "When a Fabric lakehouse already implements a medallion architecture, its bronze, silver, or gold layer can serve directly as the ETL source for a warehouse dimensional model, making a separate staging step in the warehouse unnecessary.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "Lakehouse", "Warehouse", "MedallionArchitecture"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Staging tables should mirror source table column names and data types as closely as possible, should never be exposed to business users, and should be truncated (via TRUNCATE TABLE) at the start of each ETL run.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "Staging", "ETL", "DataWarehouse"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Because Fabric Warehouse does not enforce foreign keys, the ETL process itself is responsible for referential integrity checks when loading fact rows against dimension surrogate keys.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["SilverLayerModelling", "DataWarehouse", "DataQuality", "SQL"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Surrogate keys on dimension tables should never be regenerated via a full truncate-and-reload once fact tables reference them, since that invalidates existing fact-to-dimension relationships and can make SCD type 2 history unrecoverable.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["SilverLayerModelling", "SurrogateKeys", "DimensionalModelling", "DataWarehouse"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Slowly changing dimension handling differs by type: SCD type 1 updates existing attribute values in place, SCD type 2 expires the current row version and inserts a new versioned row, and SCD type 3 updates attributes in place similarly to type 1 but preserves limited prior-value history.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "SCD", "DimensionalModelling", "DataWarehouse"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "When a dimension row was originally created as an inferred member during fact loading, later-arriving source details for that member should be treated as a late-arriving update rather than a normal SCD change, and its inferred-member flag should be cleared once real attributes arrive.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "SCD", "DimensionalModelling"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Source system deletions should not be propagated as physical deletes in dimension or fact tables; instead, a boolean soft-delete attribute should be set, and reporting queries and Power BI semantic models should filter out soft-deleted rows.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "DataQuality", "DimensionalModelling", "PowerBI"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Fact tables should be loaded incrementally using mechanisms such as a high-watermark on a reliable source identifier or timestamp, or source-side change data capture/change tracking, rather than truncating and reloading the full fact table.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "IncrementalLoad", "DataWarehouse", "ETL"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "When a fact row's dimension key lookup fails, the row should still be inserted using a special 'Unknown' dimension member rather than being dropped, so referential integrity issues don't silently lose fact data.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["SilverLayerModelling", "DataQuality", "DimensionalModelling"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "Cross-warehouse ingestion commands such as INSERT...SELECT, SELECT INTO, and CREATE TABLE AS SELECT are set-based operations recommended as the most efficient way to load dimensional model tables from staging tables in the same workspace.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["SilverLayerModelling", "SQL", "Performance", "DataWarehouse"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/data-warehouse/media/dimensional-modeling-load-tables/etl-process-steps.svg",
+      "caption": "Microsoft's diagram of the four-step ETL process: stage, process dimensions, process facts, post-process.",
+      "attribution": "Microsoft Learn (c) Microsoft",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "warehouse"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/data-warehouse/media/dimensional-modeling-load-tables/process-dimension-table.svg",
+      "caption": "Microsoft's flow diagram of how new and changed source rows are loaded into a dimension table.",
+      "attribution": "Microsoft Learn (c) Microsoft",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "warehouse"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/data-warehouse/media/dimensional-modeling-load-tables/process-fact-table.svg",
+      "caption": "Microsoft's flow diagram of how new source rows are loaded into a fact table.",
+      "attribution": "Microsoft Learn (c) Microsoft",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "warehouse"
+    }
+  ]
+}

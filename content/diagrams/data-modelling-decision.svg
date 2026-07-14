@@ -1,98 +1,286 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1180" font-family="Segoe UI, Inter, Arial, sans-serif" role="img" aria-labelledby="data-modelling-decision-title data-modelling-decision-desc" data-diagram-id="data-modelling-decision">
-  <title id="data-modelling-decision-title">Which Model, Which Store, Which Storage Mode?</title>
-  <desc id="data-modelling-decision-desc">A decision tree with three questions. The first asks what the model must optimise for: query simplicity for BI leads to a dimensional star schema; auditable history and many changing source systems leads to a data vault; a shared integration layer across domains leads to a canonical model. The second asks who consumes the physical layer: Spark and data engineering favour a Lakehouse over Delta tables, while T-SQL and multi-table transactions favour a Warehouse — both write Delta and both surface through a semantic model. The third asks how the semantic model should read the data, forking between Direct Lake, Import, and DirectQuery. A warning branch covers the Direct Lake trap in which basing a table on a SQL view silently forces every query into DirectQuery fallback.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 1300" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="data-modelling-decision-title data-modelling-decision-desc" data-diagram-id="data-modelling-decision">
+  <title id="data-modelling-decision-title">Choosing a Data Model in Microsoft Fabric: Technique, Store, and Read Mode</title>
+  <desc id="data-modelling-decision-desc">A three-gate decision tree. Gate 1 asks what the model must optimise for: BI query simplicity branches to a dimensional star schema, while auditable history across many volatile sources branches to data vault. Gate 2 asks which engine owns writes: Spark and multi-format engineering branches to a Lakehouse over managed Delta tables, T-SQL with multi-table transactions branches to a Warehouse — both converge on gate 3. Gate 3 asks how the semantic model should read the conformed table, decided per table: Direct Lake for large fresh facts, Import for compact fully-modellable tables, DirectQuery or composite for source-authoritative or exception tables. A warning node reached only from the Direct Lake branch flags that basing a Direct Lake on SQL table on a SQL view forces every query into DirectQuery fallback, and that fallback traffic lands on the DirectQuery branch anyway.</desc>
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Palette matches the house teal/green family used across content/diagrams/fabric-platform-overview.svg
+       and content/diagrams/silver-layer-modelling-architecture.svg.
+       Official Microsoft Fabric item/product icons are vendored under content/diagrams/icons/microsoft/,
+       used unchanged per docs/official-icon-policy.md, each paired with a product/item name label. -->
   <defs>
-    <linearGradient id="decHeader" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#172554"/><stop offset="0.52" stop-color="#0E7490"/><stop offset="1" stop-color="#0F766E"/></linearGradient>
-    <linearGradient id="decDirect" x1="0" x2="1"><stop stop-color="#E0E7FF"/><stop offset="1" stop-color="#DBEAFE"/></linearGradient>
-    <filter id="decShadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="6" stdDeviation="7" flood-color="#0F172A" flood-opacity="0.12"/></filter>
-    <marker id="decArrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1l10 5-10 5z" fill="#0F766E"/></marker>
-    <marker id="decWarnArrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto"><path d="M1 1l10 5-10 5z" fill="#D97706"/></marker>
-    <style>
-      .kicker{font-size:13px;font-weight:700;letter-spacing:2px}.h1{font-size:34px;font-weight:750}.h2{font-size:20px;font-weight:700}.h3{font-size:16px;font-weight:700}.body{font-size:14px}.small{font-size:12px}.micro{font-size:11px}.navy{fill:#0F172A}.muted{fill:#475569}.teal{fill:#0F766E}.white{fill:#FFF}.evidence{font-size:11px;font-weight:700;fill:#0369A1}.flow{fill:none;stroke:#0F766E;stroke-width:3;marker-end:url(#decArrow)}.branch{fill:none;stroke:#64748B;stroke-width:2.5;marker-end:url(#decArrow)}
-      [data-node-id]:focus{outline:none}[data-node-id]:focus>rect,[data-node-id]:focus>.focus-ring{stroke:#2563EB!important;stroke-width:4!important}
-    </style>
+    <linearGradient id="dmd-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#063D3B"/>
+      <stop offset="1" stop-color="#0B5E50"/>
+    </linearGradient>
+    <linearGradient id="dmd-gate" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="1" stop-color="#117865"/>
+    </linearGradient>
+    <marker id="dmd-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94"/>
+    </marker>
+    <marker id="dmd-arrDark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0B5E50"/>
+    </marker>
+    <marker id="dmd-arrAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B45309"/>
+    </marker>
+    <marker id="dmd-arrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B42318"/>
+    </marker>
+    <!-- Namespaced gradients/clips inlined from vendored Microsoft Fabric icons -->
+    <linearGradient id="dmd-ic-shell-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="dmd-ic-shell-c" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="dmd-ic-shell-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+    <linearGradient id="dmd-ic-lh-house" x1="9" x2="24.817" y1="8.172" y2="23.393" gradientUnits="userSpaceOnUse"><stop stop-color="#3477EA"/><stop offset="1" stop-color="#1D53A4"/></linearGradient>
+    <linearGradient id="dmd-ic-dw-d" x1="9" x2="23.804" y1="9.172" y2="23.149" gradientUnits="userSpaceOnUse"><stop stop-color="#3477EA"/><stop offset="1" stop-color="#1D53A4"/></linearGradient>
+    <linearGradient id="dmd-ic-sm-a" x1="10.222" x2="13.511" y1="3" y2="29.311" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="dmd-ic-sm-c" x1="11.396" x2="14.897" y1="3" y2="29.256" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <linearGradient id="dmd-ic-sm-dot" x1="8" x2="16.989" y1="11" y2="25.382" gradientUnits="userSpaceOnUse"><stop stop-color="#7751B8"/><stop offset="1" stop-color="#5A409C"/></linearGradient>
+    <radialGradient id="dmd-ic-sm-b" cx="0" cy="0" r="1" gradientTransform="matrix(13.7222 20.58336 -17.81255 11.875 11.306 9.771)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+    <linearGradient id="dmd-ic-ol-p0" x1="26.861" x2="2.308" y1="11.084" y2="16.745" gradientUnits="userSpaceOnUse"><stop offset=".2" stop-color="#028FDC"/><stop offset=".51" stop-color="#0078D4"/><stop offset="1" stop-color="#0B315B"/></linearGradient>
+    <linearGradient id="dmd-ic-ol-p1" x1="28.602" x2="12.381" y1="18.695" y2="3.828" gradientUnits="userSpaceOnUse"><stop offset=".04" stop-color="#028FDC"/><stop offset=".46" stop-color="#0078D4"/><stop offset="1" stop-color="#0B315B"/></linearGradient>
+    <radialGradient id="dmd-ic-ol-p2" cx="0" cy="0" r="1" gradientTransform="rotate(134.83 12.52 5.064)scale(18.1322 23.3919)" gradientUnits="userSpaceOnUse"><stop offset=".39" stop-color="#028FDC"/><stop offset=".59" stop-color="#0078D4"/><stop offset="1" stop-color="#1A508B"/></radialGradient>
+    <radialGradient id="dmd-ic-ol-p3" cx="0" cy="0" r="1" gradientTransform="rotate(139.44 8.59 9.18)scale(16.3171 20.1329)" gradientUnits="userSpaceOnUse"><stop offset=".46" stop-color="#40D9FA"/><stop offset=".9" stop-color="#0095E6"/></radialGradient>
+    <radialGradient id="dmd-ic-ol-p4" cx="0" cy="0" r="1" gradientTransform="matrix(-1.85792 17.21433 -12.2258 -1.31951 12.083 7.086)" gradientUnits="userSpaceOnUse"><stop offset=".77" stop-opacity="0"/><stop offset="1"/></radialGradient>
+    <radialGradient id="dmd-ic-ol-p5" cx="0" cy="0" r="1" gradientTransform="rotate(85.97 -.494 20.846)scale(26.9434 49.1305)" gradientUnits="userSpaceOnUse"><stop offset=".1" stop-color="#BDF5FF"/><stop offset=".47" stop-color="#40D9FA"/></radialGradient>
+    <clipPath id="dmd-ic-ol-clip"><path fill="#fff" d="M0 0H32V32H0z"/></clipPath>
   </defs>
-  <rect width="1440" height="1180" fill="#F8FAFC"/>
-  <rect width="1440" height="174" fill="url(#decHeader)"/><path d="M1080 0h360v174h-240z" fill="#FFF" opacity="0.05"/><circle cx="1340" cy="23" r="140" fill="#FFF" opacity="0.05"/>
-  <text x="64" y="43" class="kicker" fill="#A5F3FC">FABRIC ATLAS · MODELLING DECISION MAP</text>
-  <text x="64" y="86" class="h1 white">Three choices that shape every analytics model</text>
-  <text x="64" y="120" font-size="17" fill="#D5FAF5">Technique → physical engine → semantic read mode. Decide in that order and record the reason.</text>
-  <g transform="translate(64 140)"><rect width="278" height="25" rx="12" fill="#FFF" opacity="0.13"/><text x="16" y="17" class="small white">1 · Consumption and history</text></g><g transform="translate(356 140)"><rect width="265" height="25" rx="12" fill="#FFF" opacity="0.13"/><text x="16" y="17" class="small white">2 · Engine and transactions</text></g><g transform="translate(635 140)"><rect width="300" height="25" rx="12" fill="#FFF" opacity="0.13"/><text x="16" y="17" class="small white">3 · Freshness, scale, security</text></g>
 
-  <g data-node-id="start-question" transform="translate(64 206)" tabindex="0" aria-label="What must the model optimise for?">
-    <title data-node-tooltip="true">What must the model optimise for? — The root question: pick the modelling technique from the job the model has to do, not from habit.</title>
-    <rect class="focus-ring" width="292" height="230" rx="24" fill="#FFF" stroke="#5EEAD4" stroke-width="2" filter="url(#decShadow)"/>
-    <rect width="292" height="44" rx="24" fill="#0F766E"/><path d="M0 22h292v22H0z" fill="#0F766E"/><text x="22" y="29" class="small white" font-weight="700">GATE 1 · MODELLING TECHNIQUE</text>
-    <circle cx="54" cy="91" r="28" fill="#CCFBF1"/><path d="M38 91h32M54 75v32" stroke="#0F766E" stroke-width="4"/><text x="96" y="84" class="h2 navy">What must this</text><text x="96" y="108" class="h2 navy">model optimise?</text>
-    <text x="24" y="147" class="body muted"><tspan x="24">Start with the consumer and the</tspan><tspan x="24" dy="21">history requirement—not a template.</tspan></text>
-    <rect x="24" y="188" width="244" height="25" rx="12" fill="#ECFDF5"/><text x="40" y="205" class="micro" fill="#047857">OUTPUT · technique + recorded rationale</text>
-  </g>
-  <path d="M356 287h58M385 287v-52h37M385 287v104h37" class="branch"/><text x="368" y="225" class="micro" fill="#1D4ED8">BI-first</text><text x="368" y="378" class="micro" fill="#6D28D9">audit-first</text>
+  <rect width="1180" height="1300" fill="#FFFFFF"/>
 
-  <g data-node-id="technique-dimensional" transform="translate(422 198)" tabindex="0" aria-label="Dimensional / star schema">
-    <title data-node-tooltip="true">Dimensional / star schema — Facts at a declared grain plus conformed dimensions — the default when BI query simplicity is the goal.</title>
-    <rect class="focus-ring" width="300" height="162" rx="20" fill="#EFF6FF" stroke="#60A5FA" stroke-width="2"/>
-    <text x="22" y="30" class="h3" fill="#1E40AF">Dimensional / star schema</text><text x="22" y="51" class="small muted">Best when query simplicity wins</text>
-    <rect x="112" y="73" width="62" height="36" rx="6" fill="#2563EB"/><text x="143" y="95" text-anchor="middle" class="micro white">FACT</text><g fill="#BFDBFE" stroke="#2563EB"><rect x="24" y="79" width="54" height="26" rx="5"/><rect x="210" y="79" width="54" height="26" rx="5"/><rect x="116" y="124" width="54" height="24" rx="5"/></g><path d="M78 92h34M174 92h36M143 109v15" stroke="#2563EB" stroke-width="2"/>
-    <circle cx="276" cy="24" r="14" fill="#FFF"/><text x="276" y="28" text-anchor="middle" class="evidence">S1</text>
-  </g>
-  <g data-node-id="technique-vault" transform="translate(422 376)" tabindex="0" aria-label="Data vault">
-    <title data-node-tooltip="true">Data vault — Hubs, links, satellites — when auditable history across many volatile sources is the actual requirement.</title>
-    <rect class="focus-ring" width="300" height="162" rx="20" fill="#F5F3FF" stroke="#A78BFA" stroke-width="2"/>
-    <text x="22" y="30" class="h3" fill="#6D28D9">Data vault</text><text x="22" y="51" class="small muted">Use only when auditability earns the cost</text>
-    <circle cx="65" cy="102" r="27" fill="#7C3AED"/><text x="65" y="106" text-anchor="middle" class="micro white">HUB</text><path d="M92 102h44" stroke="#7C3AED" stroke-width="3"/><rect x="136" y="83" width="61" height="38" rx="7" fill="#DDD6FE" stroke="#7C3AED"/><text x="166" y="106" text-anchor="middle" class="micro" fill="#5B21B6">LINK</text><path d="M197 102h40" stroke="#7C3AED" stroke-width="3"/><rect x="237" y="85" width="44" height="34" rx="7" fill="#EDE9FE" stroke="#7C3AED"/><text x="259" y="106" text-anchor="middle" font-size="9" fill="#5B21B6">SAT</text>
-    <circle cx="276" cy="24" r="14" fill="#FFF"/><text x="276" y="28" text-anchor="middle" class="evidence">P</text>
-  </g>
-  <g transform="translate(746 198)"><rect width="100" height="340" rx="20" fill="#E2E8F0"/><text x="50" y="36" text-anchor="middle" class="micro muted" font-weight="700">TRADE-OFF</text><path d="M50 66v232" stroke="#94A3B8" stroke-width="2"/><circle cx="50" cy="108" r="18" fill="#DBEAFE"/><text x="50" y="112" text-anchor="middle" class="small" fill="#1D4ED8">BI</text><circle cx="50" cy="253" r="18" fill="#EDE9FE"/><text x="50" y="257" text-anchor="middle" class="small" fill="#6D28D9">AUD</text><text x="50" y="325" text-anchor="middle" class="micro muted">Never report</text><text x="50" y="338" text-anchor="middle" class="micro muted">directly on vault</text></g>
+  <!-- Header -->
+  <rect width="1180" height="86" fill="url(#dmd-head)"/>
+  <text x="36" y="36" font-size="20" font-weight="650" fill="#FFFFFF">Choosing a data model in Microsoft Fabric</text>
+  <text x="36" y="60" font-size="12.5" fill="#D9F5EE">Three separable decisions, in order: modelling technique → physical store → semantic read mode (decided per table)</text>
 
-  <path d="M846 368h38" class="flow"/>
-  <g data-node-id="store-question" transform="translate(884 206)" tabindex="0" aria-label="Who consumes the physical layer?">
-    <title data-node-tooltip="true">Who consumes the physical layer? — Second question: Lakehouse or Warehouse — decided by engine and skills, not by storage format.</title>
-    <rect class="focus-ring" width="492" height="150" rx="22" fill="#FFF" stroke="#67E8F9" stroke-width="2" filter="url(#decShadow)"/>
-    <rect width="492" height="38" rx="22" fill="#0E7490"/><path d="M0 19h492v19H0z" fill="#0E7490"/><text x="20" y="26" class="small white" font-weight="700">GATE 2 · PHYSICAL ENGINE</text>
-    <text x="22" y="75" class="h2 navy">Who owns transformations and writes?</text><text x="22" y="100" class="body muted">Both stores use Delta. Decide by Spark vs T-SQL and</text><text x="22" y="121" class="body muted">whether a load must commit across multiple tables.</text><rect x="337" y="103" width="132" height="25" rx="12" fill="#ECFEFF"/><text x="350" y="120" class="micro" fill="#0E7490">SAME OPEN FORMAT</text>
-  </g>
-  <path d="M1128 356v29M1128 385H999v25M1128 385h129v25" fill="none" stroke="#0F766E" stroke-width="3"/><text x="940" y="397" class="micro teal">Spark / notebooks</text><text x="1190" y="397" class="micro teal">T-SQL / transactions</text>
-
-  <g data-node-id="store-lakehouse" transform="translate(884 410)" tabindex="0" aria-label="Lakehouse (Spark over Delta)">
-    <title data-node-tooltip="true">Lakehouse (Spark over Delta) — Managed Delta tables queried by Spark and T-SQL, with no movement between the two.</title>
-    <rect class="focus-ring" width="232" height="174" rx="20" fill="#ECFEFF" stroke="#22D3EE" stroke-width="2"/>
-    <g transform="translate(18 23)"><path d="M0 30L25 7l25 23v37H0z" fill="#CFFAFE" stroke="#0891B2" stroke-width="4"/><path d="M0 52c12 7 38 7 50 0v17c-12 7-38 7-50 0z" fill="#06B6D4"/></g>
-    <text x="82" y="39" class="h3" fill="#155E75">Lakehouse</text><text x="82" y="60" class="small muted">Spark over managed Delta</text><path d="M18 91h196" stroke="#A5F3FC"/><text x="18" y="116" class="small navy">✓ structured + files</text><text x="18" y="137" class="small navy">✓ SQL reads same copy</text><text x="18" y="158" class="micro muted">Watch: SQL endpoint is read-oriented</text><circle cx="208" cy="22" r="14" fill="#FFF"/><text x="208" y="26" text-anchor="middle" class="evidence">S2</text>
-  </g>
-  <g data-node-id="store-warehouse" transform="translate(1144 410)" tabindex="0" aria-label="Warehouse (T-SQL, multi-table ACID)">
-    <title data-node-tooltip="true">Warehouse (T-SQL, multi-table ACID) — Full T-SQL surface with multi-table transactions — still Delta underneath, still open in OneLake.</title>
-    <rect class="focus-ring" width="232" height="174" rx="20" fill="#ECFDF5" stroke="#34D399" stroke-width="2"/>
-    <g transform="translate(18 22)" fill="#D1FAE5" stroke="#059669" stroke-width="3"><path d="M2 25L27 7l25 18v44H2z"/><path d="M0 69h55"/><path d="M14 34h8v8h-8zm20 0h8v8h-8zM14 50h8v8h-8zm20 0h8v8h-8z" fill="#059669" stroke="none"/></g>
-    <text x="82" y="39" class="h3" fill="#065F46">Warehouse</text><text x="82" y="60" class="small muted">T-SQL over open Delta</text><path d="M18 91h196" stroke="#A7F3D0"/><text x="18" y="116" class="small navy">✓ multi-table ACID</text><text x="18" y="137" class="small navy">✓ procedures + materialized views</text><text x="18" y="158" class="micro muted">Watch: autonomous engine tuning</text><circle cx="208" cy="22" r="14" fill="#FFF"/><text x="208" y="26" text-anchor="middle" class="evidence">S3</text>
+  <!-- Legend -->
+  <g transform="translate(36,100)" font-size="10">
+    <rect width="1108" height="30" rx="8" fill="#F3F2F1" stroke="#E1DFDD"/>
+    <circle cx="16" cy="15" r="5" fill="#117865"/><text x="27" y="19" fill="#3F6259">fact</text>
+    <circle cx="76" cy="15" r="5" fill="#2AAC94"/><text x="87" y="19" fill="#3F6259">pattern</text>
+    <circle cx="152" cy="15" r="5" fill="#6D6AC4"/><text x="163" y="19" fill="#3B3878">inference</text>
+    <circle cx="232" cy="15" r="5" fill="#B42318"/><text x="243" y="19" fill="#7A241A">warning</text>
+    <line x1="316" y1="15" x2="346" y2="15" stroke="#2AAC94" stroke-width="2" marker-end="url(#dmd-arr)"/><text x="353" y="19" fill="#3F6259">flow</text>
+    <line x1="402" y1="15" x2="432" y2="15" stroke="#0B5E50" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#dmd-arrDark)"/><text x="439" y="19" fill="#3F6259">branch (decision)</text>
+    <line x1="562" y1="15" x2="592" y2="15" stroke="#B45309" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#dmd-arrAmber)"/><text x="599" y="19" fill="#7A4A16">fallback / feedback</text>
+    <text x="1090" y="19" text-anchor="end" fill="#8A8886">Fabric Atlas original diagram, July 2026</text>
   </g>
 
-  <path d="M1128 584v45" class="flow"/>
-  <g data-node-id="storage-mode-question" transform="translate(64 630)" tabindex="0" aria-label="How should the semantic model read it?">
-    <title data-node-tooltip="true">How should the semantic model read it? — Third question: Direct Lake, Import, or DirectQuery — the mode determines refresh cost and freshness.</title>
-    <rect class="focus-ring" width="1312" height="284" rx="24" fill="#FFF" stroke="#818CF8" stroke-width="2" filter="url(#decShadow)"/>
-    <rect width="1312" height="44" rx="24" fill="#4338CA"/><path d="M0 22h1312v22H0z" fill="#4338CA"/><text x="22" y="29" class="small white" font-weight="700">GATE 3 · SEMANTIC STORAGE MODE — DECIDE PER TABLE, NOT BY HABIT</text>
-    <g transform="translate(24 68)"><rect width="382" height="174" rx="18" fill="url(#decDirect)" stroke="#6366F1" stroke-width="2"/><path d="M28 75a31 31 0 1162 0" fill="none" stroke="#4F46E5" stroke-width="7"/><path d="M59 75l20-24" stroke="#4F46E5" stroke-width="5" stroke-linecap="round"/><circle cx="59" cy="75" r="6" fill="#4F46E5"/><text x="112" y="35" class="h3" fill="#3730A3">Direct Lake</text><text x="112" y="57" class="small muted">Delta columns read from OneLake</text><text x="112" y="82" class="small navy">Best fit: large facts + freshness</text><text x="24" y="122" class="small" fill="#3730A3">No scheduled import refresh</text><text x="24" y="145" class="micro muted">On OneLake for richer modelling;</text><text x="24" y="160" class="micro muted">on SQL only for its security/fallback needs.</text></g>
-    <g transform="translate(430 68)"><rect width="382" height="174" rx="18" fill="#ECFDF5" stroke="#34D399" stroke-width="2"/><g transform="translate(24 25)" fill="#6EE7B7"><ellipse cx="35" cy="8" rx="35" ry="8"/><path d="M0 8v42c0 5 16 9 35 9s35-4 35-9V8c-8 5-62 5-70 0z"/></g><text x="112" y="35" class="h3" fill="#065F46">Import</text><text x="112" y="57" class="small muted">Copy into semantic-model memory</text><text x="112" y="82" class="small navy">Best fit: compact + transformed tables</text><text x="24" y="122" class="small" fill="#065F46">Full modelling flexibility</text><text x="24" y="145" class="micro muted">Operate refresh windows and monitor</text><text x="24" y="160" class="micro muted">staleness when refresh fails.</text></g>
-    <g transform="translate(836 68)"><rect width="452" height="174" rx="18" fill="#FFF7ED" stroke="#FDBA74" stroke-width="2"/><path d="M26 42h52M52 20v44" stroke="#EA580C" stroke-width="5"/><circle cx="52" cy="42" r="28" fill="none" stroke="#EA580C" stroke-width="4"/><text x="108" y="35" class="h3" fill="#9A3412">DirectQuery / composite</text><text x="108" y="57" class="small muted">Forward queries or mix modes by table</text><text x="108" y="82" class="small navy">Best fit: source authority / exceptions</text><text x="24" y="122" class="small" fill="#9A3412">Expect source latency per query</text><text x="24" y="145" class="micro muted">Composite option: Direct Lake fact +</text><text x="24" y="160" class="micro muted">Import dimensions where justified.</text></g>
-    <circle cx="1286" cy="22" r="15" fill="#FFF"/><text x="1286" y="26" text-anchor="middle" class="evidence">S4</text>
+  <!-- ===================== GATE 1 ===================== -->
+  <text x="36" y="158" font-size="11" letter-spacing="1.5" fill="#8A8886">GATE 1 · MODELLING TECHNIQUE</text>
+  <g data-node-id="gate1-technique" tabindex="0" aria-label="Gate 1: What must the model optimise for?">
+    <title data-node-tooltip="true">Gate 1 — What must the model optimise for? — The root question: choose the modelling technique from the job the model has to do, not from habit.</title>
+    <rect x="36" y="166" width="1108" height="72" rx="14" fill="url(#dmd-gate)"/>
+    <circle cx="76" cy="202" r="20" fill="#FFFFFF" opacity="0.14"/>
+    <text x="76" y="208" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">1</text>
+    <text x="112" y="196" font-size="15" font-weight="650" fill="#FFFFFF">What must the model optimise for?</text>
+    <text x="112" y="216" font-size="11.5" fill="#D9F5EE">BI query simplicity, or auditable history across many volatile sources — pick the technique from the job, not from habit.</text>
   </g>
 
-  <path d="M1130 914v34" fill="none" stroke="#D97706" stroke-width="3" marker-end="url(#decWarnArrow)"/><text x="930" y="939" class="micro" fill="#B45309">if Direct Lake on SQL points at a view</text>
-  <g data-node-id="warning-fallback-trap" transform="translate(764 948)" tabindex="0" aria-label="Trap: SQL views force DirectQuery fallback">
-    <title data-node-tooltip="true">Trap: SQL views force DirectQuery fallback — In Direct Lake on SQL, a table based on a SQL view sends every query into DirectQuery fallback.</title>
-    <rect class="focus-ring" width="612" height="134" rx="22" fill="#FFF7ED" stroke="#F59E0B" stroke-width="2"/>
-    <path d="M28 99L65 30l37 69z" fill="#F59E0B"/><path d="M65 52v25M65 87v3" stroke="#FFF" stroke-width="7" stroke-linecap="round"/>
-    <text x="126" y="38" class="h2" fill="#9A3412">Silent fallback trap</text><text x="126" y="65" class="body" fill="#7C2D12">SQL view → DirectQuery fallback → avoidable latency</text><text x="126" y="92" class="small muted">Materialise the transformation upstream and point the model at a base table.</text>
-    <rect x="470" y="25" width="112" height="24" rx="12" fill="#FFEDD5"/><text x="488" y="42" class="micro" fill="#9A3412" font-weight="700">EVIDENCE · S4</text>
+  <!-- branches to dimensional / vault -->
+  <path d="M300 238 V270 H196 V286" fill="none" stroke="#0B5E50" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#dmd-arrDark)"/>
+  <path d="M880 238 V270 H984 V286" fill="none" stroke="#0B5E50" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#dmd-arrDark)"/>
+  <text x="70" y="260" font-size="10.5" font-weight="650" fill="#0B5E50">BI query simplicity is the priority</text>
+  <text x="720" y="260" font-size="10.5" font-weight="650" fill="#0B5E50">auditable history across volatile sources</text>
+
+  <!-- technique-dimensional -->
+  <g data-node-id="technique-dimensional" tabindex="0" aria-label="Dimensional / star schema">
+    <title data-node-tooltip="true">Dimensional / star schema — Facts at a declared grain plus conformed dimensions; the default when BI query simplicity is the goal.</title>
+    <rect x="46" y="286" width="300" height="160" rx="12" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.6"/>
+    <circle cx="74" cy="316" r="18" fill="#DFF5EE"/>
+    <rect x="63" y="309" width="22" height="14" rx="3" fill="#117865"/><rect x="55" y="313" width="14" height="10" rx="2" fill="#9AD2C5"/><rect x="79" y="313" width="14" height="10" rx="2" fill="#9AD2C5"/>
+    <text x="100" y="311" font-size="13" font-weight="650" fill="#063D3B">Dimensional / star schema</text>
+    <text x="100" y="328" font-size="10" fill="#3F6259">facts at a declared grain + conformed dims</text>
+    <text x="60" y="354" font-size="9.5" fill="#3F6259">Best when the consumer is BI and query</text>
+    <text x="60" y="368" font-size="9.5" fill="#3F6259">simplicity is the goal.</text>
+    <text x="60" y="390" font-size="9" fill="#B45309">Heuristic: a fact table &gt;~50 columns is</text>
+    <text x="60" y="403" font-size="9" fill="#B45309">usually hiding a missing dimension.</text>
+    <rect x="60" y="418" width="46" height="16" rx="8" fill="#DFF5EE"/><text x="83" y="429" text-anchor="middle" font-size="8.5" fill="#0B5E50">fact</text>
   </g>
 
-  <g transform="translate(64 948)"><rect width="668" height="134" rx="22" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="2"/><text x="24" y="31" class="h3 navy">Operational hand-off</text>
-    <g transform="translate(24 49)"><circle cx="14" cy="14" r="14" fill="#CCFBF1"/><text x="14" y="18" text-anchor="middle" class="small teal" font-weight="700">1</text><text x="38" y="18" class="small navy">Record why each branch won.</text></g>
-    <g transform="translate(244 49)"><circle cx="14" cy="14" r="14" fill="#DBEAFE"/><text x="14" y="18" text-anchor="middle" class="small" fill="#1D4ED8" font-weight="700">2</text><text x="38" y="18" class="small navy">Test grain, keys, relationships.</text></g>
-    <g transform="translate(24 87)"><circle cx="14" cy="14" r="14" fill="#EDE9FE"/><text x="14" y="18" text-anchor="middle" class="small" fill="#6D28D9" font-weight="700">3</text><text x="38" y="18" class="small navy">Benchmark with representative queries.</text></g>
-    <g transform="translate(328 87)"><circle cx="14" cy="14" r="14" fill="#FFEDD5"/><text x="14" y="18" text-anchor="middle" class="small" fill="#C2410C" font-weight="700">4</text><text x="38" y="18" class="small navy">Revisit when workload facts change.</text></g>
+  <!-- technique-vault -->
+  <g data-node-id="technique-vault" tabindex="0" aria-label="Data vault">
+    <title data-node-tooltip="true">Data vault — Hubs, links, satellites — used only when auditable history across many volatile sources is the actual requirement.</title>
+    <rect x="834" y="286" width="300" height="160" rx="12" fill="#F1F0FB" stroke="#B7B3E8" stroke-width="1.6"/>
+    <circle cx="862" cy="316" r="18" fill="#E4E1F7"/>
+    <circle cx="862" cy="316" r="6" fill="#5A409C"/><path d="M868 316h20M888 310l16 6-16 6" stroke="#5A409C" stroke-width="2.6" fill="none" stroke-linejoin="round"/>
+    <text x="888" y="311" font-size="13" font-weight="650" fill="#312B57">Data vault</text>
+    <text x="888" y="328" font-size="10" fill="#4B466E">hub · link · satellite</text>
+    <text x="848" y="354" font-size="9.5" fill="#4B466E">Use only when auditable history across</text>
+    <text x="848" y="368" font-size="9.5" fill="#4B466E">many volatile sources is the requirement.</text>
+    <text x="848" y="390" font-size="9" fill="#5A409C">Never queried directly by BI — a dimensional</text>
+    <text x="848" y="403" font-size="9" fill="#5A409C">layer is still built on top for reporting.</text>
+    <rect x="848" y="418" width="66" height="16" rx="8" fill="#E4E1F7"/><text x="881" y="429" text-anchor="middle" font-size="8.5" fill="#312B57">pattern</text>
   </g>
-  <g transform="translate(64 1105)"><rect width="1312" height="46" rx="14" fill="#E2E8F0"/><text x="22" y="28" class="small" fill="#334155" font-weight="700">DECISION RULE</text><text x="140" y="28" class="small muted">Technique follows the outcome · physical store follows the write engine · semantic mode follows freshness, scale, security, and feature needs.</text></g>
-  <text x="1376" y="1171" text-anchor="end" class="micro" fill="#64748B">Fabric Atlas original · product-neutral vector illustration</text>
+
+  <!-- converge to gate 2 -->
+  <path d="M196 446 V472 H590 V510" fill="none" stroke="#2AAC94" stroke-width="2.2" marker-end="url(#dmd-arr)"/>
+  <path d="M984 446 V472 H590 V510" fill="none" stroke="#2AAC94" stroke-width="2.2" marker-end="url(#dmd-arr)"/>
+  <text x="220" y="466" font-size="9.5" fill="#0B5E50">star schema ready for a physical store</text>
+  <text x="700" y="466" font-size="9.5" fill="#0B5E50">vault + dimensional layer on top</text>
+
+  <!-- ===================== GATE 2 ===================== -->
+  <text x="36" y="500" font-size="11" letter-spacing="1.5" fill="#8A8886">GATE 2 · PHYSICAL STORE</text>
+  <g data-node-id="gate2-store" tabindex="0" aria-label="Gate 2: Which engine owns the writes?">
+    <title data-node-tooltip="true">Gate 2 — Which engine owns the writes? — Lakehouse or Warehouse, decided by engine and transaction needs, not by storage format.</title>
+    <rect x="36" y="510" width="1108" height="72" rx="14" fill="url(#dmd-gate)"/>
+    <circle cx="76" cy="546" r="20" fill="#FFFFFF" opacity="0.14"/>
+    <text x="76" y="552" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">2</text>
+    <text x="112" y="540" font-size="15" font-weight="650" fill="#FFFFFF">Which engine owns the writes?</text>
+    <text x="112" y="560" font-size="11.5" fill="#D9F5EE">Both stores persist Delta — decide by Spark vs T-SQL and whether multi-table transactions are required.</text>
+  </g>
+
+  <path d="M300 582 V606 H300 V630" fill="none" stroke="#0B5E50" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#dmd-arrDark)"/>
+  <path d="M880 582 V606 H880 V630" fill="none" stroke="#0B5E50" stroke-width="2.4" stroke-dasharray="6 4" marker-end="url(#dmd-arrDark)"/>
+  <text x="146" y="600" font-size="10.5" font-weight="650" fill="#0B5E50">Spark ETL / multi-format engineering</text>
+  <text x="770" y="600" font-size="10.5" font-weight="650" fill="#0B5E50">T-SQL / multi-table transactions</text>
+
+  <!-- store-lakehouse -->
+  <g data-node-id="store-lakehouse" tabindex="0" aria-label="Lakehouse (Spark over managed Delta)">
+    <title data-node-tooltip="true">Lakehouse (Spark over managed Delta) — Spark-native engineering over managed Delta tables; the Bronze/Silver home in the recommended medallion split.</title>
+    <rect x="46" y="630" width="508" height="160" rx="12" fill="#ECFEFF" stroke="#67E8F9" stroke-width="1.8"/>
+    <g data-official-icon="microsoft" data-icon-name="lakehouse_32_item">
+      <g transform="translate(62,642) scale(0.72)">
+        <path fill="url(#dmd-ic-shell-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+        <path fill="url(#dmd-ic-shell-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+        <path fill="url(#dmd-ic-shell-c)" fill-rule="evenodd" d="M23.5 3h-15A2.5 2.5 0 0 0 6 5.5v21A2.5 2.5 0 0 0 8.5 29h15a2.5 2.5 0 0 0 2.5-2.5v-21A2.5 2.5 0 0 0 23.5 3m-15-1A3.5 3.5 0 0 0 5 5.5v21A3.5 3.5 0 0 0 8.5 30h15a3.5 3.5 0 0 0 3.5-3.5v-21A3.5 3.5 0 0 0 23.5 2z" clip-rule="evenodd"/>
+        <path fill="url(#dmd-ic-lh-house)" d="M13.99 22.69a1.5 1.5 0 0 0-.154.31H11a2 2 0 0 1-2-2v-6.4a2 2 0 0 1 .674-1.497l5-4.428a2 2 0 0 1 2.653 0l5 4.428A2 2 0 0 1 23 14.6v3.409L22.98 18a1.5 1.5 0 0 0-.94-.01l-.12.05c-.37.15-.66.44-.81.81-.01.02-.05.07-.11.13-.06-.05-.11-.11-.11-.13a1.49 1.49 0 0 0-1.39-.93h-.14a1.5 1.5 0 0 0-1.256.94 1 1 0 0 1-.104.12c-.06-.05-.11-.11-.11-.13a1.49 1.49 0 0 0-1.39-.93h-.14c-.57.05-1.05.42-1.26.95-.04.08-.06.13-.06.13q-.013.012-.09.032l-.03.008a1.5 1.5 0 0 0-1.13 1.79 1.46 1.46 0 0 0 1.264 1.15l-.004.01c-.008.009-.038.017-.09.032l-.03.008c-.39.09-.73.32-.94.66"/>
+        <path fill="url(#dmd-ic-lh-house)" d="M23.75 21h-.01a.502.502 0 0 0 .1-.99c-.47-.11-.71-.31-.89-.78a.49.49 0 0 0-.46-.32c-.2 0-.38.12-.46.31-.15.38-.6.78-1.04.78s-.88-.41-1.03-.78c-.16-.38-.78-.38-.93 0s-.6.78-1.04.78-.88-.41-1.03-.78c-.08-.19-.26-.33-.47-.31-.2 0-.39.13-.46.32-.18.47-.41.67-.89.78-.27.06-.44.33-.38.6s.33.43.6.38c.5-.11.88-.32 1.17-.65.37.38.86.66 1.46.66s1.13-.29 1.51-.69c.37.39.91.69 1.49.69s1.1-.28 1.48-.66c.29.33.67.54 1.17.65.031.008.08.01.1.01h-.01z"/>
+        <path fill="url(#dmd-ic-lh-house)" d="M23.75 24h-.01a.502.502 0 0 0 .1-.99c-.47-.11-.71-.31-.89-.78a.49.49 0 0 0-.46-.32c-.2 0-.38.12-.46.31-.15.38-.6.78-1.04.78s-.88-.41-1.03-.78c-.16-.38-.78-.38-.93 0s-.6.78-1.04.78-.88-.41-1.03-.78c-.08-.19-.26-.33-.47-.31-.2 0-.39.13-.46.32-.18.47-.41.67-.89.78-.27.06-.44.33-.38.6s.33.43.6.38c.5-.11.88-.32 1.17-.65.37.38.86.66 1.46.66s1.13-.29 1.51-.69c.37.39.91.69 1.49.69s1.1-.28 1.48-.66c.29.33.67.54 1.17.65.031.008.08.01.1.01h-.01z"/>
+      </g>
+      <text x="94" y="654" font-size="12" font-weight="700" fill="#155E75">Lakehouse</text>
+    </g>
+    <text x="62" y="678" font-size="10.5" fill="#3F6259">Spark over managed Delta · SQL analytics endpoint (read)</text>
+    <path d="M62 692h476" stroke="#A5F3FC"/>
+    <text x="62" y="714" font-size="10" fill="#155E75">Recommended for Bronze/Silver Spark ETL, CDC, feature</text>
+    <text x="62" y="730" font-size="10" fill="#155E75">engineering; Gold optionally built here as materialized views.</text>
+    <text x="62" y="752" font-size="9" fill="#B45309">Watch: SQL analytics endpoint is read-oriented, not a write target.</text>
+    <rect x="62" y="762" width="46" height="16" rx="8" fill="#CFFAFE"/><text x="85" y="773" text-anchor="middle" font-size="8.5" fill="#155E75">fact</text>
+  </g>
+
+  <!-- store-warehouse -->
+  <g data-node-id="store-warehouse" tabindex="0" aria-label="Warehouse (T-SQL, multi-table ACID)">
+    <title data-node-tooltip="true">Warehouse (T-SQL, multi-table ACID) — Full T-SQL surface with multi-table transactions over Delta; the recommended home for a Gold star schema with procedural logic.</title>
+    <rect x="626" y="630" width="508" height="160" rx="12" fill="#ECFDF5" stroke="#34D399" stroke-width="1.8"/>
+    <g data-official-icon="microsoft" data-icon-name="data_warehouse_32_item">
+      <g transform="translate(642,642) scale(0.72)">
+        <path fill="url(#dmd-ic-shell-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+        <path fill="url(#dmd-ic-shell-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+        <path fill="url(#dmd-ic-shell-c)" fill-rule="evenodd" d="M23.5 3h-15A2.5 2.5 0 0 0 6 5.5v21A2.5 2.5 0 0 0 8.5 29h15a2.5 2.5 0 0 0 2.5-2.5v-21A2.5 2.5 0 0 0 23.5 3m-15-1A3.5 3.5 0 0 0 5 5.5v21A3.5 3.5 0 0 0 8.5 30h15a3.5 3.5 0 0 0 3.5-3.5v-21A3.5 3.5 0 0 0 23.5 2z" clip-rule="evenodd"/>
+        <path fill="url(#dmd-ic-dw-d)" d="M23 22a2 2 0 0 1-2 2H11a2 2 0 0 1-2-2v-6.4a2 2 0 0 1 .674-1.497l5-4.428a2 2 0 0 1 2.653 0l5 4.428A2 2 0 0 1 23 15.6z"/>
+        <path fill="#B4CDF8" d="M13 16a1 1 0 1 1-2 0 1 1 0 0 1 2 0m4 0a1 1 0 1 1-2 0 1 1 0 0 1 2 0m3 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2m-3 3a1 1 0 1 1-2 0 1 1 0 0 1 2 0m-5 1a1 1 0 1 0 0-2 1 1 0 0 0 0 2m9-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/>
+      </g>
+      <text x="674" y="654" font-size="12" font-weight="700" fill="#065F46">Warehouse</text>
+    </g>
+    <text x="642" y="678" font-size="10.5" fill="#3F6259">T-SQL over open Delta · stored procedures</text>
+    <path d="M642 692h476" stroke="#A7F3D0"/>
+    <text x="642" y="714" font-size="10" fill="#065F46">Recommended for a Gold star schema with multi-table</text>
+    <text x="642" y="730" font-size="10" fill="#065F46">ACID loads; reads Lakehouse Silver via cross-database query.</text>
+    <text x="642" y="752" font-size="9" fill="#B45309">Watch: cross-database perf degrades if Lakehouse-side files aren't compacted.</text>
+    <rect x="642" y="762" width="46" height="16" rx="8" fill="#D1FAE5"/><text x="665" y="773" text-anchor="middle" font-size="8.5" fill="#065F46">fact</text>
+  </g>
+
+  <!-- converge to gate 3 -->
+  <path d="M300 790 V814 H590 V850" fill="none" stroke="#2AAC94" stroke-width="2.2" marker-end="url(#dmd-arr)"/>
+  <path d="M880 790 V814 H590 V850" fill="none" stroke="#2AAC94" stroke-width="2.2" marker-end="url(#dmd-arr)"/>
+  <text x="378" y="808" font-size="9.5" fill="#0B5E50">conformed Delta table ready for a semantic model</text>
+
+  <!-- ===================== GATE 3 ===================== -->
+  <text x="36" y="843" font-size="11" letter-spacing="1.5" fill="#8A8886">GATE 3 · SEMANTIC READ MODE — DECIDE PER TABLE</text>
+  <g data-node-id="gate3-storage-mode" tabindex="0" aria-label="Gate 3: How should the semantic model read it?">
+    <title data-node-tooltip="true">Gate 3 — How should the semantic model read it? — Third question, decided per table: Direct Lake, Import, or DirectQuery/composite.</title>
+    <rect x="36" y="850" width="1108" height="72" rx="14" fill="url(#dmd-gate)"/>
+    <circle cx="76" cy="886" r="20" fill="#FFFFFF" opacity="0.14"/>
+    <text x="76" y="892" text-anchor="middle" font-size="16" font-weight="700" fill="#FFFFFF">3</text>
+    <text x="112" y="880" font-size="15" font-weight="650" fill="#FFFFFF">How should the semantic model read it?</text>
+    <text x="112" y="900" font-size="11.5" fill="#D9F5EE">Composite models let this be decided per table — not once for the whole model.</text>
+    <g data-official-icon="microsoft" data-icon-name="semantic_model_32_item">
+      <g transform="translate(1032,866) scale(0.62)">
+        <path fill="url(#dmd-ic-sm-a)" d="M3 6.5A3.5 3.5 0 0 1 6.5 3h19A3.5 3.5 0 0 1 29 6.5v19a3.5 3.5 0 0 1-3.5 3.5h-19A3.5 3.5 0 0 1 3 25.5z"/>
+        <path fill="url(#dmd-ic-sm-b)" fill-opacity=".2" d="M3 6.5A3.5 3.5 0 0 1 6.5 3h19A3.5 3.5 0 0 1 29 6.5v19a3.5 3.5 0 0 1-3.5 3.5h-19A3.5 3.5 0 0 1 3 25.5z"/>
+        <path fill="url(#dmd-ic-sm-c)" fill-rule="evenodd" d="M25.5 4h-19A2.5 2.5 0 0 0 4 6.5v19A2.5 2.5 0 0 0 6.5 28h19a2.5 2.5 0 0 0 2.5-2.5v-19A2.5 2.5 0 0 0 25.5 4m-19-1A3.5 3.5 0 0 0 3 6.5v19A3.5 3.5 0 0 0 6.5 29h19a3.5 3.5 0 0 0 3.5-3.5v-19A3.5 3.5 0 0 0 25.5 3z" clip-rule="evenodd"/>
+        <path fill="url(#dmd-ic-sm-dot)" d="M9.75 14.5a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
+        <path fill="url(#dmd-ic-sm-dot)" d="M16 14.5a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
+        <path fill="url(#dmd-ic-sm-dot)" d="M11.5 19.25a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0"/>
+        <path fill="url(#dmd-ic-sm-dot)" d="M16 21a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
+        <path fill="url(#dmd-ic-sm-dot)" d="M24 12.75a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0"/>
+      </g>
+      <text x="1000" y="900" font-size="9.5" fill="#D9F5EE" text-anchor="end">Semantic model</text>
+    </g>
+  </g>
+
+  <path d="M220 922 V946 H220 V970" fill="none" stroke="#0B5E50" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#dmd-arrDark)"/>
+  <path d="M590 922 V946 H590 V970" fill="none" stroke="#0B5E50" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#dmd-arrDark)"/>
+  <path d="M960 922 V946 H960 V970" fill="none" stroke="#0B5E50" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#dmd-arrDark)"/>
+  <text x="80" y="940" font-size="9.5" font-weight="650" fill="#0B5E50">large fact table, freshness matters</text>
+  <text x="462" y="940" font-size="9.5" font-weight="650" fill="#0B5E50">compact, full modelling features</text>
+  <text x="822" y="940" font-size="9.5" font-weight="650" fill="#0B5E50">source-authoritative / exception</text>
+
+  <!-- mode-direct-lake -->
+  <g data-node-id="mode-direct-lake" tabindex="0" aria-label="Direct Lake">
+    <title data-node-tooltip="true">Direct Lake — Delta columns read directly from OneLake; best fit for large, fresh fact tables with no import refresh.</title>
+    <rect x="46" y="970" width="352" height="176" rx="12" fill="#E0E7FF" stroke="#818CF8" stroke-width="1.8"/>
+    <path d="M66 1000a26 26 0 1 1 52 0" fill="none" stroke="#4338CA" stroke-width="6"/><path d="M92 1000l16-19" stroke="#4338CA" stroke-width="4" stroke-linecap="round"/><circle cx="92" cy="1000" r="5" fill="#4338CA"/>
+    <text x="134" y="988" font-size="13" font-weight="650" fill="#3730A3">Direct Lake</text>
+    <text x="134" y="1005" font-size="10" fill="#4338CA">Delta columns read from OneLake</text>
+    <path d="M62 1022h316" stroke="#C7D2FE"/>
+    <text x="62" y="1042" font-size="9.5" fill="#3730A3">No scheduled import refresh; best fit for</text>
+    <text x="62" y="1056" font-size="9.5" fill="#3730A3">large fact tables where freshness matters.</text>
+    <text x="62" y="1076" font-size="9" fill="#3730A3">Two flavors: on OneLake (richer modelling,</text>
+    <text x="62" y="1089" font-size="9" fill="#3730A3">faster) or on SQL (endpoint security / fallback).</text>
+    <rect x="62" y="1100" width="46" height="16" rx="8" fill="#C7D2FE"/><text x="85" y="1111" text-anchor="middle" font-size="8.5" fill="#3730A3">fact</text>
+    <text x="62" y="1132" font-size="8.5" font-weight="650" fill="#B45309">↓ risk: table mapped to a SQL view</text>
+  </g>
+
+  <!-- mode-import -->
+  <g data-node-id="mode-import" tabindex="0" aria-label="Import">
+    <title data-node-tooltip="true">Import — Copied into semantic-model memory; best fit for compact, fully-modellable tables.</title>
+    <rect x="414" y="970" width="352" height="176" rx="12" fill="#ECFDF5" stroke="#34D399" stroke-width="1.8"/>
+    <g transform="translate(66,988)" fill="#6EE7B7"><ellipse cx="20" cy="7" rx="20" ry="7"/><path d="M0 7v26c0 4 9 7 20 7s20-3 20-7V7c-4 4-36 4-40 0z"/></g>
+    <text x="502" y="988" font-size="13" font-weight="650" fill="#065F46">Import</text>
+    <text x="502" y="1005" font-size="10" fill="#0B5E50">Copy into semantic-model memory</text>
+    <path d="M430 1022h316" stroke="#A7F3D0"/>
+    <text x="430" y="1042" font-size="9.5" fill="#065F46">Full DAX calculated-column and M-transform</text>
+    <text x="430" y="1056" font-size="9.5" fill="#065F46">flexibility; best for compact, curated tables.</text>
+    <text x="430" y="1076" font-size="9" fill="#065F46">Still used deliberately alongside Direct Lake</text>
+    <text x="430" y="1089" font-size="9" fill="#065F46">facts in a composite model.</text>
+    <rect x="430" y="1100" width="74" height="16" rx="8" fill="#D1FAE5"/><text x="467" y="1111" text-anchor="middle" font-size="8.5" fill="#065F46">inference</text>
+  </g>
+
+  <!-- mode-directquery-composite -->
+  <g data-node-id="mode-directquery-composite" tabindex="0" aria-label="DirectQuery / composite">
+    <title data-node-tooltip="true">DirectQuery / composite — Forwards queries to the source, or mixes modes per table; best fit for source-authoritative or exception tables.</title>
+    <rect x="782" y="970" width="352" height="176" rx="12" fill="#FFF7ED" stroke="#FDBA74" stroke-width="1.8"/>
+    <path d="M812 1000h40M832 980v40" stroke="#EA580C" stroke-width="5"/><circle cx="832" cy="1000" r="24" fill="none" stroke="#EA580C" stroke-width="4"/>
+    <text x="870" y="988" font-size="13" font-weight="650" fill="#9A3412">DirectQuery / composite</text>
+    <text x="870" y="1005" font-size="10" fill="#9A3412">forward queries, or mix modes per table</text>
+    <path d="M798 1022h316" stroke="#FED7AA"/>
+    <text x="798" y="1042" font-size="9.5" fill="#9A3412">Source-authoritative tables and exceptions;</text>
+    <text x="798" y="1056" font-size="9.5" fill="#9A3412">query-time source latency, no refresh window.</text>
+    <text x="798" y="1076" font-size="9" fill="#B42318">Also receives traffic involuntarily: fallback</text>
+    <text x="798" y="1089" font-size="9" fill="#B42318">from a Direct Lake table lands here too.</text>
+    <rect x="798" y="1100" width="74" height="16" rx="8" fill="#FFEDD5"/><text x="835" y="1111" text-anchor="middle" font-size="8.5" fill="#9A3412">inference</text>
+  </g>
+
+  <!-- direct lake -> warning -->
+  <path d="M222 1146 V1158 H494 V1170" fill="none" stroke="#B42318" stroke-width="2.2" stroke-dasharray="5 4" marker-end="url(#dmd-arrRed)"/>
+  <text x="228" y="1154" font-size="9" fill="#B42318">table mapped to a SQL view, not a base table</text>
+
+  <!-- warning node -->
+  <g data-node-id="warning-view-fallback-trap" tabindex="0" aria-label="Trap: SQL view forces DirectQuery fallback">
+    <title data-node-tooltip="true">Trap: SQL view forces DirectQuery fallback — In Direct Lake on SQL, a table based on a SQL view sends every query into DirectQuery fallback.</title>
+    <rect x="430" y="1170" width="704" height="110" rx="16" fill="#FFF7ED" stroke="#F59E0B" stroke-width="2"/>
+    <path d="M462 1250L494 1192L526 1250z" fill="#F59E0B"/><path d="M494 1210v22M494 1240v3" stroke="#FFF" stroke-width="6" stroke-linecap="round"/>
+    <text x="552" y="1206" font-size="15" font-weight="650" fill="#9A3412">Trap: SQL view forces DirectQuery fallback</text>
+    <text x="552" y="1228" font-size="10.5" fill="#7C2D12">In Direct Lake on SQL, mapping a model table to a SQL analytics-endpoint view — instead of a base table —</text>
+    <text x="552" y="1244" font-size="10.5" fill="#7C2D12">forces every query against it into DirectQuery fallback, usually slower and invisible on the surface.</text>
+    <text x="552" y="1262" font-size="9.5" fill="#9A3412">Fix: map to base tables; materialize any needed view logic and remove non-deterministic functions from it.</text>
+    <rect x="1050" y="1186" width="60" height="20" rx="10" fill="#FFEDD5"/><text x="1080" y="1200" text-anchor="middle" font-size="9" fill="#9A3412" font-weight="700">warning</text>
+  </g>
+
+  <!-- warning -> directquery/composite (feedback edge, routes back up) -->
+  <path d="M958 1170 V1146" fill="none" stroke="#B45309" stroke-width="2.2" stroke-dasharray="6 4" marker-end="url(#dmd-arrAmber)"/>
+  <text x="966" y="1162" font-size="9" fill="#B45309">silently lands here anyway</text>
+
+  <text x="1160" y="1290" text-anchor="end" font-size="9.5" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset; item icons vendored under Microsoft's Fabric icon terms.</text>
 </svg>

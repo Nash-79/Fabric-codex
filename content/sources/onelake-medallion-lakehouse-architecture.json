@@ -1,0 +1,181 @@
+{
+  "url": "https://learn.microsoft.com/en-us/fabric/onelake/onelake-medallion-lakehouse-architecture",
+  "title": "Implement Medallion Lakehouse Architecture in Fabric",
+  "tier": 1,
+  "summary": "Microsoft's implementation guide for medallion (bronze/silver/gold) lakehouse architecture on OneLake, covering layer responsibilities, deployment patterns (all-lakehouse vs. lakehouse+warehouse gold layer), Delta Lake storage mechanics, materialized lake views for declarative transformations, and file-size/partitioning/retention guidance per layer.",
+  "audience": "Data engineers, Center of Excellence/BI teams, and Fabric administrators planning or building a lakehouse-based data platform in Fabric.",
+  "why_it_matters": "It turns the generic medallion architecture concept into concrete Fabric implementation choices: which workspace/lakehouse topology to use, when to swap the gold layer for a warehouse, how materialized lake views can replace hand-built pipelines, and how storage settings should differ by layer.",
+  "takeaways": [
+    "Medallion architecture is Microsoft's recommended default pattern for organizing data in a Fabric lakehouse, implemented as bronze/silver/gold lakehouses (or lakehouse+warehouse) inside OneLake.",
+    "Layer choice isn't just conceptual — it drives real settings: file format, file size, partitioning vs. clustering, and access patterns differ meaningfully between bronze and silver/gold.",
+    "Materialized lake views let teams define medallion transformations declaratively in SQL instead of hand-built orchestration pipelines.",
+    "Separate workspaces per layer are recommended for governance, not just tidiness.",
+    "Data mesh (domain-oriented data ownership) and medallion architecture are complementary, not competing, patterns in Fabric."
+  ],
+  "tags": [
+    "SilverLayerModelling",
+    "MicrosoftFabric",
+    "DataModelling",
+    "MedallionArchitecture",
+    "OneLake",
+    "Lakehouse"
+  ],
+  "claims": [
+    {
+      "capability_id": "lakehouse",
+      "text": "Medallion architecture is Microsoft's recommended design pattern for organizing data in a Fabric lakehouse, implemented as lakehouses within OneLake.",
+      "depth": 1,
+      "type": "pattern",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "MedallionArchitecture",
+        "Lakehouse"
+      ]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "The three medallion layers are bronze (raw, stored exactly as received with no changes), silver (enriched: errors fixed, formats standardized, duplicates removed), and gold (curated and organized for reporting and dashboards).",
+      "depth": 1,
+      "type": "fact",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "MedallionArchitecture"
+      ]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Fabric offers two medallion deployment patterns: all three layers as separate lakehouses accessed via the SQL analytics endpoint, or bronze and silver as lakehouses with gold implemented as a Fabric Warehouse accessed via the warehouse endpoint.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "MedallionArchitecture",
+        "Warehouse"
+      ]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Microsoft recommends creating each medallion layer's lakehouse in its own separate Fabric workspace rather than combining all layers in one workspace, for better control and governance at the layer level.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "MedallionArchitecture",
+        "OneLake",
+        "Governance"
+      ]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "For the bronze layer, source data from OneLake, ADLS Gen2, Amazon S3, or Google Cloud Storage should be linked via a shortcut rather than physically copied into the lakehouse.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "MedallionArchitecture",
+        "OneLake",
+        "Shortcuts"
+      ]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Silver and gold medallion layers should use Delta tables to benefit from V-order write-time Parquet optimization, which speeds up reads across Fabric compute engines including Power BI, SQL, and Spark.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "DeltaLake",
+        "Performance"
+      ]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Materialized lake views let teams define bronze-to-silver-to-gold transformations declaratively in SQL, with Fabric automatically managing dependency-based execution order and choosing incremental, full, or no refresh per view.",
+      "depth": 3,
+      "type": "fact",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "MedallionArchitecture",
+        "MaterializedViews"
+      ]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Recommended file size for good query performance in a Fabric lakehouse is approximately 1 GB per data file, since compute engines slow down when they must manage many small files and their metadata.",
+      "depth": 4,
+      "type": "fact",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "Performance",
+        "DeltaLake"
+      ]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Smaller files are acceptable in the bronze layer given the raw nature of the data, but silver and gold layers should be optimized for larger file sizes and row groups to improve consumption-engine query performance.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "MedallionArchitecture",
+        "Performance"
+      ]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Partitioned folder structures are recommended for high-frequency ingestion in the bronze layer, but Microsoft recommends using Liquid Clustering instead of partitioning in silver and gold layers to optimize query performance.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "MedallionArchitecture",
+        "Performance",
+        "DeltaLake"
+      ]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Delta Lake retains historical change metadata indefinitely by default, and the VACUUM command can remove older history, though files younger than 7 days are protected from deletion by default via the delta.deletedFileRetentionDuration table property.",
+      "depth": 4,
+      "type": "fact",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "DeltaLake",
+        "TableMaintenance"
+      ]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "A data mesh architecture, organized around business domains that each expose data as a product, can be combined with medallion architecture by implementing bronze/silver/gold layers within each Fabric data domain.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "SilverLayerModelling",
+        "DataModelling",
+        "DataMesh",
+        "Governance"
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/onelake/media/onelake-medallion-lakehouse-architecture/onelake-medallion-lakehouse-architecture-example.png",
+      "caption": "Microsoft's diagram of OneLake medallion architecture showing data sources, prepare/transform stages across bronze-silver-gold layers, and analysis via SQL and Power BI",
+      "attribution": "Microsoft Learn (c) Microsoft",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "lakehouse"
+    }
+  ]
+}

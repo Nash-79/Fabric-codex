@@ -1,0 +1,120 @@
+{
+  "url": "https://learn.microsoft.com/en-us/azure/architecture/data-guide/technology-choices/fabric-deployment-patterns",
+  "title": "Choose a Microsoft Fabric Deployment Pattern",
+  "tier": 1,
+  "summary": "An Azure Architecture Center guide that lays out the four-level Fabric deployment hierarchy (tenant, capacity, workspace, item) and evaluates four deployment patterns for structuring capacities and workspaces, from a single shared workspace up to fully separate Fabric tenants, mapped against Well-Architected Framework pillars.",
+  "audience": "Solution architects and platform/COE teams deciding how to structure a new or maturing Fabric estate.",
+  "why_it_matters": "Fabric Atlas' Architecture Strategy topic needs an authoritative, decision-oriented reference for the single highest-leverage early design choice in any Fabric rollout: how many workspaces and capacities to stand up and how to bind them to governance, security, and cost boundaries. This source gives named, comparable patterns rather than ad hoc advice, letting later architecture generation cite a specific pattern number and its trade-off table.",
+  "takeaways": [
+    "Fabric deployments are structured as a four-level hierarchy — Microsoft 365 tenant, capacity, workspace, item — and the choice of deployment pattern determines how each level is used.",
+    "Four named patterns exist on a decentralization spectrum: monolithic (one workspace), multiple workspaces on one shared capacity, multiple workspaces on separate capacities, and multiple Fabric tenants.",
+    "Workload isolation, regional/data-residency needs, and chargeback requirements are the main forces that push a design toward more capacities rather than more workspaces.",
+    "Licensing mechanics (shared capacity default, PPU not substituting for Fabric capacity, F64 free-viewer threshold) materially constrain which pattern is practical, independent of governance preference.",
+    "The guide reuses the Azure Well-Architected Framework pillars (reliability, security, cost, operations, performance) to give cross-cutting guidance that applies no matter which pattern is chosen."
+  ],
+  "tags": ["MicrosoftFabric", "ArchitectureStrategy", "Capacity", "Governance", "WellArchitectedFramework"],
+  "claims": [
+    {
+      "capability_id": "fabric-platform",
+      "text": "A Fabric deployment is organized as a four-level hierarchy: the Microsoft 365 tenant (identity/admin boundary), one or more Fabric capacities (region-bound compute and billing units), workspaces within a capacity (the collaboration and access-control boundary), and items within a workspace (lakehouses, warehouses, pipelines, semantic models, reports).",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["ArchitectureStrategy", "MicrosoftFabric", "Capacity"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "A workspace belongs to exactly one capacity at a time; moving a workspace to a capacity in the same region is straightforward, but moving it across regions typically requires deleting and re-creating most items (lakehouses, warehouses, notebooks, pipelines), so architects should prefer same-region capacity migrations.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["ArchitectureStrategy", "Capacity", "Migration"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "New workspaces default to the tenant's shared capacity (which also hosts My Workspaces and Power BI Pro/PPU content); a governed production deployment typically requires explicitly reassigning workspaces to a dedicated F-SKU Fabric capacity, and Premium Per User does not substitute for Fabric capacity for non-Power BI items like lakehouses and notebooks.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["ArchitectureStrategy", "Capacity", "Licensing"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "Four deployment patterns span a decentralization spectrum: Pattern 1 (monolithic, single workspace) favors fast time-to-market and cross-team collaboration with minimal governance; Pattern 2 (multiple workspaces, single shared capacity) adds workspace-level isolation and DevOps features without added billing complexity; Pattern 3 (multiple workspaces, separate capacities) adds performance isolation, multi-region support, and per-team chargeback; Pattern 4 (multiple Fabric tenants) gives fully independent governance, typically used after an acquisition or for an autonomous subsidiary.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["ArchitectureStrategy", "MicrosoftFabric", "Capacity", "Governance"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "Fabric domains are used to logically group workspaces by business unit for delegated governance and OneLake catalog discovery, but they are unavailable in the monolithic single-workspace pattern because all items live in one workspace, so domain-based delegation requires at least a multi-workspace pattern.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["ArchitectureStrategy", "Governance", "Purview"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "Deployment pipelines and Git-integration-based lifecycle management scoped per environment require separate workspaces, so they are unavailable under the monolithic pattern; multi-workspace patterns can dedicate a workspace per DTAP (dev/test/acceptance/production) stage, and multi-capacity patterns can additionally isolate each stage's performance by giving it its own capacity.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["ArchitectureStrategy", "DevOps", "CICD"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "Fabric provides built-in regional resiliency via availability zones automatically, where the target Azure region supports them, but cross-region disaster recovery is an opt-in capacity setting that asynchronously replicates OneLake data to a paired region, meaning data written immediately before a regional outage can still be lost.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["ArchitectureStrategy", "Reliability", "OneLake", "DisasterRecovery"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "Single-capacity deployment patterns concentrate all workloads in one Azure region, so a regional outage affects every workspace on that capacity simultaneously; multi-capacity patterns spread capacities across regions so an outage in one region only affects the capacities located there, giving a natural foundation for active-passive or active-active strategies.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["ArchitectureStrategy", "Reliability", "Capacity"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "OneLake security roles enforce granular table/folder/column/row-level access, but only for users holding the workspace Viewer role — workspace Administrators, Members, and Contributors bypass OneLake security roles entirely, which is a key constraint when designing data-plane isolation within a shared workspace.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["ArchitectureStrategy", "OneLake", "DataSecurity"]
+    },
+    {
+      "capability_id": "capacity",
+      "text": "Throttling occurs when demand exceeds a capacity's fixed CU allocation for its SKU; single-capacity patterns (monolithic and shared-workspace) have every workload competing for the same CU pool, so one expensive query or pipeline can degrade interactive performance for every other workload sharing that capacity.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["ArchitectureStrategy", "Capacity", "Performance", "Throttling"]
+    },
+    {
+      "capability_id": "capacity",
+      "text": "Multi-capacity patterns allow independent chargeback because each Fabric capacity generates its own Azure billing meter, letting cost be attributed to the business unit that owns that capacity; single-capacity patterns centralize billing onto one meter, which is simpler to administer but cannot support per-team chargeback.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["ArchitectureStrategy", "Capacity", "CostManagement"]
+    },
+    {
+      "capability_id": "fabric-platform",
+      "text": "For organizations whose requirements don't map cleanly onto a Fabric-native deployment pattern, the guide names two constrained alternatives: pairing Azure Data Factory with Data Lake Storage or OneLake for teams needing explicit orchestration control or a phased Fabric migration, or building on Data Lake Storage plus Azure Databricks plus Power BI for a PaaS-based architecture that trades unified SaaS simplicity for maximum control.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["ArchitectureStrategy", "DataFactory", "AzureDatabricks"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/data-guide/images/fabric-deployment-pattern.svg",
+      "caption": "Microsoft's four-level Fabric deployment hierarchy diagram: tenant boundary, capacities/domains, workspaces, and items flowing into OneLake, with inbound/outbound networking components annotated.",
+      "attribution": "Microsoft Learn / Azure Architecture Center (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "fabric-platform"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/data-guide/images/fabric-deployment-pattern-3-multiple-workspaces-multiple-capacities.svg",
+      "caption": "Microsoft's diagram of Pattern 3 (multiple workspaces across separate capacities) showing two capacities, three workspaces, and OneLake as the shared storage sink.",
+      "attribution": "Microsoft Learn / Azure Architecture Center (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "capacity"
+    }
+  ]
+}

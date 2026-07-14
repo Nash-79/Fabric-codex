@@ -1,18 +1,230 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1010" font-family="Segoe UI,Inter,Arial,sans-serif" role="img" aria-labelledby="silver-layer-modelling-decision-title silver-layer-modelling-decision-desc" data-diagram-id="silver-layer-modelling-decision">
- <title id="silver-layer-modelling-decision-title">History, Quarantine, and When to Optimize</title><desc id="silver-layer-modelling-decision-desc">A decision tree with three questions. The first asks whether anyone needs to see the state of a row as it was at a past point in time: if yes, the table needs SCD Type 2 history; if no, an overwrite or snapshot is simpler and cheaper. The second asks what should happen to records that fail a quality rule — quarantine them and keep the good records flowing, or fail the whole batch when partial data would be worse than none. The third asks whether the table is read-heavy enough to justify V-Order and compaction, which is disabled by default in new Fabric workspaces and costs roughly fifteen percent more write time. A warning branch covers the specific failure of resolving the latest row without a deterministic ordering key.</desc>
- <defs><linearGradient id="sdh" x2="1"><stop stop-color="#78350F"/><stop offset=".45" stop-color="#475569"/><stop offset="1" stop-color="#0F766E"/></linearGradient><filter id="sds" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dy="5" stdDeviation="6" flood-color="#0F172A" flood-opacity=".13"/></filter><marker id="sda" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto"><path d="M1 1l9 4.5L1 10z" fill="#0F766E"/></marker><marker id="sdw" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto"><path d="M1 1l9 4.5L1 10z" fill="#D97706"/></marker><style>.k{font-size:13px;font-weight:700;letter-spacing:2px}.h1{font-size:34px;font-weight:750}.h2{font-size:19px;font-weight:700}.h3{font-size:15px;font-weight:700}.b{font-size:13px}.s{font-size:12px}.m{font-size:11px}.n{fill:#0F172A}.mu{fill:#475569}.t{fill:#0F766E}.w{fill:#FFF}.ev{font-size:11px;font-weight:700;fill:#0369A1}.flow{fill:none;stroke:#0F766E;stroke-width:3;marker-end:url(#sda)}[data-node-id]:focus{outline:none}[data-node-id]:focus>rect,[data-node-id]:focus>.focus-ring{stroke:#2563EB!important;stroke-width:4!important}</style></defs>
- <rect width="1440" height="1010" fill="#F8FAFC"/><rect width="1440" height="168" fill="url(#sdh)"/><circle cx="1325" cy="15" r="150" fill="#FFF" opacity=".06"/><text x="64" y="43" class="k" fill="#FED7AA">FABRIC ATLAS · SILVER DESIGN DECISIONS</text><text x="64" y="84" class="h1 w">Declare grain. Preserve only needed history. Optimise from evidence.</text><text x="64" y="119" font-size="17" fill="#E2F7F1">Three decisions turn raw records into a reliable serving layer without unnecessary cost.</text><g transform="translate(64 138)"><rect width="245" height="24" rx="12" fill="#FFF" opacity=".14"/><text x="15" y="17" class="s w">1 · grain + history</text></g><g transform="translate(323 138)"><rect width="245" height="24" rx="12" fill="#FFF" opacity=".14"/><text x="15" y="17" class="s w">2 · failure isolation</text></g><g transform="translate(582 138)"><rect width="285" height="24" rx="12" fill="#FFF" opacity=".14"/><text x="15" y="17" class="s w">3 · physical serving shape</text></g>
- <g data-node-id="history-question" transform="translate(64 205)" tabindex="0" aria-label="Does anyone need the row as it was?"><title data-node-tooltip="true">Does anyone need the row as it was? — The history question: SCD Type 2 is justified by a real point-in-time requirement, nothing less.</title><rect class="focus-ring" width="412" height="210" rx="23" fill="#FFF" stroke="#FB923C" stroke-width="2" filter="url(#sds)"/><rect width="412" height="40" rx="23" fill="#9A3412"/><path d="M0 20h412v20H0z" fill="#9A3412"/><text x="20" y="27" class="s w" font-weight="700">GATE 1 · GRAIN + HISTORY</text><circle cx="55" cy="90" r="28" fill="#FFEDD5"/><path d="M39 90h32M55 74v32" stroke="#EA580C" stroke-width="4"/><text x="101" y="78" class="h2 n">Does anyone ask</text><text x="101" y="102" class="h2 n">“what was true then?”</text><text x="24" y="143" class="s mu">Prerequisite: one row represents one declared entity</text><text x="24" y="162" class="s mu">state at one effective time.</text><rect x="24" y="181" width="364" height="21" rx="10" fill="#FFF7ED"/><text x="42" y="196" class="m" fill="#9A3412">NAME THE BUSINESS KEY + EFFECTIVE-TIME SOURCE</text></g>
- <path d="M476 310h56v-72h52" class="flow"/><text x="500" y="225" class="m t">yes · as-of questions</text>
- <g data-node-id="history-scd2" transform="translate(584 194)" tabindex="0" aria-label="SCD Type 2 history"><title data-node-tooltip="true">SCD Type 2 history — Version the row: close the old record, open a new one, keep both.</title><rect class="focus-ring" width="356" height="170" rx="20" fill="#EFF6FF" stroke="#60A5FA" stroke-width="2"/><text x="22" y="33" class="h2" fill="#1E40AF">SCD Type 2 history</text><text x="22" y="56" class="s mu">Pay the versioning cost because consumers need it</text><g transform="translate(22 80)"><rect width="138" height="58" rx="10" fill="#DBEAFE"/><text x="14" y="21" class="m" fill="#1D4ED8">OLD ROW</text><text x="14" y="41" class="s n">valid_to = change time</text><path d="M145 29h28" stroke="#2563EB" stroke-width="3" marker-end="url(#sda)"/><rect x="178" width="138" height="58" rx="10" fill="#BFDBFE"/><text x="192" y="21" class="m" fill="#1D4ED8">NEW ROW</text><text x="192" y="41" class="s n">is_current = true</text></g></g>
- <path d="M476 310h56v112h52" class="flow"/><text x="500" y="410" class="m t">no · current state only</text>
- <g data-node-id="history-overwrite" transform="translate(584 382)" tabindex="0" aria-label="Overwrite or snapshot"><title data-node-tooltip="true">Overwrite or snapshot — No point-in-time requirement, so keep the current state and skip the versioning cost.</title><rect class="focus-ring" width="356" height="152" rx="20" fill="#ECFDF5" stroke="#34D399" stroke-width="2"/><circle cx="52" cy="53" r="28" fill="#D1FAE5"/><path d="M36 53h32M52 37v32" stroke="#059669" stroke-width="4"/><text x="94" y="43" class="h2" fill="#065F46">Overwrite / snapshot</text><text x="94" y="66" class="s mu">Keep current state; skip row versioning</text><path d="M22 96h312" stroke="#A7F3D0"/><text x="22" y="121" class="s n">Simpler merges · smaller table · clear retention policy</text><circle cx="332" cy="22" r="14" fill="#FFF"/><text x="332" y="26" text-anchor="middle" class="ev">S1</text></g>
- <path d="M940 278h50v188h52" class="flow"/><path d="M940 458h102" class="flow"/>
- <g data-node-id="failure-question" transform="translate(1042 357)" tabindex="0" aria-label="What happens to records that fail a rule?"><title data-node-tooltip="true">What happens to records that fail a rule? — Second question: quarantine the bad records, or fail the whole batch?</title><rect class="focus-ring" width="334" height="220" rx="22" fill="#FFF" stroke="#F59E0B" stroke-width="2" filter="url(#sds)"/><rect width="334" height="38" rx="22" fill="#D97706"/><path d="M0 19h334v19H0z" fill="#D97706"/><text x="18" y="26" class="s w" font-weight="700">GATE 2 · FAILURE POLICY</text><text x="22" y="73" class="h2 n">What should bad rows block?</text><g transform="translate(22 94)"><rect width="138" height="88" rx="12" fill="#FFF7ED"/><text x="14" y="22" class="h3" fill="#9A3412">Quarantine</text><text x="14" y="44" class="m mu">row-level defects</text><text x="14" y="62" class="s n">publish clean rows</text><text x="14" y="78" class="m mu">retain reason + owner</text></g><g transform="translate(174 94)"><rect width="138" height="88" rx="12" fill="#FEF2F2"/><text x="14" y="22" class="h3" fill="#991B1B">Fail batch</text><text x="14" y="44" class="m mu">atomic consistency</text><text x="14" y="62" class="s n">publish nothing</text><text x="14" y="78" class="m mu">fix + rerun all</text></g><text x="22" y="207" class="m mu">Record the policy per table, not per platform.</text></g>
- <g data-node-id="warning-nondeterministic-latest" transform="translate(64 590)" tabindex="0" aria-label="Trap: &apos;latest row&apos; with no ordering key"><title data-node-tooltip="true">Trap: &apos;latest row&apos; with no ordering key — Resolving the latest row per key without a deterministic ordering column corrupts history — differently each retry.</title><rect class="focus-ring" width="662" height="180" rx="22" fill="#FEF2F2" stroke="#F87171" stroke-width="2"/><path d="M27 137l41-78 41 78z" fill="#EF4444"/><path d="M68 84v29M68 124v3" stroke="#FFF" stroke-width="7" stroke-linecap="round"/><text x="136" y="42" class="h2" fill="#991B1B">Trap: “latest row” without total ordering</text><text x="136" y="69" class="s" fill="#7F1D1D">Two records share a timestamp → retry chooses a different winner → history changes.</text><g transform="translate(136 93)"><rect width="220" height="50" rx="11" fill="#FFF"/><text x="14" y="20" class="m" fill="#DC2626">INSUFFICIENT</text><text x="14" y="38" class="s n">ORDER BY ingest_ts</text></g><g transform="translate(370 93)"><rect width="260" height="50" rx="11" fill="#ECFDF5"/><text x="14" y="20" class="m" fill="#047857">DETERMINISTIC</text><text x="14" y="38" class="s n">commit_ts, sequence, hash</text></g></g><path d="M500 590V551H762v-17" fill="none" stroke="#D97706" stroke-width="2.5" stroke-dasharray="7 6" marker-end="url(#sdw)"/>
- <path d="M1209 577v36H939v54" class="flow"/>
- <g data-node-id="optimize-question" transform="translate(758 646)" tabindex="0" aria-label="Is this table read-heavy enough for V-Order?"><title data-node-tooltip="true">Is this table read-heavy enough for V-Order? — Third question: V-Order costs ~15% on writes and is off by default — spend it where reads dominate.</title><rect class="focus-ring" width="618" height="178" rx="22" fill="#FFF" stroke="#60A5FA" stroke-width="2" filter="url(#sds)"/><rect width="618" height="38" rx="22" fill="#1D4ED8"/><path d="M0 19h618v19H0z" fill="#1D4ED8"/><text x="18" y="26" class="s w" font-weight="700">GATE 3 · SERVING SHAPE</text><text x="22" y="72" class="h2 n">Is this table read-heavy enough for V-Order?</text><g transform="translate(22 94)"><rect width="272" height="56" rx="12" fill="#EFF6FF"/><text x="14" y="21" class="m" fill="#1D4ED8">READ-DOMINANT</text><text x="14" y="40" class="s n">frequent scans · stable write cadence</text></g><g transform="translate(308 94)"><rect width="286" height="56" rx="12" fill="#F1F5F9"/><text x="14" y="21" class="m mu">WRITE-DOMINANT / SMALL</text><text x="14" y="40" class="s n">leave V-Order off; avoid unearned cost</text></g><circle cx="594" cy="21" r="14" fill="#FFF"/><text x="594" y="25" text-anchor="middle" class="ev">S2</text></g>
- <path d="M1067 824v36" class="flow"/>
- <g data-node-id="optimize-compact" transform="translate(758 860)" tabindex="0" aria-label="OPTIMIZE to rewrite existing files"><title data-node-tooltip="true">OPTIMIZE to rewrite existing files — Toggling the property only affects future writes — existing data needs a physical rewrite.</title><rect class="focus-ring" width="618" height="104" rx="20" fill="#EFF6FF" stroke="#60A5FA" stroke-width="2"/><circle cx="52" cy="52" r="29" fill="#DBEAFE"/><path d="M34 42h36M39 52h26M44 62h16" stroke="#2563EB" stroke-width="4" stroke-linecap="round"/><text x="98" y="39" class="h2" fill="#1E40AF">Rewrite existing files with OPTIMIZE</text><text x="98" y="64" class="s mu">The table property changes future writes only; measure before and after the physical rewrite.</text><rect x="98" y="76" width="244" height="19" rx="9" fill="#DBEAFE"/><text x="220" y="90" text-anchor="middle" class="m" fill="#1D4ED8">COMPACT · V-ORDER · VERIFY</text><circle cx="594" cy="20" r="14" fill="#FFF"/><text x="594" y="24" text-anchor="middle" class="ev">S2</text></g>
- <g transform="translate(64 803)"><rect width="662" height="161" rx="21" fill="#E2E8F0"/><text x="22" y="32" class="h3 n">Silver acceptance contract</text><text x="22" y="59" class="s mu">✓ grain and business key declared</text><text x="22" y="81" class="s mu">✓ deterministic ordering survives replay</text><text x="22" y="103" class="s mu">✓ failure policy exposes owner + reason</text><text x="22" y="125" class="s mu">✓ file optimization backed by read/write evidence</text><rect x="414" y="42" width="218" height="75" rx="14" fill="#FFF"/><text x="523" y="64" text-anchor="middle" class="m" fill="#0F766E" font-weight="700">DESIGN TEST</text><text x="523" y="84" text-anchor="middle" class="s n">Can the same batch replay</text><text x="523" y="102" text-anchor="middle" class="s n">to the same current row?</text></g><text x="1376" y="997" text-anchor="end" class="m" fill="#64748B">Fabric Atlas original · product-neutral vector illustration</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 990" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="silver-layer-modelling-decision-title silver-layer-modelling-decision-desc" data-diagram-id="silver-layer-modelling-decision">
+  <title id="silver-layer-modelling-decision-title">Canonical Entity Modelling: Schema Evolution, SCD Type, and Delta Mutation Path</title>
+  <desc id="silver-layer-modelling-decision-desc">An original decision and internals diagram covering three silver-layer modelling decisions. First, a schema-evolution question: an incoming bronze column change is additive and merges automatically via Delta mergeSchema, unless a foreign key constraint exists on the target table, which freezes all further schema evolution until removed. Second, a historization question: does any consumer need to reconstruct a row's state as of a past date; a yes routes to SCD Type 2 with an internals cutaway showing the close-old/open-new MERGE mechanics and a warning about non-deterministic latest-row ordering, while a no routes to SCD Type 1 in-place overwrite. Third, a Delta mutation-path question for the SCD Type 2 write itself: whether to use classic copy-on-write MERGE or enable deletion vectors, shown as an internals cutaway of the merge-on-read soft-delete-plus-small-file mechanism with its measured before/after-OPTIMIZE performance trade-off and Delta protocol version increase. A closing node shows the V-Order and OPTIMIZE physical-layout decision that every path still converges on, with its measured write-time cost.</desc>
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Palette matches the house teal/green family used across content/diagrams/fabric-platform-overview.svg
+       and content/diagrams/silver-layer-modelling-architecture.svg.
+       Official Microsoft Fabric item icons are vendored under content/diagrams/icons/microsoft/,
+       used unchanged per docs/official-icon-policy.md, each paired with a product/item name label. -->
+  <defs>
+    <linearGradient id="sld-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#063D3B"/>
+      <stop offset="1" stop-color="#0B5E50"/>
+    </linearGradient>
+    <linearGradient id="sld-footer" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="1" stop-color="#117865"/>
+    </linearGradient>
+    <marker id="sld-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94"/>
+    </marker>
+    <marker id="sld-arrDark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0E6961"/>
+    </marker>
+    <marker id="sld-arrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B42318"/>
+    </marker>
+    <marker id="sld-arrBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1D4ED8"/>
+    </marker>
+  </defs>
+
+  <rect width="1180" height="990" fill="#FFFFFF"/>
+
+  <!-- Header -->
+  <rect width="1180" height="86" fill="url(#sld-head)"/>
+  <text x="36" y="36" font-size="20" font-weight="650" fill="#FFFFFF">Canonical entity modelling — schema evolution, SCD type, and Delta mutation path</text>
+  <text x="36" y="60" font-size="12.5" fill="#D9F5EE">Three silver-layer decisions plus the internals of the SCD merge and the V-Order/OPTIMIZE step every path shares</text>
+
+  <!-- Legend -->
+  <g transform="translate(36,100)" font-size="10.5">
+    <rect width="1108" height="30" rx="8" fill="#F3F2F1" stroke="#E1DFDD"/>
+    <circle cx="18" cy="15" r="5" fill="#117865"/><text x="30" y="19" fill="#3F6259">fact (sourced)</text>
+    <circle cx="128" cy="15" r="5" fill="#2AAC94"/><text x="140" y="19" fill="#3F6259">pattern (recommended)</text>
+    <circle cx="286" cy="15" r="5" fill="#1D4ED8"/><text x="298" y="19" fill="#1E3A8A">internals (mechanism)</text>
+    <circle cx="440" cy="15" r="5" fill="#B42318"/><text x="452" y="19" fill="#7A241A">warning / failure mode</text>
+    <line x1="600" y1="15" x2="635" y2="15" stroke="#2AAC94" stroke-width="2" marker-end="url(#sld-arr)"/><text x="642" y="19" fill="#3F6259">flow</text>
+    <line x1="700" y1="15" x2="735" y2="15" stroke="#0B5E50" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#sld-arrDark)"/><text x="742" y="19" fill="#3F6259">branch (yes/no)</text>
+    <text x="1090" y="19" text-anchor="end" fill="#8A8886">Fabric Atlas original diagram, July 2026</text>
+  </g>
+
+  <!-- ============ DECISION 1: SCHEMA EVOLUTION ============ -->
+  <text x="36" y="156" font-size="11" letter-spacing="1.5" fill="#8A8886">DECISION 1 · SCHEMA EVOLUTION AT THE SILVER MERGE TARGET</text>
+
+  <g data-node-id="schema-change-question" tabindex="0" aria-label="Is the incoming bronze schema change additive?">
+    <title data-node-tooltip="true">Is the incoming bronze schema change additive? — Root question: new column, or a breaking change to an existing one?</title>
+    <rect x="36" y="168" width="290" height="112" rx="12" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.6"/>
+    <circle cx="64" cy="198" r="18" fill="#DFF5EE"/>
+    <path d="M55 198h18M64 189v18" stroke="#117865" stroke-width="2.6" stroke-linecap="round"/>
+    <text x="50" y="220" font-size="10" fill="#3F6259">New / changed bronze</text>
+    <text x="50" y="234" font-size="12.5" font-weight="650" fill="#063D3B">column arrives</text>
+    <text x="50" y="252" font-size="9.5" fill="#3F6259">Is this an additive change</text>
+    <text x="50" y="266" font-size="9.5" fill="#3F6259">(new column) or breaking?</text>
+    <rect x="50" y="272" width="76" height="16" rx="8" fill="#DFF5EE"/><text x="88" y="283" text-anchor="middle" font-size="8.5" fill="#0B5E50">pattern</text>
+  </g>
+
+  <path d="M326 200 H358" stroke="#2AAC94" stroke-width="2" fill="none" marker-end="url(#sld-arr)"/>
+  <text x="332" y="192" font-size="9.5" fill="#0B5E50">additive</text>
+
+  <g data-node-id="mergeschema-additive" tabindex="0" aria-label="mergeSchema applies additive changes automatically">
+    <title data-node-tooltip="true">mergeSchema applies additive changes automatically — Delta Lake supports schema evolution on MERGE/write via mergeSchema for new columns.</title>
+    <rect x="358" y="168" width="270" height="112" rx="12" fill="#DFF5EE" stroke="#117865" stroke-width="1.8"/>
+    <text x="374" y="194" font-size="12.5" font-weight="650" fill="#063D3B">mergeSchema · additive</text>
+    <text x="374" y="211" font-size="9.5" fill="#0B5E50">new columns flow into silver</text>
+    <rect x="374" y="222" width="238" height="30" rx="6" fill="#C7ECE0"/>
+    <text x="382" y="235" font-size="8.5" fill="#0B5E50">.option("mergeSchema","true")</text>
+    <text x="382" y="246" font-size="8.5" fill="#0B5E50">on the MERGE / write operation</text>
+    <rect x="374" y="258" width="76" height="16" rx="8" fill="#C7ECE0"/><text x="412" y="269" text-anchor="middle" font-size="8.5" fill="#063D3B">fact</text>
+  </g>
+
+  <path d="M181 280 V336" stroke="#B42318" stroke-width="1.8" stroke-dasharray="4 3" fill="none" marker-end="url(#sld-arrRed)"/>
+  <text x="188" y="312" font-size="9.5" fill="#B42318">breaking /</text>
+  <text x="188" y="326" font-size="9.5" fill="#B42318">FK check</text>
+
+  <g data-node-id="schema-fk-freeze-warning" tabindex="0" aria-label="Trap: foreign key constraint freezes schema evolution">
+    <title data-node-tooltip="true">Trap: a foreign key constraint freezes schema evolution — Adding an FK constraint between endpoint tables silently stops future Delta schema changes from syncing.</title>
+    <rect x="36" y="336" width="592" height="120" rx="12" fill="#FDE9E7" stroke="#E4A199" stroke-width="1.6"/>
+    <path d="M64 388l22-42 22 42z" fill="#E4A199"/>
+    <path d="M86 358v18M86 380v3" stroke="#FFF" stroke-width="3.5" stroke-linecap="round"/>
+    <text x="118" y="366" font-size="12.5" font-weight="650" fill="#7A241A">Trap: FK constraint freezes evolution</text>
+    <text x="118" y="384" font-size="9.5" fill="#8A4238">Adding a foreign key between endpoint tables freezes further</text>
+    <text x="118" y="398" font-size="9.5" fill="#8A4238">schema changes on those tables — later Delta schema evolution</text>
+    <text x="118" y="412" font-size="9.5" fill="#8A4238">(e.g. new columns) silently stops syncing until it's addressed.</text>
+    <text x="118" y="430" font-size="9" fill="#7A241A" font-weight="650">Symptom: looks like a stalled sync, not an error.</text>
+    <rect x="118" y="438" width="90" height="16" rx="8" fill="#F8D3CE"/><text x="163" y="449" text-anchor="middle" font-size="8.5" fill="#7A241A">warning</text>
+  </g>
+
+  <path d="M628 224 H656 V396 H646" stroke="#2AAC94" stroke-width="2" fill="none" marker-end="url(#sld-arr)"/>
+  <text x="662" y="308" font-size="9.5" fill="#0B5E50">then route to</text>
+  <text x="662" y="322" font-size="9.5" fill="#0B5E50">historization</text>
+  <text x="662" y="336" font-size="9.5" fill="#0B5E50">decision</text>
+
+  <!-- ============ DECISION 2: SCD TYPE ============ -->
+  <text x="36" y="490" font-size="11" letter-spacing="1.5" fill="#8A8886">DECISION 2 · HISTORIZATION — SCD TYPE 1 OR TYPE 2</text>
+
+  <g data-node-id="historization-question" tabindex="0" aria-label="Does any consumer need the row as it was at a past date?">
+    <title data-node-tooltip="true">Does any consumer need the row as it was at a past date? — The historization question that routes SCD type choice.</title>
+    <rect x="36" y="502" width="290" height="126" rx="12" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.6"/>
+    <circle cx="64" cy="532" r="18" fill="#DFF5EE"/>
+    <path d="M55 532h18M64 523v18" stroke="#117865" stroke-width="2.6" stroke-linecap="round"/>
+    <text x="50" y="558" font-size="12.5" font-weight="650" fill="#063D3B">Any "as of" question?</text>
+    <text x="50" y="576" font-size="9.5" fill="#3F6259">e.g. price at time of sale,</text>
+    <text x="50" y="590" font-size="9.5" fill="#3F6259">address when contract signed</text>
+    <text x="50" y="608" font-size="9" fill="#3F6259">If none: complexity with no customer</text>
+    <rect x="50" y="614" width="76" height="16" rx="8" fill="#DFF5EE"/><text x="88" y="625" text-anchor="middle" font-size="8.5" fill="#0B5E50">pattern</text>
+  </g>
+
+  <path d="M326 534 H358" stroke="#2AAC94" stroke-width="2" fill="none" marker-end="url(#sld-arr)"/>
+  <text x="330" y="526" font-size="9.5" fill="#0B5E50">yes</text>
+
+  <g data-node-id="scd2-internals" tabindex="0" aria-label="SCD Type 2 internals: close old row, open new row">
+    <title data-node-tooltip="true">SCD Type 2 internals — the MERGE closes the current row and inserts a new current row, keyed by a deterministic ordering column.</title>
+    <rect x="358" y="502" width="330" height="126" rx="12" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.8"/>
+    <text x="374" y="527" font-size="12.5" font-weight="650" fill="#1E3A8A">SCD Type 2 — MERGE internals</text>
+    <g transform="translate(374 536)">
+      <rect width="140" height="42" rx="8" fill="#DBEAFE"/>
+      <text x="10" y="16" font-size="8" font-weight="700" fill="#1D4ED8">CLOSE existing row</text>
+      <text x="10" y="30" font-size="8" fill="#1E3A8A">is_current=false</text>
+      <path d="M144 21h24" stroke="#2563EB" stroke-width="2.4" marker-end="url(#sld-arrBlue)"/>
+      <rect x="172" width="140" height="42" rx="8" fill="#BFDBFE"/>
+      <text x="182" y="16" font-size="8" font-weight="700" fill="#1D4ED8">OPEN new row</text>
+      <text x="182" y="30" font-size="8" fill="#1E3A8A">is_current=true</text>
+    </g>
+    <text x="374" y="600" font-size="9" fill="#1E3A8A">Requires a deterministic ordering key — see the</text>
+    <text x="374" y="613" font-size="9" fill="#1E3A8A">warning node below.</text>
+    <circle cx="672" cy="24" r="14" fill="#FFF"/><text x="672" y="28" text-anchor="middle" font-size="11" font-weight="700" fill="#0369A1">i</text>
+  </g>
+
+  <path d="M326 604 V730" stroke="#0B5E50" stroke-width="2" stroke-dasharray="5 4" fill="none" marker-end="url(#sld-arrDark)"/>
+  <text x="332" y="668" font-size="9.5" fill="#0B5E50">no —</text>
+  <text x="332" y="682" font-size="9.5" fill="#0B5E50">only current</text>
+  <text x="332" y="696" font-size="9.5" fill="#0B5E50">state matters</text>
+
+  <g data-node-id="scd1-overwrite" tabindex="0" aria-label="SCD Type 1 in-place overwrite">
+    <title data-node-tooltip="true">SCD Type 1 in-place overwrite — no version history kept; Delta time travel remains as an unmodelled recovery safety net.</title>
+    <rect x="36" y="730" width="290" height="110" rx="12" fill="#ECFDF5" stroke="#34D399" stroke-width="1.8"/>
+    <circle cx="64" cy="760" r="18" fill="#D1FAE5"/>
+    <path d="M56 760l6 6 12-14" fill="none" stroke="#059669" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="50" y="796" font-size="12.5" font-weight="650" fill="#065F46">SCD Type 1 — overwrite</text>
+    <text x="50" y="812" font-size="9.5" fill="#065F46">MERGE updates in place, no history row</text>
+    <text x="50" y="826" font-size="8.5" fill="#065F46">Delta time travel covers accidental-overwrite</text>
+    <circle cx="292" cy="22" r="14" fill="#FFF"/><text x="292" y="26" text-anchor="middle" font-size="9" font-weight="700" fill="#0B5E50">S1</text>
+  </g>
+
+  <!-- warning: nondeterministic ordering -->
+  <path d="M523 628 V664 H420" stroke="#B42318" stroke-width="1.8" stroke-dasharray="4 3" fill="none" marker-end="url(#sld-arrRed)"/>
+  <g data-node-id="warning-nondeterministic-order" tabindex="0" aria-label="Trap: latest row resolved without a deterministic ordering key">
+    <title data-node-tooltip="true">Trap: "latest row" without a deterministic ordering key — resolving latest-per-key by arrival time silently corrupts SCD history on retry.</title>
+    <rect x="358" y="664" width="330" height="176" rx="12" fill="#FDE9E7" stroke="#E4A199" stroke-width="1.6"/>
+    <path d="M384 706l18-34 18 34z" fill="#E4A199"/>
+    <path d="M402 682v14M402 700v3" stroke="#FFF" stroke-width="3" stroke-linecap="round"/>
+    <text x="432" y="694" font-size="12" font-weight="650" fill="#7A241A">Trap: unstable "latest row" key</text>
+    <text x="374" y="726" font-size="9" fill="#8A4238">Deduplicating to "latest" by arrival/ingestion</text>
+    <text x="374" y="740" font-size="9" fill="#8A4238">time instead of source commit time looks</text>
+    <text x="374" y="754" font-size="9" fill="#8A4238">correct — until a retry reorders rows and</text>
+    <text x="374" y="768" font-size="9" fill="#8A4238">picks a different winner.</text>
+    <rect x="374" y="778" width="296" height="42" rx="8" fill="#FFF"/>
+    <text x="386" y="793" font-size="8.5" fill="#DC2626" font-weight="700">RESULT: SCD history diverges silently —</text>
+    <text x="386" y="807" font-size="8.5" fill="#7A241A">each rerun can record a different "current" row</text>
+    <rect x="374" y="822" width="90" height="16" rx="8" fill="#F8D3CE"/><text x="419" y="833" text-anchor="middle" font-size="8.5" fill="#7A241A">warning</text>
+  </g>
+
+  <!-- ============ DECISION 3: DELTA MUTATION PATH ============ -->
+  <text x="756" y="490" font-size="11" letter-spacing="1.5" fill="#8A8886">DECISION 3 · DELTA MUTATION PATH FOR THE SCD WRITE</text>
+
+  <g data-node-id="mutation-path-question" tabindex="0" aria-label="How should the SCD Type 2 write mutate the Delta table?">
+    <title data-node-tooltip="true">How should the SCD Type 2 write mutate the Delta table? — Classic copy-on-write MERGE, or merge-on-read via deletion vectors?</title>
+    <rect x="756" y="502" width="388" height="82" rx="12" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.6"/>
+    <text x="772" y="528" font-size="12.5" font-weight="650" fill="#063D3B">Copy-on-write MERGE, or deletion vectors?</text>
+    <text x="772" y="546" font-size="9.5" fill="#3F6259">Frequent row-level UPDATE/MERGE traffic on this</text>
+    <text x="772" y="560" font-size="9.5" fill="#3F6259">table changes which mutation path is cheaper.</text>
+    <rect x="772" y="566" width="76" height="16" rx="8" fill="#DFF5EE"/><text x="810" y="577" text-anchor="middle" font-size="8.5" fill="#0B5E50">pattern</text>
+  </g>
+
+  <path d="M950 584 V612" stroke="#2AAC94" stroke-width="2" fill="none" marker-end="url(#sld-arr)"/>
+
+  <g data-node-id="deletion-vectors-internals" tabindex="0" aria-label="Deletion vectors: merge-on-read internals">
+    <title data-node-tooltip="true">Deletion vectors: merge-on-read internals — soft-delete via a small binary marker file, filtered at query time, instead of a full file rewrite.</title>
+    <rect x="756" y="612" width="388" height="196" rx="12" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.8"/>
+    <text x="772" y="636" font-size="12.5" font-weight="650" fill="#1E3A8A">Deletion vectors — merge-on-read</text>
+    <text x="772" y="654" font-size="9" fill="#1E3A8A">UPDATE soft-deletes the old row via a new .bin</text>
+    <text x="772" y="666" font-size="9" fill="#1E3A8A">marker, writing only changed values to a small</text>
+    <text x="772" y="678" font-size="9" fill="#1E3A8A">new file — no full-file rewrite.</text>
+    <g transform="translate(772 686)">
+      <rect width="168" height="46" rx="8" fill="#DBEAFE"/>
+      <text x="10" y="17" font-size="8" font-weight="700" fill="#1D4ED8">BEFORE OPTIMIZE</text>
+      <text x="10" y="31" font-size="8" fill="#1E3A8A">~3x less storage, 1.5x</text>
+      <text x="10" y="41" font-size="8" fill="#1E3A8A">fewer files vs copy-on-write</text>
+      <rect x="180" width="176" height="46" rx="8" fill="#FEF3C7"/>
+      <text x="190" y="17" font-size="8" font-weight="700" fill="#92400E">WITHOUT OPTIMIZE</text>
+      <text x="190" y="31" font-size="8" fill="#78350F">reads run 1.5–2.3x slower</text>
+      <text x="190" y="41" font-size="8" fill="#78350F">as markers accumulate</text>
+    </g>
+    <text x="772" y="750" font-size="8.5" fill="#1E3A8A">Raises minReaderVersion to 3 / minWriterVersion to 7</text>
+    <text x="772" y="763" font-size="8.5" fill="#1E3A8A">(Delta protocol 2.3+) — older readers lose access.</text>
+    <rect x="772" y="774" width="352" height="24" rx="6" fill="#FEE2E2"/>
+    <text x="784" y="790" font-size="8.5" fill="#991B1B">Pair with periodic OPTIMIZE, or the read cost compounds</text>
+    <circle cx="1120" cy="24" r="14" fill="#FFF"/><text x="1120" y="28" text-anchor="middle" font-size="11" font-weight="700" fill="#0369A1">i</text>
+  </g>
+
+  <!-- converge arrows from each modelling path down into V-Order/OPTIMIZE node -->
+  <path d="M181 840 V870 H500 V904" stroke="#2AAC94" stroke-width="1.8" fill="none" marker-end="url(#sld-arr)"/>
+  <path d="M523 840 V870 H560 V904" stroke="#2AAC94" stroke-width="1.8" fill="none"/>
+  <path d="M950 808 V870 H660 V904" stroke="#2AAC94" stroke-width="1.8" fill="none" marker-end="url(#sld-arr)"/>
+
+  <!-- ============ CONVERGENCE: V-ORDER / OPTIMIZE ============ -->
+  <text x="36" y="896" font-size="11" letter-spacing="1.5" fill="#8A8886">EVERY PATH CONVERGES · PHYSICAL LAYOUT</text>
+
+  <g data-node-id="vorder-optimize-convergence" tabindex="0" aria-label="V-Order and OPTIMIZE apply after any modelling path is chosen">
+    <title data-node-tooltip="true">V-Order and OPTIMIZE apply after any modelling path — Type 1, Type 2, copy-on-write, or deletion vectors all still need periodic compaction.</title>
+    <rect x="36" y="908" width="1108" height="58" rx="12" fill="url(#sld-footer)"/>
+    <circle cx="64" cy="937" r="18" fill="#FFFFFF" opacity="0.18"/>
+    <path d="M55 937h18M64 928v18" stroke="#FFFFFF" stroke-width="2.6" stroke-linecap="round"/>
+    <text x="98" y="931" font-size="12.5" font-weight="650" fill="#FFFFFF">V-Order + OPTIMIZE — the shared physical-layout step</text>
+    <text x="98" y="948" font-size="9.5" fill="#D9F5EE">Every path above still needs periodic OPTIMIZE; the V-Order table property alone only affects future writes</text>
+    <rect x="960" y="918" width="76" height="16" rx="8" fill="#FFFFFF" opacity="0.18"/><text x="998" y="929" text-anchor="middle" font-size="8.5" fill="#FFFFFF">fact</text>
+    <text x="1108" y="948" font-size="9.5" fill="#D9F5EE" text-anchor="end">~15% write cost</text>
+  </g>
+
+  <text x="1144" y="982" text-anchor="end" font-size="9.5" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset.</text>
 </svg>

@@ -1,0 +1,98 @@
+{
+  "url": "https://learn.microsoft.com/en-us/fabric/real-time-intelligence/architecture-medallion",
+  "title": "Implement Medallion Architecture in Real-Time Intelligence - Microsoft Fabric | Microsoft Learn",
+  "tier": 1,
+  "tags": ["MicrosoftFabric", "Event-DrivenArchitecture", "RealTimeIntelligence", "Eventhouse", "KQL", "MedallionArchitecture"],
+  "summary": "Microsoft Learn's guide to mapping the bronze/silver/gold medallion pattern onto Real-Time Intelligence, using Eventstream ingestion, KQL update policies, and materialized views inside an Eventhouse/KQL database to keep each layer continuously current without extra orchestration infrastructure.",
+  "audience": "Data engineers and architects designing streaming lakehouse-style layering in Fabric who need to know which native Eventhouse/KQL primitives replace batch-oriented ETL jobs at each medallion stage.",
+  "why_it_matters": "It reframes the medallion pattern for streaming data: instead of scheduled batch jobs moving data between layers, KQL update policies and materialized views propagate bronze-to-silver-to-gold transformations continuously and natively inside the Eventhouse, which changes both the design and the retention/caching tradeoffs an architect needs to make per layer.",
+  "takeaways": [
+    "Bronze, Silver, and Gold layers are each realized as Eventhouse/KQL database tables or views rather than separate storage systems, fed continuously via Eventstream ingestion.",
+    "Update policies apply enrichment/transformation logic automatically as data lands in the Bronze layer, without requiring an external orchestrated job.",
+    "Materialized views handle deduplication and running aggregation in real time, and are the mechanism used to build both the Silver deduplicated table and the Gold aggregated/latest-value table.",
+    "A recommended Silver-layer pattern sets the raw transformation table's retention policy to zero days while keeping the materialized view populated, so only the deduplicated data persists.",
+    "Activator, Power BI, Real-Time Dashboards, and KQL querysets can all read from and act on any of the three layers, and Silver-layer data can be exposed to OneLake as Delta Parquet via OneLake availability."
+  ],
+  "claims": [
+    {
+      "capability_id": "eventhouse-kql",
+      "text": "Real-Time Intelligence implements the bronze/silver/gold medallion pattern natively inside a KQL database in an Eventhouse, without requiring separate orchestration infrastructure to move data between layers.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MedallionArchitecture", "Eventhouse", "KQL"]
+    },
+    {
+      "capability_id": "eventhouse-kql",
+      "text": "In this architecture the Bronze layer is the initial landing zone for raw data, populated either directly by an Eventstream destination or by a raw table inside the Eventhouse.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["MedallionArchitecture", "Eventhouse", "Eventstream"]
+    },
+    {
+      "capability_id": "eventhouse-kql",
+      "text": "KQL update policies automatically transform and enrich data as it lands in a Bronze table, pushing results into a Silver-layer table immediately and without a separately scheduled job.",
+      "depth": 3,
+      "type": "internal",
+      "tags": ["MedallionArchitecture", "KQL", "UpdatePolicy"]
+    },
+    {
+      "capability_id": "eventhouse-kql",
+      "text": "Materialized views deduplicate incoming records as they arrive and continuously compute aggregate views, making both deduplicated and aggregated data available for query without a separate aggregation job.",
+      "depth": 3,
+      "type": "internal",
+      "tags": ["MedallionArchitecture", "KQL", "MaterializedView"]
+    },
+    {
+      "capability_id": "eventhouse-kql",
+      "text": "A recommended Silver-layer design uses two objects fed by the same update policy: a raw transformation table with its retention policy set to zero days so its data never persists, and a materialized view over it that performs deduplication and is what's actually queried for high-granularity analytics.",
+      "depth": 4,
+      "type": "practice",
+      "tags": ["MedallionArchitecture", "KQL", "RetentionPolicy", "CostOptimization"]
+    },
+    {
+      "capability_id": "eventhouse-kql",
+      "text": "The Gold layer is built as a materialized view that aggregates and/or tracks the latest value per entity as data arrives, and is typically retained and queried for longer than the Silver layer's deduplicated data.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MedallionArchitecture", "KQL", "MaterializedView"]
+    },
+    {
+      "capability_id": "eventhouse-kql",
+      "text": "Retention policy and caching policy are set independently per layer/table in an Eventhouse, letting architects tune cost by keeping Bronze/Silver data for shorter periods while caching Gold-layer data to match dashboard query patterns.",
+      "depth": 4,
+      "type": "practice",
+      "tags": ["MedallionArchitecture", "KQL", "CostOptimization", "CachePolicy"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "Because both Silver and Gold layers remain queryable in this architecture, consumers are not forced to read only from the Gold layer as in a typical medallion design, which preserves access to high-granularity records alongside aggregated views; Eventhouse is described as able to query billions of records in seconds.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["MedallionArchitecture", "Eventhouse", "Event-DrivenArchitecture"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "Fabric Activator can attach to any layer of this medallion pipeline, allowing automated action on data as it arrives in Eventstream, on high-granularity Silver-layer records, or on aggregated Gold-layer data.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MedallionArchitecture", "DataActivator", "Event-DrivenArchitecture"]
+    },
+    {
+      "capability_id": "onelake",
+      "text": "Silver-layer data in this architecture can be exposed to OneLake as Delta Parquet through OneLake availability, letting other stakeholders such as data scientists consume it directly without incurring separate storage cost.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["MedallionArchitecture", "OneLake", "Eventhouse"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://learn.microsoft.com/en-us/fabric/real-time-intelligence/media/architecture-medallion/architecture-medallion.png",
+      "caption": "Microsoft's diagram of the bronze/silver/gold medallion architecture implemented in Real-Time Intelligence",
+      "attribution": "Microsoft Learn (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "eventhouse-kql"
+    }
+  ]
+}

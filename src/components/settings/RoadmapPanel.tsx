@@ -59,12 +59,17 @@ export function RoadmapPanel() {
         found: number;
         created: number;
         updated: number;
+        blogsQueued: number;
+        blogsAutoClaimed: number;
+        pages: number;
         error: string | null;
       };
       if (r.error) {
         toast.warning(`Poll failed: ${r.error}`);
       } else {
-        toast.success(`Synced ${r.found} item(s): ${r.created} new, ${r.updated} updated.`);
+        toast.success(
+          `Synced ${r.found} item(s) across ${r.pages} page(s); queued ${r.blogsQueued} blog(s), ${r.blogsAutoClaimed} auto-claimed.`,
+        );
       }
       invalidate();
     },
@@ -124,11 +129,10 @@ export function RoadmapPanel() {
       }
     >
       <p className="mb-3 text-xs text-muted-foreground">
-        Synced verbatim from the Microsoft Fabric public roadmap feed (
-        <code className="text-teal-300">fabric-gps.com/rss</code>) — items are mirrored directly,
-        never paraphrased or invented, matching the &ldquo;no source, no claim&rdquo; rule.
-        <span className="text-foreground"> Poll now</span> fetches the 25 most-recently-modified
-        releases and upserts them by guid.
+        Synced from the Fabric GPS community mirror of Microsoft&rsquo;s Fabric roadmap (
+        <code className="text-teal-300">fabric-gps.com/api/releases</code>). The paginated API
+        payload is preserved without embellishment. Canonical Microsoft blog links are added to the
+        source queue and auto-claimed; extracted claims still require normal verification.
       </p>
 
       <div className="mb-4 grid grid-cols-3 gap-2 text-xs">

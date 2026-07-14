@@ -1,9 +1,9 @@
 {
   "id": "metadata-driven-architecture-architecture",
   "title": "Metadata-Driven Architecture on Fabric",
-  "purpose": "Show how a versioned metadata contract drives reusable Fabric pipelines and notebooks, and how run state feeds back into the next run instead of being thrown away.",
-  "accessibleSummary": "A metadata contract describing sources and load rules is resolved into per-object configuration, which a single reusable pipeline and set of reusable notebooks execute against Fabric compute. Each run writes state, quality, and lineage telemetry to a run ledger; the ledger both proves what happened and supplies the watermark the next run reads to stay restartable. Two warning nodes call out where this pattern breaks: an over-grown metadata schema that turns into an untyped programming language, and non-idempotent writes that corrupt data on retry.",
-  "longDescription": "This diagram traces one execution of a metadata-driven load on Microsoft Fabric. A versioned metadata contract (object list, source connection, target shape, quality rules, load type) is resolved at run start into a concrete parameter set for one data object. That resolved configuration parameterizes a single reusable Data Factory pipeline, which in turn invokes reusable Spark notebooks or Fabric compute rather than one pipeline per source. Execution lands data in a lakehouse via Delta-managed tables. Every run — success or failure — writes to a run ledger that records status, rows processed, and the watermark for the next run; that ledger is what makes the framework restartable, and it feeds back into config resolution for the following run (the feedback edge). Quality checks evaluate the landed data against the contract's rules and post evidence forward; lineage and telemetry are captured for governance and observability. Two warning nodes are deliberately included: the metadata contract can accrete conditional logic until it functions as an undocumented programming language understood by no single person, and a non-idempotent pipeline write will corrupt or duplicate data if a failed run is blindly retried without the ledger's watermark discipline.",
+  "purpose": "Show how a versioned metadata contract drives a single reusable Data Factory pipeline and reusable notebooks, and how run state feeds back into the next run instead of being thrown away.",
+  "accessibleSummary": "A metadata contract describing sources and load rules is resolved into per-object configuration, which a single reusable Data Factory pipeline and reusable notebooks execute against Fabric compute. Each run writes data into a lakehouse and records state, quality, and lineage telemetry in a run ledger; the ledger both proves what happened and supplies the watermark the next run reads to stay restartable. Two warning nodes call out where this pattern breaks: an over-grown metadata schema that turns into an untyped programming language, and non-idempotent writes that corrupt data on retry.",
+  "longDescription": "This diagram traces one execution of a metadata-driven load on Microsoft Fabric. A versioned metadata contract (object list, source connection, target shape, quality rules, load type) is resolved at run start into a concrete parameter set for one data object. That resolved configuration parameterizes a single reusable Data Factory pipeline, which invokes a reusable notebook for object-agnostic transform logic rather than one pipeline and one notebook per source. Execution lands data in a lakehouse via managed Delta tables. Every run — success or failure — writes to a run ledger that records status, rows processed, and the watermark for the next run; that ledger is what makes the framework restartable, and it feeds back into config resolution for the following run (the feedback edge). Quality checks evaluate the landed data against the contract's rules and post evidence forward; lineage and telemetry are captured for governance and observability. Two warning nodes are deliberately included: the metadata contract can accrete conditional logic until it functions as an undocumented programming language understood by no single person, and a non-idempotent pipeline write will corrupt or duplicate data if a failed run is blindly retried without the ledger's watermark discipline.",
   "type": "architecture",
   "topicSlug": "metadata-driven-architecture",
   "capabilityIds": [
@@ -102,7 +102,7 @@
     },
     {
       "id": "pipeline-invocation",
-      "label": "Reusable pipeline invocation",
+      "label": "Reusable Data Factory pipeline",
       "summary": "One parameterized Data Factory pipeline drives every object instead of one pipeline per source.",
       "detail": "A single generic Data Factory pipeline accepts the resolved parameter set and executes the movement/orchestration steps common to every object: connect, copy or trigger transform, checkpoint. Fabric pipelines are the orchestration layer that chains data movement and transformation activities with control-flow constructs, authored once and driven by parameters rather than duplicated per source.",
       "whyItMatters": "Reuse is what keeps the framework's maintenance cost flat as object count grows — the alternative is one pipeline per source, which is the config-explosion problem this pattern exists to avoid.",
@@ -113,12 +113,13 @@
       "evidence": [
         {
           "sourceKey": "data-factory-overview",
-          "note": "Pipelines are the orchestration layer: a single pipeline can chain data movement, transformation activities, and control-flow constructs, authored in a low-code designer."
+          "note": "Data Factory is Fabric's data integration workload: it connects to data sources, moves data, transforms it, and orchestrates movement and transformation tasks from a single place."
         }
       ],
       "tags": [
         "pipeline",
-        "orchestration"
+        "orchestration",
+        "data-factory"
       ],
       "drill": {
         "inputs": [
@@ -127,11 +128,11 @@
         "processing": [
           "Bind incoming parameters to pipeline variables",
           "Execute copy/transform activities using those variables instead of hard-coded values",
-          "Invoke the reusable notebook/compute step for object-specific transform logic",
+          "Invoke the reusable notebook for object-specific transform logic",
           "Emit a run status signal on completion or failure"
         ],
         "outputs": [
-          "Triggered notebook/compute execution",
+          "Triggered notebook execution",
           "Run status event to the run ledger"
         ],
         "example": "The pipeline binds source_connection, target_table, and window parameters for 'returns', runs a Copy activity into the bronze zone, then calls the reusable transform notebook.",
@@ -182,7 +183,7 @@
           "Activity outputs (copied/transformed data)",
           "A run ID and status usable for monitoring and retry"
         ],
-        "example": "An event trigger fires when a new file lands for 'returns'; Fabric starts run ID 9F21 and tracks its activities independently of any other object's concurrent run.",
+        "example": "An event trigger fires when a new file lands for 'returns'; Fabric starts run ID 8472 and tracks its activities independently of any other object's concurrent run.",
         "controls": [
           "Trigger type (schedule vs event vs manual)",
           "Per-run timeout and retry count"
@@ -190,6 +191,52 @@
         "failureModes": [
           "Manual test runs never generate scheduled-run failure notifications, so a person watching only email alerts misses failures from manual runs",
           "Two triggers overlap for the same object and their runs race on the same target table"
+        ]
+      }
+    },
+    {
+      "id": "notebook-transform",
+      "label": "Reusable notebook transform",
+      "summary": "Object-agnostic transform logic runs once per object, parameterized the same way as the pipeline.",
+      "detail": "The pipeline invokes one shared notebook that performs the transform logic common to every object — the notebook itself has no per-source branching hard-coded into it; it reads its behavior from the same parameter set the pipeline was resolved with. This keeps transform logic in one auditable place instead of scattered across a copy-pasted notebook per source.",
+      "whyItMatters": "A per-source notebook copy is the same config-explosion failure as a per-source pipeline, just moved one layer down — this node is where that risk gets reintroduced if the reuse discipline slips.",
+      "classification": "pattern",
+      "layers": [
+        "compute",
+        "orchestration"
+      ],
+      "evidence": [],
+      "tags": [
+        "notebook",
+        "reuse"
+      ],
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark / Data Engineering capability"
+      },
+      "drill": {
+        "inputs": [
+          "Bound parameters from the pipeline invocation (object, window, target)",
+          "Landed or in-flight source data for the current run"
+        ],
+        "processing": [
+          "Notebook reads its run parameters instead of a hard-coded object name",
+          "Applies the same transform steps regardless of which object is running",
+          "Hands transformed rows to the Delta write step"
+        ],
+        "outputs": [
+          "Transformed rows ready to land in the lakehouse",
+          "Notebook execution status returned to the pipeline"
+        ],
+        "example": "The shared notebook receives object=returns and window=[2026-07-11T00:00Z, now], applies the standard bronze-to-silver cleansing steps, and writes the result — the same notebook ran for 'orders' an hour earlier with different parameters.",
+        "controls": [
+          "Notebook parameter cell/widget definitions",
+          "Compute pool/session sizing for the notebook run"
+        ],
+        "failureModes": [
+          "A one-off object exception gets hard-coded into the notebook with an if-branch instead of a contract field, reintroducing per-source logic sprawl",
+          "Notebook session cold-start latency is charged to every small object equally, even ones that would run faster as a lighter-weight activity"
         ]
       }
     },
@@ -221,7 +268,7 @@
       },
       "drill": {
         "inputs": [
-          "Transformed rows from the pipeline/notebook step",
+          "Transformed rows from the notebook step",
           "Target table path from resolved config"
         ],
         "processing": [
@@ -273,7 +320,7 @@
           "Quality evidence record tied to the run ID",
           "Optional alert on rule failure"
         ],
-        "example": "The not_null(order_id) rule for 'returns' is evaluated against the newly landed rows; 3 violations are found and recorded as a failed-rule evidence entry on run 9F21.",
+        "example": "The not_null(order_id) rule for 'returns' is evaluated against the newly landed rows; 3 violations are found and recorded as a failed-rule evidence entry on run 8472.",
         "controls": [
           "Which rules block downstream consumption vs only warn",
           "Evidence retention period"
@@ -288,7 +335,7 @@
       "id": "run-ledger",
       "label": "Run ledger / state store",
       "summary": "Records what happened, and holds the watermark the next run needs.",
-      "detail": "A persistent store of run history: one entry per pipeline run instance, carrying status, rows processed, watermark position, and links to quality evidence and lineage. It is both the audit trail and the operational memory that makes the framework restartable rather than stateless.",
+      "detail": "A persistent store of run history, itself typically a Delta table in OneLake: one entry per pipeline run instance, carrying status, rows processed, watermark position, and links to quality evidence and lineage. It is both the audit trail and the operational memory that makes the framework restartable rather than stateless.",
       "whyItMatters": "This is the node that turns a series of independent runs into a framework: without it, every run starts from zero and 'incremental load' is impossible.",
       "classification": "pattern",
       "layers": [
@@ -315,7 +362,7 @@
           "Watermark fed back into the next run's config resolution",
           "Auditable run history for operations"
         ],
-        "example": "Run 9F21 for 'returns' succeeds with 4,812 rows written; the ledger commits watermark updated_at=2026-07-12T00:00Z, which the next scheduled run will read as its starting point.",
+        "example": "Run 8472 for 'returns' succeeds with 4,812 rows written; the ledger commits watermark updated_at=2026-07-12T00:00Z, which the next scheduled run will read as its starting point.",
         "controls": [
           "What counts as 'success' for watermark advancement (all rules must pass vs write-only)",
           "Retention/archival policy for old ledger entries"
@@ -365,7 +412,7 @@
           "Lineage graph entry linking source to 'returns' target table",
           "Monitoring signal available in the admin monitoring workspace"
         ],
-        "example": "Purview Data Map records that lh_bronze.returns was last written by run 9F21 of the metadata-driven pipeline, sourced from the 'returns' operational system.",
+        "example": "Purview Data Map records that lh_bronze.returns was last written by run 8472 of the metadata-driven pipeline, sourced from the 'returns' operational system.",
         "controls": [
           "Scan frequency/scope for metadata scanning",
           "Which monitoring signals trigger an alert"
@@ -482,8 +529,16 @@
       "kind": "flow"
     },
     {
-      "id": "e-run-lakehouse",
+      "id": "e-run-notebook",
       "from": "pipeline-run-execution",
+      "to": "notebook-transform",
+      "label": "invokes notebook",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-notebook-lakehouse",
+      "from": "notebook-transform",
       "to": "lakehouse-landing",
       "label": "writes data",
       "layer": "data",
@@ -566,6 +621,11 @@
       "nodeId": "pipeline-run-execution",
       "title": "Each trigger is its own run",
       "explanation": "Fabric tracks each execution as an independent run instance, which is what makes per-object retry and monitoring possible."
+    },
+    {
+      "nodeId": "notebook-transform",
+      "title": "Transform logic is shared too",
+      "explanation": "The pipeline invokes one reusable notebook for object-specific transform logic, parameterized the same way — reuse has to extend past the pipeline layer or the config-explosion risk just moves one layer down."
     },
     {
       "nodeId": "lakehouse-landing",

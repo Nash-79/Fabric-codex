@@ -1,443 +1,319 @@
 {
   "id": "data-modelling-decision",
-  "title": "Which Model, Which Store, Which Storage Mode?",
-  "purpose": "Make the three modelling decisions explicit and in order — the technique, the physical store, and the semantic storage mode — instead of letting them get decided implicitly by whoever builds first.",
-  "accessibleSummary": "A decision tree with three questions. The first asks what the model must optimise for: query simplicity for BI leads to a dimensional star schema; auditable history and many changing source systems leads to a data vault; a shared integration layer across domains leads to a canonical model. The second asks who consumes the physical layer: Spark and data engineering favour a Lakehouse over Delta tables, while T-SQL and multi-table transactions favour a Warehouse — both write Delta and both surface through a semantic model. The third asks how the semantic model should read the data, forking between Direct Lake, Import, and DirectQuery. A warning branch covers the Direct Lake trap in which basing a table on a SQL view silently forces every query into DirectQuery fallback.",
-  "longDescription": "This is a decision tree, not a pipeline. Three questions are asked in a fixed order because each one constrains the next. Question one picks the modelling technique from what the model is for: dimensional/star for BI query simplicity, data vault for auditable history across many changing sources, canonical for a shared cross-domain integration layer. Question two picks the physical store from who consumes it: a Lakehouse when Spark and data engineering own the transformations, a Warehouse when T-SQL and multi-table ACID transactions are the requirement. Both store Delta underneath, so this is a workload-and-skills decision, not a storage-format one. Question three picks the semantic storage mode — Direct Lake to read Delta directly with no refresh, Import for small models needing full DAX and transformation freedom, DirectQuery only where the source must stay authoritative. The warning node captures a specific, sourced trap: in Direct Lake on SQL, basing a model table on a SQL view forces every query against it into DirectQuery fallback, which usually slows it down.",
+  "title": "Choosing a Data Model in Microsoft Fabric: Technique, Store, and Read Mode",
+  "purpose": "Give a practitioner a branching decision path for three separable modelling choices in Fabric — the logical modelling technique (dimensional star schema vs data vault), the physical store that hosts it (Lakehouse vs Warehouse), and the semantic-model storage mode that reads it (Direct Lake vs Import vs DirectQuery/composite) — plus the one well-documented trap that silently forces a fallback.",
+  "accessibleSummary": "A three-gate decision tree. Gate 1 asks what the model must optimise for: BI query simplicity branches to a dimensional star schema, while auditable history across many volatile sources branches to data vault — a trade-off panel notes vault is never queried directly by BI. Gate 2 asks which engine owns writes: Spark and multi-format engineering branches to a Lakehouse over managed Delta tables, T-SQL with multi-table transactions branches to a Warehouse, also Delta underneath — both converge on gate 3. Gate 3 asks how the semantic model should read the conformed table, per table rather than once for the model: Direct Lake for large, fresh facts with no import; Import for compact, fully modellable tables; DirectQuery or composite for source-authoritative or exception tables. A warning node, reached only from the Direct Lake branch, flags that basing a Direct Lake on SQL table on a SQL view forces every query into DirectQuery fallback — a sourced Microsoft documentation fact, not a hypothetical — and that fallback lands the query on the DirectQuery branch anyway.",
+  "longDescription": "This diagram sequences three modelling decisions that Fabric practitioners often conflate into one choice. The first gate is purely logical: what must the model optimise for. A dimensional star schema (conformed dimensions plus grain-declared fact tables) is the default when the consumer is BI and query simplicity matters most; Fabric's own warehouse tutorial content backs a practical fact-table design heuristic here (a fact table carrying more than roughly 50 columns is usually hiding a dimension that should be split out). Data vault (hubs, links, satellites) is reserved for cases where auditable history across many volatile, frequently-changing source systems is the actual requirement — not a default, because it is never queried directly by BI and needs a dimensional layer built on top of it for reporting. The second gate is physical: which engine owns the writes. A recommended Fabric medallion pattern keeps Bronze/Silver in a Lakehouse for Spark-based ETL, while the Gold star-schema layer is built either as Lakehouse materialized views or as a Warehouse using T-SQL, with the Warehouse reading Lakehouse tables via cross-database queries — both stores persist Delta, so this gate is decided by engine and transaction needs, not storage format. The third gate is how the semantic model reads the conformed table, and it is decided per table, not once for the whole model: Direct Lake reads Delta columns directly from OneLake with no import refresh, and composite models let very large fact tables stay Direct Lake while smaller dimension tables use Import or DirectQuery in the same model. A warning branch, reached specifically from the Direct Lake path, documents a concrete, sourced trap: in Direct Lake on SQL, basing a model table on a SQL analytics-endpoint view rather than a base table forces every query against that table into DirectQuery fallback, which is documented as a real Microsoft-listed fallback trigger alongside row-level security on the SQL endpoint and Delta tables that exceed capacity guardrails — and the fallback edge routes that traffic onto the same DirectQuery/composite branch used deliberately elsewhere in the tree.",
   "type": "decision",
   "topicSlug": "data-modelling",
-  "capabilityIds": ["lakehouse", "warehouse", "semantic-model", "direct-lake"],
-  "revision": "3",
+  "capabilityIds": ["warehouse", "lakehouse", "semantic-model", "direct-lake"],
+  "revision": "4",
   "qaStatus": "draft",
   "staticPath": "/diagrams/data-modelling-decision.svg",
   "nodes": [
     {
-      "id": "start-question",
-      "label": "What must the model optimise for?",
-      "summary": "The root question: pick the modelling technique from the job the model has to do, not from habit.",
-      "detail": "Before choosing tables, decide what the model is actually for. Optimising for BI query simplicity, for auditable history across many changing source systems, and for a shared cross-domain integration layer are three different jobs, and they lead to three different techniques. Answering this first prevents the far more common failure of picking the technique by habit and then discovering it fights the workload.",
-      "whyItMatters": "The technique decision is the hardest one to reverse: it is baked into every downstream table, load job, and measure. Choosing it deliberately, from the job to be done, is cheaper than migrating away from it later.",
-      "classification": "pattern",
+      "id": "gate1-technique",
+      "label": "Gate 1 — What must the model optimise for?",
+      "summary": "The root question: choose the modelling technique from the job the model has to do, not from habit.",
+      "detail": "The first decision is purely logical, made before any physical engine is chosen. It asks what the model exists to optimise: fast, simple BI query patterns over a declared grain, or auditable history across many volatile source systems. Picking a technique from habit — always building a star schema, or always building a vault — skips the question this gate exists to force.",
+      "whyItMatters": "Every downstream choice (physical store, semantic read mode) inherits the shape decided here; retrofitting a technique after physical build-out is expensive because the grain, keys, and history model are baked into the tables.",
+      "classification": "inference",
       "layers": ["data"],
-      "tags": ["decision-root", "DataModelling"],
       "evidence": [],
+      "tags": ["modelling", "star-schema", "data-vault", "decision"],
       "drill": {
-        "inputs": [
-          "The business questions the model must answer",
-          "The number of source systems and how often their schemas change",
-          "Whether full history and auditability are a stated requirement"
-        ],
-        "processing": [
-          "Write down the top questions the model must answer and at what grain",
-          "Count the source systems and classify how volatile their schemas are",
-          "Decide whether point-in-time reconstruction is a requirement or a nice-to-have"
-        ],
-        "outputs": ["A stated optimisation goal that routes to one of the three technique branches"],
-        "example": "A finance team needs month-end revenue by product and region, from two stable source systems, with no audit-reconstruction requirement — a clear route to a dimensional star schema rather than a vault.",
-        "controls": [
-          "Write the optimisation goal down before modelling starts, so the technique choice can be challenged"
-        ],
-        "failureModes": [
-          "Choosing the technique from team familiarity rather than the workload, then bending the workload to fit it",
-          "Treating 'we might need history one day' as a mandate for a full data vault"
-        ]
-      }
+        "inputs": ["The consumer profile (BI analysts vs data engineers)", "The history requirement (point-in-time reporting vs full audit trail vs current-state only)", "The number and volatility of source systems feeding the entity"],
+        "processing": ["Identify the dominant consumer and their query pattern", "Determine whether auditable history is a genuine requirement or a nice-to-have"],
+        "outputs": ["A chosen modelling technique (dimensional or data vault) with the reason recorded"],
+        "example": "A finance reporting team needs fast, simple slice-and-dice over sales facts by date, product, and region — this is a straightforward vote for a dimensional star schema over data vault's extra join complexity.",
+        "controls": ["Explicit written rationale for the chosen technique, reviewed when the workload changes", "Revisit trigger: a change in consumer profile or a new regulatory audit requirement"],
+        "failureModes": ["Defaulting to data vault for a team that only ever needs current-state BI reporting, paying join complexity for history nobody queries", "Defaulting to a star schema when many volatile upstream systems actually need auditable, replayable history"]
+      },
+      "drillTarget": { "kind": "topic", "slug": "data-modelling", "label": "Data Modelling" }
     },
     {
       "id": "technique-dimensional",
       "label": "Dimensional / star schema",
       "summary": "Facts at a declared grain plus conformed dimensions — the default when BI query simplicity is the goal.",
-      "detail": "A star schema puts measurable events in fact tables at one explicit grain and descriptive context in conformed dimensions. It is the technique Fabric's warehouse and semantic model layers are most directly aimed at, and it is the right default whenever the primary consumer is BI and the primary virtue is query simplicity.",
-      "whyItMatters": "A star schema keeps the semantic model's relationships simple and its measures unambiguous, which is what makes self-service BI on top of it actually work rather than quietly return wrong numbers.",
+      "detail": "A fact table records events or measurements at a single declared grain, joined to conformed dimension tables holding descriptive attributes. This is the classic Kimball pattern and remains the default choice inside Fabric Warehouses and Lakehouse gold layers when the dominant consumer is BI. A practical Fabric-sourced design heuristic: a fact table carrying more than roughly 50 columns is usually hiding attributes that belong in a dimension instead — a signal the grain or normalisation has drifted.",
+      "whyItMatters": "Star schemas keep BI query patterns simple (single joins from fact to dimension, predictable aggregation paths) and are what Direct Lake and Import semantic models are optimised to read efficiently.",
       "classification": "fact",
       "layers": ["data"],
-      "tags": ["StarSchema", "DimensionalModelling"],
       "evidence": [
-        {
-          "sourceKey": "warehouse-overview",
-          "note": "Fabric Data Warehouse is explicitly aimed at star and snowflake schemas, curated corporate data marts, and governed semantic models for BI."
-        }
+        { "sourceKey": "ultimateinfoguide-warehouse-tutorial", "note": "A practitioner heuristic: a fact table with more than roughly 50 columns is likely carrying attributes that should be split out into a dimension table instead." }
       ],
+      "tags": ["star-schema", "kimball", "dimensional-modelling"],
       "drill": {
-        "inputs": [
-          "The business questions and the grain they imply",
-          "Business keys and the descriptive attributes that qualify them"
-        ],
-        "processing": [
-          "Declare one explicit grain per fact table and write it down",
-          "Split measurable events into facts and descriptive context into dimensions",
-          "Conform shared dimensions (customer, product, date) so they mean the same thing across every fact"
-        ],
-        "outputs": [
-          "Fact tables at a single declared grain",
-          "Conformed dimensions reused across facts",
-          "A semantic model whose relationships are simple enough to trust"
-        ],
-        "example": "Order lines land in one fact at order-line grain, joined to conformed customer, product, and date dimensions; revenue measures are defined once in the semantic model rather than per report.",
-        "controls": [
-          "A written grain statement per fact table",
-          "Automated tests for key uniqueness and relationship validity"
-        ],
-        "failureModes": [
-          "Mixing grains in one fact table, which silently double-counts every additive measure",
-          "Redefining the same dimension per data mart so 'customer' means something different in each"
-        ]
-      }
+        "inputs": ["Conformed business keys and measures identified during gate 1", "A declared grain (one row per what, at what level of detail)"],
+        "processing": ["Design fact table(s) at the declared grain with foreign keys to dimensions", "Design conformed dimension tables shared across fact tables where the same entity recurs", "Apply the >50-column heuristic to catch fact tables absorbing dimension attributes"],
+        "outputs": ["A star (or snowflake) schema ready to host in a Lakehouse gold layer or Warehouse"],
+        "example": "A sales fact table at the grain of one row per order line joins to Date, Product, Customer, and Store dimensions — a BI report slices revenue by any combination without touching source system tables directly.",
+        "controls": ["Grain declaration reviewed before build, not after", "Column-count review against the ~50-column heuristic during design review"],
+        "failureModes": ["Mixed-grain fact tables (some rows at order level, some at line level) silently double-counting aggregates", "A fact table absorbing descriptive attributes instead of a dimension, bloating row size and breaking the >50-column heuristic"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     },
     {
       "id": "technique-vault",
       "label": "Data vault",
-      "summary": "Hubs, links, satellites — when auditable history across many volatile sources is the actual requirement.",
-      "detail": "A data vault separates business keys (hubs), relationships (links), and descriptive history (satellites) so that new and changing source systems can be absorbed without restructuring what already exists. It buys auditability and source-absorption at the cost of significantly more tables and joins, so it is warranted by genuine requirements, not by ambition.",
-      "whyItMatters": "Where regulators or reconciliation demand point-in-time reconstruction, a vault provides it structurally. Where they do not, it imposes a real and permanent complexity tax on every query and load.",
+      "summary": "Hubs, links, satellites — used only when auditable history across many volatile sources is the actual requirement.",
+      "detail": "Data vault decomposes an entity into a hub (business key), links (relationships between hubs), and satellites (descriptive attributes and history), insulating the model from source-system change and preserving a full audit trail. It is not queried directly by BI — a dimensional layer is still built on top of the vault for reporting, which is why this branch feeds back toward the same physical and semantic gates as the dimensional branch rather than skipping them.",
+      "whyItMatters": "Vault earns its extra join complexity only when the audit and source-volatility requirement is real; used as a default it adds cost with no corresponding BI benefit, since reporting still needs a star schema built on top of it.",
       "classification": "pattern",
       "layers": ["data"],
-      "tags": ["DataVault", "Auditability"],
       "evidence": [],
+      "tags": ["data-vault", "hub-link-satellite", "auditability"],
       "drill": {
-        "inputs": [
-          "Many source systems with volatile or diverging schemas",
-          "A stated auditability or point-in-time reconstruction requirement",
-          "Business keys that survive across those systems"
-        ],
-        "processing": [
-          "Model durable business keys as hubs",
-          "Model relationships between keys as links",
-          "Land all descriptive and changing attributes into satellites with load timestamps"
-        ],
-        "outputs": [
-          "An auditable, insert-only integration layer",
-          "A structure that absorbs a new source system without reshaping existing tables",
-          "A downstream star schema built on top for actual consumption"
-        ],
-        "example": "Customer keys from CRM and billing become one hub; each system's attributes land in its own satellite, so a later third system is added without touching either existing satellite.",
-        "controls": [
-          "Insert-only loading with load timestamps, never in-place updates",
-          "A downstream presentation layer, because the vault itself is not a query surface"
-        ],
-        "failureModes": [
-          "Adopting a vault for auditability nobody actually requires, and paying the join cost forever",
-          "Letting the vault become the reporting surface instead of building a star schema on top of it"
-        ]
-      }
+        "inputs": ["Business keys from multiple volatile source systems that need independent load and audit tracking"],
+        "processing": ["Model each core business concept as a hub keyed on its business key", "Model relationships between hubs as links", "Attach descriptive, time-versioned attributes as satellites per source"],
+        "outputs": ["An auditable, source-insulated vault layer, plus a dimensional layer built on top of it for BI consumption"],
+        "example": "A customer entity fed by three regional CRM systems is modelled as one customer hub, with a satellite per source system capturing each system's version of the attributes over time — full audit trail preserved even as source systems change.",
+        "controls": ["Load pattern (batch vs incremental) per satellite", "The dimensional layer built on top, since vault itself is never the BI-facing layer"],
+        "failureModes": ["Reporting directly against vault tables instead of building the dimensional layer on top, exposing join complexity to BI users", "Adopting vault for a single stable source system where the audit and insulation benefit never materialises"]
+      },
+      "drillTarget": { "kind": "topic", "slug": "data-modelling", "label": "Data Modelling" }
     },
     {
-      "id": "store-question",
-      "label": "Who consumes the physical layer?",
-      "summary": "Second question: Lakehouse or Warehouse — decided by engine and skills, not by storage format.",
-      "detail": "Once the technique is chosen, the physical store follows from who works on it. Both a Lakehouse and a Warehouse store their tables as Delta, so this is not a storage-format decision. It is a decision about the engine and the skills: Spark and notebook-based engineering, or T-SQL and multi-table transactions.",
-      "whyItMatters": "Teams routinely argue this as a storage question and pick on the wrong axis. Because both stores write the same open Delta format, the honest question is which engine and which skill set owns the transformations.",
-      "classification": "inference",
+      "id": "gate2-store",
+      "label": "Gate 2 — Which engine owns the writes?",
+      "summary": "Second question: Lakehouse or Warehouse, decided by engine and transaction needs, not by storage format.",
+      "detail": "Both a Fabric Lakehouse and a Fabric Warehouse persist Delta tables, so choosing between them is not a storage-format decision. A recommended Fabric medallion pattern keeps Bronze and Silver in a Lakehouse for Spark-based ETL, CDC, and feature engineering, while the Gold star-schema layer is built either as Lakehouse materialized views or as a Warehouse with T-SQL, with the Warehouse reading Lakehouse tables via cross-database queries when the two are split.",
+      "whyItMatters": "Picking the physical store by 'which one is newer' or 'which one I know' instead of by engine and transaction fit produces avoidable friction later — multi-table ACID transactions and a full T-SQL surface belong in a Warehouse; Spark-native transformation and mixed file/table workloads belong in a Lakehouse.",
+      "classification": "pattern",
       "layers": ["data", "compute"],
-      "tags": ["Lakehouse", "Warehouse"],
       "evidence": [],
+      "tags": ["lakehouse", "warehouse", "medallion"],
       "drill": {
-        "inputs": [
-          "The chosen modelling technique",
-          "The skills of the team that will own the transformations",
-          "Whether multi-table ACID transactions are a hard requirement"
-        ],
-        "processing": [
-          "Identify the primary transformation engine: Spark or T-SQL",
-          "Check whether any workload genuinely needs multi-table transactional semantics",
-          "Confirm both options still surface through the same semantic model layer"
-        ],
-        "outputs": ["A physical store choice that follows the engine, not the file format"],
-        "example": "A team of data engineers already writing PySpark notebooks picks the Lakehouse; a team of SQL developers migrating stored procedures picks the Warehouse — both end up with Delta tables in OneLake.",
-        "controls": [
-          "Decide on engine and skills explicitly, and record the reason"
-        ],
-        "failureModes": [
-          "Arguing the choice as though the two stored data in different formats — they do not",
-          "Splitting one logical model across both stores for no reason beyond team politics"
-        ]
-      }
+        "inputs": ["A modelling technique chosen at gate 1", "The primary transformation engine skill in the team (Spark vs T-SQL)", "Whether a load must commit atomically across multiple related tables"],
+        "processing": ["Route Spark-native ETL, CDC, and feature-engineering workloads to a Lakehouse", "Route multi-table ACID transactions and heavy T-SQL usage to a Warehouse", "Allow a split medallion where Bronze/Silver sit in a Lakehouse and Gold is built as a Warehouse, joined via cross-database query"],
+        "outputs": ["A chosen physical store (or a split Lakehouse/Warehouse medallion) hosting Delta tables"],
+        "example": "A team runs Spark notebooks for Bronze-to-Silver conformance in a Lakehouse, then a Warehouse Gold layer holds the star schema with stored procedures and multi-table transactional loads, querying the Lakehouse's Silver tables cross-database.",
+        "controls": ["Team skill profile (Spark vs T-SQL) driving engine choice", "Whether the workload needs multi-table transactional guarantees"],
+        "failureModes": ["Building multi-table ACID logic in a Lakehouse via notebooks when a Warehouse would provide it natively", "Splitting engines without a clear cross-database query contract, causing duplicated transformation logic"]
+      },
+      "drillTarget": { "kind": "topic", "slug": "data-modelling", "label": "Data Modelling" }
     },
     {
       "id": "store-lakehouse",
-      "label": "Lakehouse (Spark over Delta)",
-      "summary": "Managed Delta tables queried by Spark and T-SQL, with no movement between the two.",
-      "detail": "A Fabric lakehouse merges data-lake scale storage with warehouse-style querying: structured and unstructured data sit in one place, and the same tables can be analysed with both Apache Spark and T-SQL without moving data between systems. All managed lakehouse tables use Delta, giving ACID transactions, schema enforcement, and time travel over the Parquet files underneath.",
-      "whyItMatters": "It lets the engineering team work in Spark while analysts still reach the same tables through the SQL analytics endpoint — one copy, two engines, no export step.",
+      "label": "Lakehouse (Spark over managed Delta)",
+      "summary": "Spark-native engineering over managed Delta tables — the Bronze/Silver home in the recommended medallion split.",
+      "detail": "A Fabric Lakehouse stores managed Delta tables that Spark notebooks read and write natively, alongside an auto-provisioned SQL analytics endpoint for read access. In the medallion pattern this is documented as the recommended home for Bronze and Silver layers — Spark-based ETL, CDC, and feature engineering — with Gold optionally built here too as Lakehouse materialized views.",
+      "whyItMatters": "Choosing Lakehouse commits the team to Spark as the primary transform engine for this layer; the SQL analytics endpoint is read-oriented, so multi-table transactional writes are not the Lakehouse's strength.",
       "classification": "fact",
       "layers": ["data", "compute"],
-      "tags": ["Lakehouse", "DeltaLake", "Spark"],
       "evidence": [
-        {
-          "sourceKey": "lakehouse-overview",
-          "note": "A lakehouse merges lake-scale storage with warehouse-style querying: structured and unstructured data in one location, analysable with both Spark and T-SQL, with no data movement between systems."
-        },
-        {
-          "sourceKey": "lakehouse-overview",
-          "note": "All managed lakehouse tables use Delta, which supplies ACID transactions, schema enforcement, and time travel over the underlying Parquet files."
-        }
+        { "sourceKey": "ultimateinfoguide-lakehouse-vs-warehouse", "note": "A recommended medallion pattern keeps Bronze and Silver layers in a Lakehouse for Spark-based ETL/CDC/feature engineering, while the Gold layer is built either as Lakehouse materialized views or as a Warehouse with T-SQL star schemas, with the Warehouse reading Lakehouse tables via cross-database queries." }
       ],
+      "tags": ["lakehouse", "delta-lake", "spark"],
       "drill": {
-        "inputs": [
-          "Conformed entities from the chosen modelling technique",
-          "Spark notebooks or jobs that will do the transformations"
-        ],
-        "processing": [
-          "Write the modelled tables as managed Delta tables in the lakehouse Tables area",
-          "Transform with Spark SQL or the DataFrame API",
-          "Expose the same tables to analysts through the SQL analytics endpoint"
-        ],
-        "outputs": [
-          "Managed Delta tables readable by both Spark and T-SQL",
-          "ACID guarantees, schema enforcement, and time travel over one copy of the data"
-        ],
-        "example": "A gold star schema is written from a Spark notebook into the lakehouse Tables area; analysts query the same Delta tables through the SQL analytics endpoint with no copy or export.",
-        "controls": [
-          "Keep gold tables in the managed Tables area so they auto-register as Delta",
-          "Schema-evolution policy agreed before, not after, the first breaking change"
-        ],
-        "failureModes": [
-          "Treating the lakehouse as a file dump and losing the Delta guarantees that make it queryable",
-          "Assuming T-SQL access implies full warehouse write semantics — the endpoint is read-oriented"
-        ]
-      }
+        "inputs": ["A modelling technique and grain chosen upstream", "Bronze/Silver conformance workloads authored as Spark notebooks or Dataflows Gen2"],
+        "processing": ["Write and manage Delta tables in the Lakehouse Tables area from Spark", "Expose the same tables read-only through the auto-provisioned SQL analytics endpoint", "Optionally build Gold as materialized views over Silver in the same Lakehouse"],
+        "outputs": ["Managed Delta tables queryable by Spark and the SQL analytics endpoint, feeding Warehouse cross-database queries or a semantic model"],
+        "example": "A Bronze-to-Silver pipeline runs entirely as Spark notebooks against Lakehouse Delta tables, then a Gold materialized view aggregates Silver into a star schema without a separate Warehouse.",
+        "controls": ["Choice of Spark runtime and job scheduling for the ETL workload", "Whether Gold stays in-Lakehouse (materialized views) or moves to a Warehouse"],
+        "failureModes": ["Treating the SQL analytics endpoint as a general write target when it is read-oriented", "Skipping materialized-view refresh scheduling, leaving Gold aggregates stale"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
     {
       "id": "store-warehouse",
       "label": "Warehouse (T-SQL, multi-table ACID)",
-      "summary": "Full T-SQL surface with multi-table transactions — still Delta underneath, still open in OneLake.",
-      "detail": "Fabric Data Warehouse offers a large SQL engine surface including full multi-table ACID transactions, stored procedures, functions, and materialized views. Its tables are physically Delta (Parquet plus a transaction log) and are automatically published to OneLake, so choosing it does not lock the data away from other engines.",
-      "whyItMatters": "When a workload genuinely needs multi-table transactional semantics or a team's whole skill base is T-SQL, this is the right store — and it costs nothing in openness, because the data is still Delta in OneLake.",
+      "summary": "Full T-SQL surface with multi-table transactions over Delta — the recommended home for a Gold star schema with procedural logic.",
+      "detail": "A Fabric Warehouse offers a full T-SQL surface — stored procedures, multi-table transactions — while still persisting data as open Delta tables in OneLake underneath. The medallion pattern documents this as an alternative Gold-layer home to Lakehouse materialized views, reading upstream Bronze/Silver Lakehouse tables via cross-database queries.",
+      "whyItMatters": "Choosing Warehouse commits to T-SQL as the Gold transformation language and gains multi-table ACID guarantees a Lakehouse notebook pipeline would have to build manually.",
       "classification": "fact",
       "layers": ["data", "compute"],
-      "tags": ["Warehouse", "TSQL"],
       "evidence": [
-        {
-          "sourceKey": "warehouse-overview",
-          "note": "Development is primarily T-SQL over a large SQL engine surface, including full multi-table ACID transactions, materialized views, functions, and stored procedures."
-        },
-        {
-          "sourceKey": "warehouse-overview",
-          "note": "Warehouse tables are physically stored as Delta (Parquet plus a file-based transaction log) and are automatically published to OneLake Files, readable by other engines without export jobs."
-        }
+        { "sourceKey": "ultimateinfoguide-lakehouse-vs-warehouse", "note": "A recommended medallion pattern keeps Bronze and Silver layers in a Lakehouse for Spark-based ETL/CDC/feature engineering, while the Gold layer is built either as Lakehouse materialized views or as a Warehouse with T-SQL star schemas, with the Warehouse reading Lakehouse tables via cross-database queries." }
       ],
+      "tags": ["warehouse", "t-sql", "delta-lake"],
       "drill": {
-        "inputs": [
-          "The star schema from the technique decision",
-          "T-SQL skills and existing stored-procedure logic",
-          "Any requirement for a transaction spanning several tables"
-        ],
-        "processing": [
-          "Create the dimensional tables in the warehouse",
-          "Load via COPY INTO, pipelines, dataflows, or cross-database CTAS / INSERT..SELECT",
-          "Use multi-table transactions where a load must commit or roll back as one unit"
-        ],
-        "outputs": [
-          "A governed relational warehouse whose tables are still open Delta in OneLake",
-          "Transactional load semantics across several tables at once"
-        ],
-        "example": "A nightly load updates a fact and three dimensions inside one multi-table transaction, so a mid-load failure leaves no partially-updated star schema visible to reports.",
-        "controls": [
-          "Use the transaction boundary deliberately — it is the reason to be here",
-          "Remember storage and compute are separate and the query engine has no user-facing tuning knobs"
-        ],
-        "failureModes": [
-          "Choosing the warehouse and then never using a multi-table transaction — the differentiator went unused",
-          "Expecting to hand-tune the distributed query engine; workload management is autonomous"
-        ]
-      }
+        "inputs": ["Conformed Silver tables from an upstream Lakehouse, read via cross-database query", "A star schema design from gate 1"],
+        "processing": ["Load fact and dimension tables using T-SQL stored procedures with multi-table transactional guarantees", "Apply the >50-column fact-table heuristic during design review"],
+        "outputs": ["A Warehouse-hosted star schema, still Delta underneath, readable by any Fabric engine or a semantic model"],
+        "example": "A nightly stored procedure loads the Gold fact and dimension tables inside a single transaction, guaranteeing the fact table and its dimensions are never left partially updated if the load fails midway.",
+        "controls": ["Stored procedure design for atomic multi-table loads", "Cross-database query contract with the upstream Lakehouse Silver layer"],
+        "failureModes": ["Cross-database query performance degrading if the Lakehouse-side tables are not compacted (small-file bloat)", "Autonomous engine tuning behaving differently than expected under unusually skewed data distributions"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     },
     {
-      "id": "storage-mode-question",
-      "label": "How should the semantic model read it?",
-      "summary": "Third question: Direct Lake, Import, or DirectQuery — the mode determines refresh cost and freshness.",
-      "detail": "Both physical stores surface through a semantic model, and the last decision is how that model reads the data. Direct Lake reads the Delta files directly, avoiding refresh entirely. Import copies data into the model for maximum DAX and transformation freedom on smaller models. DirectQuery leaves the source authoritative at the cost of query latency. Direct Lake on OneLake also supports composite models, so a very large fact table can stay in Direct Lake while dimensions use Import.",
-      "whyItMatters": "This is the decision users feel: it sets report latency, data freshness, and whether anyone has to operate a refresh schedule at all.",
+      "id": "gate3-storage-mode",
+      "label": "Gate 3 — How should the semantic model read it?",
+      "summary": "Third question, decided per table: Direct Lake, Import, or DirectQuery/composite.",
+      "detail": "Once a table is physically built, the semantic model layer decides how to read it — and Fabric explicitly supports deciding this per table rather than once for the whole model. Composite models let very large fact tables stay in Direct Lake mode, avoiding scheduled refresh cost, while smaller dimension tables use Import or DirectQuery in the same model.",
+      "whyItMatters": "Treating storage mode as a single whole-model setting forces a worse trade-off than necessary; deciding per table lets large fact tables avoid import cost while small dimension tables get full Import modelling flexibility.",
       "classification": "fact",
-      "layers": ["compute"],
-      "tags": ["DirectLake", "SemanticModel"],
+      "layers": ["data", "compute"],
       "evidence": [
-        {
-          "sourceKey": "direct-lake-develop",
-          "note": "Direct Lake on OneLake supports composite models, so very large fact tables can stay in Direct Lake mode (avoiding refresh cost) while dimension tables use Import or DirectQuery in the same model."
-        },
-        {
-          "sourceKey": "direct-lake-develop",
-          "note": "Direct Lake has two flavors: Direct Lake on OneLake (richer modelling, faster queries) and Direct Lake on SQL (needed for SQL-endpoint security under delegated identity, or where DirectQuery fallback is required)."
-        }
+        { "sourceKey": "direct-lake-develop", "note": "Direct Lake on OneLake supports composite models, so very large fact tables can stay in Direct Lake mode (avoiding refresh cost) while dimension tables use Import or DirectQuery in the same model." }
       ],
+      "tags": ["direct-lake", "import", "directquery", "composite-model"],
       "drill": {
-        "inputs": [
-          "Model size and the freshness the business actually asks for",
-          "Whether SQL-endpoint security rules under delegated identity apply",
-          "Whether any table needs DAX or transformation features Direct Lake does not offer"
-        ],
-        "processing": [
-          "Default to Direct Lake to avoid refresh cost entirely",
-          "Use Import selectively for smaller tables needing full transformation freedom",
-          "Consider a composite model — Direct Lake facts with Import dimensions — rather than one mode for everything"
-        ],
-        "outputs": ["A storage mode per table, and an explicit reason for each deviation from Direct Lake"],
-        "example": "A billion-row sales fact stays in Direct Lake to avoid any refresh, while three small, heavily-transformed dimension tables use Import in the same composite model.",
-        "controls": [
-          "Pick the Direct Lake flavor deliberately: on OneLake for speed and modelling richness, on SQL only where delegated-identity security or fallback is required"
-        ],
-        "failureModes": [
-          "Defaulting the whole model to Import out of habit and inheriting a refresh window nobody needed",
-          "Choosing Direct Lake on SQL without needing its security model, and losing the faster path for nothing"
-        ]
-      }
+        "inputs": ["A physically built star schema or vault-derived dimensional layer in a Lakehouse or Warehouse"],
+        "processing": ["Evaluate each table's freshness requirement, size, and required modelling features", "Assign Direct Lake, Import, or DirectQuery per table rather than one mode for the whole model", "Combine modes in a composite model where table needs differ"],
+        "outputs": ["A semantic model with a storage mode assigned per table, balancing freshness, scale, and modelling flexibility"],
+        "example": "A large sales fact table stays Direct Lake for near-real-time queries with no refresh job, while a small, curated currency-conversion dimension uses Import so calculated columns and complex M transformations are available on it.",
+        "controls": ["Per-table storage-mode assignment reviewed against freshness and modelling-feature needs", "Composite-model design when table needs genuinely differ"],
+        "failureModes": ["Applying one storage mode to the whole model instead of deciding per table, over-paying for import refresh on tables that didn't need it", "Choosing Direct Lake for a table that needs Import-only modelling features (complex calculated columns, certain M transforms)"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic Model" }
     },
     {
-      "id": "warning-fallback-trap",
-      "label": "Trap: SQL views force DirectQuery fallback",
-      "summary": "In Direct Lake on SQL, a table based on a SQL view sends every query into DirectQuery fallback.",
-      "detail": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down. The model still says Direct Lake, so the regression is invisible on the surface — the fix is to base model tables on base tables, not views.",
-      "whyItMatters": "This is a silent performance cliff. The model is labelled Direct Lake, reports get slow, and nothing in the mode name reveals that every query is actually falling back to DirectQuery.",
-      "classification": "warning",
-      "layers": ["compute"],
-      "tags": ["DirectLake", "AntiPattern"],
+      "id": "mode-direct-lake",
+      "label": "Direct Lake",
+      "summary": "Delta columns read directly from OneLake — best fit for large, fresh fact tables with no import refresh.",
+      "detail": "Direct Lake reads Delta table columns directly from OneLake without a separate import copy, so there is no scheduled refresh cost and the model reflects the underlying table as soon as it commits. It comes in two flavors: Direct Lake on OneLake (OneLake security, richer modelling features, faster queries) and Direct Lake on SQL (used when SQL analytics-endpoint security rules under delegated identity are needed, or when DirectQuery fallback behaviour is specifically required).",
+      "whyItMatters": "Direct Lake is what makes very large fact tables viable in a semantic model without paying an import refresh window — but it is not unconditional, which is why the fallback trap sits directly on this branch.",
+      "classification": "fact",
+      "layers": ["data", "compute"],
       "evidence": [
-        {
-          "sourceKey": "direct-lake-develop",
-          "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables."
-        }
+        { "sourceKey": "direct-lake-develop", "note": "Direct Lake comes in two storage-mode flavors: Direct Lake on OneLake (OneLake security, richer modeling features, faster queries) and Direct Lake on SQL (needed for SQL-endpoint security rules under delegated identity, or when DirectQuery fallback is required)." }
       ],
+      "tags": ["direct-lake", "onelake", "freshness"],
       "drill": {
-        "inputs": [
-          "A Direct Lake on SQL model",
-          "Model tables sourced from SQL views rather than base tables"
-        ],
-        "processing": [
-          "Audit each model table for whether it points at a view or a base table",
-          "Repoint view-based tables at the underlying base Delta tables",
-          "Push the logic the view was doing back into the silver or gold layer instead"
-        ],
-        "outputs": [
-          "Model tables that actually read from OneLake rather than silently falling back",
-          "Transformation logic relocated to where it belongs, upstream of the model"
-        ],
-        "example": "A convenience view that joined two tables for a report is replaced by a materialised gold table; the model table repoints at it and the queries stop falling back to DirectQuery.",
-        "controls": [
-          "Prefer base tables for every Direct Lake model table",
-          "Treat any view in a Direct Lake model as a defect to be justified, not a default"
-        ],
-        "failureModes": [
-          "Diagnosing the resulting slowness as a capacity problem and scaling the SKU instead of fixing the view",
-          "Adding more views for modelling convenience and progressively converting the whole model to DirectQuery without noticing"
-        ]
-      }
+        "inputs": ["A conformed Delta table (base table, not a view) in a Lakehouse or Warehouse"],
+        "processing": ["Model reads Delta Parquet columns directly from OneLake at query time", "No scheduled import/refresh job runs for this table", "Flavor chosen: OneLake connector for richer modelling and OneLake security, or SQL connector when SQL-endpoint security/fallback is specifically needed"],
+        "outputs": ["Near-real-time query results reflecting the latest committed Delta version, with no refresh-staleness window"],
+        "example": "A sales fact table updated hourly by a pipeline is read via Direct Lake on OneLake; a report opened five minutes after a load reflects the new data with no refresh job to wait on.",
+        "controls": ["Choice of Direct Lake on OneLake vs on SQL, identifiable from the model's M expression connector in TMDL view", "Whether the base table (not a view) is what the model table maps to"],
+        "failureModes": ["Basing a Direct Lake on SQL table on a view instead of a base table — see the linked warning node", "Row/column cardinality exceeding capacity (F-SKU) guardrails, silently triggering fallback"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic Model" }
+    },
+    {
+      "id": "mode-import",
+      "label": "Import",
+      "summary": "Copied into semantic-model memory — best fit for compact, fully-modellable tables.",
+      "detail": "Import mode copies data into the semantic model's in-memory store on a scheduled refresh, giving full modelling flexibility (calculated columns, the widest range of M transformations) at the cost of refresh latency and refresh-window operational overhead. It remains the right choice for small, curated, or heavily-transformed dimension tables even in an otherwise Direct-Lake-dominant composite model.",
+      "whyItMatters": "Import is not obsolete under Direct Lake — composite models deliberately keep smaller dimension tables on Import specifically because they need modelling features Direct Lake tables don't get.",
+      "classification": "inference",
+      "layers": ["compute"],
+      "evidence": [],
+      "tags": ["import", "composite-model", "refresh"],
+      "drill": {
+        "inputs": ["A compact dimension table or a table requiring calculated columns / complex M transforms"],
+        "processing": ["Scheduled refresh copies the table into semantic-model memory", "Full DAX calculated-column and M-transformation feature set is available on the copy"],
+        "outputs": ["A fully-modellable in-memory table, refreshed on a defined schedule"],
+        "example": "A currency-conversion dimension needs a calculated column blending two source rates; it stays Import in an otherwise Direct-Lake-dominant composite model so that calculated column is available.",
+        "controls": ["Refresh schedule and window", "Monitoring for refresh failures causing silent staleness"],
+        "failureModes": ["A missed or failed refresh going unnoticed, serving stale data with no visible error", "Importing a table large enough that refresh time itself becomes the bottleneck"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic Model" }
+    },
+    {
+      "id": "mode-directquery-composite",
+      "label": "DirectQuery / composite",
+      "summary": "Forwards queries to the source, or mixes modes per table — best fit for source-authoritative or exception tables.",
+      "detail": "DirectQuery forwards each query to the underlying source at query time instead of reading a local copy, trading query-time source latency for always-current results and no refresh window. A composite model deliberately mixes DirectQuery, Import, and Direct Lake tables in the same model — the pattern Fabric documents for very large Direct Lake fact tables paired with Import or DirectQuery dimensions. This node also receives traffic involuntarily: a table that experiences DirectQuery fallback from the Direct Lake branch lands here too.",
+      "whyItMatters": "This branch is both the deliberate exception path (tables that must stay source-authoritative) and the landing point for an unplanned Direct Lake fallback — which is why distinguishing a chosen DirectQuery table from a silently-fallen-back one matters operationally.",
+      "classification": "inference",
+      "layers": ["compute"],
+      "evidence": [],
+      "tags": ["directquery", "composite-model"],
+      "drill": {
+        "inputs": ["A table that must remain source-authoritative, or a table that has fallen back from Direct Lake"],
+        "processing": ["Query forwarded to the source at query time rather than served from a local copy", "In a composite model, mixed alongside Direct Lake and/or Import tables"],
+        "outputs": ["Always-current query results at the cost of per-query source latency"],
+        "example": "A composite model keeps a large sales fact table on Direct Lake while a slowly-changing regional-hierarchy dimension is deliberately left on DirectQuery against its source system of record.",
+        "controls": ["Deliberate per-table choice of DirectQuery vs relying on fallback", "Query-time latency budget for DirectQuery tables"],
+        "failureModes": ["Arriving at DirectQuery via an unplanned fallback rather than a deliberate choice — see the warning node", "Query-time source latency compounding across multiple DirectQuery tables in one report"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic Model" }
+    },
+    {
+      "id": "warning-view-fallback-trap",
+      "label": "Trap: SQL view forces DirectQuery fallback",
+      "summary": "In Direct Lake on SQL, a table based on a SQL view sends every query into DirectQuery fallback.",
+      "detail": "Microsoft documents that basing a Direct Lake on SQL model table on a SQL analytics-endpoint view — rather than a base table — forces every query against that table into DirectQuery fallback, which usually slows it down. DirectQuery fallback exists only in Direct Lake on SQL, and its documented triggers are: querying a SQL-endpoint view, querying a table with SQL-endpoint row-level security, and a Delta table exceeding capacity guardrails. The recommended fix for a view-caused fallback is to materialize the view and remove non-deterministic functions from its definition.",
+      "whyItMatters": "This is a silent trap: the model still returns correct results, so the fallback is invisible until someone investigates unexpectedly slow queries on a table that was supposed to be Direct Lake — exactly the kind of defect this diagram exists to make visible before it happens in production.",
+      "classification": "warning",
+      "layers": ["data", "compute", "observability"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode." }
+      ],
+      "tags": ["direct-lake", "directquery-fallback", "anti-pattern"],
+      "drill": {
+        "inputs": ["A Direct Lake on SQL model table mapped to a SQL analytics-endpoint view instead of a base table"],
+        "processing": ["Every query against that table is silently routed to DirectQuery fallback instead of the Direct Lake path", "No error surfaces — only degraded query latency"],
+        "outputs": ["Correct query results, delivered materially slower than the Direct Lake path the team believed was in use"],
+        "example": "A team builds a Direct Lake on SQL table against a filtered SQL view meant to simplify the model; every report query against it silently falls back to DirectQuery, and the slowdown is only diagnosed weeks later using the community Semantic Link Labs library to check Direct Lake guardrails.",
+        "controls": ["Map Direct Lake on SQL tables to base tables, never views", "If a view-shaped transformation is required, materialize it into a physical table and remove non-deterministic functions from its definition", "Use a guardrail-checking tool to confirm which tables are actually resolving to Direct Lake vs silently falling back"],
+        "failureModes": ["View-based table silently degrading to DirectQuery fallback with no visible error", "Row-level security on the SQL endpoint or a table exceeding capacity guardrails triggering the same silent fallback via a different documented trigger"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic Model" }
     }
   ],
   "edges": [
-    {
-      "id": "e-start-dimensional",
-      "from": "start-question",
-      "to": "technique-dimensional",
-      "label": "BI query simplicity",
-      "layer": "data",
-      "kind": "branch"
-    },
-    {
-      "id": "e-start-vault",
-      "from": "start-question",
-      "to": "technique-vault",
-      "label": "auditable history, many volatile sources",
-      "layer": "data",
-      "kind": "branch"
-    },
-    {
-      "id": "e-dimensional-store",
-      "from": "technique-dimensional",
-      "to": "store-question",
-      "label": "now pick the physical store",
-      "layer": "data",
-      "kind": "flow"
-    },
-    {
-      "id": "e-vault-store",
-      "from": "technique-vault",
-      "to": "store-question",
-      "label": "present a star schema on top",
-      "layer": "data",
-      "kind": "flow"
-    },
-    {
-      "id": "e-store-lakehouse",
-      "from": "store-question",
-      "to": "store-lakehouse",
-      "label": "Spark / data engineering owns it",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "e-store-warehouse",
-      "from": "store-question",
-      "to": "store-warehouse",
-      "label": "T-SQL / multi-table transactions",
-      "layer": "compute",
-      "kind": "branch"
-    },
-    {
-      "id": "e-lakehouse-mode",
-      "from": "store-lakehouse",
-      "to": "storage-mode-question",
-      "label": "surface through a semantic model",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "e-warehouse-mode",
-      "from": "store-warehouse",
-      "to": "storage-mode-question",
-      "label": "surface through a semantic model",
-      "layer": "compute",
-      "kind": "flow"
-    },
-    {
-      "id": "e-mode-warning",
-      "from": "storage-mode-question",
-      "to": "warning-fallback-trap",
-      "label": "if Direct Lake on SQL over views",
-      "layer": "compute",
-      "kind": "branch"
-    }
+    { "id": "e-gate1-dimensional", "from": "gate1-technique", "to": "technique-dimensional", "label": "BI query simplicity is the priority", "layer": "data", "kind": "branch" },
+    { "id": "e-gate1-vault", "from": "gate1-technique", "to": "technique-vault", "label": "auditable history across volatile sources", "layer": "data", "kind": "branch" },
+    { "id": "e-dimensional-gate2", "from": "technique-dimensional", "to": "gate2-store", "label": "star schema ready for a physical store", "layer": "data", "kind": "flow" },
+    { "id": "e-vault-gate2", "from": "technique-vault", "to": "gate2-store", "label": "vault plus dimensional layer on top", "layer": "data", "kind": "flow" },
+    { "id": "e-gate2-lakehouse", "from": "gate2-store", "to": "store-lakehouse", "label": "Spark ETL / multi-format engineering", "layer": "compute", "kind": "branch" },
+    { "id": "e-gate2-warehouse", "from": "gate2-store", "to": "store-warehouse", "label": "T-SQL / multi-table transactions", "layer": "compute", "kind": "branch" },
+    { "id": "e-lakehouse-gate3", "from": "store-lakehouse", "to": "gate3-storage-mode", "label": "conformed Delta table ready for a semantic model", "layer": "data", "kind": "flow" },
+    { "id": "e-warehouse-gate3", "from": "store-warehouse", "to": "gate3-storage-mode", "label": "conformed Delta table ready for a semantic model", "layer": "data", "kind": "flow" },
+    { "id": "e-gate3-directlake", "from": "gate3-storage-mode", "to": "mode-direct-lake", "label": "large fact table, freshness matters", "layer": "compute", "kind": "branch" },
+    { "id": "e-gate3-import", "from": "gate3-storage-mode", "to": "mode-import", "label": "compact table needing full modelling features", "layer": "compute", "kind": "branch" },
+    { "id": "e-gate3-directquery", "from": "gate3-storage-mode", "to": "mode-directquery-composite", "label": "source-authoritative or exception table", "layer": "compute", "kind": "branch" },
+    { "id": "e-directlake-warning", "from": "mode-direct-lake", "to": "warning-view-fallback-trap", "label": "table mapped to a SQL view, not a base table", "layer": "observability", "kind": "branch" },
+    { "id": "e-warning-directquery", "from": "warning-view-fallback-trap", "to": "mode-directquery-composite", "label": "silently lands here anyway", "layer": "observability", "kind": "feedback" }
   ],
   "walkthrough": [
     {
-      "nodeId": "start-question",
-      "title": "1. Decide what the model is for",
-      "explanation": "The technique follows the job: BI query simplicity, auditable history, or a shared integration layer."
+      "nodeId": "gate1-technique",
+      "title": "Start with what the model must optimise for",
+      "explanation": "The root question is logical, not physical: what does this model need to be good at — BI simplicity or auditable history."
     },
     {
       "nodeId": "technique-dimensional",
-      "title": "2. Dimensional, if BI simplicity wins",
-      "explanation": "Facts at one declared grain plus conformed dimensions — the technique Fabric's warehouse and semantic layers target directly."
+      "title": "Branch: dimensional star schema",
+      "explanation": "The default when BI query simplicity wins — facts at a declared grain joined to conformed dimensions, with a >50-column fact-table heuristic as a design smell test."
     },
     {
       "nodeId": "technique-vault",
-      "title": "3. Vault, only if audit demands it",
-      "explanation": "Hubs, links, and satellites absorb volatile sources and reconstruct history — at a permanent join cost."
+      "title": "Branch: data vault",
+      "explanation": "Reserved for genuine auditable-history-across-volatile-sources requirements — never queried directly by BI, so a dimensional layer still gets built on top."
     },
     {
-      "nodeId": "store-question",
-      "title": "4. Pick the store by engine, not format",
-      "explanation": "Lakehouse and Warehouse both write Delta. The real question is Spark or T-SQL."
+      "nodeId": "gate2-store",
+      "title": "Gate 2: which engine owns the writes",
+      "explanation": "Both Lakehouse and Warehouse persist Delta — the decision is Spark vs T-SQL and whether multi-table ACID transactions are required, following the recommended medallion split."
     },
     {
       "nodeId": "store-lakehouse",
-      "title": "5. Lakehouse: Spark and T-SQL over one copy",
-      "explanation": "Managed Delta tables, queryable by both engines, with no movement between them."
+      "title": "Branch: Lakehouse over managed Delta",
+      "explanation": "The recommended home for Spark-based Bronze/Silver ETL, with Gold optionally built here as materialized views."
     },
     {
       "nodeId": "store-warehouse",
-      "title": "6. Warehouse: T-SQL and real transactions",
-      "explanation": "A full SQL surface with multi-table ACID — still Delta, still open in OneLake."
+      "title": "Branch: Warehouse, T-SQL over Delta",
+      "explanation": "The recommended home for a Gold star schema needing multi-table ACID transactions and a full T-SQL surface, reading Lakehouse Silver via cross-database query."
     },
     {
-      "nodeId": "storage-mode-question",
-      "title": "7. Choose the semantic storage mode",
-      "explanation": "Direct Lake avoids refresh; Import buys transformation freedom; a composite model can mix them."
+      "nodeId": "gate3-storage-mode",
+      "title": "Gate 3: how the semantic model reads it, per table",
+      "explanation": "Fabric composite models let this be a per-table decision — large fact tables can stay Direct Lake while other tables use Import or DirectQuery in the same model."
     },
     {
-      "nodeId": "warning-fallback-trap",
-      "title": "8. Avoid the silent fallback",
-      "explanation": "In Direct Lake on SQL, a table built on a view sends every query into DirectQuery fallback — invisibly."
+      "nodeId": "mode-direct-lake",
+      "title": "Branch: Direct Lake",
+      "explanation": "Reads Delta columns straight from OneLake with no import refresh — the right fit for large, fresh fact tables, in either the OneLake or SQL flavor."
+    },
+    {
+      "nodeId": "warning-view-fallback-trap",
+      "title": "Warning: the SQL-view fallback trap",
+      "explanation": "A documented, silent failure mode reached specifically from the Direct Lake branch: basing a Direct Lake on SQL table on a view instead of a base table forces every query into DirectQuery fallback with no visible error."
+    },
+    {
+      "nodeId": "mode-import",
+      "title": "Branch: Import",
+      "explanation": "Still the right choice for compact tables needing full modelling flexibility — calculated columns and complex M transforms that Direct Lake tables don't get."
+    },
+    {
+      "nodeId": "mode-directquery-composite",
+      "title": "Branch: DirectQuery / composite",
+      "explanation": "The deliberate exception path for source-authoritative tables — and also where a silent fallback from the warning node lands, which is why the two connect."
     }
   ]
 }

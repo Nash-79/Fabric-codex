@@ -1312,12 +1312,6 @@ function entryLink(block: string): string {
   return href ? decodeXmlEntities(href[1]) : "";
 }
 
-// Repeated sibling <category> tags — tagText only grabs the first, roadmap items need all.
-function tagTextAll(block: string, tag: string): string[] {
-  const matches = block.matchAll(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "gi"));
-  return [...matches].map((m) => decodeXmlEntities(m[1])).filter(Boolean);
-}
-
 function parseFeed(xml: string): RssEntry[] {
   const entries: RssEntry[] = [];
   // RSS <item> and Atom <entry>, in document order.
@@ -1365,36 +1359,9 @@ export const pollRssFeeds = createServerFn({ method: "POST" })
   });
 
 // --- Fabric roadmap sync ----------------------------------------------------
-// Syncs public.roadmap_items verbatim from the fixed Microsoft Fabric public roadmap feed.
-// Unlike RSS blog subscriptions, this never routes through the claims/curator pipeline — the
-// feed is already structured (status, release type, target date) and single-sourced, so we
-// mirror it directly. Never paraphrased, never embellished: "never invent roadmap claims."
-
-const FABRIC_ROADMAP_FEED_URL = "https://www.fabric-gps.com/rss";
-
-const ROADMAP_STATUS_CATEGORIES: Record<string, string> = {
-  planned: "planned",
-  "rolling out": "rolling_out",
-  launched: "launched",
-};
-
-function deriveRoadmapStatus(categories: string[]): string {
-  for (const c of categories) {
-    const mapped = ROADMAP_STATUS_CATEGORIES[c.trim().toLowerCase()];
-    if (mapped) return mapped;
-  }
-  return "planned";
-}
-
-function deriveReleaseType(categories: string[]): string {
-  return categories.find((c) => !(c.trim().toLowerCase() in ROADMAP_STATUS_CATEGORIES)) ?? "";
-}
-
-// Pulls "Planned General availability Date: Q4 2026" (or similar) out of the CDATA description.
-function parseTargetRelease(descriptionHtml: string): string {
-  const m = descriptionHtml.match(/Planned[^:<]*Date:<\/strong>\s*([^<]+)/i);
-  return m ? m[1].trim() : "";
-}
+// Sync the complete paginated Fabric GPS roadmap API. The community mirror remains the roadmap
+// provenance; canonical Microsoft blog URLs are independently graded and added to the source
+// queue. Auto-claim reserves trusted sources for ingestion but never bypasses claim verification.
 
 export const pollFabricRoadmap = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -1408,6 +1375,9 @@ export const pollFabricRoadmap = createServerFn({ method: "POST" })
         found: result.found,
         created: result.created,
         updated: result.updated,
+        pages: result.pages,
+        blogsQueued: result.blogsQueued,
+        blogsAutoClaimed: result.blogsAutoClaimed,
       });
     } else {
       await recordAudit(context.userId, "roadmap.poll_failed", "roadmap_sync_state", "", {

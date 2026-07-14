@@ -1,385 +1,420 @@
 {
   "id": "architecture-strategy-architecture",
-  "title": "Fabric Data Architecture Strategy — Domain to Delivery",
-  "purpose": "Shows how a Fabric architecture decision chain runs from a business/domain boundary through workload selection and OneLake placement to governance, capacity, and operations — and where a duplicated-lake anti-pattern branches off if the OneLake boundary is skipped.",
-  "accessibleSummary": "An eight-node architecture graph. A business and domain boundary node feeds Fabric workload selection. Workload selection feeds OneLake placement, which is the single logical copy of data. From OneLake, three paths branch: cross-cloud shortcuts, the governance and security boundary, and capacity allocation. Governance and capacity both feed into an operate-and-measure node, which feeds back into workload selection to close the loop. A separate warning node, reachable directly from workload selection if OneLake placement is skipped, shows the duplicated-physical-lake anti-pattern.",
-  "longDescription": "This diagram traces the architecture strategy described in the Fabric Data Architecture Strategy article: business outcomes and domain boundaries drive which Fabric workloads are selected; every selected workload is required to land its data in OneLake, Fabric's single tenant-wide logical lake, rather than a workload-private copy. From that single OneLake placement, the architecture branches three ways — external data is pulled in via zero-copy shortcuts rather than ETL, a governance and security boundary (Purview-backed) is applied uniformly regardless of which workload wrote the data, and capacity allocation governs how much compute each workspace can draw before throttling applies. Governance and capacity both roll up into an operate-and-measure step (monitoring hub, capacity metrics, lineage review) whose findings feed back into workload selection — closing the loop so architecture decisions are revisited as usage is observed, not made once and frozen. A dashed warning branch shows what happens if teams skip the OneLake placement step and stand up separate physical lakes per domain instead: Fabric's own guidance calls this out as an anti-pattern that reintroduces the duplication OneLake exists to remove.",
+  "title": "Microsoft Fabric Architecture Strategy — Operating Model to Migration Sequencing",
+  "purpose": "Shows the architecture decisions a Fabric platform team actually makes: the tenant/domain/workspace containment hierarchy, workloads landing on one shared OneLake, the governance and capacity boundaries that attach to that shared layer, the deployment-pipeline promotion path, and the private-link network-isolation trade-off teams hit during migration.",
+  "accessibleSummary": "A tenancy-hierarchy diagram at the top shows a Microsoft Entra tenant containing domains, domains containing workspaces, and workspaces both drawing compute from a capacity and holding items created by role-oriented workloads (Data Factory, Data Warehouse, Power BI) that all persist to OneLake. Below that, four architecture-decision panels branch off the shared OneLake layer: a governance panel showing Purview's tenant-to-domain-to-workspace policy hierarchy; a capacity panel showing the recommended multi-capacity isolation pattern by environment and workload tier; a deployment-pipeline panel showing Dev-to-Test-to-Production promotion gated by pull requests; and a network-isolation panel comparing tenant-wide private links against workspace-level private links, with a warning about the all-or-nothing tenant-wide trade-off. A SaaS framing note at the bottom states there is no separate infrastructure layer to provision underneath any of this.",
+  "longDescription": "This diagram grounds the Architecture Strategy topic: the operating model, platform boundaries, governance, capacity, and architecture decisions a team must make deploying Microsoft Fabric. The top zone establishes the containment hierarchy that every other decision nests inside — one Fabric tenant maps one-to-one to one Microsoft Entra tenant; domains group workspaces into business-aligned units (recommended at roughly 15-20 workspaces per domain to limit sprawl) so administrators can delegate governance below the tenant level; workspaces hold items created by role-oriented workloads and draw their compute from an assigned capacity. Every workload's data lands on the same OneLake layer regardless of which engine wrote it. From that shared foundation, four architecture-decision panels branch off: governance operates as a three-tier hierarchy (tenant defaults, domain overrides, workspace controls) covering data-estate management, protection, discovery, and monitoring; capacity is the isolation and chargeback boundary, and the documented pattern is splitting capacities by environment stage plus reserving separate capacity for contention-sensitive executive reporting; Deployment Pipelines promote items Dev-to-Test-to-Production with pull-request gates and Variable Libraries injecting per-environment connection strings; and network isolation via private links is a real architectural fork — tenant-wide private links are all-or-nothing and break on-premises gateways and several Power BI features, while workspace-level private links (F-SKU only) allow a mixed public/private deployment. A closing note reinforces that none of this sits on a separate infrastructure layer to provision — Fabric is SaaS, so these are configuration and governance decisions, not resource-provisioning decisions.",
   "type": "architecture",
   "topicSlug": "architecture-strategy",
-  "capabilityIds": ["fabric-platform", "onelake", "purview", "capacity"],
-  "revision": "3",
+  "capabilityIds": ["fabric-platform", "capacity", "purview", "onelake"],
+  "revision": "1",
   "qaStatus": "draft",
   "staticPath": "/diagrams/architecture-strategy-architecture.svg",
   "nodes": [
     {
-      "id": "business-domain",
-      "label": "Business outcome & domain boundary",
-      "summary": "The architecture starts by naming an owner, a bounded data product, and the outcome it serves — not a technology choice.",
-      "detail": "Before any Fabric item is provisioned, the architecture strategy calls for making the domain boundary explicit: who owns this data product, what source contract feeds it, and what business outcome it exists to serve. This is a sequencing decision, not a Fabric product feature, so it carries no product citation — it is the framing the rest of the graph hangs off.",
-      "whyItMatters": "Skipping this step is what leads teams to organize Fabric workspaces and workloads around implementation convenience instead of ownership, which is the root cause of the duplicated-lake anti-pattern seen later in this graph.",
-      "classification": "pattern",
-      "layers": ["orchestration"],
-      "evidence": [],
-      "tags": ["DataMesh", "Ownership"],
+      "id": "tenant-domain-workspace",
+      "label": "Tenant → domain → workspace hierarchy",
+      "summary": "One Fabric tenant maps one-to-one to one Microsoft Entra tenant; domains group workspaces for delegated governance, and workspaces hold items and draw compute from a capacity.",
+      "detail": "A Fabric tenant is a single organizational instance of the service aligned one-to-one with a Microsoft Entra tenant. Inside it, workspaces act as collaboration containers that hold items, draw compute from a capacity, and control who can access their contents. Domains sit between tenant and workspace: they let an organization group workspaces into logical business areas (for example Finance or Marketing), giving administrators a level above the workspace at which to delegate management and apply governance policies. Domain architecture is recommended to align to functional business units rather than mirror org-chart structure, with a practical guideline of roughly 15-20 workspaces per domain to limit sprawl.",
+      "whyItMatters": "This containment chain is the first architecture decision every other node on this diagram nests inside — governance delegation, capacity assignment, and workload placement are all scoped by where a workspace sits in the tenant/domain hierarchy, so getting the domain boundary wrong (e.g. mirroring the org chart instead of business capability) propagates governance sprawl downstream.",
+      "classification": "fact",
+      "layers": ["governance", "orchestration"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-platform-terminology",
+          "note": "A Fabric tenant is a single organizational instance aligned one-to-one with a Microsoft Entra tenant; workspaces act as collaboration containers holding items, drawing compute from a capacity, and controlling access."
+        },
+        {
+          "sourceKey": "governance-compliance-overview",
+          "note": "Domains group workspaces into logical business areas, giving administrators a delegation level above the workspace for management and governance policy."
+        },
+        {
+          "sourceKey": "capacity-planning-overview",
+          "note": "Domain architecture is recommended to align to functional business units rather than org-chart structure, with a practical guideline of roughly 15-20 workspaces per domain to limit sprawl."
+        }
+      ],
+      "tags": ["Tenant", "Domain", "Workspace", "OperatingModel"],
       "drill": {
-        "inputs": ["Business objective or KPI", "Candidate data owner / domain team", "Known source systems for the domain"],
+        "inputs": ["Microsoft Entra tenant identity", "Business-unit boundaries for domain grouping", "Team/project boundaries for workspace creation"],
         "processing": [
-          "Name a single accountable owner for the data product",
-          "Record the source contract (what arrives, how often, in what shape)",
-          "Define the observable completion signal that proves the product is 'done' for this slice"
+          "Establish the one Fabric tenant bound to the organization's Entra tenant",
+          "Group workspaces into domains aligned to functional business units, not the org chart",
+          "Create workspaces underneath each domain scoped to a team or bounded data product",
+          "Assign each workspace to a capacity for compute and to a domain for delegated governance"
         ],
-        "outputs": ["A bounded data-product definition that workload selection consumes", "A domain label usable later for governance-domain grouping"],
-        "example": "A 'customer churn' data product is scoped to the retention team, sourced from the CRM export and the support-ticket feed, with success defined as a daily-refreshed churn score table consumable by Power BI — not as 'stand up a lakehouse'.",
-        "controls": ["Which team is named accountable owner", "How narrowly the first slice is scoped"],
+        "outputs": ["A domain-scoped set of workspaces with delegated admin authority", "A stable place for capacity assignment and governance policy to attach"],
+        "example": "A retail organization creates a 'Merchandising' domain containing 14 workspaces (one per regional team plus shared platform workspaces), delegating domain-level governance to a merchandising data lead instead of routing every policy change through tenant admins.",
+        "controls": ["Domain boundary definition (business capability vs org chart)", "Workspace count per domain (target 15-20 before splitting)", "Which settings are delegated to domain admins vs kept tenant-wide"],
         "failureModes": [
-          "Framework-first delivery: building the generic platform before any single domain is proven end-to-end",
-          "No named owner, so quality and freshness issues have nowhere to land"
+          "Domains mirroring the org chart instead of business capability, so a reorg forces a governance re-architecture",
+          "Workspace sprawl inside a single domain past the ~15-20 guideline, making delegated administration unmanageable"
         ]
       }
     },
     {
-      "id": "workload-selection",
-      "label": "Fabric workload selection",
-      "summary": "Pick the role-oriented Fabric workload(s) the domain needs — Data Factory, Data Engineering, Data Warehouse, Real-Time Intelligence, Power BI, and others all share the same environment.",
-      "detail": "Fabric organizes its functionality into role-oriented workloads — Power BI, Data Factory, Data Engineering, Data Science, Data Warehouse, Databases, Real-Time Intelligence, Industry Solutions, and the preview Fabric IQ — which all run in the same environment and can share data and items without duplication. Choosing a workload is choosing an execution engine and authoring surface, not a separate storage silo.",
-      "whyItMatters": "Because every workload shares OneLake underneath it, workload choice can be revisited later without a data migration — which is what makes the feedback loop from operate-and-measure back into this node viable instead of a one-way commitment.",
+      "id": "workloads-onelake",
+      "label": "Role-oriented workloads over one OneLake",
+      "summary": "Data Factory, Data Warehouse, Power BI, and other role-oriented workloads all create items inside a workspace, and every workload persists its data to the same tenant-wide OneLake.",
+      "detail": "Fabric organizes its functionality into role-oriented workloads — Power BI, Data Factory, Data Engineering, Data Science, Data Warehouse, Databases, Real-Time Intelligence, and more — each of which lets a workspace create its own item types (pipelines, lakehouses, warehouses, semantic models). Beneath every workload sits a shared platform layer used consistently by every experience: OneLake for storage, Copilot for embedded AI, and Purview for governance. Because Fabric is SaaS, users never deal with Azure infrastructure concepts such as resource groups, RBAC, Azure Resource Manager, or redundancy configuration — there is no separate infrastructure layer to provision underneath any workload.",
+      "whyItMatters": "This is the decision that makes workload choice reversible: because every workload's output lands on the same OneLake regardless of engine, an architecture team can add or swap workloads inside a workspace without a data-migration project, and governance/capacity controls attach once at the platform layer instead of once per workload.",
       "classification": "fact",
-      "layers": ["compute", "orchestration"],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-platform-overview",
-          "note": "Fabric organizes functionality into role-oriented workloads (Power BI, Data Factory, Data Engineering, Data Science, Data Warehouse, Databases, Real-Time Intelligence, Industry Solutions, preview Fabric IQ) that run in the same environment and share data/items without duplication."
-        }
-      ],
-      "tags": ["Workloads"],
-      "drill": {
-        "inputs": ["Bounded data-product definition from the domain boundary", "Data shape: batch, streaming, tabular, semi-structured", "Consumption pattern: reporting, ML, operational API"],
-        "processing": [
-          "Match ingestion cadence to Data Factory (batch/orchestrated) or Real-Time Intelligence (event/streaming)",
-          "Match transform complexity to Data Engineering (Spark/notebooks) or Data Warehouse (T-SQL)",
-          "Match consumption to Power BI semantic models or a Databases workload for operational reads"
-        ],
-        "outputs": ["A named set of Fabric workloads provisioned into the domain's workspace(s)", "An execution-responsibility map per workload"],
-        "example": "The churn data product ingests CRM exports nightly via Data Factory pipelines, transforms with Data Engineering notebooks, and serves the result through a Power BI semantic model — three workloads, one workspace, no duplicated storage.",
-        "controls": ["Which workload(s) are enabled per workspace", "Whether streaming (RTI) or batch (Data Factory) is the ingestion path"],
-        "failureModes": [
-          "Selecting a workload for its familiarity rather than its fit, then fighting the engine on shape mismatch (e.g. forcing streaming data through a batch-only pipeline)",
-          "Provisioning workloads before the domain boundary is defined, so ownership of the resulting items is ambiguous"
-        ]
-      }
-    },
-    {
-      "id": "onelake-placement",
-      "label": "OneLake: the single logical copy",
-      "summary": "Every workload persists its data into the same tenant-wide OneLake, in open Delta Parquet, so no workload keeps a private copy.",
-      "detail": "OneLake is Fabric's single logical data lake, built on Azure Data Lake Storage Gen2, and every Fabric compute experience comes preconfigured to use it as its native store. All Fabric data items, including lakehouses and warehouses, automatically persist their tabular data in OneLake using the open Delta Parquet format regardless of which engine wrote it — so T-SQL, Spark, and Analysis Services can all operate over the same physical data without teams duplicating datasets per engine.",
-      "whyItMatters": "This is the load-bearing decision in the whole strategy: because storage is shared and one-copy, governance and capacity can be applied once at the OneLake/workspace boundary instead of once per workload, and workload choice becomes reversible instead of a data-migration project.",
-      "classification": "fact",
-      "layers": ["data", "metadata"],
-      "evidence": [
-        {
-          "sourceKey": "onelake-overview",
-          "note": "All Fabric data items automatically persist tabular data in OneLake as open Delta Parquet regardless of writing engine; the one-copy design lets T-SQL, Spark, and Analysis Services operate over the same physical data without per-engine duplication."
+          "note": "Fabric organizes functionality into role-oriented workloads (Power BI, Data Factory, Data Engineering, Data Science, Data Warehouse, Databases, Real-Time Intelligence). Beneath the workloads sits a shared platform layer of OneLake, Copilot, and Purview used by every experience."
         },
         {
           "sourceKey": "fabric-platform-overview",
-          "note": "OneLake is Fabric's single logical data lake built on ADLS Gen2, and every Fabric compute experience is preconfigured to use it as its native store."
+          "note": "Because Fabric is SaaS, users never deal with Azure infrastructure concepts such as resource groups, RBAC, Azure Resource Manager, or redundancy configuration."
         }
       ],
-      "tags": ["OneLake", "OneCopy", "DeltaLake"],
+      "tags": ["Workloads", "OneLake", "SaaS", "DataFactory", "DataWarehouse", "PowerBI"],
       "drill": {
-        "inputs": ["Delta Parquet tables written by Data Engineering / Data Warehouse / Real-Time Intelligence", "Shortcuts to external stores (see shortcut node)"],
+        "inputs": ["A workspace scoped to a domain and assigned a capacity", "The data shape and consumption pattern the domain needs to serve"],
         "processing": [
-          "Land each workload's output as Delta Parquet in the workspace's OneLake location",
-          "Expose that same physical data to every other Fabric engine without a copy step",
-          "Apply tenant-level namespace addressing: tenant → workspace container → item folder"
+          "Enable the role-oriented workload(s) that fit the domain's ingestion, transform, and consumption needs inside the workspace",
+          "Each workload creates its own item types (pipelines, lakehouses, warehouses, semantic models)",
+          "Every item's tabular data persists automatically to the same tenant-wide OneLake as open Delta Parquet"
         ],
-        "outputs": ["One physical copy of each dataset, addressable by every workload", "A stable location for governance and capacity controls to attach to"],
-        "example": "A Spark notebook writes the churn score table as Delta Parquet once; a T-SQL warehouse query and a Direct Lake Power BI model both read that identical file set with no ETL between them.",
-        "controls": ["Workspace-to-item folder layout", "Whether an item's data is native OneLake or a shortcut to external storage"],
+        "outputs": ["Items owned by the workspace, addressable by every other Fabric engine through OneLake", "No workload-private storage silo to reconcile later"],
+        "example": "A finance workspace enables Data Factory to orchestrate nightly ingestion, Data Warehouse for the T-SQL-first ledger transformation, and Power BI for the reporting layer — three workloads, one workspace, one OneLake copy of the underlying Delta tables.",
+        "controls": ["Which workloads are enabled per workspace", "Item-level ownership and naming inside the workspace"],
         "failureModes": [
-          "Anti-pattern: standing up a separate physical lake per business group instead of using OneLake workspaces and shortcuts (see the warning branch on this diagram)",
-          "Writing data outside OneLake from a workload (e.g. external blob) and losing the one-copy guarantee for that dataset"
+          "Standing up a workload-private data store instead of writing to OneLake, breaking the one-copy guarantee for that dataset",
+          "Assuming Fabric SaaS abstracts away governance and capacity decisions the same way it abstracts away infrastructure provisioning"
         ]
       }
     },
     {
-      "id": "shortcuts-external",
-      "label": "Shortcuts for cross-cloud data",
-      "summary": "External data (ADLS, S3, GCS, Dataverse) is referenced in place via OneLake shortcuts instead of copied in.",
-      "detail": "OneLake shortcuts mount existing external storage — Azure Data Lake Storage, Amazon S3, Google Cloud Storage, Dataverse — as zero-copy references, so cross-cloud or cross-workspace data can be analyzed in Fabric without ETL or migration. Shortcut targets outside Fabric's own region additionally get intelligent caching that keeps frequently accessed data closer to compute.",
-      "whyItMatters": "Shortcuts are what let the domain boundary include data the team doesn't own or want to migrate — the architecture strategy can stay one-copy even when the source of record legitimately lives outside OneLake.",
+      "id": "onelake-platform-layer",
+      "label": "OneLake: the shared storage layer",
+      "summary": "OneLake is the tenant-wide logical data lake every workload writes to and reads from — the platform-layer service the whole hierarchy above is built to feed.",
+      "detail": "Beneath every role-oriented workload sits a shared platform layer used consistently by every Fabric experience: OneLake for storage, Copilot for embedded AI, and Purview for governance. OneLake holds the tabular data every workload item creates as open Delta Parquet, addressable by every compute engine (Spark, T-SQL, Analysis Services) without a per-engine copy.",
+      "whyItMatters": "OneLake is the architectural pivot the rest of this diagram hangs off: because it is one shared layer rather than per-workload storage, governance and capacity controls documented in the panels below can attach once at the platform boundary instead of being re-implemented per workload.",
       "classification": "fact",
       "layers": ["data", "metadata"],
       "evidence": [
         {
           "sourceKey": "fabric-platform-overview",
-          "note": "OneLake shortcuts mount external storage (ADLS, S3, GCS) as zero-copy references, enabling cross-cloud analysis without ETL or migration; cross-cloud shortcuts get intelligent caching for locality and reduced egress cost."
+          "note": "Beneath the workloads sits a shared platform layer of three services used consistently by every experience: OneLake for storage, Copilot for embedded AI, and Purview for governance."
         }
       ],
-      "tags": ["Shortcuts", "MultiCloud"],
+      "tags": ["OneLake", "PlatformLayer", "DeltaLake"],
       "drill": {
-        "inputs": ["Existing S3/ADLS/GCS/Dataverse bucket or container the domain does not want to migrate"],
+        "inputs": ["Delta Parquet tables written by any enabled workload in any workspace across the tenant"],
         "processing": [
-          "Create a shortcut in the target workspace pointing at the external location",
-          "Fabric engines read the shortcut as if it were a native OneLake path",
-          "Frequently accessed cross-cloud data is cached closer to Fabric compute automatically"
+          "Hold each workload's tabular output as open Delta Parquet under the tenant's single OneLake namespace",
+          "Expose that same physical data to every other Fabric engine without a copy step",
+          "Serve as the attachment point for the governance and capacity controls shown in the panels below"
         ],
-        "outputs": ["Data that appears local to OneLake consumers without a physical copy existing in Fabric"],
-        "example": "A domain that already has clickstream data in an S3 bucket shortcuts it into their Fabric workspace instead of running a nightly copy job, so Spark in Data Engineering queries it directly.",
-        "controls": ["Shortcut target and scope (workspace-level vs item-level)", "Whether caching is relied on for latency-sensitive cross-cloud reads"],
+        "outputs": ["One physical, addressable copy of each dataset for every engine and every governance/capacity control to reference"],
+        "example": "A Data Warehouse item and a Data Engineering lakehouse in different workspaces both persist to the same tenant OneLake; a Power BI semantic model reads either directly without an import step.",
+        "controls": ["Whether an item's data is native OneLake or a shortcut to external storage"],
         "failureModes": [
-          "Treating a shortcut as a substitute for a real ownership decision — the external system is still the source of record and can change shape without warning",
-          "Latency surprises on first read of cold cross-cloud data before caching warms up"
+          "Writing data outside OneLake from a workload, losing the one-copy guarantee for that dataset and forcing governance/capacity controls to be reapplied elsewhere"
         ]
       }
     },
     {
       "id": "governance-purview",
-      "label": "Governance & security boundary",
-      "summary": "Purview-backed governance — domains, sensitivity labels, DLP, row/column security — attaches at the OneLake/workspace boundary, not per workload.",
-      "detail": "Fabric's governance surface covers managing the data estate (domains, workspaces, capacities), securing and protecting data (sensitivity labels, DLP, auditing), enabling discovery and trust (OneLake catalog, endorsement, lineage), and monitoring activity. Settings apply in a three-tier hierarchy: tenant-wide defaults, domain-level overrides where delegated, and workspace-level controls for the most granular scope. Row-, column-, and table-level security are available beyond workspace roles for SQL endpoints, warehouses, Direct Lake, and KQL databases.",
-      "whyItMatters": "Because this boundary sits on OneLake rather than inside any one workload, it is the enforcement point that makes the domain boundary from the first node real in practice — access and sensitivity rules follow the data regardless of which engine reads it.",
+      "label": "Governance: tenant → domain → workspace policy",
+      "summary": "Purview-backed governance operates as a three-tier hierarchy — tenant-wide defaults, domain-level overrides, and workspace-level controls — covering data-estate management, protection, discovery, and monitoring.",
+      "detail": "Fabric organizes its governance surface into four functional areas: managing the data estate (admin portal, domains, workspaces, capacities, metadata scanning), securing and protecting data (sensitivity labels, DLP, auditing), encouraging discovery and trust (OneLake catalog, endorsement, tags, lineage), and monitoring activity (monitoring hub, capacity metrics, admin monitoring workspace). Governance settings operate in a three-tier hierarchy: tenant-wide defaults set by Fabric admins, domain-level overrides applied by domain admins for delegated settings, and workspace-level controls managed by workspace owners for the most granular scope.",
+      "whyItMatters": "The three-tier hierarchy is the architectural mechanism that makes domain delegation from the tenancy panel actually enforceable — a domain admin can tighten a tenant default for their business area without filing a request to tenant admins, which is what keeps governance from becoming a central bottleneck as the tenant scales.",
       "classification": "fact",
       "layers": ["governance", "security"],
       "evidence": [
         {
           "sourceKey": "governance-compliance-overview",
-          "note": "Fabric governance operates as a three-tier hierarchy (tenant, domain, workspace) covering data-estate management, securing/protecting data, discovery/trust, and monitoring; row/column/table-level security is available for SQL endpoints, warehouses, Direct Lake, and KQL databases."
+          "note": "Fabric's governance surface covers four functional areas: managing the data estate, securing/protecting data, discovery and trust, and monitoring activity."
+        },
+        {
+          "sourceKey": "governance-compliance-overview",
+          "note": "Governance settings operate in a three-tier hierarchy: tenant-wide defaults, domain-level overrides applied by domain admins, and workspace-level controls managed by workspace owners."
         }
       ],
-      "tags": ["Purview", "Governance", "Security"],
+      "tags": ["Purview", "Governance", "Domains"],
       "drill": {
-        "inputs": ["Domain grouping from the business boundary", "Data sensitivity classification requirements", "Regulatory/compliance scope (e.g. HIPAA, ISO 27001)"],
+        "inputs": ["Tenant-wide governance defaults set by Fabric admins", "Domain-level delegation scope", "Item sensitivity classification needs"],
         "processing": [
-          "Assign the workspace to a domain and apply delegated domain-level policy overrides",
-          "Apply sensitivity labels (manual, inherited, or programmatic) to items landing in OneLake",
-          "Enable row/column/table-level security on SQL endpoints, warehouses, Direct Lake, or KQL items where field-level control is required",
-          "Register the item in the OneLake catalog with endorsement status for discovery"
+          "Fabric admins set tenant-wide defaults for the four governance areas",
+          "Domain admins override delegated settings for their business area",
+          "Workspace owners apply the most granular, workspace-level controls",
+          "Sensitivity labels, DLP, and lineage tracking apply through the OneLake catalog regardless of which tier set the policy"
         ],
-        "outputs": ["Labeled, access-controlled data items visible in the OneLake catalog", "Audit trail entries for DLP-flagged content"],
-        "example": "The churn score table inherits a 'Confidential' sensitivity label from its source CRM extract, is scoped to the retention domain, and exposes row-level security so regional managers only see their own region's rows through the same underlying Delta table.",
-        "controls": ["Domain assignment and delegated settings", "Sensitivity label policy (manual vs automatic)", "Which items get row/column/table-level security enabled"],
+        "outputs": ["A governance policy resolved per item from the most specific applicable tier", "An audit and lineage trail visible in the OneLake catalog"],
+        "example": "A tenant admin sets a default sensitivity-label policy tenant-wide; the Finance domain admin overrides it to require a stricter 'Confidential' default for their domain's workspaces; a workspace owner inside that domain still cannot loosen the domain override.",
+        "controls": ["Which settings tenant admins choose to leave delegable to domains", "Domain-level override policy", "Workspace-level access controls within domain constraints"],
         "failureModes": [
-          "Relying on workspace roles alone where row/column-level control is actually needed and not yet enabled for that item type",
-          "Sensitivity labels not inherited correctly through a shortcut, leaving externally-referenced data unlabeled"
+          "Domain admins unaware a setting is not delegable, assuming a workspace-level fix is possible when it isn't",
+          "Governance policy drift when tenant defaults change but domain overrides are never revisited"
         ]
       }
     },
     {
-      "id": "capacity-operate",
-      "label": "Capacity allocation & throttling",
-      "summary": "Capacity is the isolation and billing boundary; it enforces throttling per capacity, not per tenant, when a workload oversubscribes.",
-      "detail": "Capacities serve as isolation boundaries for compute resources and chargebacks; the recommended practice is splitting capacities by environment stage (dev/test/acceptance/production) for isolation and cost attribution. Throttling is enforced at the capacity level, not the tenant level, so a saturated capacity only affects the workspaces assigned to it. Fabric uses bursting and smoothing to absorb temporary spikes before throttling escalates through staged thresholds, and compound throttling ensures a single fanned-out user request is only penalized once per capacity in the chain.",
-      "whyItMatters": "Capacity is where an architecture's workload choices become a hard operating constraint: undersized capacity for a domain's actual concurrency and data volume shows up as throttling, not as a silent slowdown, which is why this node feeds directly into operate-and-measure.",
+      "id": "capacity-isolation",
+      "label": "Capacity: environment & workload isolation",
+      "summary": "Capacities are the compute isolation and chargeback boundary; the documented pattern splits capacities by environment stage and reserves separate capacity for contention-sensitive workloads.",
+      "detail": "Each Fabric capacity is a distinct resource pool living inside a Microsoft Entra tenant; the SKU size determines how much compute power it provides. Capacities serve as isolation boundaries for compute resources and chargebacks, and the recommended practice is to split capacities by environment stage (development, test, acceptance, production) to achieve workload isolation and cost attribution. A documented multi-capacity architecture pattern adds a larger production capacity for mission-critical workloads, a small development/test capacity for authoring, and optionally a separate capacity reserved for high-priority executive-facing reports that need isolation from other contention.",
+      "whyItMatters": "Capacity assignment is where the tenancy hierarchy's workspace boundary becomes an operational guarantee: because Fabric throttles per capacity rather than per tenant, splitting capacities by environment and contention-sensitivity is what keeps one team's dev workload from starving another team's production reports.",
       "classification": "fact",
       "layers": ["compute", "governance"],
       "evidence": [
         {
-          "sourceKey": "capacity-throttling",
-          "note": "Throttling is enforced per capacity, not tenant-wide; bursting and smoothing absorb temporary CU spikes before staged throttling thresholds apply; compound throttling penalizes a fanned-out request at most once per capacity in the chain."
+          "sourceKey": "fabric-platform-licenses-capacities",
+          "note": "Each Fabric capacity is a distinct resource pool living inside a Microsoft Entra tenant; the SKU size determines how much compute power the capacity provides."
         },
         {
           "sourceKey": "governance-compliance-overview",
-          "note": "Splitting capacities by environment stage (dev/test/acceptance/production) is the recommended practice for workload isolation and cost attribution."
+          "note": "Capacities serve as isolation boundaries for compute resources and chargebacks; the recommended practice is splitting capacities by environment stage (dev/test/acceptance/production) for workload isolation and cost attribution."
+        },
+        {
+          "sourceKey": "capacity-planning-overview",
+          "note": "A documented multi-capacity architecture pattern: a larger production capacity for mission-critical workloads, a small development/test capacity for authoring and testing, and optionally a separate capacity reserved for high-priority executive-facing reports needing isolation from other contention."
         }
       ],
-      "tags": ["Capacity", "Throttling", "Cost"],
-      "metrics": [
-        { "label": "Timepoint length", "value": "30 sec", "sourceKey": "capacity-throttling" },
-        { "label": "Overage protection window", "value": "10 min", "sourceKey": "capacity-throttling" },
-        { "label": "Interactive smoothing range", "value": "5–64 min", "sourceKey": "capacity-throttling" },
-        { "label": "Background smoothing window", "value": "24 hr", "sourceKey": "capacity-throttling" }
-      ],
+      "tags": ["Capacity", "Isolation", "Cost", "SKU"],
       "drill": {
-        "inputs": ["Expected concurrency and CU load per workload", "Environment stage (dev/test/acceptance/production)"],
+        "inputs": ["Environment stage of each workspace (dev/test/acceptance/production)", "Contention sensitivity of specific high-priority workloads"],
         "processing": [
-          "Assign the domain's workspaces to a capacity sized and staged for their environment",
-          "Interactive operations are smoothed over 5–64 minutes based on CU consumption; background operations always smooth over 24 hours",
-          "If future usage exceeds the 10-minute overage window, excess is tracked as carryforward CUs and burned down as idle capacity becomes available",
-          "New interactive requests are delayed 20s (10–60 min overage) or rejected outright (60 min–24 hr overage); all new requests are rejected beyond 24 hr"
+          "Assign each workspace's environment-stage workspaces to a dedicated capacity rather than sharing one capacity across stages",
+          "Size the production capacity for mission-critical workload demand",
+          "Optionally split off a dedicated capacity for executive-facing reports that cannot tolerate contention from other workloads"
         ],
-        "outputs": ["A capacity metrics signal (healthy / smoothing / throttled) per workspace", "CapacityLimitExceeded errors surfaced to callers when rejected"],
-        "example": "The churn pipeline's nightly Spark job on the production capacity briefly exceeds provisioned CUs; bursting lets it finish on time and smoothing spreads the CU cost across the following 24 hours instead of rejecting the run.",
-        "controls": ["Capacity SKU size per environment stage", "Whether Autoscale Billing for Spark is enabled (which disables bursting/smoothing for Spark, running pay-as-you-go instead)"],
+        "outputs": ["Cost attribution per environment/business area via capacity-level billing", "Throttling isolation, since Fabric enforces throttling per capacity, not tenant-wide"],
+        "example": "A tenant runs a Production F64 capacity for the merchandising domain's live reports, a shared Dev/Test F8 capacity for all domains' pre-production workspaces, and a dedicated F16 capacity reserved solely for the CFO's executive dashboard so a dev workload spike can never throttle it.",
+        "controls": ["Capacity SKU size per environment stage", "Whether a contention-sensitive workload gets its own dedicated capacity"],
         "failureModes": [
-          "Undersized production capacity causing repeated 60-minute-plus overage, so new interactive Power BI queries are rejected during business hours",
-          "A single dev capacity shared across every domain, so one domain's spike throttles everyone else's development work"
+          "Sharing one capacity across dev, test, and production so a runaway dev job throttles production reporting",
+          "No dedicated capacity for executive-facing content, so unrelated workload spikes visibly degrade leadership-facing dashboards"
         ]
       }
     },
     {
-      "id": "operate-measure",
-      "label": "Operate & measure",
-      "summary": "Monitoring hub and capacity metrics close the loop: observed throttling, lineage, and usage feed back into workload and capacity decisions.",
-      "detail": "Once governance and capacity boundaries are in place, ongoing operation means watching run state (monitoring hub), capacity health (capacity metrics app), and lineage/lineage-derived data quality signals at the same domain boundary used for ownership. This step is where the architecture strategy stops being a one-time design exercise: findings here are the input to the next iteration of workload selection.",
-      "whyItMatters": "This is the feedback node — without it, the architecture graph would be a one-way pipeline that never adapts. It is also where 'anti-pattern' review happens: repeated throttling or governance gaps observed here are the trigger to revisit earlier decisions rather than patch around them.",
-      "classification": "inference",
-      "layers": ["observability", "orchestration"],
-      "evidence": [],
-      "tags": ["Monitoring", "Feedback"],
-      "drill": {
-        "inputs": ["Capacity metrics signal from the capacity node", "Governance/lineage signal from the governance node", "Run-state history from monitoring hub"],
-        "processing": [
-          "Review recurring throttling or rejected-request patterns against actual usage",
-          "Review lineage and endorsement status to confirm the domain boundary is still accurate as data items evolve",
-          "Decide whether the finding changes workload selection, capacity sizing, or the domain boundary itself"
-        ],
-        "outputs": ["A revised workload/capacity decision fed back into workload selection", "An operational health signal for the domain's data product"],
-        "example": "Monitoring hub shows the churn pipeline's Spark job has hit the 60-minute rejection threshold twice this month; the team feeds that back into workload selection and moves the heaviest transform step to a larger, isolated capacity instead of tuning the job further.",
-        "controls": ["Review cadence (e.g. weekly capacity metrics review)", "Threshold at which a recurring issue triggers re-architecture vs a local fix"],
-        "failureModes": [
-          "No feedback loop in practice: capacity metrics are collected but never reviewed, so throttling recurs silently",
-          "Treating every operational finding as a local fix instead of occasionally revisiting workload or capacity decisions upstream"
-        ]
-      }
-    },
-    {
-      "id": "anti-pattern-duplication",
-      "label": "Anti-pattern: duplicated physical lakes",
-      "summary": "Standing up a separate physical data lake per business group instead of using OneLake workspaces and shortcuts recreates the duplication OneLake removes.",
-      "detail": "Standing up separate physical data lakes per business group, a common pre-OneLake practice, is called out as an anti-pattern in Fabric because it recreates the resource-management overhead and data duplication that the single tenant-wide OneLake with workspaces and shortcuts is designed to eliminate. This branch shows what happens when workload selection proceeds without ever routing through the OneLake placement step.",
-      "whyItMatters": "This is the concrete failure mode the whole 'OneLake as the single copy' node is designed to prevent — showing it as its own node makes the risk visible on the diagram instead of leaving it as an implicit assumption.",
-      "classification": "warning",
-      "layers": ["data"],
+      "id": "deployment-pipelines",
+      "label": "Deployment Pipelines: Dev → Test → Production",
+      "summary": "Items are promoted across Dev, Test, and Production workspaces through Deployment Pipelines, with Variable Libraries injecting per-environment connection strings and pull-request gates before production promotion.",
+      "detail": "The documented deployment pattern uses Deployment Pipelines to promote items across Dev, Test, and Production workspaces, with Variable Libraries injecting environment-specific connection strings and pull-request gates required before promotion to production.",
+      "whyItMatters": "This is the CI/CD mechanism that operationalizes the environment-stage capacity split above: without a controlled promotion path, splitting capacities by environment only isolates compute, not the actual release process that moves an item from authoring to production.",
+      "classification": "fact",
+      "layers": ["orchestration", "governance"],
       "evidence": [
         {
-          "sourceKey": "onelake-overview",
-          "note": "Standing up separate physical data lakes per business group is named as an antipattern in Fabric because it recreates the resource-management overhead and data duplication OneLake with workspaces and shortcuts is designed to eliminate."
+          "sourceKey": "capacity-planning-overview",
+          "note": "Recommended deployment pattern: Deployment Pipelines promote items across Dev, Test, and Production workspaces, with Variable Libraries injecting environment-specific connection strings and pull-request gates required before promotion to production."
         }
       ],
-      "tags": ["AntiPattern", "OneLake", "Duplication"],
+      "tags": ["CI/CD", "DeploymentPipelines", "GitIntegration"],
       "drill": {
-        "inputs": ["A workload provisioned without a OneLake-native item, e.g. writing directly to a private ADLS account per team"],
+        "inputs": ["Items authored and validated in a Dev workspace", "Environment-specific configuration values held in a Variable Library"],
         "processing": [
-          "Each business group provisions and manages its own storage account and access model",
-          "Data needed by more than one group is copied rather than shortcut, so duplicate physical copies drift out of sync",
-          "Governance and capacity controls have to be reapplied per storage account instead of once at the OneLake boundary"
+          "Promote items from Dev to Test via Deployment Pipelines",
+          "Variable Libraries swap in Test-scoped connection strings and configuration at promotion time",
+          "Require an approved pull request before the Test-to-Production promotion step executes",
+          "Variable Libraries swap in Production-scoped configuration on final promotion"
         ],
-        "outputs": ["Multiple divergent copies of the same logical dataset", "Duplicated governance and access-control effort per team"],
-        "example": "Two teams both need customer address data; instead of one shortcutting the other's OneLake table, each team stands up its own ADLS container and copy job, and the two copies silently diverge after the source schema changes.",
-        "controls": ["Whether new storage requests are routed through OneLake/workspace provisioning instead of raw Azure storage", "Whether shortcuts are the default answer to 'I need another team's data'"],
+        "outputs": ["A validated, environment-appropriate item deployed to Production without manual config edits", "An auditable promotion history per pipeline stage"],
+        "example": "A pipeline item authored in Dev references a Dev-scoped SQL connection string via a Variable Library; promoting through Test then Production automatically swaps in the Test and Production connection strings respectively, with the Production promotion blocked until a reviewer approves the pull request.",
+        "controls": ["Which items are included in the deployment pipeline's content scope", "Variable Library value sets per stage", "Whether pull-request review is enforced as a hard gate"],
         "failureModes": [
-          "Reconciliation cost: two 'sources of truth' for the same entity disagree and nobody notices until a report breaks",
-          "Governance policy has to be re-applied per private lake, so a tenant-wide sensitivity label or DLP rule silently doesn't cover the duplicated copy"
+          "Hardcoding a connection string instead of using a Variable Library, so promotion silently points production at a dev/test resource",
+          "Skipping the pull-request gate under deadline pressure, losing the review step meant to catch breaking changes before production"
+        ]
+      }
+    },
+    {
+      "id": "network-isolation-decision",
+      "label": "Network isolation: tenant-wide vs workspace-level private link",
+      "summary": "Tenant-wide private links are all-or-nothing and break on-premises gateways; workspace-level private links (F-SKU only) allow a mixed public/private deployment instead.",
+      "detail": "Fabric offers two distinct private link scopes: a tenant-level option covering the entire tenant at any paid SKU, generally available since May 2024, and a workspace-level option restricted to individual workspaces on F SKUs only, generally available since October 2025. The tenant-level model is all-or-nothing; the workspace-level model permits a mixed public-private deployment. On-premises data gateways cannot register and will not function when tenant-level Block Public Internet Access is enabled, with no supported workaround. Private links are a viable architectural choice only for pure cloud-to-cloud workloads on F SKUs that have no dependency on on-premises data gateways; for organizations lacking an explicit regulatory mandate for network-level isolation, Conditional Access combined with an IP firewall is a documented lighter-weight alternative.",
+      "whyItMatters": "This is a real fork in the architecture, not a tuning knob: choosing tenant-wide private link scope commits the whole tenant to losing on-premises gateway connectivity and several Power BI features, so architecture teams migrating a hybrid estate need the workspace-level option or an alternative like Conditional Access plus IP firewall instead of defaulting to the broader tenant-wide toggle.",
+      "classification": "fact",
+      "layers": ["security", "governance"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-platform-overview",
+          "note": "Fabric offers two private link scopes: tenant-level (all-or-nothing, any paid SKU, GA since May 2024) and workspace-level (F SKUs only, GA since October 2025, permits mixed public-private deployment)."
+        },
+        {
+          "sourceKey": "fabric-platform-overview",
+          "note": "On-premises data gateways cannot register and will not function when tenant-level Block Public Internet Access is enabled; there is no supported workaround."
+        },
+        {
+          "sourceKey": "fabric-platform-overview",
+          "note": "Private links are viable only for pure cloud-to-cloud F-SKU workloads with no on-premises gateway dependency; Conditional Access plus an IP firewall is a documented lighter-weight alternative absent a regulatory mandate."
+        }
+      ],
+      "tags": ["PrivateLink", "NetworkIsolation", "Migration", "BlockPublicInternetAccess"],
+      "drill": {
+        "inputs": ["Whether the estate has any on-premises data gateway dependency", "SKU tier of affected workspaces", "Regulatory requirement (or absence of one) for network-level isolation"],
+        "processing": [
+          "Confirm no on-premises gateway dependency exists before considering any private link scope",
+          "If isolation is required tenant-wide and the estate is pure cloud-to-cloud, evaluate tenant-level private links on any paid SKU",
+          "If only specific workspaces need isolation, evaluate workspace-level private links, available on F SKUs only, to keep the rest of the tenant public",
+          "If no explicit regulatory mandate exists, evaluate Conditional Access plus an IP firewall as a lighter-weight alternative to either private link scope"
+        ],
+        "outputs": ["A chosen network-isolation posture that either preserves or knowingly breaks on-premises gateway and specific Power BI feature availability"],
+        "example": "A hybrid organization migrating from an on-premises warehouse still depends on an on-premises gateway for a legacy source feed; the architecture team rejects tenant-wide private link, since it would deregister that gateway with no workaround, and instead isolates only the F64 workspace handling the regulated dataset with workspace-level private link.",
+        "controls": ["Private link scope selection (tenant vs workspace vs none)", "SKU tier (workspace-level private link requires F SKU)", "Whether Conditional Access plus IP firewall substitutes for private link entirely"],
+        "failureModes": [
+          "Enabling tenant-wide Block Public Internet Access without auditing on-premises gateway dependencies first, silently breaking legacy connectivity tenant-wide",
+          "Provisioning a new capacity while tenant-level private links are active without accounting for the documented DNS propagation delay of up to 24 hours"
+        ]
+      }
+    },
+    {
+      "id": "saas-no-infra-layer",
+      "label": "SaaS: no separate infrastructure layer",
+      "summary": "Because Fabric is a single SaaS control plane, none of the decisions above involve provisioning Azure resource groups, ARM templates, or redundancy settings underneath.",
+      "detail": "Microsoft Fabric is architected as a single SaaS control plane where compute engines share one capacity (F-SKU) and billing surface. Because Fabric is SaaS, users never deal with Azure infrastructure concepts such as resource groups, RBAC, Azure Resource Manager, or redundancy configuration.",
+      "whyItMatters": "This framing note closes the diagram deliberately: every architecture decision documented above (domains, workspaces, capacity, governance, deployment pipelines, network isolation) is a configuration and policy decision inside one SaaS control plane, not an infrastructure-provisioning decision — architects coming from IaaS/PaaS backgrounds should not look for a resource-group or VNet layer that does not exist in Fabric's model.",
+      "classification": "fact",
+      "layers": ["governance"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-platform-overview",
+          "note": "Microsoft Fabric is architected as a single SaaS control plane where compute engines share one capacity (F-SKU) and billing surface; users never deal with Azure infrastructure concepts such as resource groups, RBAC, ARM, or redundancy configuration."
+        }
+      ],
+      "tags": ["SaaS", "OperatingModel"],
+      "drill": {
+        "inputs": ["All architecture decisions made across the tenancy, workload, governance, capacity, deployment, and network-isolation panels above"],
+        "processing": [
+          "Confirm no Azure resource group, ARM template, or VNet needs to be provisioned to realize any decision above",
+          "Treat capacity SKU sizing, not infrastructure sizing, as the resource-planning axis"
+        ],
+        "outputs": ["An architecture expressed entirely in Fabric-native constructs: tenant, domain, workspace, capacity, item"],
+        "example": "A team migrating from a self-managed Synapse/Azure SQL estate initially plans an Azure landing zone for Fabric before realizing capacity provisioning replaces the resource-group/VNet exercise entirely.",
+        "controls": ["None — this is a platform characteristic, not a configurable control"],
+        "failureModes": [
+          "Architecture teams importing IaaS/PaaS habits (separate infra sizing, resource-group planning) that don't map onto Fabric's SaaS model, wasting planning effort on a layer that doesn't exist"
         ]
       }
     }
   ],
   "edges": [
     {
-      "id": "e-domain-workload",
-      "from": "business-domain",
-      "to": "workload-selection",
-      "label": "scopes which workloads are needed",
+      "id": "e-tenant-workloads",
+      "from": "tenant-domain-workspace",
+      "to": "workloads-onelake",
+      "label": "workspaces host role-oriented workloads",
       "layer": "orchestration",
       "kind": "flow"
     },
     {
-      "id": "e-workload-onelake",
-      "from": "workload-selection",
-      "to": "onelake-placement",
+      "id": "e-workloads-onelake",
+      "from": "workloads-onelake",
+      "to": "onelake-platform-layer",
       "label": "every workload persists to OneLake",
       "layer": "data",
       "kind": "flow"
     },
     {
-      "id": "e-workload-antipattern",
-      "from": "workload-selection",
-      "to": "anti-pattern-duplication",
-      "label": "if OneLake placement is skipped",
-      "layer": "data",
-      "kind": "branch"
-    },
-    {
-      "id": "e-onelake-shortcuts",
-      "from": "onelake-placement",
-      "to": "shortcuts-external",
-      "label": "external data referenced, not copied",
-      "layer": "data",
-      "kind": "branch"
-    },
-    {
       "id": "e-onelake-governance",
-      "from": "onelake-placement",
+      "from": "onelake-platform-layer",
       "to": "governance-purview",
-      "label": "governance attaches at the OneLake boundary",
+      "label": "governance attaches at the platform boundary",
       "layer": "governance",
       "kind": "branch"
     },
     {
       "id": "e-onelake-capacity",
-      "from": "onelake-placement",
-      "to": "capacity-operate",
-      "label": "reads/writes draw on assigned capacity",
+      "from": "onelake-platform-layer",
+      "to": "capacity-isolation",
+      "label": "compute draws from assigned capacity",
       "layer": "compute",
       "kind": "branch"
     },
     {
-      "id": "e-governance-operate",
-      "from": "governance-purview",
-      "to": "operate-measure",
-      "label": "lineage & access signals",
-      "layer": "observability",
+      "id": "e-tenant-governance",
+      "from": "tenant-domain-workspace",
+      "to": "governance-purview",
+      "label": "delegation follows the domain hierarchy",
+      "layer": "governance",
       "kind": "flow"
     },
     {
-      "id": "e-capacity-operate",
-      "from": "capacity-operate",
-      "to": "operate-measure",
-      "label": "capacity metrics & throttling signals",
-      "layer": "observability",
+      "id": "e-tenant-capacity",
+      "from": "tenant-domain-workspace",
+      "to": "capacity-isolation",
+      "label": "workspaces assigned to a capacity",
+      "layer": "compute",
       "kind": "flow"
     },
     {
-      "id": "e-operate-workload-feedback",
-      "from": "operate-measure",
-      "to": "workload-selection",
-      "label": "observed throttling/lineage findings revise workload choice",
+      "id": "e-capacity-deployment",
+      "from": "capacity-isolation",
+      "to": "deployment-pipelines",
+      "label": "environment-stage capacities receive promoted items",
       "layer": "orchestration",
-      "kind": "feedback"
+      "kind": "flow"
+    },
+    {
+      "id": "e-governance-network",
+      "from": "governance-purview",
+      "to": "network-isolation-decision",
+      "label": "network isolation is a governance/security decision",
+      "layer": "security",
+      "kind": "branch"
+    },
+    {
+      "id": "e-deployment-saas",
+      "from": "deployment-pipelines",
+      "to": "saas-no-infra-layer",
+      "label": "promotion needs no infrastructure provisioning step",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-network-saas",
+      "from": "network-isolation-decision",
+      "to": "saas-no-infra-layer",
+      "label": "isolation is configured, not provisioned",
+      "layer": "security",
+      "kind": "flow"
     }
   ],
   "walkthrough": [
     {
-      "nodeId": "business-domain",
-      "title": "1. Start from the domain, not the technology",
-      "explanation": "The architecture strategy starts before any Fabric item exists: name the owner, the bounded data product, and the outcome it serves. Everything downstream traces back to this boundary."
+      "nodeId": "tenant-domain-workspace",
+      "title": "1. Start with the containment hierarchy",
+      "explanation": "Every architecture decision nests inside the tenant → domain → workspace hierarchy: one Fabric tenant per Entra tenant, domains grouping workspaces by business capability (not org chart), each workspace holding items and drawing compute from an assigned capacity."
     },
     {
-      "nodeId": "workload-selection",
-      "title": "2. Select the Fabric workload(s) the domain needs",
-      "explanation": "With the domain scoped, pick the role-oriented workloads that fit its ingestion cadence, transform complexity, and consumption pattern — Data Factory, Data Engineering, Data Warehouse, Real-Time Intelligence, Power BI, and others all run in the same shared environment."
+      "nodeId": "workloads-onelake",
+      "title": "2. Workloads create items inside a workspace",
+      "explanation": "Role-oriented workloads — Data Factory, Data Warehouse, Power BI, and others — create their own item types inside a workspace. Choosing a workload is choosing an execution engine, not a separate storage silo."
     },
     {
-      "nodeId": "onelake-placement",
-      "title": "3. Land everything in OneLake — the single copy",
-      "explanation": "Whichever workload is chosen, its data persists as open Delta Parquet in the tenant's single OneLake. This is the decision that makes workload choice reversible and lets every downstream control attach once instead of per engine."
-    },
-    {
-      "nodeId": "anti-pattern-duplication",
-      "title": "3a. The failure mode if this step is skipped",
-      "explanation": "If a team routes around OneLake and stands up its own physical lake instead, Fabric's own guidance names this as an anti-pattern: it recreates the duplication and per-team governance overhead OneLake exists to remove."
-    },
-    {
-      "nodeId": "shortcuts-external",
-      "title": "4. Bring in external data without copying it",
-      "explanation": "Data the domain doesn't own, sitting in ADLS, S3, GCS, or Dataverse, is referenced through a OneLake shortcut instead of migrated — keeping the one-copy guarantee even for data Fabric didn't originally write."
+      "nodeId": "onelake-platform-layer",
+      "title": "3. Everything lands on the same OneLake",
+      "explanation": "Whichever workload is chosen, its tabular data persists to the same tenant-wide OneLake as open Delta Parquet. This shared layer is what lets governance and capacity controls attach once instead of per workload."
     },
     {
       "nodeId": "governance-purview",
-      "title": "5. Apply governance at the OneLake boundary",
-      "explanation": "Domains, sensitivity labels, DLP, and row/column/table-level security attach once at the workspace/OneLake boundary, so they cover the data regardless of which workload produced or reads it."
+      "title": "4. Governance resolves through three tiers",
+      "explanation": "Tenant-wide defaults, domain-level overrides, and workspace-level controls resolve governance policy per item, covering data-estate management, protection, discovery, and monitoring."
     },
     {
-      "nodeId": "capacity-operate",
-      "title": "6. Size and isolate capacity",
-      "explanation": "Capacity is the compute isolation and billing boundary. Bursting and smoothing absorb spikes, but sustained oversubscription escalates through staged throttling — a hard signal, not a silent slowdown."
+      "nodeId": "capacity-isolation",
+      "title": "5. Capacity isolates compute by environment",
+      "explanation": "The documented pattern splits capacities by environment stage — dev/test/acceptance/production — plus an optional dedicated capacity for contention-sensitive executive reporting, since Fabric throttles per capacity, not tenant-wide."
     },
     {
-      "nodeId": "operate-measure",
-      "title": "7. Operate, measure, and feed findings back",
-      "explanation": "Monitoring hub and capacity metrics surface what's actually happening. This is the loop-closing step: recurring throttling or governance gaps observed here are the trigger to revisit workload selection, not just to patch symptoms."
+      "nodeId": "deployment-pipelines",
+      "title": "6. Promote items through Deployment Pipelines",
+      "explanation": "Deployment Pipelines move items Dev to Test to Production, with Variable Libraries swapping environment-specific connection strings and a pull-request gate required before production promotion."
+    },
+    {
+      "nodeId": "network-isolation-decision",
+      "title": "7. Decide the network-isolation scope deliberately",
+      "explanation": "Tenant-wide private links are all-or-nothing and break on-premises gateways with no workaround; workspace-level private links (F SKU only) or Conditional Access plus an IP firewall are the alternatives for a hybrid or mixed estate."
+    },
+    {
+      "nodeId": "saas-no-infra-layer",
+      "title": "8. Remember: no infrastructure layer underneath",
+      "explanation": "Every decision above is configuration and policy inside one SaaS control plane — there is no Azure resource group, ARM template, or VNet layer to separately provision."
     }
   ]
 }

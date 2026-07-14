@@ -1,13 +1,13 @@
 {
   "id": "metadata-driven-architecture-decision",
   "title": "Metadata-Driven or Plain Pipeline?",
-  "purpose": "Make the boundary explicit between a plain, hard-coded pipeline and a metadata-driven framework, and show where the metadata contract should live once you commit to the pattern.",
-  "accessibleSummary": "The decision starts by asking how many data objects share the same load shape. A single one-off load stays a plain pipeline. Many sources with the same shape justify a metadata-driven framework, but the follow-up question is where the metadata contract lives: alongside the pipeline as simple parameters and a variable library, or in an external governed store when volume and audit requirements grow. Many sources with genuinely different shapes should not be forced into one contract — that path leads to the config-explosion warning this framework is meant to avoid.",
+  "purpose": "Make the boundary explicit between a plain, hard-coded Data Factory pipeline and a metadata-driven framework, and show where the metadata contract should live once you commit to the pattern.",
+  "accessibleSummary": "The decision starts by asking how many data objects share the same load shape. A single one-off load stays a plain pipeline. Many sources with the same shape justify a metadata-driven framework, but the follow-up question is where the metadata contract lives: alongside the pipeline as parameters and a variable library, or in an external governed store when volume and audit requirements grow. Many sources with genuinely different shapes should not be forced into one contract — that path leads to the config-explosion warning this framework is meant to avoid.",
   "longDescription": "This is a decision tree, not a linear flow: the same starting question about object count and shape produces three different branches with three different recommended outcomes. Branch 1, one source with a one-off shape, ends at 'keep it a plain pipeline' because a metadata contract adds indirection with no reuse payoff. Branch 2, many sources sharing the same load shape, is the case the pattern is built for; it then asks a second question about how many objects and how much audit/governance is required, forking again into 'lightweight config in pipeline parameters and a variable library' versus 'externalized versioned contract with a run ledger'. Branch 3, many sources with genuinely different shapes forced into a single generic contract, is flagged as an anti-pattern outcome that leads directly to the config-explosion failure mode documented on the architecture diagram — the fix there is multiple narrower contracts, not one contract trying to describe every shape.",
   "type": "decision",
   "topicSlug": "metadata-driven-architecture",
-  "capabilityIds": ["data-factory", "lakehouse", "purview"],
-  "revision": "3",
+  "capabilityIds": ["data-factory", "purview"],
+  "revision": "4",
   "qaStatus": "draft",
   "staticPath": "/diagrams/metadata-driven-architecture-decision.svg",
   "nodes": [
@@ -15,12 +15,15 @@
       "id": "start-question",
       "label": "How many sources, and do they share a load shape?",
       "summary": "The root question: object count and shape similarity, not team size or budget, should drive this decision.",
-      "detail": "Before choosing an architecture, count the data objects you actually need to load and ask whether they share a load shape — same kind of source, same target pattern, same class of quality rules. This single question separates the three outcomes below far more reliably than 'how big is the team' or 'how important is this project'.",
+      "detail": "Before choosing an architecture, count the data objects you actually need to load and ask whether they share a load shape — same kind of source, same target pattern, same class of quality rules. This single question separates the three outcomes below far more reliably than 'how big is the team' or 'how important is this project'. Fabric pipelines already carry the building blocks either path needs: a low-code designer that chains Copy/transform activities and control-flow constructs such as ForEach and If-Condition into one orchestration layer.",
       "whyItMatters": "Choosing metadata-driven for a one-off load adds indirection with no payoff; choosing a plain pipeline for fifty same-shape sources guarantees config duplication and drift. Getting this question right up front avoids both mistakes.",
-      "classification": "pattern",
-      "layers": ["metadata"],
-      "evidence": [],
-      "tags": ["decision-root"],
+      "classification": "fact",
+      "layers": ["metadata", "orchestration"],
+      "evidence": [
+        { "sourceKey": "d9dab580-00eb-46ab-b77a-7da268431008", "note": "Pipelines chain data movement, transformation activities, and control-flow constructs (loops, conditionals) in one low-code designer — the orchestration substrate either branch below is built on." },
+        { "sourceKey": "928a2bf6-5984-4b02-aa6b-23af8b51564c", "note": "If-Condition, Until, and ForEach iterators are the workflow-control primitives that make a single reusable pipeline capable of driving many differently-parameterized runs." }
+      ],
+      "tags": ["decision-root", "data-factory"],
       "drill": {
         "inputs": ["List of data objects the team needs to load", "For each object: source type, target Fabric item, load cadence"],
         "processing": [
@@ -89,18 +92,20 @@
       "id": "outcome-lightweight-config",
       "label": "Lightweight: pipeline parameters + variable library",
       "summary": "Modest object count, modest audit needs: parameters and a variable library are enough contract.",
-      "detail": "A small set of same-shape objects can be driven by a single reusable pipeline whose per-object differences live as rows in a parameter table or entries in a Fabric variable library, without standing up a separate contract store, config-resolution service, or dedicated run ledger beyond the pipeline's own run history.",
+      "detail": "A small set of same-shape objects can be driven by a single reusable pipeline whose per-object differences live as entries in a Fabric variable library, referenced from the pipeline's schedule at run time, without standing up a separate contract store, config-resolution service, or dedicated run ledger beyond the pipeline's own run history.",
       "whyItMatters": "This is the pragmatic middle ground — reuse without the operational overhead of a fully externalized framework, appropriate when scale and governance needs are both modest.",
-      "classification": "pattern",
+      "classification": "fact",
       "layers": ["metadata", "orchestration"],
-      "evidence": [],
-      "tags": ["outcome", "lightweight"],
+      "evidence": [
+        { "sourceKey": "1d4dd80d-478f-4fab-944e-6e7dc9c65cb9", "note": "Schedules can pass parameter values into the pipeline at each run, sourced from a variable library reference, centralizing configuration for promotion across environments — exactly the lightweight-config mechanism this outcome recommends." }
+      ],
+      "tags": ["outcome", "lightweight", "data-factory"],
       "drillTarget": { "kind": "capability", "slug": "data-factory", "label": "Data Factory capability" },
       "drill": {
         "inputs": ["Small object list (roughly single digits to low tens)", "Shared load shape across those objects"],
         "processing": [
-          "Store per-object values (connection name, target table, watermark column) in a variable library or parameter table",
-          "Schedule the pipeline can pass parameter values sourced from the variable library, centralizing config for promotion across environments",
+          "Store per-object values (connection name, target table, watermark column) in a variable library",
+          "Reference the variable library from the pipeline's schedule so parameter values are centralized for promotion across environments",
           "Reuse the pipeline's native run history as the de facto run ledger"
         ],
         "outputs": ["A small, auditable set of parameter entries and a working reusable pipeline"],
@@ -108,6 +113,9 @@
         "controls": ["Parameter name matching between the variable library entry and the pipeline's declared parameters"],
         "failureModes": [
           "A parameter name mismatch between the schedule and the pipeline's declared parameter names is silently ignored at run time rather than raising an error, so a typo produces a default value instead of a failure"
+        ],
+        "metrics": [
+          { "label": "Max schedules per pipeline", "value": "20", "sourceKey": "03935bae-f4bf-4d05-bb21-dd1421244172" }
         ]
       }
     },
@@ -117,9 +125,12 @@
       "summary": "Larger object count or real audit requirements: build the full metadata-driven framework.",
       "detail": "A larger or compliance-sensitive set of same-shape objects justifies the full pattern described on the architecture diagram: a versioned metadata contract living outside the pipeline definition, a config-resolution step, and a dedicated run ledger that records status, watermark, and quality evidence per run, tied into Fabric's lineage and monitoring surface.",
       "whyItMatters": "This is where the framework earns its overhead — dozens of objects with audit obligations cannot be safely governed as ad hoc pipeline parameters.",
-      "classification": "pattern",
+      "classification": "fact",
       "layers": ["metadata", "governance", "observability"],
-      "evidence": [],
+      "evidence": [
+        { "sourceKey": "b21728ac-0a5f-47a6-b3d8-76f6a1b36e49", "note": "Purview Data Map scans Fabric items to extract item-level metadata and lineage via Atlas APIs — the governance surface an externalized contract's run ledger wires into for audit." },
+        { "sourceKey": "383c1da5-fa94-4554-81e5-032086a6d5b4", "note": "The Monitor hub shows per-run and per-activity execution detail (row counts, skipped rows, Spark job IDs) — the platform telemetry a dedicated run ledger builds on top of." }
+      ],
       "tags": ["outcome", "full-framework"],
       "drillTarget": { "kind": "diagram", "slug": "metadata-driven-architecture-architecture", "label": "See the full architecture" },
       "drill": {
@@ -127,7 +138,7 @@
         "processing": [
           "Externalize the contract into its own versioned store, separate from any single pipeline definition",
           "Build a config-resolution step that reads the contract plus the run ledger's watermark",
-          "Wire quality evidence and lineage capture into Fabric's governance surface for audit"
+          "Wire quality evidence and lineage capture into Fabric's governance surface (Purview Data Map, Monitor hub) for audit"
         ],
         "outputs": ["The full metadata-driven pipeline shown on the architecture diagram"],
         "example": "A 60-object, HIPAA-scoped reporting layer gets a dedicated contract store, a config-resolution notebook, and a run ledger table whose entries are scanned by Purview Data Map for lineage.",

@@ -12,12 +12,13 @@ export const Route = createFileRoute("/roadmap")({
       {
         name: "description",
         content:
-          "What's coming to Microsoft Fabric, synced verbatim from the fabric-gps.com roadmap feed — never invented, never paraphrased.",
+          "What's coming to Microsoft Fabric, synced from the Fabric GPS community mirror with source details preserved.",
       },
       { property: "og:title", content: "Roadmap — Fabric Atlas" },
       {
         property: "og:description",
-        content: "The Microsoft Fabric public roadmap, synced item-for-item via fabric-gps.com.",
+        content:
+          "The Microsoft Fabric public roadmap, synced item-for-item via the Fabric GPS API.",
       },
     ],
   }),
@@ -94,8 +95,9 @@ function RoadmapPage() {
           >
             fabric-gps.com
           </a>
-          , a community feed of the Microsoft Fabric public roadmap — every item below mirrors what
-          the feed publishes, never inferred or embellished.
+          , a community mirror of the Microsoft Fabric public roadmap. The records below preserve
+          the API payload and link to canonical Microsoft posts where supplied; roadmap dates can
+          change and are not treated as verified product availability.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -176,6 +178,14 @@ function RoadmapPage() {
                       {item.pub_date && (
                         <p className="mt-2 text-xs text-muted-foreground">
                           Last updated {new Date(item.pub_date).toLocaleDateString()}
+                        </p>
+                      )}
+                      {item.product_name && (
+                        <p className="mt-2 text-xs text-muted-foreground">{item.product_name}</p>
+                      )}
+                      {item.feature_description && (
+                        <p className="mt-3 line-clamp-3 text-sm text-muted-foreground">
+                          {item.feature_description}
                         </p>
                       )}
                     </a>
