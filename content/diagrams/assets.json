@@ -1,6 +1,38 @@
 [
   {
     "kind": "generated",
+    "path": "content/diagrams/lakehouse-direct-lake-bi-architecture.svg",
+    "caption": "Original diagram: Lakehouse-to-Power-BI BI serving over OneLake with Direct Lake — gold Delta tables, Direct Lake on OneLake framing/column loading, Power BI report queries, and single-capacity memory bounds",
+    "capability_id": "direct-lake",
+    "topic_slug": "medallion-lakehouse",
+    "interaction_version": "3",
+    "qa_status": "draft",
+    "static_hash": "d025048556c774d0cdac1793c70fff91aa24e191f53f56acd79fdb3fde2b6f7f",
+    "accessible_summary": "An original architecture diagram for serving interactive Power BI reports from a Fabric lakehouse. Curated gold Delta tables in a lakehouse persist one physical copy on OneLake. A Direct Lake on OneLake semantic model binds to those tables by a framing operation and lazily loads only the columns a query touches into capacity memory. Power BI report visuals live-connect to that model and issue DAX queries. All of it draws capacity units from a single Fabric F-SKU capacity, whose size sets the per-model memory bound. A warning band flags that exceeding that memory bound causes cold reads from OneLake, and that OneSecurity on the source lakehouse can force a DirectQuery fallback.",
+    "supported_layers": [
+      "data",
+      "compute",
+      "metadata"
+    ]
+  },
+  {
+    "kind": "generated",
+    "path": "content/diagrams/lakehouse-direct-lake-bi-decision.svg",
+    "caption": "Original diagram: Storage-mode and capacity-sizing decisions for Fabric BI serving — Import vs DirectQuery vs Direct Lake, then capacity SKU sizing against memory bound and free-license viewing load",
+    "capability_id": "direct-lake",
+    "topic_slug": "medallion-lakehouse",
+    "interaction_version": "3",
+    "qa_status": "draft",
+    "static_hash": "a6f75cd47e350f929e3825b27f7ca484ff2f9988781e6fb75d9e941c0b5fe4f9",
+    "accessible_summary": "An original decision diagram for serving Power BI from a Fabric lakehouse. The first branch chooses a storage mode: Import copies and refreshes data on a schedule; DirectQuery forwards every visual to the source live; Direct Lake reads Delta columns straight from OneLake, pairing import-like speed with DirectQuery-like freshness and no copy — the recommended default. A second branch sizes the capacity for a Direct Lake model: whether the model's resident column footprint fits under the chosen SKU's memory bound, and whether broad free-license report viewing forces F64 or larger regardless of load. A closing panel lists implementation guardrails: keep tables V-Ordered with ~1 GB files and low-cardinality partitions, prefer append/merge over overwrite, keep vacuum retention longer than the framing cadence, and confirm Block Public Internet Access is off before rollout.",
+    "supported_layers": [
+      "data",
+      "compute",
+      "governance"
+    ]
+  },
+  {
+    "kind": "generated",
     "path": "content/diagrams/capacity-throttling.svg",
     "caption": "Original diagram: Fabric capacity smoothing and throttling thresholds",
     "capability_id": "capacity",
@@ -22,7 +54,7 @@
     "topic_slug": "capacity",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "e761884f0096da9dfe7d82fb476e7bffa5439d993a91ff4c15d476c506dd58b6",
+    "static_hash": "b9675d9f1d811ec57f19631520547e77e5d355294581dca407e3a10977ba5d3a",
     "accessible_summary": "A decision tree that starts by asking which workload is driving contention on a capacity. A bursty, unpredictable Spark workload branches toward enabling Autoscale Billing for Spark, which moves that workload to pay-as-you-go and out of the shared CU pool. A workload that's merely CU-hungry but predictable branches toward evaluating a SKU increase, checked against the Spark vCore and Direct Lake memory ceilings that scale with SKU size, and the F64 licensing threshold. A workload that is fine on CUs but needs isolation from another workload's throttling risk branches toward splitting across capacities, since throttling is enforced per capacity, not per tenant. A warning node covers the trap of assuming Autoscale Billing still gets bursting and smoothing protection.",
     "supported_layers": [
       "data",
@@ -584,7 +616,7 @@
     "topic_slug": "fabric-data-agent",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "a8e3bfe397523df046a2ac550c7a2776d62ffb190e77355545d919cc176af8d0",
+    "static_hash": "b0c462a0da1b72ef98266198d1c1ccffcaebf48a27064c7b59672b78d5d1d883",
     "accessible_summary": "An architecture diagram: a user's natural-language question enters a data agent configured with up to five attached data sources (lakehouse, warehouse, semantic model, KQL database) plus agent- and source-level instructions and example queries. The agent picks a source and routes generation to NL2SQL, NL2DAX, or NL2KQL depending on source type. The query executes under the user's own credentials, then passes through a four-layer governance precedence gate — tenant policy, workspace governance, developer instructions, user prompt — that can restrict or block the answer. The result is capped at 25 rows/25 columns and reaches the user through Fabric chat, Copilot, Azure AI Foundry, or a multi-agent application. A second warning node covers the region-mismatch failure where agent and source capacities sit in different geographies.",
     "supported_layers": [
       "orchestration",
@@ -602,7 +634,7 @@
     "topic_slug": "fabric-data-agent",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "1dba8d816ac7597248772563d1f2c26eacc848ee3aaaacebd992a1d091832ffc",
+    "static_hash": "78842da11430103ea3dca4b5c14da41dd0f27a1bf5e0556a965407f9138b8b8a",
     "accessible_summary": "A top-down flow diagram. A user question enters the agent, which selects a relevant data source using the source's description, schema, and example queries. The agent then fetches that source's schema under the requesting user's own credentials, assembles a prompt for a managed Azure OpenAI Assistant, and generates a read-only query in the source's native language (SQL, DAX, or KQL). The query executes under the user's identity so results never exceed what that user could already see, and Purview DLP policies apply on top. A successful path returns an answer capped at 25 rows and 25 columns; three failure branches short-circuit the flow: cross-region capacity mismatch, unsupported unstructured content, and a DLP block.",
     "supported_layers": [
       "orchestration",
@@ -829,7 +861,7 @@
     "topic_slug": "data-mesh-domains",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "5b0ca5991689d517e149c50a363de94f7a3d8694348ea734ab90030cf59d8353",
+    "static_hash": "028b03cdf82d8b700b0d675337d5d5f3845b6b5b86875bc9accf49dea73e89bc",
     "accessible_summary": "An architecture diagram: business domains (Finance, Sales, HR) each own a Fabric domain grouping their workspaces and one per-domain capacity. Producer workspaces write gold Delta tables into the single tenant-wide OneLake and certify them as published products in the OneLake Catalog. Consuming domains create read-only OneLake shortcuts into certified products rather than copying data. Tenant-wide governance, powered by built-in Purview, applies labels, DLP, and auditing across every domain regardless of which one reads the data. A warning node flags the anti-pattern of standing up a separate physical lake per domain, and a second warning flags that OneLake security roles do not constrain workspace Admins or Members.",
     "supported_layers": [
       "governance",
@@ -864,7 +896,7 @@
     "topic_slug": "medallion-lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "f639f410954c48df88844379c27f01e5862038df8fe4798056f26ec357b451f7",
+    "static_hash": "3df1516bc440041ec72e509616dd42f6372f6abf2923a01a30801ccc9268f21b",
     "accessible_summary": "An internals diagram: source systems land via pipeline copy, Dataflow Gen2, or a shortcut into a bronze Delta table in the lakehouse's managed Tables area. Spark reads bronze and writes a cleansed, conformed silver Delta table, then Spark aggregates silver into business-ready gold Delta tables shaped for consumption. Gold is exposed two ways: the auto-provisioned SQL analytics endpoint for read-only T-SQL, and Direct Lake for Power BI semantic models that read the Delta files directly with no import. A warning node flags that endpoint-level SQL permissions do not apply to the same data read through Spark or OneLake directly, so securing gold requires both the write and read paths.",
     "supported_layers": [
       "data",
@@ -1014,7 +1046,7 @@
     "topic_slug": "warehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "bcd92aa74f8beac3d2f066d99f92854e65f78bff1df1921b03845cadf001f0cd",
+    "static_hash": "1e52c20f34be3b27d7ba5aec27866ed90bffb1ae1214578d3677d8477c0ba93a",
     "accessible_summary": "A decision tree rooted at 'what kind of transformation work is this?'. Three branches: version-controlled, tested SQL modelling of already-landed data routes to dbt against the Warehouse via the third-party dbt-fabric adapter; low-code ingestion and shaping for analysts routes to Dataflow Gen2; Python/Spark work over Lakehouse/OneLake data routes to notebooks. A fourth node covers Warehouse stored procedures as the fallback when no external tooling is wanted. A warning node flags the T-SQL surface limits every dbt model inherits, and a second warning flags the anti-pattern of splitting one transformation layer across two tools.",
     "supported_layers": [
       "compute",
@@ -1328,7 +1360,7 @@
     "topic_slug": "architecture-implementation",
     "interaction_version": "4",
     "qa_status": "draft",
-    "static_hash": "2e1e7e6b5620e718b3ebf89768fb2cd44ec3a6721e9177aaded6405c63978404",
+    "static_hash": "c4aa2ef35875ad0dcfbccee54a5cb354a4f4b81e5793a2409dcf6873f85f676c",
     "accessible_summary": "A five-gate decision path read left to right. Gate 1 checks isolated, Git-integrated Dev/Test/Prod workspaces. Gate 2 checks Deployment Pipelines promotion with Variable Library environment binding and a pull-request gate. Gate 3 checks that pipeline retries and idempotent Delta MERGE writes are actually tested. Gate 4 checks vaulted secrets and least-privilege service identities. Gate 5 checks a tested Item Recovery restore and a named support owner before general availability. A failed gate routes back into that same phase for remediation, and a feedback edge shows configuration drift discovered in production re-opening the environments gate.",
     "supported_layers": [
       "governance",

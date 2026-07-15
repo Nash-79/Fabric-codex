@@ -30,7 +30,7 @@ processed lines are moved to the Done section below with the resulting content f
 
 # internals gap: governance / all sub-headings — NEEDS SOURCE: a Microsoft engineering blog or deep-dive on Purview policy-evaluation/lineage-scanning internals in Fabric tier=1
 
-# internals gap: lakehouse-direct-lake-bi / all sub-headings — NEEDS SOURCE: covered largely by existing direct-lake claims; design predates the Internals convention and needs a grounded rewrite of its Internals section from direct-lake L4/L5 claims tier=1
+# internals gap: lakehouse-direct-lake-bi / Performance characteristics — NEEDS SOURCE: Architecture & design and How it works internally were grounded from existing direct-lake L4/L5 claims; only quantified BI-concurrency latency/throughput benchmarks remain a gap. Needs a Microsoft engineering blog or benchmark publishing measured Direct Lake query latency under realistic BI concurrency tier=1
 
 # internals gap: data-mesh-domains / How it works internally + Performance characteristics — NEEDS SOURCE: Microsoft documentation or engineering blog on domain/workspace metadata internals, cross-domain shortcut resolution, or capacity-isolation behavior at scale tier=1
 

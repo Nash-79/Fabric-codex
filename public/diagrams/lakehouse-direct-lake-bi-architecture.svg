@@ -1,0 +1,239 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 900" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="lakehouse-direct-lake-bi-architecture-title lakehouse-direct-lake-bi-architecture-desc" data-diagram-id="lakehouse-direct-lake-bi-architecture">
+  <title id="lakehouse-direct-lake-bi-architecture-title">Lakehouse-to-Power-BI BI serving over OneLake with Direct Lake</title>
+  <desc id="lakehouse-direct-lake-bi-architecture-desc">An original architecture diagram for serving interactive Power BI reports from a Fabric lakehouse. Curated gold Delta tables in a lakehouse persist one physical copy on OneLake. A Direct Lake on OneLake semantic model binds to those tables by a framing operation and lazily loads only the columns a query touches into capacity memory. Power BI report visuals live-connect to that model and issue DAX queries. All of it — Spark writes, OneLake reads, the semantic model, and report queries — draws capacity units from a single Fabric F-SKU capacity, whose size sets the per-model memory bound. A warning band flags that exceeding that memory bound causes cold reads from OneLake, and that OneSecurity on the source lakehouse can force a DirectQuery fallback.</desc>
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
+       Palette matches the house teal/green family used across content/diagrams/fabric-platform-overview.svg.
+       Official Microsoft Fabric item/product icons are vendored under content/diagrams/icons/microsoft/,
+       used unchanged per docs/official-icon-policy.md, each paired with a product/item name label. -->
+  <defs>
+    <linearGradient id="ldb-lake" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0B5E50"/>
+      <stop offset="0.55" stop-color="#117865"/>
+      <stop offset="1" stop-color="#2AAC94"/>
+    </linearGradient>
+    <linearGradient id="ldb-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#063D3B"/>
+      <stop offset="1" stop-color="#0B5E50"/>
+    </linearGradient>
+    <linearGradient id="ldb-cap" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0E6961"/>
+      <stop offset="1" stop-color="#1F8E7C"/>
+    </linearGradient>
+    <marker id="ldb-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94"/>
+    </marker>
+    <marker id="ldb-arrDark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0E6961"/>
+    </marker>
+    <marker id="ldb-arrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B42318"/>
+    </marker>
+    <!-- Namespaced gradients inlined from vendored Microsoft Fabric icons -->
+    <linearGradient id="ldb-ic-shell-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="ldb-ic-shell-c" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="ldb-ic-shell-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+    <linearGradient id="ldb-ic-lh-house" x1="9" x2="24.817" y1="8.172" y2="23.393" gradientUnits="userSpaceOnUse"><stop stop-color="#3477EA"/><stop offset="1" stop-color="#1D53A4"/></linearGradient>
+    <!-- semantic model item shell + dots -->
+    <linearGradient id="ldb-ic-sm-a" x1="10.222" x2="13.511" y1="3" y2="29.311" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="ldb-ic-sm-c" x1="11.396" x2="14.897" y1="3" y2="29.256" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <linearGradient id="ldb-ic-sm-d" x1="8" x2="16.989" y1="11" y2="25.382" gradientUnits="userSpaceOnUse"><stop stop-color="#7751B8"/><stop offset="1" stop-color="#5A409C"/></linearGradient>
+    <radialGradient id="ldb-ic-sm-b" cx="0" cy="0" r="1" gradientTransform="matrix(13.7222 20.58336 -17.81255 11.875 11.306 9.771)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+    <!-- Power BI -->
+    <linearGradient id="ldb-ic-pbi-a" x1="15.333" x2="27.097" y1="2" y2="28.715" gradientUnits="userSpaceOnUse"><stop stop-color="#E6AD10"/><stop offset="1" stop-color="#C87E0E"/></linearGradient>
+    <linearGradient id="ldb-ic-pbi-b" x1="10.999" x2="20.929" y1="9" y2="29.633" gradientUnits="userSpaceOnUse"><stop stop-color="#F6D751"/><stop offset="1" stop-color="#E6AD10"/></linearGradient>
+    <linearGradient id="ldb-ic-pbi-c" x1="4.999" x2="10.444" y1="16" y2="29.825" gradientUnits="userSpaceOnUse"><stop stop-color="#F9E589"/><stop offset="1" stop-color="#F6D751"/></linearGradient>
+    <!-- OneLake -->
+    <linearGradient id="ldb-ic-ol-p0" x1="26.861" x2="2.308" y1="11.084" y2="16.745" gradientUnits="userSpaceOnUse"><stop offset=".2" stop-color="#028FDC"/><stop offset=".51" stop-color="#0078D4"/><stop offset="1" stop-color="#0B315B"/></linearGradient>
+    <linearGradient id="ldb-ic-ol-p1" x1="28.602" x2="12.381" y1="18.695" y2="3.828" gradientUnits="userSpaceOnUse"><stop offset=".04" stop-color="#028FDC"/><stop offset=".46" stop-color="#0078D4"/><stop offset="1" stop-color="#0B315B"/></linearGradient>
+    <radialGradient id="ldb-ic-ol-p2" cx="0" cy="0" r="1" gradientTransform="rotate(134.83 12.52 5.064)scale(18.1322 23.3919)" gradientUnits="userSpaceOnUse"><stop offset=".39" stop-color="#028FDC"/><stop offset=".59" stop-color="#0078D4"/><stop offset="1" stop-color="#1A508B"/></radialGradient>
+    <radialGradient id="ldb-ic-ol-p3" cx="0" cy="0" r="1" gradientTransform="rotate(139.44 8.59 9.18)scale(16.3171 20.1329)" gradientUnits="userSpaceOnUse"><stop offset=".46" stop-color="#40D9FA"/><stop offset=".9" stop-color="#0095E6"/></radialGradient>
+    <radialGradient id="ldb-ic-ol-p4" cx="0" cy="0" r="1" gradientTransform="matrix(-1.85792 17.21433 -12.2258 -1.31951 12.083 7.086)" gradientUnits="userSpaceOnUse"><stop offset=".77" stop-opacity="0"/><stop offset="1"/></radialGradient>
+    <radialGradient id="ldb-ic-ol-p5" cx="0" cy="0" r="1" gradientTransform="rotate(85.97 -.494 20.846)scale(26.9434 49.1305)" gradientUnits="userSpaceOnUse"><stop offset=".1" stop-color="#BDF5FF"/><stop offset=".47" stop-color="#40D9FA"/></radialGradient>
+    <clipPath id="ldb-ic-ol-clip"><path fill="#fff" d="M0 0H32V32H0z"/></clipPath>
+  </defs>
+
+  <rect width="1180" height="900" fill="#FFFFFF"/>
+
+  <!-- Header -->
+  <rect width="1180" height="86" fill="url(#ldb-head)"/>
+  <text x="36" y="36" font-size="20" font-weight="650" fill="#FFFFFF">Lakehouse → Power BI over OneLake with Direct Lake — BI serving architecture</text>
+  <text x="36" y="60" font-size="12.5" fill="#D9F5EE">One copy on OneLake · Direct Lake on OneLake semantic model · live-connected reports · single F-SKU capacity sets the memory bound</text>
+
+  <!-- Legend -->
+  <g transform="translate(36,100)" font-size="10.5">
+    <rect width="1108" height="30" rx="8" fill="#F3F2F1" stroke="#E1DFDD"/>
+    <circle cx="18" cy="15" r="5" fill="#117865"/><text x="30" y="19" fill="#3F6259">fact (sourced)</text>
+    <circle cx="128" cy="15" r="5" fill="#2AAC94"/><text x="140" y="19" fill="#3F6259">pattern (recommended)</text>
+    <circle cx="298" cy="15" r="5" fill="#B42318"/><text x="310" y="19" fill="#7A241A">warning / failure mode</text>
+    <line x1="470" y1="15" x2="505" y2="15" stroke="#2AAC94" stroke-width="2" marker-end="url(#ldb-arr)"/><text x="512" y="19" fill="#3F6259">query / read path</text>
+    <line x1="640" y1="15" x2="675" y2="15" stroke="#0E6961" stroke-width="2" stroke-dasharray="5 4" marker-end="url(#ldb-arrDark)"/><text x="682" y="19" fill="#3F6259">write / framing</text>
+    <text x="1090" y="19" text-anchor="end" fill="#8A8886">Fabric Atlas original diagram, July 2026</text>
+  </g>
+
+  <!-- Serving lane band -->
+  <rect x="36" y="146" width="1108" height="360" rx="20" fill="#FAFCFB" stroke="#CBE7DE" stroke-width="1.5"/>
+  <text x="56" y="172" font-size="11" letter-spacing="1.5" fill="#8A8886">READ / SERVE PATH — REPORT VISUAL → DAX → DIRECT LAKE MODEL → ONELAKE COLUMNS</text>
+
+  <!-- 1. Report visuals (Power BI) -->
+  <g data-node-id="report-visuals" tabindex="0" aria-label="Power BI report visuals live-connected to the semantic model">
+    <title data-node-tooltip="true">Report visuals — live-connect to the published semantic model and issue DAX; no data is copied into the report.</title>
+    <rect x="56" y="196" width="210" height="150" rx="12" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.6"/>
+    <g data-official-icon="microsoft" data-icon-name="power_bi_32_color">
+      <g transform="translate(72,210) scale(0.9)">
+        <path fill="url(#ldb-ic-pbi-a)" d="M27 3.177v25.646c0 .65-.527 1.177-1.177 1.177H17V3.177C17 2.527 17.527 2 18.177 2h7.646C26.473 2 27 2.527 27 3.177"/>
+        <path fill="#000" fill-opacity=".25" d="M21.5 30V10.667c0-.92-.746-1.667-1.667-1.667H17v1h2.833c.369 0 .667.299.667.667V30z" opacity=".5"/>
+        <path fill="url(#ldb-ic-pbi-b)" d="M21 10.167V30H11V10.17c0-.646.524-1.17 1.17-1.17h7.663C20.478 9 21 9.522 21 10.167"/>
+        <path fill="url(#ldb-ic-pbi-c)" d="M5 17.17v11.66c0 .646.524 1.17 1.17 1.17H15V17.167c0-.645-.522-1.167-1.167-1.167H6.17A1.17 1.17 0 0 0 5 17.17"/>
+      </g>
+      <text x="108" y="230" font-size="10" font-weight="700" fill="#063D3B">Power BI</text>
+    </g>
+    <text x="72" y="256" font-size="12.5" font-weight="650" fill="#063D3B">Report visuals</text>
+    <text x="72" y="274" font-size="10" fill="#3F6259">live connection to the model</text>
+    <text x="72" y="290" font-size="10" fill="#3F6259">visuals emit DAX queries</text>
+    <text x="72" y="306" font-size="10" fill="#3F6259">Build permission to connect</text>
+    <text x="72" y="322" font-size="9.5" fill="#3F6259">no import; no report-side cache</text>
+    <rect x="72" y="326" width="60" height="16" rx="8" fill="#DFF5EE"/><text x="102" y="337" text-anchor="middle" font-size="8.5" fill="#0B5E50">fact</text>
+  </g>
+
+  <path d="M266 271 H306" stroke="#2AAC94" stroke-width="2" fill="none" marker-end="url(#ldb-arr)"/>
+  <text x="286" y="263" font-size="9" fill="#0B5E50" text-anchor="middle">DAX</text>
+
+  <!-- 2. Direct Lake semantic model -->
+  <g data-node-id="direct-lake-model" tabindex="0" aria-label="Direct Lake on OneLake semantic model">
+    <title data-node-tooltip="true">Direct Lake on OneLake semantic model — reads Delta columns straight from OneLake, no import, no SQL round trip; never falls back.</title>
+    <rect x="306" y="196" width="252" height="150" rx="12" fill="#DFF5EE" stroke="#117865" stroke-width="1.8"/>
+    <g data-official-icon="microsoft" data-icon-name="semantic_model_32_item">
+      <g transform="translate(322,210) scale(0.9)">
+        <path fill="url(#ldb-ic-sm-a)" d="M3 6.5A3.5 3.5 0 0 1 6.5 3h19A3.5 3.5 0 0 1 29 6.5v19a3.5 3.5 0 0 1-3.5 3.5h-19A3.5 3.5 0 0 1 3 25.5z"/>
+        <path fill="url(#ldb-ic-sm-b)" fill-opacity=".2" d="M3 6.5A3.5 3.5 0 0 1 6.5 3h19A3.5 3.5 0 0 1 29 6.5v19a3.5 3.5 0 0 1-3.5 3.5h-19A3.5 3.5 0 0 1 3 25.5z"/>
+        <path fill="url(#ldb-ic-sm-c)" fill-rule="evenodd" d="M25.5 4h-19A2.5 2.5 0 0 0 4 6.5v19A2.5 2.5 0 0 0 6.5 28h19a2.5 2.5 0 0 0 2.5-2.5v-19A2.5 2.5 0 0 0 25.5 4m-19-1A3.5 3.5 0 0 0 3 6.5v19A3.5 3.5 0 0 0 6.5 29h19a3.5 3.5 0 0 0 3.5-3.5v-19A3.5 3.5 0 0 0 25.5 3z" clip-rule="evenodd"/>
+        <path fill="url(#ldb-ic-sm-d)" d="M9.75 14.5a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
+        <path fill="url(#ldb-ic-sm-d)" d="M16 14.5a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
+        <path fill="url(#ldb-ic-sm-d)" d="M11.5 19.25a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0"/>
+        <path fill="url(#ldb-ic-sm-d)" d="M16 21a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
+        <path fill="url(#ldb-ic-sm-d)" d="M24 12.75a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0"/>
+      </g>
+      <text x="358" y="230" font-size="10" font-weight="700" fill="#063D3B">Semantic model</text>
+    </g>
+    <text x="322" y="256" font-size="12.5" font-weight="650" fill="#063D3B">Direct Lake on OneLake</text>
+    <text x="322" y="274" font-size="10" fill="#0B5E50">lazy column load into memory</text>
+    <text x="322" y="290" font-size="10" fill="#0B5E50">resident cache serves next query</text>
+    <text x="322" y="306" font-size="10" fill="#0B5E50">framed to a Delta commit version</text>
+    <text x="322" y="322" font-size="9.5" fill="#0B5E50">never falls back to DirectQuery</text>
+    <rect x="322" y="326" width="60" height="16" rx="8" fill="#C7ECE0"/><text x="352" y="337" text-anchor="middle" font-size="8.5" fill="#063D3B">fact</text>
+  </g>
+
+  <path d="M558 271 H598" stroke="#2AAC94" stroke-width="2" fill="none" marker-end="url(#ldb-arr)"/>
+  <text x="578" y="263" font-size="9" fill="#0B5E50" text-anchor="middle">load cols</text>
+
+  <!-- 3. Curated gold lakehouse tables -->
+  <g data-node-id="gold-lakehouse" tabindex="0" aria-label="Curated gold Delta tables in the Fabric lakehouse">
+    <title data-node-tooltip="true">Gold lakehouse tables — one physical Delta/Parquet copy; the same tables every Fabric engine reads.</title>
+    <rect x="598" y="196" width="246" height="150" rx="12" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.6"/>
+    <g data-official-icon="microsoft" data-icon-name="lakehouse_32_item">
+      <g transform="translate(614,210) scale(0.9)">
+        <path fill="url(#ldb-ic-shell-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+        <path fill="url(#ldb-ic-shell-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+        <path fill="url(#ldb-ic-shell-c)" fill-rule="evenodd" d="M23.5 3h-15A2.5 2.5 0 0 0 6 5.5v21A2.5 2.5 0 0 0 8.5 29h15a2.5 2.5 0 0 0 2.5-2.5v-21A2.5 2.5 0 0 0 23.5 3m-15-1A3.5 3.5 0 0 0 5 5.5v21A3.5 3.5 0 0 0 8.5 30h15a3.5 3.5 0 0 0 3.5-3.5v-21A3.5 3.5 0 0 0 23.5 2z" clip-rule="evenodd"/>
+        <path fill="url(#ldb-ic-lh-house)" d="M13.99 22.69a1.5 1.5 0 0 0-.154.31H11a2 2 0 0 1-2-2v-6.4a2 2 0 0 1 .674-1.497l5-4.428a2 2 0 0 1 2.653 0l5 4.428A2 2 0 0 1 23 14.6v3.409L22.98 18a1.5 1.5 0 0 0-.94-.01l-.12.05c-.37.15-.66.44-.81.81-.01.02-.05.07-.11.13-.06-.05-.11-.11-.11-.13a1.49 1.49 0 0 0-1.39-.93h-.14a1.5 1.5 0 0 0-1.256.94 1 1 0 0 1-.104.12c-.06-.05-.11-.11-.11-.13a1.49 1.49 0 0 0-1.39-.93h-.14c-.57.05-1.05.42-1.26.95-.04.08-.06.13-.06.13q-.013.012-.09.032l-.03.008a1.5 1.5 0 0 0-1.13 1.79 1.46 1.46 0 0 0 1.264 1.15l-.004.01c-.008.009-.038.017-.09.032l-.03.008c-.39.09-.73.32-.94.66"/>
+        <path fill="url(#ldb-ic-lh-house)" d="M23.75 21h-.01a.502.502 0 0 0 .1-.99c-.47-.11-.71-.31-.89-.78a.49.49 0 0 0-.46-.32c-.2 0-.38.12-.46.31-.15.38-.6.78-1.04.78s-.88-.41-1.03-.78c-.16-.38-.78-.38-.93 0s-.6.78-1.04.78-.88-.41-1.03-.78c-.08-.19-.26-.33-.47-.31-.2 0-.39.13-.46.32-.18.47-.41.67-.89.78-.27.06-.44.33-.38.6s.33.43.6.38c.5-.11.88-.32 1.17-.65.37.38.86.66 1.46.66s1.13-.29 1.51-.69c.37.39.91.69 1.49.69s1.1-.28 1.48-.66c.29.33.67.54 1.17.65.031.008.08.01.1.01h-.01z"/>
+        <path fill="url(#ldb-ic-lh-house)" d="M23.75 24h-.01a.502.502 0 0 0 .1-.99c-.47-.11-.71-.31-.89-.78a.49.49 0 0 0-.46-.32c-.2 0-.38.12-.46.31-.15.38-.6.78-1.04.78s-.88-.41-1.03-.78c-.16-.38-.78-.38-.93 0s-.6.78-1.04.78-.88-.41-1.03-.78c-.08-.19-.26-.33-.47-.31-.2 0-.39.13-.46.32-.18.47-.41.67-.89.78-.27.06-.44.33-.38.6s.33.43.6.38c.5-.11.88-.32 1.17-.65.37.38.86.66 1.46.66s1.13-.29 1.51-.69c.37.39.91.69 1.49.69s1.1-.28 1.48-.66c.29.33.67.54 1.17.65.031.008.08.01.1.01h-.01z"/>
+      </g>
+      <text x="650" y="230" font-size="10" font-weight="700" fill="#063D3B">Lakehouse (gold)</text>
+    </g>
+    <text x="614" y="256" font-size="12.5" font-weight="650" fill="#063D3B">Curated gold Delta tables</text>
+    <text x="614" y="274" font-size="10" fill="#3F6259">star-schema facts + dimensions</text>
+    <text x="614" y="290" font-size="10" fill="#3F6259">V-Ordered, ~1 GB target files</text>
+    <text x="614" y="306" font-size="10" fill="#3F6259">low-cardinality partitions</text>
+    <text x="614" y="322" font-size="9.5" fill="#3F6259">Tables area · append/merge only</text>
+    <rect x="614" y="326" width="60" height="16" rx="8" fill="#DFF5EE"/><text x="644" y="337" text-anchor="middle" font-size="8.5" fill="#0B5E50">pattern</text>
+  </g>
+
+  <!-- framing edge model <- gold (dashed, dark) -->
+  <path d="M694 346 V376 H432 V346" stroke="#0E6961" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#ldb-arrDark)"/>
+  <text x="563" y="392" font-size="9.5" fill="#0E6961" text-anchor="middle">framing rebinds the model to the latest Delta commit (metadata-only, seconds)</text>
+
+  <!-- 4. Column residency states side panel -->
+  <g data-node-id="column-residency" tabindex="0" aria-label="Column residency states in capacity memory">
+    <title data-node-tooltip="true">Column residency — a model sits in cold, semiwarm, warm, or hot state; latency improves at each step, bounded by SKU memory.</title>
+    <rect x="884" y="196" width="230" height="150" rx="12" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.6"/>
+    <text x="900" y="222" font-size="12.5" font-weight="650" fill="#063D3B">Column residency</text>
+    <rect x="900" y="234" width="198" height="18" rx="6" fill="#F8D3CE"/><text x="908" y="247" font-size="9" fill="#7A241A">cold — transcode from OneLake</text>
+    <rect x="900" y="256" width="198" height="18" rx="6" fill="#FCE9C9"/><text x="908" y="269" font-size="9" fill="#7A4A16">semiwarm / warm — resident columns</text>
+    <rect x="900" y="278" width="198" height="18" rx="6" fill="#C7ECE0"/><text x="908" y="291" font-size="9" fill="#063D3B">hot — resident + VertiScan caches</text>
+    <text x="900" y="312" font-size="9.5" fill="#3F6259">evict on: framing · non-use · memory</text>
+    <text x="900" y="326" font-size="9.5" fill="#3F6259">pressure from concurrent operations</text>
+    <rect x="900" y="330" width="60" height="14" rx="7" fill="#DFF5EE"/><text x="930" y="341" text-anchor="middle" font-size="8" fill="#0B5E50">fact</text>
+  </g>
+  <path d="M844 250 H882" stroke="#2AAC94" stroke-width="1.8" fill="none" marker-end="url(#ldb-arr)"/>
+  <path d="M882 300 H560" stroke="#2AAC94" stroke-width="1.6" stroke-dasharray="3 3" fill="none" marker-end="url(#ldb-arr)"/>
+  <text x="720" y="316" font-size="9" fill="#0B5E50" text-anchor="middle">resident columns held in capacity memory serve subsequent queries</text>
+
+  <!-- Warning band -->
+  <rect x="36" y="416" width="1108" height="76" rx="12" fill="#FDE9E7" stroke="#E4A199" stroke-width="1.4"/>
+  <g data-node-id="memory-fallback-warning" tabindex="0" aria-label="Warning: memory bound overshoot and OneSecurity fallback">
+    <title data-node-tooltip="true">Warnings — exceeding the SKU memory bound causes cold reads from OneLake at peak; OneSecurity on the source lakehouse can force DirectQuery fallback.</title>
+    <path d="M60 456l14-26 14 26z" fill="#E4A199"/>
+    <path d="M74 440v13M74 458v3" stroke="#FFF" stroke-width="3.2" stroke-linecap="round"/>
+    <text x="102" y="440" font-size="11.5" font-weight="650" fill="#7A241A">Failure modes this architecture must design around</text>
+    <text x="102" y="458" font-size="9.5" fill="#8A4238">Model footprint over the SKU memory bound → columns fall back to on-demand cold reads from OneLake at peak, not an error.</text>
+    <text x="102" y="474" font-size="9.5" fill="#8A4238">OneSecurity (OneLake data-access roles) on the source lakehouse is reported to force the model into DirectQuery fallback — verify before enabling.</text>
+    <rect x="1044" y="428" width="86" height="16" rx="8" fill="#F8D3CE"/><text x="1087" y="439" text-anchor="middle" font-size="8.5" fill="#7A241A">warning</text>
+  </g>
+
+  <!-- OneLake bar -->
+  <rect x="36" y="512" width="1108" height="80" rx="12" fill="url(#ldb-lake)"/>
+  <g data-official-icon="microsoft" data-icon-name="one_lake_32_color">
+    <g transform="translate(60,528) scale(1.35)" clip-path="url(#ldb-ic-ol-clip)">
+      <path fill="url(#ldb-ic-ol-p0)" d="M14.746 21.986c3.842-2.218 5.107-7.222 2.825-11.175S10.323 5.451 6.48 7.67c-3.843 2.218-5.108 7.222-2.825 11.175s7.247 5.36 11.09 3.141"/>
+      <path fill="url(#ldb-ic-ol-p1)" d="M19.762 10.904c1.995-1.996 1.947-5.278-.107-7.331-2.053-2.053-5.335-2.1-7.33-.104s-1.948 5.278.106 7.33c2.054 2.054 5.336 2.1 7.33.104"/>
+      <path fill="url(#ldb-ic-ol-p2)" d="M17.609 29.464c6.644 0 12.03-5.386 12.03-12.03s-5.386-12.03-12.03-12.03-12.03 5.386-12.03 12.03 5.386 12.03 12.03 12.03"/>
+      <path fill="url(#ldb-ic-ol-p3)" fill-rule="evenodd" d="M12.896 2.97c-7.063 4.363-9.53 13.552-5.472 20.9q.41.749.891 1.429l.315.048 6.98 2.33 6.63-4.442c-1.11.034-5.728-2.586-8.746-8.314-3.782-7.176-2.223-10.492-.591-11.95z" clip-rule="evenodd"/>
+      <path fill="url(#ldb-ic-ol-p4)" fill-opacity=".2" fill-rule="evenodd" d="M12.896 2.97c-7.063 4.363-9.53 13.552-5.472 20.9q.41.749.891 1.429l.315.048 6.98 2.33 6.63-4.442c-1.11.034-5.728-2.586-8.746-8.314-3.782-7.176-2.223-10.492-.591-11.95z" clip-rule="evenodd"/>
+      <path fill="url(#ldb-ic-ol-p5)" fill-rule="evenodd" d="M26.759 25.247a12.1 12.1 0 0 0 2.548-4.978c-1.196-3.416-6.008-4.377-8.642-1.705-2.023 2.05-4.124 3.772-5.704 4.08C5.824 24.437 1.946 16.86 2.606 13.44a13.9 13.9 0 0 0 .034 5.414C4.18 26.39 11.532 31.25 19.068 29.713a13.9 13.9 0 0 0 6.111-2.928s.028-.021.038-.031a14 14 0 0 0 1.542-1.511z" clip-rule="evenodd"/>
+    </g>
+    <text x="112" y="548" font-size="16" font-weight="650" fill="#FFFFFF">OneLake</text>
+  </g>
+  <text x="112" y="568" font-size="11" fill="#D9F5EE">One physical Delta/Parquet copy — the lakehouse's gold tables. The Direct Lake model reads these columns; no second copy is refreshed.</text>
+  <text x="112" y="584" font-size="10.5" fill="#D9F5EE">Delta Parquet · Tables area · every Fabric engine reads the same files</text>
+
+  <!-- Capacity band -->
+  <rect x="36" y="612" width="1108" height="196" rx="14" fill="#F3FBF9" stroke="#9AD2C5" stroke-width="1.5"/>
+  <rect x="36" y="612" width="1108" height="40" rx="14" fill="url(#ldb-cap)"/>
+  <rect x="36" y="638" width="1108" height="14" fill="#F3FBF9"/>
+  <text x="56" y="638" font-size="14" font-weight="650" fill="#FFFFFF">Single Fabric F-SKU capacity — one pool of Capacity Units backs the whole path</text>
+  <g data-node-id="capacity" tabindex="0" aria-label="Fabric capacity sizing for this BI-serving design">
+    <title data-node-tooltip="true">Capacity — the F-SKU sets the per-model Direct Lake memory bound and meters all CU consumption; F64+ unlocks free-license report viewing.</title>
+    <g transform="translate(56,668)">
+      <rect width="336" height="122" rx="10" fill="#FFFFFF" stroke="#CBE7DE"/>
+      <text x="16" y="26" font-size="12" font-weight="650" fill="#063D3B">SKU sets the memory bound</text>
+      <text x="16" y="46" font-size="9.5" fill="#3F6259">F SKUs run F2→F2048; SKU number = CUs,</text>
+      <text x="16" y="60" font-size="9.5" fill="#3F6259">each step doubles compute (F64 = 64 CUs).</text>
+      <text x="16" y="80" font-size="9.5" fill="#3F6259">The SKU caps how much column data a single</text>
+      <text x="16" y="94" font-size="9.5" fill="#3F6259">Direct Lake model can hold resident at once.</text>
+      <rect x="16" y="102" width="60" height="14" rx="7" fill="#DFF5EE"/><text x="46" y="113" text-anchor="middle" font-size="8" fill="#0B5E50">fact</text>
+    </g>
+    <g transform="translate(408,668)">
+      <rect width="336" height="122" rx="10" fill="#FFFFFF" stroke="#CBE7DE"/>
+      <text x="16" y="26" font-size="12" font-weight="650" fill="#063D3B">F64 = the consumption threshold</text>
+      <text x="16" y="46" font-size="9.5" fill="#3F6259">On F64 or larger, free-license users can view</text>
+      <text x="16" y="60" font-size="9.5" fill="#3F6259">reports with a workspace viewer role; below</text>
+      <text x="16" y="80" font-size="9.5" fill="#3F6259">F64 every viewer needs a paid Pro/PPU seat.</text>
+      <text x="16" y="94" font-size="9.5" fill="#3F6259">Broad BI reach usually forces F64+ regardless of load.</text>
+      <rect x="16" y="102" width="60" height="14" rx="7" fill="#DFF5EE"/><text x="46" y="113" text-anchor="middle" font-size="8" fill="#0B5E50">fact</text>
+    </g>
+    <g transform="translate(760,668)">
+      <rect width="336" height="122" rx="10" fill="#FFFFFF" stroke="#CBE7DE"/>
+      <text x="16" y="26" font-size="12" font-weight="650" fill="#063D3B">Smoothing absorbs spikes</text>
+      <text x="16" y="46" font-size="9.5" fill="#3F6259">Interactive report queries smooth over 5–64 min;</text>
+      <text x="16" y="60" font-size="9.5" fill="#3F6259">compound protection throttles a fan-out request</text>
+      <text x="16" y="80" font-size="9.5" fill="#3F6259">(visual → model → OneLake) at most once.</text>
+      <text x="16" y="94" font-size="9.5" fill="#3F6259">Size for sustained load, not peak.</text>
+      <rect x="16" y="102" width="60" height="14" rx="7" fill="#DFF5EE"/><text x="46" y="113" text-anchor="middle" font-size="8" fill="#0B5E50">fact</text>
+    </g>
+  </g>
+
+  <!-- capacity to memory bound link -->
+  <line x1="224" y1="668" x2="224" y2="512" stroke="#0E6961" stroke-width="1.2" stroke-dasharray="3 3"/>
+  <text x="1144" y="890" text-anchor="end" font-size="9.5" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset; item icons vendored under Microsoft's Fabric icon terms.</text>
+</svg>

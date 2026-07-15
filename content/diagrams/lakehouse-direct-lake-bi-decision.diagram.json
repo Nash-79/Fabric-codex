@@ -1,0 +1,338 @@
+{
+  "id": "lakehouse-direct-lake-bi-decision",
+  "title": "Storage-mode and capacity-sizing decisions for Fabric BI serving",
+  "purpose": "Guide the two design decisions this pattern turns on — which semantic-model storage mode to use over a lakehouse, and how to size the Fabric capacity for a Direct Lake model — and list the write-side guardrails that keep it healthy.",
+  "accessibleSummary": "A decision diagram in two stages plus a guardrail checklist. The first stage chooses a storage mode: Import copies and refreshes on a schedule; DirectQuery forwards every visual live; Direct Lake on OneLake reads Delta columns straight from OneLake with import-like speed, DirectQuery-like freshness, and no copy — the recommended default, with a composite-model note for an oversized fact table. The second stage sizes the capacity for a Direct Lake model along two axes: whether the resident column footprint fits under the chosen SKU's memory bound (a yes gives warm import-like serving, a no risks cold reads at peak), and whether broad free-license report viewing forces F64 or larger regardless of load. A closing checklist lists the implementation guardrails: V-Order with ~1 GB files and low-cardinality partitions, append/merge over overwrite, vacuum retention longer than the framing cadence, keeping a table under 10,000 Parquet files, and confirming Block Public Internet Access is off before rollout.",
+  "longDescription": "This diagram frames the BI-serving pattern as two grounded decisions rather than a mechanism explainer. Decision one is the storage mode. Import copies data into a compressed in-memory cache and must load the whole model before answering queries, so it is fast but stale between refreshes and recopies data on each refresh. DirectQuery forwards each visual as a live source query, staying current but paying a round trip per render and typically running slower. Direct Lake on OneLake reads Delta columns straight from OneLake, pairing import-like performance with DirectQuery-like freshness and no copy or refresh job, and never falls back to DirectQuery — making it the recommended default for lakehouse-backed reporting. A composite-model note captures that Direct Lake on OneLake supports composite models, so a very large fact can stay in Direct Lake while dimensions use Import or DirectQuery. Decision two sizes the capacity. The SKU sets the per-model memory bound, so the first question is whether the model's resident column footprint (estimable from VertiPaq storage DMVs) fits under it: if yes, hot columns give import-like latency and the team can size for sustained rather than peak load because bursting and smoothing absorb spikes; if no, columns fall back to on-demand cold reads from OneLake at peak, remedied by stepping the F-SKU up (each step doubles memory), trimming the model, or isolating heavy workloads. A parallel question is report reach: F64 or larger lets free-license users view reports with a workspace viewer role, so broad consumption can force F64+ regardless of compute load — take the larger of the memory floor and the licensing floor. The closing checklist grounds the write-side and operational guardrails: write V-Ordered Delta with a ~1 GB Optimized Write target and low-cardinality partitions; prefer append/merge over Overwrite, which wipes commit history and forces a full cold reload; keep vacuum retention longer than the framing cadence so a vacuum never deletes the Parquet files a framed model is pinned to; keep a single table under 10,000 Parquet files, past which framing fails; and confirm Block Public Internet Access is off and check OneSecurity before go-live.",
+  "type": "decision",
+  "topicSlug": "medallion-lakehouse",
+  "capabilityIds": ["direct-lake", "capacity", "semantic-model", "lakehouse"],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/lakehouse-direct-lake-bi-decision.svg",
+  "nodes": [
+    {
+      "id": "storage-mode-decision",
+      "label": "Copy the data, or read it in place?",
+      "summary": "The first design fork: Import and DirectQuery versus Direct Lake, distinguished by whether data is copied and whether queries hit the source live.",
+      "detail": "Power BI Desktop supports Import, DirectQuery, and Composite storage modes, distinguished by whether data is copied into the model or left in the source at query time; Direct Lake is a fourth mode in the Analysis Services engine. This node is the decision point that routes to one of the three viable modes for lakehouse-backed reporting.",
+      "whyItMatters": "Storage mode is the single decision that determines whether the design needs a refresh pipeline, whether reports are fresh, and how fast they render — everything downstream follows from it.",
+      "classification": "decision",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "Power BI Desktop supports three model storage modes - Import, DirectQuery, and Composite - distinguished by whether the data is copied into the model or left in the underlying source at query time." },
+        { "sourceKey": "onelake-overview", "note": "Direct Lake mode in the Analysis Services engine lets Power BI semantic models read Delta Parquet data straight from OneLake, delivering import-mode speed without maintaining a copied dataset, alongside the existing import and DirectQuery modes." }
+      ],
+      "tags": ["semantic-model", "storage-mode", "decision"],
+      "drill": {
+        "inputs": ["Freshness requirement, latency requirement, and whether a second copy is acceptable"],
+        "processing": ["Weigh copy-and-refresh (Import) vs live-forward (DirectQuery) vs read-in-place (Direct Lake)"],
+        "outputs": ["A chosen storage mode for the semantic model"],
+        "example": "For a lakehouse-backed dashboard that must be current and fast with no refresh job, the fork resolves to Direct Lake on OneLake.",
+        "controls": ["The freshness/latency/copy constraints that drive the choice"],
+        "failureModes": ["Defaulting to Import out of habit and inheriting refresh orchestration and staleness the lakehouse made unnecessary"]
+      }
+    },
+    {
+      "id": "import-mode",
+      "label": "Import",
+      "summary": "Fast in-memory queries but stale between refreshes; the whole model must be memory-resident to answer queries.",
+      "detail": "An Import-mode model hosted in the Power BI service must be loaded entirely into memory before it can answer queries, and it serves a snapshot that relies on scheduled or on-demand refresh to stay current. The default model size limit without the large storage format is 1 GB; the large format lifts the ceiling toward the SKU's memory.",
+      "whyItMatters": "Import is the fastest for pure query latency but reintroduces exactly the refresh pipeline and staleness this lakehouse pattern is designed to remove, so it is an alternative rather than the default here.",
+      "classification": "alternative",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "An Import-mode model hosted in the Power BI service must be loaded entirely into memory before it can answer queries; Import models serve a snapshot and rely on scheduled or on-demand refresh to stay current." },
+        { "sourceKey": "semantic-model-large-format", "note": "Semantic models hold data in a highly compressed in-memory cache; the default model size limit without the large storage format is 1 GB, and the large format raises the ceiling toward the size of the Fabric capacity." }
+      ],
+      "tags": ["import", "semantic-model", "alternative"],
+      "drill": {
+        "inputs": ["A dataset small or static enough that periodic refresh is acceptable"],
+        "processing": ["Copy data into the compressed in-memory cache on refresh", "Load the whole model into memory to answer queries"],
+        "outputs": ["A fast but point-in-time snapshot model"],
+        "example": "A small, slowly-changing reference model where daily freshness is fine may be simplest as Import.",
+        "controls": ["Refresh schedule", "Large storage format toggle for models over 1 GB"],
+        "failureModes": ["Refreshing a model near half the capacity memory risks out-of-memory mid-refresh"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic model" }
+    },
+    {
+      "id": "directquery-mode",
+      "label": "DirectQuery",
+      "summary": "Always fresh because every visual issues a live source query, but each render pays a round trip and is typically slower.",
+      "detail": "DirectQuery models forward queries to the source so results always reflect current source data, at the cost of a live round trip per render that typically costs performance relative to an in-memory model.",
+      "whyItMatters": "DirectQuery is the right alternative only when data must be to-the-second live; for most lakehouse reporting Direct Lake's framing freshness is enough and far faster.",
+      "classification": "alternative",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "semantic-model-understand", "note": "DirectQuery models forward queries to the source so results always reflect current source data." }
+      ],
+      "tags": ["directquery", "semantic-model", "alternative"],
+      "drill": {
+        "inputs": ["A requirement for strictly live, to-the-second data"],
+        "processing": ["Forward each visual's query to the source at query time"],
+        "outputs": ["Always-current results, one round trip per render"],
+        "example": "An operational monitor that must reflect the source within seconds may justify DirectQuery despite the latency.",
+        "controls": ["Source query performance and indexing"],
+        "failureModes": ["Using DirectQuery where framing freshness would suffice, paying a per-render round trip for no real benefit"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic model" }
+    },
+    {
+      "id": "direct-lake-mode",
+      "label": "Direct Lake on OneLake (recommended default)",
+      "summary": "Reads Delta columns straight from OneLake — import-like speed, DirectQuery-like freshness, no copy or refresh job.",
+      "detail": "Direct Lake is a semantic-model storage mode in which the model reads Delta tables straight from OneLake, avoiding both data import and DirectQuery and so pairing import-like performance with DirectQuery-like freshness. Direct Lake on OneLake is chosen for OneLake security, more modelling features, and faster query performance, and it never falls back to DirectQuery, skipping SQL-endpoint coupling entirely which enables more efficient DAX query plans.",
+      "whyItMatters": "This is the storage mode that delivers the pattern's whole value proposition — fast and fresh with no second copy — so it is the recommended default for a lakehouse-backed BI serving design.",
+      "classification": "recommended",
+      "layers": ["compute", "data"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-terminology", "note": "Direct Lake is a semantic-model storage mode in which the model reads Delta tables straight from OneLake, avoiding both data import and DirectQuery, and so pairs import-like performance with DirectQuery-like freshness." },
+        { "sourceKey": "example-direct-lake", "note": "Direct Lake on OneLake is chosen for OneLake security, more modelling features, and faster query performance." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake on OneLake never falls back to DirectQuery and skips SQL-endpoint coupling entirely, which enables more efficient DAX query plans since no SQL security check is needed." }
+      ],
+      "tags": ["direct-lake", "semantic-model", "recommended"],
+      "drill": {
+        "inputs": ["A lakehouse of curated Delta tables and a need for fast, fresh, copy-free reporting"],
+        "processing": ["Create a Direct Lake on OneLake model (default from Power BI Desktop and the service)", "Bind it to the gold Delta tables"],
+        "outputs": ["A model serving import-like queries over current lakehouse data with no refresh job"],
+        "example": "A sales team's dashboards run on a Direct Lake on OneLake model that framing keeps current after each nightly load, with no scheduled dataset refresh to manage.",
+        "controls": ["OneLake vs SQL flavor (OneLake is the default and the recommendation here)", "Automatic-updates/framing cadence"],
+        "failureModes": ["Choosing Direct Lake on SQL unnecessarily and basing tables on views, forcing DirectQuery fallback"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
+    },
+    {
+      "id": "composite-note",
+      "label": "If one fact is huge: composite",
+      "summary": "Direct Lake on OneLake supports composite models, so a very large fact stays Direct Lake while dimensions use Import or DirectQuery.",
+      "detail": "Direct Lake on OneLake supports composite models, so very large fact tables can stay in Direct Lake mode (avoiding refresh cost) while dimension tables use Import or DirectQuery in the same model.",
+      "whyItMatters": "This lets the design keep the copy-free, refresh-free benefit for the table where it matters most (the big fact) without forcing every dimension into the same mode.",
+      "classification": "pattern",
+      "layers": ["data"],
+      "evidence": [
+        { "sourceKey": "direct-lake-develop", "note": "Direct Lake on OneLake supports composite models, so very large fact tables can stay in Direct Lake mode (avoiding refresh cost) while dimension tables use Import or DirectQuery in the same model." }
+      ],
+      "tags": ["direct-lake", "composite-model", "pattern"],
+      "drill": {
+        "inputs": ["A model with one very large fact and several small dimensions"],
+        "processing": ["Keep the large fact in Direct Lake mode", "Model small dimensions as Import or DirectQuery in the same composite model"],
+        "outputs": ["A composite model that avoids the fact's refresh cost while retaining flexibility on dimensions"],
+        "example": "A billion-row FactUsage stays Direct Lake while a handful of small dimension tables are Import for convenience.",
+        "controls": ["Which tables are Direct Lake vs Import/DirectQuery within the composite model"],
+        "failureModes": ["Putting the large fact in Import and paying full refresh cost the composite pattern exists to avoid"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic model" }
+    },
+    {
+      "id": "memory-fit-decision",
+      "label": "Resident columns fit under SKU memory?",
+      "summary": "The SKU sets the per-model memory bound; estimate resident column footprint against it.",
+      "detail": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once. A model's in-memory footprint can be estimated from VertiPaq storage DMVs by summing dictionary and used sizes, so the fit question can be answered before rollout rather than discovered in production.",
+      "whyItMatters": "Whether the model fits the bound decides whether reports stay import-fast or degrade to cold reads at peak — the core performance/cost trade-off of the sizing decision.",
+      "classification": "decision",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "direct-lake-how-it-works", "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once." },
+        { "sourceKey": "semantic-model-large-format", "note": "A model's in-memory footprint can be estimated from VertiPaq storage DMVs by summing the DICTIONARY_SIZE values with the USED_SIZE values queried over the XMLA endpoint." }
+      ],
+      "tags": ["capacity", "sizing", "memory", "decision"],
+      "drill": {
+        "inputs": ["An estimate of the model's resident column footprint and the candidate SKU's memory bound"],
+        "processing": ["Sum VertiPaq dictionary + used sizes from storage DMVs", "Compare against the SKU memory bound with concurrency headroom"],
+        "outputs": ["A yes/no on whether the model fits, routing to warm serving or cold-read risk"],
+        "example": "A team estimates a 9 GB resident footprint from DMVs and confirms it fits their chosen SKU's bound with room for concurrent queries.",
+        "controls": ["Chosen F-SKU", "How much of the model is likely hot at peak"],
+        "failureModes": ["Estimating footprint from raw data size instead of compressed VertiPaq footprint and mis-sizing the SKU"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "fit-yes",
+      "label": "Warm-path serving",
+      "summary": "Hot columns stay resident at import-like latency; size for sustained load and let smoothing absorb spikes.",
+      "detail": "When the model fits the memory bound, its hot columns stay resident and queries run at import-like latency. Because bursting lets an operation temporarily exceed the SKU provision and smoothing spreads interactive CU cost over a 5-to-64-minute window, the right-sizing heuristic is to size for average sustained load rather than peak.",
+      "whyItMatters": "This is the target state of the design — fast, predictable serving — and knowing that smoothing absorbs short spikes lets a team avoid over-buying SKU capacity for rare peaks.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "capacity-throttling", "note": "Fabric uses bursting (letting an operation consume more CUs than the SKU provision so it completes quickly) and smoothing (spreading consumed CU cost across future timepoints); interactive operations smooth over 5 to 64 minutes." },
+        { "sourceKey": "ultimateinfoguide-capacity-optimization", "note": "The right-sizing heuristic is to size a capacity for its average sustained load rather than its peak load, since bursting and smoothing already absorb short spikes. (Tier-6 community source.)" }
+      ],
+      "tags": ["capacity", "smoothing", "sizing"],
+      "drill": {
+        "inputs": ["A model that fits the SKU bound and a known sustained query load"],
+        "processing": ["Keep hot columns resident", "Let bursting/smoothing absorb short interactive spikes"],
+        "outputs": ["Import-like report latency at a SKU sized for sustained load"],
+        "example": "A model that fits F64's bound serves the morning concurrency spike via smoothing without needing a larger SKU.",
+        "controls": ["SKU sized to sustained load with headroom", "Off-peak scheduling of heavy background jobs"],
+        "failureModes": ["Over-buying SKU for rare peaks that smoothing would have absorbed"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "fit-no",
+      "label": "Cold-read risk at peak",
+      "summary": "Footprint over the bound → on-demand cold reads from OneLake at peak; step the SKU up, trim the model, or split workloads.",
+      "detail": "When the model's footprint exceeds the SKU memory bound, columns that don't fit are read on demand (cold) from OneLake, which is a degradation rather than an outright failure. Remedies: step the F-SKU up (each step doubles compute and memory), trim or aggregate the model, or isolate heavy workloads on a separate capacity — since throttling is enforced per capacity, so a saturated capacity only affects its own workspaces.",
+      "whyItMatters": "Naming this as a graceful degradation (not an error) is what makes it a design decision: the team chooses between paying for a larger SKU, shrinking the model, or accepting cold reads, rather than being surprised by it.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "evidence": [
+        { "sourceKey": "direct-lake-how-it-works", "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once." },
+        { "sourceKey": "fabric-platform-licenses-capacities", "note": "Fabric F SKUs run from F2 up to F2048, with each step up the ladder doubling the compute of the previous size." },
+        { "sourceKey": "capacity-throttling", "note": "Fabric enforces throttling at the capacity level rather than the tenant level, so a saturated capacity only affects the workspaces assigned to it; other capacities continue operating normally." }
+      ],
+      "tags": ["capacity", "cold-read", "failure-mode"],
+      "drill": {
+        "inputs": ["A model whose footprint exceeds the chosen SKU bound"],
+        "processing": ["Non-resident columns read on demand (cold) from OneLake at query time", "Choose a remedy: larger SKU, smaller model, or workload isolation"],
+        "outputs": ["Either a resized/trimmed design that now fits, or an accepted cold-read cost at peak"],
+        "example": "A model over its F-SKU bound shows slow first-touch queries at peak; the team steps up one SKU (doubling memory) rather than re-architecting.",
+        "controls": ["SKU step-up", "Model trimming/aggregation", "Moving heavy ETL to its own capacity"],
+        "failureModes": ["Ignoring the cold reads until users complain rather than sizing for them"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "reach-decision",
+      "label": "Broad free-license report viewing?",
+      "summary": "F64+ lets free-license users view reports; below F64 every viewer needs a paid Pro/PPU seat.",
+      "detail": "F64 is the licensing threshold for broad report consumption: on an F64 or larger capacity, users holding only a free Fabric license can view Power BI content if they have a workspace viewer role, whereas on smaller F SKUs every viewer needs a paid seat.",
+      "whyItMatters": "Report audience size can set the SKU floor independently of compute load — a design decision that is about licensing economics, not throughput.",
+      "classification": "decision",
+      "layers": ["governance"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-licenses-capacities", "note": "F64 is the licensing threshold for broad report consumption: on an F64 or larger capacity, users holding only a free Fabric license can view Power BI content with a workspace viewer role, whereas on smaller F SKUs every viewer needs a paid seat." }
+      ],
+      "tags": ["capacity", "licensing", "f64", "decision"],
+      "drill": {
+        "inputs": ["The number and license type of the report audience"],
+        "processing": ["Decide whether broad free-license viewing is required"],
+        "outputs": ["Whether the SKU floor is raised to F64 for licensing reasons"],
+        "example": "A report for 500 occasional viewers pushes the design to F64+ so those viewers need no paid seat.",
+        "controls": ["Audience size and whether viewers can be given paid seats instead"],
+        "failureModes": ["Sizing purely on compute and then discovering viewers can't open the report below F64"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "reach-outcome",
+      "label": "F64 as a licensing floor, not a load floor",
+      "summary": "Broad viewer reach forces F64+ regardless of compute load; take the larger of the memory floor and the licensing floor.",
+      "detail": "Because F64 gates free-license viewing, broad BI reach can force F64 or larger even if the model would fit a smaller SKU on memory alone. The final SKU is the larger of the two floors — the memory-fit floor from decision 2a and the licensing floor from the reach question. A smaller audience that can hold paid seats may make a smaller F-SKU cheaper overall.",
+      "whyItMatters": "This resolves the two sizing axes into one SKU choice, and makes explicit that the binding constraint is often licensing, not compute.",
+      "classification": "fact",
+      "layers": ["governance"],
+      "evidence": [
+        { "sourceKey": "fabric-platform-licenses-capacities", "note": "On an F64 or larger capacity, free-license users can view Power BI content with a workspace viewer role, whereas on smaller F SKUs every viewer needs a paid seat." }
+      ],
+      "tags": ["capacity", "licensing", "sizing"],
+      "drill": {
+        "inputs": ["The memory-fit SKU floor and the licensing SKU floor"],
+        "processing": ["Take the larger of the two as the final SKU"],
+        "outputs": ["A single chosen F-SKU that satisfies both memory and licensing"],
+        "example": "Memory fit suggests F32 but a 500-viewer free-license audience forces F64; F64 wins.",
+        "controls": ["Trade-off between a larger SKU and buying paid seats for a small audience"],
+        "failureModes": ["Choosing the memory floor and ignoring the licensing floor, blocking viewers at launch"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
+    },
+    {
+      "id": "implementation-guardrails",
+      "label": "Implementation guardrails",
+      "summary": "Write-side layout, mutation pattern, vacuum window, file-count ceiling, and the Block-Public-Internet-Access go/no-go.",
+      "detail": "The operational guardrails that keep a Direct Lake BI design healthy: write V-Ordered Delta with a ~1 GB Optimized Write target and low-cardinality partitions so column loads stay cheap; prefer append/merge over Overwrite, since Overwrite wipes the table's commit history and forces a full cold-state reload of all segments, dictionaries, and join indexes on the next query; keep vacuum retention longer than the framing cadence, because a framed model is pinned to a specific Delta commit version and vacuuming its Parquet files before the next reframe makes queries fail; keep a single table under 10,000 Parquet files, past which framing fails; and confirm Block Public Internet Access is not enabled on the tenant, since Direct Lake connections fail when it is active.",
+      "whyItMatters": "These are the concrete, sourced checks that separate a Direct Lake design that stays fast from one that silently degrades or breaks — the checklist an implementer runs before go-live.",
+      "classification": "checklist",
+      "layers": ["data", "governance"],
+      "evidence": [
+        { "sourceKey": "milescole-optimized-write-fabric", "note": "A 1 GB BinSize target is recommended when writing Delta tables that back Power BI Direct Lake semantic models, because larger files align with the Direct Lake loading pattern and reduce segment loads." },
+        { "sourceKey": "direct-lake-understand-storage", "note": "Partition Delta tables only on low-cardinality columns (under about 100-200 distinct values). Loading with Overwrite wipes commit history, defeating incremental framing and forcing a full cold-state reload. A framed model is pinned to a Delta commit version, so vacuuming must not remove that version's Parquet files before the next reframe." },
+        { "sourceKey": "direct-lake-how-it-works", "note": "Framing can fail when a Delta table breaches capacity guardrails, such as exceeding 10,000 Parquet files in a single table." },
+        { "sourceKey": "bradcoles-fabric-private-links", "note": "Direct Lake connections fail when the Block Public Internet Access tenant setting is active; Direct Lake models must route through public endpoints. (Tier-4 community source.)" }
+      ],
+      "tags": ["direct-lake", "v-order", "vacuum", "checklist"],
+      "drill": {
+        "inputs": ["The write pipeline, table-maintenance jobs, and tenant network settings"],
+        "processing": [
+          "Enable V-Order and a ~1 GB Optimized Write target on the gold tables",
+          "Use append/merge, never Overwrite, for tables backing the model",
+          "Set vacuum retention longer than the framing cadence",
+          "Keep a single table under 10,000 Parquet files",
+          "Confirm Block Public Internet Access is off; check OneSecurity placement"
+        ],
+        "outputs": ["A Direct Lake design that stays fast and connected through routine operations"],
+        "example": "A team adds a weekly OPTIMIZE + V-Order job, switches its loads from overwrite to merge, sets vacuum retention to 8 days against a nightly framing cadence, and verifies Block Public Internet Access is off before launch.",
+        "controls": ["Write-path Spark settings", "Maintenance schedule", "Tenant network/security settings"],
+        "failureModes": [
+          "Overwrite loads forcing full cold reloads",
+          "Vacuum deleting files a framed model still needs, failing queries",
+          "Enabling Block Public Internet Access and severing all Direct Lake connections"
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
+    }
+  ],
+  "edges": [
+    { "id": "e-mode-import", "from": "storage-mode-decision", "to": "import-mode", "label": "copy + schedule", "layer": "data", "kind": "branch" },
+    { "id": "e-mode-dq", "from": "storage-mode-decision", "to": "directquery-mode", "label": "forward live", "layer": "data", "kind": "branch" },
+    { "id": "e-mode-dl", "from": "storage-mode-decision", "to": "direct-lake-mode", "label": "read in place (recommended)", "layer": "data", "kind": "branch" },
+    { "id": "e-dl-composite", "from": "direct-lake-mode", "to": "composite-note", "label": "oversized fact option", "layer": "data", "kind": "flow" },
+    { "id": "e-dl-memfit", "from": "direct-lake-mode", "to": "memory-fit-decision", "label": "now size the capacity", "layer": "compute", "kind": "flow" },
+    { "id": "e-memfit-yes", "from": "memory-fit-decision", "to": "fit-yes", "label": "fits", "layer": "compute", "kind": "branch" },
+    { "id": "e-memfit-no", "from": "memory-fit-decision", "to": "fit-no", "label": "over bound", "layer": "compute", "kind": "branch" },
+    { "id": "e-memfit-reach", "from": "memory-fit-decision", "to": "reach-decision", "label": "also check report reach", "layer": "governance", "kind": "flow" },
+    { "id": "e-reach-outcome", "from": "reach-decision", "to": "reach-outcome", "label": "broad free-license viewing → F64+", "layer": "governance", "kind": "flow" },
+    { "id": "e-fityes-guardrails", "from": "fit-yes", "to": "implementation-guardrails", "label": "then apply guardrails", "layer": "data", "kind": "flow" },
+    { "id": "e-fitno-guardrails", "from": "fit-no", "to": "implementation-guardrails", "label": "and apply guardrails", "layer": "data", "kind": "flow" },
+    { "id": "e-reach-guardrails", "from": "reach-outcome", "to": "implementation-guardrails", "label": "and apply guardrails", "layer": "data", "kind": "flow" }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "storage-mode-decision",
+      "title": "Decision 1: copy or read in place",
+      "explanation": "Choose among Import (copy + refresh), DirectQuery (forward live), and Direct Lake (read Delta in place) — the fork that decides freshness, speed, and whether a refresh pipeline exists."
+    },
+    {
+      "nodeId": "direct-lake-mode",
+      "title": "Default to Direct Lake on OneLake",
+      "explanation": "Reading Delta columns straight from OneLake gives import-like speed and DirectQuery-like freshness with no copy and no fallback — the recommended default for lakehouse-backed reporting."
+    },
+    {
+      "nodeId": "composite-note",
+      "title": "Composite for an oversized fact",
+      "explanation": "If one fact table is very large, keep it in Direct Lake while dimensions use Import or DirectQuery in a composite model."
+    },
+    {
+      "nodeId": "memory-fit-decision",
+      "title": "Decision 2a: does it fit the SKU memory bound",
+      "explanation": "The SKU caps per-model memory; estimate the resident footprint from VertiPaq DMVs and check it fits before rollout."
+    },
+    {
+      "nodeId": "fit-yes",
+      "title": "Fits: warm serving, size for sustained load",
+      "explanation": "Hot columns stay resident at import-like latency; size for average load and let bursting and smoothing absorb short spikes."
+    },
+    {
+      "nodeId": "fit-no",
+      "title": "Over bound: plan for cold reads",
+      "explanation": "Columns fall back to on-demand cold reads from OneLake at peak — step the SKU up, trim the model, or isolate heavy workloads on their own capacity."
+    },
+    {
+      "nodeId": "reach-decision",
+      "title": "Decision 2b: does report reach force F64",
+      "explanation": "Broad free-license viewing needs F64 or larger, which can raise the SKU floor regardless of compute load."
+    },
+    {
+      "nodeId": "reach-outcome",
+      "title": "Take the larger of the two floors",
+      "explanation": "The final SKU is the larger of the memory-fit floor and the F64 licensing floor — often licensing, not compute, is the binding constraint."
+    },
+    {
+      "nodeId": "implementation-guardrails",
+      "title": "Apply the write-side and operational guardrails",
+      "explanation": "V-Order with ~1 GB files and low-cardinality partitions, append/merge over overwrite, vacuum retention longer than the framing cadence, under 10,000 files per table, and Block Public Internet Access off before go-live."
+    }
+  ]
+}
