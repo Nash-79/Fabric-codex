@@ -16,11 +16,13 @@ const A4_H = 297;
 const MARGIN = 14;
 const CONTENT_W = A4_W - MARGIN * 2;
 const CONTENT_H = A4_H - MARGIN * 2;
-const FOOTER_RESERVE = 8; // mm reserved at bottom for footer
+const FOOTER_RESERVE = 8;
 const USABLE_H = CONTENT_H - FOOTER_RESERVE;
 const CLONE_WIDTH_PX = 820;
 
-/** Block selectors we treat as atomic paginated units. */
+// Rendered at scale 2 with body font-size 15px * line-height 1.65 → ~49.5px/line.
+const APPROX_LINE_PX = 50;
+
 const BLOCK_SELECTOR =
   "h1,h2,h3,h4,h5,h6,p,ul,ol,pre,blockquote,table,figure,hr,section,aside,div.callout,div.diagram-embed,[data-diagram-slug]";
 
@@ -30,11 +32,33 @@ async function waitForImages(root: HTMLElement) {
     imgs.map((img) => {
       if (img.complete && img.naturalWidth > 0) return img.decode().catch(() => undefined);
       return new Promise<void>((resolve) => {
-        img.addEventListener("load", () => resolve(), { once: true });
-        img.addEventListener("error", () => resolve(), { once: true });
+        const done = () => resolve();
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
       });
     }),
   );
+}
+
+/**
+ * Diagrams lazy-mount via IntersectionObserver — if we clone the article while
+ * they're still placeholders we capture empty boxes. Scroll the live document
+ * end-to-end first so every observer fires, then restore scroll position.
+ */
+async function primeLazyContent(articleEl: HTMLElement) {
+  const originalScroll = window.scrollY;
+  const doc = document.documentElement;
+  const maxY = Math.max(doc.scrollHeight, articleEl.scrollHeight);
+  const step = Math.max(400, window.innerHeight * 0.8);
+  for (let y = 0; y <= maxY; y += step) {
+    window.scrollTo({ top: y, behavior: "instant" as ScrollBehavior });
+    await new Promise((r) => setTimeout(r, 80));
+  }
+  window.scrollTo({ top: maxY, behavior: "instant" as ScrollBehavior });
+  await new Promise((r) => setTimeout(r, 250));
+  await waitForImages(articleEl);
+  await new Promise((r) => requestAnimationFrame(() => r(null)));
+  window.scrollTo({ top: originalScroll, behavior: "instant" as ScrollBehavior });
 }
 
 function buildPrintable(sourceEl: HTMLElement): HTMLElement {
@@ -55,7 +79,6 @@ function buildPrintable(sourceEl: HTMLElement): HTMLElement {
     "z-index:-1",
   ].join(";");
   wrapper.className = "pdf-export-root";
-  // Force light tokens inside the clone regardless of app theme.
   wrapper.style.setProperty("--background", "#ffffff");
   wrapper.style.setProperty("--foreground", "#111827");
   wrapper.style.setProperty("--card", "#ffffff");
@@ -66,7 +89,6 @@ function buildPrintable(sourceEl: HTMLElement): HTMLElement {
 
   const clone = sourceEl.cloneNode(true) as HTMLElement;
 
-  // Strip interactive/print-hostile affordances.
   clone
     .querySelectorAll(
       ".no-print, button, [data-no-print], [role='tooltip'], .diagram-tooltip, .diagram-overlay",
@@ -84,7 +106,6 @@ function buildPrintable(sourceEl: HTMLElement): HTMLElement {
     (img as HTMLImageElement).style.height = "auto";
   });
 
-  // Ensure SVG diagrams fill available width and preserve aspect.
   clone.querySelectorAll<SVGSVGElement>("svg").forEach((svg) => {
     svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
     svg.style.maxWidth = "100%";
@@ -97,10 +118,7 @@ function buildPrintable(sourceEl: HTMLElement): HTMLElement {
   return wrapper;
 }
 
-async function renderBlock(
-  el: HTMLElement,
-  scale: number,
-): Promise<{ canvas: HTMLCanvasElement; widthMm: number; heightMm: number }> {
+async function renderBlock(el: HTMLElement, scale: number) {
   const canvas = await html2canvas(el, {
     scale,
     useCORS: true,
@@ -110,24 +128,29 @@ async function renderBlock(
   const pxPerMm = canvas.width / CONTENT_W;
   return {
     canvas,
-    widthMm: CONTENT_W,
+    pxPerMm,
     heightMm: canvas.height / pxPerMm,
   };
 }
 
-function sliceCanvasVertically(
-  source: HTMLCanvasElement,
-  offsetPx: number,
-  heightPx: number,
-): HTMLCanvasElement {
+function sliceCanvas(source: HTMLCanvasElement, offsetPx: number, heightPx: number) {
   const out = document.createElement("canvas");
   out.width = source.width;
-  out.height = heightPx;
+  out.height = Math.max(1, Math.round(heightPx));
   const ctx = out.getContext("2d")!;
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, out.width, out.height);
   ctx.drawImage(source, 0, -offsetPx);
   return out;
+}
+
+/** Snap a candidate slice height down to the nearest line boundary. */
+function snapSliceHeight(desiredPx: number, pxPerMm: number) {
+  const linesPerBlock = Math.floor(desiredPx / (APPROX_LINE_PX * (pxPerMm / 2)));
+  if (linesPerBlock <= 0) return desiredPx;
+  const snapped = linesPerBlock * APPROX_LINE_PX * (pxPerMm / 2);
+  // Leave a small safety gutter so descenders don't get clipped.
+  return Math.max(APPROX_LINE_PX, snapped - 4);
 }
 
 function addFooter(pdf: jsPDF, page: number, total: number, title: string) {
@@ -219,45 +242,37 @@ function drawSourcesAppendix(pdf: jsPDF, meta: PdfMeta) {
   });
 }
 
-/** Collect the atomic blocks in document order from the cloned article. */
 function collectBlocks(root: HTMLElement): HTMLElement[] {
   const out: HTMLElement[] = [];
-  // Walk direct descendants first; if a container has no matching direct
-  // block children, recurse into it so nested article wrappers still yield
-  // paginated blocks.
   const visit = (node: HTMLElement) => {
     const kids = Array.from(node.children) as HTMLElement[];
     for (const kid of kids) {
-      if (kid.matches(BLOCK_SELECTOR)) {
-        out.push(kid);
-      } else if (kid.children.length > 0) {
-        visit(kid);
-      }
+      if (kid.matches(BLOCK_SELECTOR)) out.push(kid);
+      else if (kid.children.length > 0) visit(kid);
     }
   };
   visit(root);
   return out;
 }
 
-function isHeading(el: HTMLElement): boolean {
-  return /^H[1-6]$/.test(el.tagName);
-}
-
-function containsSvg(el: HTMLElement): boolean {
-  return !!el.querySelector("svg");
-}
+const isHeading = (el: HTMLElement) => /^H[1-6]$/.test(el.tagName);
+const isAtomic = (el: HTMLElement) =>
+  el.tagName === "FIGURE" ||
+  el.tagName === "TABLE" ||
+  !!el.querySelector("svg") ||
+  !!el.querySelector("img") ||
+  !!el.closest?.("[data-diagram-slug]");
 
 export async function exportArticlePdf(articleEl: HTMLElement, meta: PdfMeta) {
+  await primeLazyContent(articleEl);
   const printable = buildPrintable(articleEl);
   try {
     await waitForImages(printable);
-    // Give web fonts a tick to settle for accurate metrics.
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 80));
 
     const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
     drawTitlePage(pdf, meta);
 
-    // Start body on a fresh page.
     pdf.addPage();
     let cursorY = MARGIN;
 
@@ -276,17 +291,14 @@ export async function exportArticlePdf(articleEl: HTMLElement, meta: PdfMeta) {
 
     for (let i = 0; i < blocks.length; i++) {
       const block = blocks[i];
-      const scale = containsSvg(block) ? 3 : 2;
-      const rendered = await renderBlock(block, scale);
-      const { canvas, heightMm } = rendered;
-      const pxPerMm = canvas.width / CONTENT_W;
+      const scale = block.querySelector("svg") ? 3 : 2;
+      const { canvas, pxPerMm, heightMm } = await renderBlock(block, scale);
 
-      // Orphan-heading avoidance: if this is a heading and the next block
-      // wouldn't fit alongside it on the current page, start a new page now.
+      // Orphan heading: never leave a heading alone at page bottom.
       if (
         isHeading(block) &&
         i + 1 < blocks.length &&
-        cursorY + heightMm + 20 > MARGIN + USABLE_H &&
+        cursorY + heightMm + 24 > MARGIN + USABLE_H &&
         cursorY > MARGIN
       ) {
         newPage();
@@ -299,43 +311,43 @@ export async function exportArticlePdf(articleEl: HTMLElement, meta: PdfMeta) {
         continue;
       }
 
-      // Doesn't fit in remaining space.
       if (heightMm <= USABLE_H) {
-        // Fits on a fresh page whole — start a new page and place it.
         newPage();
         placeImage(canvas, heightMm);
         continue;
       }
 
-      // Larger than a full page.
-      if (containsSvg(block) || block.tagName === "FIGURE" || block.tagName === "TABLE") {
-        // Scale down proportionally to fit one page, keep intact.
+      if (isAtomic(block)) {
+        // Scale a huge diagram/figure/table to one page rather than splitting.
         newPage();
         const scaleDown = USABLE_H / heightMm;
         const w = CONTENT_W * scaleDown;
-        const h = USABLE_H;
         const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
-        pdf.addImage(dataUrl, "JPEG", MARGIN + (CONTENT_W - w) / 2, cursorY, w, h);
-        cursorY += h;
+        pdf.addImage(dataUrl, "JPEG", MARGIN + (CONTENT_W - w) / 2, cursorY, w, USABLE_H);
+        cursorY += USABLE_H;
         continue;
       }
 
-      // Prose / code / lists: slice at page boundaries.
+      // Prose / list / code: slice on line boundaries.
       let offsetPx = 0;
       const totalPx = canvas.height;
-      // First slice into remaining space if there's room for at least ~20mm.
-      if (remaining > 20) {
-        const sliceHeightPx = Math.min(remaining * pxPerMm, totalPx);
-        const slice = sliceCanvasVertically(canvas, offsetPx, sliceHeightPx);
-        placeImage(slice, sliceHeightPx / pxPerMm);
-        offsetPx += sliceHeightPx;
+      if (remaining > 30) {
+        const desired = Math.min(remaining * pxPerMm, totalPx);
+        const sliceH = snapSliceHeight(desired, pxPerMm);
+        const slice = sliceCanvas(canvas, offsetPx, sliceH);
+        placeImage(slice, sliceH / pxPerMm);
+        offsetPx += sliceH;
       }
       while (offsetPx < totalPx) {
         newPage();
-        const sliceHeightPx = Math.min(USABLE_H * pxPerMm, totalPx - offsetPx);
-        const slice = sliceCanvasVertically(canvas, offsetPx, sliceHeightPx);
-        placeImage(slice, sliceHeightPx / pxPerMm);
-        offsetPx += sliceHeightPx;
+        const desired = Math.min(USABLE_H * pxPerMm, totalPx - offsetPx);
+        const sliceH =
+          totalPx - offsetPx <= USABLE_H * pxPerMm
+            ? desired
+            : snapSliceHeight(desired, pxPerMm);
+        const slice = sliceCanvas(canvas, offsetPx, sliceH);
+        placeImage(slice, sliceH / pxPerMm);
+        offsetPx += sliceH;
       }
     }
 

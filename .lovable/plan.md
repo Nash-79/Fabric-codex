@@ -1,53 +1,50 @@
-## Problem
+## Modernise the Advisor with AI Elements
 
-Today's PDF export rasterises the entire article into one giant canvas then slices it at fixed pixel heights (`src/lib/export-pdf.ts`). That's why the output looks messy:
+Rebuild the Advisor chat surface on top of the AI Elements primitives (per the chat-ui-composition contract) and fix the mobile/desktop topology so the composer, transcript, and header behave like a real chat app instead of a stack of scrolling cards.
 
-- Slices cut through the middle of headings, figures, tables and diagrams → "half-formed" and overlapping elements.
-- SVG diagrams are rendered at page-canvas scale (2×) not at their own native scale, so they're blurry and sometimes mis-sized.
-- Interactive diagram chrome (tooltips, focus rings) can leak into the raster.
-- No HTML export option exists.
+### Problems today
+- Mobile: the header (title + paragraph + 5 chip row + 3 chip row) eats the top ~40% of the viewport, pushing starter cards and the composer below the fold. Because the transcript is a middle scroll pane, the empty starter state opens *pre-scrolled*, cutting off the first card.
+- Composer sits inside its own footer band with a big empty gap above it; visually detached from the transcript.
+- Chat header mixes hero copy, model selector, tier chip, sources toggle, clear, history — no hierarchy, wraps unpredictably.
+- No AI Elements components used (Conversation, Message, MessageContent, MessageResponse, PromptInput, Shimmer, Tool). Custom `AdvisorComposer` / `AdvisorMessage` re-implement AI Elements badly.
+- Assistant messages render inside a bordered card (bubble) — contract says no background on assistant messages.
 
-## Fix
+### Plan
 
-### 1. Rewrite `src/lib/export-pdf.ts` to be block-aware
+1. **Install AI Elements** (`bun x ai-elements@latest add conversation message prompt-input shimmer`). Keep existing markdown/code/mermaid renderers by passing them to `MessageResponse` / message content children.
 
-Instead of one canvas → sliced, walk the top-level block children of the cloned article and render each block to its own image, then flow them onto A4 pages with real page-break rules.
+2. **Collapse the header into a compact toolbar.** One row only:
+   - Left: sidebar toggle + "Ask Fabric Atlas" title (truncates on mobile).
+   - Right: model select (icon+label, condensed), Sources toggle, overflow menu (Clear, tier badge, retrieval-status dot).
+   - Move the hero paragraph ("Answers retrieve verified claims…") into the empty state next to the starter cards, not the persistent header. Move `RAG over all Atlas content` / `Ready` / contextSummary chips into a slim status strip *inside* the empty state, and into the `Shimmer` line while streaming — not always-visible.
+   - Result on mobile: header height drops from ~260px to ~56px, starter cards visible on first paint.
 
-- Build the offscreen printable clone as today, but widen to 820px, force `color-scheme: light`, neutralise CSS variables (`--background: #fff`, `--foreground: #111`), and strip `.no-print`, buttons, tooltips, focus rings, and the interactive diagram overlay layer (keep the inline `<svg>` only).
-- For each direct child block (`h1..h4`, `p`, `ul/ol`, `pre`, `table`, `figure`, `.diagram-embed`, callouts):
-  - Rasterise the block on its own with `html2canvas-pro` at `scale: 2`, except any block containing an `<svg>` uses `scale: 3` so diagrams stay crisp.
-  - Convert to mm at the fixed content width; if the block fits in the remaining page space, place it there; otherwise start a new page.
-  - If a single block is taller than a full page (long code block, tall diagram): for prose/code, re-render sliced *at safe line boundaries* by measuring line-height; for figures/diagrams, scale down proportionally to fit one page rather than splitting.
-  - Keep headings glued to the next block (never leave an orphan heading at page bottom).
-- Title page, sources appendix and footers stay, but the title page is drawn on page 1 (no blank leading page from the current `addPage()` loop).
-- Cover page metadata unchanged.
+3. **Rebuild the chat surface with AI Elements.**
+   - `Conversation` + `ConversationContent` + `ConversationScrollButton` replace the custom scrollRef + smooth-scroll effect.
+   - `Message` + `MessageContent` + `MessageResponse` for user/assistant rendering. Assistant: no background, plain foreground on page. User: filled bubble using `primary` / `primary-foreground` tokens.
+   - `Shimmer` ("Thinking…", "Retrieving claims…") replaces the custom three-dot pulse and the "Retrieving verified claims…" card.
+   - Keep `AdvisorMessage`'s citation footnotes/actions but render them through `MessageContent` children so copy/retry sit as message actions.
 
-### 2. Add HTML export
+4. **Rebuild the composer with `PromptInput`.**
+   - `PromptInput` → `PromptInputTextarea` → `PromptInputFooter` (justify-end) → `PromptInputSubmit` (icon-sm) with `status`/`disabled`/`onStop` wired from `useChat`.
+   - Remove the outer bordered footer band; float the composer directly under the transcript with `max-w-3xl` centering and safe-area bottom padding.
+   - Focus textarea on mount, after send, and after switching threads.
 
-- New `src/lib/export-html.ts` exporting `exportArticleHtml(articleEl, meta)`.
-  - Clone the article, strip `.no-print`/buttons/tooltips, inline all `<img>` as data URIs (fetch + FileReader), keep `<svg>` inline (already self-contained).
-  - Snapshot the computed styles that matter (tokens for background, foreground, borders, code blocks, tables, callouts) into a single `<style>` block so the file renders standalone in any browser — no Tailwind runtime, no external CSS.
-  - Wrap in a minimal HTML5 document with `<title>`, meta description, and a header card (title, summary, updated date, tags) and a sources appendix mirroring the PDF appendix.
-  - `Blob` → `download` as `<slug>.html`.
+5. **Sources panel + sidebar polish (topology only, no behavior change).**
+   - Keep the three-column shell `[sidebar | transcript | sources]`, but make the transcript column a real flex column with the composer as its last child so there is no floating footer band.
+   - Use `grid-cols-[minmax(0,1fr)_auto]` for the toolbar row per responsive-layout-patterns; `min-w-0` on the title cell, `shrink-0` on controls.
+   - Mobile: sources panel becomes a `Sheet` (right) triggered by the Sources button; drop the desktop grid switch on small screens.
 
-### 3. UI: `src/components/PrintButton.tsx`
+6. **Empty state redesign.**
+   - Centered card stack: agent identity (already-generated Fabric mark, not `Sparkles`), one-line pitch, 2×2 starter grid, tiny "grounded in verified claims" caption. All fits above the fold on 430px.
 
-- Split into two buttons rendered side-by-side inside a small toolbar: **Download PDF** and **Download HTML**. Same styling as today, same `no-print` class, same `getMeta()` prop reused for both. Loading state per-button. Toast on success/failure; HTML export falls back to nothing (there's no browser equivalent to `window.print()` for HTML — just surface the error toast).
-- Route file `src/routes/blogs/$kind.$slug.tsx` needs no API change; the existing `<PrintButton getMeta={...} />` call keeps working.
+### Technical notes
+- No API/route changes. `/api/chat`, `useChat`, transport, thread storage all unchanged.
+- `AdvisorComposer`, `AdvisorMessage` become thin wrappers over AI Elements primitives; delete the custom textarea auto-resize and pulse-dot code once `PromptInputTextarea` / `Shimmer` are in.
+- Preserve existing `AdvisorSourcePanel`, `AdvisorMermaidBlock`, `AdvisorCodeBlock`, citation logic, thread history, and localStorage keys.
+- Type-check with `bunx tsgo --noEmit`; verify with mobile (430) + desktop (1280) screenshots that (a) starter cards visible on first paint, (b) composer sits flush at the bottom with no empty band, (c) assistant messages have no bubble background, (d) user bubble uses primary/primary-foreground.
 
-## Technical notes
-
-- No new dependencies — `jspdf` and `html2canvas-pro` already installed.
-- Everything stays client-side; no server function changes; no schema/migration changes.
-- Pure presentation-layer change, scoped to `src/lib/export-pdf.ts`, new `src/lib/export-html.ts`, and `src/components/PrintButton.tsx`.
-
-## Files touched
-
-- `src/lib/export-pdf.ts` — rewrite to block-aware pagination.
-- `src/lib/export-html.ts` — new, self-contained HTML snapshot exporter.
-- `src/components/PrintButton.tsx` — add second button for HTML; keep PDF button behaviour and API.
-
-## Verification
-
-- Manual: open a diagram-heavy article (e.g. `direct-lake`), export PDF → confirm no diagram is split or overlapping, headings stay with following block, SVG diagrams are sharp; export HTML → open the downloaded file directly in a browser tab and confirm it renders standalone with diagrams and citations.
-- `npm run build` for typecheck.
+### Out of scope
+- Backend / retrieval / model list changes.
+- Thread persistence shape (stays localStorage-per-thread as today).
+- Sources panel content redesign (only its container becomes a Sheet on mobile).
