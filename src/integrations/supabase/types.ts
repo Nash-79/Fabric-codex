@@ -1044,9 +1044,9 @@ export type Database = {
           last_modified: string | null
           last_seen_at: string
           link: string
-          pub_date: string | null
           product_id: string | null
           product_name: string
+          pub_date: string | null
           raw_payload: Json
           release_date: string | null
           release_item_id: string | null
@@ -1073,9 +1073,9 @@ export type Database = {
           last_modified?: string | null
           last_seen_at?: string
           link: string
-          pub_date?: string | null
           product_id?: string | null
           product_name?: string
+          pub_date?: string | null
           raw_payload?: Json
           release_date?: string | null
           release_item_id?: string | null
@@ -1102,9 +1102,9 @@ export type Database = {
           last_modified?: string | null
           last_seen_at?: string
           link?: string
-          pub_date?: string | null
           product_id?: string | null
           product_name?: string
+          pub_date?: string | null
           raw_payload?: Json
           release_date?: string | null
           release_item_id?: string | null
