@@ -71,23 +71,87 @@ function buildPrintable(sourceEl: HTMLElement): HTMLElement {
     "padding:0",
     "margin:0",
     "background:#ffffff",
-    "color:#111827",
+    "color:#0f172a",
     "font-family:ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif",
     "font-size:15px",
     "line-height:1.65",
     "color-scheme:light",
     "z-index:-1",
   ].join(";");
-  wrapper.className = "pdf-export-root";
-  wrapper.style.setProperty("--background", "#ffffff");
-  wrapper.style.setProperty("--foreground", "#111827");
-  wrapper.style.setProperty("--card", "#ffffff");
-  wrapper.style.setProperty("--card-foreground", "#111827");
-  wrapper.style.setProperty("--muted", "#f3f4f6");
-  wrapper.style.setProperty("--muted-foreground", "#4b5563");
-  wrapper.style.setProperty("--border", "#e5e7eb");
+  wrapper.className = "pdf-export-root light";
+  // Override every semantic token the app defines. Without this, if the live
+  // <html> is in dark mode when export is triggered, html2canvas captures the
+  // dark palette from descendants' computed styles even though the wrapper
+  // itself is white.
+  const lightTokens: Record<string, string> = {
+    "--background": "#ffffff",
+    "--foreground": "#0f172a",
+    "--card": "#ffffff",
+    "--card-foreground": "#0f172a",
+    "--popover": "#ffffff",
+    "--popover-foreground": "#0f172a",
+    "--primary": "#0f172a",
+    "--primary-foreground": "#ffffff",
+    "--secondary": "#f1f5f9",
+    "--secondary-foreground": "#0f172a",
+    "--muted": "#f3f4f6",
+    "--muted-foreground": "#4b5563",
+    "--accent": "#f1f5f9",
+    "--accent-foreground": "#0f172a",
+    "--destructive": "#dc2626",
+    "--destructive-foreground": "#ffffff",
+    "--border": "#e5e7eb",
+    "--input": "#e5e7eb",
+    "--ring": "#94a3b8",
+    "--sidebar-background": "#ffffff",
+    "--sidebar-foreground": "#0f172a",
+    "--sidebar-border": "#e5e7eb",
+  };
+  for (const [k, v] of Object.entries(lightTokens)) wrapper.style.setProperty(k, v);
+
+  const styleEl = document.createElement("style");
+  styleEl.textContent = `
+    .pdf-export-root, .pdf-export-root * {
+      color-scheme: light !important;
+      box-shadow: none !important;
+      text-shadow: none !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+    }
+    .pdf-export-root, .pdf-export-root *:not(pre):not(code):not(kbd):not(mark):not(th):not([data-keep-bg]) {
+      background-color: transparent !important;
+      background-image: none !important;
+    }
+    .pdf-export-root { background: #ffffff !important; color: #0f172a !important; }
+    .pdf-export-root h1, .pdf-export-root h2, .pdf-export-root h3,
+    .pdf-export-root h4, .pdf-export-root h5, .pdf-export-root h6 { color: #0f172a !important; }
+    .pdf-export-root p, .pdf-export-root li, .pdf-export-root td,
+    .pdf-export-root th, .pdf-export-root span, .pdf-export-root div,
+    .pdf-export-root blockquote { color: #1f2937 !important; }
+    .pdf-export-root a { color: #1d4ed8 !important; text-decoration: underline; }
+    .pdf-export-root code, .pdf-export-root kbd {
+      background-color: #f1f5f9 !important; color: #0f172a !important;
+      border: 1px solid #e2e8f0 !important; border-radius: 4px; padding: 0 4px;
+    }
+    .pdf-export-root pre {
+      background-color: #f8fafc !important; color: #0f172a !important;
+      border: 1px solid #e2e8f0 !important; border-radius: 6px; padding: 12px;
+    }
+    .pdf-export-root pre code { background: transparent !important; border: 0 !important; padding: 0 !important; }
+    .pdf-export-root table { border-collapse: collapse !important; width: 100%; }
+    .pdf-export-root th, .pdf-export-root td {
+      border: 1px solid #e5e7eb !important; padding: 6px 8px !important;
+    }
+    .pdf-export-root th { background-color: #f8fafc !important; }
+    .pdf-export-root hr { border-color: #e5e7eb !important; }
+    .pdf-export-root [class*="border"] { border-color: #e5e7eb !important; }
+  `;
+  wrapper.appendChild(styleEl);
 
   const clone = sourceEl.cloneNode(true) as HTMLElement;
+  // Strip dark-mode markers so Tailwind's dark: variants stop applying inside the clone.
+  clone.classList.remove("dark");
+  clone.querySelectorAll<HTMLElement>(".dark").forEach((el) => el.classList.remove("dark"));
 
   clone
     .querySelectorAll(
