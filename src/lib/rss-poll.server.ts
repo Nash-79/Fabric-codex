@@ -457,7 +457,7 @@ export async function pollFabricRoadmapCore(sb: SupabaseAdmin): Promise<RoadmapP
         .select("guid,capability_id")
         .in("guid", guids);
       if (existingError) throw new Error(existingError.message);
-      const capabilities = new Map(
+      const capabilities = new Map<string, string | null>(
         (existing ?? []).map((row: { guid: string; capability_id: string | null }) => [
           row.guid,
           row.capability_id,

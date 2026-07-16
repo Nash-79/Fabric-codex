@@ -21,7 +21,10 @@ export function ResumeReadingPill({ pct, scrollY }: { pct: number; scrollY: numb
   if (!visible) return null;
 
   return (
-    <div className="no-print fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full border border-teal-500/30 bg-card/95 px-3 py-2 shadow-lg shadow-black/20 backdrop-blur animate-fade-in">
+    <div
+      className="no-print fixed bottom-20 right-4 z-50 flex items-center gap-2 rounded-full border border-teal-500/30 bg-card/95 px-3 py-2 shadow-lg shadow-black/20 backdrop-blur animate-fade-in md:bottom-6 md:right-6"
+      style={{ marginBottom: "env(safe-area-inset-bottom, 0)" }}
+    >
       <button
         type="button"
         onClick={() => {
