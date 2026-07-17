@@ -77,6 +77,7 @@ function LearnPage() {
                   key={d.id}
                   to="/blogs/$kind/$slug"
                   params={{ kind: "design", slug: d.slug }}
+                  search={{ from: "learn" }}
                   className="block rounded-xl border border-border bg-card p-4 transition hover:bg-accent"
                 >
                   <div className="text-[10px] uppercase tracking-wide text-teal-300/70">
@@ -121,6 +122,7 @@ function LearnPage() {
                       key={l.id}
                       to="/blogs/$kind/$slug"
                       params={{ kind: "lesson", slug: l.slug }}
+                      search={{ from: "learn" }}
                       className="block rounded-xl border border-border bg-card p-4 transition hover:bg-accent"
                     >
                       <div className="text-[10px] uppercase tracking-wide text-teal-300/70">

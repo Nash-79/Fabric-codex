@@ -103,6 +103,9 @@ function textReport(digest) {
   lines.push(
     `Coverage: ${digest.coverage.articleLessTopics} article-less topic(s), ${digest.coverage.diagramGaps} diagram gap(s), ${digest.claims.pending} pending claim(s)`,
   );
+  if (digest.feedback.new) {
+    lines.push(`Feedback: ${digest.feedback.new} new reader report(s) awaiting triage`);
+  }
   internalsGapLine();
   if (digest.next.length) {
     lines.push("Next actions:");
@@ -128,6 +131,7 @@ async function main() {
     rss: { active: 0, stale: 0, failing: 0 },
     coverage: { articleLessTopics: 0, diagramGaps: 0, storageOverrides: 0, internalsGaps: null },
     claims: { pending: 0 },
+    feedback: { new: 0 },
     next: [],
     error: "",
   };
@@ -163,6 +167,7 @@ async function main() {
     ]);
     const queue = snapshot.queue ?? [];
     const rss = snapshot.watchers ?? [];
+    const newFeedback = snapshot.feedback ?? [];
 
     const openSources = queue.filter(
       (q) => q.kind === "source" && ["queued", "claimed"].includes(q.status),
@@ -198,6 +203,7 @@ async function main() {
       storageOverrides: storageOverrides.length,
     };
     digest.claims.pending = claims.length;
+    digest.feedback.new = newFeedback.length;
 
     for (const item of openSources.slice(0, 3))
       digest.next.push(`/ingest-batch # ${item.title || item.url}`);
@@ -209,6 +215,7 @@ async function main() {
     for (const slug of articleLess.slice(0, 2)) digest.next.push(`/blog ${slug}`);
     for (const slug of diagramGaps.slice(0, 2)) digest.next.push(`/commission-diagrams ${slug}`);
     if (claims.length) digest.next.push("/orchestrate-content");
+    if (newFeedback.length) digest.next.push("/triage-feedback");
     if (storageOverrides.length)
       digest.next.push("Backport storage-overridden diagrams to content/diagrams/");
   } catch (err) {

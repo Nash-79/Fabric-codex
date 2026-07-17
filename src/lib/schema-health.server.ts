@@ -19,6 +19,7 @@ const EXPECTED_TABLES: { name: string; severity: CheckStatus }[] = [
   { name: "capabilities", severity: "fail" },
   { name: "claims", severity: "fail" },
   { name: "claimevents", severity: "fail" },
+  { name: "content_feedback", severity: "warn" },
   { name: "content_item_sources", severity: "fail" },
   { name: "content_items", severity: "fail" },
   { name: "diagrams", severity: "fail" },

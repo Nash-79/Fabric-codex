@@ -694,6 +694,38 @@ export const toggleFavorite = createServerFn({ method: "POST" })
     return { favorited: true };
   });
 
+export type ContentFeedbackCategory =
+  "factual_error" | "outdated" | "unclear" | "broken_link" | "missing_citation" | "other";
+
+// Reader-submitted feedback on a content item. content_hash is captured server-side from the
+// live row, never trusted from the client, so triage can later tell if the article already
+// changed since this was filed.
+export const submitContentFeedback = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { contentItemId: string; category: ContentFeedbackCategory; body: string }) => d)
+  .handler(async ({ data, context }) => {
+    const body = data.body.trim();
+    if (!body) throw new Error("Feedback text is required.");
+    if (body.length > 4000) throw new Error("Feedback is too long (4000 characters max).");
+    const sb = await admin();
+    const { data: item, error: itemError } = await sb
+      .from("content_items")
+      .select("content_hash")
+      .eq("id", data.contentItemId)
+      .maybeSingle();
+    if (itemError) throw new Error(itemError.message);
+    if (!item) throw new Error("Content item not found.");
+    const { error } = await context.supabase.from("content_feedback").insert({
+      content_item_id: data.contentItemId,
+      content_hash: item.content_hash,
+      submitted_by: context.userId,
+      category: data.category,
+      body,
+    });
+    if (error) throw new Error(error.message);
+    return { ok: true as const };
+  });
+
 // Admin: is current user an admin?
 export const amIAdmin = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])

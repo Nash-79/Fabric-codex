@@ -1,33 +1,48 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { searchAll } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Input } from "@/components/ui/input";
 import { DepthBadge, TierBadge } from "@/components/Badges";
 import { KindBadge } from "@/components/KindBadge";
 
+type SearchRoute = { q?: string };
+
 export const Route = createFileRoute("/search")({
+  validateSearch: (search: Record<string, unknown>): SearchRoute => ({
+    q: typeof search.q === "string" ? search.q.slice(0, 500) : undefined,
+  }),
   head: () => ({ meta: [{ title: "Search — Fabric Atlas" }] }),
   component: SearchPage,
 });
 
 function SearchPage() {
   const fn = useServerFn(searchAll);
-  const [q, setQ] = useState("");
-  const [results, setResults] = useState<Awaited<ReturnType<typeof searchAll>> | null>(null);
-  const [busy, setBusy] = useState(false);
+  const navigate = useNavigate({ from: "/search" });
+  const { q: activeQuery } = Route.useSearch();
+  // Local input state can lag the URL (typing before submit); the query itself lives in the URL
+  // so back/forward and page reloads restore both the box contents and the fetched results —
+  // previously this was plain useState, so browser back after opening a result cleared it all.
+  const [draft, setDraft] = useState(activeQuery ?? "");
 
-  async function run(e: React.FormEvent) {
+  useEffect(() => {
+    setDraft(activeQuery ?? "");
+  }, [activeQuery]);
+
+  const results = useQuery({
+    queryKey: ["search", activeQuery],
+    queryFn: () => fn({ data: { q: activeQuery as string } }),
+    enabled: !!activeQuery?.trim(),
+    staleTime: 60_000,
+  });
+
+  function run(e: React.FormEvent) {
     e.preventDefault();
-    if (!q.trim()) return;
-    setBusy(true);
-    try {
-      const r = await fn({ data: { q } });
-      setResults(r);
-    } finally {
-      setBusy(false);
-    }
+    const trimmed = draft.trim();
+    if (!trimmed) return;
+    navigate({ search: { q: trimmed } });
   }
 
   return (
@@ -40,23 +55,23 @@ function SearchPage() {
         </p>
         <form onSubmit={run} className="mt-6 flex gap-2">
           <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
             placeholder="OneLake shortcuts, Direct Lake fallback, capacity throttling…"
             className="border-border bg-card text-foreground placeholder:text-muted-foreground"
           />
           <button
-            disabled={busy}
+            disabled={results.isFetching}
             className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            {busy ? "…" : "Search"}
+            {results.isFetching ? "…" : "Search"}
           </button>
         </form>
 
-        {results && (
+        {results.data && (
           <div className="mt-10 space-y-10">
-            <Section title={`Topics (${results.topics.length})`}>
-              {results.topics.map((t) => (
+            <Section title={`Topics (${results.data.topics.length})`}>
+              {results.data.topics.map((t) => (
                 <Link
                   key={t.slug}
                   to="/topics/$slug"
@@ -68,12 +83,13 @@ function SearchPage() {
                 </Link>
               ))}
             </Section>
-            <Section title={`Content (${results.blogs.length})`}>
-              {results.blogs.map((b: any) => (
+            <Section title={`Content (${results.data.blogs.length})`}>
+              {results.data.blogs.map((b: any) => (
                 <Link
                   key={`${b.kind ?? "article"}-${b.slug}`}
                   to="/blogs/$kind/$slug"
                   params={{ kind: b.kind ?? "article", slug: b.slug }}
+                  search={{ from: "search", q: activeQuery }}
                   className="block rounded-md p-2 hover:bg-accent"
                 >
                   <div className="flex items-center gap-2">
@@ -84,8 +100,8 @@ function SearchPage() {
                 </Link>
               ))}
             </Section>
-            <Section title={`Claims (${results.claims.length})`}>
-              {results.claims.map((c: any) => (
+            <Section title={`Claims (${results.data.claims.length})`}>
+              {results.data.claims.map((c: any) => (
                 <div key={c.id} className="rounded-md p-2">
                   <div className="flex items-center gap-2">
                     <DepthBadge depth={c.depth} />
@@ -108,8 +124,8 @@ function SearchPage() {
                 </div>
               ))}
             </Section>
-            <Section title={`Sources (${results.sources.length})`}>
-              {results.sources.map((s) => (
+            <Section title={`Sources (${results.data.sources.length})`}>
+              {results.data.sources.map((s) => (
                 <a
                   key={s.slug}
                   href={s.url}

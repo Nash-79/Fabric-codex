@@ -121,6 +121,7 @@ function TopicPage() {
                     <Link
                       to="/blogs/$kind/$slug"
                       params={{ kind: item.kind, slug: item.slug }}
+                      search={{ from: "topic", fromSlug: slug }}
                       className="block rounded-xl border border-border bg-card p-4 hover:bg-accent"
                     >
                       <div className="flex items-center gap-2">

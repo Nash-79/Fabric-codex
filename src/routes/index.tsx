@@ -1,7 +1,18 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQueries, useSuspenseQuery, queryOptions } from "@tanstack/react-query";
-import { Bot, BookOpen, Database, FileText, Filter, Network, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import {
+  Bot,
+  BookOpen,
+  Database,
+  FileText,
+  Filter,
+  GraduationCap,
+  Milestone,
+  Network,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
+import { useMemo } from "react";
 import { DepthBadge, TierBadge } from "@/components/Badges";
 import { FabricMark } from "@/components/FabricMark";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -54,6 +65,55 @@ const claimsQO = (
       }),
   });
 
+// Short cards summarizing what each area offers — copy kept in step with
+// content/help/01-getting-started.md's "The pages" list, the single source of truth for page
+// descriptions; this is the first-time-visitor front door those pages don't otherwise get from
+// the header dropdowns alone.
+const OFFERINGS = [
+  {
+    to: "/topics" as const,
+    icon: Network,
+    label: "Topics",
+    description: "The reading portal — a topic tree gathering every article, design, and lesson.",
+  },
+  {
+    to: "/learn" as const,
+    icon: GraduationCap,
+    label: "Learn",
+    description: "Tiered lessons: Beginner, Intermediate, and Expert.",
+  },
+  {
+    to: "/advisor" as const,
+    icon: Bot,
+    label: "Advisor",
+    description: "Ask a question, get an answer grounded only in verified claims.",
+  },
+  {
+    to: "/registry" as const,
+    icon: ShieldCheck,
+    label: "Capability Registry",
+    description: "The spine — every tracked capability with live claim and diagram coverage.",
+  },
+  {
+    to: "/sources" as const,
+    icon: Database,
+    label: "Sources",
+    description: "Every approved source, graded by trust tier, searchable and filterable.",
+  },
+  {
+    to: "/search" as const,
+    icon: Search,
+    label: "Search",
+    description: "One search box across topics, content, claims, and sources.",
+  },
+  {
+    to: "/roadmap" as const,
+    icon: Milestone,
+    label: "Roadmap",
+    description: "What's coming to Microsoft Fabric, tracked against the registry.",
+  },
+] satisfies Array<{ to: string; icon: any; label: string; description: string }>;
+
 const capabilityDiagramPath: Record<string, string> = {
   capacity: "/diagrams/capacity-throttling.svg",
   "data-factory": "/diagrams/data-factory-pipelines.svg",
@@ -74,7 +134,30 @@ const capabilityDiagramPath: Record<string, string> = {
   warehouse: "/diagrams/warehouse-architecture.svg",
 };
 
+type HomeSearch = {
+  capability?: string;
+  depth?: number | "all";
+  tier?: number | "all";
+  q?: string;
+};
+
 export const Route = createFileRoute("/")({
+  validateSearch: (search: Record<string, unknown>): HomeSearch => ({
+    capability: typeof search.capability === "string" ? search.capability : undefined,
+    depth:
+      search.depth === "all"
+        ? "all"
+        : typeof search.depth === "number" && [1, 2, 3, 4, 5].includes(search.depth)
+          ? search.depth
+          : undefined,
+    tier:
+      search.tier === "all"
+        ? "all"
+        : typeof search.tier === "number" && [1, 2, 3, 4, 5, 6].includes(search.tier)
+          ? search.tier
+          : undefined,
+    q: typeof search.q === "string" ? search.q.slice(0, 200) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Fabric Atlas — Interactive Microsoft Fabric knowledge atlas" },
@@ -114,10 +197,20 @@ function Landing() {
   ] = useSuspenseQueries({
     queries: [topicsQO, sourcesQO, capabilitiesQO, claimCountsQO, diagramsQO, contentItemsQO],
   });
-  const [selectedCapability, setSelectedCapability] = useState("direct-lake");
-  const [depth, setDepth] = useState<number | "all">("all");
-  const [tier, setTier] = useState<number | "all">("all");
-  const [query, setQuery] = useState("");
+  const navigate = useNavigate({ from: "/" });
+  const search = Route.useSearch();
+  const selectedCapability = search.capability ?? "direct-lake";
+  const depth = search.depth ?? "all";
+  const tier = search.tier ?? "all";
+  const query = search.q ?? "";
+  const setSelectedCapability = (capability: string) =>
+    navigate({ search: (prev) => ({ ...prev, capability }) });
+  const setDepth = (value: number | "all") =>
+    navigate({ search: (prev) => ({ ...prev, depth: value }) });
+  const setTier = (value: number | "all") =>
+    navigate({ search: (prev) => ({ ...prev, tier: value }) });
+  const setQuery = (value: string) =>
+    navigate({ search: (prev) => ({ ...prev, q: value || undefined }) });
   const { data: claims } = useSuspenseQuery(claimsQO(selectedCapability, depth, tier, query));
 
   const childTopics = useMemo(() => topics.filter((topic) => topic.parent_slug), [topics]);
@@ -272,6 +365,32 @@ function Landing() {
           </div>
         </section>
 
+        <section className="mx-auto max-w-7xl px-6 py-8">
+          <div className="mb-4">
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">
+              What Fabric Atlas offers
+            </div>
+            <h2 className="mt-1 text-lg font-semibold">Jump straight to what you need</h2>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {OFFERINGS.map((offering) => (
+              <Link
+                key={offering.to}
+                to={offering.to}
+                className="group rounded-md border border-border bg-card p-4 transition hover:border-teal-400/40 hover:bg-accent"
+              >
+                <offering.icon className="h-5 w-5 text-teal-300" />
+                <div className="mt-2 text-sm font-semibold text-foreground group-hover:text-teal-200">
+                  {offering.label}
+                </div>
+                <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
+                  {offering.description}
+                </p>
+              </Link>
+            ))}
+          </div>
+        </section>
+
         <section className="mx-auto grid max-w-7xl gap-6 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
             <section className="rounded-md border border-border bg-card">
@@ -363,7 +482,7 @@ function Landing() {
             <section className="rounded-md border border-border bg-card p-4">
               <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                 <FileText className="h-4 w-4" />
-                Article hub
+                {selectedFeed.length ? "Article hub" : "Recently published"}
               </div>
               <div className="mt-3 space-y-3">
                 {(selectedFeed.length ? selectedFeed : feedItems.slice(0, 5)).map((item: any) => (
@@ -371,6 +490,7 @@ function Landing() {
                     key={`${item.kind ?? "article"}-${item.slug}`}
                     to="/blogs/$kind/$slug"
                     params={{ kind: (item.kind ?? "article") as string, slug: item.slug }}
+                    search={{ from: "home", fromSlug: selectedCapability }}
                     className="block rounded-md border border-border bg-card p-3 hover:bg-accent"
                   >
                     <div className="text-sm font-semibold text-foreground">{item.title}</div>

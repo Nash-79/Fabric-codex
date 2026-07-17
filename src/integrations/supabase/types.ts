@@ -478,6 +478,53 @@ export type Database = {
           },
         ]
       }
+      content_feedback: {
+        Row: {
+          ai_analysis: Json | null
+          body: string
+          category: string
+          content_hash: string
+          content_item_id: string
+          created_at: string
+          id: string
+          status: string
+          submitted_by: string
+          triaged_at: string | null
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          body: string
+          category?: string
+          content_hash: string
+          content_item_id: string
+          created_at?: string
+          id?: string
+          status?: string
+          submitted_by: string
+          triaged_at?: string | null
+        }
+        Update: {
+          ai_analysis?: Json | null
+          body?: string
+          category?: string
+          content_hash?: string
+          content_item_id?: string
+          created_at?: string
+          id?: string
+          status?: string
+          submitted_by?: string
+          triaged_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_feedback_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_items: {
         Row: {
           active: boolean

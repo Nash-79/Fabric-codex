@@ -57,8 +57,12 @@ curl -s "$SB/topic_capabilities?select=topic_slug,capability_id" -H "$H1" -H "$H
 curl -s "$SB/content_items?kind=eq.article&active=eq.true&select=id,slug,topic_slug,title,status,ready_to_share,validation_confidence,updated_at,depth_levels,tags" -H "$H1" -H "$H2"
 curl -s "$SB/content_item_sources?select=content_item_id,source_id,sources(slug,title,tier,url)" -H "$H1" -H "$H2"
 curl -s "$SB/diagrams?select=slug,path,caption,kind,topic_slug,capability_id,created_at" -H "$H1" -H "$H2"
-curl -s "$SB/rss_status_public?status=eq.active&select=id,title,feed_url,last_polled_at,last_seen_guid,error_count,last_error,default_tier,default_tags&order=created_at" -H "$H1" -H "$H2"
 ```
+
+RSS/watcher state and new reader feedback are private workflow data — both come from the same
+`poll-feeds` snapshot fetched above (`$APP/api/public/hooks/poll-feeds`), not a public view:
+`.watchers` (status, `last_attempt_at`, `error_count`, `last_error`) and `.feedback` (`status="new"`
+reader reports, each with the linked `content_items`). There is no `rss_status_public` table.
 
 Also read `content/topics.json`, `content/queue.md`, and the existing `content/articles/*.json`
 files to catch git-tracked drafts that are not yet published.
@@ -66,13 +70,18 @@ files to catch git-tracked drafts that are not yet published.
 ## Method
 
 1. **Snapshot the work.** Group work into:
-   - unclaimed queue: `queue_items.status="queued"`;
-   - claimed queue: `queue_items.status="claimed"` so you do not duplicate work already underway;
+   - unclaimed queue: snapshot `.queue[]` where `status="queued"`;
+   - claimed queue: `.queue[]` where `status="claimed"`, so you do not duplicate work already
+     underway;
    - pending claims: human verification needed before articles can cite them;
    - duplicates: human merge/dismiss decisions needed;
-   - RSS state: active feeds, stale polls, feed errors, and whether "Poll now" should be run in
-     Settings before the next planning pass. Treat a feed as stale when `last_polled_at` is empty,
-     older than 24 hours for a latest-info pass, or has a non-zero `error_count`;
+   - RSS state: snapshot `.watchers[]` — active feeds, stale polls, feed errors, and whether
+     "Poll now" should be run in Settings before the next planning pass. Treat a feed as stale
+     when `last_attempt_at` is empty, older than 24 hours for a latest-info pass, or has a
+     non-zero `error_count`;
+   - reader feedback: snapshot `.feedback[]` (`status="new"`) — new reports awaiting
+     `/triage-feedback`; surface the count and oldest item, but don't triage them yourself, that's
+     the feedback-triage agent's job;
    - existing articles: published, needs review, ready/not ready, and local drafts.
 2. **Infer topic intent conservatively.** Map queue items to topics from explicit `target_slug`,
    tags, notes, title, URL, and known capability ids. If the mapping is uncertain, mark it
@@ -111,6 +120,7 @@ files to catch git-tracked drafts that are not yet published.
    - human verification: Settings -> Claims;
    - rich article: `/blog <topic-slug>` or blog-author;
    - missing diagrams: `/commission-diagrams` or diagram-author;
+   - new reader feedback: `/triage-feedback` or feedback-triage — never triage it yourself inline;
    - article/design validation: validation-reviewer after draft, server validation after publish;
    - migration/content invariants: migration-validator after publishing sources;
    - help changes: docs-author only if the UI/workflow docs changed.

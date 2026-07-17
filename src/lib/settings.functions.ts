@@ -623,6 +623,69 @@ export const deleteDiagram = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+export const listContentFeedback = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .validator((d?: { status?: "new" | "triaged" | "actioned" | "dismissed" }) => d ?? {})
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    let query = sb
+      .from("content_feedback")
+      .select(
+        "id,content_item_id,content_hash,submitted_by,category,body,status,ai_analysis,triaged_at,created_at,content_items(kind,slug,title,content_hash)",
+      )
+      .order("created_at", { ascending: false })
+      .limit(200);
+    if (data.status) query = query.eq("status", data.status);
+    const { data: rows, error } = await query;
+    if (error) throw new Error(error.message);
+    return rows ?? [];
+  });
+
+export const triageFeedback = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (d: {
+      id: string;
+      aiAnalysis: Record<string, unknown>;
+      status: "triaged" | "actioned" | "dismissed";
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { error } = await sb
+      .from("content_feedback")
+      .update({
+        ai_analysis: data.aiAnalysis,
+        status: data.status,
+        triaged_at: new Date().toISOString(),
+      })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "feedback.triaged", "content_feedback", data.id, {
+      status: data.status,
+    });
+    return { ok: true as const };
+  });
+
+export const setFeedbackStatus = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { id: string; status: "actioned" | "dismissed" | "new" }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { error } = await sb
+      .from("content_feedback")
+      .update({ status: data.status })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "feedback.status_set", "content_feedback", data.id, {
+      status: data.status,
+    });
+    return { ok: true as const };
+  });
+
 export const mutateClaim = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { claimId: string; action: ClaimAction }) => d)

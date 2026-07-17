@@ -382,6 +382,7 @@ export async function computeSuggestedActions(sb: SupabaseAdmin) {
     { data: claims },
     { data: validationIssues },
     { data: diagrams },
+    { data: feedback },
   ] = await Promise.all([
     sb
       .from("queue_items")
@@ -409,6 +410,11 @@ export async function computeSuggestedActions(sb: SupabaseAdmin) {
       .order("created_at", { ascending: false })
       .limit(20),
     sb.from("diagrams").select("slug,path,topic_slug,capability_id"),
+    sb
+      .from("content_feedback")
+      .select("id,status,created_at")
+      .in("status", ["new", "triaged"])
+      .order("created_at", { ascending: true }),
   ]);
 
   const actions: Array<{
@@ -542,6 +548,28 @@ export async function computeSuggestedActions(sb: SupabaseAdmin) {
       label: `${storageOverrides.length} diagram storage override(s) need git backport`,
       detail: storageOverrides[0].slug,
       tab: "diagrams",
+    });
+  }
+
+  const newFeedback = (feedback ?? []).filter((f: any) => f.status === "new");
+  const triagedFeedback = (feedback ?? []).filter((f: any) => f.status === "triaged");
+  if (newFeedback.length) {
+    actions.push({
+      id: "feedback-new",
+      priority: 70,
+      label: `${newFeedback.length} new reader feedback item(s)`,
+      detail: "Untriaged — verify against the article before routing.",
+      tab: "feedback",
+      command: "/triage-feedback",
+    });
+  }
+  if (triagedFeedback.length) {
+    actions.push({
+      id: "feedback-triaged",
+      priority: 45,
+      label: `${triagedFeedback.length} triaged feedback item(s) awaiting review`,
+      detail: "AI verdict posted — mark actioned once the fix ships, or dismiss.",
+      tab: "feedback",
     });
   }
 

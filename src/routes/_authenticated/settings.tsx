@@ -6,6 +6,7 @@ import {
   BookOpen,
   Database,
   FileText,
+  Flag,
   Gauge,
   Image as ImageIcon,
   ListChecks,
@@ -35,6 +36,7 @@ import { RoadmapPanel } from "@/components/settings/RoadmapPanel";
 import { LogsPanel } from "@/components/settings/LogsPanel";
 import { SystemPanel } from "@/components/settings/SystemPanel";
 import { MigrationStatusPanel } from "@/components/settings/MigrationStatusPanel";
+import { FeedbackPanel } from "@/components/settings/FeedbackPanel";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — Fabric Atlas" }] }),
@@ -57,6 +59,7 @@ const navGroups = [
     items: [
       { id: "blogs", label: "Articles", icon: BookOpen },
       { id: "diagrams", label: "Diagrams", icon: ImageIcon },
+      { id: "feedback", label: "Feedback", icon: Flag },
     ],
   },
   {
@@ -201,6 +204,9 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="diagrams" className="mt-0">
             <DiagramsPanel />
+          </TabsContent>
+          <TabsContent value="feedback" className="mt-0">
+            <FeedbackPanel />
           </TabsContent>
           <TabsContent value="pipeline" className="mt-0">
             <PipelineOverviewPanel data={cms.data} loading={cms.isLoading} onNavigate={setTab} />

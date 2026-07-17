@@ -406,9 +406,7 @@ export async function exportArticlePdf(articleEl: HTMLElement, meta: PdfMeta) {
         newPage();
         const desired = Math.min(USABLE_H * pxPerMm, totalPx - offsetPx);
         const sliceH =
-          totalPx - offsetPx <= USABLE_H * pxPerMm
-            ? desired
-            : snapSliceHeight(desired, pxPerMm);
+          totalPx - offsetPx <= USABLE_H * pxPerMm ? desired : snapSliceHeight(desired, pxPerMm);
         const slice = sliceCanvas(canvas, offsetPx, sliceH);
         placeImage(slice, sliceH / pxPerMm);
         offsetPx += sliceH;

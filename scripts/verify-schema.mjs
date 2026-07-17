@@ -28,6 +28,7 @@ const EXPECTED_TABLES = [
   ["capabilities", "fail"],
   ["claims", "fail"],
   ["claimevents", "fail"],
+  ["content_feedback", "warn"],
   ["content_item_sources", "fail"],
   ["content_items", "fail"],
   ["diagrams", "fail"],

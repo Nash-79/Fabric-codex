@@ -186,7 +186,9 @@ export function ContentPanel({
               rows={data?.designs ?? []}
               label={(d) => d.title}
               meta={(d) => `${d.status} · ${d.slug}`}
-              onEdit={() => toast.info("Design body edits stay in content/designs/ for now.")}
+              onEdit={() =>
+                toast.info("Edit design bodies from Settings → Articles (filter: Designs).")
+              }
               extraAction={(item) => (
                 <Button
                   size="sm"

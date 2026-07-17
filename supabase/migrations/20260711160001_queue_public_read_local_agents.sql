@@ -7,6 +7,7 @@
 -- Exposure is limited to exactly what queue_public already selects: column-level GRANT
 -- (no submitted_by, error, or result_source_id) and a row policy scoped to the view's
 -- open statuses (no ingested/dismissed history).
+DROP POLICY IF EXISTS "Public read open queue items" ON public.queue_items;
 CREATE POLICY "Public read open queue items" ON public.queue_items
   FOR SELECT TO anon, authenticated
   USING (status IN ('queued', 'claimed', 'failed'));

@@ -9,14 +9,18 @@ import { ContentHero } from "@/components/ContentHero";
 import { ContentTocSidebar, useTocHeadings } from "@/components/ContentTocSidebar";
 import { MobileTocDrawer } from "@/components/MobileTocDrawer";
 import { ArticleSiblingsNav } from "@/components/ArticleSiblingsNav";
+import { ArticleBreadcrumb } from "@/components/ArticleBreadcrumb";
 import { CitationSidebar } from "@/components/CitationSidebar";
 import { TopicTree } from "@/components/TopicTree";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { ContentFeedbackButton } from "@/components/ContentFeedbackButton";
 import { BookOpen } from "lucide-react";
 import { useReadingProgress } from "@/lib/use-reading-progress";
 import { ResumeReadingPill } from "@/components/ResumeReadingPill";
 
 const KINDS = new Set(["article", "design", "lesson"]);
+
+type BlogDetailSearch = { from?: string; fromSlug?: string; q?: string };
 
 const contentItemQO = (kind: string, slug: string) =>
   queryOptions({
@@ -35,6 +39,11 @@ const siblingsQO = (kind: string, slug: string) =>
 const topicsQO = queryOptions({ queryKey: ["topics"], queryFn: () => listTopics() });
 
 export const Route = createFileRoute("/blogs/$kind/$slug")({
+  validateSearch: (search: Record<string, unknown>): BlogDetailSearch => ({
+    from: typeof search.from === "string" ? search.from : undefined,
+    fromSlug: typeof search.fromSlug === "string" ? search.fromSlug : undefined,
+    q: typeof search.q === "string" ? search.q.slice(0, 500) : undefined,
+  }),
   head: ({ loaderData }: { loaderData?: Awaited<ReturnType<typeof getContentItem>> }) => ({
     meta: [
       { title: loaderData ? `${loaderData.item.title} — Fabric Atlas` : "Content — Fabric Atlas" },
@@ -79,10 +88,12 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
 
 function ContentItemPage() {
   const { kind, slug } = Route.useParams();
+  const { from, fromSlug, q } = Route.useSearch();
   const navigate = useNavigate();
   const { data } = useSuspenseQuery(contentItemQO(kind, slug));
   const { data: topics } = useSuspenseQuery(topicsQO);
   const { data: siblings } = useSuspenseQuery(siblingsQO(kind, slug));
+  const originTopicName = topics.find((t: any) => t.slug === fromSlug)?.name;
   const { item, citations } = data;
   const capabilities = (data as any).capabilities ?? [];
   const diagramMeta = (data as any).diagrams ?? [];
@@ -202,21 +213,26 @@ function ContentItemPage() {
         >
           <aside className="hidden lg:block">
             <div className="sticky top-20 space-y-4">
-              <Link to="/blogs" className="text-xs text-muted-foreground hover:text-foreground">
-                ← All blogs
-              </Link>
+              <ArticleBreadcrumb
+                from={from}
+                fromSlug={fromSlug}
+                q={q}
+                topicName={originTopicName}
+              />
               <ContentTocSidebar headings={headings} />
             </div>
           </aside>
 
           <article className="min-w-0">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <Link
-                to="/blogs"
-                className="text-xs text-muted-foreground hover:text-foreground lg:hidden"
-              >
-                ← All blogs
-              </Link>
+              <span className="lg:hidden">
+                <ArticleBreadcrumb
+                  from={from}
+                  fromSlug={fromSlug}
+                  q={q}
+                  topicName={originTopicName}
+                />
+              </span>
               <div className="ml-auto flex flex-wrap items-center gap-2">
                 {citations.length > 0 && (
                   <button
@@ -232,6 +248,7 @@ function ContentItemPage() {
                   itemType={kind as "article" | "design" | "lesson"}
                   itemKey={item.slug}
                 />
+                <ContentFeedbackButton contentItemId={item.id} />
                 <PrintButton
                   getMeta={() => ({
                     title: item.title,
