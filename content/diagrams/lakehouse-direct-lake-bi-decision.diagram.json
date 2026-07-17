@@ -7,7 +7,7 @@
   "type": "decision",
   "topicSlug": "medallion-lakehouse",
   "capabilityIds": ["direct-lake", "capacity", "semantic-model", "lakehouse"],
-  "revision": "1",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/lakehouse-direct-lake-bi-decision.svg",
   "nodes": [
@@ -17,7 +17,7 @@
       "summary": "The first design fork: Import and DirectQuery versus Direct Lake, distinguished by whether data is copied and whether queries hit the source live.",
       "detail": "Power BI Desktop supports Import, DirectQuery, and Composite storage modes, distinguished by whether data is copied into the model or left in the source at query time; Direct Lake is a fourth mode in the Analysis Services engine. This node is the decision point that routes to one of the three viable modes for lakehouse-backed reporting.",
       "whyItMatters": "Storage mode is the single decision that determines whether the design needs a refresh pipeline, whether reports are fresh, and how fast they render — everything downstream follows from it.",
-      "classification": "decision",
+      "classification": "fact",
       "layers": ["data"],
       "evidence": [
         { "sourceKey": "semantic-model-understand", "note": "Power BI Desktop supports three model storage modes - Import, DirectQuery, and Composite - distinguished by whether the data is copied into the model or left in the underlying source at query time." },
@@ -39,7 +39,7 @@
       "summary": "Fast in-memory queries but stale between refreshes; the whole model must be memory-resident to answer queries.",
       "detail": "An Import-mode model hosted in the Power BI service must be loaded entirely into memory before it can answer queries, and it serves a snapshot that relies on scheduled or on-demand refresh to stay current. The default model size limit without the large storage format is 1 GB; the large format lifts the ceiling toward the SKU's memory.",
       "whyItMatters": "Import is the fastest for pure query latency but reintroduces exactly the refresh pipeline and staleness this lakehouse pattern is designed to remove, so it is an alternative rather than the default here.",
-      "classification": "alternative",
+      "classification": "fact",
       "layers": ["compute"],
       "evidence": [
         { "sourceKey": "semantic-model-understand", "note": "An Import-mode model hosted in the Power BI service must be loaded entirely into memory before it can answer queries; Import models serve a snapshot and rely on scheduled or on-demand refresh to stay current." },
@@ -62,7 +62,7 @@
       "summary": "Always fresh because every visual issues a live source query, but each render pays a round trip and is typically slower.",
       "detail": "DirectQuery models forward queries to the source so results always reflect current source data, at the cost of a live round trip per render that typically costs performance relative to an in-memory model.",
       "whyItMatters": "DirectQuery is the right alternative only when data must be to-the-second live; for most lakehouse reporting Direct Lake's framing freshness is enough and far faster.",
-      "classification": "alternative",
+      "classification": "fact",
       "layers": ["compute"],
       "evidence": [
         { "sourceKey": "semantic-model-understand", "note": "DirectQuery models forward queries to the source so results always reflect current source data." }
@@ -84,7 +84,7 @@
       "summary": "Reads Delta columns straight from OneLake — import-like speed, DirectQuery-like freshness, no copy or refresh job.",
       "detail": "Direct Lake is a semantic-model storage mode in which the model reads Delta tables straight from OneLake, avoiding both data import and DirectQuery and so pairing import-like performance with DirectQuery-like freshness. Direct Lake on OneLake is chosen for OneLake security, more modelling features, and faster query performance, and it never falls back to DirectQuery, skipping SQL-endpoint coupling entirely which enables more efficient DAX query plans.",
       "whyItMatters": "This is the storage mode that delivers the pattern's whole value proposition — fast and fresh with no second copy — so it is the recommended default for a lakehouse-backed BI serving design.",
-      "classification": "recommended",
+      "classification": "fact",
       "layers": ["compute", "data"],
       "evidence": [
         { "sourceKey": "fabric-platform-terminology", "note": "Direct Lake is a semantic-model storage mode in which the model reads Delta tables straight from OneLake, avoiding both data import and DirectQuery, and so pairs import-like performance with DirectQuery-like freshness." },
@@ -130,7 +130,7 @@
       "summary": "The SKU sets the per-model memory bound; estimate resident column footprint against it.",
       "detail": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once. A model's in-memory footprint can be estimated from VertiPaq storage DMVs by summing dictionary and used sizes, so the fit question can be answered before rollout rather than discovered in production.",
       "whyItMatters": "Whether the model fits the bound decides whether reports stay import-fast or degrade to cold reads at peak — the core performance/cost trade-off of the sizing decision.",
-      "classification": "decision",
+      "classification": "fact",
       "layers": ["compute"],
       "evidence": [
         { "sourceKey": "direct-lake-how-it-works", "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once." },
@@ -200,7 +200,7 @@
       "summary": "F64+ lets free-license users view reports; below F64 every viewer needs a paid Pro/PPU seat.",
       "detail": "F64 is the licensing threshold for broad report consumption: on an F64 or larger capacity, users holding only a free Fabric license can view Power BI content if they have a workspace viewer role, whereas on smaller F SKUs every viewer needs a paid seat.",
       "whyItMatters": "Report audience size can set the SKU floor independently of compute load — a design decision that is about licensing economics, not throughput.",
-      "classification": "decision",
+      "classification": "fact",
       "layers": ["governance"],
       "evidence": [
         { "sourceKey": "fabric-platform-licenses-capacities", "note": "F64 is the licensing threshold for broad report consumption: on an F64 or larger capacity, users holding only a free Fabric license can view Power BI content with a workspace viewer role, whereas on smaller F SKUs every viewer needs a paid seat." }
@@ -244,7 +244,7 @@
       "summary": "Write-side layout, mutation pattern, vacuum window, file-count ceiling, and the Block-Public-Internet-Access go/no-go.",
       "detail": "The operational guardrails that keep a Direct Lake BI design healthy: write V-Ordered Delta with a ~1 GB Optimized Write target and low-cardinality partitions so column loads stay cheap; prefer append/merge over Overwrite, since Overwrite wipes the table's commit history and forces a full cold-state reload of all segments, dictionaries, and join indexes on the next query; keep vacuum retention longer than the framing cadence, because a framed model is pinned to a specific Delta commit version and vacuuming its Parquet files before the next reframe makes queries fail; keep a single table under 10,000 Parquet files, past which framing fails; and confirm Block Public Internet Access is not enabled on the tenant, since Direct Lake connections fail when it is active.",
       "whyItMatters": "These are the concrete, sourced checks that separate a Direct Lake design that stays fast from one that silently degrades or breaks — the checklist an implementer runs before go-live.",
-      "classification": "checklist",
+      "classification": "pattern",
       "layers": ["data", "governance"],
       "evidence": [
         { "sourceKey": "milescole-optimized-write-fabric", "note": "A 1 GB BinSize target is recommended when writing Delta tables that back Power BI Direct Lake semantic models, because larger files align with the Direct Lake loading pattern and reduce segment loads." },

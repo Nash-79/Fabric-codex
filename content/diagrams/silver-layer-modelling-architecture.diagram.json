@@ -7,7 +7,7 @@
   "type": "architecture",
   "topicSlug": "silver-layer-modelling",
   "capabilityIds": ["lakehouse", "warehouse", "semantic-model"],
-  "revision": "4",
+  "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/silver-layer-modelling-architecture.svg",
   "nodes": [
@@ -88,13 +88,11 @@
       "id": "schema-evolution-guard",
       "label": "Schema evolution guard",
       "summary": "Controls how new or changed bronze columns are allowed to reach the silver merge target.",
-      "detail": "Delta Lake supports schema evolution on MERGE and write operations — new columns can be added additively via mergeSchema, and DataFrameWriterV2's replace()/createOrReplace() overwrites schema and partitioning as a consequence of the method itself. But schema evolution is not unconditional: adding a foreign key constraint between endpoint tables freezes further schema changes for those tables, so later Delta schema evolution such as new columns stops syncing until the constraint is addressed. This guard stage is where a team decides which evolution is auto-applied and which requires explicit review.",
-      "whyItMatters": "An uncontrolled schema-evolution path lets an upstream bronze change silently reshape the canonical silver entity; a foreign-key constraint left unaddressed silently freezes evolution instead, which looks like a stalled sync rather than an obvious error.",
-      "classification": "fact",
+      "detail": "Delta Lake supports schema evolution on MERGE and write operations — new columns can be added additively via mergeSchema, and DataFrameWriterV2's replace()/createOrReplace() overwrites schema and partitioning as a consequence of the method itself. This guard stage is where a team decides which evolution is auto-applied and which requires explicit review. *Inference:* schema evolution may not be unconditional in every downstream scenario — for example, a foreign key constraint between endpoint tables could plausibly freeze further schema changes until the constraint is addressed, which would surface as a stalled sync rather than an obvious error. This specific interaction is not yet confirmed against a Microsoft source and should be verified before being treated as guaranteed behavior.",
+      "whyItMatters": "An uncontrolled schema-evolution path lets an upstream bronze change silently reshape the canonical silver entity; unaddressed constraints on the target table are a plausible way for evolution to silently stall instead, which would look like a stalled sync rather than an obvious error.",
+      "classification": "inference",
       "layers": ["data", "governance"],
-      "evidence": [
-        { "sourceKey": "microsoft-fabric-mirroring", "note": "Adding a foreign key constraint between endpoint tables freezes further schema changes for those tables, so later Delta schema evolution (such as new columns) stops syncing until the constraint is addressed." }
-      ],
+      "evidence": [],
       "tags": ["schema-evolution", "delta-lake", "governance"],
       "drill": {
         "inputs": ["Deduplicated rows whose schema may differ from the current silver table's schema (new columns, widened types)"],
