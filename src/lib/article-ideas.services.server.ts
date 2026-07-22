@@ -240,7 +240,18 @@ Non-negotiable rules:
   content maps to an existing topic; propose a new short kebab-case slug only when no topic fits.
 - must_include_example should be true for essentially every idea (a worked example is standard
   practice for both articles and lessons in this KB) — set it false only for a narrow conceptual
-  overview where a worked example genuinely does not apply.`;
+  overview where a worked example genuinely does not apply.
+
+Output shape (follow exactly — do not rename or restructure):
+- Return a single JSON object with exactly one top-level key: "ideas". Do NOT return a bare array.
+  Correct: {"ideas": [ ... ]}. Incorrect: [ ... ].
+- Each element of "ideas" is an object with exactly these keys: title, angle, rationale,
+  signal_type, target_content_kind, target_slug, capability_level (lessons only), target_length_hint,
+  must_include_example, diagram_guidance, supporting_capability_ids, supporting_roadmap_ids,
+  suggested_diagrams, priority.
+- "angle" and "rationale" are two distinct required fields, not one merged "justification" or
+  "reasoning" field: angle is the specific thesis/take the content will argue; rationale is why it
+  matters now, citing the concrete signal. Do not invent a different field name for either.`;
 
 const ADMIN_DIRECTION_RULE = `
 An ADMIN DIRECTION block below narrows *what* to propose ideas about — it does not exempt an idea
