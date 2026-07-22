@@ -27,8 +27,11 @@ curl -s "$APP/api/public/hooks/poll-feeds" -H "$AGENT_H"   # .feedback[] where s
 ```
 
 Each entry carries `content_item_id`, `content_hash` (captured at submission time), `category`,
-`body`, and the linked `content_items(kind,slug,title,content_hash)`. Fetch the article's current
-body and grounding claims to verify against:
+`body`, `section_id`/`section_title` (the heading the reader was on when they reported — set by the
+inline per-section "Give feedback on this section" trigger; null when they used the general
+"Report an issue" toolbar button without picking a section), and the linked
+`content_items(kind,slug,title,content_hash)`. Fetch the article's current body and grounding
+claims to verify against:
 
 ```bash
 curl -s "$SB/content_items?slug=eq.<slug>&kind=eq.<kind>&select=slug,title,body_md,content_item_sources(label,position,sources(slug,title,tier))" -H "$H1" -H "$H2"
@@ -43,9 +46,10 @@ For each `new` feedback row:
    article changed since this was filed — note that in `reasoning` and weight it toward
    `not_actionable`/`duplicate` unless you can confirm the specific issue still exists in the
    current body.
-2. **Verify, don't trust.** Read the actual `body_md` section the report points at (or search for
-   it if the reader didn't cite a section) and the claims it should be grounded on. Confirm whether
-   the reported problem is real:
+2. **Verify, don't trust.** Read the actual `body_md` section — use `section_id`/`section_title`
+   directly when present (it's a structural anchor the reader picked, not a guess), or search the
+   body for the right passage when it's null (article-level report) — and the claims it should be
+   grounded on. Confirm whether the reported problem is real:
    - `factual_error` — does the prose contradict a verified claim, or state something no claim
      supports?
    - `outdated` — does a more recent claim (by source date) supersede what's written?
@@ -83,6 +87,11 @@ For each `new` feedback row:
 - Never edit `content/articles|designs|lessons/*.json` directly; you route, you don't fix.
 - Keep `reasoning` short and specific — point at the exact claim id or sentence, not a vibe.
 - If ten or more `new` items exist, process the oldest first and say how many remain unprocessed.
+- When multiple `new` rows share the same `content_item_id` + `section_id`, treat that as a signal,
+  not noise — several readers flagging the same passage raises confidence the issue is real. Note
+  the cluster size in `reasoning` and consider one combined `suggested_queue_entry` rather than
+  duplicate lines, but still write one triage verdict per feedback `id` (each row still needs its
+  own status for the Apply-triage-results step in Settings).
 
 ## Output
 

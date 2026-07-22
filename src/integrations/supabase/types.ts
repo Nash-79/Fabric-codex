@@ -487,6 +487,8 @@ export type Database = {
           content_item_id: string
           created_at: string
           id: string
+          section_id: string | null
+          section_title: string | null
           status: string
           submitted_by: string
           triaged_at: string | null
@@ -499,6 +501,8 @@ export type Database = {
           content_item_id: string
           created_at?: string
           id?: string
+          section_id?: string | null
+          section_title?: string | null
           status?: string
           submitted_by: string
           triaged_at?: string | null
@@ -511,6 +515,8 @@ export type Database = {
           content_item_id?: string
           created_at?: string
           id?: string
+          section_id?: string | null
+          section_title?: string | null
           status?: string
           submitted_by?: string
           triaged_at?: string | null

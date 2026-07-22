@@ -632,7 +632,7 @@ export const listContentFeedback = createServerFn({ method: "GET" })
     let query = sb
       .from("content_feedback")
       .select(
-        "id,content_item_id,content_hash,submitted_by,category,body,status,ai_analysis,triaged_at,created_at,content_items(kind,slug,title,content_hash)",
+        "id,content_item_id,content_hash,submitted_by,category,body,section_id,section_title,status,ai_analysis,triaged_at,created_at,content_items(kind,slug,title,content_hash)",
       )
       .order("created_at", { ascending: false })
       .limit(200);

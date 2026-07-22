@@ -5,26 +5,32 @@ import { slugifyHeading, stripMarkdownInline } from "@/lib/heading-utils";
 export type TocEntry = {
   id: string;
   title: string;
-  kind: "heading" | "figure";
+  kind: "heading" | "subheading" | "figure";
 };
 
 export type TocHeading = TocEntry; // legacy alias
 
-// Extract both `## headings` and image references in document order so the
-// sidebar navigator lists sections AND diagrams.
+// Extract `## headings`, `### subheadings`, and image references in document order. The sidebar
+// navigator and scroll-spy only care about top-level `heading`s + `figure`s (subheadings would
+// clutter the ToC); callers that need finer-grained anchors — e.g. attributing feedback to a
+// specific subsection like "### How it works internally" — filter for `kind === "subheading"` too.
 export function useTocHeadings(bodyMd: string): TocEntry[] {
   return useMemo(() => {
     const entries: TocEntry[] = [];
     let figureIndex = 0;
-    const re = /^##\s+(.+)$|!\[([^\]]*)\]\(([^)\s]+)\)/gm;
+    const re = /^(##|###)\s+(.+)$|!\[([^\]]*)\]\(([^)\s]+)\)/gm;
     let m: RegExpExecArray | null;
     while ((m = re.exec(bodyMd)) !== null) {
       if (m[1]) {
-        const title = stripMarkdownInline(m[1]);
-        entries.push({ id: slugifyHeading(title), title, kind: "heading" });
+        const title = stripMarkdownInline(m[2]);
+        entries.push({
+          id: slugifyHeading(title),
+          title,
+          kind: m[1] === "##" ? "heading" : "subheading",
+        });
       } else {
         figureIndex += 1;
-        const alt = stripMarkdownInline(m[2] ?? "").trim();
+        const alt = stripMarkdownInline(m[3] ?? "").trim();
         entries.push({
           id: `figure-${figureIndex}`,
           title: alt ? `Figure ${figureIndex} — ${alt}` : `Figure ${figureIndex}`,
@@ -49,7 +55,8 @@ function scrollToId(id: string) {
   history.replaceState(null, "", `#${id}`);
 }
 
-export function ContentTocSidebar({ headings }: { headings: TocEntry[] }) {
+export function ContentTocSidebar({ headings: allEntries }: { headings: TocEntry[] }) {
+  const headings = useMemo(() => allEntries.filter((h) => h.kind !== "subheading"), [allEntries]);
   const activeId = useActiveHeading(headings);
 
   const goRelative = useCallback(
@@ -161,7 +168,7 @@ export function ContentTocSidebar({ headings }: { headings: TocEntry[] }) {
   );
 }
 
-function useActiveHeading(headings: TocEntry[]): string | null {
+export function useActiveHeading(headings: TocEntry[]): string | null {
   const [activeId, setActiveId] = useState<string | null>(null);
 
   useEffect(() => {

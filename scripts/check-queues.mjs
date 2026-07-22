@@ -70,6 +70,8 @@ function commandFor(item) {
   if (item.kind === "article") return `/blog ${item.target_slug ?? item.title ?? ""}`.trim();
   if (item.kind === "design") return `/design ${item.target_slug ?? item.title ?? ""}`.trim();
   if (item.kind === "lesson") return `/lesson ${item.target_slug ?? item.title ?? ""}`.trim();
+  if (item.kind === "idea")
+    return `/publish-topic ${item.target_slug ?? item.title ?? ""} # ${item.title ?? ""}`.trim();
   return "/ingest-batch";
 }
 
@@ -106,6 +108,9 @@ function textReport(digest) {
   if (digest.feedback.new) {
     lines.push(`Feedback: ${digest.feedback.new} new reader report(s) awaiting triage`);
   }
+  if (digest.ideas.pending || digest.ideas.approved) {
+    lines.push(`Ideas: ${digest.ideas.pending} pending, ${digest.ideas.approved} approved`);
+  }
   internalsGapLine();
   if (digest.next.length) {
     lines.push("Next actions:");
@@ -132,6 +137,7 @@ async function main() {
     coverage: { articleLessTopics: 0, diagramGaps: 0, storageOverrides: 0, internalsGaps: null },
     claims: { pending: 0 },
     feedback: { new: 0 },
+    ideas: { pending: 0, approved: 0 },
     next: [],
     error: "",
   };
@@ -205,6 +211,11 @@ async function main() {
     digest.claims.pending = claims.length;
     digest.feedback.new = newFeedback.length;
 
+    const ideaItems = queue.filter((q) => q.kind === "idea");
+    const pendingIdeas = ideaItems.filter((q) => q.status === "queued");
+    const approvedIdeas = ideaItems.filter((q) => q.status === "claimed");
+    digest.ideas = { pending: pendingIdeas.length, approved: approvedIdeas.length };
+
     for (const item of openSources.slice(0, 3))
       digest.next.push(`/ingest-batch # ${item.title || item.url}`);
     for (const item of commissions.slice(0, 3)) digest.next.push(commandFor(item));
@@ -216,6 +227,8 @@ async function main() {
     for (const slug of diagramGaps.slice(0, 2)) digest.next.push(`/commission-diagrams ${slug}`);
     if (claims.length) digest.next.push("/orchestrate-content");
     if (newFeedback.length) digest.next.push("/triage-feedback");
+    for (const item of approvedIdeas.slice(0, 3)) digest.next.push(commandFor(item));
+    if (pendingIdeas.length) digest.next.push("Settings → Article Ideas → review pending ideas");
     if (storageOverrides.length)
       digest.next.push("Backport storage-overridden diagrams to content/diagrams/");
   } catch (err) {

@@ -433,7 +433,10 @@ export async function computeSuggestedActions(sb: SupabaseAdmin) {
   );
   const failedQueue = (queue ?? []).filter((q: any) => q.status === "failed");
   const sourceQueue = dueQueue.filter((q: any) => q.kind === "source");
-  const commissionQueue = dueQueue.filter((q: any) => q.kind !== "source");
+  // Ideas (kind='idea') are pre-editorial candidates awaiting human approval in the Article
+  // Ideas panel, not commissioned work — excluded here or a freshly generated, unreviewed idea
+  // would surface as a "commissioned work item due" with a bogus `/idea <slug>` command.
+  const commissionQueue = dueQueue.filter((q: any) => q.kind !== "source" && q.kind !== "idea");
   if (sourceQueue.length) {
     actions.push({
       id: "queued-sources",

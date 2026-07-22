@@ -92,6 +92,20 @@ server serves the knowledge base; deterministic citation/freshness/versioning ru
 overwriting its `.svg`/`.mmd` file with the same filename and re-running Publish (all or that one
 diagram entry); no separate "delete then re-add" step exists or is needed.
 
+### Article idea generation (Settings → Article Ideas)
+
+The one deliberate exception to "server only runs deterministic checks": an admin-triggered
+"Generate ideas" button fuses the Fabric roadmap (`roadmap_items`), coverage gaps (same scoring
+`coverage-auditor` uses), the editorial backlog (`queue_items`, `content_feedback`), and stale
+articles into candidate ideas via the **Lovable AI Gateway** (`src/lib/ai-gateway.server.ts`,
+`LOVABLE_API_KEY` — the same bundled-credit gateway `/advisor/chat` uses), never the metered
+Anthropic API. Ideas are stored as `queue_items(kind='idea')` rows — no new table — with the
+rationale JSON-encoded in `notes`. Approving an idea (`src/lib/article-ideas.functions.ts`) just
+flips its status to `claimed`; a human still runs `/publish-topic <slug>` or `/blog <slug>`
+locally as normal, reading the idea's rationale as drafting context. See
+`src/lib/article-ideas.services.server.ts` for the signal-fusion + generation logic and
+`src/components/settings/ArticleIdeasPanel.tsx` for the admin UI.
+
 ## Tags and images
 
 - **Tags** are free-form topical hashtags on sources/claims/designs (e.g. MicrosoftFabric,

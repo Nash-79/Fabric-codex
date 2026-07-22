@@ -702,7 +702,15 @@ export type ContentFeedbackCategory =
 // changed since this was filed.
 export const submitContentFeedback = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((d: { contentItemId: string; category: ContentFeedbackCategory; body: string }) => d)
+  .validator(
+    (d: {
+      contentItemId: string;
+      category: ContentFeedbackCategory;
+      body: string;
+      sectionId?: string;
+      sectionTitle?: string;
+    }) => d,
+  )
   .handler(async ({ data, context }) => {
     const body = data.body.trim();
     if (!body) throw new Error("Feedback text is required.");
@@ -721,6 +729,8 @@ export const submitContentFeedback = createServerFn({ method: "POST" })
       submitted_by: context.userId,
       category: data.category,
       body,
+      section_id: data.sectionId ?? null,
+      section_title: data.sectionTitle ?? null,
     });
     if (error) throw new Error(error.message);
     return { ok: true as const };

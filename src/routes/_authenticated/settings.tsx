@@ -9,6 +9,7 @@ import {
   Flag,
   Gauge,
   Image as ImageIcon,
+  Lightbulb,
   ListChecks,
   Milestone,
   RefreshCw,
@@ -37,6 +38,7 @@ import { LogsPanel } from "@/components/settings/LogsPanel";
 import { SystemPanel } from "@/components/settings/SystemPanel";
 import { MigrationStatusPanel } from "@/components/settings/MigrationStatusPanel";
 import { FeedbackPanel } from "@/components/settings/FeedbackPanel";
+import { ArticleIdeasPanel } from "@/components/settings/ArticleIdeasPanel";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — Fabric Atlas" }] }),
@@ -66,6 +68,7 @@ const navGroups = [
     label: "Pipeline",
     items: [
       { id: "pipeline", label: "Overview", icon: Workflow },
+      { id: "ideas", label: "Article Ideas", icon: Lightbulb },
       { id: "rss", label: "Watchers", icon: Radar },
       { id: "queue", label: "Queue", icon: FileText },
       { id: "publish", label: "Publish", icon: Upload },
@@ -210,6 +213,9 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="pipeline" className="mt-0">
             <PipelineOverviewPanel data={cms.data} loading={cms.isLoading} onNavigate={setTab} />
+          </TabsContent>
+          <TabsContent value="ideas" className="mt-0">
+            <ArticleIdeasPanel data={cms.data} onDone={refresh} loading={cms.isLoading} />
           </TabsContent>
           <TabsContent value="rss" className="mt-0">
             <WatchersPanel />

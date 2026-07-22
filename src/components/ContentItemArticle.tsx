@@ -14,6 +14,8 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/h
 import type { Citation } from "@/components/CitationSidebar";
 import { slugifyHeading, textFromNode } from "@/lib/heading-utils";
 import { codeLanguage } from "@/components/CodeBlock";
+import { ContentFeedbackButton } from "@/components/ContentFeedbackButton";
+import type { TocEntry } from "@/components/ContentTocSidebar";
 
 type DiagramMeta = { path?: string; caption?: string };
 
@@ -71,10 +73,16 @@ export function ContentItemArticle({
   bodyMd,
   diagramMeta = [],
   citations = [],
+  contentItemId,
+  sections = [],
 }: {
   bodyMd: string;
   diagramMeta?: DiagramMeta[];
   citations?: Citation[];
+  /** When set, every heading gets an inline "give feedback on this section" trigger. */
+  contentItemId?: string;
+  /** Full heading list (## and ###) for the feedback dialog's section picker — see useTocHeadings. */
+  sections?: TocEntry[];
 }) {
   const captionByFile = useMemo(() => {
     const map = new Map<string, string>();
@@ -157,7 +165,45 @@ export function ContentItemArticle({
               >
                 #
               </a>
+              {contentItemId && (
+                <ContentFeedbackButton
+                  contentItemId={contentItemId}
+                  sections={sections}
+                  defaultSectionId={id}
+                  variant="inline"
+                />
+              )}
             </h2>
+          );
+        },
+        h3: ({ children, ...rest }) => {
+          const id = slugifyHeading(textFromNode(children));
+          return (
+            <h3 id={id} {...rest} className="group relative">
+              {children}
+              <a
+                href={`#${id}`}
+                aria-label="Copy link to section"
+                data-no-print
+                onClick={(e) => {
+                  e.preventDefault();
+                  const url = `${window.location.origin}${window.location.pathname}#${id}`;
+                  navigator.clipboard?.writeText(url);
+                  history.replaceState(null, "", `#${id}`);
+                }}
+                className="no-print ml-2 text-teal-500/40 opacity-0 transition group-hover:opacity-100 hover:text-teal-500"
+              >
+                #
+              </a>
+              {contentItemId && (
+                <ContentFeedbackButton
+                  contentItemId={contentItemId}
+                  sections={sections}
+                  defaultSectionId={id}
+                  variant="inline"
+                />
+              )}
+            </h3>
           );
         },
         sup: ({ children, ...rest }) => <sup {...rest}>{children}</sup>,
@@ -212,7 +258,7 @@ export function ContentItemArticle({
           );
         },
       }) satisfies ComponentProps<typeof ReactMarkdown>["components"],
-    [captionByFile, srcByFile, figureIndexByFile, citations],
+    [captionByFile, srcByFile, figureIndexByFile, citations, contentItemId, sections],
   );
 
   return (

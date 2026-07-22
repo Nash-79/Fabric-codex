@@ -35,7 +35,7 @@ export async function getAgentSnapshot() {
     supabaseAdmin
       .from("content_feedback")
       .select(
-        "id,content_item_id,content_hash,category,body,status,created_at,content_items(kind,slug,title,content_hash)",
+        "id,content_item_id,content_hash,category,body,section_id,section_title,status,created_at,content_items(kind,slug,title,content_hash)",
       )
       .eq("status", "new")
       .order("created_at"),

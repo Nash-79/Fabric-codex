@@ -6,7 +6,11 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { PrintButton } from "@/components/PrintButton";
 import { ContentItemArticle } from "@/components/ContentItemArticle";
 import { ContentHero } from "@/components/ContentHero";
-import { ContentTocSidebar, useTocHeadings } from "@/components/ContentTocSidebar";
+import {
+  ContentTocSidebar,
+  useActiveHeading,
+  useTocHeadings,
+} from "@/components/ContentTocSidebar";
 import { MobileTocDrawer } from "@/components/MobileTocDrawer";
 import { ArticleSiblingsNav } from "@/components/ArticleSiblingsNav";
 import { ArticleBreadcrumb } from "@/components/ArticleBreadcrumb";
@@ -99,6 +103,8 @@ function ContentItemPage() {
   const diagramMeta = (data as any).diagrams ?? [];
   const hasPreview = capabilities.some((c: any) => c?.maturity === "preview");
   const headings = useTocHeadings(item.body_md ?? "");
+  const tocHeadings = headings.filter((h) => h.kind !== "subheading");
+  const activeSectionId = useActiveHeading(tocHeadings);
   const diagramCount = [
     ...(item.body_md ?? "").matchAll(/!\[[^\]]*\]\((\/content\/diagrams\/[^)\s]+)\)/g),
   ].length;
@@ -248,7 +254,11 @@ function ContentItemPage() {
                   itemType={kind as "article" | "design" | "lesson"}
                   itemKey={item.slug}
                 />
-                <ContentFeedbackButton contentItemId={item.id} />
+                <ContentFeedbackButton
+                  contentItemId={item.id}
+                  sections={headings}
+                  defaultSectionId={activeSectionId ?? undefined}
+                />
                 <PrintButton
                   getMeta={() => ({
                     title: item.title,
@@ -271,6 +281,8 @@ function ContentItemPage() {
               bodyMd={item.body_md ?? ""}
               diagramMeta={diagramMeta}
               citations={citations}
+              contentItemId={item.id}
+              sections={headings}
             />
 
             <ArticleSiblingsNav

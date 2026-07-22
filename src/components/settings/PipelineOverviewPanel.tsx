@@ -42,7 +42,11 @@ export function PipelineOverviewPanel({
       .sort()
       .pop() ?? null;
 
-  const queue = (data?.queue ?? []).filter((q: any) => q.kind !== "diagram");
+  // Ideas (kind='idea') are pre-editorial candidates, not ingestion/commission work — exclude
+  // them from these pipeline counts the same way diagrams are excluded, or a freshly generated,
+  // still-unreviewed idea inflates "open work" and a later-approved one falsely reads as an
+  // "ingested source" once marked written.
+  const queue = (data?.queue ?? []).filter((q: any) => q.kind !== "diagram" && q.kind !== "idea");
   const openQueue = queue.filter((q: any) => q.status === "queued" || q.status === "claimed");
   const failedQueue = queue.filter((q: any) => q.status === "failed");
   const ingested = queue.filter((q: any) => q.status === "ingested");

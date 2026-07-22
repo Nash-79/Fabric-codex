@@ -21,6 +21,8 @@ type FeedbackRow = {
   content_item_id: string;
   category: string;
   body: string;
+  section_id: string | null;
+  section_title: string | null;
   status: "new" | "triaged" | "actioned" | "dismissed";
   ai_analysis: Record<string, unknown> | null;
   triaged_at: string | null;
@@ -98,7 +100,15 @@ function ApplyTriageResults({ onDone }: { onDone: () => void }) {
   );
 }
 
-function FeedbackRow({ row, onDone }: { row: FeedbackRow; onDone: () => void }) {
+function FeedbackRow({
+  row,
+  clusterCount,
+  onDone,
+}: {
+  row: FeedbackRow;
+  clusterCount: number;
+  onDone: () => void;
+}) {
   const statusFn = useServerFn(setFeedbackStatus);
   const setStatus = useMutation({
     mutationFn: (status: "actioned" | "dismissed") => statusFn({ data: { id: row.id, status } }),
@@ -120,7 +130,11 @@ function FeedbackRow({ row, onDone }: { row: FeedbackRow; onDone: () => void }) 
       <TableCell className="max-w-[220px]">
         {row.content_items ? (
           <a
-            href={`/blogs/${row.content_items.kind}/${row.content_items.slug}`}
+            href={
+              row.section_id
+                ? `/blogs/${row.content_items.kind}/${row.content_items.slug}#${row.section_id}`
+                : `/blogs/${row.content_items.kind}/${row.content_items.slug}`
+            }
             target="_blank"
             rel="noopener noreferrer"
             className="text-teal-300 hover:underline"
@@ -129,6 +143,19 @@ function FeedbackRow({ row, onDone }: { row: FeedbackRow; onDone: () => void }) 
           </a>
         ) : (
           <span className="text-muted-foreground">deleted item</span>
+        )}
+        {row.section_title && (
+          <div
+            className="mt-0.5 truncate text-[11px] text-muted-foreground"
+            title={row.section_title}
+          >
+            § {row.section_title}
+            {clusterCount > 1 && (
+              <span className="ml-1 rounded-sm bg-amber-500/10 px-1 text-amber-200">
+                ×{clusterCount}
+              </span>
+            )}
+          </div>
         )}
       </TableCell>
       <TableCell>
@@ -191,6 +218,15 @@ export function FeedbackPanel() {
   const rows = (feedback.data ?? []) as unknown as FeedbackRow[];
   const newCount = rows.filter((r) => r.status === "new").length;
 
+  // Cluster counts by (article, section) so triage can see "3 reports on the same section" at a
+  // glance instead of independently re-discovering the pattern across scattered rows.
+  const clusterKey = (r: FeedbackRow) => `${r.content_item_id}::${r.section_id ?? ""}`;
+  const clusterCounts = rows.reduce<Record<string, number>>((acc, r) => {
+    const k = clusterKey(r);
+    acc[k] = (acc[k] ?? 0) + 1;
+    return acc;
+  }, {});
+
   return (
     <div className="space-y-4">
       <Panel
@@ -221,7 +257,12 @@ export function FeedbackPanel() {
             </TableHeader>
             <TableBody>
               {rows.map((row) => (
-                <FeedbackRow key={row.id} row={row} onDone={refresh} />
+                <FeedbackRow
+                  key={row.id}
+                  row={row}
+                  clusterCount={clusterCounts[clusterKey(row)] ?? 1}
+                  onDone={refresh}
+                />
               ))}
             </TableBody>
           </Table>
