@@ -1,7 +1,13 @@
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
-import { getContentItem, getContentSiblings, listTopics } from "@/lib/atlas.functions";
+import { useSuspenseQuery, useQuery, queryOptions } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useMemo, useState } from "react";
+import {
+  getContentItem,
+  getContentSiblings,
+  listMyContentFeedback,
+  listTopics,
+} from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
 import { PrintButton } from "@/components/PrintButton";
 import { ContentItemArticle } from "@/components/ContentItemArticle";
@@ -18,6 +24,8 @@ import { CitationSidebar } from "@/components/CitationSidebar";
 import { TopicTree } from "@/components/TopicTree";
 import { FavoriteButton } from "@/components/FavoriteButton";
 import { ContentFeedbackButton } from "@/components/ContentFeedbackButton";
+import { readOrCreateAnonToken, useHasSession } from "@/lib/use-feedback-identity";
+import { ContentFeedbackRail } from "@/components/ContentFeedbackRail";
 import { BookOpen } from "lucide-react";
 import { useReadingProgress } from "@/lib/use-reading-progress";
 import { ResumeReadingPill } from "@/components/ResumeReadingPill";
@@ -108,6 +116,28 @@ function ContentItemPage() {
   const diagramCount = [
     ...(item.body_md ?? "").matchAll(/!\[[^\]]*\]\((\/content\/diagrams\/[^)\s]+)\)/g),
   ].length;
+
+  // "Already reported this section" — best-effort, not part of the page's critical render path:
+  // the anon token is only resolvable client-side after mount, and a failed/slow lookup should
+  // never block or degrade the article itself, just leave the reported-state indicator quiet.
+  const listMyFeedbackFn = useServerFn(listMyContentFeedback);
+  const hasSession = useHasSession();
+  const { data: myFeedback } = useQuery({
+    queryKey: ["my-content-feedback", item.id, hasSession],
+    queryFn: () =>
+      listMyFeedbackFn({
+        data: {
+          contentItemId: item.id,
+          anonToken: hasSession ? undefined : readOrCreateAnonToken(),
+        },
+      }),
+    enabled: hasSession !== null,
+  });
+  const reportedSectionIds = useMemo(
+    () => new Set((myFeedback ?? []).map((f) => f.section_id).filter((id): id is string => !!id)),
+    [myFeedback],
+  );
+
   const [progress, setProgress] = useState(0);
   const [citationsOpen, setCitationsOpen] = useState(false);
   const savedProgress = useReadingProgress(kind, slug);
@@ -283,6 +313,7 @@ function ContentItemPage() {
               citations={citations}
               contentItemId={item.id}
               sections={headings}
+              reportedSectionIds={reportedSectionIds}
             />
 
             <ArticleSiblingsNav
@@ -300,6 +331,11 @@ function ContentItemPage() {
         </div>
       </div>
       <MobileTocDrawer headings={headings} />
+      <ContentFeedbackRail
+        contentItemId={item.id}
+        headings={tocHeadings}
+        reportedSectionIds={reportedSectionIds}
+      />
       {showResume && savedProgress && (
         <ResumeReadingPill pct={savedProgress.pct} scrollY={savedProgress.scrollY} />
       )}

@@ -1,6 +1,6 @@
 ---
 description: End-to-end publish chain for one topic — coverage check, human verify gate, diagram, cited article, validation, docs sync. No server-side orchestration; this is the local agent chain.
-argument-hint: <topic-slug>
+argument-hint: <topic-slug> [--idea <id>]
 ---
 
 Publish topic: $ARGUMENTS
@@ -15,6 +15,23 @@ keyless reads once:
 source .env 2>/dev/null || true
 SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authorization: Bearer $SUPABASE_PUBLISHABLE_KEY"
 ```
+
+**Optional `--idea <id>` brief.** If `$ARGUMENTS` ends with `--idea <id>`, strip that token pair
+and use the remaining text as the topic slug. Fetch the idea before starting step 1:
+
+```bash
+curl -s "$SB/queue_items?id=eq.<id>&kind=eq.idea&select=id,title,target_slug,notes,status" -H "$H1" -H "$H2"
+```
+
+Parse `notes` as JSON (`rationale`, `target_content_kind`, `target_length_hint`, `diagram_guidance`,
+`capability_level`, `supporting_capability_ids`). Fold `rationale` + `target_length_hint` +
+`diagram_guidance` into the blog-author brief in step 4 as explicit context, the same way a human
+would paraphrase it manually today. Print one line confirming what happened before proceeding:
+either "Idea `<id>` found — folding in: `<one-line summary of rationale/length/diagram guidance>`"
+or "Idea `<id>` not found / not kind=idea / notes unparseable — proceeding without a brief, same as
+if `--idea` had been omitted." Never silently proceed as if the brief was relayed when it wasn't.
+If the idea's `target_content_kind` is `"lesson"`, stop and tell the user to run `/lesson` instead
+— this command is for articles only.
 
 1. **Coverage check.** Fetch the topic's mapped capabilities —
    `curl -s "$SB/topic_capabilities?topic_slug=eq.$ARGUMENTS&select=capability_id" -H "$H1" -H "$H2"`
@@ -35,10 +52,11 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
    V-Order vs plain Parquet for engineering). Register both as generated assets.
    Verify each `.svg`/`.mmd` exists on disk before moving on — an article that embeds a missing
    diagram fails validation as a **critical** issue and can never reach `ready_to_share`.
-4. **Article.** Use the **blog-author** subagent on `$ARGUMENTS`. It must embed **every**
-   commissioned diagram (architecture near the top, the decision/internals diagram inside
-   `### How it works internally` under `## Internals`), not just the first. The article must
-   carry a mandatory `## Internals` section with all three sub-headings (`Architecture &
+4. **Article.** Use the **blog-author** subagent on the topic slug, passing along the idea's
+   brief (rationale, length hint, diagram guidance) as explicit context if `--idea` was given. It
+   must embed **every** commissioned diagram (architecture near the top, the decision/internals
+   diagram inside `### How it works internally` under `## Internals`), not just the first. The
+   article must carry a mandatory `## Internals` section with all three sub-headings (`Architecture &
 design`, `How it works internally`, `Performance characteristics`) — grounded where L4/L5
    claims exist, otherwise a labeled `*Coming soon*` placeholder plus a `content/queue.md`
    entry (never a silently omitted section). Then write the article file for publish.

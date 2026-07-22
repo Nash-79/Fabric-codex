@@ -1,4 +1,4 @@
-import { generateObject } from "ai";
+import { generateObject, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import { ADVISOR_MODEL_IDS, DEFAULT_ADVISOR_MODEL } from "@/lib/advisor-models";
@@ -151,15 +151,50 @@ const ideaSchema = z.object({
     .string()
     .describe("Why this matters now, citing the concrete signal(s) it is grounded in."),
   signal_type: z.enum(["roadmap", "coverage", "backlog", "staleness"]),
+  target_content_kind: z
+    .enum(["article", "lesson"])
+    .describe(
+      "article = /blog|/publish-topic pipeline (no length cap, mandatory diagrams+worked example); " +
+        "lesson = /lesson pipeline (hard <400-word cap, capability+level input, no diagrams).",
+    ),
   target_slug: z
     .string()
-    .describe("Proposed or existing content/topics.json slug this article should map to."),
+    .describe(
+      "Proposed or existing content/topics.json slug this content should map to. For lessons, " +
+        "still emit the mapped topic slug where one exists for consistency; supporting_capability_ids[0] " +
+        "is the authoritative capability for /lesson, not this field.",
+    ),
+  capability_level: z
+    .enum(["Beginner", "Intermediate", "Expert"])
+    .optional()
+    .describe("Required when target_content_kind is 'lesson'; omit for articles."),
+  target_length_hint: z
+    .string()
+    .describe(
+      "A rough guidance band, not a hard rule for articles: e.g. '1200-1800 words' for an article " +
+        "(length is driven by grounding depth, not a fixed target) or the literal 'under 400 words' " +
+        "for a lesson (learning-author's actual hard cap — never propose a different number here).",
+    ),
+  must_include_example: z
+    .boolean()
+    .describe("Whether the resulting content must include a concrete worked example."),
+  diagram_guidance: z
+    .string()
+    .default("")
+    .describe(
+      "Article ideas only: short content guidance layered onto blog-author's own mandatory " +
+        "architecture + decision/internals diagram pair — e.g. 'the decision/internals diagram " +
+        "should contrast Direct Lake vs Import mode'. Never a diagram count or kind — blog-author " +
+        "already owns that invariant. Leave empty for lesson ideas (learning-author has no diagram step).",
+    ),
   supporting_capability_ids: z.array(z.string()).default([]),
   supporting_roadmap_ids: z.array(z.string()).default([]),
   suggested_diagrams: z
     .array(z.string())
     .default([])
-    .describe("1-2 short diagram briefs, e.g. 'architecture flow', 'decision tree for X vs Y'"),
+    .describe(
+      "Deprecated — use diagram_guidance instead. Kept only for backward-read compatibility.",
+    ),
   priority: z.enum(["high", "medium", "low"]),
 });
 
@@ -167,9 +202,25 @@ export type ArticleIdeaCandidate = z.infer<typeof ideaSchema>;
 
 const ideaArraySchema = z.object({ ideas: z.array(ideaSchema).max(15) });
 
-const SYSTEM_PROMPT = `You are the Fabric Atlas Editorial Radar — you propose article ideas for a governed
-Microsoft Fabric knowledge platform. You are NOT the author; a separate local agent writes the
-actual article later from verified claims. Your only job is to propose well-justified candidates.
+const SYSTEM_PROMPT = `You are the Fabric Atlas Editorial Radar — you propose article and lesson ideas for a
+governed Microsoft Fabric knowledge platform. You are NOT the author; a separate local agent writes
+the actual content later from verified claims. Your only job is to propose well-justified candidates.
+
+Content kind:
+- target_content_kind: "article" feeds the /blog or /publish-topic pipeline — no hard length cap
+  (length is driven by grounding depth, not a fixed target), a mandatory worked example, and
+  blog-author will itself commission an architecture diagram and a decision/internals diagram.
+  Your diagram_guidance is short CONTENT guidance layered onto that existing pair (e.g. "the
+  decision/internals diagram should contrast Direct Lake vs Import mode") — never a diagram count
+  or kind; that invariant already belongs to blog-author, do not contradict or replace it.
+- target_content_kind: "lesson" feeds the /lesson pipeline (learning-author) — a HARD cap of under
+  400 words (set target_length_hint to exactly "under 400 words" for every lesson idea), a required
+  capability_level (Beginner/Intermediate/Expert, mapped from claim depth: Beginner=L1-L2,
+  Intermediate=L3, Expert=L4-L5), and NO diagrams at all — leave diagram_guidance empty for lessons,
+  the lesson pipeline has no diagram-commissioning step to consume it.
+- Prefer "article" for topics needing architecture/performance/internals depth or worked examples
+  spanning multiple concepts; prefer "lesson" for a single, narrowly-scoped concept a reader could
+  absorb in one short sitting at a specific depth level.
 
 Non-negotiable rules:
 - Every idea MUST cite at least one concrete signal from the supplied CONTEXT: a roadmap_gaps
@@ -186,11 +237,48 @@ Non-negotiable rules:
 - Do not propose an idea for a topic slug that already has deep (L3+) coverage per coverage_gaps,
   unless the signal is a roadmap item indicating the capability is changing.
 - target_slug should match an existing content/topics.json slug from the topics list when the
-  article maps to an existing topic; propose a new short kebab-case slug only when no topic fits.`;
+  content maps to an existing topic; propose a new short kebab-case slug only when no topic fits.
+- must_include_example should be true for essentially every idea (a worked example is standard
+  practice for both articles and lessons in this KB) — set it false only for a narrow conceptual
+  overview where a worked example genuinely does not apply.`;
+
+const ADMIN_DIRECTION_RULE = `
+An ADMIN DIRECTION block below narrows *what* to propose ideas about — it does not exempt an idea
+from the grounding requirement above. If no signal in CONTEXT supports the admin's direction, you
+may still propose an idea if it is reasonable, but mark it priority: "low" and say explicitly in
+rationale that it is admin-directed rather than signal-driven, so the human reviewing it is not
+misled about how grounded it actually is.`;
+
+type GenerationFailureAudit = {
+  action: "idea.generation_failed" | "idea.generation_filtered";
+  metadata: Record<string, unknown>;
+};
+
+async function recordGenerationAudit(sb: SupabaseAdmin, event: GenerationFailureAudit) {
+  // This module already holds `sb`; a 5-line inline insert here avoids adding a third copy of the
+  // recordAudit shape already duplicated between settings.functions.ts and article-ideas.functions.ts
+  // for one more call site. Best-effort: a logging failure must never mask the real error/result.
+  try {
+    await sb.from("admin_audit_events").insert({
+      actor_id: null,
+      action: event.action,
+      target_type: "queue_item",
+      target_id: "",
+      metadata: event.metadata,
+    });
+  } catch {
+    // Swallow — logging is diagnostic, not load-bearing; never let it throw over the real outcome.
+  }
+}
 
 export async function generateIdeaCandidates(
   sb: SupabaseAdmin,
-  opts: { signalTypes?: IdeaSignalType[]; modelId?: string } = {},
+  opts: {
+    signalTypes?: IdeaSignalType[];
+    modelId?: string;
+    userPrompt?: string;
+    contentKind?: "article" | "lesson" | "both";
+  } = {},
 ): Promise<ArticleIdeaCandidate[]> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("LOVABLE_API_KEY not configured");
@@ -200,6 +288,8 @@ export async function generateIdeaCandidates(
   const signalTypes = opts.signalTypes?.length
     ? opts.signalTypes
     : (["roadmap", "coverage", "backlog", "staleness"] as IdeaSignalType[]);
+  const userPrompt = opts.userPrompt?.trim() || undefined;
+  const contentKind = opts.contentKind ?? "both";
 
   const signals = await assembleIdeaSignals(sb, signalTypes);
   const hasAnySignal =
@@ -208,15 +298,65 @@ export async function generateIdeaCandidates(
     signals.queue_backlog.length ||
     signals.reader_feedback.length ||
     signals.stale_articles.length;
-  if (!hasAnySignal) return [];
+  // A user-supplied direction can still produce a legitimate (if low-priority) idea even when the
+  // default signal sweep is quiet — only bail out early in auto mode, where "no signal" genuinely
+  // means "nothing to propose."
+  if (!hasAnySignal && !userPrompt) return [];
+
+  const contentKindInstruction =
+    contentKind === "article"
+      ? '\n\nOnly propose target_content_kind: "article" ideas this run.'
+      : contentKind === "lesson"
+        ? '\n\nOnly propose target_content_kind: "lesson" ideas this run.'
+        : "";
+  const system = SYSTEM_PROMPT + contentKindInstruction + (userPrompt ? ADMIN_DIRECTION_RULE : "");
+  const prompt = userPrompt
+    ? `ADMIN DIRECTION:\n${userPrompt}\n\nCONTEXT (JSON):\n${JSON.stringify(signals)}`
+    : `CONTEXT (JSON):\n${JSON.stringify(signals)}`;
 
   const gateway = createLovableAiGatewayProvider(key);
-  const { object } = await generateObject({
-    model: gateway(modelId),
-    schema: ideaArraySchema,
-    system: SYSTEM_PROMPT,
-    prompt: `CONTEXT (JSON):\n${JSON.stringify(signals)}`,
-  });
+  let object: z.infer<typeof ideaArraySchema>;
+  try {
+    ({ object } = await generateObject({
+      model: gateway(modelId),
+      schema: ideaArraySchema,
+      system,
+      prompt,
+    }));
+  } catch (err) {
+    // Log every generation failure, not only the schema-mismatch case — the bug that prompted this
+    // change was exactly a schema mismatch going completely unlogged, but a network error, an
+    // invalid/missing key past the check above (e.g. revoked mid-request), a gateway-side rate
+    // limit, or a timeout would have been just as invisible with a narrower catch.
+    if (NoObjectGeneratedError.isInstance(err)) {
+      await recordGenerationAudit(sb, {
+        action: "idea.generation_failed",
+        metadata: {
+          message: err.message,
+          raw_text: err.text?.slice(0, 4000) ?? null,
+          cause: err.cause ? String(err.cause) : null,
+          finish_reason: err.finishReason ?? null,
+          usage: err.usage ?? null,
+          model_id: modelId,
+          signal_types: signalTypes,
+          user_prompt: userPrompt ?? null,
+          error_type: "NoObjectGeneratedError",
+        },
+      });
+    } else {
+      await recordGenerationAudit(sb, {
+        action: "idea.generation_failed",
+        metadata: {
+          message: err instanceof Error ? err.message : String(err),
+          error_type: err instanceof Error ? err.constructor.name : "unknown",
+          model_id: modelId,
+          signal_types: signalTypes,
+          user_prompt: userPrompt ?? null,
+        },
+      });
+    }
+    throw err;
+  }
 
   // The schema only enforces shape, not truth — the model can satisfy
   // supporting_capability_ids/supporting_roadmap_ids with plausible-looking but fabricated ids
@@ -231,7 +371,7 @@ export async function generateIdeaCandidates(
   );
   const realRoadmapIds = new Set(signals.roadmap_gaps.map((r: any) => r.roadmap_id));
 
-  return object.ideas.filter((idea) => {
+  const filtered = object.ideas.filter((idea) => {
     const citesRealCapability = idea.supporting_capability_ids.some((id) =>
       realCapabilityIds.has(id),
     );
@@ -242,6 +382,30 @@ export async function generateIdeaCandidates(
       idea.signal_type === "backlog" || idea.signal_type === "staleness";
     return citesRealCapability || citesRealRoadmap || isUnverifiableSignalType;
   });
+
+  // "0 ideas produced" looks identical in the UI whether the model proposed nothing, or proposed N
+  // ideas that all failed the grounding cross-check above — the latter means the model hallucinated
+  // citations, a meaningfully different and more concerning outcome. Log the drop so an admin
+  // reviewing Settings -> Logs can tell "quiet because there's nothing to say" apart from "quietly
+  // discarding bad output," which a plain empty array can never distinguish on its own.
+  if (filtered.length < object.ideas.length) {
+    const keptTitles = new Set(filtered.map((idea) => idea.title));
+    await recordGenerationAudit(sb, {
+      action: "idea.generation_filtered",
+      metadata: {
+        proposed: object.ideas.length,
+        kept: filtered.length,
+        dropped_titles: object.ideas
+          .filter((idea) => !keptTitles.has(idea.title))
+          .map((idea) => idea.title),
+        model_id: modelId,
+        signal_types: signalTypes,
+        user_prompt: userPrompt ?? null,
+      },
+    });
+  }
+
+  return filtered;
 }
 
 export async function insertIdeaQueueItems(
@@ -268,14 +432,18 @@ export async function insertIdeaQueueItems(
     url: `fabric-atlas://idea/${idea.target_slug}`,
     title: idea.title,
     target_slug: idea.target_slug,
-    tags: [idea.signal_type, idea.priority],
+    tags: [idea.signal_type, idea.priority, idea.target_content_kind],
     notes: JSON.stringify({
       angle: idea.angle,
       rationale: idea.rationale,
       signal_type: idea.signal_type,
+      target_content_kind: idea.target_content_kind,
+      capability_level: idea.capability_level ?? null,
+      target_length_hint: idea.target_length_hint,
+      must_include_example: idea.must_include_example,
+      diagram_guidance: idea.diagram_guidance,
       supporting_capability_ids: idea.supporting_capability_ids,
       supporting_roadmap_ids: idea.supporting_roadmap_ids,
-      suggested_diagrams: idea.suggested_diagrams,
       priority: idea.priority,
     }),
     status: "queued",

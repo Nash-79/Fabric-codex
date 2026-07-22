@@ -4,6 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Flag, MessageSquarePlus } from "lucide-react";
 import { toast } from "sonner";
 import { submitContentFeedback, type ContentFeedbackCategory } from "@/lib/atlas.functions";
+import { readOrCreateAnonToken, useHasSession } from "@/lib/use-feedback-identity";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -43,6 +44,11 @@ export function ContentFeedbackButton({
   sections = [],
   defaultSectionId,
   variant = "toolbar",
+  forceVisible = false,
+  alreadyReported = false,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  hideDefaultTrigger = false,
 }: {
   contentItemId: string;
   /** Headings the reader can attribute feedback to. Empty = article-level only. */
@@ -51,13 +57,27 @@ export function ContentFeedbackButton({
   defaultSectionId?: string;
   /** "toolbar" = labeled button (page-level); "inline" = compact icon trigger (per-heading). */
   variant?: "toolbar" | "inline";
+  /** Inline variant only: force the hover-revealed trigger visible (tap-to-reveal on touch). */
+  forceVisible?: boolean;
+  /** Inline variant only: this identity already reported this section — shown as a filled icon. */
+  alreadyReported?: boolean;
+  /** Externally control the dialog (e.g. from ContentFeedbackRail's own trigger element). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Skip rendering the built-in trigger — the caller supplies its own clickable element and
+   * drives `open`/`onOpenChange` itself. Used by ContentFeedbackRail so the dialog/submission
+   * logic stays in one place instead of being forked for a second trigger surface. */
+  hideDefaultTrigger?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = controlledOnOpenChange ?? setUncontrolledOpen;
   const [category, setCategory] = useState<ContentFeedbackCategory>("factual_error");
   const [body, setBody] = useState("");
   const [sectionId, setSectionId] = useState<string>(defaultSectionId ?? "");
   const submitFn = useServerFn(submitContentFeedback);
   const headings = sections.filter((s) => s.kind === "heading" || s.kind === "subheading");
+  const hasSession = useHasSession();
 
   const submit = useMutation({
     mutationFn: () => {
@@ -69,6 +89,7 @@ export function ContentFeedbackButton({
           body,
           sectionId: section?.id,
           sectionTitle: section?.title,
+          anonToken: hasSession ? undefined : readOrCreateAnonToken(),
         },
       });
     },
@@ -95,28 +116,43 @@ export function ContentFeedbackButton({
         if (next) setSectionId(defaultSectionId ?? "");
       }}
     >
-      <DialogTrigger asChild>
-        {variant === "inline" ? (
-          <button
-            type="button"
-            aria-label="Give feedback on this section"
-            title="Give feedback on this section"
-            className="no-print ml-1 inline-flex h-5 w-5 items-center justify-center rounded text-teal-500/40 opacity-0 transition hover:text-teal-500 group-hover:opacity-100"
-          >
-            <MessageSquarePlus className="h-3.5 w-3.5" />
-          </button>
-        ) : (
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="no-print h-10 border-border bg-card text-foreground"
-          >
-            <Flag className="mr-2 h-4 w-4" />
-            Report an issue
-          </Button>
-        )}
-      </DialogTrigger>
+      {!hideDefaultTrigger && (
+        <DialogTrigger asChild>
+          {variant === "inline" ? (
+            <button
+              type="button"
+              aria-label={
+                alreadyReported
+                  ? "Give more feedback on this section"
+                  : "Give feedback on this section"
+              }
+              title={
+                alreadyReported
+                  ? "Give more feedback on this section"
+                  : "Give feedback on this section"
+              }
+              className={`no-print ml-1 inline-flex h-5 w-5 items-center justify-center rounded transition hover:text-teal-500 group-hover:opacity-100 group-focus-within:opacity-100 ${
+                alreadyReported ? "text-teal-500/70" : "text-teal-500/40"
+              } ${forceVisible ? "opacity-100" : "opacity-0"}`}
+            >
+              <MessageSquarePlus
+                className="h-3.5 w-3.5"
+                fill={alreadyReported ? "currentColor" : "none"}
+              />
+            </button>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="no-print h-10 border-border bg-card text-foreground"
+            >
+              <Flag className="mr-2 h-4 w-4" />
+              Report an issue
+            </Button>
+          )}
+        </DialogTrigger>
+      )}
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Report an issue</DialogTitle>

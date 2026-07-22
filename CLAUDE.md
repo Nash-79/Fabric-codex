@@ -95,16 +95,25 @@ diagram entry); no separate "delete then re-add" step exists or is needed.
 ### Article idea generation (Settings → Article Ideas)
 
 The one deliberate exception to "server only runs deterministic checks": an admin-triggered
-"Generate ideas" button fuses the Fabric roadmap (`roadmap_items`), coverage gaps (same scoring
+**Auto-generate** (all signals) or **Generate from prompt** (admin-supplied topic/direction, still
+grounding-checked) button fuses the Fabric roadmap (`roadmap_items`), coverage gaps (same scoring
 `coverage-auditor` uses), the editorial backlog (`queue_items`, `content_feedback`), and stale
 articles into candidate ideas via the **Lovable AI Gateway** (`src/lib/ai-gateway.server.ts`,
 `LOVABLE_API_KEY` — the same bundled-credit gateway `/advisor/chat` uses), never the metered
-Anthropic API. Ideas are stored as `queue_items(kind='idea')` rows — no new table — with the
-rationale JSON-encoded in `notes`. Approving an idea (`src/lib/article-ideas.functions.ts`) just
-flips its status to `claimed`; a human still runs `/publish-topic <slug>` or `/blog <slug>`
-locally as normal, reading the idea's rationale as drafting context. See
-`src/lib/article-ideas.services.server.ts` for the signal-fusion + generation logic and
-`src/components/settings/ArticleIdeasPanel.tsx` for the admin UI.
+Anthropic API. Each idea targets either an **article** (`/blog`/`/publish-topic` pipeline — no
+length cap, mandatory diagrams+worked example) or a **lesson** (`/lesson` pipeline — hard
+<400-word cap, capability+level, no diagrams), and carries a length hint and, for articles, content
+guidance for blog-author's own diagram pair (never a diagram count/kind override). Ideas are stored
+as `queue_items(kind='idea')` rows — no new table — with the full brief JSON-encoded in `notes`.
+Approving an idea (`src/lib/article-ideas.functions.ts`) just flips its status to `claimed`; a
+human runs `/publish-topic <slug> --idea <id>`, `/blog <slug> --idea <id>`, or
+`/lesson <capability> <level> --idea <id>` locally, which fetches the idea and folds its rationale/
+length/diagram guidance into the authoring agent's brief automatically (the `--idea` flag is
+optional on all three commands — omitting it works exactly as before). Every generation failure
+(schema mismatch or otherwise) and every case where the grounding cross-check drops model output
+is logged to `admin_audit_events` (`idea.generation_failed`, `idea.generation_filtered`), visible
+in Settings → Logs. See `src/lib/article-ideas.services.server.ts` for the signal-fusion +
+generation logic and `src/components/settings/ArticleIdeasPanel.tsx` for the admin UI.
 
 ## Tags and images
 

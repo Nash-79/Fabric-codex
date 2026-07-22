@@ -5,6 +5,14 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import {
   Table,
   TableBody,
   TableCell,
@@ -23,11 +31,17 @@ import { generateArticleIdeas, setArticleIdeaStatus } from "@/lib/article-ideas.
 import { Empty, Panel, statusBadge } from "@/components/settings/shared";
 
 type QueueAction = "claim" | "complete" | "fail" | "requeue" | "dismiss";
+type IdeaContentKind = "article" | "lesson" | "both";
 
 type IdeaNotes = {
   angle?: string;
   rationale?: string;
   signal_type?: string;
+  target_content_kind?: string;
+  capability_level?: string;
+  target_length_hint?: string;
+  must_include_example?: boolean;
+  diagram_guidance?: string;
   supporting_capability_ids?: string[];
   supporting_roadmap_ids?: string[];
   suggested_diagrams?: string[];
@@ -50,6 +64,11 @@ const SIGNAL_LABEL: Record<string, string> = {
   staleness: "Stale article",
 };
 
+const CONTENT_KIND_LABEL: Record<string, string> = {
+  article: "Article",
+  lesson: "Lesson",
+};
+
 const PRIORITY_CLASS: Record<string, string> = {
   high: "border-emerald-400/30 bg-emerald-500/10 text-emerald-200",
   medium: "border-amber-400/30 bg-amber-500/10 text-amber-200",
@@ -68,30 +87,55 @@ export function ArticleIdeasPanel({
   const generateFn = useServerFn(generateArticleIdeas);
   const statusFn = useServerFn(setArticleIdeaStatus);
   const [signalFilter, setSignalFilter] = useState<string>("all");
+  const [contentKindFilter, setContentKindFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [promptText, setPromptText] = useState("");
   const queryClient = useQueryClient();
 
   const ideas = useMemo(
     () => (data?.queue ?? []).filter((item: any) => item.kind === "idea"),
     [data],
   );
-  const visible =
-    signalFilter === "all"
-      ? ideas
-      : ideas.filter((item: any) => parseNotes(item.notes).signal_type === signalFilter);
+  const visible = ideas.filter((item: any) => {
+    const notes = parseNotes(item.notes);
+    if (signalFilter !== "all" && notes.signal_type !== signalFilter) return false;
+    if (contentKindFilter !== "all" && notes.target_content_kind !== contentKindFilter) {
+      return false;
+    }
+    return true;
+  });
 
-  const generate = useMutation({
+  const onGenerateSuccess = (result: unknown) => {
+    const count = (result as { ideas: unknown[] }).ideas?.length ?? 0;
+    toast.success(
+      count
+        ? `Generated ${count} idea${count === 1 ? "" : "s"}.`
+        : "No new ideas — either not enough signal right now, or every candidate failed the " +
+            "grounding check (see Settings → Logs for idea.generation_filtered).",
+    );
+    onDone();
+  };
+  const onGenerateError = (err: unknown) =>
+    toast.error(
+      `${(err as Error).message} — see Settings → Logs (idea.generation_failed) for full detail.`,
+    );
+
+  const generateAuto = useMutation({
     mutationFn: () => generateFn({ data: {} }),
+    onSuccess: onGenerateSuccess,
+    onError: onGenerateError,
+  });
+
+  const generatePrompted = useMutation({
+    mutationFn: (input: { userPrompt: string; contentKind?: IdeaContentKind }) =>
+      generateFn({ data: input }),
     onSuccess: (result) => {
-      const count = (result as { ideas: unknown[] }).ideas?.length ?? 0;
-      toast.success(
-        count
-          ? `Generated ${count} idea${count === 1 ? "" : "s"}.`
-          : "No new ideas — not enough signal right now (roadmap/coverage/backlog/staleness all quiet).",
-      );
-      onDone();
+      onGenerateSuccess(result);
+      setPromptOpen(false);
+      setPromptText("");
     },
-    onError: (err) => toast.error((err as Error).message),
+    onError: onGenerateError,
   });
 
   const mutateStatus = useMutation({
@@ -111,11 +155,13 @@ export function ArticleIdeasPanel({
       return next;
     });
 
+  const anyGenerating = generateAuto.isPending || generatePrompted.isPending;
+
   return (
     <Panel
       title="Article ideas"
       action={
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Select value={signalFilter} onValueChange={setSignalFilter}>
             <SelectTrigger className="h-8 w-40 border-border bg-card text-foreground">
               <SelectValue />
@@ -128,32 +174,56 @@ export function ArticleIdeasPanel({
               <SelectItem value="staleness">Stale article</SelectItem>
             </SelectContent>
           </Select>
-          <Button size="sm" onClick={() => generate.mutate()} disabled={generate.isPending}>
-            {generate.isPending ? "Generating…" : "Generate ideas"}
+          <Select value={contentKindFilter} onValueChange={setContentKindFilter}>
+            <SelectTrigger className="h-8 w-32 border-border bg-card text-foreground">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All kinds</SelectItem>
+              <SelectItem value="article">Articles</SelectItem>
+              <SelectItem value="lesson">Lessons</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-8 border-border bg-card text-foreground"
+            onClick={() => setPromptOpen(true)}
+            disabled={anyGenerating}
+          >
+            Generate from prompt
+          </Button>
+          <Button size="sm" onClick={() => generateAuto.mutate()} disabled={anyGenerating}>
+            {generateAuto.isPending ? "Generating…" : "Auto-generate"}
           </Button>
         </div>
       }
     >
       <p className="mb-3 text-xs text-muted-foreground">
         Fuses the Fabric roadmap, knowledge-base coverage gaps, the editorial backlog, and stale
-        articles into candidate ideas via the Lovable AI Gateway (bundled credits, not the metered
-        Anthropic API). Every idea cites a concrete signal — a roadmap item, a capability gap, a
-        queue/feedback entry, or a stale article. Approving an idea just marks it{" "}
-        <code className="text-teal-300">claimed</code>; run{" "}
-        <code className="text-teal-300">/publish-topic &lt;slug&gt;</code> or{" "}
-        <code className="text-teal-300">/blog &lt;slug&gt;</code> locally to actually author it,
-        using the idea&rsquo;s rationale as drafting context.
+        articles into candidate article or lesson ideas via the Lovable AI Gateway (bundled credits,
+        not the metered Anthropic API). Every idea cites a concrete signal — a roadmap item, a
+        capability gap, a queue/feedback entry, or a stale article — and carries a length hint and
+        (for articles) diagram guidance calibrated to what blog-author/learning-author actually
+        produce. Approving an idea just marks it <code className="text-teal-300">claimed</code>; run{" "}
+        <code className="text-teal-300">/publish-topic &lt;slug&gt; --idea &lt;id&gt;</code>,{" "}
+        <code className="text-teal-300">/blog &lt;slug&gt; --idea &lt;id&gt;</code>, or{" "}
+        <code className="text-teal-300">
+          /lesson &lt;capability&gt; &lt;level&gt; --idea &lt;id&gt;
+        </code>{" "}
+        locally to author it with the idea's brief folded in automatically.
       </p>
 
       {loading ? (
         <Empty text="Loading ideas..." />
       ) : visible.length === 0 ? (
-        <Empty text="No article ideas yet. Click Generate ideas." />
+        <Empty text="No article ideas yet. Click Auto-generate or Generate from prompt." />
       ) : (
         <Table className="text-foreground">
           <TableHeader>
             <TableRow className="border-border hover:bg-transparent">
               <TableHead>Idea</TableHead>
+              <TableHead>Kind</TableHead>
               <TableHead>Signal</TableHead>
               <TableHead>Priority</TableHead>
               <TableHead>Status</TableHead>
@@ -176,6 +246,11 @@ export function ArticleIdeasPanel({
                         {item.title}
                       </button>
                       <div className="text-xs text-muted-foreground">{item.target_slug}</div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className="border-border bg-accent text-foreground">
+                        {CONTENT_KIND_LABEL[notes.target_content_kind ?? ""] ?? "—"}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <Badge className="border-border bg-accent text-foreground">
@@ -232,7 +307,7 @@ export function ArticleIdeasPanel({
                   </TableRow>
                   {isOpen && (
                     <TableRow key={`${item.id}-detail`} className="border-border">
-                      <TableCell colSpan={5} className="bg-card/50 text-xs">
+                      <TableCell colSpan={6} className="bg-card/50 text-xs">
                         <div className="space-y-1 py-2">
                           {notes.angle && (
                             <div>
@@ -246,6 +321,34 @@ export function ArticleIdeasPanel({
                               <span className="text-muted-foreground">{notes.rationale}</span>
                             </div>
                           )}
+                          {notes.target_length_hint && (
+                            <div>
+                              <span className="font-semibold text-foreground">Length: </span>
+                              <span className="text-muted-foreground">
+                                {notes.target_length_hint}
+                                {notes.must_include_example ? " · worked example required" : ""}
+                              </span>
+                            </div>
+                          )}
+                          {notes.target_content_kind === "lesson" && notes.capability_level && (
+                            <div>
+                              <span className="font-semibold text-foreground">Level: </span>
+                              <span className="text-muted-foreground">
+                                {notes.capability_level}
+                              </span>
+                            </div>
+                          )}
+                          {notes.target_content_kind === "article" &&
+                            (notes.diagram_guidance || !!notes.suggested_diagrams?.length) && (
+                              <div>
+                                <span className="font-semibold text-foreground">
+                                  Diagram guidance:{" "}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {notes.diagram_guidance || notes.suggested_diagrams?.join("; ")}
+                                </span>
+                              </div>
+                            )}
                           {!!notes.supporting_capability_ids?.length && (
                             <div>
                               <span className="font-semibold text-foreground">Capabilities: </span>
@@ -262,16 +365,6 @@ export function ArticleIdeasPanel({
                               </span>
                             </div>
                           )}
-                          {!!notes.suggested_diagrams?.length && (
-                            <div>
-                              <span className="font-semibold text-foreground">
-                                Suggested diagrams:{" "}
-                              </span>
-                              <span className="text-muted-foreground">
-                                {notes.suggested_diagrams.join("; ")}
-                              </span>
-                            </div>
-                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -282,6 +375,33 @@ export function ArticleIdeasPanel({
           </TableBody>
         </Table>
       )}
+
+      <Dialog open={promptOpen} onOpenChange={setPromptOpen}>
+        <DialogContent className="border-border bg-popover text-foreground">
+          <DialogHeader>
+            <DialogTitle>Generate ideas from a prompt</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Describe a topic or direction. Ideas are still cross-checked against real
+              roadmap/coverage/backlog signals where one exists; a direction with no supporting
+              signal still produces an idea, honestly marked low priority and labeled admin-directed
+              rather than signal-driven.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={promptText}
+            onChange={(event) => setPromptText(event.target.value)}
+            placeholder="e.g. articles that help migrate from Import mode to Direct Lake"
+            rows={4}
+            className="border-border bg-card text-foreground"
+          />
+          <Button
+            onClick={() => generatePrompted.mutate({ userPrompt: promptText.trim() })}
+            disabled={!promptText.trim() || generatePrompted.isPending}
+          >
+            {generatePrompted.isPending ? "Generating…" : "Generate"}
+          </Button>
+        </DialogContent>
+      </Dialog>
     </Panel>
   );
 }

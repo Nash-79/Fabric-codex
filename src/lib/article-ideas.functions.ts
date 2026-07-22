@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 type IdeaSignalType = "roadmap" | "coverage" | "backlog" | "staleness";
+type IdeaContentKind = "article" | "lesson" | "both";
 type QueueAction = "claim" | "complete" | "fail" | "requeue" | "dismiss";
 
 async function requireAdmin(context: any) {
@@ -40,7 +41,18 @@ async function recordAudit(
 // not the metered Anthropic API; article authoring itself stays on the free local-agent path.
 export const generateArticleIdeas = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((d: { signalTypes?: IdeaSignalType[]; modelId?: string } | undefined) => d ?? {})
+  .validator(
+    (
+      d:
+        | {
+            signalTypes?: IdeaSignalType[];
+            modelId?: string;
+            userPrompt?: string;
+            contentKind?: IdeaContentKind;
+          }
+        | undefined,
+    ) => d ?? {},
+  )
   .handler(async ({ context, data }) => {
     await requireAdmin(context);
     const sb = await adminClient();
@@ -49,12 +61,16 @@ export const generateArticleIdeas = createServerFn({ method: "POST" })
     const ideas = await generateIdeaCandidates(sb, {
       signalTypes: data.signalTypes,
       modelId: data.modelId,
+      userPrompt: data.userPrompt,
+      contentKind: data.contentKind,
     });
     const inserted = await insertIdeaQueueItems(sb, ideas, context.userId);
     await recordAudit(context.userId, "idea.generated", "queue_item", "", {
       count: inserted.length,
       signal_types: data.signalTypes ?? ["roadmap", "coverage", "backlog", "staleness"],
       model_id: data.modelId,
+      user_prompt: data.userPrompt ?? null,
+      content_kind: data.contentKind ?? "both",
     });
     return { ok: true as const, ideas: inserted };
   });

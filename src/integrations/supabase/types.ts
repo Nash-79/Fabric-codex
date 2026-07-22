@@ -490,7 +490,8 @@ export type Database = {
           section_id: string | null
           section_title: string | null
           status: string
-          submitted_by: string
+          submitted_by: string | null
+          submitted_by_anon_token: string | null
           triaged_at: string | null
         }
         Insert: {
@@ -504,7 +505,8 @@ export type Database = {
           section_id?: string | null
           section_title?: string | null
           status?: string
-          submitted_by: string
+          submitted_by?: string | null
+          submitted_by_anon_token?: string | null
           triaged_at?: string | null
         }
         Update: {
@@ -518,7 +520,8 @@ export type Database = {
           section_id?: string | null
           section_title?: string | null
           status?: string
-          submitted_by?: string
+          submitted_by?: string | null
+          submitted_by_anon_token?: string | null
           triaged_at?: string | null
         }
         Relationships: [

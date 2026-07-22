@@ -1,4 +1,4 @@
-import { useMemo, type ComponentProps, type ComponentType, type ReactNode } from "react";
+import { useMemo, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -75,6 +75,7 @@ export function ContentItemArticle({
   citations = [],
   contentItemId,
   sections = [],
+  reportedSectionIds,
 }: {
   bodyMd: string;
   diagramMeta?: DiagramMeta[];
@@ -83,7 +84,15 @@ export function ContentItemArticle({
   contentItemId?: string;
   /** Full heading list (## and ###) for the feedback dialog's section picker — see useTocHeadings. */
   sections?: TocEntry[];
+  /** Sections the current identity already submitted feedback on — shown as a filled icon. */
+  reportedSectionIds?: Set<string>;
 }) {
+  // Hover-only reveal (opacity-0 -> group-hover:opacity-100) leaves the copy-link and feedback
+  // triggers permanently invisible on touch devices (no :hover) — this tracks which heading was
+  // last tapped so its actions can be revealed on touch, without affecting desktop hover/keyboard
+  // focus behavior at all (those are handled purely by CSS below, no state needed).
+  const [tapRevealedId, setTapRevealedId] = useState<string | null>(null);
+
   const captionByFile = useMemo(() => {
     const map = new Map<string, string>();
     for (const d of diagramMeta) {
@@ -144,8 +153,20 @@ export function ContentItemArticle({
         },
         h2: ({ children, ...rest }) => {
           const id = slugifyHeading(textFromNode(children));
+          const revealed = tapRevealedId === id;
           return (
-            <h2 id={id} {...rest} className="group relative pl-4">
+            <h2
+              id={id}
+              {...rest}
+              className={`group relative pl-4 ${revealed ? "reveal-actions" : ""}`}
+              onClick={(e) => {
+                // Only tap-toggle when the heading text itself was tapped, not one of its action
+                // buttons (the # link and feedback trigger have their own onClick already).
+                if (e.target === e.currentTarget) {
+                  setTapRevealedId((current) => (current === id ? null : id));
+                }
+              }}
+            >
               <span
                 className="absolute left-0 top-1/2 h-5 w-1 -translate-y-1/2 rounded-full bg-teal-400"
                 aria-hidden="true"
@@ -161,7 +182,7 @@ export function ContentItemArticle({
                   navigator.clipboard?.writeText(url);
                   history.replaceState(null, "", `#${id}`);
                 }}
-                className="no-print ml-2 text-teal-500/40 opacity-0 transition group-hover:opacity-100 hover:text-teal-500"
+                className="no-print ml-2 text-teal-500/40 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 group-[.reveal-actions]:opacity-100 hover:text-teal-500"
               >
                 #
               </a>
@@ -171,6 +192,8 @@ export function ContentItemArticle({
                   sections={sections}
                   defaultSectionId={id}
                   variant="inline"
+                  forceVisible={revealed}
+                  alreadyReported={reportedSectionIds?.has(id)}
                 />
               )}
             </h2>
@@ -178,8 +201,18 @@ export function ContentItemArticle({
         },
         h3: ({ children, ...rest }) => {
           const id = slugifyHeading(textFromNode(children));
+          const revealed = tapRevealedId === id;
           return (
-            <h3 id={id} {...rest} className="group relative">
+            <h3
+              id={id}
+              {...rest}
+              className={`group relative ${revealed ? "reveal-actions" : ""}`}
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setTapRevealedId((current) => (current === id ? null : id));
+                }
+              }}
+            >
               {children}
               <a
                 href={`#${id}`}
@@ -191,7 +224,7 @@ export function ContentItemArticle({
                   navigator.clipboard?.writeText(url);
                   history.replaceState(null, "", `#${id}`);
                 }}
-                className="no-print ml-2 text-teal-500/40 opacity-0 transition group-hover:opacity-100 hover:text-teal-500"
+                className="no-print ml-2 text-teal-500/40 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100 group-[.reveal-actions]:opacity-100 hover:text-teal-500"
               >
                 #
               </a>
@@ -201,6 +234,8 @@ export function ContentItemArticle({
                   sections={sections}
                   defaultSectionId={id}
                   variant="inline"
+                  forceVisible={revealed}
+                  alreadyReported={reportedSectionIds?.has(id)}
                 />
               )}
             </h3>
@@ -258,7 +293,16 @@ export function ContentItemArticle({
           );
         },
       }) satisfies ComponentProps<typeof ReactMarkdown>["components"],
-    [captionByFile, srcByFile, figureIndexByFile, citations, contentItemId, sections],
+    [
+      captionByFile,
+      srcByFile,
+      figureIndexByFile,
+      citations,
+      contentItemId,
+      sections,
+      tapRevealedId,
+      reportedSectionIds,
+    ],
   );
 
   return (

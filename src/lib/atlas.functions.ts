@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
@@ -697,11 +698,67 @@ export const toggleFavorite = createServerFn({ method: "POST" })
 export type ContentFeedbackCategory =
   "factual_error" | "outdated" | "unclear" | "broken_link" | "missing_citation" | "other";
 
+const FEEDBACK_RATE_LIMIT = 5; // max submissions per (content item, identity) per rolling hour
+
+// Resolves the caller's identity WITHOUT requiring profiles.status === 'approved' — that gate
+// (enforced by the generated requireSupabaseAuth middleware, which this endpoint deliberately
+// does not use) is the right access boundary for the rest of the app, but "report an issue" is
+// meant to be open to any reader, logged in or not. If a Bearer token is present, it's resolved
+// to a real auth.uid() (still validated — a garbage/expired token is rejected, not silently
+// treated as anonymous); otherwise the caller must be anonymous.
+async function resolveFeedbackIdentity(): Promise<{
+  userId: string | null;
+  supabase: ReturnType<typeof createClient<Database>>;
+}> {
+  const url = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL!;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY ?? process.env.VITE_SUPABASE_PUBLISHABLE_KEY!;
+  const request = getRequest();
+  const authHeader = request?.headers?.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
+    // No token at all — anonymous caller. Use a plain anon-key client so the `anon` role's RLS
+    // insert policy governs the write (see the content_feedback_anonymous migration).
+    return { userId: null, supabase: createClient<Database>(url, key) };
+  }
+  const token = authHeader.replace("Bearer ", "");
+  const supabase = createClient<Database>(url, key, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+    auth: { storage: undefined, persistSession: false, autoRefreshToken: false },
+  });
+  const { data, error } = await supabase.auth.getClaims(token);
+  if (error || !data?.claims?.sub) {
+    throw new Error("Unauthorized: Invalid token");
+  }
+  return { userId: data.claims.sub, supabase };
+}
+
+async function logFeedbackEvent(
+  action: "feedback.rate_limited" | "feedback.submitted_anonymous",
+  metadata: Record<string, unknown>,
+) {
+  // Both events need the real service-role client — admin_audit_events grants INSERT only to
+  // service_role (not authenticated, not anon), unlike content_feedback itself. Best-effort:
+  // a logging failure must never mask the real outcome of the submission.
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("admin_audit_events").insert({
+      actor_id: null,
+      action,
+      target_type: "content_feedback",
+      target_id: "",
+      metadata: metadata as never,
+    });
+  } catch {
+    // Swallow — see comment above.
+  }
+}
+
 // Reader-submitted feedback on a content item. content_hash is captured server-side from the
 // live row, never trusted from the client, so triage can later tell if the article already
-// changed since this was filed.
+// changed since this was filed. Open to any reader — logged in or fully anonymous (anonToken) —
+// not gated on profiles.status='approved' like the rest of the app; a server-side rate limit is
+// the replacement spam control, and every rate-limit rejection and anonymous submission is logged
+// so an admin can see the effect of that widened access in Settings -> Logs, not just in theory.
 export const submitContentFeedback = createServerFn({ method: "POST" })
-  .middleware([requireSupabaseAuth])
   .validator(
     (d: {
       contentItemId: string;
@@ -709,12 +766,20 @@ export const submitContentFeedback = createServerFn({ method: "POST" })
       body: string;
       sectionId?: string;
       sectionTitle?: string;
+      anonToken?: string;
     }) => d,
   )
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data }) => {
     const body = data.body.trim();
     if (!body) throw new Error("Feedback text is required.");
     if (body.length > 4000) throw new Error("Feedback is too long (4000 characters max).");
+
+    const { userId, supabase } = await resolveFeedbackIdentity();
+    const anonToken = data.anonToken?.trim().slice(0, 100) || null;
+    if (!userId && !anonToken) {
+      throw new Error("Sign in, or wait a moment for feedback to initialize, to report an issue.");
+    }
+
     const sb = await admin();
     const { data: item, error: itemError } = await sb
       .from("content_items")
@@ -723,17 +788,73 @@ export const submitContentFeedback = createServerFn({ method: "POST" })
       .maybeSingle();
     if (itemError) throw new Error(itemError.message);
     if (!item) throw new Error("Content item not found.");
-    const { error } = await context.supabase.from("content_feedback").insert({
+
+    const identityLabel = userId ?? `anon:${anonToken}`;
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    let recentCountQuery = supabase
+      .from("content_feedback")
+      .select("id", { count: "exact", head: true })
+      .eq("content_item_id", data.contentItemId)
+      .gte("created_at", oneHourAgo);
+    recentCountQuery = userId
+      ? recentCountQuery.eq("submitted_by", userId)
+      : recentCountQuery.eq("submitted_by_anon_token", anonToken as string);
+    const { count: recentCount } = await recentCountQuery;
+    if ((recentCount ?? 0) >= FEEDBACK_RATE_LIMIT) {
+      await logFeedbackEvent("feedback.rate_limited", {
+        content_item_id: data.contentItemId,
+        identity: identityLabel,
+        count_last_hour: recentCount ?? 0,
+      });
+      throw new Error("Please wait before submitting more feedback on this article.");
+    }
+
+    const { error } = await supabase.from("content_feedback").insert({
       content_item_id: data.contentItemId,
       content_hash: item.content_hash,
-      submitted_by: context.userId,
+      submitted_by: userId,
+      submitted_by_anon_token: userId ? null : anonToken,
       category: data.category,
       body,
       section_id: data.sectionId ?? null,
       section_title: data.sectionTitle ?? null,
     });
     if (error) throw new Error(error.message);
+
+    if (!userId) {
+      await logFeedbackEvent("feedback.submitted_anonymous", {
+        content_item_id: data.contentItemId,
+        section_id: data.sectionId ?? null,
+        category: data.category,
+        anon_token: anonToken,
+      });
+    }
     return { ok: true as const };
+  });
+
+// "Did I already report this section" for the current identity (authenticated or anonymous) on
+// one content item. Uses the service-role client rather than RLS: an anonymous token is not a
+// real Postgres session identity to key a row policy on, and there is deliberately no anon SELECT
+// grant on content_feedback (see the migration) — this function is the one narrow, trusted read
+// path, and it only ever returns the calling identity's own rows, never another submitter's data.
+export const listMyContentFeedback = createServerFn({ method: "GET" })
+  .validator((d: { contentItemId: string; anonToken?: string }) => d)
+  .handler(async ({ data }) => {
+    const { userId } = await resolveFeedbackIdentity();
+    const anonToken = data.anonToken?.trim().slice(0, 100) || null;
+    if (!userId && !anonToken) return [];
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    let query = supabaseAdmin
+      .from("content_feedback")
+      .select("section_id,category,status,created_at")
+      .eq("content_item_id", data.contentItemId);
+    query = userId
+      ? query.eq("submitted_by", userId)
+      : query.eq("submitted_by_anon_token", anonToken as string);
+    const { data: rows, error } = await query;
+    if (error) throw new Error(error.message);
+    return rows ?? [];
   });
 
 // Admin: is current user an admin?
