@@ -109,11 +109,35 @@ Approving an idea (`src/lib/article-ideas.functions.ts`) just flips its status t
 human runs `/publish-topic <slug> --idea <id>`, `/blog <slug> --idea <id>`, or
 `/lesson <capability> <level> --idea <id>` locally, which fetches the idea and folds its rationale/
 length/diagram guidance into the authoring agent's brief automatically (the `--idea` flag is
-optional on all three commands — omitting it works exactly as before). Every generation failure
-(schema mismatch or otherwise) and every case where the grounding cross-check drops model output
-is logged to `admin_audit_events` (`idea.generation_failed`, `idea.generation_filtered`), visible
-in Settings → Logs. See `src/lib/article-ideas.services.server.ts` for the signal-fusion +
-generation logic and `src/components/settings/ArticleIdeasPanel.tsx` for the admin UI.
+optional on all three commands — omitting it works exactly as before). The `<id>` is the idea's
+`queue_items` row id, surfaced (with a copyable ready-to-paste command) in the expanded idea row —
+`ArticleIdeasPanel` is the only place it is shown. An idea's brief can be **amended** any time
+before the article is authored — in `queued`, `claimed`, or `failed` state — via `updateArticleIdea`
+(edits `title`/`target_slug`/`angle`/`rationale`/length/diagram-guidance/level, merged over `notes`,
+preserving the signal grounding ids; logged as `idea.amended`). A `dismissed` idea can be **revived**
+back to `queued` (the shared `mutateQueueItem` `requeue` transition now allows `dismissed → queued`
+for every queue kind) so it can be amended and re-approved. Once authored (`ingested`) the brief is
+frozen. Generation is resilient: it tries the requested/default
+model, then falls back across providers (Gemini flash-lite → OpenAI gpt-5-mini) so one flaky model
+or provider outage does not zero out a run; the model actually used is surfaced in the success toast
+and logged (`idea.generation_fallback_used`). A follow-up generation also feeds the prior round's
+dismissed/kept ideas back to the model as context, so it stops repeating rejected ideas and sharpens
+kept ones. Every generation failure (schema mismatch or otherwise, now including the full
+`APICallError` `status_code`/`response_body` and the per-model attempt chain) and every case where
+the grounding cross-check drops model output is logged to `admin_audit_events`
+(`idea.generation_failed`, `idea.generation_filtered`), visible in Settings → Logs.
+
+**Idea-schema invariant (do not regress):** `supportsStructuredOutputs: true` on the gateway makes
+schema-capable models (OpenAI) validate in **strict `json_schema` mode**, which requires _every_
+property to appear in the JSON Schema's `required` array. In the AI SDK's zod3→JSON-Schema
+conversion, `.optional()`, `.default(...)`, **and** `.catch(...)` all drop a key from `required` —
+so **none of them may be used on any field of `ideaSchema`**. Express "empty for this content kind"
+as `.nullable()` (e.g. `capability_level` is null for articles) or a required-but-possibly-empty
+array/string, and tell the model in `.describe()` to emit the empty value (`""` / `[]`) rather than
+omit the key. Adding a field with `.optional()`/`.default()` reintroduces a hard OpenAI 400 that
+kills the whole request before any model runs. See `src/lib/article-ideas.services.server.ts` for
+the signal-fusion + generation logic and `src/components/settings/ArticleIdeasPanel.tsx` for the
+admin UI.
 
 ## Tags and images
 

@@ -242,7 +242,10 @@ export async function mutateQueueItem(
     },
     fail: { from: ["claimed", "queued"], patch: { status: "failed", error: data.error ?? "" } },
     requeue: {
-      from: ["failed", "claimed"],
+      // 'dismissed' is included so a rejected item can be revived back into the active queue
+      // (used by the Article Ideas panel's "revive" action so a dismissed idea can be amended and
+      // re-approved; applies to every queue kind that shares this transition table).
+      from: ["failed", "claimed", "dismissed"],
       patch: { status: "queued", claimed_at: null, error: "" },
     },
     dismiss: { from: ["queued", "failed"], patch: { status: "dismissed" } },

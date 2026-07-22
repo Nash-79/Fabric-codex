@@ -27,8 +27,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { generateArticleIdeas, setArticleIdeaStatus } from "@/lib/article-ideas.functions";
-import { Empty, Panel, statusBadge } from "@/components/settings/shared";
+import {
+  generateArticleIdeas,
+  setArticleIdeaStatus,
+  updateArticleIdea,
+} from "@/lib/article-ideas.functions";
+import { Area, Empty, Field, Panel, statusBadge } from "@/components/settings/shared";
 
 type QueueAction = "claim" | "complete" | "fail" | "requeue" | "dismiss";
 type IdeaContentKind = "article" | "lesson" | "both";
@@ -75,6 +79,18 @@ const PRIORITY_CLASS: Record<string, string> = {
   low: "border-border bg-card text-muted-foreground",
 };
 
+// The local slash command a human runs to author this idea (the `--idea <id>` folds the brief in
+// automatically). Lessons go through /lesson (capability + level); articles through /blog. This is
+// the one place the idea's queue_items id is surfaced — without it there's no way to use --idea.
+function localAuthorCommand(item: { id: string; target_slug?: string | null }, notes: IdeaNotes) {
+  if (notes.target_content_kind === "lesson") {
+    const cap = notes.supporting_capability_ids?.[0] ?? "<capability>";
+    const level = (notes.capability_level ?? "<level>").toLowerCase();
+    return `/lesson ${cap} ${level} --idea ${item.id}`;
+  }
+  return `/blog ${item.target_slug ?? "<slug>"} --idea ${item.id}`;
+}
+
 export function ArticleIdeasPanel({
   data,
   onDone,
@@ -86,11 +102,23 @@ export function ArticleIdeasPanel({
 }) {
   const generateFn = useServerFn(generateArticleIdeas);
   const statusFn = useServerFn(setArticleIdeaStatus);
+  const updateFn = useServerFn(updateArticleIdea);
   const [signalFilter, setSignalFilter] = useState<string>("all");
   const [contentKindFilter, setContentKindFilter] = useState<string>("all");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [promptOpen, setPromptOpen] = useState(false);
   const [promptText, setPromptText] = useState("");
+  // The idea currently open in the amend dialog, plus the editable draft of its brief.
+  const [amendItem, setAmendItem] = useState<any | null>(null);
+  const [amendDraft, setAmendDraft] = useState<{
+    title: string;
+    target_slug: string;
+    angle: string;
+    rationale: string;
+    target_length_hint: string;
+    diagram_guidance: string;
+    capability_level: string;
+  } | null>(null);
   const queryClient = useQueryClient();
 
   const ideas = useMemo(
@@ -182,6 +210,50 @@ export function ArticleIdeasPanel({
     },
     onError: (err) => toast.error((err as Error).message),
   });
+
+  const amendIdea = useMutation({
+    mutationFn: (input: { itemId: string; patch: Record<string, unknown> }) =>
+      updateFn({ data: input }),
+    onSuccess: () => {
+      toast.success("Idea brief amended.");
+      setAmendItem(null);
+      setAmendDraft(null);
+      onDone();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  const openAmend = (item: any) => {
+    const notes = parseNotes(item.notes);
+    setAmendItem(item);
+    setAmendDraft({
+      title: item.title ?? "",
+      target_slug: item.target_slug ?? "",
+      angle: notes.angle ?? "",
+      rationale: notes.rationale ?? "",
+      target_length_hint: notes.target_length_hint ?? "",
+      diagram_guidance: notes.diagram_guidance ?? "",
+      capability_level: notes.capability_level ?? "",
+    });
+  };
+
+  const submitAmend = () => {
+    if (!amendItem || !amendDraft) return;
+    const isLesson = parseNotes(amendItem.notes).target_content_kind === "lesson";
+    amendIdea.mutate({
+      itemId: amendItem.id,
+      patch: {
+        title: amendDraft.title,
+        target_slug: amendDraft.target_slug,
+        angle: amendDraft.angle,
+        rationale: amendDraft.rationale,
+        target_length_hint: amendDraft.target_length_hint,
+        // Diagram guidance only applies to articles; capability level only to lessons.
+        diagram_guidance: isLesson ? "" : amendDraft.diagram_guidance,
+        capability_level: isLesson ? amendDraft.capability_level || null : null,
+      },
+    });
+  };
 
   const toggleExpanded = (id: string) =>
     setExpanded((current) => {
@@ -316,6 +388,20 @@ export function ArticleIdeasPanel({
                           size="sm"
                           variant="outline"
                           className="h-8 border-border bg-card text-foreground"
+                          // Amend the brief any time before the article is authored: queued,
+                          // claimed (approved), or failed (a /blog run that errored).
+                          disabled={
+                            amendIdea.isPending ||
+                            !["queued", "claimed", "failed"].includes(item.status)
+                          }
+                          onClick={() => openAmend(item)}
+                        >
+                          amend
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 border-border bg-card text-foreground"
                           disabled={
                             mutateStatus.isPending || !["queued", "claimed"].includes(item.status)
                           }
@@ -338,6 +424,19 @@ export function ArticleIdeasPanel({
                         >
                           dismiss
                         </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-8 border-border bg-card text-foreground"
+                          // Revive a dismissed idea back into the active queue so it can be
+                          // amended and re-approved ("we can claim again").
+                          disabled={mutateStatus.isPending || item.status !== "dismissed"}
+                          onClick={() =>
+                            mutateStatus.mutate({ itemId: item.id, action: "requeue" })
+                          }
+                        >
+                          revive
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -345,6 +444,31 @@ export function ArticleIdeasPanel({
                     <TableRow key={`${item.id}-detail`} className="border-border">
                       <TableCell colSpan={6} className="bg-card/50 text-xs">
                         <div className="space-y-1 py-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-foreground">Author locally: </span>
+                            <code className="rounded bg-background px-1.5 py-0.5 text-teal-300">
+                              {localAuthorCommand(item, notes)}
+                            </code>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-6 border-border bg-card px-2 text-[11px] text-foreground"
+                              onClick={() => {
+                                const cmd = localAuthorCommand(item, notes);
+                                navigator.clipboard
+                                  ?.writeText(cmd)
+                                  .then(() => toast.success("Command copied."))
+                                  .catch(() =>
+                                    toast.error("Copy failed — select the text manually."),
+                                  );
+                              }}
+                            >
+                              copy
+                            </Button>
+                            <span className="text-muted-foreground">
+                              idea id: <span className="font-mono text-foreground">{item.id}</span>
+                            </span>
+                          </div>
                           {notes.angle && (
                             <div>
                               <span className="font-semibold text-foreground">Angle: </span>
@@ -438,6 +562,77 @@ export function ArticleIdeasPanel({
           >
             {generatePrompted.isPending ? "Generating…" : "Generate"}
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!amendItem}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAmendItem(null);
+            setAmendDraft(null);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[85vh] overflow-y-auto border-border bg-popover text-foreground">
+          <DialogHeader>
+            <DialogTitle>Amend idea brief</DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              Sharpen this idea before authoring the article. Changes are saved to the idea's brief
+              (used automatically when you run the local authoring command with{" "}
+              <code className="text-teal-300">--idea</code>). Editable while the idea is queued,
+              approved, or failed — not after the article is written. Signal grounding (cited
+              capability/roadmap ids) is preserved and not editable here.
+            </DialogDescription>
+          </DialogHeader>
+          {amendDraft && amendItem && (
+            <div className="space-y-3">
+              <Field
+                label="Title"
+                value={amendDraft.title}
+                onChange={(v) => setAmendDraft({ ...amendDraft, title: v })}
+              />
+              <Field
+                label="Target slug"
+                value={amendDraft.target_slug}
+                onChange={(v) => setAmendDraft({ ...amendDraft, target_slug: v })}
+              />
+              <Area
+                label="Angle (the thesis the content argues)"
+                value={amendDraft.angle}
+                rows={2}
+                onChange={(v) => setAmendDraft({ ...amendDraft, angle: v })}
+              />
+              <Area
+                label="Rationale (why it matters now)"
+                value={amendDraft.rationale}
+                rows={3}
+                onChange={(v) => setAmendDraft({ ...amendDraft, rationale: v })}
+              />
+              <Field
+                label="Length hint"
+                value={amendDraft.target_length_hint}
+                onChange={(v) => setAmendDraft({ ...amendDraft, target_length_hint: v })}
+              />
+              {parseNotes(amendItem.notes).target_content_kind === "lesson" ? (
+                <Field
+                  label="Capability level (Beginner / Intermediate / Expert)"
+                  value={amendDraft.capability_level}
+                  onChange={(v) => setAmendDraft({ ...amendDraft, capability_level: v })}
+                />
+              ) : (
+                <Area
+                  label="Diagram guidance (content guidance for blog-author's diagram pair)"
+                  value={amendDraft.diagram_guidance}
+                  rows={2}
+                  onChange={(v) => setAmendDraft({ ...amendDraft, diagram_guidance: v })}
+                />
+              )}
+              <Button onClick={submitAmend} disabled={amendIdea.isPending}>
+                {amendIdea.isPending ? "Saving…" : "Save amendments"}
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </Panel>
