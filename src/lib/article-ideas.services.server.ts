@@ -171,10 +171,24 @@ const ideaSchema = z.object({
         "still emit the mapped topic slug where one exists for consistency; supporting_capability_ids[0] " +
         "is the authoritative capability for /lesson, not this field.",
     ),
+  // Every property in this object MUST stay required in the emitted JSON Schema. The Lovable
+  // gateway forwards our schema to OpenAI in strict json_schema mode (supportsStructuredOutputs:
+  // true), and OpenAI 400s ("'required' ... must include every key in properties") if ANY property
+  // is missing from `required`. In the AI SDK's zod3→JSON-Schema conversion, `.optional()`,
+  // `.default(...)`, AND `.catch(...)` all drop a key from `required` — so none may be used on any
+  // field here. Express "empty for this content kind" as `.nullable()` (capability_level) or a
+  // required-but-possibly-empty array/string, and tell the model in each .describe() to emit the
+  // empty value ("" / []) rather than omit the key. A model that omits a required field fails
+  // parse for that attempt and the fallback chain advances to the next model — acceptable, and far
+  // better than the whole request 400ing before any model runs (the original bug: capability_level
+  // was `.optional()`, so OpenAI rejected the schema outright and gpt-5-mini never produced output).
   capability_level: z
     .enum(["Beginner", "Intermediate", "Expert"])
-    .optional()
-    .describe("Required when target_content_kind is 'lesson'; omit for articles."),
+    .nullable()
+    .describe(
+      "Always present (null, not omitted — OpenAI strict mode requires the key). Set to Beginner/" +
+        "Intermediate/Expert when target_content_kind is 'lesson'; set to null for 'article'.",
+    ),
   target_length_hint: z
     .string()
     .describe(
@@ -187,20 +201,24 @@ const ideaSchema = z.object({
     .describe("Whether the resulting content must include a concrete worked example."),
   diagram_guidance: z
     .string()
-    .default("")
     .describe(
       "Article ideas only: short content guidance layered onto blog-author's own mandatory " +
         "architecture + decision/internals diagram pair — e.g. 'the decision/internals diagram " +
         "should contrast Direct Lake vs Import mode'. Never a diagram count or kind — blog-author " +
-        "already owns that invariant. Leave empty for lesson ideas (learning-author has no diagram step).",
+        'already owns that invariant. Use an empty string "" for lesson ideas (learning-author ' +
+        "has no diagram step) — always present, never omitted.",
     ),
-  supporting_capability_ids: z.array(z.string()).default([]),
-  supporting_roadmap_ids: z.array(z.string()).default([]),
+  supporting_capability_ids: z
+    .array(z.string())
+    .describe("Cited capability ids; emit [] (never omit) when none apply."),
+  supporting_roadmap_ids: z
+    .array(z.string())
+    .describe("Cited roadmap ids; emit [] (never omit) when none apply."),
   suggested_diagrams: z
     .array(z.string())
-    .default([])
     .describe(
-      "Deprecated — use diagram_guidance instead. Kept only for backward-read compatibility.",
+      "Deprecated — use diagram_guidance instead. Kept only for backward-read compatibility; " +
+        "emit [] (never omit).",
     ),
   priority: z.enum(["high", "medium", "low"]),
 });
@@ -252,10 +270,13 @@ Non-negotiable rules:
 Output shape (follow exactly — do not rename or restructure):
 - Return a single JSON object with exactly one top-level key: "ideas". Do NOT return a bare array.
   Correct: {"ideas": [ ... ]}. Incorrect: [ ... ].
-- Each element of "ideas" is an object with exactly these keys: title, angle, rationale,
-  signal_type, target_content_kind, target_slug, capability_level (lessons only), target_length_hint,
-  must_include_example, diagram_guidance, supporting_capability_ids, supporting_roadmap_ids,
-  suggested_diagrams, priority.
+- Each element of "ideas" is an object with ALL of these keys ALWAYS present — never omit a key,
+  even when its value is empty; emit the empty value instead: title, angle, rationale, signal_type,
+  target_content_kind, target_slug, capability_level, target_length_hint, must_include_example,
+  diagram_guidance, supporting_capability_ids, supporting_roadmap_ids, suggested_diagrams, priority.
+- Empty-value conventions (present, not omitted): capability_level = the level string for lessons or
+  null for articles; diagram_guidance = "" for lessons; supporting_capability_ids /
+  supporting_roadmap_ids / suggested_diagrams = [] when none apply.
 - "angle" and "rationale" are two distinct required fields, not one merged "justification" or
   "reasoning" field: angle is the specific thesis/take the content will argue; rationale is why it
   matters now, citing the concrete signal. Do not invent a different field name for either.`;
