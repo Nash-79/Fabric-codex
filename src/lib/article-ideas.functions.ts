@@ -4,6 +4,12 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 type IdeaSignalType = "roadmap" | "coverage" | "backlog" | "staleness";
 type IdeaContentKind = "article" | "lesson" | "both";
 type QueueAction = "claim" | "complete" | "fail" | "requeue" | "dismiss";
+type PriorIdeaContext = {
+  title: string;
+  angle: string;
+  signal_type: string;
+  status: "dismissed" | "kept";
+};
 
 async function requireAdmin(context: any) {
   const { data, error } = await context.supabase.rpc("has_role", {
@@ -49,6 +55,7 @@ export const generateArticleIdeas = createServerFn({ method: "POST" })
             modelId?: string;
             userPrompt?: string;
             contentKind?: IdeaContentKind;
+            priorIdeas?: PriorIdeaContext[];
           }
         | undefined,
     ) => d ?? {},
@@ -58,21 +65,30 @@ export const generateArticleIdeas = createServerFn({ method: "POST" })
     const sb = await adminClient();
     const { generateIdeaCandidates, insertIdeaQueueItems } =
       await import("@/lib/article-ideas.services.server");
-    const ideas = await generateIdeaCandidates(sb, {
+    const result = await generateIdeaCandidates(sb, {
       signalTypes: data.signalTypes,
       modelId: data.modelId,
       userPrompt: data.userPrompt,
       contentKind: data.contentKind,
+      priorIdeas: data.priorIdeas,
     });
-    const inserted = await insertIdeaQueueItems(sb, ideas, context.userId);
+    const inserted = await insertIdeaQueueItems(sb, result.ideas, context.userId);
     await recordAudit(context.userId, "idea.generated", "queue_item", "", {
       count: inserted.length,
       signal_types: data.signalTypes ?? ["roadmap", "coverage", "backlog", "staleness"],
-      model_id: data.modelId,
+      requested_model_id: result.requestedModelId,
+      used_model_id: result.usedModelId,
+      fallback_used: result.usedModelId !== result.requestedModelId,
       user_prompt: data.userPrompt ?? null,
       content_kind: data.contentKind ?? "both",
     });
-    return { ok: true as const, ideas: inserted };
+    return {
+      ok: true as const,
+      ideas: inserted,
+      usedModelId: result.usedModelId,
+      requestedModelId: result.requestedModelId,
+      fallbackUsed: result.usedModelId !== result.requestedModelId,
+    };
   });
 
 // Idea lifecycle reuses the exact same queue_items status vocabulary/transitions as every

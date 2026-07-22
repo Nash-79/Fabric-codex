@@ -106,30 +106,66 @@ export function ArticleIdeasPanel({
     return true;
   });
 
+  type GenerateResult = {
+    ideas: unknown[];
+    usedModelId?: string;
+    requestedModelId?: string;
+    fallbackUsed?: boolean;
+  };
+
   const onGenerateSuccess = (result: unknown) => {
-    const count = (result as { ideas: unknown[] }).ideas?.length ?? 0;
+    const { ideas, usedModelId, fallbackUsed } = result as GenerateResult;
+    const count = ideas?.length ?? 0;
+    const modelNote = usedModelId
+      ? fallbackUsed
+        ? ` (fell back to ${usedModelId} after the requested model failed — see Settings → Logs, idea.generation_fallback_used)`
+        : ` via ${usedModelId}`
+      : "";
     toast.success(
       count
-        ? `Generated ${count} idea${count === 1 ? "" : "s"}.`
+        ? `Generated ${count} idea${count === 1 ? "" : "s"}${modelNote}.`
         : "No new ideas — either not enough signal right now, or every candidate failed the " +
             "grounding check (see Settings → Logs for idea.generation_filtered).",
     );
     onDone();
   };
   const onGenerateError = (err: unknown) =>
-    toast.error(
-      `${(err as Error).message} — see Settings → Logs (idea.generation_failed) for full detail.`,
-    );
+    toast.error((err as Error).message, {
+      description: "See Settings → Logs (idea.generation_failed) for the per-model attempt chain.",
+      duration: 10000,
+    });
+
+  // Ideas already dismissed or already kept (queued/claimed) are fed back as PRIOR ROUND context
+  // so a follow-up generation doesn't repeat a rejected idea and can build on one the admin kept.
+  const priorIdeasContext = useMemo(
+    () =>
+      ideas
+        .filter(
+          (item: any) =>
+            item.status === "dismissed" || item.status === "queued" || item.status === "claimed",
+        )
+        .slice(0, 30)
+        .map((item: any) => {
+          const notes = parseNotes(item.notes);
+          return {
+            title: item.title,
+            angle: notes.angle ?? "",
+            signal_type: notes.signal_type ?? "",
+            status: (item.status === "dismissed" ? "dismissed" : "kept") as "dismissed" | "kept",
+          };
+        }),
+    [ideas],
+  );
 
   const generateAuto = useMutation({
-    mutationFn: () => generateFn({ data: {} }),
+    mutationFn: () => generateFn({ data: { priorIdeas: priorIdeasContext } }),
     onSuccess: onGenerateSuccess,
     onError: onGenerateError,
   });
 
   const generatePrompted = useMutation({
     mutationFn: (input: { userPrompt: string; contentKind?: IdeaContentKind }) =>
-      generateFn({ data: input }),
+      generateFn({ data: { ...input, priorIdeas: priorIdeasContext } }),
     onSuccess: (result) => {
       onGenerateSuccess(result);
       setPromptOpen(false);
@@ -385,6 +421,8 @@ export function ArticleIdeasPanel({
               roadmap/coverage/backlog signals where one exists; a direction with no supporting
               signal still produces an idea, honestly marked low priority and labeled admin-directed
               rather than signal-driven.
+              {priorIdeasContext.length > 0 &&
+                ` Dismissed and kept ideas from earlier rounds (${priorIdeasContext.length} here) are passed along too, so this generation won't repeat what you already rejected and can sharpen what you kept.`}
             </DialogDescription>
           </DialogHeader>
           <Textarea

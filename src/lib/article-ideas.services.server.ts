@@ -1,7 +1,14 @@
-import { generateObject, NoObjectGeneratedError } from "ai";
+import { APICallError, generateObject, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
 import { ADVISOR_MODEL_IDS, DEFAULT_ADVISOR_MODEL } from "@/lib/advisor-models";
+
+// Fallback chain tried in order after the requested/default model fails. Deliberately spans two
+// providers (Google, then OpenAI) rather than just other Gemini tiers — the 2026-07-22 production
+// failures were APICallError (the gateway/provider call itself failing, not a schema mismatch), so
+// a same-provider fallback could hit the same outage. gpt-5-mini is the last resort, not the
+// second try: it's the "moderate" tier, pricier than the Gemini flash tiers it's backing up.
+const FALLBACK_MODEL_IDS = ["google/gemini-3.1-flash-lite-preview", "openai/gpt-5-mini"];
 
 // Article idea generation reuses the same Lovable AI Gateway as /advisor/chat (bundled
 // Lovable AI credits, not the metered Anthropic API — the actual article authoring stays
@@ -260,8 +267,27 @@ may still propose an idea if it is reasonable, but mark it priority: "low" and s
 rationale that it is admin-directed rather than signal-driven, so the human reviewing it is not
 misled about how grounded it actually is.`;
 
+const PRIOR_ROUND_RULE = `
+A PRIOR ROUND block below lists ideas already proposed in an earlier generation for this same
+editorial session, each labeled with its current disposition:
+- dismissed = the admin rejected it. Do NOT propose the same idea again, and do not propose a
+  trivial rewording of it — treat the underlying angle as ruled out unless the new ADMIN DIRECTION
+  explicitly asks for it.
+- kept (queued/claimed) = the admin is interested or already acting on it. Do not duplicate it, but
+  you may propose a genuinely distinct companion idea (e.g. a deeper-depth follow-up or an adjacent
+  capability) if ADMIN DIRECTION points that way.
+Use PRIOR ROUND only to avoid repetition and to sharpen new ideas with the added context in ADMIN
+DIRECTION — it is not itself a signal and does not satisfy the grounding requirement above.`;
+
+export type PriorIdeaContext = {
+  title: string;
+  angle: string;
+  signal_type: string;
+  status: "dismissed" | "kept";
+};
+
 type GenerationFailureAudit = {
-  action: "idea.generation_failed" | "idea.generation_filtered";
+  action: "idea.generation_failed" | "idea.generation_filtered" | "idea.generation_fallback_used";
   metadata: Record<string, unknown>;
 };
 
@@ -282,6 +308,13 @@ async function recordGenerationAudit(sb: SupabaseAdmin, event: GenerationFailure
   }
 }
 
+export type GenerateIdeaResult = {
+  ideas: ArticleIdeaCandidate[];
+  usedModelId: string;
+  requestedModelId: string;
+  attemptErrors: Array<{ model_id: string; message: string }>;
+};
+
 export async function generateIdeaCandidates(
   sb: SupabaseAdmin,
   opts: {
@@ -289,8 +322,9 @@ export async function generateIdeaCandidates(
     modelId?: string;
     userPrompt?: string;
     contentKind?: "article" | "lesson" | "both";
+    priorIdeas?: PriorIdeaContext[];
   } = {},
-): Promise<ArticleIdeaCandidate[]> {
+): Promise<GenerateIdeaResult> {
   const key = process.env.LOVABLE_API_KEY;
   if (!key) throw new Error("LOVABLE_API_KEY not configured");
 
@@ -301,6 +335,7 @@ export async function generateIdeaCandidates(
     : (["roadmap", "coverage", "backlog", "staleness"] as IdeaSignalType[]);
   const userPrompt = opts.userPrompt?.trim() || undefined;
   const contentKind = opts.contentKind ?? "both";
+  const priorIdeas = opts.priorIdeas?.length ? opts.priorIdeas : undefined;
 
   const signals = await assembleIdeaSignals(sb, signalTypes);
   const hasAnySignal =
@@ -312,7 +347,9 @@ export async function generateIdeaCandidates(
   // A user-supplied direction can still produce a legitimate (if low-priority) idea even when the
   // default signal sweep is quiet — only bail out early in auto mode, where "no signal" genuinely
   // means "nothing to propose."
-  if (!hasAnySignal && !userPrompt) return [];
+  if (!hasAnySignal && !userPrompt) {
+    return { ideas: [], usedModelId: modelId, requestedModelId: modelId, attemptErrors: [] };
+  }
 
   const contentKindInstruction =
     contentKind === "article"
@@ -320,53 +357,120 @@ export async function generateIdeaCandidates(
       : contentKind === "lesson"
         ? '\n\nOnly propose target_content_kind: "lesson" ideas this run.'
         : "";
-  const system = SYSTEM_PROMPT + contentKindInstruction + (userPrompt ? ADMIN_DIRECTION_RULE : "");
+  const system =
+    SYSTEM_PROMPT +
+    contentKindInstruction +
+    (userPrompt ? ADMIN_DIRECTION_RULE : "") +
+    (priorIdeas ? PRIOR_ROUND_RULE : "");
+  const priorRoundBlock = priorIdeas
+    ? `\n\nPRIOR ROUND (JSON):\n${JSON.stringify(priorIdeas)}`
+    : "";
   const prompt = userPrompt
-    ? `ADMIN DIRECTION:\n${userPrompt}\n\nCONTEXT (JSON):\n${JSON.stringify(signals)}`
-    : `CONTEXT (JSON):\n${JSON.stringify(signals)}`;
+    ? `ADMIN DIRECTION:\n${userPrompt}\n\nCONTEXT (JSON):\n${JSON.stringify(signals)}${priorRoundBlock}`
+    : `CONTEXT (JSON):\n${JSON.stringify(signals)}${priorRoundBlock}`;
 
   const gateway = createLovableAiGatewayProvider(key);
-  let object: z.infer<typeof ideaArraySchema>;
-  try {
-    ({ object } = await generateObject({
-      model: gateway(modelId),
-      schema: ideaArraySchema,
-      system,
-      prompt,
-    }));
-  } catch (err) {
-    // Log every generation failure, not only the schema-mismatch case — the bug that prompted this
-    // change was exactly a schema mismatch going completely unlogged, but a network error, an
-    // invalid/missing key past the check above (e.g. revoked mid-request), a gateway-side rate
-    // limit, or a timeout would have been just as invisible with a narrower catch.
-    if (NoObjectGeneratedError.isInstance(err)) {
-      await recordGenerationAudit(sb, {
-        action: "idea.generation_failed",
-        metadata: {
-          message: err.message,
-          raw_text: err.text?.slice(0, 4000) ?? null,
-          cause: err.cause ? String(err.cause) : null,
-          finish_reason: err.finishReason ?? null,
-          usage: err.usage ?? null,
-          model_id: modelId,
-          signal_types: signalTypes,
-          user_prompt: userPrompt ?? null,
-          error_type: "NoObjectGeneratedError",
-        },
-      });
-    } else {
-      await recordGenerationAudit(sb, {
-        action: "idea.generation_failed",
-        metadata: {
-          message: err instanceof Error ? err.message : String(err),
-          error_type: err instanceof Error ? err.constructor.name : "unknown",
-          model_id: modelId,
-          signal_types: signalTypes,
-          user_prompt: userPrompt ?? null,
-        },
-      });
+
+  // Try the requested/default model first, then fall back through FALLBACK_MODEL_IDS on any
+  // failure (schema mismatch, gateway/provider API error, timeout, etc.) — a single flaky model
+  // or provider outage should not zero out an idea-generation run. Each attempt's failure is
+  // logged individually so Settings -> Logs shows the full chain, not just the last error.
+  const attemptModelIds = [modelId, ...FALLBACK_MODEL_IDS.filter((id) => id !== modelId)];
+  let object: z.infer<typeof ideaArraySchema> | undefined;
+  let usedModelId: string | undefined;
+  const attemptErrors: Array<{ model_id: string; message: string }> = [];
+
+  for (let i = 0; i < attemptModelIds.length; i++) {
+    const attemptModelId = attemptModelIds[i];
+    const isLastAttempt = i === attemptModelIds.length - 1;
+    try {
+      ({ object } = await generateObject({
+        model: gateway(attemptModelId),
+        schema: ideaArraySchema,
+        system,
+        prompt,
+      }));
+      usedModelId = attemptModelId;
+      break;
+    } catch (err) {
+      // Log every generation failure, not only the schema-mismatch case — the bug that prompted this
+      // change was exactly a schema mismatch going completely unlogged, but a network error, an
+      // invalid/missing key past the check above (e.g. revoked mid-request), a gateway-side rate
+      // limit, or a timeout would have been just as invisible with a narrower catch.
+      const baseMetadata = {
+        model_id: attemptModelId,
+        signal_types: signalTypes,
+        user_prompt: userPrompt ?? null,
+        attempt: i + 1,
+        of_attempts: attemptModelIds.length,
+        will_retry: !isLastAttempt,
+      };
+      let message: string;
+      if (NoObjectGeneratedError.isInstance(err)) {
+        message = err.message;
+        await recordGenerationAudit(sb, {
+          action: "idea.generation_failed",
+          metadata: {
+            ...baseMetadata,
+            message: err.message,
+            raw_text: err.text?.slice(0, 4000) ?? null,
+            cause: err.cause ? String(err.cause) : null,
+            finish_reason: err.finishReason ?? null,
+            usage: err.usage ?? null,
+            error_type: "NoObjectGeneratedError",
+          },
+        });
+      } else if (APICallError.isInstance(err)) {
+        message = err.message;
+        await recordGenerationAudit(sb, {
+          action: "idea.generation_failed",
+          metadata: {
+            ...baseMetadata,
+            message: err.message,
+            status_code: err.statusCode ?? null,
+            response_body: err.responseBody?.slice(0, 4000) ?? null,
+            is_retryable: err.isRetryable,
+            url: err.url,
+            cause: err.cause ? String(err.cause) : null,
+            error_type: "APICallError",
+          },
+        });
+      } else {
+        message = err instanceof Error ? err.message : String(err);
+        await recordGenerationAudit(sb, {
+          action: "idea.generation_failed",
+          metadata: {
+            ...baseMetadata,
+            message,
+            error_type: err instanceof Error ? err.constructor.name : "unknown",
+          },
+        });
+      }
+      attemptErrors.push({ model_id: attemptModelId, message });
+      if (isLastAttempt) {
+        throw new Error(
+          `Idea generation failed on all ${attemptModelIds.length} model(s): ` +
+            attemptErrors.map((a) => `${a.model_id} (${a.message})`).join("; "),
+        );
+      }
     }
-    throw err;
+  }
+
+  if (!object || !usedModelId) {
+    // Unreachable in practice — the loop above either sets both and breaks, or throws on the
+    // last attempt — but keeps TypeScript's control-flow analysis honest.
+    throw new Error("Idea generation produced no object and no error");
+  }
+  if (usedModelId !== modelId) {
+    await recordGenerationAudit(sb, {
+      action: "idea.generation_fallback_used",
+      metadata: {
+        requested_model_id: modelId,
+        used_model_id: usedModelId,
+        signal_types: signalTypes,
+        user_prompt: userPrompt ?? null,
+      },
+    });
   }
 
   // The schema only enforces shape, not truth — the model can satisfy
@@ -416,7 +520,7 @@ export async function generateIdeaCandidates(
     });
   }
 
-  return filtered;
+  return { ideas: filtered, usedModelId, requestedModelId: modelId, attemptErrors };
 }
 
 export async function insertIdeaQueueItems(
