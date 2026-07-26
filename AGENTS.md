@@ -112,3 +112,21 @@ Skills for reusable prompts; these still work and map 1:1 to the Claude Code com
 ## How to run
 
 See `backend/README.md`. SQLite by default; set `DATABASE_URL` for Postgres + pgvector at scale.
+
+## Optional: model-tier registry, Copilot chatmodes, LangGraph scaffold
+
+Not part of the default workflow above — skip this section unless you're touching one of
+these directly.
+
+- `.ucp/models.yaml` maps each agent's `x-ucp-tier` frontmatter field (reasoning / code /
+  standard / fast / diagram) to a concrete model per provider; `scripts/sync_models.py`
+  resolves and rewrites `model:` frontmatter across `.claude/agents/*.md` and
+  `.github/chatmodes/*.chatmode.md` so a new Claude release requires editing one file, not
+  fifteen. Run with `--dry-run` first.
+- `.github/chatmodes/*.chatmode.md` are thin GitHub Copilot pointers to the same
+  instructions in `.claude/agents/*.md` — for `solution-architect`, `diagram-author`,
+  `code-reviewer`, and `dev-intelligence` today. They don't duplicate the contract, they
+  reference it.
+- `langgraph/` is an unwired reference scaffold for a possible future headless/scheduled
+  content pipeline (see `langgraph/README.md`). Nothing in the app, backend, or CI calls
+  it; it exists so that need doesn't start from zero if it ever arises.

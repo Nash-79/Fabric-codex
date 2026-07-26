@@ -1,0 +1,93 @@
+{
+  "url": "https://learn.microsoft.com/en-us/fabric/data-engineering/sql-analytics-endpoint-metadata-sync",
+  "title": "SQL analytics endpoint metadata sync",
+  "tier": 1,
+  "tags": ["MicrosoftFabric", "Lakehouse", "SQLAnalyticsEndpoint", "DeltaLake", "MetadataSync", "Performance"],
+  "claims": [
+    {
+      "capability_id": "lakehouse",
+      "text": "The SQL analytics endpoint's background sync process keeps its SQL metadata current by reading the Delta transaction logs under each table's /Tables folder in OneLake, rather than by copying or re-scanning the underlying Parquet data itself.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["MetadataSync", "DeltaLake", "OneLake"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "The legacy (default, non-preview) metadata sync handles three responsibilities together as one process: discovering newly created or dropped Delta tables, detecting schema changes (column adds/removes/type changes) in existing tables, and detecting data changes (inserts/updates/deletes) to keep query results current.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["MetadataSync", "SchemaChange", "DataFreshness"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "A newer metadata sync architecture, announced in preview in May 2026, replaces log re-scanning with an external-tables-based approach for parsing Delta logs and building the SQL catalog, and it only applies to newly created SQL analytics endpoints in a workspace that opts in — existing endpoints stay on the legacy sync path.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["MetadataSync", "ExternalTables", "Preview"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "The new metadata sync decouples schema-change detection from data-change detection into separate refresh paths, combining a periodic background refresh for data with an on-demand refresh that triggers when an incoming query finds the cached data is stale — a design aimed at making newly landed data queryable within seconds instead of waiting on a shared scan cycle.",
+      "depth": 5,
+      "type": "internal",
+      "tags": ["MetadataSync", "SchemaChange", "DataFreshness"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Under the new metadata sync, sync health is inspectable through the sys.dm_db_external_tables_log_status DMV, which exposes per-table fields including the last update timestamp, the Delta log version last processed, the latest checkpoint version applied, and whether the last sync attempt was blocked.",
+      "depth": 5,
+      "type": "fact",
+      "tags": ["MetadataSync", "DMV", "Monitoring"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "The new metadata sync has documented gaps: it does not support Delta's (deprecated) multi-part checkpoint feature, so tables using that feature fail to update under it, and it currently cannot be enabled at all on workspaces using workspace private link.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["MetadataSync", "Limitations", "Preview"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Automatic metadata discovery runs as a single background sync instance per Fabric workspace, and that one instance is responsible for scanning every lakehouse in the workspace for committed changes — the scan work is serialized across lakehouses rather than parallelized per lakehouse.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["MetadataSync", "Workspace", "Bottleneck"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Because sync is a single per-workspace instance, a workspace holding many lakehouses is a documented cause of increased sync latency; Microsoft's stated mitigation is to split lakehouses across separate workspaces so each workspace's automatic metadata discovery scales independently.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["MetadataSync", "Workspace", "Scalability"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Under normal conditions the lag between a committed lakehouse change and its visibility in the SQL analytics endpoint is under one minute, ranging from a few seconds to minutes; the background sync process itself only runs while the endpoint is active and stops after 15 minutes of endpoint inactivity.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["MetadataSync", "Latency", "Performance"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Sync and query latency both degrade as small-file counts grow: because Parquet files are immutable, every update or delete adds new files rather than rewriting existing ones, so unmaintained tables accumulate files that add read overhead to both the metadata scan and subsequent queries — the documented fix is scheduled Delta table maintenance (OPTIMIZE/compaction).",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["MetadataSync", "SmallFiles", "TableMaintenance"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "Partition column choice affects sync latency: a high-cardinality partition column fragments a Delta table into a large number of partitions, which slows the metadata discovery scan for changes; Microsoft recommends choosing lower-cardinality partition columns that yield partitions of roughly 1 GB or larger instead.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": ["MetadataSync", "Partitioning", "Performance"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "The SQL analytics endpoint is powered by the same compute engine as Fabric Data Warehouse, which is the basis for its low-latency T-SQL query performance over open Delta files; it remains strictly read-only over its autogenerated tables — data changes must go through Spark in the lakehouse, though users can still layer their own views, functions, and stored procedures on top of the endpoint.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["SQLAnalyticsEndpoint", "Polaris", "ReadOnly"]
+    }
+  ],
+  "assets": []
+}

@@ -3,6 +3,7 @@ name: source-drift-analyst
 description: Use when a source may have changed (Microsoft updated a doc, a blog was revised) or on a schedule. Re-ingests the source, diffs the new claims against the stored versions, classifies added/changed/removed/unchanged, supersedes affected claims, and flags every saved design that cites the source as needs-review.
 tools: Read, Bash, WebFetch
 model: sonnet
+x-ucp-tier: standard
 ---
 
 You are the Source Drift Analyst for Fabric Atlas. You keep the knowledge base honest over time.

@@ -101,6 +101,12 @@ processed lines are moved to the Done section below with the resulting content f
 # discovered via fabric-blog-rayfin-ama: introducing-rayfin ba-p/5191676 tier=1, https://github.com/microsoft/rayfin tier=3
 # discovered via ultimateinfoguide-production-stability: https://learn.microsoft.com/en-us/fabric/onelake/security/data-access-control-model tier=1, /fabric/onelake/onelake-storage-tiers tier=1
 
+# ---- Suggested sources discovered during 2026-07-26 MLV GA ingestion (human approval needed — add via Settings → Queue, kind=source) ----
+# discovered via fabric-blog-materialized-lake-views-ga: https://learn.microsoft.com/fabric/data-engineering/materialized-lake-views/get-started-with-materialized-lake-views tier=1 (canonical MLV quick start + API reference)
+# discovered via fabric-blog-materialized-lake-views-ga: https://learn.microsoft.com/fabric/data-engineering/materialized-lake-views/create-materialized-lake-view-pyspark tier=1 (PySpark MLV authoring walkthrough, cited for the PySpark-authoring claims)
+# discovered via fabric-blog-materialized-lake-views-ga: https://learn.microsoft.com/fabric/data-engineering/materialized-lake-views/tutorial tier=1 (end-to-end medallion architecture tutorial combining MLVs with Shortcut Transformations)
+# discovered via fabric-blog-materialized-lake-views-ga: https://blog.fabric.microsoft.com/blog/announcing-materialized-lake-views-at-build-2025/ tier=1 (original Build 2025 preview announcement; background/history for the GA post, likely superseded content worth diffing via drift once ingested)
+
 # ---- Data-hygiene note (2026-07-11) ----
 # Supabase has the CoddSpeed SIGMOD paper as a source under TWO slugs: coddspeed-gpu-warehouse and
 # coddspeed-hardware-accelerated-query-processing-in-microsoft-fabric. Admin should review and retire one.

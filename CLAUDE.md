@@ -295,3 +295,17 @@ heading text below is a hard, exact-match convention, not a schema field:
   `.claude/agents/`, `.claude/commands/`, `AGENTS.md`, and `docs/*.md` for the old term in the
   same change — don't defer prompt/doc updates to a follow-up, or agent instructions silently
   drift out of sync with what they actually query.
+
+## Optional: model-tier registry, Copilot chatmodes, LangGraph scaffold
+
+Not part of the default workflow above — skip unless you're touching one of these directly.
+Every agent's frontmatter carries an `x-ucp-tier` field (reasoning / code / standard / fast /
+diagram); `.ucp/models.yaml` + `scripts/sync_models.py` resolve that to a concrete model per
+provider and rewrite `model:` frontmatter across `.claude/agents/*.md` and
+`.github/chatmodes/*.chatmode.md`, so a new model release is a one-file edit, not fifteen.
+`.github/chatmodes/*.chatmode.md` are thin GitHub Copilot pointers back to the matching
+`.claude/agents/*.md` contract, not a second copy of it. `langgraph/` is an **unwired**
+reference scaffold for a possible future headless/scheduled content pipeline — see
+`langgraph/README.md`; nothing in the app, backend, or CI calls it today. This does not change
+the "single-model + retrieval, no agent mesh" scope discipline above — it's optional
+infrastructure sitting alongside the existing subagent workflow, not a replacement for it.

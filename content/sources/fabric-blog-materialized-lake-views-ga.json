@@ -1,0 +1,121 @@
+{
+  "url": "https://blog.fabric.microsoft.com/en-US/blog/materialized-lake-views-in-microsoft-fabric-generally-available/",
+  "title": "Materialized Lake Views in Microsoft Fabric (Generally Available)",
+  "tier": 1,
+  "summary": "Microsoft's official GA announcement for Materialized Lake Views (MLV), the declarative Spark SQL/PySpark layer for building medallion-architecture Lakehouse pipelines in Fabric. It covers what changed between the Build 2025 preview and March 2026 GA: wider incremental-refresh coverage, PySpark authoring, multiple independent refresh schedules, in-place definition updates, and expanded data-quality enforcement.",
+  "audience": "Fabric data engineers and architects building or modernizing Lakehouse medallion pipelines who need to know what MLV can and cannot yet do at GA.",
+  "why_it_matters": "MLV replaces a category of hand-written orchestration and dependency-tracking notebook code with a managed, declarative construct; understanding its refresh model and current limits determines whether a team can retire custom pipeline scaffolding or still needs it for parts of a workload.",
+  "takeaways": [
+    "MLV is a persisted, auto-refreshed view defined in Spark SQL or PySpark, with Fabric managing dependency ordering, refresh, and constraint enforcement across the whole set of views in a lakehouse.",
+    "GA substantially widens which queries qualify for incremental (rather than full) refresh, and adds an automatic full-vs-incremental cost decision so engineers don't have to choose manually.",
+    "PySpark-authored MLVs are new at GA but are full-refresh only for now; incremental/optimal refresh for PySpark MLVs is an explicitly stated future item, not a current capability.",
+    "Multiple named refresh schedules per lakehouse and in-place Replace semantics (versus drop/recreate) are the two biggest operational-overhead reductions in this release.",
+    "Data-quality constraints gained expression-based, multi-column, and UDF-backed rules for PySpark MLVs, with results rolled into a built-in data quality report rather than a separately built monitoring pipeline."
+  ],
+  "tags": ["MicrosoftFabric", "DataEngineering", "Lakehouse", "MaterializedLakeViews", "PySpark", "Spark", "MedallionArchitecture"],
+  "claims": [
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "A materialized lake view (MLV) in Fabric is a persisted, automatically refreshed view defined in Spark SQL or PySpark, intended to express medallion-architecture (bronze/silver/gold) transformations as declarative statements instead of custom Spark jobs.",
+      "depth": 1,
+      "type": "concept",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "Lakehouse", "MedallionArchitecture"]
+    },
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "Fabric automatically tracks dependencies across the MLVs defined in a lakehouse, orchestrates refreshes in the correct topological order, executes independent views in parallel, and enforces data-quality constraints at each stage, all visible from a single monitoring surface.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "Lakehouse", "DataQuality", "Orchestration"]
+    },
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "At GA, incremental refresh coverage was expanded to include aggregations with GROUP BY (e.g., COUNT, SUM), left outer joins, left semi joins, and common table expressions, meaning most everyday medallion-pipeline query shapes now qualify for incremental processing without rewriting.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "IncrementalRefresh", "Lakehouse"]
+    },
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "MLV refresh uses a built-in decision engine that evaluates the volume of changed data against the cost of a full recomputation for every refresh and automatically chooses whichever is faster, so engineers do not manually decide between full and incremental refresh; Change Data Feed is enabled by default on every new MLV to support this.",
+      "depth": 3,
+      "type": "internal",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "IncrementalRefresh", "CDC", "Lakehouse"]
+    },
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "PySpark authoring for MLVs (introduced in preview at GA) lets data engineers create, refresh, and Replace MLVs from Fabric notebooks using the DataFrameWriter API, intended for logic that needs custom Python cleansing, user-defined functions wrapping business rules or ML models, or procedural steps mixed with DataFrame operations.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "PySpark", "Spark"]
+    },
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "PySpark-authored MLVs currently perform only a full refresh on every run; optimal (incremental) refresh support for PySpark-authored MLVs is an explicitly stated upcoming capability, not yet available at GA.",
+      "depth": 2,
+      "type": "limitation",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "PySpark", "IncrementalRefresh"]
+    },
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "Multi-schedule support lets a lakehouse define multiple independent named refresh schedules, each targeting a specific subset of views (for example, an hourly finance-gold schedule alongside a six-hourly lower-priority analytics schedule) without custom scripting; a named schedule refreshes all upstream dependencies of its targeted views in order and executes independent views in parallel.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "Scheduling", "Lakehouse"]
+    },
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "Before GA, refreshing MLVs on a lakehouse via notebooks instead of a native schedule bypassed dependency management and centralized error reporting: failures only surfaced in cell output, dependent views had no awareness of an upstream failure, and a broken pipeline could go undetected indefinitely. Managed multi-schedule refresh is presented as the fix for this gap.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "Scheduling", "Lakehouse"]
+    },
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "If a scheduled MLV refresh run is still in progress when its next scheduled window fires, the new run is skipped rather than queued or run concurrently, and the following scheduled window proceeds normally.",
+      "depth": 3,
+      "type": "internal",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "Scheduling"]
+    },
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "The Replace operation added at GA updates an MLV's SQL or PySpark definition in place: Fabric validates the new logic and swaps it in while preserving the view's identity, metadata, and lineage, so downstream dependencies remain intact. This replaces the prior preview-era requirement to drop and recreate an MLV to change its logic, which lost refresh history and forced downstream reconnection.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "Lakehouse"]
+    },
+    {
+      "capability_id": "materialized-lake-views",
+      "text": "Data-quality constraints for PySpark-authored MLVs at GA go beyond preview-era null/fixed-value checks to support expression-based logic across multiple columns, arithmetic and built-in function combinations within a single rule, and session-scoped user-defined functions written in Python; Fabric tracks constraint outcomes across every refresh in a built-in data quality report showing failure rates by rule and by view over time.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["MicrosoftFabric", "MaterializedLakeViews", "DataQuality", "PySpark"]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "https://community.fabric.microsoft.com/t5/image/serverpage/image-id/1335636iBF87C5F37D97E66A/image-size/large?v=v2&px=999",
+      "caption": "Materialized lake views implementing a medallion-architecture pipeline in Fabric, shown as a workflow/dependency diagram.",
+      "attribution": "Microsoft Fabric Blog (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "materialized-lake-views"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://community.fabric.microsoft.com/t5/image/serverpage/image-id/1335637i404AB29B858C35B2/image-size/large?v=v2&px=999",
+      "caption": "The Fabric Lakehouse \"Create with PySpark\" menu option for authoring a new materialized lake view.",
+      "attribution": "Microsoft Fabric Blog (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "materialized-lake-views"
+    },
+    {
+      "kind": "referenced",
+      "url": "https://community.fabric.microsoft.com/t5/image/serverpage/image-id/1335638i5B462AA26C66FB08/image-size/large?v=v2&px=999",
+      "caption": "The materialized lake view management page's Schedules panel, showing multiple independently configured refresh schedules.",
+      "attribution": "Microsoft Fabric Blog (© Microsoft)",
+      "license_note": "External image; linked with attribution, not re-hosted.",
+      "capability_id": "materialized-lake-views"
+    }
+  ]
+}

@@ -31,6 +31,7 @@ CAPABILITY_IDS = [
     "graphql-api",
     "purview",
     "capacity",
+    "materialized-lake-views",
 ]
 
 
