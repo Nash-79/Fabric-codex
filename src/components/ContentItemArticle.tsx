@@ -16,6 +16,7 @@ import { slugifyHeading, textFromNode } from "@/lib/heading-utils";
 import { codeLanguage } from "@/components/CodeBlock";
 import { ContentFeedbackButton } from "@/components/ContentFeedbackButton";
 import type { TocEntry } from "@/components/ContentTocSidebar";
+import type { PresentationArchetype, ReadingDensity } from "@/lib/content-presentation";
 
 type DiagramMeta = { path?: string; caption?: string };
 
@@ -76,6 +77,8 @@ export function ContentItemArticle({
   contentItemId,
   sections = [],
   reportedSectionIds,
+  archetype,
+  density,
 }: {
   bodyMd: string;
   diagramMeta?: DiagramMeta[];
@@ -86,6 +89,10 @@ export function ContentItemArticle({
   sections?: TocEntry[];
   /** Sections the current identity already submitted feedback on — shown as a filled icon. */
   reportedSectionIds?: Set<string>;
+  /** presentation_profile.archetype — drives the archetype-scoped CSS in styles.css. */
+  archetype?: PresentationArchetype;
+  /** presentation_profile.reading_density — drives the density-scoped CSS in styles.css. */
+  density?: ReadingDensity;
 }) {
   // Hover-only reveal (opacity-0 -> group-hover:opacity-100) leaves the copy-link and feedback
   // triggers permanently invisible on touch devices (no :hover) — this tracks which heading was
@@ -306,7 +313,11 @@ export function ContentItemArticle({
   );
 
   return (
-    <div className="article-body prose dark:prose-invert prose-lg lg:prose-xl mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-h2:mt-16 prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-2xl prose-h3:mt-10 prose-h3:text-xl prose-p:leading-relaxed prose-a:text-teal-600 dark:prose-a:text-teal-300 prose-strong:text-foreground prose-li:marker:text-teal-500 dark:prose-li:marker:text-teal-400">
+    <div
+      className="article-body prose dark:prose-invert prose-lg lg:prose-xl mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-h2:mt-16 prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-2xl prose-h3:mt-10 prose-h3:text-xl prose-p:leading-relaxed prose-a:text-teal-600 dark:prose-a:text-teal-300 prose-strong:text-foreground prose-li:marker:text-teal-500 dark:prose-li:marker:text-teal-400"
+      data-archetype={archetype}
+      data-density={density}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw, [rehypeHighlight, { detect: true, ignoreMissing: true }]]}

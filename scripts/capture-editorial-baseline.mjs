@@ -42,8 +42,7 @@ const browser = [
 ]
   .filter(Boolean)
   .find(existsSync);
-if (!browser)
-  throw new Error("Editorial baseline capture needs Edge/Chrome or DIAGRAM_BROWSER.");
+if (!browser) throw new Error("Editorial baseline capture needs Edge/Chrome or DIAGRAM_BROWSER.");
 
 const temp = mkdtempSync(join(tmpdir(), "fabric-atlas-editorial-baseline-"));
 const port = 9500 + Math.floor(Math.random() * 300);
@@ -186,14 +185,22 @@ try {
   const totalIssues = summary.reduce((sum, entry) => sum + entry.issues.length, 0);
   writeFileSync(
     join(root, "baseline/summary.json"),
-    JSON.stringify({ capturedAt: baseUrl, routes: ROUTES, widths: WIDTHS, themes: THEMES, results: summary }, null, 2),
+    JSON.stringify(
+      { capturedAt: baseUrl, routes: ROUTES, widths: WIDTHS, themes: THEMES, results: summary },
+      null,
+      2,
+    ),
   );
   console.log(
     `Editorial baseline captured: ${summary.length} shots across ${ROUTES.length} routes, ${totalIssues} audit issue(s) flagged. See baseline/summary.json.`,
   );
   if (totalIssues) {
     console.log("Issues found (informational for Phase 1 baseline, not a failure):");
-    for (const entry of summary) if (entry.issues.length) console.log(`- ${entry.route} (${entry.theme}, ${entry.width}px): ${entry.issues.join("; ")}`);
+    for (const entry of summary)
+      if (entry.issues.length)
+        console.log(
+          `- ${entry.route} (${entry.theme}, ${entry.width}px): ${entry.issues.join("; ")}`,
+        );
   }
 } finally {
   child.kill();

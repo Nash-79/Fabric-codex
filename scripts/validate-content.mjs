@@ -150,17 +150,21 @@ for (const dir of ["content/articles", "content/designs", "content/lessons"])
     const h1Count = [...item.body_md.matchAll(/^# .+$/gm)].length;
     const sourceLegendCount = [...item.body_md.matchAll(/^##\s+Source Legend\s*$/gim)].length;
     if (h1Count > 1)
-      warnings.push(`${path}: duplicate in-body H1 (${h1Count} found) — page hero already renders the title as H1`);
+      warnings.push(
+        `${path}: duplicate in-body H1 (${h1Count} found) — page hero already renders the title as H1`,
+      );
     if (sourceLegendCount > 1)
       warnings.push(
         `${path}: duplicate Source Legend section (${sourceLegendCount} found) — the source rail already renders this automatically`,
       );
     if (dir === "content/lessons") {
-      if (!item.lesson_meta?.summary && !item.summary) warnings.push(`${path}: lesson missing summary`);
+      if (!item.lesson_meta?.summary && !item.summary)
+        warnings.push(`${path}: lesson missing summary`);
       if (wordCount > 500)
         warnings.push(`${path}: lesson is ${wordCount} words against the ~400 word budget`);
     }
-    if (dir === "content/designs" && !item.summary) warnings.push(`${path}: design missing summary`);
+    if (dir === "content/designs" && !item.summary)
+      warnings.push(`${path}: design missing summary`);
 
     if (item.presentation_profile) {
       const result = presentationProfileSchema.safeParse(item.presentation_profile);

@@ -198,6 +198,7 @@
   --radius-4xl: calc(var(--radius) + 16px);
   --font-sans: var(--font-sans-stack);
   --font-mono: var(--font-mono-stack);
+  --font-serif: var(--font-serif-stack);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -245,6 +246,10 @@
     "Helvetica Neue", Arial, sans-serif;
   --font-mono-stack:
     "Cascadia Code", "JetBrains Mono", Consolas, ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* Editorial display/serif role — selected titles, deck copy, pull quotes (Phase 2 of the
+     Editorial Experience Revamp). Source Serif 4 is loaded from Google Fonts in __root.tsx. */
+  --font-serif-stack:
+    "Source Serif 4", ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
 
   /* Fabric teal brand palette — light mode (mirrors frontend/src/theme.js). */
   --background: oklch(0.985 0.002 95);
@@ -315,6 +320,50 @@
   --sidebar-accent-foreground: oklch(0.86 0.1 170);
   --sidebar-border: oklch(1 0 0 / 12%);
   --sidebar-ring: oklch(0.7 0.13 170);
+}
+
+/* Editorial surface tokens — Phase 2 of the Editorial Experience Revamp. Structural/compound
+   tokens (bg + border + radius per surface kind), not new semantic colors, so they live here
+   rather than in @theme inline. Defined now; consumed by Callout/CodeBlock/step/source-preview
+   components starting Phase 4, and by figures/diagrams starting Phase 5. ContentHero's compact
+   metadata row (Phase 2) is the first and only consumer today. */
+:root {
+  --surface-card-bg: var(--card);
+  --surface-card-border: var(--border);
+  --surface-card-radius: var(--radius-lg);
+
+  --surface-code-bg: color-mix(in oklab, var(--muted) 45%, var(--background));
+  --surface-code-border: var(--border);
+
+  --surface-step-bg: color-mix(in oklab, var(--muted) 25%, transparent);
+  --surface-step-border: var(--border);
+  --surface-step-marker-bg: var(--primary);
+  --surface-step-marker-fg: var(--primary-foreground);
+
+  --surface-figure-bg: transparent;
+  --surface-figure-border: var(--border);
+  --surface-figure-caption-fg: var(--muted-foreground);
+
+  --surface-callout-bg: color-mix(in oklab, var(--accent) 60%, var(--background));
+  --surface-callout-border: var(--accent-foreground);
+  --surface-callout-fg: var(--accent-foreground);
+
+  --surface-source-preview-bg: var(--popover);
+  --surface-source-preview-border: var(--border);
+
+  --surface-sticky-bg: color-mix(in oklab, var(--background) 92%, transparent);
+  --surface-sticky-border: var(--border);
+  --surface-sticky-blur: 8px;
+}
+
+.dark {
+  /* Same token names; dark surfaces want more opacity / less lightening than the light-mode
+     ratios above to avoid washing out against the near-black background. Card/border/step/
+     figure/source-preview tokens reuse var() indirection and inherit .dark's own --card/
+     --border/--muted values automatically. */
+  --surface-code-bg: color-mix(in oklab, var(--muted) 55%, var(--background));
+  --surface-callout-bg: color-mix(in oklab, var(--accent) 45%, var(--background));
+  --surface-sticky-bg: color-mix(in oklab, var(--background) 85%, transparent);
 }
 
 @layer base {
@@ -488,7 +537,10 @@
   .article-body :where(h3) {
     margin-top: 1.75rem;
   }
-  .article-body > p:first-of-type::first-letter {
+  .article-body:not([data-archetype="tutorial"]):not([data-archetype="field-guide"]):not(
+      [data-archetype="lesson"]
+    )
+    > p:first-of-type::first-letter {
     font-size: 3.15rem;
   }
   .article-body .article-figure {
@@ -551,15 +603,19 @@
 /* Article reading polish                                                     */
 /* -------------------------------------------------------------------------- */
 
-/* Drop-cap on the first paragraph of every article for a magazine feel. */
-.article-body > p:first-of-type::first-letter {
+/* Drop-cap on the first paragraph — magazine feel. Off for archetypes where
+   scanability matters more than an editorial opening (tutorial/field-guide/lesson). */
+.article-body:not([data-archetype="tutorial"]):not([data-archetype="field-guide"]):not(
+    [data-archetype="lesson"]
+  )
+  > p:first-of-type::first-letter {
   float: left;
   font-size: 3.4rem;
   line-height: 0.9;
   padding: 0.25rem 0.6rem 0 0;
   font-weight: 700;
-  color: hsl(var(--foreground));
-  font-family: ui-serif, Georgia, serif;
+  color: var(--primary);
+  font-family: var(--font-serif-stack);
 }
 
 /* Auto-numbered figure captions ("Figure 1 — …"). */
@@ -617,7 +673,7 @@
   line-height: var(--fa-body-lh);
 }
 .article-body :where(p, li) {
-  max-width: 68ch;
+  max-width: var(--fa-reading-width, 68ch);
 }
 .article-body :where(h1) {
   font-size: var(--fa-h1);
@@ -628,7 +684,7 @@
   font-size: var(--fa-h2);
   letter-spacing: -0.015em;
   line-height: 1.2;
-  margin-top: 3.5rem;
+  margin-top: calc(var(--fa-rhythm, 3.5rem) * var(--fa-density-scale, 1));
 }
 .article-body :where(h3) {
   font-size: var(--fa-h3);
@@ -642,10 +698,6 @@
   font-size: calc(var(--fa-body-size) * 1.08);
   font-weight: 450;
   color: hsl(var(--foreground));
-}
-.article-body > p:first-of-type::first-letter {
-  font-size: 3.8rem;
-  color: var(--primary);
 }
 
 /* Links: accessible underline with proper offset, teal on hover. */
@@ -679,7 +731,7 @@
   padding: 0.25rem 0 0.25rem 1.5rem;
   margin: 2rem 0;
   font-style: italic;
-  font-family: ui-serif, Georgia, "Iowan Old Style", serif;
+  font-family: var(--font-serif-stack);
   font-size: calc(var(--fa-body-size) * 1.15);
   line-height: 1.55;
   color: hsl(var(--foreground));
@@ -733,4 +785,42 @@
   .article-body :where(a, button, .article-figure) {
     transition: none !important;
   }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Editorial archetypes — Phase 2 of the Editorial Experience Revamp           */
+/* -------------------------------------------------------------------------- */
+/* Driven by presentation_profile.archetype/reading_density (src/lib/content-presentation.ts),
+   applied as data-archetype/data-density attributes on .article-body (ContentItemArticle.tsx).
+   Content with no presentation_profile — or archetype "explainer" — gets no attribute and falls
+   through to the existing unscoped rules above unchanged: this layer is purely additive. */
+
+.article-body[data-archetype="tutorial"] {
+  --fa-reading-width: 72ch; /* wider: code fences need room */
+  --fa-rhythm: 1.5rem; /* tighter rhythm than the magazine default — scanability over pacing */
+}
+.article-body[data-archetype="field-guide"] {
+  --fa-reading-width: 62ch; /* narrowest: dense reference/navigation, not long-form prose */
+  --fa-rhythm: 1.25rem;
+}
+.article-body[data-archetype="deep-dive"] {
+  --fa-reading-width: 70ch;
+  --fa-rhythm: 3rem;
+}
+.article-body[data-archetype="architecture"] {
+  --fa-reading-width: 74ch; /* widest: diagrams + technical prose need room */
+  --fa-rhythm: 2.5rem;
+}
+.article-body[data-archetype="lesson"] {
+  --fa-reading-width: 66ch;
+  --fa-rhythm: 1.75rem;
+}
+
+/* Reading density (presentation_profile.reading_density) — orthogonal to archetype, scales
+   vertical rhythm only. */
+.article-body[data-density="compact"] {
+  --fa-density-scale: 0.8;
+}
+.article-body[data-density="spacious"] {
+  --fa-density-scale: 1.25;
 }

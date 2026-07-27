@@ -47,7 +47,11 @@ export const presentationProfileSchema = z
     surface_outcomes: z.boolean().default(false),
   })
   .strict();
+// The parsed/output shape (defaults applied) -- what components read after parsing.
 export type PresentationProfile = z.infer<typeof presentationProfileSchema>;
+// The pre-parse/input shape (defaulted fields optional) -- what callers may supply, e.g. a
+// content JSON file's presentation_profile that omits hero_treatment/reading_density/etc.
+export type PresentationProfileInput = z.input<typeof presentationProfileSchema>;
 
 // Mirrors learning-author.md's existing Beginner/Intermediate/Expert vocabulary and its
 // L1-2/L3/L4-5 depth-level mapping -- do not introduce a second level taxonomy.
@@ -65,3 +69,4 @@ export const lessonMetaSchema = z
   })
   .strict();
 export type LessonMeta = z.infer<typeof lessonMetaSchema>;
+export type LessonMetaInput = z.input<typeof lessonMetaSchema>;

@@ -1,7 +1,9 @@
 import { KindBadge } from "@/components/KindBadge";
 import { MaturityBadge } from "@/components/Badges";
 import { readingTime } from "@/lib/reading-time";
-import { ShieldCheck, Layers, FileText } from "lucide-react";
+import { ShieldCheck } from "lucide-react";
+import type { accent as accentFn } from "@/lib/fabric-theme";
+import type { PresentationProfile } from "@/lib/content-presentation";
 
 const FORMAT_LABEL: Record<string, string> = {
   article: "Source-grounded article",
@@ -14,6 +16,8 @@ export function ContentHero({
   citationCount,
   diagramCount,
   hasPreview,
+  presentationProfile,
+  accent,
 }: {
   item: {
     kind: string;
@@ -28,11 +32,27 @@ export function ContentHero({
   citationCount: number;
   diagramCount: number;
   hasPreview: boolean;
+  /** presentation_profile — drives hero_treatment (data-hero) and archetype (data-archetype). */
+  presentationProfile?: PresentationProfile | null;
+  /** Resolved via fabric-theme's accent(): presentation_profile.accent, falling back to the
+      topic/capability's accent when unset. */
+  accent?: ReturnType<typeof accentFn>;
 }) {
+  const heroTreatment = presentationProfile?.hero_treatment ?? "standard";
   return (
     // Bleed only from sm up — at phone widths the column already fills the viewport, so a
     // negative margin overflows the page sideways.
-    <div className="relative pb-2 pt-2 sm:-mx-8 sm:px-8">
+    <div
+      className="relative pb-2 pt-2 sm:-mx-8 sm:px-8"
+      data-archetype={presentationProfile?.archetype}
+      data-hero={heroTreatment}
+    >
+      {heroTreatment === "diagram-led" && accent && (
+        <div
+          aria-hidden="true"
+          className={`pointer-events-none absolute inset-x-0 top-0 -z-10 h-32 bg-gradient-to-b ${accent.grad}`}
+        />
+      )}
       <div className="flex items-center gap-2">
         <KindBadge kind={item.kind} />
         {item.tags?.length ? (
@@ -88,47 +108,36 @@ export function ContentHero({
         )}
       </div>
 
-      {item.summary && (
+      {heroTreatment !== "minimal" && item.summary && (
         <p className="mt-4 text-lg leading-relaxed text-muted-foreground">{item.summary}</p>
       )}
 
-      <div className="mt-8 grid gap-2 border-t border-border pt-6 sm:grid-cols-3">
-        <StatCard
-          icon={ShieldCheck}
-          label="Citation policy"
-          value="Every factual claim cites a source"
-        />
-        <StatCard
-          icon={Layers}
-          label="Depth range"
-          value={item.depth_levels?.length ? `L${item.depth_levels.join(" · L")}` : "L1 · L5"}
-        />
-        <StatCard
-          icon={FileText}
-          label="Format"
-          value={FORMAT_LABEL[item.kind] ?? "Source-grounded content"}
-        />
-      </div>
-    </div>
-  );
-}
-
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: typeof ShieldCheck;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-start gap-2.5 rounded-md border border-border bg-card p-3">
-      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-teal-400" aria-hidden="true" />
-      <div>
-        <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
-        <div className="mt-1 text-xs font-medium text-muted-foreground">{value}</div>
-      </div>
+      {heroTreatment !== "minimal" && (
+        <div
+          className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-4 text-xs text-muted-foreground"
+          style={{
+            borderColor: "var(--surface-card-border)",
+          }}
+        >
+          <span>
+            Depth{" "}
+            <strong className="font-medium text-foreground">
+              {item.depth_levels?.length ? `L${item.depth_levels.join(" · L")}` : "L1 · L5"}
+            </strong>
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>{FORMAT_LABEL[item.kind] ?? "Source-grounded content"}</span>
+          <details className="group ml-auto">
+            <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md px-1.5 py-1 hover:text-foreground [&::-webkit-details-marker]:hidden">
+              <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-teal-400" aria-hidden="true" />
+              Citation policy
+            </summary>
+            <p className="mt-1.5 max-w-prose text-muted-foreground">
+              Every factual claim cites a source.
+            </p>
+          </details>
+        </div>
+      )}
     </div>
   );
 }

@@ -14,8 +14,8 @@
 import {
   presentationProfileSchema,
   lessonMetaSchema,
-  type PresentationProfile,
-  type LessonMeta,
+  type PresentationProfileInput,
+  type LessonMetaInput,
 } from "./content-presentation";
 
 type SupabaseAdmin = any;
@@ -225,8 +225,8 @@ type ContentItemPayload = {
   status?: string;
   scenario?: string;
   constraints?: Record<string, unknown>;
-  presentation_profile?: PresentationProfile;
-  lesson_meta?: LessonMeta;
+  presentation_profile?: PresentationProfileInput;
+  lesson_meta?: LessonMetaInput;
 };
 
 // Publish a single article/design/lesson. This is the fix for the versioning bug that used to

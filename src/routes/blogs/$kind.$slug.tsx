@@ -29,6 +29,9 @@ import { ContentFeedbackRail } from "@/components/ContentFeedbackRail";
 import { BookOpen } from "lucide-react";
 import { useReadingProgress } from "@/lib/use-reading-progress";
 import { ResumeReadingPill } from "@/components/ResumeReadingPill";
+import { accent } from "@/lib/fabric-theme";
+import { CAPABILITY_NAMES } from "@/lib/capability-names";
+import { presentationProfileSchema } from "@/lib/content-presentation";
 
 const KINDS = new Set(["article", "design", "lesson"]);
 
@@ -110,6 +113,19 @@ function ContentItemPage() {
   const capabilities = (data as any).capabilities ?? [];
   const diagramMeta = (data as any).diagrams ?? [];
   const hasPreview = capabilities.some((c: any) => c?.maturity === "preview");
+  // presentation_profile is stored as untyped jsonb — parse it through the same Zod schema
+  // publish-time validation uses. A malformed/legacy value falls back to undefined (no
+  // archetype-specific treatment) rather than throwing on the reading path.
+  const presentationProfile = presentationProfileSchema.safeParse(
+    (item as any).presentation_profile,
+  );
+  const profile = presentationProfile.success ? presentationProfile.data : undefined;
+  // presentation_profile.accent (an explicit editorial choice) overrides the incidental
+  // capability-derived accent when set; capability accent remains the fallback.
+  const capabilityAccent = capabilities[0]?.id
+    ? CAPABILITY_NAMES[capabilities[0].id as string]?.accent
+    : undefined;
+  const resolvedAccent = accent(profile?.accent ?? capabilityAccent);
   const headings = useTocHeadings(item.body_md ?? "");
   const tocHeadings = headings.filter((h) => h.kind !== "subheading");
   const activeSectionId = useActiveHeading(tocHeadings);
@@ -307,6 +323,8 @@ function ContentItemPage() {
               citationCount={citations.length}
               diagramCount={diagramCount}
               hasPreview={hasPreview}
+              presentationProfile={profile}
+              accent={resolvedAccent}
             />
 
             <ContentItemArticle
@@ -316,6 +334,8 @@ function ContentItemPage() {
               contentItemId={item.id}
               sections={headings}
               reportedSectionIds={reportedSectionIds}
+              archetype={profile?.archetype}
+              density={profile?.reading_density}
             />
 
             <ArticleSiblingsNav

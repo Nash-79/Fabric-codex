@@ -547,6 +547,8 @@ export type Database = {
           document: Json
           id: string
           kind: string
+          lesson_meta: Json | null
+          presentation_profile: Json | null
           ready_to_share: boolean
           scenario: string
           slug: string
@@ -572,6 +574,8 @@ export type Database = {
           document?: Json
           id?: string
           kind: string
+          lesson_meta?: Json | null
+          presentation_profile?: Json | null
           ready_to_share?: boolean
           scenario?: string
           slug: string
@@ -597,6 +601,8 @@ export type Database = {
           document?: Json
           id?: string
           kind?: string
+          lesson_meta?: Json | null
+          presentation_profile?: Json | null
           ready_to_share?: boolean
           scenario?: string
           slug?: string
