@@ -1,37 +1,8 @@
-import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
-import { useSuspenseQuery, useQuery, queryOptions } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
-import {
-  getContentItem,
-  getContentSiblings,
-  listMyContentFeedback,
-  listTopics,
-} from "@/lib/atlas.functions";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { getContentItem, getContentSiblings, listTopics } from "@/lib/atlas.functions";
 import { SiteHeader } from "@/components/SiteHeader";
-import { PrintButton } from "@/components/PrintButton";
-import { ContentItemArticle } from "@/components/ContentItemArticle";
-import { ContentHero } from "@/components/ContentHero";
-import {
-  ContentTocSidebar,
-  useActiveHeading,
-  useTocHeadings,
-} from "@/components/ContentTocSidebar";
-import { MobileTocDrawer } from "@/components/MobileTocDrawer";
-import { ArticleSiblingsNav } from "@/components/ArticleSiblingsNav";
-import { ArticleBreadcrumb } from "@/components/ArticleBreadcrumb";
-import { CitationSidebar } from "@/components/CitationSidebar";
-import { TopicTree } from "@/components/TopicTree";
-import { FavoriteButton } from "@/components/FavoriteButton";
-import { ContentFeedbackButton } from "@/components/ContentFeedbackButton";
-import { readOrCreateAnonToken, useHasSession } from "@/lib/use-feedback-identity";
-import { ContentFeedbackRail } from "@/components/ContentFeedbackRail";
-import { BookOpen } from "lucide-react";
-import { useReadingProgress } from "@/lib/use-reading-progress";
-import { ResumeReadingPill } from "@/components/ResumeReadingPill";
-import { accent } from "@/lib/fabric-theme";
-import { CAPABILITY_NAMES } from "@/lib/capability-names";
-import { presentationProfileSchema } from "@/lib/content-presentation";
+import { ReaderShell } from "@/components/readers/ReaderShell";
 
 const KINDS = new Set(["article", "design", "lesson"]);
 
@@ -104,7 +75,6 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
 function ContentItemPage() {
   const { kind, slug } = Route.useParams();
   const { from, fromSlug, q } = Route.useSearch();
-  const navigate = useNavigate();
   const { data } = useSuspenseQuery(contentItemQO(kind, slug));
   const { data: topics } = useSuspenseQuery(topicsQO);
   const { data: siblings } = useSuspenseQuery(siblingsQO(kind, slug));
@@ -112,255 +82,20 @@ function ContentItemPage() {
   const { item, citations } = data;
   const capabilities = (data as any).capabilities ?? [];
   const diagramMeta = (data as any).diagrams ?? [];
-  const hasPreview = capabilities.some((c: any) => c?.maturity === "preview");
-  // presentation_profile is stored as untyped jsonb — parse it through the same Zod schema
-  // publish-time validation uses. A malformed/legacy value falls back to undefined (no
-  // archetype-specific treatment) rather than throwing on the reading path.
-  const presentationProfile = presentationProfileSchema.safeParse(
-    (item as any).presentation_profile,
-  );
-  const profile = presentationProfile.success ? presentationProfile.data : undefined;
-  // presentation_profile.accent (an explicit editorial choice) overrides the incidental
-  // capability-derived accent when set; capability accent remains the fallback.
-  const capabilityAccent = capabilities[0]?.id
-    ? CAPABILITY_NAMES[capabilities[0].id as string]?.accent
-    : undefined;
-  const resolvedAccent = accent(profile?.accent ?? capabilityAccent);
-  const headings = useTocHeadings(item.body_md ?? "");
-  const tocHeadings = headings.filter((h) => h.kind !== "subheading");
-  const activeSectionId = useActiveHeading(tocHeadings);
-  // Real content embeds /diagrams/... (mirrored public path), not /content/diagrams/... — this
-  // must match scripts/validate-content.mjs's markdownDiagram regex exactly, or the two drift.
-  const diagramCount = [
-    ...(item.body_md ?? "").matchAll(/!\[[^\]]*\]\((?:\/content)?\/diagrams\/([^)\s]+)\)/g),
-  ].length;
-
-  // "Already reported this section" — best-effort, not part of the page's critical render path:
-  // the anon token is only resolvable client-side after mount, and a failed/slow lookup should
-  // never block or degrade the article itself, just leave the reported-state indicator quiet.
-  const listMyFeedbackFn = useServerFn(listMyContentFeedback);
-  const hasSession = useHasSession();
-  const { data: myFeedback } = useQuery({
-    queryKey: ["my-content-feedback", item.id, hasSession],
-    queryFn: () =>
-      listMyFeedbackFn({
-        data: {
-          contentItemId: item.id,
-          anonToken: hasSession ? undefined : readOrCreateAnonToken(),
-        },
-      }),
-    enabled: hasSession !== null,
-  });
-  const reportedSectionIds = useMemo(
-    () => new Set((myFeedback ?? []).map((f) => f.section_id).filter((id): id is string => !!id)),
-    [myFeedback],
-  );
-
-  const [progress, setProgress] = useState(0);
-  const [citationsOpen, setCitationsOpen] = useState(false);
-  const savedProgress = useReadingProgress(kind, slug);
-  const showResume = savedProgress != null && savedProgress.pct > 10 && savedProgress.pct < 95;
-
-  // [ / ] jumps to previous / next sibling article.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName)) return;
-      if (t?.isContentEditable) return;
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === "[" && siblings.prev) {
-        e.preventDefault();
-        navigate({
-          to: "/blogs/$kind/$slug",
-          params: { kind, slug: siblings.prev.slug },
-        });
-      } else if (e.key === "]" && siblings.next) {
-        e.preventDefault();
-        navigate({
-          to: "/blogs/$kind/$slug",
-          params: { kind, slug: siblings.next.slug },
-        });
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [siblings, kind, navigate]);
-
-  useEffect(() => {
-    function updateProgress() {
-      const max = document.documentElement.scrollHeight - window.innerHeight;
-      setProgress(max > 0 ? Math.min(100, Math.max(0, (window.scrollY / max) * 100)) : 0);
-    }
-    updateProgress();
-    window.addEventListener("scroll", updateProgress, { passive: true });
-    window.addEventListener("resize", updateProgress);
-    return () => {
-      window.removeEventListener("scroll", updateProgress);
-      window.removeEventListener("resize", updateProgress);
-    };
-  }, []);
-
-  useEffect(() => {
-    function handleCiteClick(e: MouseEvent) {
-      const target = e.target as HTMLElement;
-      const anchor = target.closest("a");
-      if (anchor && anchor.getAttribute("href")?.startsWith("#src-")) {
-        e.preventDefault();
-        setCitationsOpen(true);
-        const targetId = anchor.getAttribute("href")?.substring(1);
-        if (targetId) {
-          setTimeout(() => {
-            const el = document.getElementById(targetId);
-            if (el) {
-              el.scrollIntoView({ behavior: "smooth", block: "center" });
-              el.classList.add(
-                "ring-2",
-                "ring-teal-400",
-                "ring-offset-2",
-                "ring-offset-background",
-                "duration-500",
-                "transition-all",
-              );
-              setTimeout(() => {
-                el.classList.remove(
-                  "ring-2",
-                  "ring-teal-400",
-                  "ring-offset-2",
-                  "ring-offset-background",
-                );
-              }, 2500);
-            }
-          }, 150);
-        }
-      }
-    }
-    document.addEventListener("click", handleCiteClick);
-    return () => {
-      document.removeEventListener("click", handleCiteClick);
-    };
-  }, []);
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <SiteHeader />
-      <div
-        className="no-print sticky top-14 z-20 h-1 bg-muted"
-        role="presentation"
-        aria-hidden="true"
-      >
-        <div
-          className="h-full origin-left bg-teal-300 will-change-transform"
-          style={{ transform: `scaleX(${progress / 100})`, width: "100%" }}
-        />
-      </div>
-      <div className="mx-auto flex max-w-[1600px] gap-6 px-4 py-6 sm:px-6 sm:py-10">
-        <div className="hidden lg:block">
-          <TopicTree topics={topics} activeSlug={item.topic_slug ?? undefined} />
-        </div>
-
-        <div
-          className={`mx-auto grid w-full gap-8 transition-all duration-300 ${
-            citationsOpen
-              ? "max-w-7xl lg:grid-cols-[220px_1fr_300px]"
-              : "max-w-5xl lg:grid-cols-[220px_1fr]"
-          }`}
-        >
-          <aside className="hidden lg:block">
-            <div className="sticky top-20 space-y-4">
-              <ArticleBreadcrumb
-                from={from}
-                fromSlug={fromSlug}
-                q={q}
-                topicName={originTopicName}
-              />
-              <ContentTocSidebar headings={headings} />
-            </div>
-          </aside>
-
-          <article className="min-w-0">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <span className="lg:hidden">
-                <ArticleBreadcrumb
-                  from={from}
-                  fromSlug={fromSlug}
-                  q={q}
-                  topicName={originTopicName}
-                />
-              </span>
-              <div className="ml-auto flex flex-wrap items-center gap-2">
-                {citations.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setCitationsOpen(!citationsOpen)}
-                    className="no-print inline-flex min-h-10 items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground"
-                  >
-                    <BookOpen className="h-3.5 w-3.5" />
-                    <span>{citationsOpen ? "Hide Sources" : `Sources (${citations.length})`}</span>
-                  </button>
-                )}
-                <FavoriteButton
-                  itemType={kind as "article" | "design" | "lesson"}
-                  itemKey={item.slug}
-                />
-                <ContentFeedbackButton
-                  contentItemId={item.id}
-                  sections={headings}
-                  defaultSectionId={activeSectionId ?? undefined}
-                />
-                <PrintButton
-                  getMeta={() => ({
-                    title: item.title,
-                    summary: item.summary,
-                    tags: item.tags,
-                    updatedAt: item.updated_at,
-                    citations,
-                  })}
-                />
-              </div>
-            </div>
-            <ContentHero
-              item={item}
-              citationCount={citations.length}
-              diagramCount={diagramCount}
-              hasPreview={hasPreview}
-              presentationProfile={profile}
-              accent={resolvedAccent}
-            />
-
-            <ContentItemArticle
-              bodyMd={item.body_md ?? ""}
-              diagramMeta={diagramMeta}
-              citations={citations}
-              contentItemId={item.id}
-              sections={headings}
-              reportedSectionIds={reportedSectionIds}
-              archetype={profile?.archetype}
-              density={profile?.reading_density}
-            />
-
-            <ArticleSiblingsNav
-              kind={kind as "article" | "design" | "lesson"}
-              prev={siblings.prev}
-              next={siblings.next}
-            />
-          </article>
-
-          <aside className={`print-sources ${citationsOpen ? "block" : "hidden print:block"}`}>
-            <div className="sticky top-20">
-              <CitationSidebar citations={citations} />
-            </div>
-          </aside>
-        </div>
-      </div>
-      <MobileTocDrawer headings={headings} />
-      <ContentFeedbackRail
-        contentItemId={item.id}
-        headings={tocHeadings}
-        reportedSectionIds={reportedSectionIds}
-      />
-      {showResume && savedProgress && (
-        <ResumeReadingPill pct={savedProgress.pct} scrollY={savedProgress.scrollY} />
-      )}
-    </div>
+    <ReaderShell
+      kind={kind as "article" | "design" | "lesson"}
+      slug={slug}
+      from={from}
+      fromSlug={fromSlug}
+      q={q}
+      item={item}
+      citations={citations}
+      capabilities={capabilities}
+      diagramMeta={diagramMeta}
+      siblings={siblings}
+      originTopicName={originTopicName}
+    />
   );
 }
