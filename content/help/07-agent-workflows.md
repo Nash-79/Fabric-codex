@@ -1,8 +1,8 @@
 # Agent workflows
 
 Fabric Atlas is local-first. Claude Code and Codex run in the IDE, read approved sources, and
-write structured results to `content/` or the backend. The server stores and validates those
-results; it does not invent claims.
+write structured results to `content/`. The server stores and validates those results; it does
+not invent claims.
 
 Queue and watcher configuration is private workflow state. Local agents read a sanitized snapshot
 from `GET /api/public/hooks/poll-feeds` using `FABRIC_ATLAS_APP_URL` and the server-only
@@ -14,16 +14,25 @@ an explicit configuration error; an inaccessible queue is never interpreted as a
 Claude workflows live in two places:
 
 - `.claude/agents/` contains focused agents such as `knowledge-curator`, `blog-author`,
-  `content-orchestrator`, `validation-reviewer`, `diagram-author`, and `docs-author`.
+  `content-orchestrator`, `validation-reviewer`, `diagram-author`, `feedback-triage`, and
+  `docs-author`.
 - `.claude/commands/` contains slash commands that call those agents, including `/ingest`,
-  `/orchestrate-content`, `/blog`, `/publish-topic`, `/validate`, `/drift`, `/lesson`, and
-  `/docs-sync`.
+  `/orchestrate-content`, `/blog`, `/publish-topic`, `/validate`, `/drift`, `/lesson`,
+  `/commission-diagrams`, `/gaps`, `/triage-feedback`, and `/docs-sync`.
 
 Start with `/orchestrate-content` when you want a master view across unclaimed queue items,
 claimed work, pending claims, RSS poll state, existing articles, local drafts, and diagram gaps.
 It returns a ranked workplan and stops at human gates such as Settings → RSS Feeds, Publish,
 Queue, and Claims. Article candidates are self-evaluated for grounding, novelty, richness, depth,
 diagram coverage, and whether the next human gate is clear.
+
+Use `/triage-feedback` to review new reader-submitted "Report an issue" notes (see
+_Admin settings_ → Feedback): the agent checks each report against the article's actual text and
+citations and writes a verdict file for an admin to apply in Settings.
+
+Use `/gaps` for the derived `## Internals` coverage-gap inventory (never a hand-written gap
+document) — it ranks placeholders by architectural impact and routes each to a source, a queue
+line, or a depth to deepen.
 
 Use `/docs-sync` after changing routes, settings, source submission, curation, validation, or
 authoring workflows. The `docs-author` agent reads the real code and rewrites only Help pages
@@ -42,7 +51,11 @@ Codex prompt templates live in `.codex/prompts/`. Install them once by following
 - `/prompts:fa-validate` to run a validation-review pass.
 - `/prompts:fa-drift` to compare a changed source with existing claims.
 - `/prompts:fa-lesson` to create a tiered learning draft.
+- `/prompts:fa-gaps` to generate and route the `## Internals` coverage-gap inventory.
 - `/prompts:fa-docs-sync` to refresh the Help section from the actual code.
+
+Reader feedback triage (`/triage-feedback`) does not yet have a Codex prompt equivalent — run it
+from Claude Code.
 
 Use `FOCUS=<topic-or-capability>` with `/prompts:fa-orchestrate` when you want a narrower plan,
 for example `/prompts:fa-orchestrate FOCUS=ai-apis`.
@@ -77,6 +90,11 @@ or architecture until they have been published and human-verified.
 
 For latest RSS coverage, poll feeds in Settings first, then rerun the orchestrator. The agents read
 the resulting queue; they do not poll feeds or complete queue items themselves.
+
+Article and lesson ideas are generated inside the app itself (Settings → Pipeline → Article
+Ideas), not by a local agent — see _Admin settings_. Approving an idea there surfaces a ready-to-
+copy `/blog`, `/lesson`, or Codex-equivalent command with an `--idea <id>` flag that folds the
+idea's brief into that authoring run automatically.
 
 ## Documentation rules
 

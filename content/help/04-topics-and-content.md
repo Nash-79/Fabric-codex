@@ -42,6 +42,19 @@ rail, and the citation list on the right.
 Sections only exist where verified claims support them — a topic with no performance claims
 simply has no performance section in its article, by design.
 
+## Reporting an issue
+
+Every piece of content has a **Report an issue** button, plus a small feedback dot next to
+each section heading (shown on hover, or always visible on touch) so you can flag a specific
+section instead of the whole piece. Pick a category — factual error, outdated, unclear,
+broken link/diagram, or missing citation — and describe what's wrong; quoting the exact
+sentence helps. You do not need to be signed in to report an issue.
+
+A report never edits the content directly. It's reviewed — with agent assistance that checks
+the report against the article's actual text and citations before a human acts on it — and,
+when it's actionable, routed into the normal ingestion/curation pipeline like any other
+editorial work.
+
 ## Versions
 
 Publishing an article, design, or lesson always creates a **new version** — it never
