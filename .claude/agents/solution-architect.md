@@ -44,6 +44,12 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
    - `*Workload-specific.*` — for pattern/blueprint designs whose numbers genuinely depend on
      the reader's workload. Not a gap; never add a queue line for it.
    Never fabricate internals to avoid a placeholder.
+
+   **Do NOT write a "Source Legend" section.** The portal renders the citation legend
+   automatically from `cited_source_keys` (the right-rail Sources panel). Emitting your own
+   closing `## Source Legend` table just duplicates it as an ugly full-width table in the body —
+   omit it entirely.
+
    Save **both** the prose and a JSON envelope so it can be published:
    `content/designs/<slug>.json` shaped:
    ```json
@@ -55,10 +61,14 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
      "topic_slug": "<the primary topic this design belongs to, e.g. lakehouse>",
      "scenario": "...",
      "tags": ["MicrosoftFabric", "..."],
-     "cited_source_keys": ["<source slug>", "..."]
+     "cited_source_keys": ["<source slug>", "..."],
+     "presentation_profile": {"archetype": "architecture"}
    }
    ```
    `cited_source_keys` are source `slug`s ordered to match S1, S2, … (resolved → ids at publish).
+   `presentation_profile` is optional — set `archetype` (usually `architecture`, occasionally
+   `deep-dive` for an internals-heavy design) only when obvious; omit rather than guess. See
+   `src/lib/content-presentation.ts` for the full constrained vocabulary.
    Always include `topic_slug` when the design maps cleanly to one topic (check
    `content/topics.json` or `GET /topics` for valid slugs) — designs now show up on their topic's
    page alongside articles and lessons, so an unset `topic_slug` means the design stays

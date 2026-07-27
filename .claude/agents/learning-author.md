@@ -31,10 +31,11 @@ knowledge base, not a parallel content set. Every lesson is grounded in approved
 2. If there are no claims at that depth, do not invent content. Report the gap and recommend
    running the knowledge-curator on a source that covers that depth.
 3. **You** write the lesson locally (no server API) under ~400 words: a plain explanation, one
-   concrete worked example, and a short "What goes wrong" list. Cite claims as `[S1]`, `[S2]`…
-   Build your own source legend the same way blog-author/solution-architect do: collect the
-   distinct sources (`sources.slug` is the portable key) of the claims you actually cite, in
-   first-use order, mapped S1, S2, …
+   concrete worked example, and a short "What goes wrong" list. This is a real budget, not a soft
+   suggestion — `npm run validate:content` now flags lessons over ~500 words as a warning. Cite
+   claims as `[S1]`, `[S2]`… Build your own source legend the same way blog-author/solution-architect
+   do: collect the distinct sources (`sources.slug` is the portable key) of the claims you actually
+   cite, in first-use order, mapped S1, S2, …
 4. Save both the prose and a JSON envelope so it can be published — write
    `content/lessons/<capability>-<level>.json` shaped:
    ```json
@@ -44,12 +45,25 @@ knowledge base, not a parallel content set. Every lesson is grounded in approved
      "title": "...",
      "body_md": "<the lesson markdown>",
      "depth_levels": [1, 2],
-     "cited_source_keys": ["<source slug>", "..."]
+     "cited_source_keys": ["<source slug>", "..."],
+     "lesson_meta": {
+       "summary": "one or two sentences for listing cards, search, and orientation",
+       "level": "beginner",
+       "estimated_minutes": 15,
+       "objectives": ["what the learner can do after this lesson"],
+       "prerequisites": [],
+       "completion_outcome": "the concrete result of finishing this lesson"
+     },
+     "presentation_profile": { "archetype": "lesson" }
    }
    ```
    `depth_levels` are the numeric depths this lesson actually draws on (Beginner=[1,2],
    Intermediate=[3], Expert=[4,5]). `cited_source_keys` are source `slug`s ordered to match
-   S1, S2, … (resolved → ids at publish time).
+   S1, S2, … (resolved → ids at publish time). `lesson_meta` and `presentation_profile` are
+   optional but should be populated for every new lesson going forward — see
+   `src/lib/content-presentation.ts` for the exact constrained vocabulary (`level` must be
+   `beginner`/`intermediate`/`expert` matching the level you were asked to write; never invent a
+   value outside the enum).
 5. **Publishing is a human step.** Tell the user to open **Settings → Publish**, choose
    **Lesson**, and paste `content/lessons/<capability>-<level>.json` — the server persists it
    into `content_items` (kind=`lesson`) and always creates a **new version** on re-publish (the

@@ -145,6 +145,49 @@ describe("publishContentItem", () => {
       expect.objectContaining({ content_item_id: "new-id", label: "S1", position: 0 }),
     ]);
   });
+
+  it("persists a valid presentation_profile and lesson_meta", async () => {
+    const { sb, ops } = makeStub({
+      sources: [{ data: [{ id: "s1", slug: "src-a" }] }],
+      content_items: [
+        { data: null }, // no prior active row
+        { data: { id: "new-id", version: 1 } }, // insert
+      ],
+      content_item_sources: [{ data: null }],
+    });
+    await publishContentItem(sb, {
+      kind: "lesson",
+      slug: "spark-beginner",
+      title: "Spark — Beginner",
+      body_md: "Body [S1]",
+      cited_source_keys: ["src-a"],
+      presentation_profile: { archetype: "lesson" },
+      lesson_meta: {
+        summary: "A short summary.",
+        level: "beginner",
+        estimated_minutes: 12,
+        objectives: ["Do the thing"],
+        completion_outcome: "You can do the thing.",
+      },
+    });
+    const insert = opsFor(ops, "content_items", "insert")[0].args[0] as Record<string, unknown>;
+    expect(insert.presentation_profile).toMatchObject({ archetype: "lesson" });
+    expect(insert.lesson_meta).toMatchObject({ level: "beginner", estimated_minutes: 12 });
+  });
+
+  it("refuses to publish a malformed presentation_profile", async () => {
+    const { sb } = makeStub({ sources: [{ data: [{ id: "s1", slug: "src-a" }] }] });
+    await expect(
+      publishContentItem(sb, {
+        kind: "article",
+        slug: "x",
+        title: "T",
+        body_md: "B [S1]",
+        cited_source_keys: ["src-a"],
+        presentation_profile: { archetype: "not-a-real-archetype" } as never,
+      }),
+    ).rejects.toThrow();
+  });
 });
 
 describe("publishDiagram", () => {

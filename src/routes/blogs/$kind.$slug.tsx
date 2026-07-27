@@ -113,8 +113,10 @@ function ContentItemPage() {
   const headings = useTocHeadings(item.body_md ?? "");
   const tocHeadings = headings.filter((h) => h.kind !== "subheading");
   const activeSectionId = useActiveHeading(tocHeadings);
+  // Real content embeds /diagrams/... (mirrored public path), not /content/diagrams/... — this
+  // must match scripts/validate-content.mjs's markdownDiagram regex exactly, or the two drift.
   const diagramCount = [
-    ...(item.body_md ?? "").matchAll(/!\[[^\]]*\]\((\/content\/diagrams\/[^)\s]+)\)/g),
+    ...(item.body_md ?? "").matchAll(/!\[[^\]]*\]\((?:\/content)?\/diagrams\/([^)\s]+)\)/g),
   ].length;
 
   // "Already reported this section" — best-effort, not part of the page's critical render path:

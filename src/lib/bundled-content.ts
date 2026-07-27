@@ -16,6 +16,10 @@ const designJsons = import.meta.glob("/content/designs/*.json", { eager: true })
   string,
   { default: any }
 >;
+const lessonJsons = import.meta.glob("/content/lessons/*.json", { eager: true }) as Record<
+  string,
+  { default: any }
+>;
 const diagramAssets = import.meta.glob("/content/diagrams/assets.json", { eager: true }) as Record<
   string,
   { default: any[] }
@@ -112,6 +116,7 @@ function blogRows() {
         tags: blog.tags ?? [],
         depth_levels: blog.depth_levels ?? [],
         cited_source_keys: blog.cited_source_keys ?? [],
+        presentation_profile: blog.presentation_profile ?? null,
         updated_at: "",
       };
     })
@@ -132,6 +137,26 @@ function designRows() {
       status: "published",
       tags: design.tags ?? [],
       cited_source_keys: design.cited_source_keys ?? [],
+      presentation_profile: design.presentation_profile ?? null,
+      updated_at: "",
+    };
+  });
+}
+
+function lessonRows() {
+  return Object.entries(lessonJsons).map(([path, mod]) => {
+    const lesson = mod.default;
+    return {
+      id: lesson.slug ?? fileStem(path),
+      slug: lesson.slug ?? fileStem(path),
+      capability_id: lesson.capability_id ?? null,
+      title: lesson.title ?? lesson.slug ?? fileStem(path),
+      body_md: lesson.body_md ?? "",
+      depth_levels: lesson.depth_levels ?? [],
+      cited_source_keys: lesson.cited_source_keys ?? [],
+      presentation_profile: lesson.presentation_profile ?? null,
+      lesson_meta: lesson.lesson_meta ?? null,
+      status: "published",
       updated_at: "",
     };
   });
@@ -194,6 +219,7 @@ let memoSources: ReturnType<typeof sourceRows> | undefined;
 let memoCapabilities: ReturnType<typeof capabilityRows> | undefined;
 let memoBlogs: ReturnType<typeof blogRows> | undefined;
 let memoDesigns: ReturnType<typeof designRows> | undefined;
+let memoLessons: ReturnType<typeof lessonRows> | undefined;
 let memoDiagrams: ReturnType<typeof diagramRows> | undefined;
 let memoHelp: ReturnType<typeof helpRows> | undefined;
 let memoClaims: ReturnType<typeof claimsRows> | undefined;
@@ -238,6 +264,10 @@ function designsMemo() {
   return (memoDesigns ??= designRows());
 }
 
+function lessonsMemo() {
+  return (memoLessons ??= lessonRows());
+}
+
 function diagramsMemo() {
   return (memoDiagrams ??= diagramRows());
 }
@@ -256,6 +286,7 @@ export const bundledContent = {
   sources: sourcesMemo,
   blogs: blogsMemo,
   designs: designsMemo,
+  lessons: lessonsMemo,
   diagrams: diagramsMemo,
   help: helpMemo,
   claims: claimsMemo,
@@ -281,5 +312,10 @@ export const bundledContent = {
     const design = designsMemo().find((row) => row.slug === slug);
     if (!design) return null;
     return { design, citations: citations(design.cited_source_keys) };
+  },
+  lesson(slug: string) {
+    const lesson = lessonsMemo().find((row) => row.slug === slug);
+    if (!lesson) return null;
+    return { lesson, citations: citations(lesson.cited_source_keys) };
   },
 };

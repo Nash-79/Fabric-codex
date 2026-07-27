@@ -11,6 +11,13 @@
 // PRESERVE curated status — re-publishing a source keeps its verified claims and only refreshes the
 // pending ones, so a re-publish never silently un-verifies human review.
 
+import {
+  presentationProfileSchema,
+  lessonMetaSchema,
+  type PresentationProfile,
+  type LessonMeta,
+} from "./content-presentation";
+
 type SupabaseAdmin = any;
 
 // The capability registry is the spine. Claims tagged to an id outside this set are dropped
@@ -218,6 +225,8 @@ type ContentItemPayload = {
   status?: string;
   scenario?: string;
   constraints?: Record<string, unknown>;
+  presentation_profile?: PresentationProfile;
+  lesson_meta?: LessonMeta;
 };
 
 // Publish a single article/design/lesson. This is the fix for the versioning bug that used to
@@ -237,6 +246,13 @@ export async function publishContentItem(sb: SupabaseAdmin, payload: ContentItem
   }
   const slug = (payload.slug ?? "").trim();
   if (!slug) throw new Error(`${kindLabel} slug is required.`);
+
+  // Publish must hard-fail on a malformed presentation_profile/lesson_meta rather than silently
+  // drop or coerce it — same "refuse rather than degrade" posture as the citation checks above.
+  const presentationProfile = payload.presentation_profile
+    ? presentationProfileSchema.parse(payload.presentation_profile)
+    : null;
+  const lessonMeta = payload.lesson_meta ? lessonMetaSchema.parse(payload.lesson_meta) : null;
 
   const { ids, missing } = await resolveCitedSources(sb, keys);
   if (missing.length) {
@@ -277,6 +293,8 @@ export async function publishContentItem(sb: SupabaseAdmin, payload: ContentItem
       depth_levels: payload.depth_levels ?? [],
       scenario: payload.scenario ?? "",
       constraints: payload.constraints ?? {},
+      presentation_profile: presentationProfile,
+      lesson_meta: lessonMeta,
       version: prior ? (prior.version ?? 1) + 1 : 1,
       supersedes_id: prior?.id ?? null,
       active: true,

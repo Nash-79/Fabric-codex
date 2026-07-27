@@ -186,6 +186,9 @@ export const listContentItems = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     try {
       const sb = await admin();
+      // Deliberately omits presentation_profile/lesson_meta: nothing consumes them at list-view
+      // granularity yet (Editorial Experience Revamp Phase 1). Add them here once a later phase
+      // needs to filter/display by archetype in a list — this is a scoped deferral, not an oversight.
       let q = sb
         .from("content_items")
         .select("id,kind,slug,title,summary,topic_slug,capability_id,depth_levels,tags,updated_at")

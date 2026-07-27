@@ -130,8 +130,14 @@ description of what to find>`. Never fabricate detail to avoid a placeholder —
      ```json
      {"topic_slug": "...", "slug": "...", "title": "...", "summary": "...",
       "body_md": "...", "cited_source_keys": ["<source_key>", ...],
-      "tags": [...], "depth_levels": [1,2,3]}
+      "tags": [...], "depth_levels": [1,2,3],
+      "presentation_profile": {"archetype": "explainer"}}
      ```
+     `presentation_profile` is optional — set `archetype` (one of `explainer`, `field-guide`,
+     `tutorial`, `deep-dive`, `architecture`, `lesson`) only when it's obvious from the piece's
+     content and reader goal; omit it entirely rather than guessing. See
+     `src/lib/content-presentation.ts` for the full constrained vocabulary — never invent a value
+     outside the enum or add unlisted keys.
      Include depth `4`/`5` in `depth_levels` only if at least one Internals sub-heading is
      actually **grounded** (not a placeholder) — an all-placeholder Internals section means
      the article is still L1-L3 for coverage-tracking purposes.

@@ -1,7 +1,8 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { z } from "zod";
 import { collectInternalsGaps, internalsGapIssues } from "./lib/internals-gaps.mjs";
+import { presentationProfileSchema, lessonMetaSchema } from "./lib/content-presentation.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = (path) => JSON.parse(readFileSync(join(root, path), "utf8"));
@@ -87,7 +88,12 @@ const assets =
     ),
   ) || [];
 const assetFiles = new Set(assets.map((asset) => basename(asset.path)));
+const diagramSlugs = new Set(assets.map((asset) => basename(asset.path, ".svg")));
 const markdownDiagram = /!\[[^\]]*\]\((?:\/content)?\/diagrams\/([^\)\s]+)\)/g;
+
+// Editorial Experience Revamp Phase 1: exact content metrics so later phases can compare
+// objectively, plus shape validation for the optional presentation_profile/lesson_meta fields.
+const metrics = [];
 
 for (const dir of ["content/articles", "content/designs", "content/lessons"])
   for (const name of jsonFiles(dir)) {
@@ -138,6 +144,55 @@ for (const dir of ["content/articles", "content/designs", "content/lessons"])
       warnings.push(
         `${path}: ${uncited.length} long factual-looking paragraph(s) need citation review`,
       );
+
+    // --- Editorial Experience Revamp Phase 1: content metrics + presentation shape ---
+    const wordCount = item.body_md.split(/\s+/).filter(Boolean).length;
+    const h1Count = [...item.body_md.matchAll(/^# .+$/gm)].length;
+    const sourceLegendCount = [...item.body_md.matchAll(/^##\s+Source Legend\s*$/gim)].length;
+    if (h1Count > 1)
+      warnings.push(`${path}: duplicate in-body H1 (${h1Count} found) — page hero already renders the title as H1`);
+    if (sourceLegendCount > 1)
+      warnings.push(
+        `${path}: duplicate Source Legend section (${sourceLegendCount} found) — the source rail already renders this automatically`,
+      );
+    if (dir === "content/lessons") {
+      if (!item.lesson_meta?.summary && !item.summary) warnings.push(`${path}: lesson missing summary`);
+      if (wordCount > 500)
+        warnings.push(`${path}: lesson is ${wordCount} words against the ~400 word budget`);
+    }
+    if (dir === "content/designs" && !item.summary) warnings.push(`${path}: design missing summary`);
+
+    if (item.presentation_profile) {
+      const result = presentationProfileSchema.safeParse(item.presentation_profile);
+      if (!result.success)
+        failures.push(
+          `${path}: invalid presentation_profile — ${result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
+        );
+      else if (result.data.featured_diagram && !diagramSlugs.has(result.data.featured_diagram))
+        failures.push(
+          `${path}: presentation_profile.featured_diagram '${result.data.featured_diagram}' is not a registered diagram`,
+        );
+    }
+    if (dir === "content/lessons" && item.lesson_meta) {
+      const result = lessonMetaSchema.safeParse(item.lesson_meta);
+      if (!result.success)
+        failures.push(
+          `${path}: invalid lesson_meta — ${result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
+        );
+    }
+
+    metrics.push({
+      path,
+      kind: basename(dir),
+      slug: item.slug,
+      word_count: wordCount,
+      h1_count: h1Count,
+      source_legend_count: sourceLegendCount,
+      diagram_count: diagrams.length,
+      has_summary: Boolean(item.summary),
+      has_presentation_profile: Boolean(item.presentation_profile),
+      has_lesson_meta: dir === "content/lessons" ? Boolean(item.lesson_meta) : undefined,
+    });
   }
 for (const issue of internalsGapIssues(collectInternalsGaps(root)))
   (issue.severity === "critical" ? failures : warnings).push(`${issue.file}: ${issue.message}`);
@@ -150,3 +205,12 @@ if (failures.length) {
 console.log(
   `Content validation passed: ${sources.size} sources, ${topics.length} topics, ${assets.length} diagrams.`,
 );
+
+console.log(`\nContent metrics (${metrics.length} items):`);
+console.table(metrics);
+try {
+  mkdirSync(join(root, "baseline"), { recursive: true });
+  writeFileSync(join(root, "baseline/content-metrics.json"), JSON.stringify(metrics, null, 2));
+} catch (error) {
+  console.warn(`Could not write baseline/content-metrics.json: ${error.message}`);
+}
