@@ -1,6 +1,7 @@
-import { Check, Copy } from "lucide-react";
+import { Check, Copy, WrapText } from "lucide-react";
 import { useMemo, useState, type ReactNode } from "react";
 import { textFromNode } from "@/lib/heading-utils";
+import { parseCodeMeta } from "@/lib/code-meta";
 
 // Pull the fenced language ("sql", "python", …) off the inner <code className="language-xxx">.
 export function codeLanguage(node: ReactNode): string {
@@ -18,14 +19,22 @@ export function codeLanguage(node: ReactNode): string {
   return "";
 }
 
+type HastNode = { children?: Array<{ data?: { meta?: string } }> };
+
 // The one fenced-code panel for the whole app — articles, designs, lessons, and the Advisor all
-// render this: bordered panel, language chip, copy-to-clipboard. highlight.js (via
-// rehype-highlight) colours the tokens inside the inner <code>; this component only owns the
-// chrome.
-export function CodeBlock({ children }: { children: ReactNode }) {
+// render this: bordered panel, title/language chip, copy-to-clipboard, wrap toggle, highlighted
+// lines. highlight.js (via rehype-highlight) colours the tokens inside the inner <code>; this
+// component only owns the chrome and never touches that already-tokenized tree, so raw code stays
+// intact for copy and syntax highlighting.
+export function CodeBlock({ children, node }: { children: ReactNode; node?: HastNode }) {
   const [copied, setCopied] = useState(false);
+  const [wrapped, setWrapped] = useState(false);
   const lang = codeLanguage(children) || "code";
   const code = useMemo(() => textFromNode(children), [children]);
+  // The meta string lives on the inner <code> hast node (mdast-util-to-hast's code handler sets
+  // it there before wrapping in <pre>), so from <pre>'s node prop it's one level down.
+  const meta = useMemo(() => parseCodeMeta(node?.children?.[0]?.data?.meta), [node]);
+  const lineCount = useMemo(() => code.split("\n").length, [code]);
 
   async function copyCode() {
     if (!navigator?.clipboard) return;
@@ -35,24 +44,71 @@ export function CodeBlock({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="not-prose my-6 overflow-hidden rounded-lg border border-border bg-card">
-      <div className="flex items-center justify-between border-b border-border bg-muted/50 px-3 py-1.5">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          {lang}
+    <div
+      className="not-prose my-6 overflow-hidden rounded-lg border"
+      style={{
+        backgroundColor: "var(--surface-code-bg)",
+        borderColor: "var(--surface-code-border)",
+      }}
+    >
+      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+        <span className="flex min-w-0 items-center gap-2">
+          {meta.title ? (
+            <>
+              <span className="truncate text-[11px] font-medium text-foreground">{meta.title}</span>
+              <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {lang}
+              </span>
+            </>
+          ) : (
+            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              {lang}
+            </span>
+          )}
         </span>
-        <button
-          type="button"
-          onClick={copyCode}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          aria-label="Copy code block"
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-          {copied ? "Copied" : "Copy"}
-        </button>
+        <span className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setWrapped((w) => !w)}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label={wrapped ? "Switch to scroll mode" : "Switch to wrap mode"}
+            aria-pressed={wrapped}
+          >
+            <WrapText className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={copyCode}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            aria-label="Copy code block"
+          >
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </span>
       </div>
-      <pre className="overflow-x-auto px-4 py-3 text-sm leading-relaxed [&_code]:bg-transparent [&_code]:p-0">
-        {children}
-      </pre>
+      <div className="relative" aria-label={meta.title ? `Code: ${meta.title}` : undefined}>
+        {meta.highlightLines.size > 0 && (
+          <div className="pointer-events-none absolute inset-0 py-3" aria-hidden="true">
+            {Array.from({ length: lineCount }, (_, i) => i + 1).map((line) =>
+              meta.highlightLines.has(line) ? (
+                <div
+                  key={line}
+                  className="absolute inset-x-0 bg-teal-500/10"
+                  style={{ top: `${(line - 1) * 1.625}em`, height: "1.625em" }}
+                />
+              ) : null,
+            )}
+          </div>
+        )}
+        <pre
+          className={`relative px-4 py-3 text-sm leading-relaxed [&_code]:bg-transparent [&_code]:p-0 ${
+            wrapped ? "whitespace-pre-wrap break-words" : "overflow-x-auto"
+          }`}
+        >
+          {children}
+        </pre>
+      </div>
     </div>
   );
 }

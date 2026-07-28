@@ -9,7 +9,7 @@ import { CodeBlock } from "@/components/CodeBlock";
 // Code, table, and heading renderers shared by the blog and design article views. Spread into
 // a ReactMarkdown `components` map; route-specific overrides (links, images, callouts) layer on.
 export const markdownPanels: Components = {
-  pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
+  pre: ({ children, node }) => <CodeBlock node={node as never}>{children}</CodeBlock>,
   code: ({ className, children, ...rest }) => {
     // Block code (inside <pre>) carries a `language-*` class — leave it for the CodeBlock
     // wrapper + highlight.js. Inline code gets a subtle pill.

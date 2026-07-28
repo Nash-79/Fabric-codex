@@ -1,4 +1,11 @@
-import { useMemo, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
+import {
+  useMemo,
+  useState,
+  type ComponentProps,
+  type ComponentType,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
@@ -17,8 +24,202 @@ import { codeLanguage } from "@/components/CodeBlock";
 import { ContentFeedbackButton } from "@/components/ContentFeedbackButton";
 import type { TocEntry } from "@/components/ContentTocSidebar";
 import type { PresentationArchetype, ReadingDensity } from "@/lib/content-presentation";
+import { StepSequence } from "@/components/StepSequence";
+import { CodeGroup } from "@/components/CodeGroup";
+import { parseCodeMeta, isOutputBlock } from "@/lib/code-meta";
+
+// Wraps runs of consecutive `> [!STEP]` blockquotes in <div data-step-sequence data-section="..">
+// and runs of consecutive fenced code blocks that carry a grouping meta tag in
+// <div data-code-group data-titles="...">, both BEFORE ReactMarkdown parses the body — the same
+// "regex the raw string, let rehypeRaw carry the wrapper through" idiom already used for [S1]
+// citations and figure indexing in this file. Grouping can't happen inside a per-node component
+// override (ReactMarkdown calls `blockquote`/`pre` independently per node, with no
+// sibling-awareness), so it has to happen once, on the string, before individual nodes render.
+function wrapTeachingPrimitiveRuns(bodyMd: string): string {
+  const lines = bodyMd.split("\n");
+  const out: string[] = [];
+  let currentSectionSlug = "intro";
+  let stepRunCounter = 0;
+  let i = 0;
+
+  const isBlank = (line: string) => line.trim() === "";
+  const isQuoteLine = (line: string) => /^\s*>/.test(line);
+  const isFenceLine = (line: string) => /^```/.test(line.trim());
+
+  while (i < lines.length) {
+    const line = lines[i];
+    const headingMatch = line.match(/^(#{2,3})\s+(.+)$/);
+    if (headingMatch) {
+      currentSectionSlug = slugifyHeading(headingMatch[2]);
+      out.push(line);
+      i += 1;
+      continue;
+    }
+
+    // A run of consecutive `> [!STEP]` blockquote blocks (blank-line separated) starting here.
+    if (isQuoteLine(line) && /^\s*>\s*\[!STEP\]/i.test(line)) {
+      const runLines: string[] = [];
+      while (i < lines.length) {
+        // Consume one blockquote block.
+        if (!isQuoteLine(lines[i])) break;
+        const blockStartsStep = /^\s*>\s*\[!STEP\]/i.test(lines[i]);
+        if (!blockStartsStep) break;
+        while (i < lines.length && isQuoteLine(lines[i])) {
+          runLines.push(lines[i]);
+          i += 1;
+        }
+        // A single blank line between blockquote blocks continues the run; two or more, or a
+        // non-blockquote non-blank line, ends it.
+        if (i < lines.length && isBlank(lines[i]) && isQuoteLine(lines[i + 1] ?? "")) {
+          runLines.push(lines[i]);
+          i += 1;
+        } else {
+          break;
+        }
+      }
+      stepRunCounter += 1;
+      out.push(
+        `<div data-step-sequence="${stepRunCounter}" data-section="${currentSectionSlug}">`,
+        "",
+        ...runLines,
+        "",
+        "</div>",
+        "",
+      );
+      continue;
+    }
+
+    // A run of consecutive fenced code blocks (blank-line separated) where at least one carries
+    // a grouping-relevant meta tag (data-output, or 2+ blocks each with a distinct title=).
+    if (isFenceLine(line)) {
+      const blockStarts: number[] = [i];
+      const blockEnds: number[] = [];
+      let cursor = i;
+      let closed = false;
+      while (cursor < lines.length) {
+        if (cursor !== i && isFenceLine(lines[cursor])) {
+          closed = true;
+          blockEnds.push(cursor);
+          cursor += 1;
+          break;
+        }
+        cursor += 1;
+      }
+      if (!closed) {
+        out.push(line);
+        i += 1;
+        continue;
+      }
+      // Keep consuming further fenced blocks separated by exactly one blank line.
+      while (
+        cursor < lines.length &&
+        isBlank(lines[cursor]) &&
+        isFenceLine(lines[cursor + 1] ?? "")
+      ) {
+        const nextStart = cursor + 1;
+        let inner = nextStart + 1;
+        let innerClosed = false;
+        while (inner < lines.length) {
+          if (isFenceLine(lines[inner])) {
+            innerClosed = true;
+            break;
+          }
+          inner += 1;
+        }
+        if (!innerClosed) break;
+        blockStarts.push(nextStart);
+        blockEnds.push(inner);
+        cursor = inner + 1;
+      }
+
+      if (blockStarts.length >= 2) {
+        const metas = blockStarts.map((start) => {
+          const metaText = lines[start].replace(/^```[a-z0-9+#-]*\s*/i, "");
+          return parseCodeMeta(metaText);
+        });
+        const outputIdx = blockStarts.findIndex((start) =>
+          isOutputBlock(lines[start].replace(/^```[a-z0-9+#-]*\s*/i, "")),
+        );
+        const distinctTitles = new Set(metas.map((m) => m.title).filter(Boolean));
+        const shouldGroup = outputIdx >= 0 || distinctTitles.size >= 2;
+        if (shouldGroup) {
+          const titlesAttr = metas.map((m) => m.title ?? "").join("|||");
+          const lastEnd = blockEnds[blockEnds.length - 1];
+          out.push(
+            `<div data-code-group data-titles="${titlesAttr}"${
+              outputIdx >= 0 ? ` data-output-index="${outputIdx}"` : ""
+            }>`,
+            "",
+            ...lines.slice(i, lastEnd + 1),
+            "",
+            "</div>",
+            "",
+          );
+          i = lastEnd + 1;
+          continue;
+        }
+      }
+      // No grouping applies — emit the single fenced block untouched.
+      out.push(...lines.slice(i, blockEnds[0] + 1));
+      i = blockEnds[0] + 1;
+      continue;
+    }
+
+    out.push(line);
+    i += 1;
+  }
+
+  return out.join("\n");
+}
 
 type DiagramMeta = { path?: string; caption?: string };
+
+// Renders a single `> [!STEP] Title` blockquote's body as a step card's content: the text
+// immediately after the marker (up to the first line break within the blockquote) becomes the
+// step title, the rest is the step body. Reuses Callout.tsx's walk-and-strip technique rather
+// than introducing a second parsing approach.
+function StepCard({ children }: { children: ReactNode }) {
+  const fullText = textFromNode(children);
+  const match = fullText.match(/^\s*\[!STEP\]\s*(.*)$/);
+  const title = match?.[1]?.trim();
+  return (
+    <div>
+      {title && <div className="font-semibold text-foreground">{title}</div>}
+      <div className="mt-1 text-sm text-muted-foreground [&_p]:m-0">
+        {stripStepMarker(children, title)}
+      </div>
+    </div>
+  );
+}
+
+// Removes the leading "[!STEP] Title" text (marker + extracted title, both on the blockquote's
+// first line) from the rendered children, leaving only the step body — mirrors Callout.tsx's
+// stripMarker, generalized to also drop the title text since it's rendered separately above.
+function stripStepMarker(children: ReactNode, title: string | undefined): ReactNode {
+  const markerPrefix = title ? `[!STEP] ${title}` : "[!STEP]";
+  let removed = false;
+  const walk = (n: ReactNode): ReactNode => {
+    if (removed) return n;
+    if (typeof n === "string") {
+      if (n.includes(markerPrefix)) {
+        removed = true;
+        return n.replace(markerPrefix, "");
+      }
+      if (n.includes("[!STEP]")) {
+        removed = true;
+        return n.replace("[!STEP]", "");
+      }
+      return n;
+    }
+    if (Array.isArray(n)) return n.map(walk);
+    if (n && typeof n === "object" && "props" in (n as { props?: unknown })) {
+      const el = n as ReactElement<{ children?: ReactNode }>;
+      return { ...el, props: { ...el.props, children: walk(el.props?.children) } };
+    }
+    return n;
+  };
+  return walk(children);
+}
 
 // Hoverable [Sn] citation marker: hovering previews the cited source (title, tier, summary)
 // with a working external link; clicking still opens the citations sidebar via the page-level
@@ -79,6 +280,8 @@ export function ContentItemArticle({
   reportedSectionIds,
   archetype,
   density,
+  kind,
+  slug,
 }: {
   bodyMd: string;
   diagramMeta?: DiagramMeta[];
@@ -93,6 +296,9 @@ export function ContentItemArticle({
   archetype?: PresentationArchetype;
   /** presentation_profile.reading_density — drives the density-scoped CSS in styles.css. */
   density?: ReadingDensity;
+  /** Used to key step-completion localStorage state (fa:steps:${kind}:${slug}) — see StepSequence. */
+  kind?: string;
+  slug?: string;
 }) {
   // Hover-only reveal (opacity-0 -> group-hover:opacity-100) leaves the copy-link and feedback
   // triggers permanently invisible on touch devices (no :hover) — this tracks which heading was
@@ -118,11 +324,14 @@ export function ContentItemArticle({
     return map;
   }, [diagramMeta]);
 
-  // Replace [S1] / [S1][S2] inline citations with clickable superscripts.
-  const renderedBody = bodyMd.replace(
-    /\[S(\d+)\]/g,
-    (_m: string, n: string) =>
-      ` <sup id="cite-${n}"><a href="#src-${n}" class="cite">[S${n}]</a></sup>`,
+  // Replace [S1] / [S1][S2] inline citations with clickable superscripts, then group any
+  // authored step sequences / code-block runs into raw wrapper divs rehypeRaw carries through.
+  const renderedBody = wrapTeachingPrimitiveRuns(
+    bodyMd.replace(
+      /\[S(\d+)\]/g,
+      (_m: string, n: string) =>
+        ` <sup id="cite-${n}"><a href="#src-${n}" class="cite">[S${n}]</a></sup>`,
+    ),
   );
 
   // Compute figure numbers from the markdown source, not by mutating a counter during render.
@@ -151,12 +360,15 @@ export function ContentItemArticle({
     () =>
       ({
         ...markdownPanels,
-        pre: ({ children }) => {
+        pre: ({ children, node }) => {
           if (codeLanguage(children) === "mermaid") {
             return <AdvisorMermaidBlock code={textFromNode(children)} />;
           }
-          const PanelPre = markdownPanels.pre as ComponentType<{ children?: ReactNode }>;
-          return <PanelPre>{children}</PanelPre>;
+          const PanelPre = markdownPanels.pre as ComponentType<{
+            children?: ReactNode;
+            node?: unknown;
+          }>;
+          return <PanelPre node={node}>{children}</PanelPre>;
         },
         h2: ({ children, ...rest }) => {
           const id = slugifyHeading(textFromNode(children));
@@ -276,7 +488,37 @@ export function ContentItemArticle({
             </a>
           );
         },
-        blockquote: ({ children }) => <Callout>{children}</Callout>,
+        blockquote: ({ children }) => {
+          const text = textFromNode(children);
+          if (/^\s*\[!STEP\]/i.test(text)) {
+            return <StepCard>{children}</StepCard>;
+          }
+          return <Callout>{children}</Callout>;
+        },
+        div: ({ children, node, ...rest }) => {
+          const props = (node?.properties ?? {}) as Record<string, unknown>;
+          if ("dataStepSequence" in props) {
+            const sectionSlug = String(props.dataSection ?? "intro");
+            return (
+              <StepSequence sectionSlug={sectionSlug} kind={kind} slug={slug}>
+                {children}
+              </StepSequence>
+            );
+          }
+          if ("dataCodeGroup" in props) {
+            const titles = String(props.dataTitles ?? "")
+              .split("|||")
+              .map((t) => (t ? t : undefined));
+            const outputIndexRaw = props.dataOutputIndex;
+            const outputIndex = outputIndexRaw !== undefined ? Number(outputIndexRaw) : undefined;
+            return (
+              <CodeGroup titles={titles} outputIndex={outputIndex}>
+                {children}
+              </CodeGroup>
+            );
+          }
+          return <div {...rest}>{children}</div>;
+        },
         img: ({ src, alt }) => {
           const base =
             String(src ?? "")
@@ -309,6 +551,8 @@ export function ContentItemArticle({
       sections,
       tapRevealedId,
       reportedSectionIds,
+      kind,
+      slug,
     ],
   );
 

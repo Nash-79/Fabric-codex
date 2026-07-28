@@ -14,11 +14,22 @@ const calloutStyles: Record<string, { cls: string; label: string }> = {
     cls: "border-violet-500/30 bg-violet-500/10 text-violet-100",
     label: "Inference (not a sourced fact)",
   },
+  // Phase 4 teaching primitives (Editorial Experience Revamp) — same generic card path as above.
+  CHECKPOINT: { cls: "border-sky-500/30 bg-sky-500/10 text-sky-100", label: "Checkpoint" },
+  PREREQUISITE: {
+    cls: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-100",
+    label: "Before you start",
+  },
+  RESULT: { cls: "border-lime-500/30 bg-lime-500/10 text-lime-100", label: "Expected result" },
+  TAKEAWAY: { cls: "border-orange-500/30 bg-orange-500/10 text-orange-100", label: "Key takeaway" },
+  DEFINITION: { cls: "border-zinc-500/30 bg-zinc-500/10 text-zinc-100", label: "Definition" },
 };
 
 export function Callout({ children }: { children: ReactNode }) {
   const text = extractText(children);
-  const match = text.match(/^\s*\[!(NOTE|TIP|WARNING|IMPORTANT|INFERENCE|QUOTE)\]\s*/i);
+  const match = text.match(
+    /^\s*\[!(NOTE|TIP|WARNING|IMPORTANT|INFERENCE|QUOTE|CHECKPOINT|PREREQUISITE|RESULT|TAKEAWAY|DEFINITION|TRY-IT)\]\s*/i,
+  );
   if (!match) {
     return (
       <blockquote className="border-l-2 border-border pl-4 italic text-muted-foreground">
@@ -34,6 +45,18 @@ export function Callout({ children }: { children: ReactNode }) {
           {stripMarker(children, match[0])}
         </div>
       </blockquote>
+    );
+  }
+  // Try-it exercises are a prompt-then-reveal pattern: layer Callout's styling on a native
+  // <details> so the content stays in the DOM/print output even collapsed (no JS-only hiding).
+  if (kind === "TRY-IT") {
+    return (
+      <details className="not-prose my-5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm leading-relaxed text-cyan-100 [&_p]:m-0">
+        <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide">
+          Try it — reveal solution
+        </summary>
+        <div className="mt-2">{stripMarker(children, match[0])}</div>
+      </details>
     );
   }
   const style = calloutStyles[kind] ?? calloutStyles.NOTE;

@@ -280,6 +280,8 @@ export function ReaderShell({
                 reportedSectionIds={reportedSectionIds}
                 archetype={profile?.archetype}
                 density={profile?.reading_density}
+                kind={kind}
+                slug={slug}
               />
 
               <ArticleSiblingsNav kind={kind} prev={siblings.prev} next={siblings.next} />

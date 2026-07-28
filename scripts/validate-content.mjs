@@ -95,6 +95,25 @@ const markdownDiagram = /!\[[^\]]*\]\((?:\/content)?\/diagrams\/([^\)\s]+)\)/g;
 // objectively, plus shape validation for the optional presentation_profile/lesson_meta fields.
 const metrics = [];
 
+// Editorial Experience Revamp Phase 4: mirrors src/lib/heading-utils.ts's slugifyHeading exactly
+// (a trivial lowercase/hyphenate/trim chain — duplicated inline rather than a new scripts/lib
+// mirror file, unlike content-presentation.mjs which centralizes real schemas/enums).
+function slugifyHeading(text) {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+// Mirrors heading-utils.ts's stripMarkdownInline exactly — also trivial, also inlined.
+function stripMarkdownInline(text) {
+  return text
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/`([^`]*)`/g, "$1")
+    .replace(/(\*\*|__|\*|_|~~)/g, "")
+    .trim();
+}
+
 for (const dir of ["content/articles", "content/designs", "content/lessons"])
   for (const name of jsonFiles(dir)) {
     const path = `${dir}/${name}`,
@@ -183,6 +202,55 @@ for (const dir of ["content/articles", "content/designs", "content/lessons"])
         failures.push(
           `${path}: invalid lesson_meta — ${result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ")}`,
         );
+    }
+
+    // --- Editorial Experience Revamp Phase 4: markdown teaching-primitive validation ---
+    // a. Code-fence language tag enforcement — flag any opening fence with no language token.
+    const fenceLines = [...item.body_md.matchAll(/^```(.*)$/gm)];
+    let fenceOpen = false;
+    let untaggedFences = 0;
+    for (const fence of fenceLines) {
+      if (!fenceOpen) {
+        const rest = fence[1].trim();
+        if (!rest.split(/\s+/)[0]) untaggedFences += 1;
+      }
+      fenceOpen = !fenceOpen;
+    }
+    if (untaggedFences)
+      warnings.push(`${path}: ${untaggedFences} fenced code block(s) with no language tag`);
+
+    // b. Heading hierarchy — warn on a level skip (e.g. h2 -> h4) in document order.
+    const headingLines = [...item.body_md.matchAll(/^(#{1,6})\s+.+$/gm)];
+    let previousLevel = 1; // the page's own H1 (rendered by the hero) is the implicit root.
+    for (const heading of headingLines) {
+      const level = heading[1].length;
+      if (level > previousLevel + 1)
+        warnings.push(
+          `${path}: heading level skips from h${previousLevel} to h${level} ("${heading[0].slice(0, 60)}")`,
+        );
+      previousLevel = level;
+    }
+
+    // c. Unique anchor/slug enforcement — only ##/### are actually anchored/slugged at runtime
+    // (matches useTocHeadings' own scope). A collision is a real broken-deep-link bug: failure.
+    const anchoredHeadings = [...item.body_md.matchAll(/^(#{2,3})\s+(.+)$/gm)];
+    const seenSlugs = new Map();
+    for (const heading of anchoredHeadings) {
+      const slug = slugifyHeading(stripMarkdownInline(heading[2].trim()));
+      if (seenSlugs.has(slug))
+        failures.push(
+          `${path}: heading anchor collision "#${slug}" — "${seenSlugs.get(slug)}" and "${heading[2].trim()}" produce the same slug`,
+        );
+      else seenSlugs.set(slug, heading[2].trim());
+    }
+
+    // d. Image alt-text presence — empty alt is a real accessibility violation (failure);
+    // a generic placeholder alt is a content-quality nit (warning).
+    for (const image of item.body_md.matchAll(/!\[([^\]]*)\]\([^)\s]+\)/g)) {
+      const alt = image[1].trim();
+      if (!alt) failures.push(`${path}: image missing alt text — ${image[0].slice(0, 60)}`);
+      else if (/^(image|diagram|screenshot|figure)\s*\d*$/i.test(alt))
+        warnings.push(`${path}: image alt text is a generic placeholder — "${alt}"`);
     }
 
     metrics.push({
