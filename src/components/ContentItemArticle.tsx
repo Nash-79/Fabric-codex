@@ -35,7 +35,7 @@ import { parseCodeMeta, isOutputBlock } from "@/lib/code-meta";
 // citations and figure indexing in this file. Grouping can't happen inside a per-node component
 // override (ReactMarkdown calls `blockquote`/`pre` independently per node, with no
 // sibling-awareness), so it has to happen once, on the string, before individual nodes render.
-function wrapTeachingPrimitiveRuns(bodyMd: string): string {
+export function wrapTeachingPrimitiveRuns(bodyMd: string): string {
   const lines = bodyMd.split("\n");
   const out: string[] = [];
   let currentSectionSlug = "intro";

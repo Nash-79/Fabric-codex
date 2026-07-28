@@ -37,7 +37,7 @@ sub-headings join with `+`.
 
 ## What the guard fails vs warns on
 
-`npm run validate:content` (run in both `ci.yml` and `publish-content.yml`) imports the same lib:
+`npm run validate:content` (run in `ci.yml`) imports the same lib:
 
 - **Fails CI (critical):**
   - a placeholder whose prose asserts ``Tracked in `content/queue.md` `` when no matching queue

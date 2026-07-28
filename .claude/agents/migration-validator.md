@@ -48,7 +48,19 @@ tables, `kind IN ('article','design','lesson')`; `content_item_sources` replaces
    `content/diagrams/*`) path must exist on disk (`public/diagrams/` mirror). Read article bodies
    via REST, grep the paths, and `test -f` each. A missing embed is a critical issue.
 5. **Capability integrity** — every `topic_capabilities.capability_id` and every active
-   `claims.capability_id` is in the registry (`backend/app/llm.py` `CAPABILITY_IDS`).
+   `claims.capability_id` is in the registry (a real row in the `capabilities` table).
+6. **Presentation profile integrity** — for active `content_items` rows with a non-null
+   `presentation_profile`, if `featured_diagram` is set, confirm it resolves against the live
+   `diagrams` table:
+   ```bash
+   curl -s "$SB/content_items?active=eq.true&presentation_profile=not.is.null&select=kind,slug,presentation_profile" -H "$H1" -H "$H2"
+   ```
+   For each row with a `featured_diagram` value, check
+   `curl -s "$SB/diagrams?slug=eq.<value>&select=slug" -H "$H1" -H "$H2"` returns a row. This
+   complements — not duplicates — `validate-content.mjs`'s pre-publish check on the git-tracked
+   `content/*.json` files: this check catches drift in the *published* Supabase row, e.g. a
+   diagram deregistered after the article went live, or a stale profile landed by a direct edit.
+   A dangling `featured_diagram` is a warning (a broken hero image, not a data-integrity failure).
 
 These are read-only assertions you compute and report — you do not (and cannot) mutate Supabase.
 

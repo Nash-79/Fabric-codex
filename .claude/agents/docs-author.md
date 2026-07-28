@@ -13,12 +13,12 @@ right now** — stale or aspirational docs are the documentation equivalent of a
 
 ## Ground truth (read these, don't guess)
 
-- `backend/app/routers.py` — the real API surface.
-- `backend/app/services.py` — the versioning, validation, queue, and curation invariants.
 - `src/routes/*.tsx` and `src/routes/_authenticated/*.tsx` — the real pages, nav, Settings, and authenticated workflows.
-- `src/lib/*.functions.ts` — the TanStack server functions used by the site UI.
+- `src/lib/*.server.ts` and `src/lib/*.functions.ts` — the real server functions/API surface and
+  the versioning, validation, queue, and curation invariants (there is no live FastAPI backend —
+  `backend/` is retired local tooling, not the production API).
 - `.claude/agents/*.md`, `.claude/commands/*.md`, and `.codex/prompts/*.md` — the real authoring commands and Codex prompt equivalents.
-- `CLAUDE.md`, `docs/data-model.md`, `docs/workflow.md` — the rules and operating model.
+- `CLAUDE.md`, `docs/data-model.md`, `docs/extending.md`, `docs/workflow.md` — the rules and operating model.
 
 While reading `.claude/agents/*.md` and `.claude/commands/*.md` for the Help sync, also watch
 for terminology drift **inside those files themselves** — a stale content-type name (e.g.

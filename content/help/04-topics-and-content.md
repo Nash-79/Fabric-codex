@@ -27,9 +27,9 @@ them apart at a glance. Click any row to open it.
 
 ## Reading a piece of content
 
-Every article, design, and lesson opens at `/content/<kind>/<slug>` — the same reading layout
-regardless of kind, with the topic tree on the left, a table of contents in the middle-left
-rail, and the citation list on the right.
+Every article, design, and lesson opens at `/content/<kind>/<slug>` — the same surrounding
+layout regardless of kind, with the topic tree on the left, a table of contents in the
+middle-left rail, and the citation list on the right.
 
 - The kind pill at the top tells you whether you're reading an **article**, **design**, or
   **lesson**.
@@ -41,6 +41,70 @@ rail, and the citation list on the right.
 
 Sections only exist where verified claims support them — a topic with no performance claims
 simply has no performance section in its article, by design.
+
+The opening block right under the title varies a little by kind, when the piece has the
+relevant detail filled in to show:
+
+- **Designs** may show a **Scenario** summary and a **Constraints** list right up top, before
+  the write-up itself — the situation the design was built for and the limits it was designed
+  around.
+- **Lessons** show their level (Beginner / Intermediate / Expert), an estimated time to work
+  through them, and a **What you'll learn** list of objectives, plus **Prerequisites** where
+  the lesson names any.
+- **Tutorial-style articles** may show a **Before you start** list and an **Outcome** summary
+  the same way.
+
+If a piece doesn't have that detail filled in, this block simply doesn't appear — you go
+straight from the title into the write-up, same as always.
+
+## Step-by-step walkthroughs
+
+Some articles and tutorials — the ones that walk you through actually doing something, not
+just explaining a concept — present part of the text as a numbered sequence of connected step
+cards instead of plain paragraphs, so you can see at a glance how many steps there are and
+where you are in them.
+
+If you like, you can click the circle on a step to check it off as done; it turns into a
+checkmark. This is remembered only on your own browser, not on your account — it resets if
+you clear site data or switch devices — so treat it as a personal progress marker rather than
+something anyone else can see.
+
+A walkthrough is often followed by a **Checkpoint** callout describing what you should see if
+you followed the steps correctly, so you can confirm you're on track before moving on.
+
+## Callouts
+
+Beyond the checkpoint mentioned above, articles, designs, and lessons use a small set of other
+labeled callout boxes: **Note**, **Tip**, **Warning**, **Important**, **Before you start**,
+**Expected result**, **Key takeaway**, and **Definition**. One more —
+**Inference (not a sourced fact)** — is the visible marker for the rule that generated text
+must label its own inferences: anything in that box is the author's reasoning from the cited
+claims, not a claim with its own citation. Some content also includes a **Try it** box that
+stays collapsed until you click it to reveal a worked answer or example.
+
+## Interactive diagrams
+
+Diagrams embedded in content aren't static pictures. Click or tap a region — a box, a
+component, a step in the flow — to open a detail panel with a plain-language explanation of
+that part, the evidence and citations behind it, and, where the diagram has it, a worked
+example, the controls that affect it, and what happens when it fails. Hovering a region (or
+moving keyboard focus to it) shows a quick preview tooltip even without clicking.
+
+Open a diagram in its zoom view (the button in its corner) to pan and zoom freely, and — when
+the diagram offers one — start a **guided walkthrough** that steps through its parts in order
+with Next/Previous controls, highlighting one region at a time instead of leaving you to find
+your own way around. Some diagrams also let you filter which layers are shown, or jump
+straight to a related diagram, topic, capability, or piece of content from inside the detail
+panel.
+
+## Lessons: objectives, time, and completion
+
+Every lesson states its level, an estimated time to work through it, and what you'll be able
+to do afterward (its objectives, and sometimes prerequisites) — shown at the top of the
+lesson, and again as a short summary on its card on the **Learn** page. A **Mark complete**
+button on the lesson lets you check it off; completed lessons then show a checkmark on their
+Learn page card too. Like step completion, this is remembered on your own browser only — a
+personal tracker, not something synced to your account or visible to anyone else.
 
 ## Reporting an issue
 

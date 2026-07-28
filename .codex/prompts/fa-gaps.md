@@ -19,7 +19,7 @@ Interpretation rules:
 - Honest `untracked` placeholders are warnings: add the missing `# internals gap:` line.
 - `workloadSpecific` entries are **not gaps** — pattern docs that truthfully have no universal
   number. Never queue them.
-- `publishedDrift` entries need a republish (push to main; `publish-content.yml` handles it).
+- `publishedDrift` entries need a republish — Settings → Publish → "Publish all".
 
 For an on-demand snapshot file, `node scripts/gaps.mjs --markdown > <path>` — do not commit it;
 the repo does not own its freshness. See `docs/knowledge-gaps.md` for the model.

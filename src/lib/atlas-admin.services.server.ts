@@ -1,4 +1,10 @@
 import type { Database } from "@/integrations/supabase/types";
+import {
+  presentationProfileSchema,
+  lessonMetaSchema,
+  type PresentationProfileInput,
+  type LessonMetaInput,
+} from "./content-presentation";
 
 type SupabaseAdmin = any;
 type ClaimAction = "verify" | "reject" | "promote" | "dismiss";
@@ -149,6 +155,8 @@ export async function saveContentItemVersion(
     cited_source_ids?: string[];
     tags?: string[];
     depth_levels?: number[];
+    presentation_profile?: PresentationProfileInput | null;
+    lesson_meta?: LessonMetaInput | null;
   },
 ) {
   if (!data.title.trim() || !data.body_md.trim()) throw new Error("Title and body are required.");
@@ -184,6 +192,23 @@ export async function saveContentItemVersion(
     if (error) throw new Error(error.message);
   }
 
+  // Carry the prior version's presentation_profile/lesson_meta forward by default, same as
+  // topic_slug/capability_id below -- otherwise every edit through this path (Settings -> "Edit
+  // as new version") would silently null out the archetype/featured_diagram a previous
+  // publish/retrofit set, since this admin UI has no field to re-enter them.
+  const presentationProfile =
+    data.presentation_profile !== undefined
+      ? data.presentation_profile
+        ? presentationProfileSchema.parse(data.presentation_profile)
+        : null
+      : (prior?.presentation_profile ?? null);
+  const lessonMeta =
+    data.lesson_meta !== undefined
+      ? data.lesson_meta
+        ? lessonMetaSchema.parse(data.lesson_meta)
+        : null
+      : (prior?.lesson_meta ?? null);
+
   const { data: created, error: createError } = await sb
     .from("content_items")
     .insert({
@@ -197,6 +222,8 @@ export async function saveContentItemVersion(
       status: data.status ?? "published",
       tags: data.tags ?? [],
       depth_levels: data.depth_levels ?? [],
+      presentation_profile: presentationProfile,
+      lesson_meta: lessonMeta,
       version: prior ? (prior.version ?? 1) + 1 : 1,
       supersedes_id: prior?.id ?? null,
       active: true,
