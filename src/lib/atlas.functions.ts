@@ -812,7 +812,6 @@ export const submitContentFeedback = createServerFn({ method: "POST" })
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     const feedbackTable = supabase.from("content_feedback") as any;
     let recentCountQuery = feedbackTable
-      .from("content_feedback")
       .select("id", { count: "exact", head: true })
       .eq("content_item_id", data.contentItemId)
       .gte("created_at", oneHourAgo);
