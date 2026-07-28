@@ -421,6 +421,80 @@ export type Database = {
           },
         ]
       }
+      content_feedback: {
+        Row: {
+          ai_analysis: Json | null
+          body: string
+          category: string
+          content_hash: string
+          content_item_id: string
+          created_at: string
+          id: string
+          section_id: string | null
+          section_title: string | null
+          status: string
+          submitted_by: string
+          triaged_at: string | null
+        }
+        Insert: {
+          ai_analysis?: Json | null
+          body: string
+          category?: string
+          content_hash: string
+          content_item_id: string
+          created_at?: string
+          id?: string
+          section_id?: string | null
+          section_title?: string | null
+          status?: string
+          submitted_by: string
+          triaged_at?: string | null
+        }
+        Update: {
+          ai_analysis?: Json | null
+          body?: string
+          category?: string
+          content_hash?: string
+          content_item_id?: string
+          created_at?: string
+          id?: string
+          section_id?: string | null
+          section_title?: string | null
+          status?: string
+          submitted_by?: string
+          triaged_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_feedback_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "blogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_feedback_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "content_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_feedback_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "designs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_feedback_content_item_id_fkey"
+            columns: ["content_item_id"]
+            isOneToOne: false
+            referencedRelation: "lessons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_item_sources: {
         Row: {
           content_item_id: string
@@ -474,62 +548,6 @@ export type Database = {
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "sources"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      content_feedback: {
-        Row: {
-          ai_analysis: Json | null
-          body: string
-          category: string
-          content_hash: string
-          content_item_id: string
-          created_at: string
-          id: string
-          section_id: string | null
-          section_title: string | null
-          status: string
-          submitted_by: string | null
-          submitted_by_anon_token: string | null
-          triaged_at: string | null
-        }
-        Insert: {
-          ai_analysis?: Json | null
-          body: string
-          category?: string
-          content_hash: string
-          content_item_id: string
-          created_at?: string
-          id?: string
-          section_id?: string | null
-          section_title?: string | null
-          status?: string
-          submitted_by?: string | null
-          submitted_by_anon_token?: string | null
-          triaged_at?: string | null
-        }
-        Update: {
-          ai_analysis?: Json | null
-          body?: string
-          category?: string
-          content_hash?: string
-          content_item_id?: string
-          created_at?: string
-          id?: string
-          section_id?: string | null
-          section_title?: string | null
-          status?: string
-          submitted_by?: string | null
-          submitted_by_anon_token?: string | null
-          triaged_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "content_feedback_content_item_id_fkey"
-            columns: ["content_item_id"]
-            isOneToOne: false
-            referencedRelation: "content_items"
             referencedColumns: ["id"]
           },
         ]
