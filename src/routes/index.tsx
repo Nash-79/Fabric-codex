@@ -135,7 +135,7 @@ function Landing() {
   const search = Route.useSearch();
   const selectedCapability = search.capability ?? "direct-lake";
   const setSelectedCapability = (capability: string) =>
-    navigate({ search: (prev) => ({ ...prev, capability }) });
+    navigate({ search: { ...search, capability } });
 
   const childTopics = useMemo(() => topics.filter((topic) => topic.parent_slug), [topics]);
   const selected = capabilities.find((capability) => capability.id === selectedCapability);

@@ -111,13 +111,13 @@ function RegistryPage() {
   });
   const selectedRow = rows.find((r) => r.id === selectedCapability);
   const setSelectedCapability = (capability: string) =>
-    navigate({ search: (prev) => ({ ...prev, capability }) });
+    navigate({ search: { ...claimSearch, capability } });
   const setDepth = (value: number | "all") =>
-    navigate({ search: (prev) => ({ ...prev, depth: value }) });
+    navigate({ search: { ...claimSearch, depth: value } });
   const setTier = (value: number | "all") =>
-    navigate({ search: (prev) => ({ ...prev, tier: value }) });
+    navigate({ search: { ...claimSearch, tier: value } });
   const setClaimQuery = (value: string) =>
-    navigate({ search: (prev) => ({ ...prev, q: value || undefined }) });
+    navigate({ search: { ...claimSearch, q: value || undefined } });
 
   return (
     <div className="min-h-screen bg-background text-foreground">

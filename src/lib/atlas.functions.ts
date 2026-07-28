@@ -810,7 +810,8 @@ export const submitContentFeedback = createServerFn({ method: "POST" })
 
     const identityLabel = userId ?? `anon:${anonToken}`;
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-    let recentCountQuery = supabase
+    const feedbackTable = supabase.from("content_feedback") as any;
+    let recentCountQuery = feedbackTable
       .from("content_feedback")
       .select("id", { count: "exact", head: true })
       .eq("content_item_id", data.contentItemId)
@@ -828,7 +829,7 @@ export const submitContentFeedback = createServerFn({ method: "POST" })
       throw new Error("Please wait before submitting more feedback on this article.");
     }
 
-    const { error } = await supabase.from("content_feedback").insert({
+    const { error } = await feedbackTable.insert({
       content_item_id: data.contentItemId,
       content_hash: item.content_hash,
       submitted_by: userId,
