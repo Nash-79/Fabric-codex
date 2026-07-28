@@ -98,6 +98,10 @@ for (const name of sidecarNames) {
       `${label}: revision "${doc.revision}" must match manifest interaction_version ` +
         `"${assetsBySlug.get(slug)?.interaction_version}"`,
     );
+  // Editorial Experience Revamp Phase 5: optional inline embed width mode, additive/defaults
+  // to "standard" when absent.
+  if (doc.layoutHint && !["standard", "wide", "full-bleed"].includes(doc.layoutHint))
+    failures.push(`${label}: invalid layoutHint "${doc.layoutHint}"`);
 
   const nodes = Array.isArray(doc.nodes) ? doc.nodes : [];
   const edges = Array.isArray(doc.edges) ? doc.edges : [];

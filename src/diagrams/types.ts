@@ -102,6 +102,12 @@ export type AuthoredDiagram = {
   qaStatus: "draft" | "passed" | "failed";
   /** The authored infographic used for reading, print, and no-JavaScript fallback. */
   staticPath: string;
+  /**
+   * Inline embed width mode (Editorial Experience Revamp Phase 5). Optional, defaults to
+   * "standard" (today's behavior) when absent — only set this to opt a diagram into breaking out
+   * of the reading column.
+   */
+  layoutHint?: "standard" | "wide" | "full-bleed";
   nodes: AuthoredDiagramNode[];
   edges: AuthoredDiagramEdge[];
   walkthrough: DiagramWalkthroughStep[];

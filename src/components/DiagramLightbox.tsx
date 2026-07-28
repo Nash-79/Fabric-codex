@@ -5,11 +5,23 @@ import {
   useControls,
   useTransformEffect,
 } from "react-zoom-pan-pinch";
-import { Maximize2, Minimize2, Move, Plus, Minus, RotateCcw, X, ZoomIn } from "lucide-react";
+import {
+  Maximize2,
+  Minimize2,
+  Move,
+  Plus,
+  Minus,
+  RotateCcw,
+  Scan,
+  Sparkles,
+  X,
+  ZoomIn,
+} from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { AuthoredSvg } from "@/components/AuthoredSvg";
+import { InteractiveDiagram } from "@/components/InteractiveDiagram";
+import { DiagramWalkthroughBar } from "@/components/DiagramWalkthroughBar";
 import type { Citation } from "@/components/CitationSidebar";
 import type { AuthoredDiagram } from "@/diagrams/types";
 
@@ -45,6 +57,7 @@ export function DiagramLightbox({
   citations?: Citation[];
 }) {
   const [open, setOpen] = useState(false);
+  const [walkthroughOpen, setWalkthroughOpen] = useState(false);
   const [ratio, setRatio] = useState<number | null>(
     () => ratioCache.get(src) ?? ratioFromSvg(svgMarkup),
   );
@@ -92,12 +105,22 @@ export function DiagramLightbox({
   const captionId = figId ? `${figId}-caption` : undefined;
   const describeId = figId ? `${figId}-desc` : undefined;
   const captionText = caption || alt;
+  // "standard" (default) keeps today's behavior — inside the reading column. "wide"/"full-bleed"
+  // break out via negative-margin tricks; this is new CSS with no existing precedent in this
+  // codebase, verify visually before treating full-bleed as production-ready.
+  const layoutHint = definition?.layoutHint ?? "standard";
+  const layoutClass =
+    layoutHint === "full-bleed"
+      ? "sm:w-screen sm:max-w-none sm:relative sm:left-1/2 sm:right-1/2 sm:-mx-[50vw]"
+      : layoutHint === "wide"
+        ? "sm:w-[min(64rem,100%)] sm:max-w-none sm:-mx-[calc((min(64rem,100%)-48rem)/2)]"
+        : "";
 
   return (
     <>
       <figure
         id={figId}
-        className="not-prose article-figure group my-10 scroll-mt-24"
+        className={cn("not-prose article-figure group my-10 scroll-mt-24", layoutClass)}
         style={
           { contentVisibility: "auto", containIntrinsicSize: `600px auto` } as React.CSSProperties
         }
@@ -110,7 +133,7 @@ export function DiagramLightbox({
           style={{ aspectRatio: `${aspectRatio}` }}
         >
           {inView && svgMarkup && definition ? (
-            <AuthoredSvg
+            <InteractiveDiagram
               markup={svgMarkup}
               definition={definition}
               citations={citations}
@@ -167,6 +190,14 @@ export function DiagramLightbox({
         <DialogContent
           className="h-[100dvh] max-h-[100dvh] w-screen max-w-none gap-0 overflow-hidden border-0 bg-background p-0 [&>button]:hidden sm:h-[94dvh] sm:max-h-[94dvh] sm:w-[98vw] sm:max-w-[98vw] sm:rounded-2xl sm:border"
           aria-describedby={describeId}
+          onEscapeKeyDown={(e) => {
+            // Innermost-mode-first: the first Escape exits walkthrough mode rather than closing
+            // the dialog; a second Escape (walkthrough already closed) closes normally.
+            if (walkthroughOpen) {
+              e.preventDefault();
+              setWalkthroughOpen(false);
+            }
+          }}
         >
           <DialogTitle className="sr-only">
             {figureIndex ? `Figure ${figureIndex}: ` : "Diagram: "}
@@ -187,6 +218,8 @@ export function DiagramLightbox({
             definition={definition}
             citations={citations}
             onClose={() => setOpen(false)}
+            walkthroughOpen={walkthroughOpen}
+            onWalkthroughOpenChange={setWalkthroughOpen}
           />
         </DialogContent>
       </Dialog>
@@ -203,6 +236,8 @@ function LightboxViewer({
   definition,
   citations,
   onClose,
+  walkthroughOpen,
+  onWalkthroughOpenChange,
 }: {
   src: string;
   alt: string;
@@ -212,10 +247,21 @@ function LightboxViewer({
   definition?: AuthoredDiagram;
   citations?: Citation[];
   onClose: () => void;
+  walkthroughOpen: boolean;
+  onWalkthroughOpenChange: (open: boolean) => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const scaleRef = useRef(1);
+  const [walkthroughStepIndex, setWalkthroughStepIndex] = useState(0);
+  const hasWalkthrough = Boolean(definition?.walkthrough.length);
+  const walkthroughStep = definition?.walkthrough[walkthroughStepIndex];
+  const walkthroughTotal = definition?.walkthrough.length ?? 0;
+
+  function exitWalkthrough() {
+    onWalkthroughOpenChange(false);
+    setWalkthroughStepIndex(0);
+  }
 
   useEffect(() => {
     const onFsChange = () => setIsFullscreen(!!document.fullscreenElement);
@@ -276,8 +322,21 @@ function LightboxViewer({
               isFullscreen={fsActive}
               onClose={onClose}
               onScaleChange={(s) => (scaleRef.current = s)}
+              hasWalkthrough={hasWalkthrough}
+              walkthroughOpen={walkthroughOpen}
+              onToggleWalkthrough={() =>
+                walkthroughOpen ? exitWalkthrough() : onWalkthroughOpenChange(true)
+              }
             />
-            <KeyboardBridge onFullscreen={toggleFullscreen} utils={utils} />
+            <KeyboardBridge
+              onFullscreen={toggleFullscreen}
+              utils={utils}
+              walkthroughOpen={walkthroughOpen}
+              onWalkthroughPrevious={() => setWalkthroughStepIndex((i) => Math.max(0, i - 1))}
+              onWalkthroughNext={() =>
+                setWalkthroughStepIndex((i) => Math.min(walkthroughTotal - 1, i + 1))
+              }
+            />
             <TransformComponent
               wrapperStyle={{ width: "100%", height: "100%", touchAction: "none" }}
               contentStyle={{
@@ -289,10 +348,12 @@ function LightboxViewer({
               }}
             >
               {svgMarkup && definition ? (
-                <AuthoredSvg
+                <InteractiveDiagram
                   markup={svgMarkup}
                   definition={definition}
                   citations={citations}
+                  walkthroughActive={walkthroughOpen}
+                  walkthroughStepIndex={walkthroughStepIndex}
                   className="max-h-[100dvh] max-w-full select-none sm:max-h-[88dvh]"
                 />
               ) : (
@@ -305,18 +366,29 @@ function LightboxViewer({
               )}
             </TransformComponent>
             <OrientationRefit />
-            {caption && (
-              <div
-                className="pointer-events-none absolute inset-x-0 bottom-0 hidden justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex"
-                aria-hidden
-              >
-                <div className="pointer-events-auto max-w-3xl rounded-xl border border-border/60 bg-background/90 px-4 py-2.5 text-center text-sm text-muted-foreground shadow-md backdrop-blur">
-                  <span className="mr-1.5 text-xs font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-300">
-                    {figureIndex ? `Figure ${figureIndex}` : "Diagram"}
-                  </span>
-                  {caption}
+            {walkthroughOpen && walkthroughStep ? (
+              <DiagramWalkthroughBar
+                step={walkthroughStep}
+                index={walkthroughStepIndex}
+                total={walkthroughTotal}
+                onPrevious={() => setWalkthroughStepIndex((i) => Math.max(0, i - 1))}
+                onNext={() => setWalkthroughStepIndex((i) => Math.min(walkthroughTotal - 1, i + 1))}
+                onExit={exitWalkthrough}
+              />
+            ) : (
+              caption && (
+                <div
+                  className="pointer-events-none absolute inset-x-0 bottom-0 hidden justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:flex"
+                  aria-hidden
+                >
+                  <div className="pointer-events-auto max-w-3xl rounded-xl border border-border/60 bg-background/90 px-4 py-2.5 text-center text-sm text-muted-foreground shadow-md backdrop-blur">
+                    <span className="mr-1.5 text-xs font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-300">
+                      {figureIndex ? `Figure ${figureIndex}` : "Diagram"}
+                    </span>
+                    {caption}
+                  </div>
                 </div>
-              </div>
+              )
             )}
             <div
               className="pointer-events-none absolute bottom-4 left-4 hidden items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-[11px] text-muted-foreground backdrop-blur sm:flex"
@@ -339,13 +411,19 @@ function Toolbar({
   isFullscreen,
   onClose,
   onScaleChange,
+  hasWalkthrough,
+  walkthroughOpen,
+  onToggleWalkthrough,
 }: {
   onFullscreen: () => void;
   isFullscreen: boolean;
   onClose: () => void;
   onScaleChange?: (s: number) => void;
+  hasWalkthrough?: boolean;
+  walkthroughOpen?: boolean;
+  onToggleWalkthrough?: () => void;
 }) {
-  const { zoomIn, zoomOut, resetTransform } = useControls();
+  const { zoomIn, zoomOut, resetTransform, centerView } = useControls();
   const [pct, setPct] = useState(100);
   const resetRef = useRef<HTMLButtonElement | null>(null);
   useTransformEffect(({ state }) => {
@@ -365,6 +443,18 @@ function Toolbar({
       aria-orientation="horizontal"
       className="absolute right-[max(0.5rem,env(safe-area-inset-right))] top-[max(0.5rem,env(safe-area-inset-top))] z-10 flex items-center gap-0.5 rounded-full border border-border/60 bg-background/90 p-1 shadow-md backdrop-blur sm:right-3 sm:top-3 sm:gap-1"
     >
+      {hasWalkthrough && (
+        <>
+          <ToolbarButton
+            onClick={() => onToggleWalkthrough?.()}
+            label={walkthroughOpen ? "Exit walkthrough" : "Start walkthrough"}
+            pressed={walkthroughOpen}
+          >
+            <Sparkles className="h-4 w-4" />
+          </ToolbarButton>
+          <span className="mx-0.5 h-6 w-px bg-border" aria-hidden />
+        </>
+      )}
       <span
         className="hidden min-w-[3.25rem] px-2 text-center font-mono text-xs tabular-nums text-muted-foreground sm:block"
         aria-live="polite"
@@ -378,6 +468,9 @@ function Toolbar({
       </ToolbarButton>
       <ToolbarButton onClick={() => zoomIn()} label="Zoom in">
         <Plus className="h-4 w-4" />
+      </ToolbarButton>
+      <ToolbarButton onClick={() => centerView(undefined, 200, "easeOut")} label="Fit to view">
+        <Scan className="h-4 w-4" />
       </ToolbarButton>
       <ToolbarButton onClick={() => resetTransform()} label="Reset zoom" ref={resetRef}>
         <RotateCcw className="h-4 w-4" />
@@ -418,7 +511,19 @@ const ToolbarButton = forwardRef<
   );
 });
 
-function KeyboardBridge({ onFullscreen, utils }: { onFullscreen: () => void; utils: any }) {
+function KeyboardBridge({
+  onFullscreen,
+  utils,
+  walkthroughOpen,
+  onWalkthroughPrevious,
+  onWalkthroughNext,
+}: {
+  onFullscreen: () => void;
+  utils: any;
+  walkthroughOpen?: boolean;
+  onWalkthroughPrevious?: () => void;
+  onWalkthroughNext?: () => void;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLElement && ["INPUT", "TEXTAREA"].includes(e.target.tagName))
@@ -432,14 +537,25 @@ function KeyboardBridge({ onFullscreen, utils }: { onFullscreen: () => void; uti
       } else if (e.key === "0") {
         e.preventDefault();
         utils.resetTransform?.();
+      } else if (e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        utils.centerView?.(undefined, 200, "easeOut");
       } else if (e.key.toLowerCase() === "f") {
         e.preventDefault();
         onFullscreen();
+      } else if (walkthroughOpen && (e.key === "ArrowRight" || e.key.toLowerCase() === "n")) {
+        e.preventDefault();
+        onWalkthroughNext?.();
+      } else if (walkthroughOpen && (e.key === "ArrowLeft" || e.key.toLowerCase() === "p")) {
+        e.preventDefault();
+        onWalkthroughPrevious?.();
       }
+      // Escape is handled by DialogContent's onEscapeKeyDown (DiagramLightbox), not here — a raw
+      // window-level listener can't reliably preempt Radix's own React-level Escape handling.
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onFullscreen, utils]);
+  }, [onFullscreen, utils, walkthroughOpen, onWalkthroughPrevious, onWalkthroughNext]);
   return null;
 }
 

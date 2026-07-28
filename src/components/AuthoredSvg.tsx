@@ -1,4 +1,13 @@
-import { useMemo, useRef, useState, type FocusEvent, type PointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 import type { Citation } from "@/components/CitationSidebar";
 import type { AuthoredDiagram, AuthoredDiagramNode } from "@/diagrams/types";
 import { cn } from "@/lib/utils";
@@ -19,11 +28,25 @@ export function AuthoredSvg({
   definition,
   citations = [],
   className,
+  selectedNodeId,
+  onSelectNode,
+  walkthroughNodeId,
+  dimmedNodeIds,
 }: {
   markup: string;
   definition: AuthoredDiagram;
   citations?: Citation[];
   className?: string;
+  /** Persists across blur, unlike the hover tooltip — set by a click/tap/Enter, not a hover. */
+  selectedNodeId?: string | null;
+  onSelectNode?: (nodeId: string | null) => void;
+  /** The current walkthrough step's node, if a guided walkthrough is active. Visually distinct
+      from selectedNodeId — a walkthrough highlight persists per-step regardless of what the
+      user last clicked. */
+  walkthroughNodeId?: string | null;
+  /** Node ids to visually dim (an active layer filter's non-matching regions). Never mutates the
+      underlying SVG — a transient DOM attribute only, gone on unmount. */
+  dimmedNodeIds?: Set<string>;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const [active, setActive] = useState<ActiveNode | null>(null);
@@ -69,6 +92,38 @@ export function AuthoredSvg({
     activate(nodeElement(event.target));
   const onFocus = (event: FocusEvent<HTMLDivElement>) => activate(nodeElement(event.target));
 
+  // Click/tap/Enter/Space pins a node's selection open — additive to, not a replacement for, the
+  // hover/focus tooltip above. Toggles off when re-clicking the already-selected node.
+  const onClick = (event: MouseEvent<HTMLDivElement>) => {
+    const el = nodeElement(event.target);
+    const id = el?.dataset.nodeId;
+    if (!id || !onSelectNode) return;
+    onSelectNode(selectedNodeId === id ? null : id);
+  };
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const el = nodeElement(event.target);
+    const id = el?.dataset.nodeId;
+    if (!id || !onSelectNode) return;
+    event.preventDefault();
+    onSelectNode(selectedNodeId === id ? null : id);
+  };
+
+  // Toggle data-selected/data-walkthrough-current/data-dimmed directly on the matched SVG region
+  // post-mount — never re-renders dangerouslySetInnerHTML (which would blow away nested state)
+  // and never touches the underlying static SVG file itself.
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const regions = root.querySelectorAll<SVGElement>("[data-node-id]");
+    for (const region of regions) {
+      const id = region.dataset.nodeId;
+      region.toggleAttribute("data-selected", id === selectedNodeId);
+      region.toggleAttribute("data-walkthrough-current", id === walkthroughNodeId);
+      region.toggleAttribute("data-dimmed", Boolean(id && dimmedNodeIds?.has(id)));
+    }
+  }, [markup, selectedNodeId, walkthroughNodeId, dimmedNodeIds]);
+
   return (
     <div
       ref={rootRef}
@@ -79,6 +134,8 @@ export function AuthoredSvg({
       onBlurCapture={(event) => {
         if (!event.currentTarget.contains(event.relatedTarget)) setActive(null);
       }}
+      onClick={onClick}
+      onKeyDown={onKeyDown}
     >
       <div
         className="h-full w-full [&>svg]:block [&>svg]:h-full [&>svg]:w-full"
