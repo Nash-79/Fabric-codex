@@ -46,6 +46,12 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
      or item label nearby, records provenance, and is not used as Fabric Atlas branding or to
      represent a non-Microsoft service. Apply `docs/official-icon-policy.md`; unverified icon
      sources or modified official marks are copyright/brand warnings.
+   - **presentation_profile integrity.** If the document sets `presentation_profile`, confirm
+     `archetype` is one of the enum values in `src/lib/content-presentation.ts` (never invent a
+     new archetype) and — the one check nothing else in the pipeline currently makes — if
+     `featured_diagram` is set, confirm a matching `content/diagrams/<slug>.diagram.json` actually
+     exists on disk. A `featured_diagram` that doesn't resolve is a dangling reference a reader
+     will hit as a broken hero image; flag it **warning**.
    - **Internals section (articles and designs).** Confirm `## Internals` exists with all three
      required sub-headings (`### Architecture & design`, `### How it works internally`,
      `### Performance characteristics`). Missing the section or a sub-heading entirely is a
