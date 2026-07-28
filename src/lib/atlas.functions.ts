@@ -851,27 +851,21 @@ export const submitContentFeedback = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-// "Did I already report this section" for the current identity (authenticated or anonymous) on
-// one content item. Uses the service-role client rather than RLS: an anonymous token is not a
-// real Postgres session identity to key a row policy on, and there is deliberately no anon SELECT
-// grant on content_feedback (see the migration) — this function is the one narrow, trusted read
-// path, and it only ever returns the calling identity's own rows, never another submitter's data.
+// "Did I already report this section" for the current identity on one content item. This is a
+// non-critical reader convenience, so it must never require the service-role key: authenticated
+// callers read through their own RLS-scoped session, while anonymous callers fall back to an empty
+// list because anon tokens are not a verifiable database identity.
 export const listMyContentFeedback = createServerFn({ method: "GET" })
   .validator((d: { contentItemId: string; anonToken?: string }) => d)
   .handler(async ({ data }) => {
-    const { userId } = await resolveFeedbackIdentity();
-    const anonToken = data.anonToken?.trim().slice(0, 100) || null;
-    if (!userId && !anonToken) return [];
+    const { userId, supabase } = await resolveFeedbackIdentity();
+    if (!userId) return [];
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    let query = supabaseAdmin
+    const { data: rows, error } = await supabase
       .from("content_feedback")
       .select("section_id,category,status,created_at")
-      .eq("content_item_id", data.contentItemId);
-    query = userId
-      ? query.eq("submitted_by", userId)
-      : query.eq("submitted_by_anon_token", anonToken as string);
-    const { data: rows, error } = await query;
+      .eq("content_item_id", data.contentItemId)
+      .eq("submitted_by", userId);
     if (error) throw new Error(error.message);
     return rows ?? [];
   });
