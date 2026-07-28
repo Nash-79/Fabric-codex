@@ -66,16 +66,22 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
    }
    ```
    `cited_source_keys` are source `slug`s ordered to match S1, S2, … (resolved → ids at publish).
-   `presentation_profile` is optional — set `archetype` (usually `architecture`, occasionally
-   `deep-dive` for an internals-heavy design) only when obvious; omit rather than guess. See
-   `src/lib/content-presentation.ts` for the full constrained vocabulary.
+   `presentation_profile` should be populated for every new design going forward — set
+   `archetype` (usually `architecture`, occasionally `deep-dive` for an internals-heavy design) to
+   whichever best matches the piece. If step 3 commissions a diagram, come back and set
+   `featured_diagram` to its slug before handing the file to the user for publishing — the JSON is
+   written before the diagram exists, so this is a final edit to the already-saved file, not a
+   field you can fill in on the first pass. See `src/lib/content-presentation.ts` for the full
+   constrained vocabulary.
    Always include `topic_slug` when the design maps cleanly to one topic (check
    `content/topics.json` or `GET /topics` for valid slugs) — designs now show up on their topic's
    page alongside articles and lessons, so an unset `topic_slug` means the design stays
    undiscoverable from topic browsing (findable only via the global `/content` list). Leave it out
    only when the design genuinely spans multiple topics with no clear primary one.
 3. If a diagram would help, hand off to the **diagram-author** agent to produce an original
-   architecture diagram (a generated asset) — do not copy any source image.
+   architecture diagram (a generated asset) — do not copy any source image. Once it registers the
+   diagram, update `content/designs/<slug>.json`'s `presentation_profile.featured_diagram` with
+   the returned slug (see step 2).
 4. **Publishing is a human step.** Tell the user to open **Settings → Publish**, choose **Design**,
    and paste `content/designs/<slug>.json` — the server persists it into `content_items`
    (kind=`design`) and always creates a **new version** on re-publish (the prior version is

@@ -128,4 +128,6 @@ The saved file paths — **`content/diagrams/<slug>.diagram.json`** plus the `co
 SVG and its `public/diagrams/` mirror — the manifest entry appended to
 `content/diagrams/assets.json`, and a note on which claims ground the `fact` nodes (and why any
 node is `pattern`/`inference` rather than `fact`). Remind that the asset registers into Supabase on
-the next bootstrap/publish.
+the next bootstrap/publish. Report the diagram's **slug** explicitly and note that the calling
+agent (blog-author/solution-architect) should consider setting it as the content item's
+`presentation_profile.featured_diagram` if this diagram is the piece's primary hero image.

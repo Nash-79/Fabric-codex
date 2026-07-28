@@ -133,11 +133,12 @@ description of what to find>`. Never fabricate detail to avoid a placeholder —
       "tags": [...], "depth_levels": [1,2,3],
       "presentation_profile": {"archetype": "explainer"}}
      ```
-     `presentation_profile` is optional — set `archetype` (one of `explainer`, `field-guide`,
-     `tutorial`, `deep-dive`, `architecture`, `lesson`) only when it's obvious from the piece's
-     content and reader goal; omit it entirely rather than guessing. See
-     `src/lib/content-presentation.ts` for the full constrained vocabulary — never invent a value
-     outside the enum or add unlisted keys.
+     `presentation_profile` should be populated for every new article going forward — set
+     `archetype` (one of `explainer`, `field-guide`, `tutorial`, `deep-dive`, `architecture`,
+     `lesson`) to whichever best matches the piece's content and reader goal, and set
+     `featured_diagram` to the slug of the architecture diagram you commissioned in step 6 (the
+     one embedded near the top of the article). See `src/lib/content-presentation.ts` for the
+     full constrained vocabulary — never invent a value outside the enum or add unlisted keys.
      Include depth `4`/`5` in `depth_levels` only if at least one Internals sub-heading is
      actually **grounded** (not a placeholder) — an all-placeholder Internals section means
      the article is still L1-L3 for coverage-tracking purposes.
