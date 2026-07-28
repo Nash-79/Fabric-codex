@@ -35,6 +35,7 @@ export function CodeBlock({ children, node }: { children: ReactNode; node?: Hast
   // it there before wrapping in <pre>), so from <pre>'s node prop it's one level down.
   const meta = useMemo(() => parseCodeMeta(node?.children?.[0]?.data?.meta), [node]);
   const lineCount = useMemo(() => code.split("\n").length, [code]);
+  const displayTitle = meta.title ?? lang;
 
   async function copyCode() {
     if (!navigator?.clipboard) return;
@@ -45,26 +46,38 @@ export function CodeBlock({ children, node }: { children: ReactNode; node?: Hast
 
   return (
     <div
-      className="not-prose my-6 overflow-hidden rounded-lg border"
+      className="not-prose my-6 overflow-hidden rounded-xl border shadow-sm"
       style={{
         backgroundColor: "var(--surface-code-bg)",
         borderColor: "var(--surface-code-border)",
       }}
     >
-      <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+      <div
+        className="flex items-center justify-between gap-2 border-b border-border px-3 py-2"
+        style={{ backgroundColor: "var(--surface-code-header-bg)" }}
+      >
         <span className="flex min-w-0 items-center gap-2">
           {meta.title ? (
             <>
-              <span className="truncate text-[11px] font-medium text-foreground">{meta.title}</span>
-              <span className="shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span className="truncate text-xs font-semibold text-foreground">{meta.title}</span>
+              <span
+                className="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wide"
+                style={{
+                  borderColor: "color-mix(in oklab, var(--surface-code-accent) 30%, transparent)",
+                  color: "var(--surface-code-accent)",
+                }}
+              >
                 {lang}
               </span>
             </>
           ) : (
-            <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
               {lang}
             </span>
           )}
+          <span className="hidden text-[10px] text-muted-foreground sm:inline">
+            {lineCount} line{lineCount === 1 ? "" : "s"}
+          </span>
         </span>
         <span className="flex shrink-0 items-center gap-1">
           <button
@@ -87,7 +100,7 @@ export function CodeBlock({ children, node }: { children: ReactNode; node?: Hast
           </button>
         </span>
       </div>
-      <div className="relative" aria-label={meta.title ? `Code: ${meta.title}` : undefined}>
+      <div className="relative" aria-label={`Code: ${displayTitle}`}>
         {meta.highlightLines.size > 0 && (
           <div className="pointer-events-none absolute inset-0 py-3" aria-hidden="true">
             {Array.from({ length: lineCount }, (_, i) => i + 1).map((line) =>
@@ -102,7 +115,7 @@ export function CodeBlock({ children, node }: { children: ReactNode; node?: Hast
           </div>
         )}
         <pre
-          className={`relative px-4 py-3 text-sm leading-relaxed [&_code]:bg-transparent [&_code]:p-0 ${
+          className={`relative max-h-[min(34rem,72vh)] px-4 py-4 text-sm leading-relaxed [tab-size:2] [&_code]:bg-transparent [&_code]:p-0 ${
             wrapped ? "whitespace-pre-wrap break-words" : "overflow-x-auto"
           }`}
         >

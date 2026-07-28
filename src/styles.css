@@ -334,15 +334,22 @@
 
   --surface-code-bg: color-mix(in oklab, var(--muted) 45%, var(--background));
   --surface-code-border: var(--border);
+  --surface-code-header-bg: color-mix(in oklab, var(--muted) 62%, var(--background));
+  --surface-code-accent: color-mix(in oklab, var(--primary) 72%, var(--foreground));
 
   --surface-step-bg: color-mix(in oklab, var(--muted) 25%, transparent);
   --surface-step-border: var(--border);
   --surface-step-marker-bg: var(--primary);
   --surface-step-marker-fg: var(--primary-foreground);
 
-  --surface-figure-bg: transparent;
+  --surface-figure-bg: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--card) 92%, var(--primary) 8%),
+    color-mix(in oklab, var(--card) 94%, var(--muted) 6%)
+  );
   --surface-figure-border: var(--border);
   --surface-figure-caption-fg: var(--muted-foreground);
+  --surface-figure-shadow: 0 22px 55px color-mix(in oklab, black 12%, transparent);
 
   --surface-callout-bg: color-mix(in oklab, var(--accent) 60%, var(--background));
   --surface-callout-border: var(--accent-foreground);
@@ -362,6 +369,14 @@
      figure/source-preview tokens reuse var() indirection and inherit .dark's own --card/
      --border/--muted values automatically. */
   --surface-code-bg: color-mix(in oklab, var(--muted) 55%, var(--background));
+  --surface-code-header-bg: color-mix(in oklab, var(--muted) 68%, var(--background));
+  --surface-code-accent: color-mix(in oklab, var(--primary) 70%, white);
+  --surface-figure-bg: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--card) 88%, var(--primary) 12%),
+    color-mix(in oklab, var(--card) 92%, black 8%)
+  );
+  --surface-figure-shadow: 0 24px 64px color-mix(in oklab, black 42%, transparent);
   --surface-callout-bg: color-mix(in oklab, var(--accent) 45%, var(--background));
   --surface-sticky-bg: color-mix(in oklab, var(--background) 85%, transparent);
 }
@@ -671,7 +686,7 @@
   content: "Figure " counter(article-figure) " — ";
   font-style: normal;
   font-weight: 600;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 /* Kill jitter: never animate transform on hover inside the article body. */
@@ -713,9 +728,14 @@
   --fa-h3: clamp(1.15rem, 1.05rem + 0.4vw, 1.35rem);
   font-size: var(--fa-body-size);
   line-height: var(--fa-body-lh);
+  font-feature-settings:
+    "kern" 1,
+    "liga" 1,
+    "calt" 1;
 }
 .article-body :where(p, li) {
   max-width: var(--fa-reading-width, 68ch);
+  text-wrap: pretty;
 }
 .article-body :where(h1) {
   font-size: var(--fa-h1);
@@ -727,19 +747,21 @@
   letter-spacing: -0.015em;
   line-height: 1.2;
   margin-top: calc(var(--fa-rhythm, 3.5rem) * var(--fa-density-scale, 1));
+  text-wrap: balance;
 }
 .article-body :where(h3) {
   font-size: var(--fa-h3);
   letter-spacing: -0.005em;
   line-height: 1.3;
   margin-top: 2rem;
+  text-wrap: balance;
 }
 
 /* Stronger lede — signals the opening paragraph editorially. */
 .article-body > p:first-of-type {
   font-size: calc(var(--fa-body-size) * 1.08);
   font-weight: 450;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 /* Links: accessible underline with proper offset, teal on hover. */
@@ -763,7 +785,7 @@
   border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
   font-size: 0.9em;
   font-variant-ligatures: none;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 /* Pull-quote blockquotes (used when the article doesn't render as Callout). */
@@ -776,7 +798,7 @@
   font-family: var(--font-serif-stack);
   font-size: calc(var(--fa-body-size) * 1.15);
   line-height: 1.55;
-  color: hsl(var(--foreground));
+  color: var(--foreground);
 }
 
 /* Ornamental section dividers instead of a plain hairline. */
@@ -822,6 +844,40 @@
   color: color-mix(in oklab, var(--primary) 85%, var(--foreground));
 }
 
+/* Modern diagram/figure styling — article-native visual language, not generic image chrome. */
+.article-body .article-figure {
+  margin-block: calc(2.75rem * var(--fa-density-scale, 1));
+}
+
+.article-body .article-figure > div:first-child {
+  background: var(--surface-figure-bg);
+  border-color: var(--surface-figure-border);
+  box-shadow: var(--surface-figure-shadow);
+}
+
+.article-body .article-figure > div:first-child::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 20% 10%, color-mix(in oklab, var(--primary) 18%, transparent), transparent 34%),
+    linear-gradient(180deg, color-mix(in oklab, white 7%, transparent), transparent 32%);
+  opacity: 0.75;
+}
+
+.article-body .article-figure .diagram-zoom-button {
+  border-color: color-mix(in oklab, var(--border) 72%, transparent);
+  background: color-mix(in oklab, var(--background) 92%, transparent);
+}
+
+.article-body .article-figure figcaption {
+  color: var(--surface-figure-caption-fg);
+  text-wrap: balance;
+}
+
 /* Reduced-motion: honor user preference across the article. */
 @media (prefers-reduced-motion: reduce) {
   .article-body :where(a, button, .article-figure) {
@@ -856,6 +912,25 @@
 .article-body[data-archetype="lesson"] {
   --fa-reading-width: 66ch;
   --fa-rhythm: 1.75rem;
+}
+
+.article-body[data-archetype="tutorial"] :where(h2),
+.article-body[data-archetype="lesson"] :where(h2) {
+  border-bottom-style: dashed;
+}
+
+.article-body[data-archetype="architecture"] .article-figure,
+.article-body[data-archetype="deep-dive"] .article-figure {
+  margin-block: calc(3.25rem * var(--fa-density-scale, 1));
+}
+
+.article-body[data-archetype="field-guide"] :where(p, li) {
+  font-size: 0.96em;
+}
+
+.article-body[data-archetype="tutorial"] :where(pre),
+.article-body[data-archetype="architecture"] :where(pre) {
+  font-size: 0.88rem;
 }
 
 /* Reading density (presentation_profile.reading_density) — orthogonal to archetype, scales

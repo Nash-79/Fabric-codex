@@ -4,6 +4,7 @@ import { DiagramDetailPanel } from "@/components/DiagramDetailPanel";
 import type { Citation } from "@/components/CitationSidebar";
 import type { AuthoredDiagram, DiagramLayer } from "@/diagrams/types";
 import { getAuthoredDiagram, getStaticDiagramSvg } from "@/diagrams/catalog";
+import { cn } from "@/lib/utils";
 
 // Sits between DiagramLightbox ("the stage" — figure chrome, Dialog, zoom/pan, fullscreen,
 // keyboard bridge) and AuthoredSvg ("dumb" SVG rendering + region hit-testing). Owns all
@@ -85,8 +86,8 @@ export function InteractiveDiagram({
   }, [walkthroughActive, walkthroughNodeId, onWalkthroughNodeChange]);
 
   return (
-    <div className={className}>
-      <div className="grid gap-4 sm:hidden">
+    <div className={cn("flex h-full flex-col", className)}>
+      <div className="grid h-full gap-4 sm:hidden">
         <AuthoredSvg
           markup={effectiveMarkup}
           definition={effectiveDefinition}
@@ -95,7 +96,7 @@ export function InteractiveDiagram({
           onSelectNode={walkthroughActive ? undefined : setSelectedNodeId}
           walkthroughNodeId={walkthroughNodeId}
           dimmedNodeIds={dimmedNodeIds}
-          className="h-full w-full"
+          className="h-full min-h-[50vh] w-full"
         />
         <DiagramDetailPanel
           node={
@@ -112,7 +113,11 @@ export function InteractiveDiagram({
           variant="stacked"
         />
       </div>
-      <div className="hidden gap-6 sm:grid sm:grid-cols-[1fr_22rem]">
+      {/* h-full here is what AuthoredSvg's own h-full (and its [&>svg]:h-full rule) actually
+          resolves against -- without it the SVG renders at its own natural/viewBox size and the
+          grid row collapses to that, leaving the rest of this component's allotted space empty
+          (the bug behind the diagram rendering tiny with dead space below/beside it). */}
+      <div className="hidden h-full gap-6 sm:grid sm:grid-cols-[1fr_22rem]">
         <AuthoredSvg
           markup={effectiveMarkup}
           definition={effectiveDefinition}

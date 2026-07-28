@@ -43,8 +43,8 @@ export function DiagramDetailPanel({
       className={cn(
         "text-sm",
         variant === "side"
-          ? "sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-lg border border-border bg-card p-4"
-          : "rounded-lg border border-border bg-card p-4",
+          ? "sticky top-20 max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl border border-border bg-card/95 p-4 shadow-sm"
+          : "rounded-xl border border-border bg-card/95 p-4 shadow-sm",
       )}
     >
       {!node ? (
@@ -64,7 +64,7 @@ export function DiagramDetailPanel({
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2">
               <strong className="text-sm leading-snug text-foreground">{node.label}</strong>
-              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              <span className="shrink-0 rounded-full border border-border bg-muted/70 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 {node.classification}
               </span>
             </div>
@@ -156,7 +156,7 @@ export function DiagramDetailPanel({
           </div>
 
           {node.drill.example && (
-            <div className="mt-3 rounded-lg border border-teal-500/30 bg-teal-500/5 p-3">
+            <div className="mt-3 rounded-xl border border-teal-500/30 bg-teal-500/5 p-3">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">
                 Worked example
               </div>
@@ -182,7 +182,7 @@ export function DiagramDetailPanel({
                 {node.drill.metrics.map((metric) => (
                   <div
                     key={metric.label}
-                    className="rounded-md border border-border bg-muted/30 p-2"
+                    className="rounded-lg border border-border bg-muted/30 p-2"
                   >
                     <div className="text-sm font-semibold text-foreground">{metric.value}</div>
                     <div className="text-[10px] text-muted-foreground">{metric.label}</div>

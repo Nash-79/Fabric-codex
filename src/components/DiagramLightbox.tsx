@@ -183,7 +183,7 @@ export function DiagramLightbox({
             onClick={() => setOpen(true)}
             aria-label={`Open diagram${figureIndex ? ` ${figureIndex}` : ""}: ${alt || caption || "diagram"} in zoom view`}
             aria-haspopup="dialog"
-            className="absolute right-3 top-3 z-20 flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+            className="diagram-zoom-button absolute right-3 top-3 z-20 flex items-center gap-1.5 rounded-full border border-border bg-background/90 px-2.5 py-1 text-[11px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
             <ZoomIn className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Click to zoom · pan</span>
@@ -231,6 +231,7 @@ export function DiagramLightbox({
             svgMarkup={svgMarkup}
             definition={definition}
             citations={citations}
+            aspectRatio={aspectRatio}
             onClose={() => setOpen(false)}
             walkthroughOpen={walkthroughOpen}
             onWalkthroughOpenChange={setWalkthroughOpen}
@@ -249,6 +250,7 @@ function LightboxViewer({
   svgMarkup,
   definition,
   citations,
+  aspectRatio,
   onClose,
   walkthroughOpen,
   onWalkthroughOpenChange,
@@ -260,6 +262,7 @@ function LightboxViewer({
   svgMarkup?: string;
   definition?: AuthoredDiagram;
   citations?: Citation[];
+  aspectRatio: number;
   onClose: () => void;
   walkthroughOpen: boolean;
   onWalkthroughOpenChange: (open: boolean) => void;
@@ -362,19 +365,29 @@ function LightboxViewer({
               }}
             >
               {svgMarkup && definition ? (
-                <InteractiveDiagram
-                  markup={svgMarkup}
-                  definition={definition}
-                  citations={citations}
-                  walkthroughActive={walkthroughOpen}
-                  walkthroughStepIndex={walkthroughStepIndex}
-                  // Explicit width: TransformComponent's contentStyle is a flex container with no
-                  // basis for its child, so without a real width here the sm:grid-cols-[1fr_22rem]
-                  // split inside InteractiveDiagram has nothing definite to divide 1fr against and
-                  // can collapse the diagram column far smaller than the tooltip/detail panel next
-                  // to it — the bug behind the tooltip swallowing the diagram canvas.
-                  className="max-h-[100dvh] w-[min(92vw,72rem)] max-w-full select-none sm:max-h-[88dvh]"
-                />
+                // Sized by the diagram's own aspect ratio, clamped against the viewport on BOTH
+                // axes -- the browser picks whichever axis actually binds, so this adapts to a
+                // laptop's wide/short window and a phone's narrow/tall one (portrait or
+                // landscape) the same way, rather than assuming one shape. Without an explicit
+                // size here, TransformComponent's flex-centered contentStyle gives the child no
+                // basis: InteractiveDiagram's sm:grid-cols-[1fr_22rem] split then has nothing
+                // definite to divide 1fr against (collapsing the diagram column far smaller than
+                // the tooltip/detail panel next to it -- the tooltip-swallows-canvas bug), and
+                // AuthoredSvg's own h-full (and its [&>svg]:h-full rule) resolves to nothing, so
+                // the SVG renders at its natural/viewBox size with dead space around it.
+                <div
+                  className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] sm:max-h-[calc(88dvh-2rem)] sm:max-w-[min(92vw,72rem)]"
+                  style={{ aspectRatio, width: "auto", height: "100%" }}
+                >
+                  <InteractiveDiagram
+                    markup={svgMarkup}
+                    definition={definition}
+                    citations={citations}
+                    walkthroughActive={walkthroughOpen}
+                    walkthroughStepIndex={walkthroughStepIndex}
+                    className="h-full w-full select-none"
+                  />
+                </div>
               ) : (
                 <img
                   src={src}
