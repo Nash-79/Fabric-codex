@@ -1,31 +1,19 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useSuspenseQueries, useSuspenseQuery, queryOptions } from "@tanstack/react-query";
-import {
-  Bot,
-  BookOpen,
-  Database,
-  FileText,
-  Filter,
-  GraduationCap,
-  Milestone,
-  Network,
-  Search,
-  ShieldCheck,
-} from "lucide-react";
+import { useSuspenseQueries, queryOptions } from "@tanstack/react-query";
+import { Bot, BookOpen, Database, FileText, Milestone, Network } from "lucide-react";
 import { useMemo } from "react";
-import { DepthBadge, TierBadge } from "@/components/Badges";
 import { FabricMark } from "@/components/FabricMark";
 import { SiteHeader } from "@/components/SiteHeader";
 import {
   listCapabilities,
   listClaimCountsByCapability,
-  listClaimsByCapability,
   listDiagrams,
   listSources,
   listTopics,
   listContentItems,
 } from "@/lib/atlas.functions";
 import { accent } from "@/lib/fabric-theme";
+import { presentationProfileSchema } from "@/lib/content-presentation";
 
 const topicsQO = queryOptions({ queryKey: ["home-topics"], queryFn: () => listTopics() });
 const sourcesQO = queryOptions({ queryKey: ["home-sources"], queryFn: () => listSources() });
@@ -45,25 +33,6 @@ const contentItemsQO = queryOptions({
   queryKey: ["home-content-items"],
   queryFn: () => listContentItems({ data: {} }),
 });
-const claimsQO = (
-  capabilityId: string,
-  depth: number | "all" = "all",
-  tier: number | "all" = "all",
-  q = "",
-) =>
-  queryOptions({
-    queryKey: ["home-claims", capabilityId, depth, tier, q],
-    queryFn: () =>
-      listClaimsByCapability({
-        data: {
-          capabilityId,
-          limit: 8,
-          depth: depth === "all" ? undefined : depth,
-          tier: tier === "all" ? undefined : tier,
-          q: q.trim() || undefined,
-        },
-      }),
-  });
 
 // Short cards summarizing what each area offers — copy kept in step with
 // content/help/01-getting-started.md's "The pages" list, the single source of truth for page
@@ -77,34 +46,16 @@ const OFFERINGS = [
     description: "The reading portal — a topic tree gathering every article, design, and lesson.",
   },
   {
-    to: "/learn" as const,
-    icon: GraduationCap,
-    label: "Learn",
-    description: "Tiered lessons: Beginner, Intermediate, and Expert.",
-  },
-  {
     to: "/advisor" as const,
     icon: Bot,
     label: "Advisor",
     description: "Ask a question, get an answer grounded only in verified claims.",
   },
   {
-    to: "/registry" as const,
-    icon: ShieldCheck,
-    label: "Capability Registry",
-    description: "The spine — every tracked capability with live claim and diagram coverage.",
-  },
-  {
     to: "/sources" as const,
     icon: Database,
     label: "Sources",
     description: "Every approved source, graded by trust tier, searchable and filterable.",
-  },
-  {
-    to: "/search" as const,
-    icon: Search,
-    label: "Search",
-    description: "One search box across topics, content, claims, and sources.",
   },
   {
     to: "/roadmap" as const,
@@ -136,27 +87,11 @@ const capabilityDiagramPath: Record<string, string> = {
 
 type HomeSearch = {
   capability?: string;
-  depth?: number | "all";
-  tier?: number | "all";
-  q?: string;
 };
 
 export const Route = createFileRoute("/")({
   validateSearch: (search: Record<string, unknown>): HomeSearch => ({
     capability: typeof search.capability === "string" ? search.capability : undefined,
-    depth:
-      search.depth === "all"
-        ? "all"
-        : typeof search.depth === "number" && [1, 2, 3, 4, 5].includes(search.depth)
-          ? search.depth
-          : undefined,
-    tier:
-      search.tier === "all"
-        ? "all"
-        : typeof search.tier === "number" && [1, 2, 3, 4, 5, 6].includes(search.tier)
-          ? search.tier
-          : undefined,
-    q: typeof search.q === "string" ? search.q.slice(0, 200) : undefined,
   }),
   head: () => ({
     meta: [
@@ -181,7 +116,6 @@ export const Route = createFileRoute("/")({
       context.queryClient.ensureQueryData(claimCountsQO),
       context.queryClient.ensureQueryData(diagramsQO),
       context.queryClient.ensureQueryData(contentItemsQO),
-      context.queryClient.ensureQueryData(claimsQO("direct-lake")),
     ]),
   component: Landing,
 });
@@ -200,18 +134,8 @@ function Landing() {
   const navigate = useNavigate({ from: "/" });
   const search = Route.useSearch();
   const selectedCapability = search.capability ?? "direct-lake";
-  const depth = search.depth ?? "all";
-  const tier = search.tier ?? "all";
-  const query = search.q ?? "";
   const setSelectedCapability = (capability: string) =>
     navigate({ search: (prev) => ({ ...prev, capability }) });
-  const setDepth = (value: number | "all") =>
-    navigate({ search: (prev) => ({ ...prev, depth: value }) });
-  const setTier = (value: number | "all") =>
-    navigate({ search: (prev) => ({ ...prev, tier: value }) });
-  const setQuery = (value: string) =>
-    navigate({ search: (prev) => ({ ...prev, q: value || undefined }) });
-  const { data: claims } = useSuspenseQuery(claimsQO(selectedCapability, depth, tier, query));
 
   const childTopics = useMemo(() => topics.filter((topic) => topic.parent_slug), [topics]);
   const selected = capabilities.find((capability) => capability.id === selectedCapability);
@@ -227,14 +151,20 @@ function Landing() {
     [feedItems, selectedTopic],
   );
 
-  const visibleClaims = claims;
-
-  const sourceCount = new Set(
-    claims
-      .filter((claim) => claim.capability_id === selectedCapability)
-      .map((claim: any) => claim.sources?.slug)
-      .filter(Boolean),
-  ).size;
+  // Featured slot: most-recently-updated content item with a featured diagram set, falling back
+  // to the most recent item regardless (contentItems is already ordered updated_at desc).
+  const featured = useMemo(() => {
+    const withDiagram = feedItems.find((item: any) => {
+      const parsed = presentationProfileSchema.safeParse(item.presentation_profile);
+      return parsed.success && parsed.data.featured_diagram;
+    });
+    return withDiagram ?? feedItems[0] ?? null;
+  }, [feedItems]);
+  const featuredDiagram = useMemo(() => {
+    if (!featured) return null;
+    const parsed = presentationProfileSchema.safeParse((featured as any).presentation_profile);
+    return parsed.success ? (parsed.data.featured_diagram ?? null) : null;
+  }, [featured]);
 
   const a = accent(selected?.accent);
   const diagramPath =
@@ -338,8 +268,8 @@ function Landing() {
                   {selectedTopic?.description ?? selected?.description}
                 </p>
                 <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
-                  <Stat label="Claims" value={visibleClaims.length} />
-                  <Stat label="Sources" value={sourceCount} />
+                  <Stat label="Claims" value={claimCounts[selectedCapability] ?? 0} />
+                  <Stat label="Content items" value={selectedFeed.length} />
                 </div>
                 {diagramPath && (
                   <div className="mt-4 overflow-hidden rounded-md border border-border bg-muted">
@@ -393,89 +323,34 @@ function Landing() {
 
         <section className="mx-auto grid max-w-7xl gap-6 px-6 py-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <div className="space-y-6">
-            <section className="rounded-md border border-border bg-card">
-              <div className="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                    <Filter className="h-4 w-4" />
-                    Claim workbench
-                  </div>
-                  <h2 className="mt-1 text-lg font-semibold">Source-grounded facts</h2>
+            {featured && (
+              <Link
+                to="/blogs/$kind/$slug"
+                params={{ kind: (featured as any).kind ?? "article", slug: (featured as any).slug }}
+                search={{ from: "home" }}
+                className="block rounded-md border border-border bg-card p-6 transition hover:border-teal-500/40"
+              >
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-300">
+                  Featured
                 </div>
-                <div className="flex w-full flex-wrap gap-2 md:w-auto">
-                  <select
-                    value={depth}
-                    aria-label="Filter by depth level"
-                    onChange={(event) =>
-                      setDepth(event.target.value === "all" ? "all" : Number(event.target.value))
-                    }
-                    className="min-h-10 flex-1 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground md:flex-none"
-                  >
-                    <option value="all">All depths</option>
-                    {[1, 2, 3, 4, 5].map((d) => (
-                      <option key={d} value={d}>
-                        L{d}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    value={tier}
-                    aria-label="Filter by trust tier"
-                    onChange={(event) =>
-                      setTier(event.target.value === "all" ? "all" : Number(event.target.value))
-                    }
-                    className="min-h-10 flex-1 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground md:flex-none"
-                  >
-                    <option value="all">All tiers</option>
-                    {[1, 2, 3, 4, 5, 6].map((t) => (
-                      <option key={t} value={t}>
-                        T{t}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="relative w-full md:w-44">
-                    <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                    <input
-                      value={query}
-                      onChange={(event) => setQuery(event.target.value)}
-                      placeholder="Filter claims"
-                      className="min-h-10 w-full rounded-md border border-border bg-card py-1.5 pl-7 pr-2 text-xs text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="divide-y divide-border">
-                {visibleClaims.map((claim: any) => (
-                  <div key={claim.id} className="p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <DepthBadge depth={claim.depth} />
-                      {claim.sources?.tier && <TierBadge tier={claim.sources.tier} />}
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        {claim.type}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                      {claim.text}
-                    </p>
-                    {claim.sources?.title && (
-                      <a
-                        href={claim.sources.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="mt-2 inline-block text-xs text-teal-300 hover:underline"
-                      >
-                        {claim.sources.title}
-                      </a>
-                    )}
-                  </div>
-                ))}
-                {visibleClaims.length === 0 && (
-                  <div className="p-8 text-center text-sm text-muted-foreground">
-                    No claims match the current filters.
-                  </div>
+                <h2 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">
+                  {(featured as any).title}
+                </h2>
+                {(featured as any).summary && (
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {(featured as any).summary}
+                  </p>
                 )}
-              </div>
-            </section>
+                {featuredDiagram && (
+                  <img
+                    src={`/diagrams/${featuredDiagram}.svg`}
+                    alt=""
+                    aria-hidden="true"
+                    className="mt-4 h-48 w-full rounded-md border border-border object-contain bg-muted p-2"
+                  />
+                )}
+              </Link>
+            )}
           </div>
 
           <aside className="space-y-6">

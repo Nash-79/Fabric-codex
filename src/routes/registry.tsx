@@ -1,12 +1,60 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery, queryOptions } from "@tanstack/react-query";
+import { Filter, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
-import { MaturityBadge } from "@/components/Badges";
-import { getRegistryCoverage, type RegistryCoverageRow } from "@/lib/atlas.functions";
+import { DepthBadge, MaturityBadge, TierBadge } from "@/components/Badges";
+import {
+  getRegistryCoverage,
+  listClaimsByCapability,
+  type RegistryCoverageRow,
+} from "@/lib/atlas.functions";
 import { accent, depthMeta } from "@/lib/fabric-theme";
 
+const claimsQO = (
+  capabilityId: string,
+  depth: number | "all" = "all",
+  tier: number | "all" = "all",
+  q = "",
+) =>
+  queryOptions({
+    queryKey: ["registry-claims", capabilityId, depth, tier, q],
+    queryFn: () =>
+      listClaimsByCapability({
+        data: {
+          capabilityId,
+          limit: 8,
+          depth: depth === "all" ? undefined : depth,
+          tier: tier === "all" ? undefined : tier,
+          q: q.trim() || undefined,
+        },
+      }),
+  });
+
+type RegistrySearch = {
+  capability?: string;
+  depth?: number | "all";
+  tier?: number | "all";
+  q?: string;
+};
+
 export const Route = createFileRoute("/registry")({
+  validateSearch: (search: Record<string, unknown>): RegistrySearch => ({
+    capability: typeof search.capability === "string" ? search.capability : undefined,
+    depth:
+      search.depth === "all"
+        ? "all"
+        : typeof search.depth === "number" && [1, 2, 3, 4, 5].includes(search.depth)
+          ? search.depth
+          : undefined,
+    tier:
+      search.tier === "all"
+        ? "all"
+        : typeof search.tier === "number" && [1, 2, 3, 4, 5, 6].includes(search.tier)
+          ? search.tier
+          : undefined,
+    q: typeof search.q === "string" ? search.q.slice(0, 200) : undefined,
+  }),
   head: () => ({
     meta: [
       { title: "Capability Registry — Fabric Atlas" },
@@ -36,6 +84,9 @@ function RegistryPage() {
   const [gapsOnly, setGapsOnly] = useState(false);
   const [q, setQ] = useState("");
 
+  const navigate = useNavigate({ from: "/registry" });
+  const claimSearch = Route.useSearch();
+
   const rows = useMemo(() => (data ?? []) as RegistryCoverageRow[], [data]);
 
   const filtered = useMemo(() => {
@@ -50,6 +101,23 @@ function RegistryPage() {
   }, [rows, maturity, gapsOnly, q]);
 
   const kpis = useMemo(() => summarize(rows), [rows]);
+  const selectedCapability = claimSearch.capability ?? rows[0]?.id;
+  const depth = claimSearch.depth ?? "all";
+  const tier = claimSearch.tier ?? "all";
+  const claimQuery = claimSearch.q ?? "";
+  const claims = useQuery({
+    ...claimsQO(selectedCapability ?? "", depth, tier, claimQuery),
+    enabled: !!selectedCapability,
+  });
+  const selectedRow = rows.find((r) => r.id === selectedCapability);
+  const setSelectedCapability = (capability: string) =>
+    navigate({ search: (prev) => ({ ...prev, capability }) });
+  const setDepth = (value: number | "all") =>
+    navigate({ search: (prev) => ({ ...prev, depth: value }) });
+  const setTier = (value: number | "all") =>
+    navigate({ search: (prev) => ({ ...prev, tier: value }) });
+  const setClaimQuery = (value: string) =>
+    navigate({ search: (prev) => ({ ...prev, q: value || undefined }) });
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -144,6 +212,108 @@ function RegistryPage() {
         </div>
 
         {!isLoading && filtered.length > 0 && <DepthHeatmap rows={filtered} />}
+
+        {!isLoading && rows.length > 0 && (
+          <section className="mt-10 rounded-md border border-border bg-card">
+            <div className="flex flex-col gap-3 border-b border-border p-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                  <Filter className="h-4 w-4" />
+                  Claim workbench
+                </div>
+                <h2 className="mt-1 text-lg font-semibold">Source-grounded facts</h2>
+              </div>
+              <div className="flex w-full flex-wrap gap-2 md:w-auto">
+                <select
+                  value={selectedCapability ?? ""}
+                  aria-label="Select capability"
+                  onChange={(event) => setSelectedCapability(event.target.value)}
+                  className="min-h-10 flex-1 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground md:flex-none"
+                >
+                  {rows.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={depth}
+                  aria-label="Filter by depth level"
+                  onChange={(event) =>
+                    setDepth(event.target.value === "all" ? "all" : Number(event.target.value))
+                  }
+                  className="min-h-10 flex-1 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground md:flex-none"
+                >
+                  <option value="all">All depths</option>
+                  {[1, 2, 3, 4, 5].map((d) => (
+                    <option key={d} value={d}>
+                      L{d}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={tier}
+                  aria-label="Filter by trust tier"
+                  onChange={(event) =>
+                    setTier(event.target.value === "all" ? "all" : Number(event.target.value))
+                  }
+                  className="min-h-10 flex-1 rounded-md border border-border bg-card px-2 py-1.5 text-xs text-foreground md:flex-none"
+                >
+                  <option value="all">All tiers</option>
+                  {[1, 2, 3, 4, 5, 6].map((t) => (
+                    <option key={t} value={t}>
+                      T{t}
+                    </option>
+                  ))}
+                </select>
+                <div className="relative w-full md:w-44">
+                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    value={claimQuery}
+                    onChange={(event) => setClaimQuery(event.target.value)}
+                    placeholder="Filter claims"
+                    className="min-h-10 w-full rounded-md border border-border bg-card py-1.5 pl-7 pr-2 text-xs text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
+              </div>
+            </div>
+            {selectedRow && (
+              <div className="border-b border-border px-4 py-2 text-xs text-muted-foreground">
+                Browsing claims for{" "}
+                <span className="font-medium text-foreground">{selectedRow.name}</span>
+              </div>
+            )}
+            <div className="divide-y divide-border">
+              {(claims.data ?? []).map((claim: any) => (
+                <div key={claim.id} className="p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <DepthBadge depth={claim.depth} />
+                    {claim.sources?.tier && <TierBadge tier={claim.sources.tier} />}
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      {claim.type}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{claim.text}</p>
+                  {claim.sources?.title && (
+                    <a
+                      href={claim.sources.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="mt-2 inline-block text-xs text-teal-600 hover:underline dark:text-teal-300"
+                    >
+                      {claim.sources.title}
+                    </a>
+                  )}
+                </div>
+              ))}
+              {claims.isFetched && (claims.data ?? []).length === 0 && (
+                <div className="p-8 text-center text-sm text-muted-foreground">
+                  No claims match the current filters.
+                </div>
+              )}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

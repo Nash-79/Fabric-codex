@@ -107,16 +107,20 @@ function blogRows() {
       const blog = mod.default;
       return {
         id: blog.slug ?? fileStem(path),
+        kind: "article" as const,
         slug: blog.slug ?? fileStem(path),
         topic_slug: blog.topic_slug ?? null,
+        capability_id: blog.capability_id ?? null,
         title: blog.title ?? blog.slug ?? fileStem(path),
         summary: blog.summary ?? "",
+        scenario: "",
         body_md: blog.body_md ?? "",
         status: "published",
         tags: blog.tags ?? [],
         depth_levels: blog.depth_levels ?? [],
         cited_source_keys: blog.cited_source_keys ?? [],
         presentation_profile: blog.presentation_profile ?? null,
+        lesson_meta: null,
         updated_at: "",
       };
     })
@@ -128,7 +132,10 @@ function designRows() {
     const design = mod.default;
     return {
       id: design.slug ?? fileStem(path),
+      kind: "design" as const,
       slug: design.slug ?? fileStem(path),
+      topic_slug: design.topic_slug ?? null,
+      capability_id: design.capability_id ?? null,
       title: design.title ?? design.slug ?? fileStem(path),
       summary: design.summary ?? "",
       scenario: design.scenario ?? "",
@@ -136,8 +143,10 @@ function designRows() {
       output_md: design.body_md ?? "",
       status: "published",
       tags: design.tags ?? [],
+      depth_levels: design.depth_levels ?? [],
       cited_source_keys: design.cited_source_keys ?? [],
       presentation_profile: design.presentation_profile ?? null,
+      lesson_meta: null,
       updated_at: "",
     };
   });
@@ -148,10 +157,15 @@ function lessonRows() {
     const lesson = mod.default;
     return {
       id: lesson.slug ?? fileStem(path),
+      kind: "lesson" as const,
       slug: lesson.slug ?? fileStem(path),
+      topic_slug: lesson.topic_slug ?? null,
       capability_id: lesson.capability_id ?? null,
       title: lesson.title ?? lesson.slug ?? fileStem(path),
+      summary: lesson.summary ?? "",
+      scenario: "",
       body_md: lesson.body_md ?? "",
+      tags: lesson.tags ?? [],
       depth_levels: lesson.depth_levels ?? [],
       cited_source_keys: lesson.cited_source_keys ?? [],
       presentation_profile: lesson.presentation_profile ?? null,

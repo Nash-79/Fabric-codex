@@ -17,6 +17,7 @@ import { ArticleBreadcrumb } from "@/components/ArticleBreadcrumb";
 import { CitationSidebar, type Citation } from "@/components/CitationSidebar";
 import { CitationDrawer } from "@/components/CitationDrawer";
 import { FavoriteButton } from "@/components/FavoriteButton";
+import { MarkLessonCompleteButton } from "@/components/MarkLessonCompleteButton";
 import { ContentFeedbackButton } from "@/components/ContentFeedbackButton";
 import { readOrCreateAnonToken, useHasSession } from "@/lib/use-feedback-identity";
 import { ContentFeedbackRail } from "@/components/ContentFeedbackRail";
@@ -244,6 +245,7 @@ export function ReaderShell({
                   </button>
                 )}
                 <FavoriteButton itemType={kind} itemKey={item.slug} />
+                {kind === "lesson" && <MarkLessonCompleteButton slug={item.slug} />}
                 <ContentFeedbackButton
                   contentItemId={item.id}
                   sections={headings}

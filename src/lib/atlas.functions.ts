@@ -136,18 +136,29 @@ export const getContentItem = createServerFn({ method: "GET" })
         };
       }
     } catch {
-      // Fall through to bundled content (article kind only -- designs/lessons have no bundled fallback).
+      // Fall through to bundled content -- each kind has its own bundled accessor with a
+      // slightly different field set (design carries scenario, lesson carries lesson_meta,
+      // neither carries the other's fields), so branch per kind rather than one generic call.
     }
-    if (data.kind === "article") {
-      const fallback = bundledContent.blog(data.slug);
-      if (fallback) {
-        return {
-          item: { ...fallback.blog, kind: "article" as const },
-          citations: fallback.citations,
-          capabilities: [] as any[],
-          diagrams: [] as any[],
-        };
-      }
+    const fallback =
+      data.kind === "article"
+        ? bundledContent.blog(data.slug)
+        : data.kind === "design"
+          ? bundledContent.design(data.slug)
+          : bundledContent.lesson(data.slug);
+    if (fallback) {
+      const item =
+        "blog" in fallback
+          ? fallback.blog
+          : "design" in fallback
+            ? fallback.design
+            : fallback.lesson;
+      return {
+        item: { ...item, kind: data.kind },
+        citations: fallback.citations,
+        capabilities: [] as any[],
+        diagrams: [] as any[],
+      };
     }
     throw new Error(`${data.kind} not found`);
   });
@@ -186,12 +197,15 @@ export const listContentItems = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     try {
       const sb = await admin();
-      // Deliberately omits presentation_profile/lesson_meta: nothing consumes them at list-view
-      // granularity yet (Editorial Experience Revamp Phase 1). Add them here once a later phase
-      // needs to filter/display by archetype in a list — this is a scoped deferral, not an oversight.
+      // presentation_profile/lesson_meta/scenario added for Phase 6's list-view card variation
+      // (archetype tags, featured-diagram thumbnails, lesson estimated time/objectives, design
+      // scenario subtext) -- all additive/existing columns, safe for every existing caller since
+      // none enumerate the whole row.
       let q = sb
         .from("content_items")
-        .select("id,kind,slug,title,summary,topic_slug,capability_id,depth_levels,tags,updated_at")
+        .select(
+          "id,kind,slug,title,summary,scenario,topic_slug,capability_id,depth_levels,tags,updated_at,presentation_profile,lesson_meta",
+        )
         .eq("status", "published")
         .eq("active", true)
         .order("updated_at", { ascending: false });
@@ -202,10 +216,12 @@ export const listContentItems = createServerFn({ method: "GET" })
       if (error) throw new Error(error.message);
       if (rows?.length) return rows;
     } catch {
-      // Fall through to bundled content for articles only.
+      // Fall through to bundled content, per kind.
     }
-    if (!data.kind || data.kind === "article") return bundledContent.blogs();
-    return [];
+    if (data.kind === "article") return bundledContent.blogs();
+    if (data.kind === "design") return bundledContent.designs();
+    if (data.kind === "lesson") return bundledContent.lessons();
+    return [...bundledContent.blogs(), ...bundledContent.designs(), ...bundledContent.lessons()];
   });
 
 // Deprecated thin wrappers — kept for one release so call sites not yet migrated to
