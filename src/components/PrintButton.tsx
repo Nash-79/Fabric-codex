@@ -44,7 +44,7 @@ export function PrintButton({
       type="button"
       onClick={onClick}
       disabled={busy}
-      className="no-print inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground disabled:opacity-60"
+      className="no-print inline-flex h-10 items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-border hover:text-foreground disabled:opacity-60"
       aria-label={label}
     >
       {busy ? (

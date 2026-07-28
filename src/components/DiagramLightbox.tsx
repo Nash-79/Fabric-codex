@@ -129,15 +129,29 @@ export function DiagramLightbox({
       >
         <div
           ref={triggerRef}
-          className="relative block w-full overflow-hidden rounded-2xl border border-border bg-card shadow-lg shadow-black/20 transition-colors hover:border-teal-500/50"
-          style={{ aspectRatio: `${aspectRatio}` }}
+          className={cn(
+            "relative block w-full rounded-2xl border border-border bg-card shadow-lg shadow-black/20 transition-colors hover:border-teal-500/50",
+            // The interactive branch's mobile layout (InteractiveDiagram's sm:hidden stack) grows
+            // to fit the diagram PLUS a variable-height detail panel below it -- locking this
+            // container to the SVG's own aspectRatio with overflow-hidden (fine for the static
+            // <img> fallback, which has nothing else to show) clips that panel's content on
+            // narrow viewports. Only the non-interactive branches get the fixed-ratio box below
+            // the sm: breakpoint; at sm: and up (InteractiveDiagram's side-by-side split) the
+            // fixed-ratio box is restored via diagram-figure-frame in styles.css.
+            svgMarkup && definition ? "diagram-figure-frame" : "overflow-hidden",
+          )}
+          style={
+            svgMarkup && definition
+              ? ({ "--diagram-aspect-ratio": aspectRatio } as React.CSSProperties)
+              : { aspectRatio: `${aspectRatio}` }
+          }
         >
           {inView && svgMarkup && definition ? (
             <InteractiveDiagram
               markup={svgMarkup}
               definition={definition}
               citations={citations}
-              className="h-full w-full"
+              className="h-auto w-full sm:h-full"
             />
           ) : inView ? (
             <img
@@ -354,7 +368,12 @@ function LightboxViewer({
                   citations={citations}
                   walkthroughActive={walkthroughOpen}
                   walkthroughStepIndex={walkthroughStepIndex}
-                  className="max-h-[100dvh] max-w-full select-none sm:max-h-[88dvh]"
+                  // Explicit width: TransformComponent's contentStyle is a flex container with no
+                  // basis for its child, so without a real width here the sm:grid-cols-[1fr_22rem]
+                  // split inside InteractiveDiagram has nothing definite to divide 1fr against and
+                  // can collapse the diagram column far smaller than the tooltip/detail panel next
+                  // to it — the bug behind the tooltip swallowing the diagram canvas.
+                  className="max-h-[100dvh] w-[min(92vw,72rem)] max-w-full select-none sm:max-h-[88dvh]"
                 />
               ) : (
                 <img

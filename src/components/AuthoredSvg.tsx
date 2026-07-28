@@ -65,12 +65,21 @@ export function AuthoredSvg({
     [citations],
   );
 
+  // Below this container width, a floating tooltip sized off the container itself has no safe
+  // room to sit next to the region it's describing (this is the bug behind the diagram's tooltip
+  // swallowing the whole canvas when InteractiveDiagram's side-by-side split gives the diagram a
+  // narrow column, e.g. inside DiagramLightbox's react-zoom-pan-pinch transform). Below the
+  // threshold, rely solely on click/tap/Enter's pinned DiagramDetailPanel (onSelectNode) instead
+  // of also trying to float a tooltip — the persistent panel already shows the same content.
+  const MIN_TOOLTIP_CONTAINER_WIDTH = 280;
+
   const activate = (element: SVGElement | null) => {
     const root = rootRef.current;
     const id = element?.dataset.nodeId;
     const node = id ? nodes.get(id) : undefined;
     if (!root || !element || !node) return;
     const rootBox = root.getBoundingClientRect();
+    if (rootBox.width < MIN_TOOLTIP_CONTAINER_WIDTH) return;
     const box = element.getBoundingClientRect();
     const rawLeft = box.left - rootBox.left + box.width / 2;
     const tooltipWidth = Math.min(352, Math.max(0, rootBox.width - 16));

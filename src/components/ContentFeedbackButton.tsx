@@ -131,7 +131,7 @@ export function ContentFeedbackButton({
                   ? "Give more feedback on this section"
                   : "Give feedback on this section"
               }
-              className={`no-print ml-1 inline-flex h-5 w-5 items-center justify-center rounded transition hover:text-teal-500 group-hover:opacity-100 group-focus-within:opacity-100 ${
+              className={`no-print feedback-inline-trigger ml-1 inline-flex h-5 w-5 items-center justify-center rounded transition hover:text-teal-500 group-hover:opacity-100 group-focus-within:opacity-100 ${
                 alreadyReported ? "text-teal-500/70" : "text-teal-500/40"
               } ${forceVisible ? "opacity-100" : "opacity-0"}`}
             >
