@@ -40,11 +40,14 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
   }),
   loader: async ({ context, params }) => {
     if (!KINDS.has(params.kind)) throw notFound();
+    // Siblings only power the prev/next nav at the bottom of the article — no reason to block
+    // first paint on them. Fire-and-forget prefetch; useSuspenseQuery below will pick it up
+    // from cache (or wait, if the user scrolls that far before it resolves).
+    context.queryClient.prefetchQuery(siblingsQO(params.kind, params.slug));
     try {
       const [item] = await Promise.all([
         context.queryClient.ensureQueryData(contentItemQO(params.kind, params.slug)),
         context.queryClient.ensureQueryData(topicsQO),
-        context.queryClient.ensureQueryData(siblingsQO(params.kind, params.slug)),
       ]);
       return item;
     } catch {
