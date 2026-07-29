@@ -435,15 +435,33 @@ function Landing() {
   );
 }
 
-function Metric({ icon: Icon, label, value }: { icon: any; label: string; value: number }) {
+function MetricLink({
+  to,
+  icon: Icon,
+  label,
+  value,
+}: {
+  to: string;
+  icon: any;
+  label: string;
+  value: number;
+}) {
   return (
-    <div className="rounded-md border border-border bg-card p-3">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Icon className="h-4 w-4" />
-        {label}
+    <Link
+      to={to as any}
+      aria-label={`${value} ${label} — view all`}
+      className="card-interactive group block rounded-md border border-border bg-card p-3"
+    >
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-2">
+          <Icon className="h-4 w-4" />
+          {label}
+        </span>
+        <ArrowRight className="h-3.5 w-3.5 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
       </div>
-      <div className="mt-2 text-2xl font-semibold">{value}</div>
-    </div>
+      <div className="mt-2 text-2xl font-semibold text-foreground">{value}</div>
+      <div className="mt-0.5 text-[10px] uppercase tracking-wider text-teal-300/70">View all</div>
+    </Link>
   );
 }
 
