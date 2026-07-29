@@ -184,8 +184,16 @@ function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
+      <UpdatesMarquee
+        articles={(contentItems ?? []).filter((i: any) => i.kind !== "lesson") as any}
+        sources={sources as any}
+        roadmap={(roadmap ?? []) as any}
+      />
       <main>
-        <section className="border-b border-border bg-card">
+        <section
+          className="border-b border-border bg-card"
+          style={{ backgroundImage: "var(--gradient-hero)" }}
+        >
           <div className="mx-auto grid max-w-7xl gap-8 px-6 py-10 lg:grid-cols-[360px_minmax(0,1fr)]">
             <div>
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
@@ -199,14 +207,21 @@ function Landing() {
                 Browse Microsoft Fabric by capability, inspect cited claims, open source-backed
                 articles, and jump into Advisor prompts grounded in the same registry.
               </p>
-              <div className="mt-6 grid grid-cols-3 gap-2">
-                <Metric icon={Network} label="Topics" value={childTopics.length} />
-                <Metric
+              <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <MetricLink to="/topics" icon={Network} label="Topics" value={childTopics.length} />
+                <MetricLink
+                  to="/blogs"
                   icon={BookOpen}
                   label="Articles"
                   value={(contentItems ?? []).filter((i: any) => i.kind === "article").length}
                 />
-                <Metric icon={Database} label="Sources" value={sources.length} />
+                <MetricLink to="/sources" icon={Database} label="Sources" value={sources.length} />
+                <MetricLink
+                  to="/roadmap"
+                  icon={Milestone}
+                  label="Roadmap"
+                  value={(roadmap ?? []).length}
+                />
               </div>
             </div>
 
