@@ -192,7 +192,12 @@ export const getContentSiblings = createServerFn({ method: "GET" })
 
 export const listContentItems = createServerFn({ method: "GET" })
   .validator(
-    (d: { kind?: "article" | "design" | "lesson"; topicSlug?: string; capabilityId?: string }) => d,
+    (d: {
+      kind?: "article" | "design" | "lesson";
+      topicSlug?: string;
+      capabilityId?: string;
+      limit?: number;
+    }) => d,
   )
   .handler(async ({ data }) => {
     try {
@@ -212,16 +217,22 @@ export const listContentItems = createServerFn({ method: "GET" })
       if (data.kind) q = q.eq("kind", data.kind);
       if (data.topicSlug) q = q.eq("topic_slug", data.topicSlug);
       if (data.capabilityId) q = q.eq("capability_id", data.capabilityId);
+      if (data.limit && data.limit > 0) q = q.limit(data.limit);
       const { data: rows, error } = await q;
       if (error) throw new Error(error.message);
       if (rows?.length) return rows;
     } catch {
       // Fall through to bundled content, per kind.
     }
-    if (data.kind === "article") return bundledContent.blogs();
-    if (data.kind === "design") return bundledContent.designs();
-    if (data.kind === "lesson") return bundledContent.lessons();
-    return [...bundledContent.blogs(), ...bundledContent.designs(), ...bundledContent.lessons()];
+    const bundled =
+      data.kind === "article"
+        ? bundledContent.blogs()
+        : data.kind === "design"
+          ? bundledContent.designs()
+          : data.kind === "lesson"
+            ? bundledContent.lessons()
+            : [...bundledContent.blogs(), ...bundledContent.designs(), ...bundledContent.lessons()];
+    return data.limit && data.limit > 0 ? bundled.slice(0, data.limit) : bundled;
   });
 
 // Deprecated thin wrappers — kept for one release so call sites not yet migrated to
