@@ -35,6 +35,10 @@ const contentItemsQO = queryOptions({
   queryKey: ["home-content-items"],
   queryFn: () => listContentItems({ data: {} }),
 });
+const roadmapQO = queryOptions({
+  queryKey: ["home-roadmap"],
+  queryFn: () => listRoadmapItems(),
+});
 
 // Short cards summarizing what each area offers — copy kept in step with
 // content/help/01-getting-started.md's "The pages" list, the single source of truth for page
@@ -118,6 +122,7 @@ export const Route = createFileRoute("/")({
       context.queryClient.ensureQueryData(claimCountsQO),
       context.queryClient.ensureQueryData(diagramsQO),
       context.queryClient.ensureQueryData(contentItemsQO),
+      context.queryClient.ensureQueryData(roadmapQO),
     ]),
   component: Landing,
 });
@@ -130,8 +135,9 @@ function Landing() {
     { data: claimCounts },
     { data: diagrams },
     { data: contentItems },
+    { data: roadmap },
   ] = useSuspenseQueries({
-    queries: [topicsQO, sourcesQO, capabilitiesQO, claimCountsQO, diagramsQO, contentItemsQO],
+    queries: [topicsQO, sourcesQO, capabilitiesQO, claimCountsQO, diagramsQO, contentItemsQO, roadmapQO],
   });
   const navigate = useNavigate({ from: "/" });
   const search = Route.useSearch();
