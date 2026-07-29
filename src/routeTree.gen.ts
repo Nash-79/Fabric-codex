@@ -26,6 +26,7 @@ import { Route as TopicsIndexRouteImport } from './routes/topics/index'
 import { Route as BlogsIndexRouteImport } from './routes/blogs/index'
 import { Route as TopicsSlugRouteImport } from './routes/topics/$slug'
 import { Route as RegistryIdRouteImport } from './routes/registry.$id'
+import { Route as DevPerfRouteImport } from './routes/dev.perf'
 import { Route as DevLogsRouteImport } from './routes/dev.logs'
 import { Route as DesignSlugRouteImport } from './routes/design.$slug'
 import { Route as ApiChatRouteImport } from './routes/api/chat'
@@ -125,6 +126,11 @@ const RegistryIdRoute = RegistryIdRouteImport.update({
   path: '/$id',
   getParentRoute: () => RegistryRoute,
 } as any)
+const DevPerfRoute = DevPerfRouteImport.update({
+  id: '/dev/perf',
+  path: '/dev/perf',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DevLogsRoute = DevLogsRouteImport.update({
   id: '/dev/logs',
   path: '/dev/logs',
@@ -220,6 +226,7 @@ export interface FileRoutesByFullPath {
   '/api/chat': typeof ApiChatRoute
   '/design/$slug': typeof DesignSlugRoute
   '/dev/logs': typeof DevLogsRoute
+  '/dev/perf': typeof DevPerfRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs/': typeof BlogsIndexRoute
@@ -252,6 +259,7 @@ export interface FileRoutesByTo {
   '/api/chat': typeof ApiChatRoute
   '/design/$slug': typeof DesignSlugRoute
   '/dev/logs': typeof DevLogsRoute
+  '/dev/perf': typeof DevPerfRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs': typeof BlogsIndexRoute
@@ -286,6 +294,7 @@ export interface FileRoutesById {
   '/api/chat': typeof ApiChatRoute
   '/design/$slug': typeof DesignSlugRoute
   '/dev/logs': typeof DevLogsRoute
+  '/dev/perf': typeof DevPerfRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs/': typeof BlogsIndexRoute
@@ -320,6 +329,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/design/$slug'
     | '/dev/logs'
+    | '/dev/perf'
     | '/registry/$id'
     | '/topics/$slug'
     | '/blogs/'
@@ -352,6 +362,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/design/$slug'
     | '/dev/logs'
+    | '/dev/perf'
     | '/registry/$id'
     | '/topics/$slug'
     | '/blogs'
@@ -385,6 +396,7 @@ export interface FileRouteTypes {
     | '/api/chat'
     | '/design/$slug'
     | '/dev/logs'
+    | '/dev/perf'
     | '/registry/$id'
     | '/topics/$slug'
     | '/blogs/'
@@ -417,6 +429,7 @@ export interface RootRouteChildren {
   ApiChatRoute: typeof ApiChatRoute
   DesignSlugRoute: typeof DesignSlugRoute
   DevLogsRoute: typeof DevLogsRoute
+  DevPerfRoute: typeof DevPerfRoute
   TopicsSlugRoute: typeof TopicsSlugRoute
   BlogsIndexRoute: typeof BlogsIndexRoute
   TopicsIndexRoute: typeof TopicsIndexRoute
@@ -549,6 +562,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/registry/$id'
       preLoaderRoute: typeof RegistryIdRouteImport
       parentRoute: typeof RegistryRoute
+    }
+    '/dev/perf': {
+      id: '/dev/perf'
+      path: '/dev/perf'
+      fullPath: '/dev/perf'
+      preLoaderRoute: typeof DevPerfRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/dev/logs': {
       id: '/dev/logs'
@@ -696,6 +716,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiChatRoute: ApiChatRoute,
   DesignSlugRoute: DesignSlugRoute,
   DevLogsRoute: DevLogsRoute,
+  DevPerfRoute: DevPerfRoute,
   TopicsSlugRoute: TopicsSlugRoute,
   BlogsIndexRoute: BlogsIndexRoute,
   TopicsIndexRoute: TopicsIndexRoute,
