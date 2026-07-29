@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { exportArticlePdf, type PdfMeta } from "@/lib/export-pdf";
+import type { PdfMeta } from "@/lib/export-pdf";
 
 /**
  * Downloads the article as a real PDF (jsPDF + html2canvas-pro) so diagrams,
@@ -28,6 +28,9 @@ export function PrintButton({
     }
     const dismiss = toast.loading("Building PDF…");
     try {
+      // Dynamic import — jspdf + html2canvas-pro (~500KB) only load when the reader
+      // actually clicks Download, not on every article page load.
+      const { exportArticlePdf } = await import("@/lib/export-pdf");
       await exportArticlePdf(article as HTMLElement, getMeta());
       toast.success("PDF downloaded", { id: dismiss });
     } catch (err) {

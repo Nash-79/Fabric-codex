@@ -32,8 +32,9 @@ const diagramsQO = queryOptions({
   queryFn: () => listDiagrams(),
 });
 const contentItemsQO = queryOptions({
-  queryKey: ["home-content-items"],
-  queryFn: () => listContentItems({ data: {} }),
+  queryKey: ["home-content-items", { limit: 40 }],
+  // Home only needs recent items for the feed + counts; a 40-row cap keeps the SSR payload small.
+  queryFn: () => listContentItems({ data: { limit: 40 } }),
 });
 const roadmapQO = queryOptions({
   queryKey: ["home-roadmap"],
@@ -115,6 +116,9 @@ export const Route = createFileRoute("/")({
     ],
   }),
   loader: ({ context }) =>
+    // All seven feed useSuspenseQueries below, so keep them awaited in parallel. The real
+    // wins are (a) the paginated contentItemsQO (limit: 40) that used to fetch every row,
+    // and (b) defaultPreload:"intent" on the router prefetching on hover.
     Promise.all([
       context.queryClient.ensureQueryData(topicsQO),
       context.queryClient.ensureQueryData(sourcesQO),

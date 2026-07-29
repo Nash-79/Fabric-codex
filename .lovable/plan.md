@@ -1,45 +1,56 @@
+## Performance review — what's slow and why
 
-## Goal
-Make the home page feel alive and the whole app feel more modern and slick, without touching editorial/curation logic.
+I audited the router, loaders, server functions, home page, and article route. The app is generally healthy (SSR + TanStack Query with a 5-minute `staleTime`, `scrollRestoration`, siblings prefetched), but there are a few concrete bottlenecks that account for most of the "long time to load" and "slow switching" feel.
 
-## 1. Home page (src/routes/index.tsx)
+### Findings
 
-**Mixed-feed marquee (new)**
-- New `src/components/UpdatesMarquee.tsx`: auto-scrolling horizontal strip just under the hero.
-- Data: merge already-loaded `contentItems` (newest 8), `sources` (newest 6), and `roadmap_items` (newest 6 via a new lightweight `listRecentRoadmap` server fn) into one time-ordered feed with a type chip (Article / Source / Roadmap).
-- CSS keyframe marquee (duplicated track for seamless loop), `pauses on hover/focus`, disabled under `prefers-reduced-motion`, arrow buttons for manual scroll fallback. Each item is a `<Link>` to its detail route.
+1. **Home page fetches 7 datasets serially-in-parallel before first paint.** `src/routes/index.tsx` `ensureQueryData`s topics, sources, capabilities, claim counts, diagrams, *all* content items, and roadmap — all blocking the render. `listContentItems({})` with no filter pulls every article/design/lesson row (with `presentation_profile` JSON) just to compute a count and a 5-item list.
+2. **`listContentItems` is called with `select("*")`-adjacent wide columns** and no pagination. On the home page and topic pages, only `id/kind/slug/title/summary/updated_at` are actually read — the extra JSON columns bloat the SSR payload and slow hydration.
+3. **No HTTP caching on public server functions.** `listTopics`, `listCapabilities`, `listSources`, `listRoadmapItems`, `listDiagrams`, `listContentItems` are pure public reads but return no `Cache-Control`, so every SSR hit and every client navigation re-queries Supabase.
+4. **Article route blocks on siblings.** `/blogs/$kind/$slug` awaits `getContentItem` + `topicsQO` + `getContentSiblings` together. Siblings are a "nice to have" for prev/next — they don't need to block first paint.
+5. **`ContentItemArticle` (579 lines, ships shiki/markdown/mermaid stack) is bundled into every route that imports it.** No `React.lazy` for the heavy renderers (mermaid, shiki highlighter, PDF export in `export-pdf.ts` with jspdf+html2canvas-pro). PDF export code is loaded eagerly with the article even though it's only used on click.
+6. **`UpdatesMarquee` animates on the home hero even when scrolled off-screen** and receives full article/source/roadmap arrays.
+7. **Router `defaultPreloadStaleTime: 60 * 1000`** but no `defaultPreload: "intent"` — hover-preload is off, so switching pages always waits for a fresh RPC round-trip.
+8. **No DB indexes verified** for `content_items(status, active, updated_at desc)` used by every list query, or `content_item_sources(content_item_id, position)`.
 
-**Clickable metric tiles**
-- Convert the three `<Metric>` cards (Topics / Articles / Sources) into `<Link>` tiles pointing to `/topics`, `/blogs`, `/sources`.
-- Add hover lift (`hover-scale`, ring accent), a small "View all →" affordance, and an `aria-label` describing the count + destination.
-- Add a fourth tile for Roadmap (count of active roadmap_items) linking to `/roadmap`.
+### Plan (grouped by impact)
 
-**Section polish**
-- Tighten hero rhythm, add a subtle gradient token (`--gradient-hero`) behind the hero band.
-- Featured card: add hover ring + arrow, keep existing layout.
-- "Recently published" list: add timestamp ("2d ago") and kind chip.
+**A. Cut home-page time-to-interactive**
+- Split home loader: `ensureQueryData` only for topics + capabilities + claim counts (spine). `prefetchQuery` (unawaited) for sources, diagrams, roadmap, content items so they stream in.
+- Add a paginated variant: `listContentItems({ limit: 20 })` for the home feed; keep the full list only where it's actually needed (blogs index).
+- Trim `listContentItems` default `select` to the fields the list views use; drop `presentation_profile`/`lesson_meta` from the list payload and add a separate `listFeaturedContentItems` for the featured card.
 
-## 2. App-wide modernization
+**B. Faster navigation between pages**
+- Enable `defaultPreload: "intent"` in `src/router.tsx` so hovering a link prefetches loader data.
+- Move `siblingsQO` out of the blocking `Promise.all` in `/blogs/$kind/$slug` (prefetch, don't await); render sibling nav with its own `Suspense` fallback so the article body paints immediately.
 
-**Code blocks with VS Code-style highlighting**
-- Add `shiki` (works in Workers, pure JS, no Node deps) with a small wrapper `src/lib/highlight.ts` using `bundledLanguages` limited to the languages we actually render (ts, tsx, js, json, sql, python, bash, yaml, md).
-- New `src/components/CodeBlock.tsx`: async-highlights on mount, renders theme `github-dark`/`github-light` matched to app theme, adds language badge + copy button, line numbers, wrap toggle.
-- Wire into `ContentItemArticle.tsx` markdown renderer so all `pre > code` blocks in articles/lessons/designs use it. Inline `code` keeps current style.
+**C. Smaller article bundle**
+- `React.lazy` for `AdvisorMermaidBlock`, `CodeBlock` (shiki), and the PDF/HTML export triggers inside `ContentItemArticle.tsx` / `PrintButton.tsx`. Wrap in `Suspense` with a lightweight placeholder.
+- Dynamic-import `jspdf` and `html2canvas-pro` inside the click handler in `src/lib/export-pdf.ts` (not at module top), so no reader pays for the PDF pipeline until they use it.
 
-**Slicker global polish (small, contained)**
-- `src/styles.css`: add `--gradient-hero`, `--shadow-card-hover`, and a `.card-interactive` utility (border + hover ring + shadow transition). Apply to home cards, sibling nav, featured card.
-- Add `animate-fade-in` to route root on `/` for first paint.
-- Smooth scroll + underline-on-hover (`story-link`) for inline article links.
+**D. Cache public reads at the edge**
+- Add `Cache-Control: public, s-maxage=60, stale-while-revalidate=600` (via `setResponseHeaders` inside each handler) to `listTopics`, `listCapabilities`, `listSources`, `listRoadmapItems`, `listDiagrams`, `listClaimCountsByCapability`, and the default `listContentItems` shape. Keep authenticated/admin reads untouched.
 
-## 3. Server additions
-- `listRecentRoadmap({ limit })` in `src/lib/atlas.functions.ts` (public read, uses existing `roadmap_items` RLS).
-- Nothing else server-side.
+**E. DB indexes (one migration)**
+- `create index if not exists content_items_published_updated_idx on content_items (status, active, updated_at desc) where status='published' and active=true;`
+- `create index if not exists content_item_sources_item_pos_idx on content_item_sources (content_item_id, position);`
+- Verify existing indexes on `topics(parent_slug, sort_order)` and `content_items(topic_slug)` / `(capability_id)`; add any that are missing.
 
-## Out of scope
-- Editorial pipeline, validation, publishing, RSS, security policies.
-- Route restructure or new pages.
+**F. Small polish**
+- Pause `UpdatesMarquee` animation via `IntersectionObserver` when off-screen.
+- Add `loading="lazy"` + `decoding="async"` + fixed `width`/`height` to the home featured diagram `<img>` and capability preview `<img>` to remove residual CLS.
 
-## Technical notes
-- Marquee is CSS-only animation on a duplicated flex track; JS only for pause-on-hover state and reduced-motion detection.
-- Shiki bundle stays small by importing only the needed languages from `shiki/langs` and two themes; highlight runs in an effect so SSR ships the raw `<pre>` fallback.
-- All new tokens are semantic (added to `:root` and `.dark`); no hardcoded colors.
+### Verification
+
+- Playwright: cold-load `/`, `/blogs`, and one long article (`/blogs/article/spark-sql-expert`); record `performance.timing` (TTFB, DCL, LCP) before/after.
+- Bundle: run `vite build` and diff the article chunk size before/after lazy splits.
+- Network: confirm `Cache-Control` headers on the six public server functions.
+- Supabase: `explain analyze` the two indexed queries.
+
+### Out of scope (call out, don't do)
+
+- No visual redesign, no copy changes, no auth/RLS changes.
+- Won't touch generated Supabase clients or `src/routeTree.gen.ts`.
+- PDF/HTML output shape unchanged — only *when* the code loads changes.
+
+Approve and I'll implement A–F in that order, verifying after each group.
