@@ -8,11 +8,16 @@ const KINDS = new Set(["article", "design", "lesson"]);
 
 type BlogDetailSearch = { from?: string; fromSlug?: string; q?: string };
 
+// Article bodies barely change during a session — cache for 30 min so returning
+// to a previously-read article (or Prev/Next navigation) hydrates instantly
+// from memory instead of re-fetching.
 const contentItemQO = (kind: string, slug: string) =>
   queryOptions({
     queryKey: ["content-item", kind, slug],
     queryFn: () =>
       getContentItem({ data: { kind: kind as "article" | "design" | "lesson", slug } }),
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
 const siblingsQO = (kind: string, slug: string) =>
@@ -20,9 +25,16 @@ const siblingsQO = (kind: string, slug: string) =>
     queryKey: ["content-siblings", kind, slug],
     queryFn: () =>
       getContentSiblings({ data: { kind: kind as "article" | "design" | "lesson", slug } }),
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 
-const topicsQO = queryOptions({ queryKey: ["topics"], queryFn: () => listTopics() });
+const topicsQO = queryOptions({
+  queryKey: ["topics"],
+  queryFn: () => listTopics(),
+  staleTime: 30 * 60 * 1000,
+});
+
 
 export const Route = createFileRoute("/blogs/$kind/$slug")({
   validateSearch: (search: Record<string, unknown>): BlogDetailSearch => ({
