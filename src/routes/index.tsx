@@ -115,21 +115,19 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
-  loader: ({ context }) => {
-    // Block first paint on the spine only (topics + capabilities + claim counts + the
-    // recent-content feed). Sources / diagrams / roadmap stream in via prefetch — the
-    // useSuspenseQueries below still sees them because they resolve well before hydration
-    // in practice, and even a cold miss just delays the marquee/aside, not the fold.
-    return Promise.all([
+  loader: ({ context }) =>
+    // All seven feed useSuspenseQueries below, so keep them awaited in parallel. The real
+    // wins are (a) the paginated contentItemsQO (limit: 40) that used to fetch every row,
+    // and (b) defaultPreload:"intent" on the router prefetching on hover.
+    Promise.all([
       context.queryClient.ensureQueryData(topicsQO),
+      context.queryClient.ensureQueryData(sourcesQO),
       context.queryClient.ensureQueryData(capabilitiesQO),
       context.queryClient.ensureQueryData(claimCountsQO),
+      context.queryClient.ensureQueryData(diagramsQO),
       context.queryClient.ensureQueryData(contentItemsQO),
-      context.queryClient.prefetchQuery(sourcesQO),
-      context.queryClient.prefetchQuery(diagramsQO),
-      context.queryClient.prefetchQuery(roadmapQO),
-    ]);
-  },
+      context.queryClient.ensureQueryData(roadmapQO),
+    ]),
   component: Landing,
 });
 
