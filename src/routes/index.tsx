@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQueries, queryOptions } from "@tanstack/react-query";
-import { Bot, BookOpen, Database, FileText, Milestone, Network } from "lucide-react";
+import { ArrowRight, Bot, BookOpen, Database, FileText, Milestone, Network } from "lucide-react";
 import { useMemo } from "react";
 import { FabricMark } from "@/components/FabricMark";
 import { SiteHeader } from "@/components/SiteHeader";
+import { UpdatesMarquee } from "@/components/UpdatesMarquee";
 import {
   listCapabilities,
   listClaimCountsByCapability,
@@ -11,6 +12,7 @@ import {
   listSources,
   listTopics,
   listContentItems,
+  listRoadmapItems,
 } from "@/lib/atlas.functions";
 import { accent } from "@/lib/fabric-theme";
 import { presentationProfileSchema } from "@/lib/content-presentation";
