@@ -277,6 +277,40 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const router = useRouter();
+
+  useEffect(() => {
+    let cancelled = false;
+    // Async import so the tracker + observers never enter the SSR graph.
+    void import("../lib/perf-tracker").then((m) => {
+      if (cancelled) return;
+      m.installPerfTracker();
+      // Route load timings via router lifecycle.
+      const starts = new Map<string, number>();
+      const unsubStart = router.subscribe("onBeforeNavigate", (e) => {
+        starts.set(e.toLocation.href, performance.now());
+      });
+      const unsubEnd = router.subscribe("onResolved", (e) => {
+        const t0 = starts.get(e.toLocation.href);
+        if (t0 !== undefined) {
+          starts.delete(e.toLocation.href);
+          m.recordPerf({
+            kind: "route",
+            name: e.toLocation.pathname,
+            ms: Math.round(performance.now() - t0),
+          });
+        }
+      });
+      (window as any).__faPerfCleanup = () => {
+        unsubStart();
+        unsubEnd();
+      };
+    });
+    return () => {
+      cancelled = true;
+      (window as any).__faPerfCleanup?.();
+    };
+  }, [router]);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -286,3 +320,4 @@ function RootComponent() {
     </QueryClientProvider>
   );
 }
+
