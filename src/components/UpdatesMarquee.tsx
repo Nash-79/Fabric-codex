@@ -68,8 +68,10 @@ export function UpdatesMarquee({
   }, [articles, sources, roadmap]);
 
   const trackRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
   const [paused, setPaused] = useState(false);
   const [reduced, setReduced] = useState(false);
+  const [inView, setInView] = useState(true);
 
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -79,11 +81,23 @@ export function UpdatesMarquee({
     return () => mq.removeEventListener("change", on);
   }, []);
 
+  // Don't burn a CSS animation frame budget while the marquee is scrolled off-screen.
+  useEffect(() => {
+    const el = sectionRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([entry]) => setInView(entry.isIntersecting), {
+      rootMargin: "50px",
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
   if (items.length === 0) return null;
-  const shouldAnimate = !reduced && !paused;
+  const shouldAnimate = !reduced && !paused && inView;
 
   return (
     <section
+      ref={sectionRef}
       className="border-b border-border bg-card/60 backdrop-blur-sm"
       aria-label="Latest updates"
     >
