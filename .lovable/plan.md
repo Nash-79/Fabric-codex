@@ -1,50 +1,45 @@
-## Modernise the Advisor with AI Elements
 
-Rebuild the Advisor chat surface on top of the AI Elements primitives (per the chat-ui-composition contract) and fix the mobile/desktop topology so the composer, transcript, and header behave like a real chat app instead of a stack of scrolling cards.
+## Goal
+Make the home page feel alive and the whole app feel more modern and slick, without touching editorial/curation logic.
 
-### Problems today
-- Mobile: the header (title + paragraph + 5 chip row + 3 chip row) eats the top ~40% of the viewport, pushing starter cards and the composer below the fold. Because the transcript is a middle scroll pane, the empty starter state opens *pre-scrolled*, cutting off the first card.
-- Composer sits inside its own footer band with a big empty gap above it; visually detached from the transcript.
-- Chat header mixes hero copy, model selector, tier chip, sources toggle, clear, history — no hierarchy, wraps unpredictably.
-- No AI Elements components used (Conversation, Message, MessageContent, MessageResponse, PromptInput, Shimmer, Tool). Custom `AdvisorComposer` / `AdvisorMessage` re-implement AI Elements badly.
-- Assistant messages render inside a bordered card (bubble) — contract says no background on assistant messages.
+## 1. Home page (src/routes/index.tsx)
 
-### Plan
+**Mixed-feed marquee (new)**
+- New `src/components/UpdatesMarquee.tsx`: auto-scrolling horizontal strip just under the hero.
+- Data: merge already-loaded `contentItems` (newest 8), `sources` (newest 6), and `roadmap_items` (newest 6 via a new lightweight `listRecentRoadmap` server fn) into one time-ordered feed with a type chip (Article / Source / Roadmap).
+- CSS keyframe marquee (duplicated track for seamless loop), `pauses on hover/focus`, disabled under `prefers-reduced-motion`, arrow buttons for manual scroll fallback. Each item is a `<Link>` to its detail route.
 
-1. **Install AI Elements** (`bun x ai-elements@latest add conversation message prompt-input shimmer`). Keep existing markdown/code/mermaid renderers by passing them to `MessageResponse` / message content children.
+**Clickable metric tiles**
+- Convert the three `<Metric>` cards (Topics / Articles / Sources) into `<Link>` tiles pointing to `/topics`, `/blogs`, `/sources`.
+- Add hover lift (`hover-scale`, ring accent), a small "View all →" affordance, and an `aria-label` describing the count + destination.
+- Add a fourth tile for Roadmap (count of active roadmap_items) linking to `/roadmap`.
 
-2. **Collapse the header into a compact toolbar.** One row only:
-   - Left: sidebar toggle + "Ask Fabric Atlas" title (truncates on mobile).
-   - Right: model select (icon+label, condensed), Sources toggle, overflow menu (Clear, tier badge, retrieval-status dot).
-   - Move the hero paragraph ("Answers retrieve verified claims…") into the empty state next to the starter cards, not the persistent header. Move `RAG over all Atlas content` / `Ready` / contextSummary chips into a slim status strip *inside* the empty state, and into the `Shimmer` line while streaming — not always-visible.
-   - Result on mobile: header height drops from ~260px to ~56px, starter cards visible on first paint.
+**Section polish**
+- Tighten hero rhythm, add a subtle gradient token (`--gradient-hero`) behind the hero band.
+- Featured card: add hover ring + arrow, keep existing layout.
+- "Recently published" list: add timestamp ("2d ago") and kind chip.
 
-3. **Rebuild the chat surface with AI Elements.**
-   - `Conversation` + `ConversationContent` + `ConversationScrollButton` replace the custom scrollRef + smooth-scroll effect.
-   - `Message` + `MessageContent` + `MessageResponse` for user/assistant rendering. Assistant: no background, plain foreground on page. User: filled bubble using `primary` / `primary-foreground` tokens.
-   - `Shimmer` ("Thinking…", "Retrieving claims…") replaces the custom three-dot pulse and the "Retrieving verified claims…" card.
-   - Keep `AdvisorMessage`'s citation footnotes/actions but render them through `MessageContent` children so copy/retry sit as message actions.
+## 2. App-wide modernization
 
-4. **Rebuild the composer with `PromptInput`.**
-   - `PromptInput` → `PromptInputTextarea` → `PromptInputFooter` (justify-end) → `PromptInputSubmit` (icon-sm) with `status`/`disabled`/`onStop` wired from `useChat`.
-   - Remove the outer bordered footer band; float the composer directly under the transcript with `max-w-3xl` centering and safe-area bottom padding.
-   - Focus textarea on mount, after send, and after switching threads.
+**Code blocks with VS Code-style highlighting**
+- Add `shiki` (works in Workers, pure JS, no Node deps) with a small wrapper `src/lib/highlight.ts` using `bundledLanguages` limited to the languages we actually render (ts, tsx, js, json, sql, python, bash, yaml, md).
+- New `src/components/CodeBlock.tsx`: async-highlights on mount, renders theme `github-dark`/`github-light` matched to app theme, adds language badge + copy button, line numbers, wrap toggle.
+- Wire into `ContentItemArticle.tsx` markdown renderer so all `pre > code` blocks in articles/lessons/designs use it. Inline `code` keeps current style.
 
-5. **Sources panel + sidebar polish (topology only, no behavior change).**
-   - Keep the three-column shell `[sidebar | transcript | sources]`, but make the transcript column a real flex column with the composer as its last child so there is no floating footer band.
-   - Use `grid-cols-[minmax(0,1fr)_auto]` for the toolbar row per responsive-layout-patterns; `min-w-0` on the title cell, `shrink-0` on controls.
-   - Mobile: sources panel becomes a `Sheet` (right) triggered by the Sources button; drop the desktop grid switch on small screens.
+**Slicker global polish (small, contained)**
+- `src/styles.css`: add `--gradient-hero`, `--shadow-card-hover`, and a `.card-interactive` utility (border + hover ring + shadow transition). Apply to home cards, sibling nav, featured card.
+- Add `animate-fade-in` to route root on `/` for first paint.
+- Smooth scroll + underline-on-hover (`story-link`) for inline article links.
 
-6. **Empty state redesign.**
-   - Centered card stack: agent identity (already-generated Fabric mark, not `Sparkles`), one-line pitch, 2×2 starter grid, tiny "grounded in verified claims" caption. All fits above the fold on 430px.
+## 3. Server additions
+- `listRecentRoadmap({ limit })` in `src/lib/atlas.functions.ts` (public read, uses existing `roadmap_items` RLS).
+- Nothing else server-side.
 
-### Technical notes
-- No API/route changes. `/api/chat`, `useChat`, transport, thread storage all unchanged.
-- `AdvisorComposer`, `AdvisorMessage` become thin wrappers over AI Elements primitives; delete the custom textarea auto-resize and pulse-dot code once `PromptInputTextarea` / `Shimmer` are in.
-- Preserve existing `AdvisorSourcePanel`, `AdvisorMermaidBlock`, `AdvisorCodeBlock`, citation logic, thread history, and localStorage keys.
-- Type-check with `bunx tsgo --noEmit`; verify with mobile (430) + desktop (1280) screenshots that (a) starter cards visible on first paint, (b) composer sits flush at the bottom with no empty band, (c) assistant messages have no bubble background, (d) user bubble uses primary/primary-foreground.
+## Out of scope
+- Editorial pipeline, validation, publishing, RSS, security policies.
+- Route restructure or new pages.
 
-### Out of scope
-- Backend / retrieval / model list changes.
-- Thread persistence shape (stays localStorage-per-thread as today).
-- Sources panel content redesign (only its container becomes a Sheet on mobile).
+## Technical notes
+- Marquee is CSS-only animation on a duplicated flex track; JS only for pause-on-hover state and reduced-motion detection.
+- Shiki bundle stays small by importing only the needed languages from `shiki/langs` and two themes; highlight runs in an effect so SSR ships the raw `<pre>` fallback.
+- All new tokens are semantic (added to `:root` and `.dark`); no hardcoded colors.

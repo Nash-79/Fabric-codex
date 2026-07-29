@@ -1,9 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQueries, queryOptions } from "@tanstack/react-query";
-import { Bot, BookOpen, Database, FileText, Milestone, Network } from "lucide-react";
+import { ArrowRight, Bot, BookOpen, Database, FileText, Milestone, Network } from "lucide-react";
 import { useMemo } from "react";
 import { FabricMark } from "@/components/FabricMark";
 import { SiteHeader } from "@/components/SiteHeader";
+import { UpdatesMarquee } from "@/components/UpdatesMarquee";
 import {
   listCapabilities,
   listClaimCountsByCapability,
@@ -11,6 +12,7 @@ import {
   listSources,
   listTopics,
   listContentItems,
+  listRoadmapItems,
 } from "@/lib/atlas.functions";
 import { accent } from "@/lib/fabric-theme";
 import { presentationProfileSchema } from "@/lib/content-presentation";
@@ -32,6 +34,10 @@ const diagramsQO = queryOptions({
 const contentItemsQO = queryOptions({
   queryKey: ["home-content-items"],
   queryFn: () => listContentItems({ data: {} }),
+});
+const roadmapQO = queryOptions({
+  queryKey: ["home-roadmap"],
+  queryFn: () => listRoadmapItems(),
 });
 
 // Short cards summarizing what each area offers — copy kept in step with
@@ -116,6 +122,7 @@ export const Route = createFileRoute("/")({
       context.queryClient.ensureQueryData(claimCountsQO),
       context.queryClient.ensureQueryData(diagramsQO),
       context.queryClient.ensureQueryData(contentItemsQO),
+      context.queryClient.ensureQueryData(roadmapQO),
     ]),
   component: Landing,
 });
@@ -128,8 +135,9 @@ function Landing() {
     { data: claimCounts },
     { data: diagrams },
     { data: contentItems },
+    { data: roadmap },
   ] = useSuspenseQueries({
-    queries: [topicsQO, sourcesQO, capabilitiesQO, claimCountsQO, diagramsQO, contentItemsQO],
+    queries: [topicsQO, sourcesQO, capabilitiesQO, claimCountsQO, diagramsQO, contentItemsQO, roadmapQO],
   });
   const navigate = useNavigate({ from: "/" });
   const search = Route.useSearch();
@@ -176,8 +184,16 @@ function Landing() {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
+      <UpdatesMarquee
+        articles={(contentItems ?? []).filter((i: any) => i.kind !== "lesson") as any}
+        sources={sources as any}
+        roadmap={(roadmap ?? []) as any}
+      />
       <main>
-        <section className="border-b border-border bg-card">
+        <section
+          className="border-b border-border bg-card"
+          style={{ backgroundImage: "var(--gradient-hero)" }}
+        >
           <div className="mx-auto grid max-w-7xl gap-8 px-6 py-10 lg:grid-cols-[360px_minmax(0,1fr)]">
             <div>
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
@@ -191,14 +207,21 @@ function Landing() {
                 Browse Microsoft Fabric by capability, inspect cited claims, open source-backed
                 articles, and jump into Advisor prompts grounded in the same registry.
               </p>
-              <div className="mt-6 grid grid-cols-3 gap-2">
-                <Metric icon={Network} label="Topics" value={childTopics.length} />
-                <Metric
+              <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <MetricLink to="/topics" icon={Network} label="Topics" value={childTopics.length} />
+                <MetricLink
+                  to="/blogs"
                   icon={BookOpen}
                   label="Articles"
                   value={(contentItems ?? []).filter((i: any) => i.kind === "article").length}
                 />
-                <Metric icon={Database} label="Sources" value={sources.length} />
+                <MetricLink to="/sources" icon={Database} label="Sources" value={sources.length} />
+                <MetricLink
+                  to="/roadmap"
+                  icon={Milestone}
+                  label="Roadmap"
+                  value={(roadmap ?? []).length}
+                />
               </div>
             </div>
 
@@ -412,15 +435,33 @@ function Landing() {
   );
 }
 
-function Metric({ icon: Icon, label, value }: { icon: any; label: string; value: number }) {
+function MetricLink({
+  to,
+  icon: Icon,
+  label,
+  value,
+}: {
+  to: string;
+  icon: any;
+  label: string;
+  value: number;
+}) {
   return (
-    <div className="rounded-md border border-border bg-card p-3">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Icon className="h-4 w-4" />
-        {label}
+    <Link
+      to={to as any}
+      aria-label={`${value} ${label} — view all`}
+      className="card-interactive group block rounded-md border border-border bg-card p-3"
+    >
+      <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-2">
+          <Icon className="h-4 w-4" />
+          {label}
+        </span>
+        <ArrowRight className="h-3.5 w-3.5 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
       </div>
-      <div className="mt-2 text-2xl font-semibold">{value}</div>
-    </div>
+      <div className="mt-2 text-2xl font-semibold text-foreground">{value}</div>
+      <div className="mt-0.5 text-[10px] uppercase tracking-wider text-teal-300/70">View all</div>
+    </Link>
   );
 }
 
