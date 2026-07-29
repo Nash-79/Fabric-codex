@@ -29,6 +29,29 @@ import type { AuthoredDiagram } from "@/diagrams/types";
 // re-run the reflow after decode.
 const ratioCache = new Map<string, number>();
 
+// Mirrors the exact breakpoint InteractiveDiagram's own layout switches on (Tailwind `sm:`,
+// 640px) -- the side-by-side split kicks in there, so the sizing math here must switch at the
+// same point or the two disagree about how much width the sidebar needs.
+const SIDE_BY_SIDE_QUERY = "(min-width: 640px)";
+// InteractiveDiagram's sm: grid is `grid-cols-[1fr_22rem] gap-6` -- keep these two in sync with
+// that literal if it ever changes.
+const SIDEBAR_REM = 22;
+const GAP_REM = 1.5;
+
+function useSideBySideDiagram() {
+  const [sideBySide, setSideBySide] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(SIDE_BY_SIDE_QUERY).matches,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(SIDE_BY_SIDE_QUERY);
+    const onChange = () => setSideBySide(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
+  return sideBySide;
+}
+
 function ratioFromSvg(markup?: string) {
   if (!markup) return null;
   const match = /<svg\b[^>]*\bviewBox=["']\s*[-.\d]+\s+[-.\d]+\s+([.\d]+)\s+([.\d]+)\s*["']/i.exec(
@@ -122,7 +145,14 @@ export function DiagramLightbox({
         id={figId}
         className={cn("not-prose article-figure group my-10 scroll-mt-24", layoutClass)}
         style={
-          { contentVisibility: "auto", containIntrinsicSize: `600px auto` } as React.CSSProperties
+          {
+            contentVisibility: "auto",
+            containIntrinsicSize: `600px auto`,
+            // The diagram-figure-frame descendant's height (styles.css) is a cqw-based calc that
+            // needs an ancestor to query -- see the comment on that div below for why it can't be
+            // the container itself.
+            containerType: "inline-size",
+          } as React.CSSProperties
         }
         aria-labelledby={captionText && captionId ? captionId : undefined}
         aria-label={!captionText ? alt || "Diagram" : undefined}
@@ -137,7 +167,11 @@ export function DiagramLightbox({
             // <img> fallback, which has nothing else to show) clips that panel's content on
             // narrow viewports. Only the non-interactive branches get the fixed-ratio box below
             // the sm: breakpoint; at sm: and up (InteractiveDiagram's side-by-side split) the
-            // fixed-ratio box is restored via diagram-figure-frame in styles.css.
+            // fixed-ratio box is restored via diagram-figure-frame in styles.css. That frame's
+            // height is a cqw-based calc (styles.css) that must query an ANCESTOR's inline size --
+            // container-type and a cqw-based height on the very same element is a self-referential
+            // query Chromium silently miscomputes (observed ballooning to ~2x the correct height)
+            // -- so this figure (one level up) carries the container type instead.
             svgMarkup && definition ? "diagram-figure-frame" : "overflow-hidden",
           )}
           style={
@@ -274,6 +308,30 @@ function LightboxViewer({
   const hasWalkthrough = Boolean(definition?.walkthrough.length);
   const walkthroughStep = definition?.walkthrough[walkthroughStepIndex];
   const walkthroughTotal = definition?.walkthrough.length ?? 0;
+  const sideBySide = useSideBySideDiagram();
+  const [rootHeight, setRootHeight] = useState(0);
+
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const height = entries[0]?.contentRect.height;
+      if (height) setRootHeight(height);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // The box's width is `height * aspectRatio` (see the inline style below) -- at sm: and up,
+  // InteractiveDiagram splits that width into a 1fr diagram column plus a FIXED 22rem sidebar
+  // and 1.5rem gap, so sizing the box off the bare SVG ratio leaves no room for the sidebar
+  // without shrinking the diagram. Inflate the ratio by the sidebar+gap's pixel width (derived
+  // from the container's actual rendered height) so the 1fr column keeps ~aspectRatio and the
+  // sidebar gets genuinely extra width instead of carving it out of the diagram's.
+  const remPx = 16;
+  const sidebarPx = (SIDEBAR_REM + GAP_REM) * remPx;
+  const effectiveRatio =
+    sideBySide && rootHeight > 0 ? aspectRatio + sidebarPx / rootHeight : aspectRatio;
 
   function exitWalkthrough() {
     onWalkthroughOpenChange(false);
@@ -375,9 +433,17 @@ function LightboxViewer({
                 // the tooltip/detail panel next to it -- the tooltip-swallows-canvas bug), and
                 // AuthoredSvg's own h-full (and its [&>svg]:h-full rule) resolves to nothing, so
                 // the SVG renders at its natural/viewBox size with dead space around it.
+                //
+                // At sm: and up, InteractiveDiagram renders the SVG next to a FIXED 22rem detail
+                // sidebar plus the grid's 1.5rem (gap-6) gutter, not the bare SVG alone -- sizing
+                // this box off `aspectRatio` alone starves the diagram column to make room for
+                // that sidebar inside a box only ever shaped for the SVG by itself. effectiveRatio
+                // below inflates the ratio by the sidebar's share so the 1fr diagram column still
+                // renders at (approximately) the SVG's own aspect ratio, with the sidebar getting
+                // genuinely extra width rather than carved out of the diagram's.
                 <div
-                  className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] sm:max-h-[calc(88dvh-2rem)] sm:max-w-[min(92vw,72rem)]"
-                  style={{ aspectRatio, width: "auto", height: "100%" }}
+                  className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] sm:max-h-[calc(88dvh-2rem)] sm:max-w-[min(94vw,84rem)]"
+                  style={{ aspectRatio: effectiveRatio, width: "auto", height: "100%" }}
                 >
                   <InteractiveDiagram
                     markup={svgMarkup}

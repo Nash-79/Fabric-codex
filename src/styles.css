@@ -945,11 +945,22 @@
 /* Inline interactive diagram figure frame (DiagramLightbox.tsx). Below the sm: breakpoint,
    InteractiveDiagram stacks the SVG and a variable-height detail panel — no fixed aspect ratio,
    no clipping, so tapping a node can show its full detail. At sm: and up (InteractiveDiagram's
-   side-by-side split), the frame locks to the diagram's own aspect ratio, matching the static
-   <img> fallback's sizing. */
+   side-by-side split renders the SVG next to a FIXED 22rem detail sidebar plus the grid's 1.5rem
+   gap-6 gutter), the frame's width is fixed (fills the article column) and its height must derive
+   from the DIAGRAM COLUMN's width only -- i.e. the frame's own width minus the sidebar+gap --
+   divided by the SVG's own aspect ratio. Plain `aspect-ratio` on the whole frame sizes height off
+   the frame's FULL width (SVG + sidebar together), leaving the diagram column shorter than its
+   own ratio calls for and squeezed by the sidebar's fixed width instead of the sidebar getting
+   genuinely extra room. A `height: calc(100% - ...)` can't reference "my own width" (percentages
+   in `height` resolve against the parent's height, not this element's width) -- container query
+   units (`cqw`) do resolve against an ancestor's inline size instead. The container MUST be a
+   different element than the one being sized: `container-type` and a `cqw`-based `height` on the
+   SAME element is a self-referential size query that Chromium silently falls back on (observed
+   ballooning to ~2x the correct height rather than erroring), so the container lives on the
+   parent <figure> (DiagramLightbox.tsx), one level up from `.diagram-figure-frame`. */
 @media (min-width: 640px) {
   .diagram-figure-frame {
-    aspect-ratio: var(--diagram-aspect-ratio);
+    height: calc((100cqw - 22rem - 1.5rem) / var(--diagram-aspect-ratio));
     overflow: hidden;
   }
 }
