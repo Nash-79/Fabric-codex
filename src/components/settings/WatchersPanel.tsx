@@ -84,6 +84,7 @@ export function WatchersPanel() {
     testFn = useServerFn(testSourceWatcher),
     updateFn = useServerFn(updateSourceWatcher),
     pollFn = useServerFn(pollSourceWatchers),
+    rescanFn = useServerFn(rescanSourceWatcher),
     statusFn = useServerFn(setSourceWatcherStatus),
     deleteFn = useServerFn(deleteSourceWatcher);
   const qc = useQueryClient();
@@ -94,6 +95,7 @@ export function WatchersPanel() {
     [tier, setTier] = useState("6"),
     [tags, setTags] = useState(""),
     [editingId, setEditingId] = useState<string | null>(null),
+    [pollSummary, setPollSummary] = useState<string[] | null>(null),
     [testResult, setTestResult] = useState<any>(null);
   const payload = () => ({
     url: url.trim(),
