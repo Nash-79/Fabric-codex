@@ -209,3 +209,10 @@ describe("source watcher parsing", () => {
     );
   });
 });
+
+it("decodes numeric HTML entities in feed titles", () => {
+  const items = parseWebFeed(
+    `<rss><channel><item><title>What now for Power BI? The question I can&#8217;t escape</title><link>https://x.test/a/</link></item></channel></rss>`,
+  );
+  expect(items[0].title).toBe("What now for Power BI? The question I can’t escape");
+});

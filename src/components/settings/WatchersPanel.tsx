@@ -18,6 +18,7 @@ import {
   deleteSourceWatcher,
   listSourceWatchers,
   pollSourceWatchers,
+  rescanSourceWatcher,
   setSourceWatcherStatus,
   testSourceWatcher,
   updateSourceWatcher,
@@ -41,6 +42,17 @@ export type WatcherRow = {
   last_error: string;
   last_error_trigger: string | null;
   suggested_url: string | null;
+  tracked_count?: number;
+  open_queue_count?: number;
+};
+
+type PollOutcome = {
+  watcher: string;
+  queued: number;
+  skipped: number;
+  discovered: number;
+  attempts?: { outcome: string }[];
+  error?: { message: string } | null;
 };
 
 const REMEDIATION: Record<string, string> = {
@@ -54,12 +66,25 @@ const REMEDIATION: Record<string, string> = {
 };
 const remediation = (code: string | null) => (code ? (REMEDIATION[code] ?? null) : null);
 
+/** Turn raw poll counters into a sentence an admin can act on. */
+export function explainPollResult(result: PollOutcome): string {
+  if (result.error) return `${result.watcher}: failed — ${result.error.message}`;
+  if (result.queued > 0)
+    return `${result.watcher}: ${result.queued} new item(s) added to the ingestion queue.`;
+  if ((result.attempts ?? []).some((a) => a.outcome === "unchanged"))
+    return `${result.watcher}: up to date — the site returned 304 Not Modified since the last poll, so there are no new posts. Use "Force re-scan" to re-read the feed anyway.`;
+  if (result.skipped > 0)
+    return `${result.watcher}: ${result.skipped} item(s) seen, all already queued or already ingested — nothing new.`;
+  return `${result.watcher}: no items found for the configured scope.`;
+}
+
 export function WatchersPanel() {
   const listFn = useServerFn(listSourceWatchers),
     addFn = useServerFn(addSourceWatcher),
     testFn = useServerFn(testSourceWatcher),
     updateFn = useServerFn(updateSourceWatcher),
     pollFn = useServerFn(pollSourceWatchers),
+    rescanFn = useServerFn(rescanSourceWatcher),
     statusFn = useServerFn(setSourceWatcherStatus),
     deleteFn = useServerFn(deleteSourceWatcher);
   const qc = useQueryClient();
@@ -70,6 +95,7 @@ export function WatchersPanel() {
     [tier, setTier] = useState("6"),
     [tags, setTags] = useState(""),
     [editingId, setEditingId] = useState<string | null>(null),
+    [pollSummary, setPollSummary] = useState<string[] | null>(null),
     [testResult, setTestResult] = useState<any>(null);
   const payload = () => ({
     url: url.trim(),
@@ -145,15 +171,27 @@ export function WatchersPanel() {
     },
     onError: (e) => toast.error((e as Error).message),
   });
+  const applyPollResult = (r: {
+    results: PollOutcome[];
+    totalQueued: number;
+  }) => {
+    const failed = r.results.filter((x) => x.error).length;
+    setPollSummary(r.results.map((x) => explainPollResult(x)));
+    toast[failed ? "warning" : "success"](
+      r.results.length === 1
+        ? explainPollResult(r.results[0])
+        : `${r.totalQueued} new item(s) queued; ${failed} watcher(s) failed.`,
+    );
+    invalidate();
+  };
   const poll = useMutation({
     mutationFn: (watcherId?: string) => pollFn({ data: watcherId ? { watcherId } : {} }),
-    onSuccess: (r) => {
-      const failed = r.results.filter((x) => x.error).length;
-      toast[failed ? "warning" : "success"](
-        `${r.totalQueued} queued; ${failed} watcher(s) failed.`,
-      );
-      invalidate();
-    },
+    onSuccess: (r) => applyPollResult(r as any),
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const rescan = useMutation({
+    mutationFn: (id: string) => rescanFn({ data: { id } }),
+    onSuccess: (r) => applyPollResult(r as any),
     onError: (e) => toast.error((e as Error).message),
   });
   const toggle = useMutation({
@@ -183,6 +221,21 @@ export function WatchersPanel() {
           {poll.isPending ? "Polling…" : "Poll all"}
         </Button>
       </div>
+      {pollSummary && pollSummary.length > 0 && (
+        <div className="mb-4 rounded-md border border-border bg-muted/30 p-3 text-xs">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="font-medium text-foreground">Last poll outcome</p>
+            <Button size="sm" variant="ghost" onClick={() => setPollSummary(null)}>
+              Dismiss
+            </Button>
+          </div>
+          <ul className="space-y-1 text-muted-foreground">
+            {pollSummary.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="mb-4 grid gap-2 rounded-md border border-border bg-card p-4 md:grid-cols-2">
         {editingId && (
           <p className="text-sm font-medium text-foreground md:col-span-2">Editing watcher</p>
@@ -307,6 +360,12 @@ export function WatchersPanel() {
                   <Badge variant="outline">auto → {r.detected_mode || "detecting"}</Badge>
                   <Badge variant="outline">T{r.default_tier}</Badge>
                   <Badge variant="outline">{r.status}</Badge>
+                  <Badge variant="outline">{r.tracked_count ?? 0} tracked</Badge>
+                  {(r.open_queue_count ?? 0) > 0 && (
+                    <Badge className="border-teal-400/30 bg-teal-500/10 text-teal-200">
+                      {r.open_queue_count} in queue
+                    </Badge>
+                  )}
                   {r.last_error_code && (
                     <Badge className="border-rose-400/30 bg-rose-500/10 text-rose-200">
                       {r.last_error_code}
@@ -354,14 +413,25 @@ export function WatchersPanel() {
                   Edit
                 </Button>
                 {r.status === "active" && (
-                  <Button
-                    size="sm"
-                    variant={r.last_error ? "default" : "outline"}
-                    onClick={() => poll.mutate(r.id)}
-                    disabled={poll.isPending}
-                  >
-                    {r.last_error ? "Retry" : "Poll"}
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant={r.last_error ? "default" : "outline"}
+                      onClick={() => poll.mutate(r.id)}
+                      disabled={poll.isPending || rescan.isPending}
+                    >
+                      {r.last_error ? "Retry" : "Poll"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      title="Clear the cached ETag/Last-Modified and re-read the feed in full."
+                      onClick={() => rescan.mutate(r.id)}
+                      disabled={poll.isPending || rescan.isPending}
+                    >
+                      {rescan.isPending ? "Re-scanning…" : "Force re-scan"}
+                    </Button>
+                  </>
                 )}
                 <Button size="sm" variant="outline" onClick={() => toggle.mutate(r)}>
                   {r.status === "active" ? "Pause" : "Resume"}
