@@ -196,8 +196,21 @@ function decode(value: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&#0?39;|&apos;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    // Numeric character references (&#8217; &#x2019;) — common in WordPress feeds.
+    .replace(/&#(\d+);/g, (_m, code) => safeCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_m, code) => safeCodePoint(parseInt(code, 16)))
     .replace(/&amp;/g, "&")
     .trim();
+}
+
+function safeCodePoint(code: number): string {
+  if (!Number.isFinite(code) || code < 0x20 || code > 0x10ffff) return "";
+  try {
+    return String.fromCodePoint(code);
+  } catch {
+    return "";
+  }
 }
 function tag(block: string, name: string): string {
   return decode(block.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "i"))?.[1] ?? "");
