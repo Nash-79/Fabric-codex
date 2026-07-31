@@ -221,6 +221,21 @@ export function WatchersPanel() {
           {poll.isPending ? "Polling…" : "Poll all"}
         </Button>
       </div>
+      {pollSummary && pollSummary.length > 0 && (
+        <div className="mb-4 rounded-md border border-border bg-muted/30 p-3 text-xs">
+          <div className="mb-1 flex items-center justify-between">
+            <p className="font-medium text-foreground">Last poll outcome</p>
+            <Button size="sm" variant="ghost" onClick={() => setPollSummary(null)}>
+              Dismiss
+            </Button>
+          </div>
+          <ul className="space-y-1 text-muted-foreground">
+            {pollSummary.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      )}
       <div className="mb-4 grid gap-2 rounded-md border border-border bg-card p-4 md:grid-cols-2">
         {editingId && (
           <p className="text-sm font-medium text-foreground md:col-span-2">Editing watcher</p>
