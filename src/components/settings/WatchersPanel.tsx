@@ -413,14 +413,25 @@ export function WatchersPanel() {
                   Edit
                 </Button>
                 {r.status === "active" && (
-                  <Button
-                    size="sm"
-                    variant={r.last_error ? "default" : "outline"}
-                    onClick={() => poll.mutate(r.id)}
-                    disabled={poll.isPending}
-                  >
-                    {r.last_error ? "Retry" : "Poll"}
-                  </Button>
+                  <>
+                    <Button
+                      size="sm"
+                      variant={r.last_error ? "default" : "outline"}
+                      onClick={() => poll.mutate(r.id)}
+                      disabled={poll.isPending || rescan.isPending}
+                    >
+                      {r.last_error ? "Retry" : "Poll"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      title="Clear the cached ETag/Last-Modified and re-read the feed in full."
+                      onClick={() => rescan.mutate(r.id)}
+                      disabled={poll.isPending || rescan.isPending}
+                    >
+                      {rescan.isPending ? "Re-scanning…" : "Force re-scan"}
+                    </Button>
+                  </>
                 )}
                 <Button size="sm" variant="outline" onClick={() => toggle.mutate(r)}>
                   {r.status === "active" ? "Pause" : "Resume"}
