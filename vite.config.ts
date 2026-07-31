@@ -25,6 +25,8 @@ const pwaPlugin = VitePWA({
   manifest: false,
   workbox: {
     globPatterns: ["**/*.{js,css,woff,woff2}"],
+    // The diagram lightbox chunk (Mermaid + Shiki) exceeds Workbox's 2 MiB default.
+    maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
     navigateFallback: "/",
     navigateFallbackDenylist: [
       /^\/api\//,
