@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { OfflineIndicator } from "@/components/OfflineIndicator";
 
 // iOS launch (splash) image link entries. iOS Safari picks the matching file
 // via `media` — CSS-pixel dimensions + device-pixel-ratio + orientation.
@@ -279,6 +280,12 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
 
+  // Register the app-shell service worker once. The wrapper itself refuses to
+  // register (and cleans up) in dev, iframes, and Lovable preview hosts.
+  useEffect(() => {
+    void import("../lib/register-sw").then((m) => m.registerServiceWorker());
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
     // Async import so the tracker + observers never enter the SSR graph.
@@ -315,6 +322,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+      <OfflineIndicator />
       <Outlet />
       <Toaster />
     </QueryClientProvider>
