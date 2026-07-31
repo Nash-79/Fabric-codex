@@ -27,9 +27,10 @@ const pwaPlugin = VitePWA({
   // public/manifest.webmanifest is hand-maintained — don't emit a second one.
   manifest: false,
   workbox: {
-    globPatterns: ["**/*.{js,css,woff,woff2}"],
-    // The diagram lightbox chunk (Mermaid + Shiki) exceeds Workbox's 2 MiB default.
-    maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+    // Keep the precache small (CSS + fonts + icons). JS chunks are large and
+    // route-specific, so they are cached on demand by the CacheFirst rule below.
+    globPatterns: ["**/*.{css,woff,woff2}", "icon-*.png", "manifest.webmanifest"],
+    maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
     navigateFallback: "/",
     navigateFallbackDenylist: [
       /^\/api\//,
