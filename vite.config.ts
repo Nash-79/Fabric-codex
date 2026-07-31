@@ -103,6 +103,6 @@ export default defineConfig({
     server: { entry: "server" },
   },
   vite: {
-    plugins: mcpPlugins,
+    plugins: [...mcpPlugins, ...(process.env.NODE_ENV === "production" ? [pwaPlugin] : [])],
   },
 });
