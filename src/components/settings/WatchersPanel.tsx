@@ -171,15 +171,27 @@ export function WatchersPanel() {
     },
     onError: (e) => toast.error((e as Error).message),
   });
+  const applyPollResult = (r: {
+    results: PollOutcome[];
+    totalQueued: number;
+  }) => {
+    const failed = r.results.filter((x) => x.error).length;
+    setPollSummary(r.results.map((x) => explainPollResult(x)));
+    toast[failed ? "warning" : "success"](
+      r.results.length === 1
+        ? explainPollResult(r.results[0])
+        : `${r.totalQueued} new item(s) queued; ${failed} watcher(s) failed.`,
+    );
+    invalidate();
+  };
   const poll = useMutation({
     mutationFn: (watcherId?: string) => pollFn({ data: watcherId ? { watcherId } : {} }),
-    onSuccess: (r) => {
-      const failed = r.results.filter((x) => x.error).length;
-      toast[failed ? "warning" : "success"](
-        `${r.totalQueued} queued; ${failed} watcher(s) failed.`,
-      );
-      invalidate();
-    },
+    onSuccess: (r) => applyPollResult(r as any),
+    onError: (e) => toast.error((e as Error).message),
+  });
+  const rescan = useMutation({
+    mutationFn: (id: string) => rescanFn({ data: { id } }),
+    onSuccess: (r) => applyPollResult(r as any),
     onError: (e) => toast.error((e as Error).message),
   });
   const toggle = useMutation({
