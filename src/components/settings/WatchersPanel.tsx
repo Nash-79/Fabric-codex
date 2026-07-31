@@ -18,6 +18,7 @@ import {
   deleteSourceWatcher,
   listSourceWatchers,
   pollSourceWatchers,
+  rescanSourceWatcher,
   setSourceWatcherStatus,
   testSourceWatcher,
   updateSourceWatcher,
@@ -41,6 +42,17 @@ export type WatcherRow = {
   last_error: string;
   last_error_trigger: string | null;
   suggested_url: string | null;
+  tracked_count?: number;
+  open_queue_count?: number;
+};
+
+type PollOutcome = {
+  watcher: string;
+  queued: number;
+  skipped: number;
+  discovered: number;
+  attempts?: { outcome: string }[];
+  error?: { message: string } | null;
 };
 
 const REMEDIATION: Record<string, string> = {
@@ -53,6 +65,18 @@ const REMEDIATION: Record<string, string> = {
   http: "HTTP error from the origin. Check the URL is reachable, then retry.",
 };
 const remediation = (code: string | null) => (code ? (REMEDIATION[code] ?? null) : null);
+
+/** Turn raw poll counters into a sentence an admin can act on. */
+export function explainPollResult(result: PollOutcome): string {
+  if (result.error) return `${result.watcher}: failed — ${result.error.message}`;
+  if (result.queued > 0)
+    return `${result.watcher}: ${result.queued} new item(s) added to the ingestion queue.`;
+  if ((result.attempts ?? []).some((a) => a.outcome === "unchanged"))
+    return `${result.watcher}: up to date — the site returned 304 Not Modified since the last poll, so there are no new posts. Use "Force re-scan" to re-read the feed anyway.`;
+  if (result.skipped > 0)
+    return `${result.watcher}: ${result.skipped} item(s) seen, all already queued or already ingested — nothing new.`;
+  return `${result.watcher}: no items found for the configured scope.`;
+}
 
 export function WatchersPanel() {
   const listFn = useServerFn(listSourceWatchers),
