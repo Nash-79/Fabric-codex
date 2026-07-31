@@ -1172,7 +1172,58 @@ export const listSourceWatchers = createServerFn({ method: "GET" })
       .select("*")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    return { watchers: data ?? [] };
+    const watchers = data ?? [];
+    // Per-watcher provenance: how many URLs this watcher tracks, and how many of
+    // them are still sitting in the open ingestion queue. Answers "did this feed
+    // ever produce anything?" without reading the last poll's delta.
+    const [{ data: items }, { data: openQueue }] = await Promise.all([
+      sb.from("source_watcher_items").select("watcher_id,canonical_url"),
+      sb.from("queue_items").select("url").in("status", ["queued", "claimed"]),
+    ]);
+    const openUrls = new Set((openQueue ?? []).map((x: { url: string }) => x.url));
+    const tracked = new Map<string, number>();
+    const open = new Map<string, number>();
+    for (const item of (items ?? []) as { watcher_id: string; canonical_url: string }[]) {
+      tracked.set(item.watcher_id, (tracked.get(item.watcher_id) ?? 0) + 1);
+      if (openUrls.has(item.canonical_url))
+        open.set(item.watcher_id, (open.get(item.watcher_id) ?? 0) + 1);
+    }
+    return {
+      watchers: watchers.map((w: { id: string }) => ({
+        ...w,
+        tracked_count: tracked.get(w.id) ?? 0,
+        open_queue_count: open.get(w.id) ?? 0,
+      })),
+    };
+  });
+
+/**
+ * Clear the conditional-request cache (ETag / Last-Modified) for one watcher so
+ * the next poll re-reads the feed in full instead of receiving a 304.
+ */
+export const rescanSourceWatcher = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { id: string }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const { error } = await sb
+      .from("source_watchers")
+      .update({ etag: null, last_modified: null })
+      .eq("id", data.id);
+    if (error) throw new Error(error.message);
+    await recordAudit(context.userId, "watcher.rescan_requested", "source_watcher", data.id);
+    const { pollSourceWatchersCore } = await import("@/lib/source-watcher.server");
+    const result = await pollSourceWatchersCore(sb, {
+      watcherId: data.id,
+      actorId: context.userId,
+    });
+    await recordAudit(context.userId, "watcher.polled", "source_watcher", data.id, {
+      forced: true,
+      totalQueued: result.totalQueued,
+      results: result.results,
+    });
+    return result;
   });
 
 export const testSourceWatcher = createServerFn({ method: "POST" })
