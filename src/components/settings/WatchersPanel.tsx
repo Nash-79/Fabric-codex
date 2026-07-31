@@ -360,6 +360,12 @@ export function WatchersPanel() {
                   <Badge variant="outline">auto → {r.detected_mode || "detecting"}</Badge>
                   <Badge variant="outline">T{r.default_tier}</Badge>
                   <Badge variant="outline">{r.status}</Badge>
+                  <Badge variant="outline">{r.tracked_count ?? 0} tracked</Badge>
+                  {(r.open_queue_count ?? 0) > 0 && (
+                    <Badge className="border-teal-400/30 bg-teal-500/10 text-teal-200">
+                      {r.open_queue_count} in queue
+                    </Badge>
+                  )}
                   {r.last_error_code && (
                     <Badge className="border-rose-400/30 bg-rose-500/10 text-rose-200">
                       {r.last_error_code}
