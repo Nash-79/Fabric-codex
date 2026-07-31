@@ -20,6 +20,9 @@ const pwaPlugin = VitePWA({
   registerType: "autoUpdate",
   injectRegister: null,
   filename: "sw.js",
+  // Multi-environment (client + nitro server) build: pin the plugin to the
+  // client output, otherwise it globs `dist/` and precaches server bundles too.
+  outDir: "dist/client",
   devOptions: { enabled: false },
   // public/manifest.webmanifest is hand-maintained — don't emit a second one.
   manifest: false,
