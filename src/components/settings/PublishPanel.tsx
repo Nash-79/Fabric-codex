@@ -1,4 +1,5 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { refreshContentVersion } from "@/lib/content-version";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -39,11 +40,13 @@ const PUBLISH_ALL_ACTION_STYLE: Record<string, string> = {
 
 function PublishAllPanel() {
   const publishAllFn = useServerFn(publishAllBundled);
+  const queryClient = useQueryClient();
   const [force, setForce] = useState(false);
 
   const publishAll = useMutation({
     mutationFn: () => publishAllFn({ data: { force } }),
     onSuccess: (res) => {
+      void refreshContentVersion(queryClient);
       const s = (
         res as { summary?: { published: number; skipped: number; blocked: number; failed: number } }
       ).summary;
@@ -158,6 +161,7 @@ function PublishAllPanel() {
 
 export function PublishPanel({ onDone }: { onDone: () => void }) {
   const publishFn = useServerFn(publishFromFile);
+  const queryClient = useQueryClient();
   const [kind, setKind] = useState<"source" | "article" | "design" | "lesson" | "diagram">(
     "source",
   );
@@ -174,6 +178,7 @@ export function PublishPanel({ onDone }: { onDone: () => void }) {
       return publishFn({ data: { kind, payload } });
     },
     onSuccess: (res) => {
+      void refreshContentVersion(queryClient);
       const r = (res as { result?: Record<string, unknown> })?.result ?? {};
       const slug = (r.slug as string) ?? "";
       let extra: string;

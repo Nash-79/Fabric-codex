@@ -99,6 +99,53 @@ export const getTopic = createServerFn({ method: "GET" })
     return fallback;
   });
 
+/**
+ * Cheap freshness stamp for all reader-facing content.
+ *
+ * Derived (no new table), so it also moves when content is published out-of-band
+ * (scripts/import_content.py, direct migrations) — not just via the in-app publisher.
+ * Two aggregate queries, no body columns: safe to poll from every open tab.
+ */
+export const getContentVersion = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const sb = await admin();
+    const [items, diagrams] = await Promise.all([
+      sb
+        .from("content_items")
+        .select("updated_at", { count: "exact" })
+        .eq("status", "published")
+        .eq("active", true)
+        .order("updated_at", { ascending: false })
+        .limit(1),
+      sb
+        .from("diagrams")
+        .select("created_at", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .limit(1),
+    ]);
+    if (items.error) throw new Error(items.error.message);
+    return {
+      stamp: buildContentStamp(items, {
+        data: (diagrams.data ?? []).map((d) => ({ updated_at: d.created_at })),
+        count: diagrams.count,
+      }),
+      ok: true as const,
+    };
+  } catch {
+    // Offline / bundled-content fallback: return a neutral stamp so the client keeps
+    // whatever it already had instead of thrashing its caches.
+    return { stamp: "", ok: false as const };
+  }
+});
+
+type StampPart = { data?: { updated_at?: string | null }[] | null; count?: number | null };
+
+export function buildContentStamp(items: StampPart, diagrams: StampPart): string {
+  const at = (p: StampPart) => p.data?.[0]?.updated_at ?? "0";
+  const n = (p: StampPart) => p.count ?? 0;
+  return `${at(items)}:${n(items)}|${at(diagrams)}:${n(diagrams)}`;
+}
+
 export const getContentItem = createServerFn({ method: "GET" })
   .validator((d: { kind: "article" | "design" | "lesson"; slug: string }) => d)
   .handler(async ({ data }) => {

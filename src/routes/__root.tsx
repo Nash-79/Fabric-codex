@@ -13,6 +13,7 @@ import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
+import { ContentVersionWatcher } from "@/components/ContentVersionWatcher";
 
 // iOS launch (splash) image link entries. iOS Safari picks the matching file
 // via `media` — CSS-pixel dimensions + device-pixel-ratio + orientation.
@@ -321,6 +322,9 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      {/* Stale-content guard: drops cached articles/prev-next when the server stamp moves.
+          Must live *inside* the provider — it uses the query client. */}
+      <ContentVersionWatcher />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <OfflineIndicator />
       <Outlet />

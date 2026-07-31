@@ -1,6 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { useSuspenseQuery, queryOptions, useQueryClient } from "@tanstack/react-query";
 import { getContentItem, getContentSiblings, listTopics } from "@/lib/atlas.functions";
+import { currentStamp } from "@/lib/content-version";
 import { SiteHeader } from "@/components/SiteHeader";
 import { ReaderShell } from "@/components/readers/ReaderShell";
 
@@ -11,18 +12,18 @@ type BlogDetailSearch = { from?: string; fromSlug?: string; q?: string };
 // Article bodies barely change during a session — cache for 30 min so returning
 // to a previously-read article (or Prev/Next navigation) hydrates instantly
 // from memory instead of re-fetching.
-const contentItemQO = (kind: string, slug: string) =>
+const contentItemQO = (kind: string, slug: string, stamp: string) =>
   queryOptions({
-    queryKey: ["content-item", kind, slug],
+    queryKey: ["content-item", kind, slug, stamp],
     queryFn: () =>
       getContentItem({ data: { kind: kind as "article" | "design" | "lesson", slug } }),
     staleTime: 30 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
 
-const siblingsQO = (kind: string, slug: string) =>
+const siblingsQO = (kind: string, slug: string, stamp: string) =>
   queryOptions({
-    queryKey: ["content-siblings", kind, slug],
+    queryKey: ["content-siblings", kind, slug, stamp],
     queryFn: () =>
       getContentSiblings({ data: { kind: kind as "article" | "design" | "lesson", slug } }),
     staleTime: 30 * 60 * 1000,
@@ -55,10 +56,11 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
     // Siblings only power the prev/next nav at the bottom of the article — no reason to block
     // first paint on them. Fire-and-forget prefetch; useSuspenseQuery below will pick it up
     // from cache (or wait, if the user scrolls that far before it resolves).
-    context.queryClient.prefetchQuery(siblingsQO(params.kind, params.slug));
+    const stamp = currentStamp(context.queryClient);
+    context.queryClient.prefetchQuery(siblingsQO(params.kind, params.slug, stamp));
     try {
       const [item] = await Promise.all([
-        context.queryClient.ensureQueryData(contentItemQO(params.kind, params.slug)),
+        context.queryClient.ensureQueryData(contentItemQO(params.kind, params.slug, stamp)),
         context.queryClient.ensureQueryData(topicsQO),
       ]);
       return item;
@@ -90,9 +92,11 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
 function ContentItemPage() {
   const { kind, slug } = Route.useParams();
   const { from, fromSlug, q } = Route.useSearch();
-  const { data } = useSuspenseQuery(contentItemQO(kind, slug));
+  const queryClient = useQueryClient();
+  const stamp = currentStamp(queryClient);
+  const { data } = useSuspenseQuery(contentItemQO(kind, slug, stamp));
   const { data: topics } = useSuspenseQuery(topicsQO);
-  const { data: siblings } = useSuspenseQuery(siblingsQO(kind, slug));
+  const { data: siblings } = useSuspenseQuery(siblingsQO(kind, slug, stamp));
   const originTopicName = topics.find((t: any) => t.slug === fromSlug)?.name;
   const { item, citations } = data;
   const capabilities = (data as any).capabilities ?? [];

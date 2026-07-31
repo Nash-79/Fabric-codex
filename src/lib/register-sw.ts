@@ -47,6 +47,15 @@ async function unregisterAppWorker() {
   }
 }
 
+async function clearPageCache() {
+  if (typeof caches === "undefined") return;
+  try {
+    await caches.delete("fa-pages");
+  } catch {
+    /* cache eviction is best-effort */
+  }
+}
+
 export function registerServiceWorker() {
   if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
 
@@ -54,6 +63,12 @@ export function registerServiceWorker() {
     void unregisterAppWorker();
     return;
   }
+
+  // A new worker taking control means a new deploy: drop the cached HTML shells so an
+  // offline fallback can never resurrect a pre-deploy article page.
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    void clearPageCache();
+  });
 
   void navigator.serviceWorker.register(SW_URL, { scope: "/" }).catch(() => {
     /* registration failures are non-fatal: the app works fine online */
