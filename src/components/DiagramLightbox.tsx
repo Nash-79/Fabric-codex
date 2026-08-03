@@ -443,7 +443,7 @@ function LightboxViewer({
                 // genuinely extra width rather than carved out of the diagram's.
                 <div
                   className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] sm:max-h-[calc(88dvh-2rem)] sm:max-w-[min(94vw,84rem)]"
-                  style={{ aspectRatio: effectiveRatio, width: "auto", height: "100%" }}
+                  style={{ aspectRatio: effectiveRatio, width: "100%", height: "auto", maxHeight: "100%", maxWidth: "100%" }}
                 >
                   <InteractiveDiagram
                     markup={svgMarkup}
