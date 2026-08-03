@@ -60,14 +60,14 @@ Or author the file by hand — the shape is one JSON file **per source**:
 
 Field rules:
 
-| Field | Rule |
-| --- | --- |
-| `capability_id` | should reference a real row in `capabilities` (see §2) — publishing auto-creates a bare placeholder row for an unknown id, so prefer registering the capability first |
-| `depth` | 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 internals |
-| `type` | `fact` \| `pattern` \| `antipattern` \| `internal` |
-| `tier` | 1 MS Learn · 2 Fabric blog · 3 MS GitHub/papers · 4 MVP/community · 5 vendor · 6 unknown |
-| `summary` / `audience` / `why_it_matters` | original reader metadata only; do not copy article prose |
-| `takeaways` | 3-5 original, concise takeaways; no copied bullets from the source |
+| Field                                     | Rule                                                                                                                                                                  |
+| ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `capability_id`                           | should reference a real row in `capabilities` (see §2) — publishing auto-creates a bare placeholder row for an unknown id, so prefer registering the capability first |
+| `depth`                                   | 1 conceptual · 2 practitioner · 3 architect · 4 performance · 5 internals                                                                                             |
+| `type`                                    | `fact` \| `pattern` \| `antipattern` \| `internal`                                                                                                                    |
+| `tier`                                    | 1 MS Learn · 2 Fabric blog · 3 MS GitHub/papers · 4 MVP/community · 5 vendor · 6 unknown                                                                              |
+| `summary` / `audience` / `why_it_matters` | original reader metadata only; do not copy article prose                                                                                                              |
+| `takeaways`                               | 3-5 original, concise takeaways; no copied bullets from the source                                                                                                    |
 
 Re-publishing an existing source is safe — it's a drift check (versions changed claims, deprecates
 removed ones, flags citing content items `needs_review`), not an overwrite. If claim texts are

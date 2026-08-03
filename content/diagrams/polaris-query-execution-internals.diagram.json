@@ -20,17 +20,33 @@
       "classification": "fact",
       "layers": ["compute"],
       "evidence": [
-        { "sourceKey": "polaris-vldb-paper", "note": "Query compilation in Polaris is two-phase: the SQL Server Cascades optimizer first generates the logical search space (MEMO), then a distributed cost-based phase enumerates physical distributed plans, using distribution properties both as correctness filters and as System-R-style interesting properties, picking the plan that minimizes data movement." },
-        { "sourceKey": "warehouse-workload-management", "note": "When a query arrives, the SQL frontend optimizes it and hands the plan to the Distributed Query Processing (DQP) engine, which splits it into tasks that run on backend compute nodes; results flow back through the frontend to the caller." }
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Query compilation in Polaris is two-phase: the SQL Server Cascades optimizer first generates the logical search space (MEMO), then a distributed cost-based phase enumerates physical distributed plans, using distribution properties both as correctness filters and as System-R-style interesting properties, picking the plan that minimizes data movement."
+        },
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "When a query arrives, the SQL frontend optimizes it and hands the plan to the Distributed Query Processing (DQP) engine, which splits it into tasks that run on backend compute nodes; results flow back through the frontend to the caller."
+        }
       ],
       "tags": ["Polaris", "Cascades", "QueryOptimizer"],
       "drill": {
         "inputs": ["An optimized logical query plan handed off by the SQL frontend"],
-        "processing": ["Build the logical MEMO search space with the Cascades optimizer", "Run the distributed cost-based phase, checking each join's inputs for hash alignment", "Enumerate physical distributed plans and pick the one minimizing data movement"],
-        "outputs": ["A physical distributed plan with task boundaries decided, ready to become a task DAG"],
+        "processing": [
+          "Build the logical MEMO search space with the Cascades optimizer",
+          "Run the distributed cost-based phase, checking each join's inputs for hash alignment",
+          "Enumerate physical distributed plans and pick the one minimizing data movement"
+        ],
+        "outputs": [
+          "A physical distributed plan with task boundaries decided, ready to become a task DAG"
+        ],
         "example": "A three-way join over hash-distributed fact and dimension tables compiles into a plan where two joins whose inputs are already co-located fuse into one task, while the third join against a non-aligned table gets a broadcast enforcer inserted ahead of it.",
-        "controls": ["No user-facing tuning knob — Polaris's cost-based phase makes this decision autonomously per query"],
-        "failureModes": ["Expecting to hand-tune the distributed plan the way one might hint a single-node optimizer — Polaris workload management is autonomous by design"]
+        "controls": [
+          "No user-facing tuning knob — Polaris's cost-based phase makes this decision autonomously per query"
+        ],
+        "failureModes": [
+          "Expecting to hand-tune the distributed plan the way one might hint a single-node optimizer — Polaris workload management is autonomous by design"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "polaris", "label": "Polaris" }
     },
@@ -43,17 +59,35 @@
       "classification": "fact",
       "layers": ["compute"],
       "evidence": [
-        { "sourceKey": "polaris-vldb-paper", "note": "Polaris injects 'data move enforcer' operators — hash re-distribution and broadcast — to change a dataset's distribution properties; enforcers are blocking and the operator subtree rooted at an enforcer defines a task's input/output boundary." },
-        { "sourceKey": "polaris-vldb-paper", "note": "Polaris deliberately makes tasks maximal units of work (e.g., fusing multiple hash-aligned joins into one task) and re-encodes each task template back into T-SQL that runs natively in a SQL Server instance on the compute node, letting SQL Server re-optimize with fresh statistics at blocking task boundaries." }
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Polaris injects 'data move enforcer' operators — hash re-distribution and broadcast — to change a dataset's distribution properties; enforcers are blocking and the operator subtree rooted at an enforcer defines a task's input/output boundary."
+        },
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Polaris deliberately makes tasks maximal units of work (e.g., fusing multiple hash-aligned joins into one task) and re-encodes each task template back into T-SQL that runs natively in a SQL Server instance on the compute node, letting SQL Server re-optimize with fresh statistics at blocking task boundaries."
+        }
       ],
       "tags": ["Polaris", "Tasks", "DataMovement"],
       "drill": {
-        "inputs": ["A join operator from the physical plan, with the distribution properties of both input sides"],
-        "processing": ["Check whether both sides are already hash-aligned on the join key", "If aligned: fuse the join into the current task template", "If not aligned: insert a hash re-distribution or broadcast enforcer, closing the current task and opening a new one downstream"],
-        "outputs": ["Either an extended, fused task template, or a new task boundary with a persisted intermediate result"],
+        "inputs": [
+          "A join operator from the physical plan, with the distribution properties of both input sides"
+        ],
+        "processing": [
+          "Check whether both sides are already hash-aligned on the join key",
+          "If aligned: fuse the join into the current task template",
+          "If not aligned: insert a hash re-distribution or broadcast enforcer, closing the current task and opening a new one downstream"
+        ],
+        "outputs": [
+          "Either an extended, fused task template, or a new task boundary with a persisted intermediate result"
+        ],
         "example": "Joining two large fact tables both hash-distributed on customer_id fuses directly into one task; joining one of them against a small unpartitioned reference table instead inserts a broadcast enforcer that replicates the reference table to every node first.",
-        "controls": ["No direct user control — driven entirely by the tables' chosen hash-distribution definitions, which is why distribution key choice at table-design time matters"],
-        "failureModes": ["Choosing table distribution keys that never align across commonly-joined tables, forcing an enforcer (and a shuffle) on every query that joins them"]
+        "controls": [
+          "No direct user control — driven entirely by the tables' chosen hash-distribution definitions, which is why distribution key choice at table-design time matters"
+        ],
+        "failureModes": [
+          "Choosing table distribution keys that never align across commonly-joined tables, forcing an enforcer (and a shuffle) on every query that joins them"
+        ]
       }
     },
     {
@@ -65,17 +99,33 @@
       "classification": "fact",
       "layers": ["compute"],
       "evidence": [
-        { "sourceKey": "polaris-vldb-paper", "note": "A Polaris task is the physical execution of an operator expression over one hash-distribution of its inputs, with input cells, a task template, and output cells; a query plan becomes a DAG of task templates whose edges encode dataflow and precedence." },
-        { "sourceKey": "warehouse-workload-management", "note": "The DQP scheduler operates at task level and represents each query as a directed acyclic graph (DAG) of tasks, so tasks without mutual dependencies can execute simultaneously or out of order, giving intra-query parallelism and cross-query concurrency." }
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "A Polaris task is the physical execution of an operator expression over one hash-distribution of its inputs, with input cells, a task template, and output cells; a query plan becomes a DAG of task templates whose edges encode dataflow and precedence."
+        },
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "The DQP scheduler operates at task level and represents each query as a directed acyclic graph (DAG) of tasks, so tasks without mutual dependencies can execute simultaneously or out of order, giving intra-query parallelism and cross-query concurrency."
+        }
       ],
       "tags": ["Polaris", "TaskDAG", "OneLake"],
       "drill": {
-        "inputs": ["The compiled physical plan with task boundaries fixed by the fuse-vs-enforcer decisions"],
-        "processing": ["Instantiate each task template with its input/output cell collections", "Wire dependency edges between tasks based on enforcer boundaries", "Hand the resulting DAG to the scheduler as part of the global workload graph"],
+        "inputs": [
+          "The compiled physical plan with task boundaries fixed by the fuse-vs-enforcer decisions"
+        ],
+        "processing": [
+          "Instantiate each task template with its input/output cell collections",
+          "Wire dependency edges between tasks based on enforcer boundaries",
+          "Hand the resulting DAG to the scheduler as part of the global workload graph"
+        ],
         "outputs": ["A ready-to-schedule task DAG for the query"],
         "example": "A star-join query compiles into a DAG where three dimension-table read tasks run in parallel with no mutual dependency, all feeding into a downstream fact-join task that only starts once its inputs are persisted.",
-        "controls": ["No direct control at this stage — task boundaries were already fixed by the compilation phase"],
-        "failureModes": ["A poorly distributed table design produces an unnecessarily deep or wide DAG, increasing coordination overhead even before scheduling begins"]
+        "controls": [
+          "No direct control at this stage — task boundaries were already fixed by the compilation phase"
+        ],
+        "failureModes": [
+          "A poorly distributed table design produces an unnecessarily deep or wide DAG, increasing coordination overhead even before scheduling begins"
+        ]
       }
     },
     {
@@ -87,18 +137,38 @@
       "classification": "fact",
       "layers": ["compute", "orchestration"],
       "evidence": [
-        { "sourceKey": "polaris-vldb-paper", "note": "Polaris schedules across queries using a global 'workload graph' that unions the task DAGs of all active queries; each task carries a multi-dimensional resource demand vector, compute nodes are modeled as resource bins, and supported policies include FIFO, sorting by resource demand, and sorting by proximity to the DAG root." },
-        { "sourceKey": "warehouse-workload-management", "note": "Incoming tasks are scheduled on first-in-first-out principles, but when idle capacity exists the scheduler can switch to a best-fit placement approach to improve concurrency." },
-        { "sourceKey": "warehouse-workload-management", "note": "When the scheduler detects resource pressure it autonomously triggers a scale-out of the backend topology; because acquiring new nodes typically takes a few seconds with no SLA on assignment, the engine is not optimized for consistently sub-second latency on queries that need distributed processing." }
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Polaris schedules across queries using a global 'workload graph' that unions the task DAGs of all active queries; each task carries a multi-dimensional resource demand vector, compute nodes are modeled as resource bins, and supported policies include FIFO, sorting by resource demand, and sorting by proximity to the DAG root."
+        },
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "Incoming tasks are scheduled on first-in-first-out principles, but when idle capacity exists the scheduler can switch to a best-fit placement approach to improve concurrency."
+        },
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "When the scheduler detects resource pressure it autonomously triggers a scale-out of the backend topology; because acquiring new nodes typically takes a few seconds with no SLA on assignment, the engine is not optimized for consistently sub-second latency on queries that need distributed processing."
+        }
       ],
       "tags": ["Polaris", "WorkloadManagement", "Scheduling", "Autoscaling"],
       "drill": {
         "inputs": ["Task DAGs from every currently active query, unioned into the workload graph"],
-        "processing": ["Model each task's CPU/memory/disk demand as a resource vector", "Place tasks FIFO under load, or best-fit when idle capacity allows", "Trigger autonomous online scale-out when resource pressure is detected, then scale back down as pressure subsides"],
-        "outputs": ["Tasks placed on backend compute nodes, with topology adjusted elastically to demand"],
+        "processing": [
+          "Model each task's CPU/memory/disk demand as a resource vector",
+          "Place tasks FIFO under load, or best-fit when idle capacity allows",
+          "Trigger autonomous online scale-out when resource pressure is detected, then scale back down as pressure subsides"
+        ],
+        "outputs": [
+          "Tasks placed on backend compute nodes, with topology adjusted elastically to demand"
+        ],
         "example": "During a concurrency spike from 200 to 5,000 active sessions, the scheduler places new tasks FIFO against existing nodes first, then triggers scale-out within seconds when queued tasks exceed available capacity, all without interrupting queries already in flight.",
-        "controls": ["No user-facing scheduling knobs — placement policy and scale-out triggers are autonomous", "Workspace-level burstable capacity and smoothing settings shape how spiky demand is absorbed at the capacity level"],
-        "failureModes": ["Assuming Fabric Warehouse behaves like a fixed-size cluster and sizing capacity as if scale-out has zero latency, when new-node acquisition still takes a few seconds with no SLA"]
+        "controls": [
+          "No user-facing scheduling knobs — placement policy and scale-out triggers are autonomous",
+          "Workspace-level burstable capacity and smoothing settings shape how spiky demand is absorbed at the capacity level"
+        ],
+        "failureModes": [
+          "Assuming Fabric Warehouse behaves like a fixed-size cluster and sizing capacity as if scale-out has zero latency, when new-node acquisition still takes a few seconds with no SLA"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     },
@@ -111,18 +181,38 @@
       "classification": "warning",
       "layers": ["compute", "observability"],
       "evidence": [
-        { "sourceKey": "polaris-vldb-paper", "note": "Task placement in Polaris is affinitized to compute by consistently assigning the same data cells to the same nodes, preserving SQL Server buffer-pool and local SSD caches across topology changes: shrinking the topology loses only the caches of removed nodes, and growing it preserves all existing caches while only new nodes warm up." },
-        { "sourceKey": "warehouse-workload-management", "note": "The engine is fault tolerant at the task level: if a backend node becomes unhealthy, the operations running on it are redistributed to healthy nodes for completion rather than failing the query." },
-        { "sourceKey": "warehouse-workload-management", "note": "Scaling of the warehouse backend is an online operation — in-flight query processing continues uninterrupted while nodes are added — and when pressure subsides the topology scales back down and returns compute to the region." }
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Task placement in Polaris is affinitized to compute by consistently assigning the same data cells to the same nodes, preserving SQL Server buffer-pool and local SSD caches across topology changes: shrinking the topology loses only the caches of removed nodes, and growing it preserves all existing caches while only new nodes warm up."
+        },
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "The engine is fault tolerant at the task level: if a backend node becomes unhealthy, the operations running on it are redistributed to healthy nodes for completion rather than failing the query."
+        },
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "Scaling of the warehouse backend is an online operation — in-flight query processing continues uninterrupted while nodes are added — and when pressure subsides the topology scales back down and returns compute to the region."
+        }
       ],
       "tags": ["Polaris", "Caching", "DataAffinity", "FaultTolerance"],
       "drill": {
         "inputs": ["A topology-change event: scale-out, scale-in, or an unhealthy node detected"],
-        "processing": ["Scale-out: assign new nodes to new data cells, leave existing node-to-cell assignments untouched", "Scale-in: remove selected nodes and their cell assignments, redistribute only those cells", "Node failure: redistribute the failed node's in-flight tasks to healthy nodes, which run them without the prior warm cache"],
-        "outputs": ["A topology where most existing caches survive the change, but some fraction of work runs cache-cold until it rewarms"],
+        "processing": [
+          "Scale-out: assign new nodes to new data cells, leave existing node-to-cell assignments untouched",
+          "Scale-in: remove selected nodes and their cell assignments, redistribute only those cells",
+          "Node failure: redistribute the failed node's in-flight tasks to healthy nodes, which run them without the prior warm cache"
+        ],
+        "outputs": [
+          "A topology where most existing caches survive the change, but some fraction of work runs cache-cold until it rewarms"
+        ],
         "example": "A warehouse scales out from 8 to 12 nodes to absorb a reporting-hour spike; queries hitting cells already assigned to the original 8 nodes keep their warm buffer-pool and SSD caches, while queries touching cells newly assigned to the 4 new nodes run measurably slower until those caches warm up.",
-        "controls": ["No direct user control over cell-to-node assignment — data affinity is managed internally by Polaris"],
-        "failureModes": ["Interpreting the post-scale-out or post-failure slowdown as a regression and escalating a support case, when it is expected cache-rewarming behavior that resolves once the new or recovering nodes warm up", "Benchmarking warehouse performance immediately after a scale event and drawing conclusions from cache-cold numbers"]
+        "controls": [
+          "No direct user control over cell-to-node assignment — data affinity is managed internally by Polaris"
+        ],
+        "failureModes": [
+          "Interpreting the post-scale-out or post-failure slowdown as a regression and escalating a support case, when it is expected cache-rewarming behavior that resolves once the new or recovering nodes warm up",
+          "Benchmarking warehouse performance immediately after a scale event and drawing conclusions from cache-cold numbers"
+        ]
       }
     },
     {
@@ -134,28 +224,92 @@
       "classification": "fact",
       "layers": ["compute", "orchestration"],
       "evidence": [
-        { "sourceKey": "polaris-vldb-paper", "note": "Polaris orchestrates execution as a hierarchical composition of finite state machines over entities (query DAG, task templates, tasks) with simple and composite states; transient failures are retried at task granularity and escalate to the parent state machine only if not retriable, and all transitions are logged for reproducibility and resumable execution." },
-        { "sourceKey": "polaris-vldb-paper", "note": "Polaris compute is stateless because all durable state is externalized to remote storage and centralized services; only caches live on compute nodes, and since caches can be rebuilt lazily their loss never fails in-flight work, enabling partial query restarts and online topology changes." },
-        { "sourceKey": "warehouse-workload-management", "note": "The engine is fault tolerant at the task level: if a backend node becomes unhealthy, the operations running on it are redistributed to healthy nodes for completion rather than failing the query." }
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Polaris orchestrates execution as a hierarchical composition of finite state machines over entities (query DAG, task templates, tasks) with simple and composite states; transient failures are retried at task granularity and escalate to the parent state machine only if not retriable, and all transitions are logged for reproducibility and resumable execution."
+        },
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "Polaris compute is stateless because all durable state is externalized to remote storage and centralized services; only caches live on compute nodes, and since caches can be rebuilt lazily their loss never fails in-flight work, enabling partial query restarts and online topology changes."
+        },
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "The engine is fault tolerant at the task level: if a backend node becomes unhealthy, the operations running on it are redistributed to healthy nodes for completion rather than failing the query."
+        }
       ],
       "tags": ["Polaris", "FaultTolerance", "StateMachines"],
       "drill": {
-        "inputs": ["A task, task template, or the overall query DAG entering a Failed state after some execution event"],
-        "processing": ["Classify the failure as retriable (e.g., a transient node issue) or not", "If retriable: retry at task granularity on a healthy node, logging the transition", "If not retriable: escalate the failure to the parent state machine (task template, then query DAG) up to eventual query failure"],
-        "outputs": ["Either a successfully retried task with no visible query impact, or an escalated, logged failure surfaced to the caller"],
+        "inputs": [
+          "A task, task template, or the overall query DAG entering a Failed state after some execution event"
+        ],
+        "processing": [
+          "Classify the failure as retriable (e.g., a transient node issue) or not",
+          "If retriable: retry at task granularity on a healthy node, logging the transition",
+          "If not retriable: escalate the failure to the parent state machine (task template, then query DAG) up to eventual query failure"
+        ],
+        "outputs": [
+          "Either a successfully retried task with no visible query impact, or an escalated, logged failure surfaced to the caller"
+        ],
         "example": "One task in a 40-task query DAG fails because its assigned node became unhealthy mid-execution; the state machine retries just that task on a healthy node using externally persisted state, and the query completes with no user-visible error — only the query's total duration reflects the retry.",
-        "controls": ["No user-facing retry configuration — retry-vs-escalate classification and retry execution are autonomous"],
-        "failureModes": ["Misreading a retried-and-recovered query's longer duration as evidence of instability, when the logged state transitions would show a normal transient-failure recovery", "A genuinely non-retriable failure (e.g., a data error, not an infrastructure issue) escalating all the way to query failure, which is correct behavior but can look identical to a transient issue without inspecting the logged transitions"]
+        "controls": [
+          "No user-facing retry configuration — retry-vs-escalate classification and retry execution are autonomous"
+        ],
+        "failureModes": [
+          "Misreading a retried-and-recovered query's longer duration as evidence of instability, when the logged state transitions would show a normal transient-failure recovery",
+          "A genuinely non-retriable failure (e.g., a data error, not an infrastructure issue) escalating all the way to query failure, which is correct behavior but can look identical to a transient issue without inspecting the logged transitions"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-compile-fuse", "from": "task-dag-compile", "to": "fuse-vs-enforcer", "label": "per join, check hash alignment", "layer": "compute", "kind": "flow" },
-    { "id": "e-fuse-taskdag", "from": "fuse-vs-enforcer", "to": "task-dag", "label": "fused or enforcer-bounded tasks assembled", "layer": "compute", "kind": "flow" },
-    { "id": "e-taskdag-scheduler", "from": "task-dag", "to": "workload-graph-scheduler", "label": "DAG joins the global workload graph", "layer": "orchestration", "kind": "flow" },
-    { "id": "e-scheduler-cache", "from": "workload-graph-scheduler", "to": "cache-affinity-outcomes", "label": "task placement is cache-affinitized", "layer": "compute", "kind": "flow" },
-    { "id": "e-scheduler-faulttolerance", "from": "workload-graph-scheduler", "to": "fault-tolerance-state-machine", "label": "placed tasks execute under the state machine", "layer": "orchestration", "kind": "flow" },
-    { "id": "e-faulttolerance-scheduler", "from": "fault-tolerance-state-machine", "to": "workload-graph-scheduler", "label": "retried task re-enters scheduling", "layer": "orchestration", "kind": "feedback" }
+    {
+      "id": "e-compile-fuse",
+      "from": "task-dag-compile",
+      "to": "fuse-vs-enforcer",
+      "label": "per join, check hash alignment",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-fuse-taskdag",
+      "from": "fuse-vs-enforcer",
+      "to": "task-dag",
+      "label": "fused or enforcer-bounded tasks assembled",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-taskdag-scheduler",
+      "from": "task-dag",
+      "to": "workload-graph-scheduler",
+      "label": "DAG joins the global workload graph",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-scheduler-cache",
+      "from": "workload-graph-scheduler",
+      "to": "cache-affinity-outcomes",
+      "label": "task placement is cache-affinitized",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-scheduler-faulttolerance",
+      "from": "workload-graph-scheduler",
+      "to": "fault-tolerance-state-machine",
+      "label": "placed tasks execute under the state machine",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-faulttolerance-scheduler",
+      "from": "fault-tolerance-state-machine",
+      "to": "workload-graph-scheduler",
+      "label": "retried task re-enters scheduling",
+      "layer": "orchestration",
+      "kind": "feedback"
+    }
   ],
   "walkthrough": [
     {

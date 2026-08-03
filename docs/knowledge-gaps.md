@@ -6,11 +6,11 @@ those are generated, never committed, so they cannot drift.
 
 ## The three-layer model
 
-| Layer | What it is | Where it lives |
-|---|---|---|
-| **Truth** | The marker in the document body — a labeled placeholder inside an `## Internals` sub-heading | `content/articles/*.json`, `content/designs/*.json` (`body_md`) |
-| **Ledger** | The routing entry that turns a gap into ingestion work | `# internals gap: <slug> / <sub-heading> — NEEDS SOURCE: … tier=<n>` lines in `content/queue.md` |
-| **View** | The derived inventory — run it, don't write it | `node scripts/gaps.mjs` (`--json` / `--brief` / `--markdown`), or `/gaps` |
+| Layer      | What it is                                                                                   | Where it lives                                                                                   |
+| ---------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| **Truth**  | The marker in the document body — a labeled placeholder inside an `## Internals` sub-heading | `content/articles/*.json`, `content/designs/*.json` (`body_md`)                                  |
+| **Ledger** | The routing entry that turns a gap into ingestion work                                       | `# internals gap: <slug> / <sub-heading> — NEEDS SOURCE: … tier=<n>` lines in `content/queue.md` |
+| **View**   | The derived inventory — run it, don't write it                                               | `node scripts/gaps.mjs` (`--json` / `--brief` / `--markdown`), or `/gaps`                        |
 
 There is **no committed gap document**. `node scripts/gaps.mjs --markdown > <path>` gives an
 on-demand snapshot; committing one would create a fourth source of truth that drifts like the
@@ -55,7 +55,7 @@ session start.
 
 ## Known open items (not covered by the generator)
 
-Gaps in the knowledge base's *shape* rather than in Internals sections — resolve and delete:
+Gaps in the knowledge base's _shape_ rather than in Internals sections — resolve and delete:
 
 - Topic `data-architecture` has no landing article (the only section node without one).
 - `content/articles/investment-analytics-data-modelling.json` is orphaned from

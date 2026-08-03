@@ -21,15 +21,24 @@
       "layers": ["data"],
       "tags": ["PowerBI", "SemanticModel"],
       "evidence": [
-        { "sourceKey": "semantic-model-direct-lake-reporting", "note": "A semantic model containing Direct Lake tables is consumed exactly like any other Power BI semantic model: it supports reports, explorations, and DAX queries with no special client handling." }
+        {
+          "sourceKey": "semantic-model-direct-lake-reporting",
+          "note": "A semantic model containing Direct Lake tables is consumed exactly like any other Power BI semantic model: it supports reports, explorations, and DAX queries with no special client handling."
+        }
       ],
       "drill": {
-        "inputs": ["A report visual, DAX query, paginated report, or Excel pivot table bound to the semantic model"],
-        "processing": ["Client issues a DAX query against the semantic model exactly as it would for Import or DirectQuery"],
+        "inputs": [
+          "A report visual, DAX query, paginated report, or Excel pivot table bound to the semantic model"
+        ],
+        "processing": [
+          "Client issues a DAX query against the semantic model exactly as it would for Import or DirectQuery"
+        ],
         "outputs": ["A query request handed to the semantic model engine"],
         "example": "An analyst adds a new card visual to an existing Direct Lake report; no special configuration is needed because the visual layer treats the model identically to any other storage mode.",
         "controls": ["Which columns/measures the visual requests"],
-        "failureModes": ["None specific to this node — this is the uniform entry point for all storage modes"]
+        "failureModes": [
+          "None specific to this node — this is the uniform entry point for all storage modes"
+        ]
       }
     },
     {
@@ -42,16 +51,33 @@
       "layers": ["compute", "data"],
       "tags": ["DirectLake", "Caching"],
       "evidence": [
-        { "sourceKey": "semantic-model-direct-lake-reporting", "note": "When a report visual requests data from a Direct Lake table, the semantic model reads the Delta table in OneLake directly and may retain recently accessed data in an in-memory cache to serve subsequent queries efficiently." },
-        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes not just columns the query names but also those needed by relationships and measures." }
+        {
+          "sourceKey": "semantic-model-direct-lake-reporting",
+          "note": "When a report visual requests data from a Direct Lake table, the semantic model reads the Delta table in OneLake directly and may retain recently accessed data in an in-memory cache to serve subsequent queries efficiently."
+        },
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes not just columns the query names but also those needed by relationships and measures."
+        }
       ],
       "drill": {
-        "inputs": ["The set of columns the query needs, including columns pulled in by relationships and measures"],
-        "processing": ["Check each needed column against the in-memory resident cache", "Split columns into already-resident vs. not-yet-loaded"],
-        "outputs": ["A resident subset served immediately, and a not-resident subset routed to the lazy-load step"],
+        "inputs": [
+          "The set of columns the query needs, including columns pulled in by relationships and measures"
+        ],
+        "processing": [
+          "Check each needed column against the in-memory resident cache",
+          "Split columns into already-resident vs. not-yet-loaded"
+        ],
+        "outputs": [
+          "A resident subset served immediately, and a not-resident subset routed to the lazy-load step"
+        ],
         "example": "A dashboard refreshed minutes ago already has the SalesAmount and Region columns resident; a newly added visual asking for CustomerSegment triggers a lazy load for just that one column while the other two serve from cache.",
-        "controls": ["Not directly configurable — residency is managed by the engine and affected by framing/eviction, covered in the next nodes"],
-        "failureModes": ["Assuming residency persists indefinitely — memory pressure or prolonged non-use can evict a column, requiring reload on the next query"]
+        "controls": [
+          "Not directly configurable — residency is managed by the engine and affected by framing/eviction, covered in the next nodes"
+        ],
+        "failureModes": [
+          "Assuming residency persists indefinitely — memory pressure or prolonged non-use can evict a column, requiring reload on the next query"
+        ]
       }
     },
     {
@@ -64,16 +90,31 @@
       "layers": ["data"],
       "tags": ["DirectLake", "OneLake", "Framing"],
       "evidence": [
-        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes not just columns the query names but also those needed by relationships and measures." },
-        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake queries reflect the Delta table state as of the most recent successful framing operation, not the live table, so writes landing after the last frame remain invisible until the next one." }
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes not just columns the query names but also those needed by relationships and measures."
+        },
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "Direct Lake queries reflect the Delta table state as of the most recent successful framing operation, not the live table, so writes landing after the last frame remain invisible until the next one."
+        }
       ],
       "drill": {
-        "inputs": ["Non-resident columns identified by the residency check, plus the current framing baseline"],
-        "processing": ["Read the needed columns' Parquet data from OneLake as of the last framing point", "Transcode from Parquet encoding into the in-memory columnar format the DAX engine queries"],
+        "inputs": [
+          "Non-resident columns identified by the residency check, plus the current framing baseline"
+        ],
+        "processing": [
+          "Read the needed columns' Parquet data from OneLake as of the last framing point",
+          "Transcode from Parquet encoding into the in-memory columnar format the DAX engine queries"
+        ],
         "outputs": ["Newly resident columns available to serve the current and future queries"],
         "example": "A CustomerSegment column not previously queried loads from OneLake for the first time; the load reflects whatever Delta commit version the last framing operation bound to, not any writes that landed afterward.",
-        "controls": ["Automatic-updates setting controlling how often framing (and thus the load baseline) advances"],
-        "failureModes": ["Assuming a load reflects the absolute latest write — it reflects only the last framing point, which can lag behind in-flight writes"]
+        "controls": [
+          "Automatic-updates setting controlling how often framing (and thus the load baseline) advances"
+        ],
+        "failureModes": [
+          "Assuming a load reflects the absolute latest write — it reflects only the last framing point, which can lag behind in-flight writes"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
     },
@@ -87,17 +128,38 @@
       "layers": ["data", "orchestration"],
       "tags": ["DirectLake", "Framing"],
       "evidence": [
-        { "sourceKey": "direct-lake-how-it-works", "note": "Framing is a metadata-only refresh that typically finishes in seconds: the model reads the latest Delta table version and rebinds itself to the current Parquet file set, establishing the new baseline for future transcoding." },
-        { "sourceKey": "direct-lake-how-it-works", "note": "An automatic-updates model setting, on by default, reframes Direct Lake tables whenever the underlying OneLake data changes; turn it off to control data visibility through manual or scheduled framing." },
-        { "sourceKey": "direct-lake-how-it-works", "note": "Framing can fail when a Delta table breaches capacity guardrails, such as exceeding 10,000 Parquet files in a single table." }
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "Framing is a metadata-only refresh that typically finishes in seconds: the model reads the latest Delta table version and rebinds itself to the current Parquet file set, establishing the new baseline for future transcoding."
+        },
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "An automatic-updates model setting, on by default, reframes Direct Lake tables whenever the underlying OneLake data changes; turn it off to control data visibility through manual or scheduled framing."
+        },
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "Framing can fail when a Delta table breaches capacity guardrails, such as exceeding 10,000 Parquet files in a single table."
+        }
       ],
       "drill": {
-        "inputs": ["A change to the underlying OneLake Delta table (new commit), or a manual/scheduled framing trigger"],
-        "processing": ["Read the Delta table's latest log entry to determine the current Parquet file set", "Rebind the model's baseline to that file set", "Evict only the column segments tied to removed row groups during incremental framing, keeping and extending dictionaries rather than fully re-transcoding"],
+        "inputs": [
+          "A change to the underlying OneLake Delta table (new commit), or a manual/scheduled framing trigger"
+        ],
+        "processing": [
+          "Read the Delta table's latest log entry to determine the current Parquet file set",
+          "Rebind the model's baseline to that file set",
+          "Evict only the column segments tied to removed row groups during incremental framing, keeping and extending dictionaries rather than fully re-transcoding"
+        ],
         "outputs": ["A new framing baseline that subsequent lazy loads read against"],
         "example": "A pipeline run completes and commits new Parquet files to a sales table; framing triggers automatically within seconds and the model's next query sees the new data, with no scheduled refresh job involved.",
-        "controls": ["Automatic-updates on/off", "Manual or scheduled framing when automatic updates are disabled for controlled visibility"],
-        "failureModes": ["Framing fails outright once a Delta table exceeds 10,000 Parquet files", "Leaving automatic updates on during multi-step ETL exposes intermediate, inconsistent table states to report users mid-load"]
+        "controls": [
+          "Automatic-updates on/off",
+          "Manual or scheduled framing when automatic updates are disabled for controlled visibility"
+        ],
+        "failureModes": [
+          "Framing fails outright once a Delta table exceeds 10,000 Parquet files",
+          "Leaving automatic updates on during multi-step ETL exposes intermediate, inconsistent table states to report users mid-load"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
     },
@@ -111,17 +173,37 @@
       "layers": ["data", "compute"],
       "tags": ["DirectLake", "DirectQuery", "SQLAnalyticsEndpoint"],
       "evidence": [
-        { "sourceKey": "direct-lake-how-it-works", "note": "DirectQuery fallback exists only in Direct Lake on SQL; documented triggers are querying a SQL-endpoint view, querying a table with SQL-endpoint row-level security, and a Delta table exceeding capacity guardrails." },
-        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake on OneLake never falls back to DirectQuery and skips SQL-endpoint coupling entirely, which enables more efficient DAX query plans since no SQL security check is needed." },
-        { "sourceKey": "direct-lake-how-it-works", "note": "Fallback behavior for Direct Lake on SQL models is governed by the model's DirectLakeBehavior property; the property has no effect on Direct Lake on OneLake models." }
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "DirectQuery fallback exists only in Direct Lake on SQL; documented triggers are querying a SQL-endpoint view, querying a table with SQL-endpoint row-level security, and a Delta table exceeding capacity guardrails."
+        },
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "Direct Lake on OneLake never falls back to DirectQuery and skips SQL-endpoint coupling entirely, which enables more efficient DAX query plans since no SQL security check is needed."
+        },
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "Fallback behavior for Direct Lake on SQL models is governed by the model's DirectLakeBehavior property; the property has no effect on Direct Lake on OneLake models."
+        }
       ],
       "drill": {
         "inputs": ["A query against a Direct Lake on SQL model table"],
-        "processing": ["Check whether the table is based on a SQL-endpoint view", "Check whether the table has SQL-endpoint row-level security applied", "Check whether the underlying Delta table exceeds capacity guardrails"],
-        "outputs": ["Either the normal Direct Lake path (framing/lazy-load), or a fallback to DirectQuery against the SQL analytics endpoint"],
+        "processing": [
+          "Check whether the table is based on a SQL-endpoint view",
+          "Check whether the table has SQL-endpoint row-level security applied",
+          "Check whether the underlying Delta table exceeds capacity guardrails"
+        ],
+        "outputs": [
+          "Either the normal Direct Lake path (framing/lazy-load), or a fallback to DirectQuery against the SQL analytics endpoint"
+        ],
         "example": "A model table backed by a base Delta table with no RLS and under the file-count guardrail proceeds through the normal Direct Lake path; an otherwise-identical table backed by a SQL view fails this check on every single query and always falls back.",
-        "controls": ["DirectLakeBehavior model property (SQL flavor only)", "Whether model tables are based on views vs. base tables — the fix for the most common trigger"],
-        "failureModes": ["Not realizing this check only applies to Direct Lake on SQL — a OneLake-flavor model has no equivalent fallback path at all"]
+        "controls": [
+          "DirectLakeBehavior model property (SQL flavor only)",
+          "Whether model tables are based on views vs. base tables — the fix for the most common trigger"
+        ],
+        "failureModes": [
+          "Not realizing this check only applies to Direct Lake on SQL — a OneLake-flavor model has no equivalent fallback path at all"
+        ]
       }
     },
     {
@@ -134,16 +216,31 @@
       "layers": ["data", "compute"],
       "tags": ["DirectLake", "DirectQuery"],
       "evidence": [
-        { "sourceKey": "direct-lake-how-it-works", "note": "A fallen-back query reads the SQL analytics endpoint directly and therefore returns the latest data, escaping the framing point-in-time — at the cost of typically slower performance." },
-        { "sourceKey": "semantic-model-direct-lake-reporting", "note": "A Direct Lake on SQL table can fall back to DirectQuery through the SQL analytics endpoint when Direct Lake mode cannot be used, and this fallback is governed by the model's Direct Lake behavior property." }
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "A fallen-back query reads the SQL analytics endpoint directly and therefore returns the latest data, escaping the framing point-in-time — at the cost of typically slower performance."
+        },
+        {
+          "sourceKey": "semantic-model-direct-lake-reporting",
+          "note": "A Direct Lake on SQL table can fall back to DirectQuery through the SQL analytics endpoint when Direct Lake mode cannot be used, and this fallback is governed by the model's Direct Lake behavior property."
+        }
       ],
       "drill": {
         "inputs": ["A query that tripped one of the three fallback triggers"],
-        "processing": ["Query routed live to the SQL analytics endpoint instead of reading resident/loaded OneLake columns", "Result reflects the current SQL-endpoint state, not the last framing snapshot"],
-        "outputs": ["Fresh, live query results, at the cost of typically slower response time than the normal Direct Lake path"],
+        "processing": [
+          "Query routed live to the SQL analytics endpoint instead of reading resident/loaded OneLake columns",
+          "Result reflects the current SQL-endpoint state, not the last framing snapshot"
+        ],
+        "outputs": [
+          "Fresh, live query results, at the cost of typically slower response time than the normal Direct Lake path"
+        ],
         "example": "A table with SQL-endpoint row-level security correctly falls back to DirectQuery on every query for security-eligible users, trading Direct Lake speed for the row-level security enforcement the scenario genuinely requires.",
-        "controls": ["DirectLakeBehavior property (e.g. to prefer or avoid fallback where the trigger is optional)"],
-        "failureModes": ["Treating a slow report as a capacity problem and scaling the SKU instead of recognizing the query is falling back to DirectQuery"]
+        "controls": [
+          "DirectLakeBehavior property (e.g. to prefer or avoid fallback where the trigger is optional)"
+        ],
+        "failureModes": [
+          "Treating a slow report as a capacity problem and scaling the SKU instead of recognizing the query is falling back to DirectQuery"
+        ]
       }
     },
     {
@@ -156,27 +253,98 @@
       "layers": ["data", "compute"],
       "tags": ["DirectLake", "AntiPattern", "SQLViews"],
       "evidence": [
-        { "sourceKey": "direct-lake-develop", "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode." }
+        {
+          "sourceKey": "direct-lake-develop",
+          "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode."
+        }
       ],
       "drill": {
         "inputs": ["A Direct Lake on SQL model with one or more tables sourced from SQL views"],
-        "processing": ["Audit each model table for whether it points at a view or a base table", "Repoint view-based tables at the underlying base Delta tables", "Push whatever transformation the view was doing upstream, into the lakehouse/warehouse layer instead"],
-        "outputs": ["Model tables that actually read through the normal Direct Lake path instead of silently falling back on every query"],
+        "processing": [
+          "Audit each model table for whether it points at a view or a base table",
+          "Repoint view-based tables at the underlying base Delta tables",
+          "Push whatever transformation the view was doing upstream, into the lakehouse/warehouse layer instead"
+        ],
+        "outputs": [
+          "Model tables that actually read through the normal Direct Lake path instead of silently falling back on every query"
+        ],
         "example": "A convenience view joining two tables for a report is replaced by a materialized gold table; the model table repoints at the base table and queries stop falling back to DirectQuery on every single request.",
-        "controls": ["Treat any view in a Direct Lake on SQL model as a defect to justify, not a default", "Prefer base tables for every Direct Lake model table"],
-        "failureModes": ["Diagnosing the resulting slowness as a capacity problem and scaling the SKU instead of fixing the view", "Adding more views for modelling convenience over time, progressively converting the whole model to DirectQuery without noticing"]
+        "controls": [
+          "Treat any view in a Direct Lake on SQL model as a defect to justify, not a default",
+          "Prefer base tables for every Direct Lake model table"
+        ],
+        "failureModes": [
+          "Diagnosing the resulting slowness as a capacity problem and scaling the SKU instead of fixing the view",
+          "Adding more views for modelling convenience over time, progressively converting the whole model to DirectQuery without noticing"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-visual-residency", "from": "visual-query", "to": "residency-check", "label": "query reaches the semantic model", "layer": "data", "kind": "flow" },
-    { "id": "e-residency-load", "from": "residency-check", "to": "lazy-load-onelake", "label": "column not yet resident", "layer": "data", "kind": "flow" },
-    { "id": "e-load-framing", "from": "lazy-load-onelake", "to": "framing", "label": "load anchored to the current frame", "layer": "data", "kind": "flow" },
-    { "id": "e-framing-fallbackcheck", "from": "framing", "to": "fallback-trigger-check", "label": "check applies only to Direct Lake on SQL", "layer": "data", "kind": "flow" },
-    { "id": "e-fallbackcheck-directquery", "from": "fallback-trigger-check", "to": "directquery-fallback", "label": "trigger condition met", "layer": "data", "kind": "branch" },
-    { "id": "e-fallbackcheck-warning", "from": "fallback-trigger-check", "to": "sql-view-fallback-warning", "label": "if table is based on a SQL view", "layer": "data", "kind": "branch" },
-    { "id": "e-warning-directquery", "from": "sql-view-fallback-warning", "to": "directquery-fallback", "label": "every query falls back, permanently", "layer": "data", "kind": "flow" },
-    { "id": "e-directquery-residency", "from": "directquery-fallback", "to": "residency-check", "label": "next query re-checks residency", "layer": "data", "kind": "feedback" }
+    {
+      "id": "e-visual-residency",
+      "from": "visual-query",
+      "to": "residency-check",
+      "label": "query reaches the semantic model",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-residency-load",
+      "from": "residency-check",
+      "to": "lazy-load-onelake",
+      "label": "column not yet resident",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-load-framing",
+      "from": "lazy-load-onelake",
+      "to": "framing",
+      "label": "load anchored to the current frame",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-framing-fallbackcheck",
+      "from": "framing",
+      "to": "fallback-trigger-check",
+      "label": "check applies only to Direct Lake on SQL",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-fallbackcheck-directquery",
+      "from": "fallback-trigger-check",
+      "to": "directquery-fallback",
+      "label": "trigger condition met",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-fallbackcheck-warning",
+      "from": "fallback-trigger-check",
+      "to": "sql-view-fallback-warning",
+      "label": "if table is based on a SQL view",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-warning-directquery",
+      "from": "sql-view-fallback-warning",
+      "to": "directquery-fallback",
+      "label": "every query falls back, permanently",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-directquery-residency",
+      "from": "directquery-fallback",
+      "to": "residency-check",
+      "label": "next query re-checks residency",
+      "layer": "data",
+      "kind": "feedback"
+    }
   ],
   "walkthrough": [
     {

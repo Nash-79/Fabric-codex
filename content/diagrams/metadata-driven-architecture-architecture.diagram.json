@@ -6,12 +6,7 @@
   "longDescription": "This diagram traces one execution of a metadata-driven load on Microsoft Fabric. A versioned metadata contract (object list, source connection, target shape, quality rules, load type) is resolved at run start into a concrete parameter set for one data object. That resolved configuration parameterizes a single reusable Data Factory pipeline, which invokes a reusable notebook for object-agnostic transform logic rather than one pipeline and one notebook per source. Execution lands data in a lakehouse via managed Delta tables. Every run — success or failure — writes to a run ledger that records status, rows processed, and the watermark for the next run; that ledger is what makes the framework restartable, and it feeds back into config resolution for the following run (the feedback edge). Quality checks evaluate the landed data against the contract's rules and post evidence forward; lineage and telemetry are captured for governance and observability. Two warning nodes are deliberately included: the metadata contract can accrete conditional logic until it functions as an undocumented programming language understood by no single person, and a non-idempotent pipeline write will corrupt or duplicate data if a failed run is blindly retried without the ledger's watermark discipline.",
   "type": "architecture",
   "topicSlug": "metadata-driven-architecture",
-  "capabilityIds": [
-    "data-factory",
-    "spark",
-    "lakehouse",
-    "purview"
-  ],
+  "capabilityIds": ["data-factory", "spark", "lakehouse", "purview"],
   "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/metadata-driven-architecture-architecture.svg",
@@ -23,15 +18,9 @@
       "detail": "A structured, version-controlled record (table, file, or config store) listing every data object the framework loads: its source connection, target Fabric item, column/type expectations, quality rules, load type (full vs incremental), and ownership. Because it is versioned, a schema or rule change is auditable and reversible, the same discipline applied to claims in this knowledge base.",
       "whyItMatters": "This is the single place that defines what 'correct' looks like for every object. If it drifts silently, every downstream run inherits the drift with no record of why.",
       "classification": "pattern",
-      "layers": [
-        "metadata",
-        "governance"
-      ],
+      "layers": ["metadata", "governance"],
       "evidence": [],
-      "tags": [
-        "contract",
-        "config"
-      ],
+      "tags": ["contract", "config"],
       "drill": {
         "inputs": [
           "Source system inventory",
@@ -67,14 +56,9 @@
       "detail": "At run start, this step reads the metadata contract plus the current watermark from the run ledger and resolves them into the concrete parameter set for a single object: which connection to open, which incremental window to pull, which target table to write, and which quality rules apply. This is the translation layer between declarative metadata and an executable run.",
       "whyItMatters": "This is where 'metadata' actually becomes 'a run' — if resolution logic is wrong, every object it touches gets the wrong parameters, not just one.",
       "classification": "pattern",
-      "layers": [
-        "metadata",
-        "orchestration"
-      ],
+      "layers": ["metadata", "orchestration"],
       "evidence": [],
-      "tags": [
-        "parameterization"
-      ],
+      "tags": ["parameterization"],
       "drill": {
         "inputs": [
           "Metadata contract (current version)",
@@ -86,9 +70,7 @@
           "Read the last committed watermark for that object from the ledger",
           "Build the concrete parameter payload (connection, window, target, rules) for this run"
         ],
-        "outputs": [
-          "Resolved parameter set handed to the pipeline invocation"
-        ],
+        "outputs": ["Resolved parameter set handed to the pipeline invocation"],
         "example": "For 'returns', resolution reads last watermark updated_at=2026-07-11T00:00Z from the ledger and produces parameters: window=[2026-07-11T00:00Z, now], target=lh_bronze.returns, rules=[not_null(order_id)].",
         "controls": [
           "Resolution logic itself (code, not data) — kept intentionally thin",
@@ -107,34 +89,23 @@
       "detail": "A single generic Data Factory pipeline accepts the resolved parameter set and executes the movement/orchestration steps common to every object: connect, copy or trigger transform, checkpoint. Fabric pipelines are the orchestration layer that chains data movement and transformation activities with control-flow constructs, authored once and driven by parameters rather than duplicated per source.",
       "whyItMatters": "Reuse is what keeps the framework's maintenance cost flat as object count grows — the alternative is one pipeline per source, which is the config-explosion problem this pattern exists to avoid.",
       "classification": "fact",
-      "layers": [
-        "orchestration"
-      ],
+      "layers": ["orchestration"],
       "evidence": [
         {
           "sourceKey": "data-factory-overview",
           "note": "Data Factory is Fabric's data integration workload: it connects to data sources, moves data, transforms it, and orchestrates movement and transformation tasks from a single place."
         }
       ],
-      "tags": [
-        "pipeline",
-        "orchestration",
-        "data-factory"
-      ],
+      "tags": ["pipeline", "orchestration", "data-factory"],
       "drill": {
-        "inputs": [
-          "Resolved parameter set from config resolution"
-        ],
+        "inputs": ["Resolved parameter set from config resolution"],
         "processing": [
           "Bind incoming parameters to pipeline variables",
           "Execute copy/transform activities using those variables instead of hard-coded values",
           "Invoke the reusable notebook for object-specific transform logic",
           "Emit a run status signal on completion or failure"
         ],
-        "outputs": [
-          "Triggered notebook execution",
-          "Run status event to the run ledger"
-        ],
+        "outputs": ["Triggered notebook execution", "Run status event to the run ledger"],
         "example": "The pipeline binds source_connection, target_table, and window parameters for 'returns', runs a Copy activity into the bronze zone, then calls the reusable transform notebook.",
         "controls": [
           "Pipeline parameter schema",
@@ -155,20 +126,14 @@
       "detail": "A pipeline run is one execution instance of the pipeline, started on demand, on a time-based schedule, or from an event trigger such as a file arriving in storage. Each run is tracked independently, which is what lets the framework retry or inspect one failed object without touching the others.",
       "whyItMatters": "Treating each object's execution as its own run instance, rather than one big batch job, is what makes per-object retry and monitoring possible at all.",
       "classification": "fact",
-      "layers": [
-        "orchestration",
-        "observability"
-      ],
+      "layers": ["orchestration", "observability"],
       "evidence": [
         {
           "sourceKey": "pipeline-runs",
           "note": "A pipeline run is one execution instance of a pipeline and can be started on demand, on a schedule, or from an event trigger such as files arriving in storage."
         }
       ],
-      "tags": [
-        "runs",
-        "triggers"
-      ],
+      "tags": ["runs", "triggers"],
       "drill": {
         "inputs": [
           "Trigger signal (schedule, event, or manual)",
@@ -201,15 +166,9 @@
       "detail": "The pipeline invokes one shared notebook that performs the transform logic common to every object — the notebook itself has no per-source branching hard-coded into it; it reads its behavior from the same parameter set the pipeline was resolved with. This keeps transform logic in one auditable place instead of scattered across a copy-pasted notebook per source.",
       "whyItMatters": "A per-source notebook copy is the same config-explosion failure as a per-source pipeline, just moved one layer down — this node is where that risk gets reintroduced if the reuse discipline slips.",
       "classification": "pattern",
-      "layers": [
-        "compute",
-        "orchestration"
-      ],
+      "layers": ["compute", "orchestration"],
       "evidence": [],
-      "tags": [
-        "notebook",
-        "reuse"
-      ],
+      "tags": ["notebook", "reuse"],
       "drillTarget": {
         "kind": "capability",
         "slug": "spark",
@@ -247,20 +206,14 @@
       "detail": "The pipeline/notebook writes the object's data into a Fabric lakehouse's managed Tables area. Fabric validates the Delta format, extracts schema and partitioning metadata, and registers the table in the metastore automatically, so it is queryable from Spark or T-SQL without a manual CREATE TABLE step.",
       "whyItMatters": "Auto-registration removes an entire class of manual schema-drift bugs that plague hand-rolled loaders, but it also means a bad write is immediately visible to every consumer — there is no staging gate unless the framework adds one.",
       "classification": "fact",
-      "layers": [
-        "data",
-        "compute"
-      ],
+      "layers": ["data", "compute"],
       "evidence": [
         {
           "sourceKey": "lakehouse-sql-analytics-endpoint",
           "note": "When a Delta table is created or changed in the lakehouse, the SQL analytics endpoint detects it and refreshes its own SQL metadata (table definitions, column types, statistics) automatically, with no import step, making it immediately queryable via T-SQL."
         }
       ],
-      "tags": [
-        "delta",
-        "lakehouse"
-      ],
+      "tags": ["delta", "lakehouse"],
       "drillTarget": {
         "kind": "capability",
         "slug": "lakehouse",
@@ -276,10 +229,7 @@
           "Fabric validates the Delta format and extracts column/type/partition metadata",
           "Table is registered in the metastore for Spark SQL / T-SQL access"
         ],
-        "outputs": [
-          "Queryable managed Delta table",
-          "Updated table metadata for the metastore"
-        ],
+        "outputs": ["Queryable managed Delta table", "Updated table metadata for the metastore"],
         "example": "'returns' rows are written to Tables/bronze/returns as Delta; the metastore registers the table with its inferred schema, and it is immediately queryable via the SQL analytics endpoint.",
         "controls": [
           "Write mode (append/merge/overwrite) chosen per load_type in the contract",
@@ -298,28 +248,17 @@
       "detail": "The quality rules declared per object in the metadata contract (not-null checks, row-count thresholds, referential checks) are evaluated against the data that just landed. The result — pass, fail, or a specific rule violation — is recorded as evidence attached to that run, not just logged and discarded.",
       "whyItMatters": "Without recorded evidence, 'the load succeeded' and 'the load produced correct data' are conflated; this node is what keeps them separate and auditable.",
       "classification": "pattern",
-      "layers": [
-        "governance",
-        "observability"
-      ],
+      "layers": ["governance", "observability"],
       "evidence": [],
-      "tags": [
-        "dataquality"
-      ],
+      "tags": ["dataquality"],
       "drill": {
-        "inputs": [
-          "Landed Delta table",
-          "Quality rules from the object's contract entry"
-        ],
+        "inputs": ["Landed Delta table", "Quality rules from the object's contract entry"],
         "processing": [
           "Run each declared rule against the landed data (e.g., not-null, row-count delta, uniqueness)",
           "Aggregate rule results into a pass/fail evidence record",
           "Attach the evidence record to this run's ledger entry"
         ],
-        "outputs": [
-          "Quality evidence record tied to the run ID",
-          "Optional alert on rule failure"
-        ],
+        "outputs": ["Quality evidence record tied to the run ID", "Optional alert on rule failure"],
         "example": "The not_null(order_id) rule for 'returns' is evaluated against the newly landed rows; 3 violations are found and recorded as a failed-rule evidence entry on run 8472.",
         "controls": [
           "Which rules block downstream consumption vs only warn",
@@ -338,15 +277,9 @@
       "detail": "A persistent store of run history, itself typically a Delta table in OneLake: one entry per pipeline run instance, carrying status, rows processed, watermark position, and links to quality evidence and lineage. It is both the audit trail and the operational memory that makes the framework restartable rather than stateless.",
       "whyItMatters": "This is the node that turns a series of independent runs into a framework: without it, every run starts from zero and 'incremental load' is impossible.",
       "classification": "pattern",
-      "layers": [
-        "metadata",
-        "observability"
-      ],
+      "layers": ["metadata", "observability"],
       "evidence": [],
-      "tags": [
-        "watermark",
-        "restartability"
-      ],
+      "tags": ["watermark", "restartability"],
       "drill": {
         "inputs": [
           "Run status from the pipeline run instance",
@@ -380,30 +313,21 @@
       "detail": "Fabric's governance surface captures item-level metadata and lineage for the objects the framework touches, and monitoring hub / capacity metrics expose run-level operational signals. The framework should apply this at the same object boundary it uses for ownership, not as an afterthought bolted on separately.",
       "whyItMatters": "Lineage is what lets someone answer 'where did this number come from' months later; telemetry is what lets an operator see capacity strain before it becomes an incident.",
       "classification": "fact",
-      "layers": [
-        "governance",
-        "observability"
-      ],
+      "layers": ["governance", "observability"],
       "evidence": [
         {
           "sourceKey": "governance-compliance-overview",
           "note": "Fabric's governance surface includes discovery/trust (OneLake catalog, lineage) and monitoring activity (monitoring hub, capacity metrics), and Purview Data Map can scan Fabric items to extract item-level metadata and lineage."
         }
       ],
-      "tags": [
-        "lineage",
-        "governance"
-      ],
+      "tags": ["lineage", "governance"],
       "drillTarget": {
         "kind": "capability",
         "slug": "purview",
         "label": "Governance & Purview capability"
       },
       "drill": {
-        "inputs": [
-          "Run ledger entries",
-          "Item metadata from lakehouse tables touched by the run"
-        ],
+        "inputs": ["Run ledger entries", "Item metadata from lakehouse tables touched by the run"],
         "processing": [
           "Scan/register item-level metadata and lineage edges (source object to target table) for the run's objects",
           "Surface run-level operational metrics through the monitoring hub"
@@ -430,18 +354,11 @@
       "detail": "As more edge cases accumulate, teams add conditional flags, per-object overrides, and nested rule expressions directly into the metadata contract until interpreting an entry requires understanding a bespoke, undocumented execution model — the contract has become a programming language with no compiler, type system, or review discipline.",
       "whyItMatters": "This is the most common way metadata-driven frameworks fail in practice: the framework's own flexibility becomes its biggest liability, and the failure mode is invisible until someone has to change it under pressure.",
       "classification": "warning",
-      "layers": [
-        "metadata"
-      ],
+      "layers": ["metadata"],
       "evidence": [],
-      "tags": [
-        "antipattern",
-        "risk"
-      ],
+      "tags": ["antipattern", "risk"],
       "drill": {
-        "inputs": [
-          "Metadata contract, after many incremental exception additions"
-        ],
+        "inputs": ["Metadata contract, after many incremental exception additions"],
         "processing": [
           "Each new edge case is solved by adding another conditional field to the contract rather than extending the executor",
           "No schema versioning discipline is applied to the growing set of fields",
@@ -468,16 +385,9 @@
       "detail": "If a pipeline activity's write is not idempotent (e.g., a blind append rather than a merge keyed on a natural key, or a write that ignores the ledger's last committed watermark), retrying a failed or partial run reprocesses rows that already landed, producing duplicates or inconsistent aggregates downstream.",
       "whyItMatters": "Retries are the normal recovery path in any orchestrated system; a framework that cannot retry safely turns every transient failure into a manual data-fix incident.",
       "classification": "warning",
-      "layers": [
-        "orchestration",
-        "data"
-      ],
+      "layers": ["orchestration", "data"],
       "evidence": [],
-      "tags": [
-        "antipattern",
-        "risk",
-        "idempotency"
-      ],
+      "tags": ["antipattern", "risk", "idempotency"],
       "drill": {
         "inputs": [
           "A partially completed run (e.g., 60% of rows written before failure)",

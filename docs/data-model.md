@@ -58,7 +58,7 @@ claimevents (audit)                    queue_items (frontend → agent ingestion
 - **`topics`** — keyed by `slug` (text PK); adjacency via `parent_slug`. Not versioned.
 - **`claimevents`** — append-only audit trail of human curation actions on claims.
 - **`queue_items`** — work awaiting a local agent (`queued → claimed → ingested | failed
-  (→ queued via requeue)`, or `queued → dismissed`). `kind` is `source` (a URL to ingest, default),
+(→ queued via requeue)`, or `queued → dismissed`). `kind` is `source` (a URL to ingest, default),
   `diagram` (commission a diagram for `target_slug`), or `idea` (an article/lesson idea brief).
   `scheduled_at` (a future timestamp) hides an item until due.
 
@@ -84,7 +84,7 @@ On publish: find the current active `(kind, slug)` row (if any), archive it (ren
 `{slug}@v{version}`, set `active=false`, `status="superseded"`), then insert a new row with
 `version = prior.version + 1`, `supersedes_id = prior.id`, `active=true`,
 `status="published"` — there is no separate review/promotion UI, so **Settings → Publish** going
-live *is* the publish action. A malformed `presentation_profile`/`lesson_meta` hard-fails the
+live _is_ the publish action. A malformed `presentation_profile`/`lesson_meta` hard-fails the
 publish (`presentationProfileSchema.parse(...)`/`lessonMetaSchema.parse(...)`) rather than being
 silently dropped or coerced — same "refuse rather than degrade" posture as the citation checks,
 which also hard-fail if `cited_source_keys` doesn't resolve against approved sources.
@@ -101,12 +101,12 @@ v2  status=verified   active=true                        (only one active claim 
 
 State transitions:
 
-| Event | What happens |
-| --- | --- |
-| New claim ingested | v1, `status=pending`, `active=true` |
-| Human approves in the Registry | `status=verified` |
+| Event                              | What happens                                                                                 |
+| ---------------------------------- | -------------------------------------------------------------------------------------------- |
+| New claim ingested                 | v1, `status=pending`, `active=true`                                                          |
+| Human approves in the Registry     | `status=verified`                                                                            |
 | Source revised, claim text changed | new version inserted, `supersedes_id` → old; old row set `status=superseded`, `active=false` |
-| Source revised, claim gone | old row set `status=deprecated`, `active=false` |
+| Source revised, claim gone         | old row set `status=deprecated`, `active=false`                                              |
 
 Only active claims can be superseded. Every claim event (supersede, verify) is written to
 `claimevents` as an append-only audit trail.

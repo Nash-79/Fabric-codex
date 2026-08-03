@@ -137,7 +137,15 @@ def main():
         if alias:
             changed += rewrite_frontmatter_model(f, alias, dry)
 
-    # 2. Copilot chat modes — display names from registry, fallback Auto
+    # 2. Gemini subagents — Google models per tier
+    print("Gemini subagents:")
+    for f in sorted((ROOT / ".gemini" / "agents").glob("*.md")):
+        tier = tier_of(f, reg)
+        model = resolve(reg, tier, "google", avail)
+        if model:
+            changed += rewrite_frontmatter_model(f, model, dry)
+
+    # 3. Copilot chat modes — display names from registry, fallback Auto
     print("Copilot chat modes:")
     names = reg["tools"]["copilot_chatmodes"]["copilot_display_names"]
     for f in sorted((ROOT / ".github" / "chatmodes").glob("*.chatmode.md")):

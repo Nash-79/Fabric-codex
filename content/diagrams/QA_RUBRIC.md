@@ -3,7 +3,7 @@
 Editorial Experience Revamp, Phase 5. A manual/editorial scoring checklist applied per diagram —
 **not** an automated script. `npm run validate:diagrams` and `npm run validate:diagram-layout`
 remain the only automated gates (structural/geometric/evidence-integrity checks); this rubric
-covers what those scripts can't: whether a diagram actually *reads well*.
+covers what those scripts can't: whether a diagram actually _reads well_.
 
 Score each axis **pass/fail**. A diagram **fails the rubric** if any axis fails; it **passes**
 only if every axis passes. A numeric average isn't actionable the way a fail-per-axis list is —
@@ -15,10 +15,10 @@ don't average these.
    direction, or does the eye have to hunt?
 2. **Label size** — are all text labels legible at 390px width specifically (the narrowest width
    `validate-diagram-layout.mjs` already audits for overlap/overflow — a diagram can pass that
-   check and still fail this *subjective* legibility axis).
+   check and still fail this _subjective_ legibility axis).
 3. **Alignment** — do nodes/edges look grid-aligned, or hand-placed/drifting? (Distinct from
    `validate-diagrams.mjs`'s "geometry is derived, not authored" rule — this axis is about the
-   *result* looking aligned, not just about not hand-authoring x/y.)
+   _result_ looking aligned, not just about not hand-authoring x/y.)
 4. **Color-meaning consistency** — does color map consistently to classification/layer across the
    whole diagram, not one scheme in one corner and a different one elsewhere?
 5. **Contrast** — sufficient text/background and line/background contrast in both light and dark
@@ -27,7 +27,7 @@ don't average these.
    avoid overlapping other elements?
 7. **Density** — is the diagram trying to show too much in too little space? (A proxy for: will
    this diagram survive being embedded at `standard` inline width, not just `wide`/`full-bleed`.)
-8. **Small-screen readability** — a holistic pass at 390px width: does this diagram *communicate*,
+8. **Small-screen readability** — a holistic pass at 390px width: does this diagram _communicate_,
    not just technically pass the layout script's overlap/overflow checks?
 9. **Evidence-mapping clarity** — for `fact`-classified nodes, is it visually obvious which region
    the cited evidence belongs to? (A visual judgment, not a JSON-level check.)

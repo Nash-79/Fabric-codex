@@ -21,15 +21,24 @@
       "layers": ["orchestration"],
       "tags": ["FabricDataAgent"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-concept", "note": "A data agent is a standalone, highly configurable artifact that can be invoked by external orchestrators, distinguishing it from preconfigured, non-customizable Fabric Copilots." }
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "A data agent is a standalone, highly configurable artifact that can be invoked by external orchestrators, distinguishing it from preconfigured, non-customizable Fabric Copilots."
+        }
       ],
       "drill": {
-        "inputs": ["Natural-language text from Fabric chat, Copilot, Microsoft Foundry, Copilot Studio, or a custom app using the agent's endpoint"],
+        "inputs": [
+          "Natural-language text from Fabric chat, Copilot, Microsoft Foundry, Copilot Studio, or a custom app using the agent's endpoint"
+        ],
         "processing": ["Route the raw question into the agent's source-selection stage"],
         "outputs": ["An unrouted question ready for source selection"],
         "example": "An analyst types 'what were Q2 returns by region' into the agent's chat panel inside a Fabric workspace.",
-        "controls": ["Which surfaces the agent is published to determines who can ask it questions at all"],
-        "failureModes": ["A question ambiguous enough that no configured data source description matches it well"]
+        "controls": [
+          "Which surfaces the agent is published to determines who can ask it questions at all"
+        ],
+        "failureModes": [
+          "A question ambiguous enough that no configured data source description matches it well"
+        ]
       },
       "drillTarget": { "kind": "topic", "slug": "fabric-data-agent", "label": "Fabric Data Agent" }
     },
@@ -43,16 +52,36 @@
       "layers": ["orchestration"],
       "tags": ["FabricDataAgent"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-configuration", "note": "The routing decision for which data source to use factors in each source's description, schema, and example queries together, not any single signal in isolation." },
-        { "sourceKey": "fabric-data-agent-concept", "note": "A single data agent can combine up to five data sources in any mix of lakehouses, warehouses, KQL databases, Power BI semantic models, ontologies, and Microsoft Graph." }
+        {
+          "sourceKey": "fabric-data-agent-configuration",
+          "note": "The routing decision for which data source to use factors in each source's description, schema, and example queries together, not any single signal in isolation."
+        },
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "A single data agent can combine up to five data sources in any mix of lakehouses, warehouses, KQL databases, Power BI semantic models, ontologies, and Microsoft Graph."
+        }
       ],
       "drill": {
-        "inputs": ["The user's question", "Up to five attached data source descriptions, schemas, and example-query sets"],
-        "processing": ["Compare the question against each source's description and schema", "Weigh matching example queries as an additional routing signal", "Select the best-matching source"],
-        "outputs": ["A selected data source and its type (lakehouse, warehouse, semantic model, KQL database, ontology, Graph)"],
+        "inputs": [
+          "The user's question",
+          "Up to five attached data source descriptions, schemas, and example-query sets"
+        ],
+        "processing": [
+          "Compare the question against each source's description and schema",
+          "Weigh matching example queries as an additional routing signal",
+          "Select the best-matching source"
+        ],
+        "outputs": [
+          "A selected data source and its type (lakehouse, warehouse, semantic model, KQL database, ontology, Graph)"
+        ],
         "example": "A question mentioning 'returns by region' routes to the warehouse source whose description mentions sales and returns tables, over a KQL eventhouse source describing device telemetry.",
-        "controls": ["Data source description text", "Which example queries are attached per source"],
-        "failureModes": ["Two sources with overlapping descriptions causing inconsistent routing across similarly-worded questions"]
+        "controls": [
+          "Data source description text",
+          "Which example queries are attached per source"
+        ],
+        "failureModes": [
+          "Two sources with overlapping descriptions causing inconsistent routing across similarly-worded questions"
+        ]
       }
     },
     {
@@ -65,15 +94,27 @@
       "layers": ["orchestration"],
       "tags": ["FabricDataAgent"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-concept", "note": "A data agent cannot execute queries when its workspace capacity and its data source's workspace capacity are in different regions, so a lakehouse in one region paired with a data agent capacity in another region will fail." }
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "A data agent cannot execute queries when its workspace capacity and its data source's workspace capacity are in different regions, so a lakehouse in one region paired with a data agent capacity in another region will fail."
+        }
       ],
       "drill": {
-        "inputs": ["Agent workspace capacity region", "Attached source's workspace capacity region"],
-        "processing": ["Compare regions at query time; a mismatch fails the request before schema fetch"],
+        "inputs": [
+          "Agent workspace capacity region",
+          "Attached source's workspace capacity region"
+        ],
+        "processing": [
+          "Compare regions at query time; a mismatch fails the request before schema fetch"
+        ],
         "outputs": ["A hard failure with no partial answer"],
         "example": "A data agent provisioned in a West Europe capacity is attached to a lakehouse whose workspace runs on an East US capacity; every query against that source fails outright.",
-        "controls": ["Placing the agent's workspace capacity in the same region as every attached source at design time"],
-        "failureModes": ["Discovering the region mismatch only after users report every query failing, rather than at configuration time"]
+        "controls": [
+          "Placing the agent's workspace capacity in the same region as every attached source at design time"
+        ],
+        "failureModes": [
+          "Discovering the region mismatch only after users report every query failing, rather than at configuration time"
+        ]
       }
     },
     {
@@ -86,15 +127,22 @@
       "layers": ["orchestration"],
       "tags": ["FabricDataAgent"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-concept", "note": "The agent only ever generates read queries and never create, update, or delete statements, and it cannot directly query unstructured files such as PDF, DOCX, or TXT, or standalone lakehouse files unless those files are first ingested or exposed as tables." }
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "The agent only ever generates read queries and never create, update, or delete statements, and it cannot directly query unstructured files such as PDF, DOCX, or TXT, or standalone lakehouse files unless those files are first ingested or exposed as tables."
+        }
       ],
       "drill": {
         "inputs": ["A question implying content lives in raw files rather than tables"],
         "processing": ["Source selection finds no queryable table backing the requested content"],
         "outputs": ["No generated query; the agent cannot answer from raw file content"],
         "example": "A user asks to summarize contract terms in PDFs sitting in a lakehouse's Files area with no extracted table representation; the agent has nothing to query.",
-        "controls": ["Ingesting/extracting unstructured content into tables before attaching the source, if that content must be queryable"],
-        "failureModes": ["Assuming attaching a lakehouse makes all its files, not just its tables, queryable"]
+        "controls": [
+          "Ingesting/extracting unstructured content into tables before attaching the source, if that content must be queryable"
+        ],
+        "failureModes": [
+          "Assuming attaching a lakehouse makes all its files, not just its tables, queryable"
+        ]
       }
     },
     {
@@ -107,16 +155,29 @@
       "layers": ["governance", "orchestration"],
       "tags": ["FabricDataAgent"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-concept", "note": "Agent behavior is governed by a four-layer precedence model, from highest to lowest: tenant-wide organizational policy, workspace/role-based governance, developer instructions, and end-user prompts; higher layers always override lower ones." },
-        { "sourceKey": "fabric-data-agent-concept", "note": "Purview Data Loss Prevention and access-restriction policies apply directly to data agent queries, and can block a query from running or strip sensitive results from an agent's response even when the agent is technically permitted to read the source." }
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "Agent behavior is governed by a four-layer precedence model, from highest to lowest: tenant-wide organizational policy, workspace/role-based governance, developer instructions, and end-user prompts; higher layers always override lower ones."
+        },
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "Purview Data Loss Prevention and access-restriction policies apply directly to data agent queries, and can block a query from running or strip sensitive results from an agent's response even when the agent is technically permitted to read the source."
+        }
       ],
       "drill": {
-        "inputs": ["The selected source, the routed question, and tenant/workspace/developer instruction layers"],
-        "processing": ["Apply instruction precedence, highest layer first", "Evaluate DLP and access-restriction policy against the pending query and its likely result"],
+        "inputs": [
+          "The selected source, the routed question, and tenant/workspace/developer instruction layers"
+        ],
+        "processing": [
+          "Apply instruction precedence, highest layer first",
+          "Evaluate DLP and access-restriction policy against the pending query and its likely result"
+        ],
         "outputs": ["A permitted-to-proceed query, or a blocked/stripped result"],
         "example": "A workspace-level governance setting restricting a KQL table to internal-only overrides a developer instruction that told the agent to always answer from that table.",
         "controls": ["Tenant-wide organizational policy", "Purview DLP policy scope"],
-        "failureModes": ["Assuming developer instructions are the final word, when tenant policy silently overrides them"]
+        "failureModes": [
+          "Assuming developer instructions are the final word, when tenant policy silently overrides them"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "purview", "label": "Governance" }
     },
@@ -130,16 +191,27 @@
       "layers": ["security", "orchestration"],
       "tags": ["FabricDataAgent"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-create", "note": "When answering a question, the agent first fetches the target data source's schema using the requesting user's own credentials, guaranteeing schema visibility is scoped to what that user can already see." },
-        { "sourceKey": "fabric-data-agent-concept", "note": "The agent enforces read-only, least-privilege access by executing under the requesting user's own credentials and permissions, so each query only reaches data that user is already authorized to view." }
+        {
+          "sourceKey": "fabric-data-agent-create",
+          "note": "When answering a question, the agent first fetches the target data source's schema using the requesting user's own credentials, guaranteeing schema visibility is scoped to what that user can already see."
+        },
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "The agent enforces read-only, least-privilege access by executing under the requesting user's own credentials and permissions, so each query only reaches data that user is already authorized to view."
+        }
       ],
       "drill": {
         "inputs": ["The selected source and the requesting user's Fabric identity"],
-        "processing": ["Call the source's metadata surface under the user's own permissions", "Return only tables/columns that identity can see"],
+        "processing": [
+          "Call the source's metadata surface under the user's own permissions",
+          "Return only tables/columns that identity can see"
+        ],
         "outputs": ["A user-scoped schema for the query-generation prompt"],
         "example": "Two users ask the same question against the same warehouse source, but one has row-level security scoping them to their own region; the schema and any resulting data reflect that automatically.",
         "controls": ["Row-level and column-level security already defined on the source"],
-        "failureModes": ["A user with no read permission on the source gets no schema and no answer, rather than a misleading partial one"]
+        "failureModes": [
+          "A user with no read permission on the source gets no schema and no answer, rather than a misleading partial one"
+        ]
       }
     },
     {
@@ -152,16 +224,38 @@
       "layers": ["compute", "orchestration"],
       "tags": ["FabricDataAgent"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-create", "note": "The prompt sent to the underlying Azure OpenAI Assistant is assembled from the user's question, the fetched schema metadata, and any creator-supplied instructions or example queries, before the assistant selects a query-generation tool." },
-        { "sourceKey": "fabric-data-agent-create", "note": "No customer-managed Azure OpenAI key or access token is required to use a data agent; Fabric brokers a Microsoft-managed Azure OpenAI Assistant and handles that authentication internally." }
+        {
+          "sourceKey": "fabric-data-agent-create",
+          "note": "The prompt sent to the underlying Azure OpenAI Assistant is assembled from the user's question, the fetched schema metadata, and any creator-supplied instructions or example queries, before the assistant selects a query-generation tool."
+        },
+        {
+          "sourceKey": "fabric-data-agent-create",
+          "note": "No customer-managed Azure OpenAI key or access token is required to use a data agent; Fabric brokers a Microsoft-managed Azure OpenAI Assistant and handles that authentication internally."
+        }
       ],
       "drill": {
-        "inputs": ["User question", "User-scoped schema", "Agent-level and data-source-level instructions", "Top-matching example queries"],
-        "processing": ["Assemble all inputs into one prompt", "Send to the managed Azure OpenAI Assistant", "Assistant selects a query-generation tool for the source type"],
-        "outputs": ["A tool selection and generation context ready for source-specific query generation"],
+        "inputs": [
+          "User question",
+          "User-scoped schema",
+          "Agent-level and data-source-level instructions",
+          "Top-matching example queries"
+        ],
+        "processing": [
+          "Assemble all inputs into one prompt",
+          "Send to the managed Azure OpenAI Assistant",
+          "Assistant selects a query-generation tool for the source type"
+        ],
+        "outputs": [
+          "A tool selection and generation context ready for source-specific query generation"
+        ],
         "example": "Agent-level instructions defining 'active customer' as a specific status code are included in the prompt alongside the schema, so the generated query filters correctly without the user having to state that definition themselves.",
-        "controls": ["Agent-level instructions (up to 15,000 characters)", "Data-source-level instructions and example queries"],
-        "failureModes": ["Missing or vague instructions letting the model guess business terminology incorrectly"]
+        "controls": [
+          "Agent-level instructions (up to 15,000 characters)",
+          "Data-source-level instructions and example queries"
+        ],
+        "failureModes": [
+          "Missing or vague instructions letting the model guess business terminology incorrectly"
+        ]
       }
     },
     {
@@ -174,16 +268,29 @@
       "layers": ["compute"],
       "tags": ["FabricDataAgent", "NL2SQL"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-concept", "note": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases, or a Microsoft Graph query for organizational data." },
-        { "sourceKey": "fabric-data-agent-concept", "note": "The agent only ever generates read queries (SQL, DAX, or KQL) and never create, update, or delete statements, and it cannot directly query unstructured files such as PDF, DOCX, or TXT, or standalone lakehouse files unless those files are first ingested or exposed as tables." }
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases, or a Microsoft Graph query for organizational data."
+        },
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "The agent only ever generates read queries (SQL, DAX, or KQL) and never create, update, or delete statements, and it cannot directly query unstructured files such as PDF, DOCX, or TXT, or standalone lakehouse files unless those files are first ingested or exposed as tables."
+        }
       ],
       "drill": {
         "inputs": ["Assembled prompt with schema, instructions, and example queries"],
-        "processing": ["Generate a syntactically valid query in the target language for the selected source type", "No write operations are ever generated"],
+        "processing": [
+          "Generate a syntactically valid query in the target language for the selected source type",
+          "No write operations are ever generated"
+        ],
         "outputs": ["A single read-only SQL, DAX, KQL, or Graph query"],
         "example": "A question against a warehouse source generates a SELECT with a GROUP BY on region and a filter on the current fiscal quarter — never an UPDATE or DELETE, regardless of phrasing.",
-        "controls": ["Example queries steering generation toward business-specific join and filter logic"],
-        "failureModes": ["Complex multi-step or ambiguous schema references producing an incorrect but syntactically valid query"]
+        "controls": [
+          "Example queries steering generation toward business-specific join and filter logic"
+        ],
+        "failureModes": [
+          "Complex multi-step or ambiguous schema references producing an incorrect but syntactically valid query"
+        ]
       }
     },
     {
@@ -196,16 +303,27 @@
       "layers": ["security", "compute"],
       "tags": ["FabricDataAgent"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-concept", "note": "The agent enforces read-only, least-privilege access by executing under the requesting user's own credentials and permissions, so each query only reaches data that user is already authorized to view." },
-        { "sourceKey": "fabric-data-agent-concept", "note": "For Power BI semantic model sources, only Read permission on the model is required for the agent to retrieve schema and run queries; Build permission is not needed, though Row-Level and Column-Level Security still apply." }
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "The agent enforces read-only, least-privilege access by executing under the requesting user's own credentials and permissions, so each query only reaches data that user is already authorized to view."
+        },
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "For Power BI semantic model sources, only Read permission on the model is required for the agent to retrieve schema and run queries; Build permission is not needed, though Row-Level and Column-Level Security still apply."
+        }
       ],
       "drill": {
         "inputs": ["The generated read-only query and the requesting user's identity"],
-        "processing": ["Execute the query against the source engine under that identity", "Apply any RLS/CLS defined at the source"],
+        "processing": [
+          "Execute the query against the source engine under that identity",
+          "Apply any RLS/CLS defined at the source"
+        ],
         "outputs": ["Raw result rows, still subject to RLS/CLS applied at execution"],
         "example": "A semantic-model-backed agent executes the generated DAX query with the requesting user's Row-Level Security context, so a regional manager only ever sees their own region's numbers even if the question asked for all regions.",
         "controls": ["RLS/CLS already defined at the source"],
-        "failureModes": ["Assuming agent-level instructions can override source-level RLS/CLS — they cannot"]
+        "failureModes": [
+          "Assuming agent-level instructions can override source-level RLS/CLS — they cannot"
+        ]
       }
     },
     {
@@ -218,15 +336,29 @@
       "layers": ["governance"],
       "tags": ["FabricDataAgent", "Purview"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-concept", "note": "Purview Data Loss Prevention and access-restriction policies apply directly to data agent queries, and can block a query from running or strip sensitive results from an agent's response even when the agent is technically permitted to read the source." }
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "Purview Data Loss Prevention and access-restriction policies apply directly to data agent queries, and can block a query from running or strip sensitive results from an agent's response even when the agent is technically permitted to read the source."
+        }
       ],
       "drill": {
-        "inputs": ["A generated query or its result set, evaluated against active Purview DLP policy"],
-        "processing": ["Purview scans the query/result for policy-defined sensitive content", "Blocks the run or redacts the response accordingly"],
-        "outputs": ["A blocked query, or an answer with sensitive fields stripped, instead of the full result"],
+        "inputs": [
+          "A generated query or its result set, evaluated against active Purview DLP policy"
+        ],
+        "processing": [
+          "Purview scans the query/result for policy-defined sensitive content",
+          "Blocks the run or redacts the response accordingly"
+        ],
+        "outputs": [
+          "A blocked query, or an answer with sensitive fields stripped, instead of the full result"
+        ],
         "example": "A DLP policy scoped to a table containing national ID numbers strips that column from the agent's response even though the requesting user technically had read access to the table.",
-        "controls": ["Scoping DLP policies deliberately around what the agent may surface, not just what a human report author could see"],
-        "failureModes": ["Assuming a passed read-permission check means the answer will be unrestricted"]
+        "controls": [
+          "Scoping DLP policies deliberately around what the agent may surface, not just what a human report author could see"
+        ],
+        "failureModes": [
+          "Assuming a passed read-permission check means the answer will be unrestricted"
+        ]
       }
     },
     {
@@ -239,46 +371,175 @@
       "layers": ["orchestration"],
       "tags": ["FabricDataAgent"],
       "evidence": [
-        { "sourceKey": "fabric-data-agent-concept", "note": "Agent responses are capped at a maximum of 25 rows and 25 columns, and because prior chat turns can influence later answers, a request like asking for all rows for a year will still be limited to 25 rows even in follow-up questions within the same session." },
-        { "sourceKey": "ultimateinfoguide-data-agent-tutorial", "note": "The post frames a data agent's 25-row/25-column response cap as a deliberate design choice for conversational use rather than a temporary limitation, explicitly recommending against relying on it for heavy analytical workloads." }
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "Agent responses are capped at a maximum of 25 rows and 25 columns, and because prior chat turns can influence later answers, a request like asking for all rows for a year will still be limited to 25 rows even in follow-up questions within the same session."
+        },
+        {
+          "sourceKey": "ultimateinfoguide-data-agent-tutorial",
+          "note": "The post frames a data agent's 25-row/25-column response cap as a deliberate design choice for conversational use rather than a temporary limitation, explicitly recommending against relying on it for heavy analytical workloads."
+        }
       ],
       "drill": {
         "inputs": ["Raw, permission-scoped result rows from execution"],
-        "processing": ["Truncate to at most 25 rows and 25 columns", "Attach the generated query for transparency"],
+        "processing": [
+          "Truncate to at most 25 rows and 25 columns",
+          "Attach the generated query for transparency"
+        ],
         "outputs": ["A capped natural-language answer with the underlying query visible"],
         "example": "A question returning 4,000 matching order rows is summarized and truncated to the top 25 for display, with the full generated SQL shown so the user can run it themselves elsewhere if they need the complete set.",
         "controls": ["None — the cap is fixed, not a configurable setting"],
-        "failureModes": ["Relying on the agent for full analytical extracts instead of using it as a conversational front end"],
+        "failureModes": [
+          "Relying on the agent for full analytical extracts instead of using it as a conversational front end"
+        ],
         "metrics": [
-          { "label": "Response cap", "value": "25 rows x 25 columns", "sourceKey": "fabric-data-agent-concept" }
+          {
+            "label": "Response cap",
+            "value": "25 rows x 25 columns",
+            "sourceKey": "fabric-data-agent-concept"
+          }
         ]
       },
       "drillTarget": { "kind": "topic", "slug": "fabric-data-agent", "label": "Fabric Data Agent" }
     }
   ],
   "edges": [
-    { "id": "e-question-selection", "from": "user-question", "to": "source-selection", "label": "routed for source matching", "layer": "orchestration", "kind": "flow" },
-    { "id": "e-selection-region-fail", "from": "source-selection", "to": "region-mismatch-failure", "label": "if agent and source capacities differ in region", "layer": "orchestration", "kind": "branch" },
-    { "id": "e-selection-unstructured-fail", "from": "source-selection", "to": "unstructured-content-failure", "label": "if question targets raw file content", "layer": "orchestration", "kind": "branch" },
-    { "id": "e-selection-governance", "from": "source-selection", "to": "governance-gate", "label": "selected source", "layer": "governance", "kind": "flow" },
-    { "id": "e-governance-schema", "from": "governance-gate", "to": "schema-fetch", "label": "permitted to proceed", "layer": "security", "kind": "flow" },
-    { "id": "e-schema-prompt", "from": "schema-fetch", "to": "prompt-assembly", "label": "user-scoped schema", "layer": "compute", "kind": "flow" },
-    { "id": "e-prompt-generation", "from": "prompt-assembly", "to": "query-generation", "label": "assembled prompt", "layer": "compute", "kind": "flow" },
-    { "id": "e-generation-execution", "from": "query-generation", "to": "query-execution", "label": "read-only query", "layer": "compute", "kind": "flow" },
-    { "id": "e-execution-dlp-fail", "from": "query-execution", "to": "dlp-block-failure", "label": "if DLP policy matches query or result", "layer": "governance", "kind": "branch" },
-    { "id": "e-execution-answer", "from": "query-execution", "to": "answer-returned", "label": "permission-scoped rows", "layer": "orchestration", "kind": "flow" }
+    {
+      "id": "e-question-selection",
+      "from": "user-question",
+      "to": "source-selection",
+      "label": "routed for source matching",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-selection-region-fail",
+      "from": "source-selection",
+      "to": "region-mismatch-failure",
+      "label": "if agent and source capacities differ in region",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "e-selection-unstructured-fail",
+      "from": "source-selection",
+      "to": "unstructured-content-failure",
+      "label": "if question targets raw file content",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "e-selection-governance",
+      "from": "source-selection",
+      "to": "governance-gate",
+      "label": "selected source",
+      "layer": "governance",
+      "kind": "flow"
+    },
+    {
+      "id": "e-governance-schema",
+      "from": "governance-gate",
+      "to": "schema-fetch",
+      "label": "permitted to proceed",
+      "layer": "security",
+      "kind": "flow"
+    },
+    {
+      "id": "e-schema-prompt",
+      "from": "schema-fetch",
+      "to": "prompt-assembly",
+      "label": "user-scoped schema",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-prompt-generation",
+      "from": "prompt-assembly",
+      "to": "query-generation",
+      "label": "assembled prompt",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-generation-execution",
+      "from": "query-generation",
+      "to": "query-execution",
+      "label": "read-only query",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-execution-dlp-fail",
+      "from": "query-execution",
+      "to": "dlp-block-failure",
+      "label": "if DLP policy matches query or result",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e-execution-answer",
+      "from": "query-execution",
+      "to": "answer-returned",
+      "label": "permission-scoped rows",
+      "layer": "orchestration",
+      "kind": "flow"
+    }
   ],
   "walkthrough": [
-    { "nodeId": "user-question", "title": "A question arrives from any published surface", "explanation": "Chat, Copilot, Foundry, or a custom app — the orchestration path is identical from here." },
-    { "nodeId": "source-selection", "title": "Route to the right source", "explanation": "Description, schema, and example queries together decide which of up to five attached sources answers this question — and this is also where a region or unstructured-content failure can end the request early." },
-    { "nodeId": "region-mismatch-failure", "title": "Failure branch: capacity region mismatch", "explanation": "If the agent's workspace capacity and the source's capacity sit in different regions, execution fails outright — a design-time constraint, not a run-time one to fix with instructions." },
-    { "nodeId": "unstructured-content-failure", "title": "Failure branch: no table to query", "explanation": "A question aimed at raw PDF/DOCX/TXT content or ungoverned lakehouse files has no query path unless that content is first exposed as a table." },
-    { "nodeId": "governance-gate", "title": "Instruction precedence and DLP apply", "explanation": "Tenant policy overrides workspace governance overrides developer instructions overrides the user's own prompt, and Purview DLP evaluates independently of read permission." },
-    { "nodeId": "schema-fetch", "title": "Schema is fetched under the user's own identity", "explanation": "Not a service identity — this is what keeps schema visibility itself scoped to what the requesting user can already see." },
-    { "nodeId": "prompt-assembly", "title": "Question, schema, and instructions become one prompt", "explanation": "Sent to a Microsoft-managed Azure OpenAI Assistant — no customer-managed key required." },
-    { "nodeId": "query-generation", "title": "A read-only query is generated, never a write", "explanation": "NL2SQL, NL2DAX, NL2KQL, or a Graph query, routed by source type — write statements are structurally never produced." },
-    { "nodeId": "query-execution", "title": "Execution happens under the caller's identity too", "explanation": "Same principle as schema fetch: results can never exceed what the requesting user is already authorized to see, and RLS/CLS still applies." },
-    { "nodeId": "dlp-block-failure", "title": "Failure branch: DLP can still block or strip", "explanation": "Even a technically-permitted read can be blocked or redacted by Purview DLP at this stage." },
-    { "nodeId": "answer-returned", "title": "A capped, query-transparent answer", "explanation": "At most 25 rows and 25 columns, with the generated query itself shown — a deliberate conversational-use design choice, not a bug to work around." }
+    {
+      "nodeId": "user-question",
+      "title": "A question arrives from any published surface",
+      "explanation": "Chat, Copilot, Foundry, or a custom app — the orchestration path is identical from here."
+    },
+    {
+      "nodeId": "source-selection",
+      "title": "Route to the right source",
+      "explanation": "Description, schema, and example queries together decide which of up to five attached sources answers this question — and this is also where a region or unstructured-content failure can end the request early."
+    },
+    {
+      "nodeId": "region-mismatch-failure",
+      "title": "Failure branch: capacity region mismatch",
+      "explanation": "If the agent's workspace capacity and the source's capacity sit in different regions, execution fails outright — a design-time constraint, not a run-time one to fix with instructions."
+    },
+    {
+      "nodeId": "unstructured-content-failure",
+      "title": "Failure branch: no table to query",
+      "explanation": "A question aimed at raw PDF/DOCX/TXT content or ungoverned lakehouse files has no query path unless that content is first exposed as a table."
+    },
+    {
+      "nodeId": "governance-gate",
+      "title": "Instruction precedence and DLP apply",
+      "explanation": "Tenant policy overrides workspace governance overrides developer instructions overrides the user's own prompt, and Purview DLP evaluates independently of read permission."
+    },
+    {
+      "nodeId": "schema-fetch",
+      "title": "Schema is fetched under the user's own identity",
+      "explanation": "Not a service identity — this is what keeps schema visibility itself scoped to what the requesting user can already see."
+    },
+    {
+      "nodeId": "prompt-assembly",
+      "title": "Question, schema, and instructions become one prompt",
+      "explanation": "Sent to a Microsoft-managed Azure OpenAI Assistant — no customer-managed key required."
+    },
+    {
+      "nodeId": "query-generation",
+      "title": "A read-only query is generated, never a write",
+      "explanation": "NL2SQL, NL2DAX, NL2KQL, or a Graph query, routed by source type — write statements are structurally never produced."
+    },
+    {
+      "nodeId": "query-execution",
+      "title": "Execution happens under the caller's identity too",
+      "explanation": "Same principle as schema fetch: results can never exceed what the requesting user is already authorized to see, and RLS/CLS still applies."
+    },
+    {
+      "nodeId": "dlp-block-failure",
+      "title": "Failure branch: DLP can still block or strip",
+      "explanation": "Even a technically-permitted read can be blocked or redacted by Purview DLP at this stage."
+    },
+    {
+      "nodeId": "answer-returned",
+      "title": "A capped, query-transparent answer",
+      "explanation": "At most 25 rows and 25 columns, with the generated query itself shown — a deliberate conversational-use design choice, not a bug to work around."
+    }
   ]
 }

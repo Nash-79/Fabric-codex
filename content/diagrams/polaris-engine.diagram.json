@@ -6,9 +6,7 @@
   "longDescription": "Polaris separates SQL compilation from distributed execution. The optimizer selects physical distribution and movement. DQP divides plans into maximal tasks connected as a DAG. Hierarchical finite-state machines manage progress and retry. A global workload graph schedules tasks onto stateless SQL compute. Cell abstractions connect those tasks to partitioned and hash-distributed data in durable remote storage.",
   "type": "internals",
   "topicSlug": "polaris",
-  "capabilityIds": [
-    "polaris"
-  ],
+  "capabilityIds": ["polaris"],
   "nodes": [
     {
       "id": "step-1",
@@ -17,36 +15,21 @@
       "detail": "The SQL front end parses and optimizes a query before distributed execution. Bind names, optimize expressions, and produce a plan.",
       "whyItMatters": "A plan ready for distributed physical planning depends on making this responsibility and its operating boundary explicit.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "warehouse-workload-management",
           "note": "The SQL frontend optimizes requests and passes plans to DQP."
         }
       ],
-      "tags": [
-        "MicrosoftFabric",
-        "compute"
-      ],
+      "tags": ["MicrosoftFabric", "compute"],
       "drill": {
-        "inputs": [
-          "T-SQL request, schema metadata, and statistics"
-        ],
-        "processing": [
-          "Bind names, optimize expressions, and produce a plan"
-        ],
-        "outputs": [
-          "A plan ready for distributed physical planning"
-        ],
+        "inputs": ["T-SQL request, schema metadata, and statistics"],
+        "processing": ["Bind names, optimize expressions, and produce a plan"],
+        "outputs": ["A plan ready for distributed physical planning"],
         "example": "A grouped sales query is compiled before any backend task runs.",
-        "controls": [
-          "Statistics and query shape"
-        ],
-        "failureModes": [
-          "Stale statistics lead to a costly distribution choice"
-        ]
+        "controls": ["Statistics and query shape"],
+        "failureModes": ["Stale statistics lead to a costly distribution choice"]
       },
       "drillTarget": {
         "kind": "capability",
@@ -61,36 +44,21 @@
       "detail": "A second planning phase chooses distribution properties and minimizes data movement. Enumerate distributed alternatives and add required move operators.",
       "whyItMatters": "A valid distributed physical plan depends on making this responsibility and its operating boundary explicit.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "polaris-vldb-paper",
           "note": "Polaris performs distributed cost-based planning and injects redistribution or broadcast enforcers."
         }
       ],
-      "tags": [
-        "MicrosoftFabric",
-        "compute"
-      ],
+      "tags": ["MicrosoftFabric", "compute"],
       "drill": {
-        "inputs": [
-          "Logical optimizer search space and data distributions"
-        ],
-        "processing": [
-          "Enumerate distributed alternatives and add required move operators"
-        ],
-        "outputs": [
-          "A valid distributed physical plan"
-        ],
+        "inputs": ["Logical optimizer search space and data distributions"],
+        "processing": ["Enumerate distributed alternatives and add required move operators"],
+        "outputs": ["A valid distributed physical plan"],
         "example": "A small dimension is broadcast instead of repartitioning a large fact table.",
-        "controls": [
-          "Distribution keys and estimated cardinalities"
-        ],
-        "failureModes": [
-          "Bad estimates choose a broadcast too large for available memory"
-        ]
+        "controls": ["Distribution keys and estimated cardinalities"],
+        "failureModes": ["Bad estimates choose a broadcast too large for available memory"]
       }
     },
     {
@@ -100,38 +68,21 @@
       "detail": "DQP divides the physical plan into tasks linked by dataflow and precedence. Fuse compatible operators and cut tasks at blocking movement boundaries.",
       "whyItMatters": "A directed acyclic graph of executable tasks depends on making this responsibility and its operating boundary explicit.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "orchestration"
-      ],
+      "layers": ["compute", "orchestration"],
       "evidence": [
         {
           "sourceKey": "polaris-vldb-paper",
           "note": "A Polaris plan becomes a DAG of task templates whose edges encode dataflow and precedence."
         }
       ],
-      "tags": [
-        "MicrosoftFabric",
-        "compute",
-        "orchestration"
-      ],
+      "tags": ["MicrosoftFabric", "compute", "orchestration"],
       "drill": {
-        "inputs": [
-          "Distributed physical operators and cell collections"
-        ],
-        "processing": [
-          "Fuse compatible operators and cut tasks at blocking movement boundaries"
-        ],
-        "outputs": [
-          "A directed acyclic graph of executable tasks"
-        ],
+        "inputs": ["Distributed physical operators and cell collections"],
+        "processing": ["Fuse compatible operators and cut tasks at blocking movement boundaries"],
+        "outputs": ["A directed acyclic graph of executable tasks"],
         "example": "Aligned joins remain one task while a hash redistribution creates a boundary.",
-        "controls": [
-          "Task boundaries and intermediate statistics"
-        ],
-        "failureModes": [
-          "Excessive movement produces slow blocking stages"
-        ]
+        "controls": ["Task boundaries and intermediate statistics"],
+        "failureModes": ["Excessive movement produces slow blocking stages"]
       }
     },
     {
@@ -141,38 +92,21 @@
       "detail": "Hierarchical state machines track query, template, and task progress and retry. Advance states, log transitions, retry transient task failures.",
       "whyItMatters": "Resumable and reproducible query execution depends on making this responsibility and its operating boundary explicit.",
       "classification": "fact",
-      "layers": [
-        "orchestration",
-        "observability"
-      ],
+      "layers": ["orchestration", "observability"],
       "evidence": [
         {
           "sourceKey": "polaris-vldb-paper",
           "note": "Polaris orchestrates execution with hierarchical finite-state machines and task-level retry."
         }
       ],
-      "tags": [
-        "MicrosoftFabric",
-        "orchestration",
-        "observability"
-      ],
+      "tags": ["MicrosoftFabric", "orchestration", "observability"],
       "drill": {
-        "inputs": [
-          "Task DAG, state transitions, and failure signals"
-        ],
-        "processing": [
-          "Advance states, log transitions, retry transient task failures"
-        ],
-        "outputs": [
-          "Resumable and reproducible query execution"
-        ],
+        "inputs": ["Task DAG, state transitions, and failure signals"],
+        "processing": ["Advance states, log transitions, retry transient task failures"],
+        "outputs": ["Resumable and reproducible query execution"],
         "example": "One failed task is retried without restarting every completed task.",
-        "controls": [
-          "Retry classification and state-transition logs"
-        ],
-        "failureModes": [
-          "A persistent data error is repeatedly misclassified as transient"
-        ]
+        "controls": ["Retry classification and state-transition logs"],
+        "failureModes": ["A persistent data error is repeatedly misclassified as transient"]
       }
     },
     {
@@ -182,36 +116,21 @@
       "detail": "A workload graph schedules tasks across concurrent queries by multidimensional resource demand. Select eligible tasks and place them on available compute.",
       "whyItMatters": "Concurrent task assignments across the pool depends on making this responsibility and its operating boundary explicit.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "polaris-vldb-paper",
           "note": "The scheduler unions active task DAGs and places tasks using CPU, memory, and disk demand."
         }
       ],
-      "tags": [
-        "MicrosoftFabric",
-        "compute"
-      ],
+      "tags": ["MicrosoftFabric", "compute"],
       "drill": {
-        "inputs": [
-          "Ready tasks, node resources, and active-query DAGs"
-        ],
-        "processing": [
-          "Select eligible tasks and place them on available compute"
-        ],
-        "outputs": [
-          "Concurrent task assignments across the pool"
-        ],
+        "inputs": ["Ready tasks, node resources, and active-query DAGs"],
+        "processing": ["Select eligible tasks and place them on available compute"],
+        "outputs": ["Concurrent task assignments across the pool"],
         "example": "Root-near tasks are prioritized to release shared resources sooner.",
-        "controls": [
-          "Scheduling policy and resource pools"
-        ],
-        "failureModes": [
-          "Resource pressure delays tasks while callers assume fixed latency"
-        ]
+        "controls": ["Scheduling policy and resource pools"],
+        "failureModes": ["Resource pressure delays tasks while callers assume fixed latency"]
       }
     },
     {
@@ -221,36 +140,21 @@
       "detail": "Compute nodes run task templates while durable state remains external. Execute encoded SQL operators and materialize output cells.",
       "whyItMatters": "Task results and updated cache locality depends on making this responsibility and its operating boundary explicit.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "polaris-vldb-paper",
           "note": "Polaris externalizes durable data, metadata, and logs; compute retains only rebuildable caches."
         }
       ],
-      "tags": [
-        "MicrosoftFabric",
-        "compute"
-      ],
+      "tags": ["MicrosoftFabric", "compute"],
       "drill": {
-        "inputs": [
-          "Scheduled task, input cells, and local cache state"
-        ],
-        "processing": [
-          "Execute encoded SQL operators and materialize output cells"
-        ],
-        "outputs": [
-          "Task results and updated cache locality"
-        ],
+        "inputs": ["Scheduled task, input cells, and local cache state"],
+        "processing": ["Execute encoded SQL operators and materialize output cells"],
+        "outputs": ["Task results and updated cache locality"],
         "example": "A replacement node re-reads persisted cells after another node fails.",
-        "controls": [
-          "Pool isolation and cache affinity"
-        ],
-        "failureModes": [
-          "Scale-out nodes start cold and temporarily lose cache locality"
-        ]
+        "controls": ["Pool isolation and cache affinity"],
+        "failureModes": ["Scale-out nodes start cold and temporarily lose cache locality"]
       }
     },
     {
@@ -260,38 +164,21 @@
       "detail": "Two-dimensional cells connect partition pruning and hash distribution to durable data. Prune partitions, select hash buckets, and read or write cell collections.",
       "whyItMatters": "Storage-agnostic inputs and durable task outputs depends on making this responsibility and its operating boundary explicit.",
       "classification": "fact",
-      "layers": [
-        "data",
-        "compute"
-      ],
+      "layers": ["data", "compute"],
       "evidence": [
         {
           "sourceKey": "polaris-vldb-paper",
           "note": "Datasets are grids of partitioned and hash-distributed cells used as DQP units."
         }
       ],
-      "tags": [
-        "MicrosoftFabric",
-        "data",
-        "compute"
-      ],
+      "tags": ["MicrosoftFabric", "data", "compute"],
       "drill": {
-        "inputs": [
-          "Partition predicates, distribution keys, and stored table data"
-        ],
-        "processing": [
-          "Prune partitions, select hash buckets, and read or write cell collections"
-        ],
-        "outputs": [
-          "Storage-agnostic inputs and durable task outputs"
-        ],
+        "inputs": ["Partition predicates, distribution keys, and stored table data"],
+        "processing": ["Prune partitions, select hash buckets, and read or write cell collections"],
+        "outputs": ["Storage-agnostic inputs and durable task outputs"],
         "example": "A date predicate prunes partitions while customer hash spreads work across nodes.",
-        "controls": [
-          "Partition and distribution design"
-        ],
-        "failureModes": [
-          "Skew concentrates cells and computation on too few nodes"
-        ]
+        "controls": ["Partition and distribution design"],
+        "failureModes": ["Skew concentrates cells and computation on too few nodes"]
       }
     }
   ],

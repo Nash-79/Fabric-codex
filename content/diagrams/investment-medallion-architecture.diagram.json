@@ -20,15 +20,32 @@
       "classification": "fact",
       "layers": ["data", "orchestration"],
       "evidence": [
-        { "sourceKey": "data-factory-overview", "note": "Data Factory offers three distinct data-movement options: Copy job for simplified movement with built-in delivery styles, Copy activity for fully customizable movement with manual control of parallelism, and Mirroring for near-real-time database replication into OneLake." }
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "Data Factory offers three distinct data-movement options: Copy job for simplified movement with built-in delivery styles, Copy activity for fully customizable movement with manual control of parallelism, and Mirroring for near-real-time database replication into OneLake."
+        }
       ],
       "drill": {
-        "inputs": ["Flat files from custodians/administrators (positions, transactions, instruments)"],
-        "processing": ["Lookup active file entities from the control-plane registry", "ForEach entity, Copy activity moves new files into bronze", "Stored procedure records the run and advances the watermark"],
-        "outputs": ["Append-only bronze Delta tables under bronze_files/, tagged with run id and watermark"],
+        "inputs": [
+          "Flat files from custodians/administrators (positions, transactions, instruments)"
+        ],
+        "processing": [
+          "Lookup active file entities from the control-plane registry",
+          "ForEach entity, Copy activity moves new files into bronze",
+          "Stored procedure records the run and advances the watermark"
+        ],
+        "outputs": [
+          "Append-only bronze Delta tables under bronze_files/, tagged with run id and watermark"
+        ],
         "example": "A nightly positions file from a custodian lands in bronze_files/positions; the same pipeline definition, driven by a different registry row, also lands the instruments file with no separate pipeline built.",
-        "controls": ["Registry-driven entity list rather than hardcoded pipeline logic", "Watermark column choice per entity"],
-        "failureModes": ["A custodian changing file layout without notice, breaking the Copy activity's schema expectations", "Registry drift where an entity is added to the source but never registered, silently never ingesting"]
+        "controls": [
+          "Registry-driven entity list rather than hardcoded pipeline logic",
+          "Watermark column choice per entity"
+        ],
+        "failureModes": [
+          "A custodian changing file layout without notice, breaking the Copy activity's schema expectations",
+          "Registry drift where an entity is added to the source but never registered, silently never ingesting"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "data-factory", "label": "Data Factory" }
     },
@@ -41,15 +58,24 @@
       "classification": "fact",
       "layers": ["data"],
       "evidence": [
-        { "sourceKey": "data-factory-overview", "note": "Mirroring is surfaced from Data Factory as a data-movement method that keeps a near-real-time replica of an operational database inside OneLake, so analytics and reporting can run against the replica instead of the source system." }
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "Mirroring is surfaced from Data Factory as a data-movement method that keeps a near-real-time replica of an operational database inside OneLake, so analytics and reporting can run against the replica instead of the source system."
+        }
       ],
       "drill": {
         "inputs": ["Change events from the operational portfolio/transactions database"],
-        "processing": ["Mirroring replicator polls and merges incremental changes into OneLake as Delta Parquet", "No ETL pipeline is authored or maintained for this path"],
+        "processing": [
+          "Mirroring replicator polls and merges incremental changes into OneLake as Delta Parquet",
+          "No ETL pipeline is authored or maintained for this path"
+        ],
         "outputs": ["A continuously updated Delta replica of portfolios/transactions in OneLake"],
         "example": "A portfolio rebalance posted in the operational system appears in the mirrored replica shortly after, without any Data Factory pipeline run being triggered.",
         "controls": ["Which tables/entities are included in the mirror configuration"],
-        "failureModes": ["Treating the mirrored replica as if it were the transactional source and attempting writes against it — it is a read replica", "Silver logic assuming file-pipeline-style watermarks exist for mirrored data when none do"]
+        "failureModes": [
+          "Treating the mirrored replica as if it were the transactional source and attempting writes against it — it is a read replica",
+          "Silver logic assuming file-pipeline-style watermarks exist for mirrored data when none do"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "mirroring", "label": "Mirroring" }
     },
@@ -62,15 +88,30 @@
       "classification": "fact",
       "layers": ["data", "orchestration"],
       "evidence": [
-        { "sourceKey": "data-factory-overview", "note": "Data Factory connects to data sources, moves data, transforms it, and orchestrates movement and transformation tasks from a single place, with connectivity to more than 170 data sources spanning cloud, multicloud, and on-premises systems." }
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "Data Factory connects to data sources, moves data, transforms it, and orchestrates movement and transformation tasks from a single place, with connectivity to more than 170 data sources spanning cloud, multicloud, and on-premises systems."
+        }
       ],
       "drill": {
         "inputs": ["Market-data and risk-engine REST endpoints, one registry row per entity"],
-        "processing": ["Lookup active API entities", "ForEach entity, Copy activity issues a REST GET with pagination and a linked-service-held auth token", "Result lands in bronze, run recorded in the control plane"],
-        "outputs": ["Bronze tables for market_data and risk_engine_results, refreshed on each entity's own schedule"],
+        "processing": [
+          "Lookup active API entities",
+          "ForEach entity, Copy activity issues a REST GET with pagination and a linked-service-held auth token",
+          "Result lands in bronze, run recorded in the control plane"
+        ],
+        "outputs": [
+          "Bronze tables for market_data and risk_engine_results, refreshed on each entity's own schedule"
+        ],
         "example": "A risk-engine results feed polled every 15 minutes lands new VaR calculations into bronze_api/risk_engine_results, driven by the same pipeline that also pulls hourly market-data snapshots on a different schedule.",
-        "controls": ["Per-entity schedule_cron in the control-plane registry", "Auth via Data Factory linked service, never hardcoded"],
-        "failureModes": ["An API rate limit throttling a poorly-scheduled pull and silently truncating results", "Pagination logic missing a page on a large result set, undercounting rows with no error raised"]
+        "controls": [
+          "Per-entity schedule_cron in the control-plane registry",
+          "Auth via Data Factory linked service, never hardcoded"
+        ],
+        "failureModes": [
+          "An API rate limit throttling a poorly-scheduled pull and silently truncating results",
+          "Pagination logic missing a page on a large result set, undercounting rows with no error raised"
+        ]
       }
     },
     {
@@ -82,15 +123,32 @@
       "classification": "fact",
       "layers": ["data"],
       "evidence": [
-        { "sourceKey": "onelake-overview", "note": "All Fabric data items, including lakehouses and warehouses, automatically persist their tabular data in OneLake using the open Delta Parquet format, regardless of which engine wrote the data." }
+        {
+          "sourceKey": "onelake-overview",
+          "note": "All Fabric data items, including lakehouses and warehouses, automatically persist their tabular data in OneLake using the open Delta Parquet format, regardless of which engine wrote the data."
+        }
       ],
       "drill": {
-        "inputs": ["Bronze writes from the file Copy pipeline", "Bronze writes from the API Copy pipeline", "A OneLake shortcut pointing at the mirrored portfolio/transactions replica"],
-        "processing": ["Fabric auto-registers Delta writes into the Tables area metastore", "A Spark conform notebook dedupes, standardizes, and merges bronze into silver per entity"],
-        "outputs": ["Conformed silver Delta tables (positions, transactions, instruments, portfolios, returns, risk measures)"],
+        "inputs": [
+          "Bronze writes from the file Copy pipeline",
+          "Bronze writes from the API Copy pipeline",
+          "A OneLake shortcut pointing at the mirrored portfolio/transactions replica"
+        ],
+        "processing": [
+          "Fabric auto-registers Delta writes into the Tables area metastore",
+          "A Spark conform notebook dedupes, standardizes, and merges bronze into silver per entity"
+        ],
+        "outputs": [
+          "Conformed silver Delta tables (positions, transactions, instruments, portfolios, returns, risk measures)"
+        ],
         "example": "silver.positions is built by merging deduplicated file-sourced position records with instrument reference data, ready for dbt to read as a staging source.",
-        "controls": ["Schema/schema-evolution policy per silver table", "Business-key definition per entity used in the conform merge"],
-        "failureModes": ["See the blast-radius warning node — one shared Tables namespace means an over-broad grant or runaway job in bronze can reach silver too"]
+        "controls": [
+          "Schema/schema-evolution policy per silver table",
+          "Business-key definition per entity used in the conform merge"
+        ],
+        "failureModes": [
+          "See the blast-radius warning node — one shared Tables namespace means an over-broad grant or runaway job in bronze can reach silver too"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -104,12 +162,25 @@
       "layers": ["data", "governance"],
       "evidence": [],
       "drill": {
-        "inputs": ["A single lakehouse item hosting both bronze_* and silver schemas as folders/tables in one Tables area"],
-        "processing": ["Workspace roles and item-level grants apply to the whole lakehouse, not per-schema", "A destructive operation in bronze has no item boundary preventing it from reaching silver"],
-        "outputs": ["Access control degrading from item-level isolation to a schema/folder-naming convention rather than a Fabric-enforced boundary"],
+        "inputs": [
+          "A single lakehouse item hosting both bronze_* and silver schemas as folders/tables in one Tables area"
+        ],
+        "processing": [
+          "Workspace roles and item-level grants apply to the whole lakehouse, not per-schema",
+          "A destructive operation in bronze has no item boundary preventing it from reaching silver"
+        ],
+        "outputs": [
+          "Access control degrading from item-level isolation to a schema/folder-naming convention rather than a Fabric-enforced boundary"
+        ],
         "example": "A workspace-role grant intended to let an engineering contractor write to bronze_files also gives them write access to silver, because both live in the same lakehouse item with no separate grant surface.",
-        "controls": ["Revisit the merged layout if bronze and silver need different access populations", "Compensate with folder-naming discipline and row-level auditing until/unless a split is warranted"],
-        "failureModes": ["An accidental DROP TABLE in a bronze cleanup script reaching a silver table with no item boundary to stop it", "Compliance requirements diverging between raw and conformed data with no structural separation to enforce them"]
+        "controls": [
+          "Revisit the merged layout if bronze and silver need different access populations",
+          "Compensate with folder-naming discipline and row-level auditing until/unless a split is warranted"
+        ],
+        "failureModes": [
+          "An accidental DROP TABLE in a bronze cleanup script reaching a silver table with no item boundary to stop it",
+          "Compliance requirements diverging between raw and conformed data with no structural separation to enforce them"
+        ]
       }
     },
     {
@@ -121,16 +192,35 @@
       "classification": "fact",
       "layers": ["compute", "orchestration"],
       "evidence": [
-        { "sourceKey": "dbt-fabric-warehouse", "note": "Fabric Data Warehouse is supported as a dbt target via the dbt-fabric adapter, a Python package published on PyPI, rather than through a Fabric-native dbt integration; Fabric documents pairing dbt with Apache Airflow inside Fabric Data Factory for scheduled runs rather than a native dbt scheduler." },
-        { "sourceKey": "warehouse-overview", "note": "Development is primarily in T-SQL on a large SQL Database Engine surface area, including full multi-table ACID transactions, materialized views, functions, and stored procedures." }
+        {
+          "sourceKey": "dbt-fabric-warehouse",
+          "note": "Fabric Data Warehouse is supported as a dbt target via the dbt-fabric adapter, a Python package published on PyPI, rather than through a Fabric-native dbt integration; Fabric documents pairing dbt with Apache Airflow inside Fabric Data Factory for scheduled runs rather than a native dbt scheduler."
+        },
+        {
+          "sourceKey": "warehouse-overview",
+          "note": "Development is primarily in T-SQL on a large SQL Database Engine surface area, including full multi-table ACID transactions, materialized views, functions, and stored procedures."
+        }
       ],
       "drill": {
-        "inputs": ["Silver Delta tables read via dbt sources.yml using three-part cross-database names"],
-        "processing": ["dbt staging models build stg_positions/stg_returns views over silver", "dbt dimension models build dim_date/dim_portfolio/dim_benchmark and an SCD Type 2 dim_instrument", "dbt incremental fact models build fact_positions/fact_returns_daily/fact_risk_measures/fact_transactions", "Airflow DAG inside Data Factory triggers dbt run then dbt test on a schedule"],
+        "inputs": [
+          "Silver Delta tables read via dbt sources.yml using three-part cross-database names"
+        ],
+        "processing": [
+          "dbt staging models build stg_positions/stg_returns views over silver",
+          "dbt dimension models build dim_date/dim_portfolio/dim_benchmark and an SCD Type 2 dim_instrument",
+          "dbt incremental fact models build fact_positions/fact_returns_daily/fact_risk_measures/fact_transactions",
+          "Airflow DAG inside Data Factory triggers dbt run then dbt test on a schedule"
+        ],
         "outputs": ["A star schema in wh_gold: facts joined to conformed dimensions"],
         "example": "The nightly Airflow DAG runs dbt run then dbt test against wh_gold; a failed test on fact_positions_daily's uniqueness constraint blocks the DAG from marking the run successful.",
-        "controls": ["Incremental vs full-refresh materialization per model", "Test coverage on facts (uniqueness, not-null) as a build gate"],
-        "failureModes": ["dbt issuing a T-SQL operation the warehouse doesn't natively support (ALTER, full MERGE, TRUNCATE) — the adapter works around this via CTAS+DROP/CREATE, which the team must understand rather than assume is free", "Airflow DAG failures not surfacing to the same control-plane audit trail as the ingestion pipelines"]
+        "controls": [
+          "Incremental vs full-refresh materialization per model",
+          "Test coverage on facts (uniqueness, not-null) as a build gate"
+        ],
+        "failureModes": [
+          "dbt issuing a T-SQL operation the warehouse doesn't natively support (ALTER, full MERGE, TRUNCATE) — the adapter works around this via CTAS+DROP/CREATE, which the team must understand rather than assume is free",
+          "Airflow DAG failures not surfacing to the same control-plane audit trail as the ingestion pipelines"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     },
@@ -143,15 +233,26 @@
       "classification": "fact",
       "layers": ["compute"],
       "evidence": [
-        { "sourceKey": "warehouse-overview", "note": "Warehouse data is automatically published to OneLake Files in Delta format, making the same tables readable by external engines and other Fabric workloads without export jobs." }
+        {
+          "sourceKey": "warehouse-overview",
+          "note": "Warehouse data is automatically published to OneLake Files in Delta format, making the same tables readable by external engines and other Fabric workloads without export jobs."
+        }
       ],
       "drill": {
         "inputs": ["wh_gold's Delta fact and dimension tables"],
-        "processing": ["Direct Lake mode reads column data straight from OneLake, lazily loading only the columns a query and its measures/relationships touch"],
-        "outputs": ["Power BI reports and dashboards reflecting the latest completed dbt gold build"],
+        "processing": [
+          "Direct Lake mode reads column data straight from OneLake, lazily loading only the columns a query and its measures/relationships touch"
+        ],
+        "outputs": [
+          "Power BI reports and dashboards reflecting the latest completed dbt gold build"
+        ],
         "example": "A risk analyst's VaR dashboard reflects last night's dbt run as soon as it completes, with no scheduled semantic-model refresh in between.",
-        "controls": ["Framing/refresh cadence tied to the dbt build schedule, not a separate Power BI refresh"],
-        "failureModes": ["A partially failed dbt run leaving gold tables mid-update while Direct Lake queries continue reading them, if no completion gate is enforced"]
+        "controls": [
+          "Framing/refresh cadence tied to the dbt build schedule, not a separate Power BI refresh"
+        ],
+        "failureModes": [
+          "A partially failed dbt run leaving gold tables mid-update while Direct Lake queries continue reading them, if no completion gate is enforced"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
     },
@@ -165,12 +266,24 @@
       "layers": ["orchestration", "observability"],
       "evidence": [],
       "drill": {
-        "inputs": ["Run-start and run-completion writes from the file pipeline, API pipeline, and Airflow DAG"],
-        "processing": ["Stored procedures insert etl_run/etl_run_step rows and advance etl_watermark", "Mirrored entities get an inventory-only registry row with no pipeline firing for them"],
-        "outputs": ["A queryable run history joinable across all ingestion paths and the gold build"],
+        "inputs": [
+          "Run-start and run-completion writes from the file pipeline, API pipeline, and Airflow DAG"
+        ],
+        "processing": [
+          "Stored procedures insert etl_run/etl_run_step rows and advance etl_watermark",
+          "Mirrored entities get an inventory-only registry row with no pipeline firing for them"
+        ],
+        "outputs": [
+          "A queryable run history joinable across all ingestion paths and the gold build"
+        ],
         "example": "An operator queries etl_run_step for all failed steps in the last 24 hours across file, API, and dbt runs in one T-SQL statement.",
-        "controls": ["Which pipelines/DAGs are required to write to the control plane", "Retention policy on run history"],
-        "failureModes": ["A pipeline or DAG failing before it writes its own audit row, leaving a silent gap in the run history rather than a visible failure"]
+        "controls": [
+          "Which pipelines/DAGs are required to write to the control plane",
+          "Retention policy on run history"
+        ],
+        "failureModes": [
+          "A pipeline or DAG failing before it writes its own audit row, leaving a silent gap in the run history rather than a visible failure"
+        ]
       }
     },
     {
@@ -182,40 +295,165 @@
       "classification": "fact",
       "layers": ["observability"],
       "evidence": [
-        { "sourceKey": "onelake-overview", "note": "All Fabric data items, including lakehouses and warehouses, automatically persist their tabular data in OneLake using the open Delta Parquet format, regardless of which engine wrote the data — the same open-storage foundation an Eventhouse's KQL tables also sit on when OneLake availability is enabled." }
+        {
+          "sourceKey": "onelake-overview",
+          "note": "All Fabric data items, including lakehouses and warehouses, automatically persist their tabular data in OneLake using the open Delta Parquet format, regardless of which engine wrote the data — the same open-storage foundation an Eventhouse's KQL tables also sit on when OneLake availability is enabled."
+        }
       ],
       "drill": {
-        "inputs": ["Per-event telemetry from ingestion functions: API call attempts, retries, validation failures"],
-        "processing": ["Events land via Eventstream or direct Kusto ingestion into KQL tables", "Records are organized by arrival time for fast indexed queries"],
-        "outputs": ["A queryable, arrival-ordered event log independent of the low-cardinality run audit in sqldb_meta"],
+        "inputs": [
+          "Per-event telemetry from ingestion functions: API call attempts, retries, validation failures"
+        ],
+        "processing": [
+          "Events land via Eventstream or direct Kusto ingestion into KQL tables",
+          "Records are organized by arrival time for fast indexed queries"
+        ],
+        "outputs": [
+          "A queryable, arrival-ordered event log independent of the low-cardinality run audit in sqldb_meta"
+        ],
         "example": "An operator queries eh_ops for every retry attempt on the API pull pipeline in a 5-minute window, a query shape sqldb_meta's run-level tables were never designed for.",
         "controls": ["Which functions/pipelines emit telemetry events, and at what granularity"],
-        "failureModes": ["Conflating the two telemetry lanes — trying to answer a run-level audit question from Eventhouse or a per-event volume question from sqldb_meta — is a query-shape mismatch, not a missing feature"]
+        "failureModes": [
+          "Conflating the two telemetry lanes — trying to answer a run-level audit question from Eventhouse or a per-event volume question from sqldb_meta — is a query-shape mismatch, not a missing feature"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-file-lakehouse", "from": "file-copy-pipeline", "to": "lakehouse-bronze-silver", "label": "bronze file writes", "layer": "data", "kind": "flow" },
-    { "id": "e-mirror-lakehouse", "from": "mirroring-portfolio-db", "to": "lakehouse-bronze-silver", "label": "shortcut to mirrored replica", "layer": "data", "kind": "flow" },
-    { "id": "e-api-lakehouse", "from": "api-pull-pipeline", "to": "lakehouse-bronze-silver", "label": "bronze API writes", "layer": "data", "kind": "flow" },
-    { "id": "e-lakehouse-warning", "from": "lakehouse-bronze-silver", "to": "blast-radius-warning", "label": "risk of shared Tables namespace", "layer": "governance", "kind": "branch" },
-    { "id": "e-lakehouse-dbt", "from": "lakehouse-bronze-silver", "to": "dbt-gold-build", "label": "silver read via dbt sources", "layer": "compute", "kind": "flow" },
-    { "id": "e-dbt-directlake", "from": "dbt-gold-build", "to": "direct-lake-power-bi", "label": "gold star schema", "layer": "compute", "kind": "flow" },
-    { "id": "e-file-controlplane", "from": "file-copy-pipeline", "to": "control-plane-sqldb", "label": "run + watermark audit", "layer": "orchestration", "kind": "flow" },
-    { "id": "e-api-controlplane", "from": "api-pull-pipeline", "to": "control-plane-sqldb", "label": "run + watermark audit", "layer": "orchestration", "kind": "flow" },
-    { "id": "e-dbt-controlplane", "from": "dbt-gold-build", "to": "control-plane-sqldb", "label": "DAG run status", "layer": "orchestration", "kind": "flow" },
-    { "id": "e-file-telemetry", "from": "file-copy-pipeline", "to": "telemetry-eventhouse", "label": "per-event function telemetry", "layer": "observability", "kind": "flow" },
-    { "id": "e-api-telemetry", "from": "api-pull-pipeline", "to": "telemetry-eventhouse", "label": "per-event function telemetry", "layer": "observability", "kind": "flow" }
+    {
+      "id": "e-file-lakehouse",
+      "from": "file-copy-pipeline",
+      "to": "lakehouse-bronze-silver",
+      "label": "bronze file writes",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-mirror-lakehouse",
+      "from": "mirroring-portfolio-db",
+      "to": "lakehouse-bronze-silver",
+      "label": "shortcut to mirrored replica",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-api-lakehouse",
+      "from": "api-pull-pipeline",
+      "to": "lakehouse-bronze-silver",
+      "label": "bronze API writes",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-lakehouse-warning",
+      "from": "lakehouse-bronze-silver",
+      "to": "blast-radius-warning",
+      "label": "risk of shared Tables namespace",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e-lakehouse-dbt",
+      "from": "lakehouse-bronze-silver",
+      "to": "dbt-gold-build",
+      "label": "silver read via dbt sources",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-dbt-directlake",
+      "from": "dbt-gold-build",
+      "to": "direct-lake-power-bi",
+      "label": "gold star schema",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-file-controlplane",
+      "from": "file-copy-pipeline",
+      "to": "control-plane-sqldb",
+      "label": "run + watermark audit",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-api-controlplane",
+      "from": "api-pull-pipeline",
+      "to": "control-plane-sqldb",
+      "label": "run + watermark audit",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-dbt-controlplane",
+      "from": "dbt-gold-build",
+      "to": "control-plane-sqldb",
+      "label": "DAG run status",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-file-telemetry",
+      "from": "file-copy-pipeline",
+      "to": "telemetry-eventhouse",
+      "label": "per-event function telemetry",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-api-telemetry",
+      "from": "api-pull-pipeline",
+      "to": "telemetry-eventhouse",
+      "label": "per-event function telemetry",
+      "layer": "observability",
+      "kind": "flow"
+    }
   ],
   "walkthrough": [
-    { "nodeId": "file-copy-pipeline", "title": "Files: metadata-driven Copy", "explanation": "A single registry-driven pipeline copies every custodian file source into bronze, instead of one pipeline per source." },
-    { "nodeId": "mirroring-portfolio-db", "title": "The operational DB: mirrored, not pipelined", "explanation": "The live portfolio/transactions system of record is mirrored continuously into OneLake, keeping the source database untouched by analytics load." },
-    { "nodeId": "api-pull-pipeline", "title": "APIs: the same pattern, a REST source", "explanation": "Market-data and risk-engine pulls reuse the file path's registry-driven orchestration shape with a REST source instead of a file source." },
-    { "nodeId": "lakehouse-bronze-silver", "title": "Convergence: one lakehouse, bronze and silver", "explanation": "All three paths land in lh_analytics, where bronze and silver are schemas in one item rather than two separate lakehouses." },
-    { "nodeId": "blast-radius-warning", "title": "The trade-off of merging bronze and silver", "explanation": "That simplification costs item-level isolation — a shared Tables namespace means bronze and silver no longer have separate access or blast-radius boundaries." },
-    { "nodeId": "dbt-gold-build", "title": "dbt builds gold, Airflow schedules it", "explanation": "dbt reads silver and builds a star schema in the warehouse, orchestrated by an Airflow DAG running inside Data Factory." },
-    { "nodeId": "direct-lake-power-bi", "title": "Power BI reads gold with no refresh", "explanation": "Direct Lake reads the warehouse's Delta gold tables straight from OneLake, as current as the last completed dbt run." },
-    { "nodeId": "control-plane-sqldb", "title": "One control plane for run audit", "explanation": "A Fabric SQL database records every pipeline and dbt run, giving one place to ask what ran and whether it succeeded." },
-    { "nodeId": "telemetry-eventhouse", "title": "High-volume telemetry gets its own store", "explanation": "Per-event function telemetry goes to an Eventhouse built for arrival-ordered event scale, kept separate from the low-cardinality run audit." }
+    {
+      "nodeId": "file-copy-pipeline",
+      "title": "Files: metadata-driven Copy",
+      "explanation": "A single registry-driven pipeline copies every custodian file source into bronze, instead of one pipeline per source."
+    },
+    {
+      "nodeId": "mirroring-portfolio-db",
+      "title": "The operational DB: mirrored, not pipelined",
+      "explanation": "The live portfolio/transactions system of record is mirrored continuously into OneLake, keeping the source database untouched by analytics load."
+    },
+    {
+      "nodeId": "api-pull-pipeline",
+      "title": "APIs: the same pattern, a REST source",
+      "explanation": "Market-data and risk-engine pulls reuse the file path's registry-driven orchestration shape with a REST source instead of a file source."
+    },
+    {
+      "nodeId": "lakehouse-bronze-silver",
+      "title": "Convergence: one lakehouse, bronze and silver",
+      "explanation": "All three paths land in lh_analytics, where bronze and silver are schemas in one item rather than two separate lakehouses."
+    },
+    {
+      "nodeId": "blast-radius-warning",
+      "title": "The trade-off of merging bronze and silver",
+      "explanation": "That simplification costs item-level isolation — a shared Tables namespace means bronze and silver no longer have separate access or blast-radius boundaries."
+    },
+    {
+      "nodeId": "dbt-gold-build",
+      "title": "dbt builds gold, Airflow schedules it",
+      "explanation": "dbt reads silver and builds a star schema in the warehouse, orchestrated by an Airflow DAG running inside Data Factory."
+    },
+    {
+      "nodeId": "direct-lake-power-bi",
+      "title": "Power BI reads gold with no refresh",
+      "explanation": "Direct Lake reads the warehouse's Delta gold tables straight from OneLake, as current as the last completed dbt run."
+    },
+    {
+      "nodeId": "control-plane-sqldb",
+      "title": "One control plane for run audit",
+      "explanation": "A Fabric SQL database records every pipeline and dbt run, giving one place to ask what ran and whether it succeeded."
+    },
+    {
+      "nodeId": "telemetry-eventhouse",
+      "title": "High-volume telemetry gets its own store",
+      "explanation": "Per-event function telemetry goes to an Eventhouse built for arrival-ordered event scale, kept separate from the low-cardinality run audit."
+    }
   ]
 }

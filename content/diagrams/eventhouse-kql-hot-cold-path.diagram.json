@@ -20,15 +20,28 @@
       "classification": "fact",
       "layers": ["data"],
       "evidence": [
-        { "sourceKey": "rti-overview", "note": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale. Data stored in an Eventhouse is also mirrored to OneLake as a single logical copy for use by other Fabric experiences." }
+        {
+          "sourceKey": "rti-overview",
+          "note": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale. Data stored in an Eventhouse is also mirrored to OneLake as a single logical copy for use by other Fabric experiences."
+        }
       ],
       "drill": {
-        "inputs": ["A streaming or batch record arriving via Eventstream or direct ingestion into a KQL database table"],
-        "processing": ["Record is indexed and organized by arrival time", "Record becomes queryable via native KQL and the T-SQL analytics endpoint", "Record is routed into the caching-policy hot tier and the retention-policy standard tier concurrently"],
-        "outputs": ["A queryable record, present in both the hot cache and the durable standard-tier store"],
+        "inputs": [
+          "A streaming or batch record arriving via Eventstream or direct ingestion into a KQL database table"
+        ],
+        "processing": [
+          "Record is indexed and organized by arrival time",
+          "Record becomes queryable via native KQL and the T-SQL analytics endpoint",
+          "Record is routed into the caching-policy hot tier and the retention-policy standard tier concurrently"
+        ],
+        "outputs": [
+          "A queryable record, present in both the hot cache and the durable standard-tier store"
+        ],
         "example": "A telemetry event from a fleet-tracking Eventstream lands in a KQL database table and is immediately queryable via KQL within seconds, indexed by its arrival timestamp alongside millions of other records from the same ingestion window.",
         "controls": ["Ingestion source and format (Eventstream, direct SDK/API ingestion, batch)"],
-        "failureModes": ["Assuming query latency is uniform regardless of how old the queried data is — it is not, because hot and cold tiers behave differently (see the next two nodes)"]
+        "failureModes": [
+          "Assuming query latency is uniform regardless of how old the queried data is — it is not, because hot and cold tiers behave differently (see the next two nodes)"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "eventhouse-kql", "label": "Eventhouse/KQL" }
     },
@@ -41,15 +54,26 @@
       "classification": "fact",
       "layers": ["data"],
       "evidence": [
-        { "sourceKey": "eventhouse-overview", "note": "KQL database storage is split into two independently billed tiers: a premium cache tier (comparable to ADLS premium) that holds the hot dataset governed by the caching policy, and a standard tier (comparable to ADLS hot) that holds the full retention window governed by the retention policy. Configuring a shorter cache window reduces premium-tier spend without affecting total queryable history." }
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "KQL database storage is split into two independently billed tiers: a premium cache tier (comparable to ADLS premium) that holds the hot dataset governed by the caching policy, and a standard tier (comparable to ADLS hot) that holds the full retention window governed by the retention policy. Configuring a shorter cache window reduces premium-tier spend without affecting total queryable history."
+        }
       ],
       "drill": {
         "inputs": ["Recently ingested records, within the configured caching-policy window"],
-        "processing": ["Data within the cache window is kept resident in premium-tier storage", "Queries against this window read directly from premium storage for lower latency"],
-        "outputs": ["Fast query response for recent data, billed at premium-tier rates for the cache window's size"],
+        "processing": [
+          "Data within the cache window is kept resident in premium-tier storage",
+          "Queries against this window read directly from premium storage for lower latency"
+        ],
+        "outputs": [
+          "Fast query response for recent data, billed at premium-tier rates for the cache window's size"
+        ],
         "example": "A dashboard querying the last 24 hours of IoT telemetry with a 48-hour caching policy always hits premium-tier storage, giving consistently fast response times regardless of how much older history the table also retains.",
         "controls": ["Caching policy window length, set independently of the retention policy"],
-        "failureModes": ["Setting an unnecessarily long cache window and paying premium-tier rates for data that queries rarely touch", "Assuming shortening the cache window deletes data — it only moves the boundary of what's held at premium-tier speed, not what's retained"]
+        "failureModes": [
+          "Setting an unnecessarily long cache window and paying premium-tier rates for data that queries rarely touch",
+          "Assuming shortening the cache window deletes data — it only moves the boundary of what's held at premium-tier speed, not what's retained"
+        ]
       }
     },
     {
@@ -61,16 +85,32 @@
       "classification": "fact",
       "layers": ["data", "governance"],
       "evidence": [
-        { "sourceKey": "eventhouse-overview", "note": "KQL database storage is split into two independently billed tiers: a premium cache tier and a standard tier (comparable to ADLS hot) that holds the full retention window governed by the retention policy." },
-        { "sourceKey": "eventhouse-overview", "note": "The KQL retention policy also governs the OneLake copy: data aged out of the KQL database is concurrently soft-deleted from OneLake." }
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "KQL database storage is split into two independently billed tiers: a premium cache tier and a standard tier (comparable to ADLS hot) that holds the full retention window governed by the retention policy."
+        },
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "The KQL retention policy also governs the OneLake copy: data aged out of the KQL database is concurrently soft-deleted from OneLake."
+        }
       ],
       "drill": {
-        "inputs": ["All ingested records within the configured retention window, regardless of cache-window membership"],
-        "processing": ["Data is held in standard-tier storage for the full retention period", "When data ages past the retention window, it is deleted from the standard tier and concurrently soft-deleted from OneLake if OneLake availability is enabled"],
-        "outputs": ["The full queryable history within retention, at standard-tier cost, plus a synchronized deletion signal to the OneLake mirror"],
+        "inputs": [
+          "All ingested records within the configured retention window, regardless of cache-window membership"
+        ],
+        "processing": [
+          "Data is held in standard-tier storage for the full retention period",
+          "When data ages past the retention window, it is deleted from the standard tier and concurrently soft-deleted from OneLake if OneLake availability is enabled"
+        ],
+        "outputs": [
+          "The full queryable history within retention, at standard-tier cost, plus a synchronized deletion signal to the OneLake mirror"
+        ],
         "example": "A table with a 2-year retention policy and a 48-hour cache window keeps two years of history queryable (at standard-tier latency beyond 48 hours) and automatically soft-deletes both the KQL copy and the OneLake copy of any record older than two years.",
         "controls": ["Retention policy window, set per table or database"],
-        "failureModes": ["Assuming the OneLake copy persists independently of KQL retention — it does not; the same retention policy prunes both concurrently", "Setting retention shorter than a downstream OneLake consumer (e.g. a Lakehouse job) expects, silently losing history that consumer assumed was durable"]
+        "failureModes": [
+          "Assuming the OneLake copy persists independently of KQL retention — it does not; the same retention policy prunes both concurrently",
+          "Setting retention shorter than a downstream OneLake consumer (e.g. a Lakehouse job) expects, silently losing history that consumer assumed was durable"
+        ]
       }
     },
     {
@@ -82,16 +122,36 @@
       "classification": "fact",
       "layers": ["data", "metadata"],
       "evidence": [
-        { "sourceKey": "eventhouse-overview", "note": "OneLake availability for a KQL database can be enabled at either the database level (covering all current and future tables, with optional backfill of existing data) or at the individual table level." },
-        { "sourceKey": "eventhouse-overview", "note": "Enabling OneLake availability exposes KQL table data in Delta Lake format, making it directly queryable by other Fabric engines — including Power BI Direct Lake mode, Warehouse, Lakehouse, and Spark notebooks — without any data movement or copy. There is no additional storage charge for the OneLake copy beyond the standard OneLake storage tier already billed." }
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "OneLake availability for a KQL database can be enabled at either the database level (covering all current and future tables, with optional backfill of existing data) or at the individual table level."
+        },
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "Enabling OneLake availability exposes KQL table data in Delta Lake format, making it directly queryable by other Fabric engines — including Power BI Direct Lake mode, Warehouse, Lakehouse, and Spark notebooks — without any data movement or copy. There is no additional storage charge for the OneLake copy beyond the standard OneLake storage tier already billed."
+        }
       ],
       "drill": {
-        "inputs": ["A KQL database or individual table, with a decision on whether cross-engine access to its data is needed"],
-        "processing": ["If enabled at database level: all current and future tables get OneLake availability, with optional backfill for existing data", "If enabled at table level: only that specific table is exposed", "If left disabled: data stays queryable only via native KQL and the T-SQL analytics endpoint"],
-        "outputs": ["Either a Delta-format OneLake mirror usable by Direct Lake, Warehouse, Lakehouse, and Spark, or KQL-only access with no OneLake footprint"],
+        "inputs": [
+          "A KQL database or individual table, with a decision on whether cross-engine access to its data is needed"
+        ],
+        "processing": [
+          "If enabled at database level: all current and future tables get OneLake availability, with optional backfill for existing data",
+          "If enabled at table level: only that specific table is exposed",
+          "If left disabled: data stays queryable only via native KQL and the T-SQL analytics endpoint"
+        ],
+        "outputs": [
+          "Either a Delta-format OneLake mirror usable by Direct Lake, Warehouse, Lakehouse, and Spark, or KQL-only access with no OneLake footprint"
+        ],
         "example": "A team enables OneLake availability at the database level with backfill for a telemetry KQL database so a Direct Lake semantic model can report on it directly, at no incremental OneLake storage cost beyond what's already billed.",
-        "controls": ["Database-level vs table-level enablement", "Whether to backfill existing data or start availability from the point of enablement forward"],
-        "failureModes": ["Enabling database-level availability without realizing it applies to all future tables too, exposing data that wasn't meant to be OneLake-visible", "Not requesting backfill, and assuming historical data is available in OneLake when only new data going forward actually is"]
+        "controls": [
+          "Database-level vs table-level enablement",
+          "Whether to backfill existing data or start availability from the point of enablement forward"
+        ],
+        "failureModes": [
+          "Enabling database-level availability without realizing it applies to all future tables too, exposing data that wasn't meant to be OneLake-visible",
+          "Not requesting backfill, and assuming historical data is available in OneLake when only new data going forward actually is"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
     },
@@ -104,15 +164,29 @@
       "classification": "fact",
       "layers": ["data", "compute"],
       "evidence": [
-        { "sourceKey": "eventhouse-overview", "note": "When OneLake availability is active, an adaptive batching mechanism delays writes to OneLake until enough data accumulates to produce optimally-sized Parquet files (typically 200-256 MB). The default maximum delay is up to 3 hours; it can be lowered to as little as 5 minutes via the mirroring policy, though smaller delays risk producing many small files that degrade downstream query performance." }
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "When OneLake availability is active, an adaptive batching mechanism delays writes to OneLake until enough data accumulates to produce optimally-sized Parquet files (typically 200-256 MB). The default maximum delay is up to 3 hours; it can be lowered to as little as 5 minutes via the mirroring policy, though smaller delays risk producing many small files that degrade downstream query performance."
+        }
       ],
       "drill": {
-        "inputs": ["Newly ingested records in a table with OneLake availability enabled", "The configured mirroring policy delay (default up to 3 hours, tunable down to 5 minutes)"],
-        "processing": ["Accumulate incoming records until either the target file size (200-256 MB) is reached or the maximum delay elapses", "Write the accumulated batch to OneLake as a Delta/Parquet file"],
-        "outputs": ["Delta-format files in OneLake, sized for efficient downstream query performance, at some latency behind KQL-native freshness"],
+        "inputs": [
+          "Newly ingested records in a table with OneLake availability enabled",
+          "The configured mirroring policy delay (default up to 3 hours, tunable down to 5 minutes)"
+        ],
+        "processing": [
+          "Accumulate incoming records until either the target file size (200-256 MB) is reached or the maximum delay elapses",
+          "Write the accumulated batch to OneLake as a Delta/Parquet file"
+        ],
+        "outputs": [
+          "Delta-format files in OneLake, sized for efficient downstream query performance, at some latency behind KQL-native freshness"
+        ],
         "example": "A high-volume table hits the 200-256 MB file-size target every 20 minutes during peak ingestion, so OneLake freshness tracks close to real time; the same table during a quiet period waits the full 3-hour default before a smaller batch is flushed.",
         "controls": ["Mirroring policy delay, tunable from the 3-hour default down to 5 minutes"],
-        "failureModes": ["Tuning the delay down to 5 minutes for freshness without accounting for the resulting small-file query-performance cost downstream", "Assuming OneLake-side data is as fresh as KQL-native queries, when it can lag by up to 3 hours under the default policy"]
+        "failureModes": [
+          "Tuning the delay down to 5 minutes for freshness without accounting for the resulting small-file query-performance cost downstream",
+          "Assuming OneLake-side data is as fresh as KQL-native queries, when it can lag by up to 3 hours under the default policy"
+        ]
       }
     },
     {
@@ -124,15 +198,34 @@
       "classification": "warning",
       "layers": ["data", "governance"],
       "evidence": [
-        { "sourceKey": "eventhouse-overview", "note": "While OneLake availability is enabled on a table, certain DDL operations are blocked: renaming the table, changing a column's data type, applying row-level security, and deleting or purging rows. These operations require temporarily disabling OneLake availability; re-enabling it triggers a full historic backfill." }
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "While OneLake availability is enabled on a table, certain DDL operations are blocked: renaming the table, changing a column's data type, applying row-level security, and deleting or purging rows. These operations require temporarily disabling OneLake availability; re-enabling it triggers a full historic backfill."
+        }
       ],
       "drill": {
-        "inputs": ["A table with OneLake availability enabled", "A required DDL change: rename, column type change, row-level security, or delete/purge"],
-        "processing": ["Attempting the DDL directly fails while OneLake availability is active", "Disable OneLake availability on the table", "Perform the DDL change", "Re-enable OneLake availability, which triggers a full historic backfill rather than an incremental resync"],
-        "outputs": ["The DDL change applied, but at the cost of a full re-backfill of OneLake data for that table"],
+        "inputs": [
+          "A table with OneLake availability enabled",
+          "A required DDL change: rename, column type change, row-level security, or delete/purge"
+        ],
+        "processing": [
+          "Attempting the DDL directly fails while OneLake availability is active",
+          "Disable OneLake availability on the table",
+          "Perform the DDL change",
+          "Re-enable OneLake availability, which triggers a full historic backfill rather than an incremental resync"
+        ],
+        "outputs": [
+          "The DDL change applied, but at the cost of a full re-backfill of OneLake data for that table"
+        ],
         "example": "A compliance requirement to apply row-level security to a customer telemetry table, already OneLake-available for six months of history, forces a disable/apply/re-enable cycle that re-backfills the entire six months into OneLake rather than just applying the new policy incrementally.",
-        "controls": ["Plan schema and security requirements (renames, type changes, row-level security) before enabling OneLake availability, not after", "Budget for a full backfill window when a blocked DDL operation is unavoidable on an already-available table"],
-        "failureModes": ["Discovering the DDL block only when an urgent schema or security change is needed, with no backfill window planned", "Repeated disable/re-enable cycles each re-triggering a full backfill, compounding cost and delay"]
+        "controls": [
+          "Plan schema and security requirements (renames, type changes, row-level security) before enabling OneLake availability, not after",
+          "Budget for a full backfill window when a blocked DDL operation is unavoidable on an already-available table"
+        ],
+        "failureModes": [
+          "Discovering the DDL block only when an urgent schema or security change is needed, with no backfill window planned",
+          "Repeated disable/re-enable cycles each re-triggering a full backfill, compounding cost and delay"
+        ]
       }
     },
     {
@@ -144,28 +237,98 @@
       "classification": "warning",
       "layers": ["compute", "governance"],
       "evidence": [
-        { "sourceKey": "eventhouse-overview", "note": "When query demand exceeds capacity, an Eventhouse applies throttling in three escalating stages: proactive (queries slowed, ingestion unaffected), reactive (both queries and ingestion paused but no data lost), and extreme-reactive (ingestion and queries paused with a risk of data loss after a holding period)." },
-        { "sourceKey": "eventhouse-overview", "note": "Workspace-level surge protection allows capacity administrators to cap each workspace's share of total CU consumption as a percentage over a rolling 24-hour window. When a workspace breaches its threshold it is automatically blocked from accepting new operations; high-priority workspaces can be designated as mission-critical to exempt them from these rules." }
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "When query demand exceeds capacity, an Eventhouse applies throttling in three escalating stages: proactive (queries slowed, ingestion unaffected), reactive (both queries and ingestion paused but no data lost), and extreme-reactive (ingestion and queries paused with a risk of data loss after a holding period)."
+        },
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "Workspace-level surge protection allows capacity administrators to cap each workspace's share of total CU consumption as a percentage over a rolling 24-hour window. When a workspace breaches its threshold it is automatically blocked from accepting new operations; high-priority workspaces can be designated as mission-critical to exempt them from these rules."
+        }
       ],
       "drill": {
-        "inputs": ["Sustained query and/or ingestion demand approaching or exceeding available capacity"],
-        "processing": ["Stage 1 (proactive): queries slow down, ingestion continues unaffected", "Stage 2 (reactive): both queries and ingestion pause, but no data is lost while paused", "Stage 3 (extreme-reactive): both remain paused, and data loss becomes a real risk after a holding period"],
-        "outputs": ["Either recovery as demand subsides at stage 1 or 2, or actual data loss if stage 3 is sustained past the holding period"],
+        "inputs": [
+          "Sustained query and/or ingestion demand approaching or exceeding available capacity"
+        ],
+        "processing": [
+          "Stage 1 (proactive): queries slow down, ingestion continues unaffected",
+          "Stage 2 (reactive): both queries and ingestion pause, but no data is lost while paused",
+          "Stage 3 (extreme-reactive): both remain paused, and data loss becomes a real risk after a holding period"
+        ],
+        "outputs": [
+          "Either recovery as demand subsides at stage 1 or 2, or actual data loss if stage 3 is sustained past the holding period"
+        ],
         "example": "A capacity undersized for a sudden 5x ingestion spike from a new Eventstream source first slows queries (stage 1); if the spike continues and capacity isn't increased, ingestion itself pauses (stage 2); left unaddressed past the holding period, incoming events begin to be dropped (stage 3).",
-        "controls": ["Capacity sizing sufficient for peak, not average, ingestion and query load", "Workspace-level surge protection to cap runaway consumption before it escalates the whole capacity toward stage 3", "Mission-critical workspace exemption for workloads that must never be throttled"],
-        "failureModes": ["Sizing capacity for average load and getting blindsided by a burst that pushes straight through proactive into reactive throttling", "Assuming all three stages are equally safe — extreme-reactive is the only one that risks real data loss, and it is reached only after sustained pressure past the holding period"]
+        "controls": [
+          "Capacity sizing sufficient for peak, not average, ingestion and query load",
+          "Workspace-level surge protection to cap runaway consumption before it escalates the whole capacity toward stage 3",
+          "Mission-critical workspace exemption for workloads that must never be throttled"
+        ],
+        "failureModes": [
+          "Sizing capacity for average load and getting blindsided by a burst that pushes straight through proactive into reactive throttling",
+          "Assuming all three stages are equally safe — extreme-reactive is the only one that risks real data loss, and it is reached only after sustained pressure past the holding period"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
     }
   ],
   "edges": [
-    { "id": "e-ingest-hot", "from": "record-ingest", "to": "hot-cache-tier", "label": "record enters the caching-policy window", "layer": "data", "kind": "flow" },
-    { "id": "e-ingest-cold", "from": "record-ingest", "to": "cold-standard-tier", "label": "record enters the retention-policy window", "layer": "data", "kind": "flow" },
-    { "id": "e-cold-onelake-decision", "from": "cold-standard-tier", "to": "onelake-availability-decision", "label": "check whether OneLake availability is configured", "layer": "metadata", "kind": "flow" },
-    { "id": "e-decision-batching", "from": "onelake-availability-decision", "to": "adaptive-batching", "label": "enabled: route through adaptive batching", "layer": "data", "kind": "branch" },
-    { "id": "e-decision-ddl-warning", "from": "onelake-availability-decision", "to": "ddl-restriction-warning", "label": "enabled: DDL restrictions now apply", "layer": "governance", "kind": "branch" },
-    { "id": "e-hot-throttle", "from": "hot-cache-tier", "to": "throttling-ladder", "label": "risk under sustained query/ingestion pressure", "layer": "compute", "kind": "branch" },
-    { "id": "e-batching-throttle", "from": "adaptive-batching", "to": "throttling-ladder", "label": "OneLake write load contributes to capacity pressure", "layer": "compute", "kind": "flow" }
+    {
+      "id": "e-ingest-hot",
+      "from": "record-ingest",
+      "to": "hot-cache-tier",
+      "label": "record enters the caching-policy window",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-ingest-cold",
+      "from": "record-ingest",
+      "to": "cold-standard-tier",
+      "label": "record enters the retention-policy window",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-cold-onelake-decision",
+      "from": "cold-standard-tier",
+      "to": "onelake-availability-decision",
+      "label": "check whether OneLake availability is configured",
+      "layer": "metadata",
+      "kind": "flow"
+    },
+    {
+      "id": "e-decision-batching",
+      "from": "onelake-availability-decision",
+      "to": "adaptive-batching",
+      "label": "enabled: route through adaptive batching",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-decision-ddl-warning",
+      "from": "onelake-availability-decision",
+      "to": "ddl-restriction-warning",
+      "label": "enabled: DDL restrictions now apply",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e-hot-throttle",
+      "from": "hot-cache-tier",
+      "to": "throttling-ladder",
+      "label": "risk under sustained query/ingestion pressure",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-batching-throttle",
+      "from": "adaptive-batching",
+      "to": "throttling-ladder",
+      "label": "OneLake write load contributes to capacity pressure",
+      "layer": "compute",
+      "kind": "flow"
+    }
   ],
   "walkthrough": [
     {

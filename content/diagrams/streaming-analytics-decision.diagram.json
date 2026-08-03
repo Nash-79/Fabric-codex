@@ -22,13 +22,22 @@
       "tags": ["decision-root", "StreamingAnalytics"],
       "evidence": [],
       "drill": {
-        "inputs": ["The stated business requirement for this specific workload, not the data source's technical capability", "Who consumes the result and how they use it (live monitoring vs periodic report)"],
-        "processing": ["State the actual latency requirement in concrete terms (seconds, minutes, hours, daily)", "Separate the requirement from the fact that the source happens to be a continuous event stream"],
+        "inputs": [
+          "The stated business requirement for this specific workload, not the data source's technical capability",
+          "Who consumes the result and how they use it (live monitoring vs periodic report)"
+        ],
+        "processing": [
+          "State the actual latency requirement in concrete terms (seconds, minutes, hours, daily)",
+          "Separate the requirement from the fact that the source happens to be a continuous event stream"
+        ],
         "outputs": ["A routed decision toward the hot path, the cold path, or both"],
-        "example": "A safety-alert workload genuinely needs sub-minute detection and routes to the hot path; a weekly utilization trend report built from the same vehicle telemetry only needs the cold path, even though both read from the same Eventhouse."
-      ,
-        "controls": ["Write the latency requirement down in business terms before choosing an implementation path"],
-        "failureModes": ["Routing every workload through the hot path because the data source is already streaming, rather than asking what each specific workload needs"]
+        "example": "A safety-alert workload genuinely needs sub-minute detection and routes to the hot path; a weekly utilization trend report built from the same vehicle telemetry only needs the cold path, even though both read from the same Eventhouse.",
+        "controls": [
+          "Write the latency requirement down in business terms before choosing an implementation path"
+        ],
+        "failureModes": [
+          "Routing every workload through the hot path because the data source is already streaming, rather than asking what each specific workload needs"
+        ]
       }
     },
     {
@@ -41,16 +50,32 @@
       "layers": ["data", "compute"],
       "tags": ["Eventhouse", "KQL"],
       "evidence": [
-        { "sourceKey": "eventhouse-overview", "note": "KQL database storage is split into a premium cache tier that holds the hot dataset governed by the caching policy, and a standard tier that holds the full retention window; configuring a shorter cache window reduces premium-tier spend without affecting total queryable history." },
-        { "sourceKey": "rti-overview", "note": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale. Eventhouse includes native anomaly detection that evaluates live time-series and event datasets in place." }
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "KQL database storage is split into a premium cache tier that holds the hot dataset governed by the caching policy, and a standard tier that holds the full retention window; configuring a shorter cache window reduces premium-tier spend without affecting total queryable history."
+        },
+        {
+          "sourceKey": "rti-overview",
+          "note": "Eventhouses automatically organize ingested records by arrival time, enabling fast, indexed queries over structured, semi-structured, and unstructured data at any scale. Eventhouse includes native anomaly detection that evaluates live time-series and event datasets in place."
+        }
       ],
       "drill": {
         "inputs": ["An event stream with a genuine sub-second-to-minutes latency requirement"],
-        "processing": ["Route the eventstream to an Eventhouse KQL database", "Size the caching policy's hot-cache window to cover exactly what live queries need", "Connect Activator rules or a Real-Time Dashboard against the hot data"],
-        "outputs": ["Live-queryable data supporting dashboards, alerting, and in-place anomaly detection"],
+        "processing": [
+          "Route the eventstream to an Eventhouse KQL database",
+          "Size the caching policy's hot-cache window to cover exactly what live queries need",
+          "Connect Activator rules or a Real-Time Dashboard against the hot data"
+        ],
+        "outputs": [
+          "Live-queryable data supporting dashboards, alerting, and in-place anomaly detection"
+        ],
         "example": "A fleet-safety monitor needs to detect a stopped vehicle within a minute; it queries the Eventhouse hot cache directly rather than waiting on any batch or cold-path materialization.",
-        "controls": ["Caching policy window sized to the actual query need, not maximized by default"],
-        "failureModes": ["Sizing the hot cache window larger than any live query actually needs, paying premium-tier cost for data nobody queries at low latency"]
+        "controls": [
+          "Caching policy window sized to the actual query need, not maximized by default"
+        ],
+        "failureModes": [
+          "Sizing the hot cache window larger than any live query actually needs, paying premium-tier cost for data nobody queries at low latency"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "eventhouse-kql", "label": "Eventhouse / KQL" }
     },
@@ -64,16 +89,32 @@
       "layers": ["data", "metadata"],
       "tags": ["Eventhouse", "OneLake"],
       "evidence": [
-        { "sourceKey": "eventhouse-overview", "note": "Enabling OneLake availability exposes KQL table data in Delta Lake format, making it directly queryable by other Fabric engines — including Power BI Direct Lake mode, Warehouse, Lakehouse, and Spark notebooks — without any data movement or copy, with no additional storage charge beyond standard OneLake storage." },
-        { "sourceKey": "eventhouse-overview", "note": "An adaptive batching mechanism delays writes to OneLake until enough data accumulates to produce optimally-sized Parquet files. The default maximum delay is up to 3 hours; it can be lowered to as little as 5 minutes via the mirroring policy." }
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "Enabling OneLake availability exposes KQL table data in Delta Lake format, making it directly queryable by other Fabric engines — including Power BI Direct Lake mode, Warehouse, Lakehouse, and Spark notebooks — without any data movement or copy, with no additional storage charge beyond standard OneLake storage."
+        },
+        {
+          "sourceKey": "eventhouse-overview",
+          "note": "An adaptive batching mechanism delays writes to OneLake until enough data accumulates to produce optimally-sized Parquet files. The default maximum delay is up to 3 hours; it can be lowered to as little as 5 minutes via the mirroring policy."
+        }
       ],
       "drill": {
         "inputs": ["The same Eventhouse KQL table already receiving the event stream"],
-        "processing": ["Enable OneLake availability at the table or database level", "Adaptive batching writes Delta files on a delay tuned between 5 minutes and 3 hours", "Downstream engines query the resulting Delta table like any other OneLake data"],
-        "outputs": ["Historical, cross-engine-queryable data at whatever freshness the batching delay is tuned to"],
+        "processing": [
+          "Enable OneLake availability at the table or database level",
+          "Adaptive batching writes Delta files on a delay tuned between 5 minutes and 3 hours",
+          "Downstream engines query the resulting Delta table like any other OneLake data"
+        ],
+        "outputs": [
+          "Historical, cross-engine-queryable data at whatever freshness the batching delay is tuned to"
+        ],
         "example": "A weekly fleet-utilization report joins the OneLake-available vehicle telemetry table with warehouse maintenance and contract dimensions, needing nothing faster than the default 3-hour batching delay.",
-        "controls": ["Mirroring policy delay setting, tuned to the actual freshness requirement rather than minimized by default"],
-        "failureModes": ["Tuning the delay far below what the reporting cadence actually needs, producing many small files that degrade downstream query performance for no freshness benefit anyone uses"]
+        "controls": [
+          "Mirroring policy delay setting, tuned to the actual freshness requirement rather than minimized by default"
+        ],
+        "failureModes": [
+          "Tuning the delay far below what the reporting cadence actually needs, producing many small files that degrade downstream query performance for no freshness benefit anyone uses"
+        ]
       }
     },
     {
@@ -87,12 +128,24 @@
       "tags": ["Eventhouse", "OneLake"],
       "evidence": [],
       "drill": {
-        "inputs": ["A workload with both a genuine live-response requirement and a genuine historical/cross-domain requirement"],
-        "processing": ["Keep the Eventhouse hot cache sized for the live query need", "Enable OneLake availability on the same table for the historical/cross-engine need", "Route Activator and dashboards against the hot cache; route reporting and joins against the OneLake Delta copy"],
-        "outputs": ["One ingested table serving both a live alerting surface and a historical reporting surface"],
+        "inputs": [
+          "A workload with both a genuine live-response requirement and a genuine historical/cross-domain requirement"
+        ],
+        "processing": [
+          "Keep the Eventhouse hot cache sized for the live query need",
+          "Enable OneLake availability on the same table for the historical/cross-engine need",
+          "Route Activator and dashboards against the hot cache; route reporting and joins against the OneLake Delta copy"
+        ],
+        "outputs": [
+          "One ingested table serving both a live alerting surface and a historical reporting surface"
+        ],
         "example": "A logistics team both alerts in real time when a vehicle goes offline (hot path) and builds a monthly on-time-delivery trend report joining the same telemetry with warehouse order data (cold path), from one Eventhouse table with both features enabled.",
-        "controls": ["Independent tuning of caching policy (hot) and mirroring policy delay (cold) on the same table"],
-        "failureModes": ["Assuming enabling both paths doubles storage or ingestion cost, when OneLake availability adds no additional storage charge beyond standard OneLake storage"]
+        "controls": [
+          "Independent tuning of caching policy (hot) and mirroring policy delay (cold) on the same table"
+        ],
+        "failureModes": [
+          "Assuming enabling both paths doubles storage or ingestion cost, when OneLake availability adds no additional storage charge beyond standard OneLake storage"
+        ]
       }
     },
     {
@@ -105,32 +158,116 @@
       "layers": ["data", "compute"],
       "tags": ["Eventhouse", "AntiPattern"],
       "evidence": [
-        { "sourceKey": "rti-overview", "note": "Streaming adds cost and operational shape that batch workloads do not need; if the business requirement is daily freshness, a lakehouse or warehouse pipeline is usually a better fit than keeping a hot event path." }
+        {
+          "sourceKey": "rti-overview",
+          "note": "Streaming adds cost and operational shape that batch workloads do not need; if the business requirement is daily freshness, a lakehouse or warehouse pipeline is usually a better fit than keeping a hot event path."
+        }
       ],
       "drill": {
-        "inputs": ["A workload with a stated daily (or slower) freshness requirement, currently routed through the Eventhouse hot path"],
-        "processing": ["Re-examine the actual business requirement against the current implementation", "Estimate the ongoing Eventhouse hot-cache cost versus an equivalent lakehouse/warehouse scheduled pipeline", "Migrate the workload off the hot path if no genuine sub-daily need exists"],
-        "outputs": ["Either a justified hot-path workload, or one correctly migrated to a cheaper scheduled pipeline"],
+        "inputs": [
+          "A workload with a stated daily (or slower) freshness requirement, currently routed through the Eventhouse hot path"
+        ],
+        "processing": [
+          "Re-examine the actual business requirement against the current implementation",
+          "Estimate the ongoing Eventhouse hot-cache cost versus an equivalent lakehouse/warehouse scheduled pipeline",
+          "Migrate the workload off the hot path if no genuine sub-daily need exists"
+        ],
+        "outputs": [
+          "Either a justified hot-path workload, or one correctly migrated to a cheaper scheduled pipeline"
+        ],
         "example": "A monthly compliance report was originally built on the Eventhouse hot path because the source data happened to be streaming; a review finds no consumer ever needed faster than daily freshness, and the workload is moved to a nightly lakehouse pipeline, eliminating the always-on premium cache cost.",
-        "controls": ["Periodic review of hot-path workloads against their actual stated freshness requirement, not just their data source's technical shape"],
-        "failureModes": ["Nobody revisits the original routing decision after the workload ships, so the unnecessary cost persists indefinitely"]
+        "controls": [
+          "Periodic review of hot-path workloads against their actual stated freshness requirement, not just their data source's technical shape"
+        ],
+        "failureModes": [
+          "Nobody revisits the original routing decision after the workload ships, so the unnecessary cost persists indefinitely"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-start-hot", "from": "start-question", "to": "hot-path-route", "label": "sub-second/minutes operational need", "layer": "data", "kind": "branch" },
-    { "id": "e-start-cold", "from": "start-question", "to": "cold-path-route", "label": "hours-scale historical or cross-domain need", "layer": "data", "kind": "branch" },
-    { "id": "e-start-both", "from": "start-question", "to": "both-paths-route", "label": "needs both live response and history", "layer": "data", "kind": "branch" },
-    { "id": "e-hot-both", "from": "hot-path-route", "to": "both-paths-route", "label": "same table, add OneLake availability", "layer": "metadata", "kind": "flow" },
-    { "id": "e-cold-both", "from": "cold-path-route", "to": "both-paths-route", "label": "same table, hot cache already present", "layer": "metadata", "kind": "flow" },
-    { "id": "e-hot-cost-warning", "from": "hot-path-route", "to": "cost-trap-warning", "label": "if the real need was only daily", "layer": "compute", "kind": "branch" },
-    { "id": "e-warning-cold-feedback", "from": "cost-trap-warning", "to": "cold-path-route", "label": "migrate to a cheaper scheduled pipeline", "layer": "data", "kind": "feedback" }
+    {
+      "id": "e-start-hot",
+      "from": "start-question",
+      "to": "hot-path-route",
+      "label": "sub-second/minutes operational need",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-cold",
+      "from": "start-question",
+      "to": "cold-path-route",
+      "label": "hours-scale historical or cross-domain need",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-both",
+      "from": "start-question",
+      "to": "both-paths-route",
+      "label": "needs both live response and history",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-hot-both",
+      "from": "hot-path-route",
+      "to": "both-paths-route",
+      "label": "same table, add OneLake availability",
+      "layer": "metadata",
+      "kind": "flow"
+    },
+    {
+      "id": "e-cold-both",
+      "from": "cold-path-route",
+      "to": "both-paths-route",
+      "label": "same table, hot cache already present",
+      "layer": "metadata",
+      "kind": "flow"
+    },
+    {
+      "id": "e-hot-cost-warning",
+      "from": "hot-path-route",
+      "to": "cost-trap-warning",
+      "label": "if the real need was only daily",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-warning-cold-feedback",
+      "from": "cost-trap-warning",
+      "to": "cold-path-route",
+      "label": "migrate to a cheaper scheduled pipeline",
+      "layer": "data",
+      "kind": "feedback"
+    }
   ],
   "walkthrough": [
-    { "nodeId": "start-question", "title": "1. Ask what latency the workload needs, not what the source offers", "explanation": "The source being a continuous event stream doesn't mean every workload built on it needs hot-path latency." },
-    { "nodeId": "hot-path-route", "title": "2. Hot path for genuine operational needs", "explanation": "Live dashboards, anomaly detection, and alerting conditions that must fire in seconds belong on the Eventhouse hot cache." },
-    { "nodeId": "cold-path-route", "title": "3. Cold path for historical and cross-domain needs", "explanation": "OneLake availability serves hours-scale freshness at lower cost, since it's the same table exposed as Delta rather than a second pipeline." },
-    { "nodeId": "both-paths-route", "title": "4. Both, when both are genuinely needed", "explanation": "A workload needing live response now and historical analysis later gets both from one table, with no duplicated ingestion." },
-    { "nodeId": "cost-trap-warning", "title": "5. Warning: don't default to the hot path", "explanation": "A workload that only ever needed daily freshness pays ongoing hot-cache cost for a latency benefit nobody uses — the fix is migrating it to a scheduled pipeline." }
+    {
+      "nodeId": "start-question",
+      "title": "1. Ask what latency the workload needs, not what the source offers",
+      "explanation": "The source being a continuous event stream doesn't mean every workload built on it needs hot-path latency."
+    },
+    {
+      "nodeId": "hot-path-route",
+      "title": "2. Hot path for genuine operational needs",
+      "explanation": "Live dashboards, anomaly detection, and alerting conditions that must fire in seconds belong on the Eventhouse hot cache."
+    },
+    {
+      "nodeId": "cold-path-route",
+      "title": "3. Cold path for historical and cross-domain needs",
+      "explanation": "OneLake availability serves hours-scale freshness at lower cost, since it's the same table exposed as Delta rather than a second pipeline."
+    },
+    {
+      "nodeId": "both-paths-route",
+      "title": "4. Both, when both are genuinely needed",
+      "explanation": "A workload needing live response now and historical analysis later gets both from one table, with no duplicated ingestion."
+    },
+    {
+      "nodeId": "cost-trap-warning",
+      "title": "5. Warning: don't default to the hot path",
+      "explanation": "A workload that only ever needed daily freshness pays ongoing hot-cache cost for a latency benefit nobody uses — the fix is migrating it to a scheduled pipeline."
+    }
   ]
 }

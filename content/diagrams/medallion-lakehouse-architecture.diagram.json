@@ -21,15 +21,30 @@
       "layers": ["data", "orchestration"],
       "tags": ["DataFactory", "OneLake", "Ingestion"],
       "evidence": [
-        { "sourceKey": "lakehouse-overview", "note": "Data can enter a lakehouse through several routes: Spark notebooks, pipeline copy activities, Spark job definitions for compiled production ETL, Dataflows Gen2 for low-code preparation, or OneLake shortcuts that reference external data in place." }
+        {
+          "sourceKey": "lakehouse-overview",
+          "note": "Data can enter a lakehouse through several routes: Spark notebooks, pipeline copy activities, Spark job definitions for compiled production ETL, Dataflows Gen2 for low-code preparation, or OneLake shortcuts that reference external data in place."
+        }
       ],
       "drill": {
-        "inputs": ["Source system extracts, files, or an already-governed dataset elsewhere in OneLake or an external store"],
-        "processing": ["Route bulk/recurring loads through a pipeline Copy activity", "Route low-code shaping needs through Dataflow Gen2", "Route already-governed external data through a OneLake shortcut instead of copying it"],
+        "inputs": [
+          "Source system extracts, files, or an already-governed dataset elsewhere in OneLake or an external store"
+        ],
+        "processing": [
+          "Route bulk/recurring loads through a pipeline Copy activity",
+          "Route low-code shaping needs through Dataflow Gen2",
+          "Route already-governed external data through a OneLake shortcut instead of copying it"
+        ],
         "outputs": ["Raw or lightly-shaped data ready to land as a bronze Delta table"],
         "example": "A nightly CDC extract from an order-management system lands via a pipeline Copy activity, while a partner's already-governed ADLS dataset is referenced with a shortcut instead of being re-ingested.",
-        "controls": ["Choice of ingestion route per source workload", "Recurrence/trigger schedule for pipeline-based loads"],
-        "failureModes": ["Re-ingesting data that is already governed elsewhere instead of shortcutting it, creating an unnecessary duplicate copy", "Choosing Dataflow Gen2 for very large bulk loads where a pipeline Copy activity would be far more cost-effective at scale"]
+        "controls": [
+          "Choice of ingestion route per source workload",
+          "Recurrence/trigger schedule for pipeline-based loads"
+        ],
+        "failureModes": [
+          "Re-ingesting data that is already governed elsewhere instead of shortcutting it, creating an unnecessary duplicate copy",
+          "Choosing Dataflow Gen2 for very large bulk loads where a pipeline Copy activity would be far more cost-effective at scale"
+        ]
       }
     },
     {
@@ -42,16 +57,33 @@
       "layers": ["data"],
       "tags": ["Lakehouse", "DeltaLake"],
       "evidence": [
-        { "sourceKey": "lakehouse-overview", "note": "A lakehouse splits its storage into two top-level areas: a managed Tables area reserved for Delta tables and a Files area for unstructured or non-Delta data." },
-        { "sourceKey": "lakehouse-overview", "note": "When data lands in the managed Tables area, Fabric automatically validates the format (Delta only at present), extracts column names, types, compression, and partitioning metadata, and registers the table in the metastore so it is immediately queryable from Spark SQL or T-SQL." }
+        {
+          "sourceKey": "lakehouse-overview",
+          "note": "A lakehouse splits its storage into two top-level areas: a managed Tables area reserved for Delta tables and a Files area for unstructured or non-Delta data."
+        },
+        {
+          "sourceKey": "lakehouse-overview",
+          "note": "When data lands in the managed Tables area, Fabric automatically validates the format (Delta only at present), extracts column names, types, compression, and partitioning metadata, and registers the table in the metastore so it is immediately queryable from Spark SQL or T-SQL."
+        }
       ],
       "drill": {
         "inputs": ["Landed writes from pipeline Copy, Dataflow Gen2, or a shortcut target"],
-        "processing": ["Fabric validates the write is Delta format", "Extracts and registers schema/partition metadata in the metastore"],
-        "outputs": ["A queryable bronze Delta table, visible immediately to Spark SQL and the SQL analytics endpoint"],
+        "processing": [
+          "Fabric validates the write is Delta format",
+          "Extracts and registers schema/partition metadata in the metastore"
+        ],
+        "outputs": [
+          "A queryable bronze Delta table, visible immediately to Spark SQL and the SQL analytics endpoint"
+        ],
         "example": "A raw bronze_orders table appears in the lakehouse explorer the moment the nightly Copy activity commits, with no DDL run by hand.",
-        "controls": ["Landing target inside the managed Tables area (not Files) so auto-registration applies", "Partition column choice on first write"],
-        "failureModes": ["Landing non-Delta formats (CSV/Parquet) directly and expecting auto-registration — only Delta is auto-discovered in Tables", "Schema drift on the source silently changing bronze column types between loads"]
+        "controls": [
+          "Landing target inside the managed Tables area (not Files) so auto-registration applies",
+          "Partition column choice on first write"
+        ],
+        "failureModes": [
+          "Landing non-Delta formats (CSV/Parquet) directly and expecting auto-registration — only Delta is auto-discovered in Tables",
+          "Schema drift on the source silently changing bronze column types between loads"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -65,15 +97,30 @@
       "layers": ["compute", "data"],
       "tags": ["Spark", "DeltaLake"],
       "evidence": [
-        { "sourceKey": "lakehouse-overview", "note": "All managed lakehouse tables use the Delta Lake storage format, which supplies ACID transactions, schema enforcement, and time travel over the underlying Parquet files." }
+        {
+          "sourceKey": "lakehouse-overview",
+          "note": "All managed lakehouse tables use the Delta Lake storage format, which supplies ACID transactions, schema enforcement, and time travel over the underlying Parquet files."
+        }
       ],
       "drill": {
         "inputs": ["Raw bronze Delta table(s)"],
-        "processing": ["De-duplicate and enforce consistent types", "Apply conforming joins/business keys across sources", "Write the result as a new silver Delta table via a Delta MERGE or overwrite"],
-        "outputs": ["A cleansed, conformed silver Delta table, still in the same lakehouse Tables area"],
+        "processing": [
+          "De-duplicate and enforce consistent types",
+          "Apply conforming joins/business keys across sources",
+          "Write the result as a new silver Delta table via a Delta MERGE or overwrite"
+        ],
+        "outputs": [
+          "A cleansed, conformed silver Delta table, still in the same lakehouse Tables area"
+        ],
         "example": "A Spark job reads bronze_orders, resolves inconsistent customer key formats across two source systems, and writes silver_orders with ACID guarantees so a mid-job failure never leaves a half-updated table.",
-        "controls": ["The Spark transformation logic (notebook or Spark job definition)", "Schema-evolution policy for the silver table"],
-        "failureModes": ["Silent type coercion during cleansing that truncates or nulls malformed values instead of failing loud", "Skipping de-duplication and letting downstream gold aggregations double-count"]
+        "controls": [
+          "The Spark transformation logic (notebook or Spark job definition)",
+          "Schema-evolution policy for the silver table"
+        ],
+        "failureModes": [
+          "Silent type coercion during cleansing that truncates or nulls malformed values instead of failing loud",
+          "Skipping de-duplication and letting downstream gold aggregations double-count"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark" }
     },
@@ -87,15 +134,27 @@
       "layers": ["compute", "data"],
       "tags": ["Spark", "DeltaLake", "Lakehouse"],
       "evidence": [
-        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "Only Delta tables whose data lives under the lakehouse /tables area are discoverable by the endpoint; tables that reference data in /files, and external Delta tables created with Spark code, are invisible to it — the documented workaround is a shortcut placed in the Tables area." }
+        {
+          "sourceKey": "lakehouse-sql-analytics-endpoint",
+          "note": "Only Delta tables whose data lives under the lakehouse /tables area are discoverable by the endpoint; tables that reference data in /files, and external Delta tables created with Spark code, are invisible to it — the documented workaround is a shortcut placed in the Tables area."
+        }
       ],
       "drill": {
         "inputs": ["Cleansed, conformed silver Delta table(s)"],
-        "processing": ["Aggregate and reshape silver into business-ready fact/dimension tables", "Write to the lakehouse's managed Tables area as Delta"],
+        "processing": [
+          "Aggregate and reshape silver into business-ready fact/dimension tables",
+          "Write to the lakehouse's managed Tables area as Delta"
+        ],
         "outputs": ["Gold Delta tables ready for read-only T-SQL and Direct Lake serving"],
         "example": "A Spark job aggregates silver_orders and silver_customers into gold_revenue_by_region, written to the Tables area so both the SQL analytics endpoint and a Direct Lake semantic model can see it immediately.",
-        "controls": ["Star-schema/grain design for the gold table", "Ensuring the write target is the managed Tables area, not Files or an unregistered external Delta path"],
-        "failureModes": ["Writing gold as an external Delta table outside the Tables area, making it invisible to the SQL analytics endpoint and Direct Lake", "Mixing grains in one gold fact table, silently double-counting additive measures"]
+        "controls": [
+          "Star-schema/grain design for the gold table",
+          "Ensuring the write target is the managed Tables area, not Files or an unregistered external Delta path"
+        ],
+        "failureModes": [
+          "Writing gold as an external Delta table outside the Tables area, making it invisible to the SQL analytics endpoint and Direct Lake",
+          "Mixing grains in one gold fact table, silently double-counting additive measures"
+        ]
       }
     },
     {
@@ -108,18 +167,39 @@
       "layers": ["compute", "data"],
       "tags": ["Warehouse", "SQLEndpoint"],
       "evidence": [
-        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "Every lakehouse automatically provisions a SQL analytics endpoint at creation time with no setup, exposing the lakehouse's Delta tables through a read-only T-SQL query surface." },
-        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "The endpoint is strictly read-only for data: INSERT, UPDATE, and DELETE are not possible through it, and data modification must happen via Spark in the lakehouse — yet T-SQL views, inline functions, and stored procedures can still be created and persisted on it." }
+        {
+          "sourceKey": "lakehouse-sql-analytics-endpoint",
+          "note": "Every lakehouse automatically provisions a SQL analytics endpoint at creation time with no setup, exposing the lakehouse's Delta tables through a read-only T-SQL query surface."
+        },
+        {
+          "sourceKey": "lakehouse-sql-analytics-endpoint",
+          "note": "The endpoint is strictly read-only for data: INSERT, UPDATE, and DELETE are not possible through it, and data modification must happen via Spark in the lakehouse — yet T-SQL views, inline functions, and stored procedures can still be created and persisted on it."
+        }
       ],
       "drill": {
         "inputs": ["Gold Delta tables registered in the lakehouse Tables area"],
-        "processing": ["Endpoint detects new/changed Delta tables and refreshes its own SQL metadata automatically", "Serves T-SQL SELECT queries, views, functions, and stored procedures over the same Delta files"],
-        "outputs": ["Read-only T-SQL query results for BI tools, ad-hoc analysts, and reporting jobs"],
+        "processing": [
+          "Endpoint detects new/changed Delta tables and refreshes its own SQL metadata automatically",
+          "Serves T-SQL SELECT queries, views, functions, and stored procedures over the same Delta files"
+        ],
+        "outputs": [
+          "Read-only T-SQL query results for BI tools, ad-hoc analysts, and reporting jobs"
+        ],
         "example": "A reporting analyst queries gold_revenue_by_region via T-SQL through the endpoint minutes after the Spark aggregation job commits, with no manual refresh triggered.",
-        "controls": ["Views/stored procedures built on top for reusable reporting logic", "SQL granular (object/column/row) permissions on the endpoint itself"],
-        "failureModes": ["Expecting write access through the endpoint and hitting a hard read-only wall", "Assuming endpoint-level SQL permissions are the only security boundary — see the warning node"]
+        "controls": [
+          "Views/stored procedures built on top for reusable reporting logic",
+          "SQL granular (object/column/row) permissions on the endpoint itself"
+        ],
+        "failureModes": [
+          "Expecting write access through the endpoint and hitting a hard read-only wall",
+          "Assuming endpoint-level SQL permissions are the only security boundary — see the warning node"
+        ]
       },
-      "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse SQL analytics endpoint" }
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "lakehouse",
+        "label": "Lakehouse SQL analytics endpoint"
+      }
     },
     {
       "id": "direct-lake-serving",
@@ -131,15 +211,27 @@
       "layers": ["compute", "data"],
       "tags": ["DirectLake", "SemanticModel", "PowerBI"],
       "evidence": [
-        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes not just columns the query names but also those needed by relationships and measures." }
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes not just columns the query names but also those needed by relationships and measures."
+        }
       ],
       "drill": {
         "inputs": ["Gold Delta tables in the lakehouse Tables area"],
-        "processing": ["Semantic model binds to the current Delta table version via framing", "Columns are transcoded into memory lazily as queries first touch them"],
+        "processing": [
+          "Semantic model binds to the current Delta table version via framing",
+          "Columns are transcoded into memory lazily as queries first touch them"
+        ],
         "outputs": ["Import-mode-speed DAX query results with no scheduled refresh"],
         "example": "A revenue dashboard built on gold_revenue_by_region queries Direct Lake; the region and revenue columns load into memory on first use, and later Spark writes to the table become visible after the next automatic framing.",
-        "controls": ["Automatic-updates setting controlling whether framing happens on every change or is pinned deliberately", "Capacity SKU, which bounds how much column data can be resident at once"],
-        "failureModes": ["Framing failing when a Delta table exceeds 10,000 Parquet files, a capacity guardrail", "Assuming Direct Lake always reflects live data — it reflects the state as of the last successful framing, not the live table"]
+        "controls": [
+          "Automatic-updates setting controlling whether framing happens on every change or is pinned deliberately",
+          "Capacity SKU, which bounds how much column data can be resident at once"
+        ],
+        "failureModes": [
+          "Framing failing when a Delta table exceeds 10,000 Parquet files, a capacity guardrail",
+          "Assuming Direct Lake always reflects live data — it reflects the state as of the last successful framing, not the live table"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
     },
@@ -153,25 +245,81 @@
       "layers": ["security", "governance"],
       "tags": ["SQLEndpoint", "Security", "AntiPattern"],
       "evidence": [
-        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "Treating endpoint-level GRANT/DENY as the sole security boundary for lakehouse data is unsafe, because users with Spark or OneLake access read the underlying Delta files without the SQL rules applying." }
+        {
+          "sourceKey": "lakehouse-sql-analytics-endpoint",
+          "note": "Treating endpoint-level GRANT/DENY as the sole security boundary for lakehouse data is unsafe, because users with Spark or OneLake access read the underlying Delta files without the SQL rules applying."
+        }
       ],
       "drill": {
-        "inputs": ["A gold table with row/column-level SQL permissions defined only on the SQL analytics endpoint"],
-        "processing": ["Audit whether workspace roles or OneLake security roles also restrict the same table's Spark/OneLake read path", "Apply access controls on both the endpoint and the underlying workspace/OneLake permissions"],
+        "inputs": [
+          "A gold table with row/column-level SQL permissions defined only on the SQL analytics endpoint"
+        ],
+        "processing": [
+          "Audit whether workspace roles or OneLake security roles also restrict the same table's Spark/OneLake read path",
+          "Apply access controls on both the endpoint and the underlying workspace/OneLake permissions"
+        ],
         "outputs": ["A gold table genuinely secured on every read path, not just the T-SQL one"],
         "example": "Row-level security on the endpoint hides HR salary rows from most analysts in T-SQL, but the same analysts still have Spark access to the underlying lakehouse and can read every row directly — the SQL rule never applied there.",
-        "controls": ["Workspace-role and OneLake security-role restrictions on the write/Spark path", "Treat SQL-endpoint GRANT/DENY as one layer, not the whole boundary"],
-        "failureModes": ["A compliance review discovering sensitive gold data was fully readable via Spark the whole time", "Adding ever more granular SQL rules while the actual leak is a Spark/OneLake permission gap"]
+        "controls": [
+          "Workspace-role and OneLake security-role restrictions on the write/Spark path",
+          "Treat SQL-endpoint GRANT/DENY as one layer, not the whole boundary"
+        ],
+        "failureModes": [
+          "A compliance review discovering sensitive gold data was fully readable via Spark the whole time",
+          "Adding ever more granular SQL rules while the actual leak is a Spark/OneLake permission gap"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-source-bronze", "from": "source-ingestion", "to": "bronze", "label": "lands as raw Delta table", "layer": "data", "kind": "flow" },
-    { "id": "e-bronze-silver", "from": "bronze", "to": "spark-silver", "label": "read for cleansing", "layer": "compute", "kind": "flow" },
-    { "id": "e-silver-gold", "from": "spark-silver", "to": "spark-gold", "label": "conformed silver table", "layer": "compute", "kind": "flow" },
-    { "id": "e-gold-endpoint", "from": "spark-gold", "to": "sql-endpoint", "label": "auto-detected, no refresh step", "layer": "data", "kind": "flow" },
-    { "id": "e-gold-directlake", "from": "spark-gold", "to": "direct-lake-serving", "label": "read directly, no import", "layer": "data", "kind": "flow" },
-    { "id": "e-endpoint-warning", "from": "sql-endpoint", "to": "endpoint-security-warning", "label": "risk if treated as the only boundary", "layer": "security", "kind": "branch" }
+    {
+      "id": "e-source-bronze",
+      "from": "source-ingestion",
+      "to": "bronze",
+      "label": "lands as raw Delta table",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-bronze-silver",
+      "from": "bronze",
+      "to": "spark-silver",
+      "label": "read for cleansing",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-silver-gold",
+      "from": "spark-silver",
+      "to": "spark-gold",
+      "label": "conformed silver table",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-gold-endpoint",
+      "from": "spark-gold",
+      "to": "sql-endpoint",
+      "label": "auto-detected, no refresh step",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-gold-directlake",
+      "from": "spark-gold",
+      "to": "direct-lake-serving",
+      "label": "read directly, no import",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-endpoint-warning",
+      "from": "sql-endpoint",
+      "to": "endpoint-security-warning",
+      "label": "risk if treated as the only boundary",
+      "layer": "security",
+      "kind": "branch"
+    }
   ],
   "walkthrough": [
     {

@@ -22,7 +22,9 @@
       "tags": ["schema-evolution", "decision-root"],
       "evidence": [],
       "drill": {
-        "inputs": ["An incoming bronze batch whose schema differs from the current silver table's schema"],
+        "inputs": [
+          "An incoming bronze batch whose schema differs from the current silver table's schema"
+        ],
         "processing": [
           "Diff the incoming schema against the current silver table schema",
           "Classify each difference as additive (new column) or breaking (type change, removal, rename)",
@@ -31,8 +33,12 @@
         ],
         "outputs": ["A classified schema change ready for either automatic merge or manual review"],
         "example": "A source system adds a loyalty_tier column with no other changes — a clean additive case that routes straight to mergeSchema.",
-        "controls": ["The additive-vs-breaking classification rule itself, since Delta's mergeSchema does not distinguish intent, only column presence"],
-        "failureModes": ["Treating a type-narrowing change (e.g. decimal(18,2) to decimal(10,2)) as if it were purely additive and letting it merge automatically"]
+        "controls": [
+          "The additive-vs-breaking classification rule itself, since Delta's mergeSchema does not distinguish intent, only column presence"
+        ],
+        "failureModes": [
+          "Treating a type-narrowing change (e.g. decimal(18,2) to decimal(10,2)) as if it were purely additive and letting it merge automatically"
+        ]
       }
     },
     {
@@ -45,7 +51,10 @@
       "layers": ["data"],
       "tags": ["schema-evolution", "delta-lake", "merge"],
       "evidence": [
-        { "sourceKey": "milescole-dataframewriterv2", "note": "Calling replace() or createOrReplace() under DataFrameWriterV2 automatically overwrites a Delta table's schema and partitioning as a consequence of the method choice itself, without requiring the overwriteSchema=true option that V1 needs for the same effect." }
+        {
+          "sourceKey": "milescole-dataframewriterv2",
+          "note": "Calling replace() or createOrReplace() under DataFrameWriterV2 automatically overwrites a Delta table's schema and partitioning as a consequence of the method choice itself, without requiring the overwriteSchema=true option that V1 needs for the same effect."
+        }
       ],
       "drill": {
         "inputs": ["An incoming batch classified as an additive schema change"],
@@ -54,10 +63,16 @@
           "Delta appends the new column(s) to the target table's schema definition",
           "Existing rows backfill the new column as null"
         ],
-        "outputs": ["An updated silver table schema with the new column present, no manual DDL required"],
+        "outputs": [
+          "An updated silver table schema with the new column present, no manual DDL required"
+        ],
         "example": "A loyalty_tier column newly present in the bronze batch flows into silver_customers via mergeSchema=true; existing rows show loyalty_tier=null until their next update.",
-        "controls": ["Whether mergeSchema is enabled per-operation or left off by default, forcing explicit review of every change"],
-        "failureModes": ["Leaving mergeSchema on unconditionally and letting an unintended column (e.g. a debug field) flow into the canonical silver schema"],
+        "controls": [
+          "Whether mergeSchema is enabled per-operation or left off by default, forcing explicit review of every change"
+        ],
+        "failureModes": [
+          "Leaving mergeSchema on unconditionally and letting an unintended column (e.g. a debug field) flow into the canonical silver schema"
+        ],
         "metrics": []
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
@@ -72,19 +87,32 @@
       "layers": ["data", "governance"],
       "tags": ["schema-evolution", "anti-pattern", "foreign-key"],
       "evidence": [
-        { "sourceKey": "lakehouse-sql-analytics-endpoint", "note": "Adding a foreign key constraint between endpoint tables freezes further schema changes for those tables, so later Delta schema evolution (such as new columns) stops syncing until the constraint is addressed." }
+        {
+          "sourceKey": "lakehouse-sql-analytics-endpoint",
+          "note": "Adding a foreign key constraint between endpoint tables freezes further schema changes for those tables, so later Delta schema evolution (such as new columns) stops syncing until the constraint is addressed."
+        }
       ],
       "drill": {
-        "inputs": ["A silver or mirrored endpoint table that has a foreign key constraint defined against another table"],
+        "inputs": [
+          "A silver or mirrored endpoint table that has a foreign key constraint defined against another table"
+        ],
         "processing": [
           "A subsequent bronze schema change (e.g. a new column) arrives",
           "The FK constraint on the target table blocks the schema sync from applying it",
           "No error surfaces — the sync simply stops reflecting new schema changes"
         ],
-        "outputs": ["A silver table whose schema has silently diverged from what mergeSchema alone would have produced"],
+        "outputs": [
+          "A silver table whose schema has silently diverged from what mergeSchema alone would have produced"
+        ],
         "example": "A team adds a foreign key between silver_orders and silver_customers for referential documentation. Two months later, a new discount_code column added to bronze never appears in silver_orders — the team spends a day debugging Spark before finding the FK constraint is the cause.",
-        "controls": ["Auditing existing foreign key constraints on tables that need to keep evolving", "Removing or reworking the constraint before relying on continued additive schema evolution"],
-        "failureModes": ["Diagnosing the resulting stalled sync as a platform bug or a mergeSchema misconfiguration instead of checking for an FK constraint", "Adding FK constraints for documentation purposes without realizing the schema-evolution cost"]
+        "controls": [
+          "Auditing existing foreign key constraints on tables that need to keep evolving",
+          "Removing or reworking the constraint before relying on continued additive schema evolution"
+        ],
+        "failureModes": [
+          "Diagnosing the resulting stalled sync as a platform bug or a mergeSchema misconfiguration instead of checking for an FK constraint",
+          "Adding FK constraints for documentation purposes without realizing the schema-evolution cost"
+        ]
       }
     },
     {
@@ -98,7 +126,10 @@
       "tags": ["decision-root", "scd"],
       "evidence": [],
       "drill": {
-        "inputs": ["The set of questions consumers actually ask of this entity", "Regulatory or reconciliation requirements for point-in-time reconstruction"],
+        "inputs": [
+          "The set of questions consumers actually ask of this entity",
+          "Regulatory or reconciliation requirements for point-in-time reconstruction"
+        ],
         "processing": [
           "List the questions asked of this entity by downstream consumers",
           "Mark which ones require a past state rather than the current state",
@@ -106,8 +137,13 @@
         ],
         "outputs": ["A yes/no routing to SCD Type 2 history or SCD Type 1 overwrite"],
         "example": "A product dimension is asked only 'what is this product called now', never 'what was it called when that order shipped' — so it routes to Type 1.",
-        "controls": ["Require a named 'as of' question before adopting Type 2, rather than applying it by convention"],
-        "failureModes": ["Applying Type 2 to every dimension by habit and paying the join cost forever", "Discovering the history requirement after the fact, with no way to reconstruct what an overwrite already destroyed"]
+        "controls": [
+          "Require a named 'as of' question before adopting Type 2, rather than applying it by convention"
+        ],
+        "failureModes": [
+          "Applying Type 2 to every dimension by habit and paying the join cost forever",
+          "Discovering the history requirement after the fact, with no way to reconstruct what an overwrite already destroyed"
+        ]
       }
     },
     {
@@ -121,17 +157,31 @@
       "tags": ["scd", "history", "merge-internals"],
       "evidence": [],
       "drill": {
-        "inputs": ["Change records with a business key", "A deterministic ordering column — source commit time or a monotonic sequence", "The set of attributes whose change should trigger a new version"],
+        "inputs": [
+          "Change records with a business key",
+          "A deterministic ordering column — source commit time or a monotonic sequence",
+          "The set of attributes whose change should trigger a new version"
+        ],
         "processing": [
           "Order changes deterministically by the ordering key, never by arrival order",
           "In the MERGE WHEN MATCHED clause, close the current row by setting is_current=false and effective_to=batch_ts",
           "In the WHEN NOT MATCHED clause, insert the new version with is_current=true and effective_from=batch_ts",
           "Merge idempotently so a replayed batch does not create duplicate versions"
         ],
-        "outputs": ["A versioned Delta table with validity ranges per row", "The ability to reconstruct any entity's state as of any past date"],
+        "outputs": [
+          "A versioned Delta table with validity ranges per row",
+          "The ability to reconstruct any entity's state as of any past date"
+        ],
         "example": "A customer's address change is applied by source commit time; the previous row's validity is closed and a new row opened, so an order from last year still joins to the address that was current then.",
-        "controls": ["A deterministic ordering key, enforced and tested", "An idempotent merge key so retries are safe", "Which attributes are tracked for history versus overwritten in place"],
-        "failureModes": ["Applying changes in arrival order rather than event order, producing a plausible but wrong history — see the adjacent warning node", "A non-idempotent merge that duplicates versions when a batch is replayed"]
+        "controls": [
+          "A deterministic ordering key, enforced and tested",
+          "An idempotent merge key so retries are safe",
+          "Which attributes are tracked for history versus overwritten in place"
+        ],
+        "failureModes": [
+          "Applying changes in arrival order rather than event order, producing a plausible but wrong history — see the adjacent warning node",
+          "A non-idempotent merge that duplicates versions when a batch is replayed"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -145,15 +195,28 @@
       "layers": ["data"],
       "tags": ["scd", "delta-lake"],
       "evidence": [
-        { "sourceKey": "lakehouse-overview", "note": "All managed lakehouse tables use Delta, which supplies ACID transactions, schema enforcement, and time travel over the underlying Parquet files." }
+        {
+          "sourceKey": "lakehouse-overview",
+          "note": "All managed lakehouse tables use Delta, which supplies ACID transactions, schema enforcement, and time travel over the underlying Parquet files."
+        }
       ],
       "drill": {
         "inputs": ["Current-state records from the source", "A business key to match on"],
-        "processing": ["MERGE on the business key, updating matched rows in place", "Insert unmatched (new) rows with no versioning logic"],
-        "outputs": ["A current-state table at its natural grain", "Delta time travel available for recovery, though not modelled as business history"],
+        "processing": [
+          "MERGE on the business key, updating matched rows in place",
+          "Insert unmatched (new) rows with no versioning logic"
+        ],
+        "outputs": [
+          "A current-state table at its natural grain",
+          "Delta time travel available for recovery, though not modelled as business history"
+        ],
         "example": "A product reference table is merged on product key each night; only the current name and category are kept, and Delta time travel covers accidental-overwrite recovery.",
-        "controls": ["Do not lean on Delta time travel as if it were business history — retention is bounded"],
-        "failureModes": ["Treating time travel as an SCD Type 2 substitute and discovering the retention window has passed when a real point-in-time need arrives"]
+        "controls": [
+          "Do not lean on Delta time travel as if it were business history — retention is bounded"
+        ],
+        "failureModes": [
+          "Treating time travel as an SCD Type 2 substitute and discovering the retention window has passed when a real point-in-time need arrives"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -168,16 +231,27 @@
       "tags": ["anti-pattern", "scd", "failure-mode"],
       "evidence": [],
       "drill": {
-        "inputs": ["Change records with more than one row per business key in a batch", "The column currently being used to decide which one wins"],
+        "inputs": [
+          "Change records with more than one row per business key in a batch",
+          "The column currently being used to decide which one wins"
+        ],
         "processing": [
           "Identify a genuinely deterministic ordering key — source commit time, a monotonic sequence, or an LSN",
           "Break ties explicitly, so two rows with the same timestamp still resolve identically every run",
           "Make the merge idempotent so a replay reproduces the same result exactly"
         ],
-        "outputs": ["Deduplication that produces the same winner on every run", "An SCD Type 2 history that is reproducible rather than incidental"],
+        "outputs": [
+          "Deduplication that produces the same winner on every run",
+          "An SCD Type 2 history that is reproducible rather than incidental"
+        ],
         "example": "A Spark retry re-reads the same micro-batch after a transient executor failure; because the dedup stage ordered by ingestion timestamp (which shifts on retry) rather than the source system's commit sequence, the retried run picks a different row as 'latest' than the original attempt, silently rewriting which address is marked current for that customer.",
-        "controls": ["A deterministic ordering key plus an explicit tiebreak, tested with a deliberately reordered replay"],
-        "failureModes": ["Using ingestion or file-arrival time as if it were event time", "Assuming a same-second tie will not happen, so leaving the tiebreak undefined"]
+        "controls": [
+          "A deterministic ordering key plus an explicit tiebreak, tested with a deliberately reordered replay"
+        ],
+        "failureModes": [
+          "Using ingestion or file-arrival time as if it were event time",
+          "Assuming a same-second tie will not happen, so leaving the tiebreak undefined"
+        ]
       }
     },
     {
@@ -191,16 +265,26 @@
       "tags": ["deletion-vectors", "delta-lake", "decision-root"],
       "evidence": [],
       "drill": {
-        "inputs": ["The SCD Type 2 table's expected row-level UPDATE/MERGE frequency", "Whether a periodic OPTIMIZE job can realistically be scheduled and maintained for this table"],
+        "inputs": [
+          "The SCD Type 2 table's expected row-level UPDATE/MERGE frequency",
+          "Whether a periodic OPTIMIZE job can realistically be scheduled and maintained for this table"
+        ],
         "processing": [
           "Estimate the proportion of writes that are row-level mutations versus append-only inserts",
           "Weigh storage/write-time savings from deletion vectors against the read-side risk if OPTIMIZE lapses",
           "Confirm downstream readers support the resulting Delta protocol version before enabling deletion vectors"
         ],
-        "outputs": ["A chosen mutation path for the SCD merge, plus (if deletion vectors) a committed OPTIMIZE cadence"],
+        "outputs": [
+          "A chosen mutation path for the SCD merge, plus (if deletion vectors) a committed OPTIMIZE cadence"
+        ],
         "example": "A frequently-updated customer table with daily GDPR delete requests evaluates deletion vectors against its OPTIMIZE-scheduling capacity before enabling them.",
-        "controls": ["Whether deletion vectors are enabled at the table level", "The OPTIMIZE cadence committed to alongside that choice"],
-        "failureModes": ["Enabling deletion vectors for the write-time win without committing to the OPTIMIZE cadence it depends on"]
+        "controls": [
+          "Whether deletion vectors are enabled at the table level",
+          "The OPTIMIZE cadence committed to alongside that choice"
+        ],
+        "failureModes": [
+          "Enabling deletion vectors for the write-time win without committing to the OPTIMIZE cadence it depends on"
+        ]
       }
     },
     {
@@ -213,26 +297,59 @@
       "layers": ["data", "compute"],
       "tags": ["deletion-vectors", "delta-lake", "internals"],
       "evidence": [
-        { "sourceKey": "milescole-deletion-vectors", "note": "Deletion vectors shift Delta Lake mutations from copy-on-write to merge-on-read: rather than rewriting entire Parquet files for any changed record, the system records the positions of affected rows in a small binary file and filters those rows out at query time." },
-        { "sourceKey": "milescole-deletion-vectors", "note": "For UPDATE operations, deletion vectors soft-delete the old version of changed rows in their existing Parquet file via a new .bin record, then write only the updated row values to a new, smaller Parquet file — avoiding a full rewrite of the source file." },
-        { "sourceKey": "milescole-deletion-vectors", "note": "Before running OPTIMIZE, deletion vectors produced about 3x less storage (2,351 MB versus 7,705 MB) and roughly 1.5x fewer files than the copy-on-write baseline in the author's benchmark, because soft-deletes avoid rewriting large unchanged files." },
-        { "sourceKey": "milescole-deletion-vectors", "note": "If deletion vectors accumulate without periodic OPTIMIZE, read performance degrades: the author's benchmark showed a scenario with 53% non-append changes and no compaction running 2.3x slower, and a MERGE-only scenario with 5M new records running 1.5x slower than the copy-on-write baseline." },
-        { "sourceKey": "milescole-deletion-vectors", "note": "Enabling deletion vectors permanently raises a table's minReaderVersion to 3 and minWriterVersion to 7, requiring Delta reader/writer protocol version 2.3 or later; downstream consumers that do not support these versions will be unable to read the table." }
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "Deletion vectors shift Delta Lake mutations from copy-on-write to merge-on-read: rather than rewriting entire Parquet files for any changed record, the system records the positions of affected rows in a small binary file and filters those rows out at query time."
+        },
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "For UPDATE operations, deletion vectors soft-delete the old version of changed rows in their existing Parquet file via a new .bin record, then write only the updated row values to a new, smaller Parquet file — avoiding a full rewrite of the source file."
+        },
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "Before running OPTIMIZE, deletion vectors produced about 3x less storage (2,351 MB versus 7,705 MB) and roughly 1.5x fewer files than the copy-on-write baseline in the author's benchmark, because soft-deletes avoid rewriting large unchanged files."
+        },
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "If deletion vectors accumulate without periodic OPTIMIZE, read performance degrades: the author's benchmark showed a scenario with 53% non-append changes and no compaction running 2.3x slower, and a MERGE-only scenario with 5M new records running 1.5x slower than the copy-on-write baseline."
+        },
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "Enabling deletion vectors permanently raises a table's minReaderVersion to 3 and minWriterVersion to 7, requiring Delta reader/writer protocol version 2.3 or later; downstream consumers that do not support these versions will be unable to read the table."
+        }
       ],
       "drill": {
-        "inputs": ["A table with frequent row-level UPDATE, DELETE, or MERGE traffic considering deletion vectors"],
+        "inputs": [
+          "A table with frequent row-level UPDATE, DELETE, or MERGE traffic considering deletion vectors"
+        ],
         "processing": [
           "Enable deletion vectors on the table (raises minReaderVersion/minWriterVersion)",
           "Route mutations through the merge-on-read path: soft-delete via marker file, write only changed values",
           "Schedule periodic OPTIMIZE to compact accumulated markers before read performance degrades"
         ],
-        "outputs": ["Faster individual mutations and lower storage before compaction, at the cost of a stricter Delta protocol version and an ongoing dependency on OPTIMIZE"],
+        "outputs": [
+          "Faster individual mutations and lower storage before compaction, at the cost of a stricter Delta protocol version and an ongoing dependency on OPTIMIZE"
+        ],
         "example": "A customer table processing daily GDPR delete requests enables deletion vectors and gets roughly 3x smaller storage and 1.5x fewer files before its first OPTIMIZE; a weekly OPTIMIZE then keeps read performance from degrading as markers accumulate.",
-        "controls": ["Confirm downstream consumers support Delta protocol 2.3+ before enabling", "Schedule OPTIMIZE on a cadence matched to mutation volume"],
-        "failureModes": ["Enabling deletion vectors and never scheduling OPTIMIZE, letting read performance silently degrade 1.5x–2.3x as markers accumulate", "A downstream reader or older tool incompatible with Delta protocol 2.3+ losing read access to the table"],
+        "controls": [
+          "Confirm downstream consumers support Delta protocol 2.3+ before enabling",
+          "Schedule OPTIMIZE on a cadence matched to mutation volume"
+        ],
+        "failureModes": [
+          "Enabling deletion vectors and never scheduling OPTIMIZE, letting read performance silently degrade 1.5x–2.3x as markers accumulate",
+          "A downstream reader or older tool incompatible with Delta protocol 2.3+ losing read access to the table"
+        ],
         "metrics": [
-          { "label": "Storage before OPTIMIZE vs copy-on-write", "value": "~3x smaller (2,351 MB vs 7,705 MB in benchmark)", "sourceKey": "milescole-deletion-vectors" },
-          { "label": "Read slowdown if OPTIMIZE never runs", "value": "1.5x–2.3x slower in benchmark", "sourceKey": "milescole-deletion-vectors" }
+          {
+            "label": "Storage before OPTIMIZE vs copy-on-write",
+            "value": "~3x smaller (2,351 MB vs 7,705 MB in benchmark)",
+            "sourceKey": "milescole-deletion-vectors"
+          },
+          {
+            "label": "Read slowdown if OPTIMIZE never runs",
+            "value": "1.5x–2.3x slower in benchmark",
+            "sourceKey": "milescole-deletion-vectors"
+          }
         ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
@@ -247,40 +364,144 @@
       "layers": ["data", "compute"],
       "tags": ["v-order", "optimize", "delta-lake", "convergence"],
       "evidence": [
-        { "sourceKey": "delta-optimization-and-v-order", "note": "Toggling the V-Order table property only affects future writes; files already on disk keep the layout they were written with, so applying or removing V-Order on existing data requires a physical rewrite via table compaction (OPTIMIZE)." },
-        { "sourceKey": "delta-optimization-and-v-order", "note": "Microsoft states the typical V-Order tradeoff as writes taking roughly 15% longer on average, in exchange for reads that can improve significantly depending on the workload." },
-        { "sourceKey": "delta-optimization-and-v-order", "note": "V-Order is disabled by default in all newly created Fabric workspaces (spark.sql.parquet.vorder.default=false), a deliberate default that favors write-heavy ingestion and transformation pipelines over read optimization." }
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "Toggling the V-Order table property only affects future writes; files already on disk keep the layout they were written with, so applying or removing V-Order on existing data requires a physical rewrite via table compaction (OPTIMIZE)."
+        },
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "Microsoft states the typical V-Order tradeoff as writes taking roughly 15% longer on average, in exchange for reads that can improve significantly depending on the workload."
+        },
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "V-Order is disabled by default in all newly created Fabric workspaces (spark.sql.parquet.vorder.default=false), a deliberate default that favors write-heavy ingestion and transformation pipelines over read optimization."
+        }
       ],
       "drill": {
-        "inputs": ["A silver table produced by any of the three decision paths above, accumulating small files from repeated writes"],
+        "inputs": [
+          "A silver table produced by any of the three decision paths above, accumulating small files from repeated writes"
+        ],
         "processing": [
           "Classify the table as read-heavy or write-heavy",
           "For read-heavy tables, enable V-Order (session, table property, or per-write) and run OPTIMIZE to apply it to existing files",
           "For write-heavy tables, leave V-Order off, matching the platform default"
         ],
-        "outputs": ["A compacted, appropriately V-Ordered silver table regardless of which schema-evolution, SCD, or mutation-path decision produced it"],
+        "outputs": [
+          "A compacted, appropriately V-Ordered silver table regardless of which schema-evolution, SCD, or mutation-path decision produced it"
+        ],
         "example": "A gold-facing silver_customers table built with SCD Type 2 and deletion vectors gets V-Order enabled and a weekly OPTIMIZE once dashboards start querying it heavily; a write-heavy staging table built with SCD Type 1 stays on the workspace default of V-Order off.",
-        "controls": ["OPTIMIZE cadence", "Whether V-Order is enabled for this table's compaction pass"],
-        "failureModes": ["Enabling the V-Order property and never running OPTIMIZE, then concluding V-Order does not work", "Enabling V-Order on a write-dominated table and paying the ~15% write cost for a read benefit nobody uses"],
+        "controls": [
+          "OPTIMIZE cadence",
+          "Whether V-Order is enabled for this table's compaction pass"
+        ],
+        "failureModes": [
+          "Enabling the V-Order property and never running OPTIMIZE, then concluding V-Order does not work",
+          "Enabling V-Order on a write-dominated table and paying the ~15% write cost for a read benefit nobody uses"
+        ],
         "metrics": [
-          { "label": "Typical V-Order write-time cost", "value": "~15% longer writes", "sourceKey": "delta-optimization-and-v-order" }
+          {
+            "label": "Typical V-Order write-time cost",
+            "value": "~15% longer writes",
+            "sourceKey": "delta-optimization-and-v-order"
+          }
         ]
       },
-      "drillTarget": { "kind": "topic", "slug": "silver-layer-modelling", "label": "Silver Layer Modelling" }
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "silver-layer-modelling",
+        "label": "Silver Layer Modelling"
+      }
     }
   ],
   "edges": [
-    { "id": "e-schema-additive", "from": "schema-change-question", "to": "mergeschema-additive", "label": "additive change", "layer": "data", "kind": "branch" },
-    { "id": "e-schema-breaking", "from": "schema-change-question", "to": "schema-fk-freeze-warning", "label": "breaking / FK check", "layer": "governance", "kind": "branch" },
-    { "id": "e-schema-to-history", "from": "mergeschema-additive", "to": "historization-question", "label": "then route to historization decision", "layer": "data", "kind": "flow" },
-    { "id": "e-history-scd2", "from": "historization-question", "to": "scd2-internals", "label": "yes — \"as of\" questions are asked", "layer": "data", "kind": "branch" },
-    { "id": "e-history-scd1", "from": "historization-question", "to": "scd1-overwrite", "label": "no — only current state matters", "layer": "data", "kind": "branch" },
-    { "id": "e-scd2-warning", "from": "scd2-internals", "to": "warning-nondeterministic-order", "label": "requires a deterministic ordering key", "layer": "observability", "kind": "branch" },
-    { "id": "e-scd1-mutation", "from": "scd1-overwrite", "to": "mutation-path-question", "label": "still needs a mutation-path choice", "layer": "compute", "kind": "flow" },
-    { "id": "e-mutation-deletionvectors", "from": "mutation-path-question", "to": "deletion-vectors-internals", "label": "row-level mutation traffic", "layer": "compute", "kind": "branch" },
-    { "id": "e-scd1-vorder", "from": "scd1-overwrite", "to": "vorder-optimize-convergence", "label": "converges on physical layout", "layer": "compute", "kind": "flow" },
-    { "id": "e-warning-vorder", "from": "warning-nondeterministic-order", "to": "vorder-optimize-convergence", "label": "converges on physical layout", "layer": "compute", "kind": "flow" },
-    { "id": "e-deletionvectors-vorder", "from": "deletion-vectors-internals", "to": "vorder-optimize-convergence", "label": "converges on physical layout", "layer": "compute", "kind": "flow" }
+    {
+      "id": "e-schema-additive",
+      "from": "schema-change-question",
+      "to": "mergeschema-additive",
+      "label": "additive change",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-schema-breaking",
+      "from": "schema-change-question",
+      "to": "schema-fk-freeze-warning",
+      "label": "breaking / FK check",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e-schema-to-history",
+      "from": "mergeschema-additive",
+      "to": "historization-question",
+      "label": "then route to historization decision",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-history-scd2",
+      "from": "historization-question",
+      "to": "scd2-internals",
+      "label": "yes — \"as of\" questions are asked",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-history-scd1",
+      "from": "historization-question",
+      "to": "scd1-overwrite",
+      "label": "no — only current state matters",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-scd2-warning",
+      "from": "scd2-internals",
+      "to": "warning-nondeterministic-order",
+      "label": "requires a deterministic ordering key",
+      "layer": "observability",
+      "kind": "branch"
+    },
+    {
+      "id": "e-scd1-mutation",
+      "from": "scd1-overwrite",
+      "to": "mutation-path-question",
+      "label": "still needs a mutation-path choice",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-mutation-deletionvectors",
+      "from": "mutation-path-question",
+      "to": "deletion-vectors-internals",
+      "label": "row-level mutation traffic",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-scd1-vorder",
+      "from": "scd1-overwrite",
+      "to": "vorder-optimize-convergence",
+      "label": "converges on physical layout",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-warning-vorder",
+      "from": "warning-nondeterministic-order",
+      "to": "vorder-optimize-convergence",
+      "label": "converges on physical layout",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-deletionvectors-vorder",
+      "from": "deletion-vectors-internals",
+      "to": "vorder-optimize-convergence",
+      "label": "converges on physical layout",
+      "layer": "compute",
+      "kind": "flow"
+    }
   ],
   "walkthrough": [
     {

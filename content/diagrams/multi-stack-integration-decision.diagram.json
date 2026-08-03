@@ -22,12 +22,22 @@
       "tags": ["decision-root", "MultiStackIntegration"],
       "evidence": [],
       "drill": {
-        "inputs": ["The external source system and who owns/governs it today", "Whether downstream Fabric consumers need continuous freshness or a scheduled snapshot", "Whether the source type is supported by a shortcut, Mirroring, or only a pipeline connector"],
-        "processing": ["Identify whether the source should remain the system of record with Fabric only referencing it", "Determine the freshness requirement: near-real-time replica vs scheduled batch", "Check the source against shortcut-compatible stores and Mirroring's supported source list"],
+        "inputs": [
+          "The external source system and who owns/governs it today",
+          "Whether downstream Fabric consumers need continuous freshness or a scheduled snapshot",
+          "Whether the source type is supported by a shortcut, Mirroring, or only a pipeline connector"
+        ],
+        "processing": [
+          "Identify whether the source should remain the system of record with Fabric only referencing it",
+          "Determine the freshness requirement: near-real-time replica vs scheduled batch",
+          "Check the source against shortcut-compatible stores and Mirroring's supported source list"
+        ],
         "outputs": ["A routed decision toward shortcut, Mirroring, or a Data Factory pipeline"],
         "example": "A partner's S3 bucket that the partner continues to own and update is a candidate for a shortcut rather than a copy, since Fabric only needs to query it, not own it.",
         "controls": ["Write down the ownership and freshness requirement before selecting a tool"],
-        "failureModes": ["Defaulting to a pipeline copy for every source regardless of whether a shortcut or Mirroring would avoid the duplication"]
+        "failureModes": [
+          "Defaulting to a pipeline copy for every source regardless of whether a shortcut or Mirroring would avoid the duplication"
+        ]
       }
     },
     {
@@ -40,16 +50,37 @@
       "layers": ["data", "metadata"],
       "tags": ["OneLake", "Shortcuts", "DataVirtualization"],
       "evidence": [
-        { "sourceKey": "onelake-shortcuts", "note": "A OneLake shortcut points from a shortcut path to a target path in another storage location and behaves like a symbolic link; through the OneLake API it is transparent, so Spark, SQL, Real-Time Intelligence, and other engines query it without shortcut-specific logic." },
-        { "sourceKey": "onelake-overview", "note": "OneLake shortcuts reference data held in other locations, within the same workspace, across workspaces, or outside OneLake in stores like ADLS, Amazon S3, or Dataverse, making remote files and folders appear local without duplication." }
+        {
+          "sourceKey": "onelake-shortcuts",
+          "note": "A OneLake shortcut points from a shortcut path to a target path in another storage location and behaves like a symbolic link; through the OneLake API it is transparent, so Spark, SQL, Real-Time Intelligence, and other engines query it without shortcut-specific logic."
+        },
+        {
+          "sourceKey": "onelake-overview",
+          "note": "OneLake shortcuts reference data held in other locations, within the same workspace, across workspaces, or outside OneLake in stores like ADLS, Amazon S3, or Dataverse, making remote files and folders appear local without duplication."
+        }
       ],
       "drill": {
-        "inputs": ["A target path in another OneLake location, ADLS Gen2, Amazon S3, or Dataverse", "A bound cloud connection for external (ADLS/S3) targets"],
-        "processing": ["Create the shortcut interactively in the portal or via the OneLake shortcuts REST API", "Fabric registers it as a reference object, not a copy", "If the target holds Delta Parquet in a lakehouse Tables folder, the lakehouse auto-syncs metadata and registers it as a table"],
-        "outputs": ["A folder that appears local to every OneLake-aware engine, backed by data that never moved"],
+        "inputs": [
+          "A target path in another OneLake location, ADLS Gen2, Amazon S3, or Dataverse",
+          "A bound cloud connection for external (ADLS/S3) targets"
+        ],
+        "processing": [
+          "Create the shortcut interactively in the portal or via the OneLake shortcuts REST API",
+          "Fabric registers it as a reference object, not a copy",
+          "If the target holds Delta Parquet in a lakehouse Tables folder, the lakehouse auto-syncs metadata and registers it as a table"
+        ],
+        "outputs": [
+          "A folder that appears local to every OneLake-aware engine, backed by data that never moved"
+        ],
         "example": "A shortcut into a partner's read-only S3 bucket of reference data lets a lakehouse query it directly via Spark SQL, with the partner remaining the sole owner and updater of the underlying files.",
-        "controls": ["Choice of internal (same-tenant) vs external (ADLS/S3/Dataverse) shortcut type", "Which cloud connection is bound for external shortcut authorization"],
-        "failureModes": ["Moving, renaming, or deleting the shortcut target elsewhere breaks the shortcut with no warning at the Fabric side", "Naming a table shortcut with a space breaks Delta table auto-discovery since Delta disallows spaces in table names"]
+        "controls": [
+          "Choice of internal (same-tenant) vs external (ADLS/S3/Dataverse) shortcut type",
+          "Which cloud connection is bound for external shortcut authorization"
+        ],
+        "failureModes": [
+          "Moving, renaming, or deleting the shortcut target elsewhere breaks the shortcut with no warning at the Fabric side",
+          "Naming a table shortcut with a space breaks Delta table auto-discovery since Delta disallows spaces in table names"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
     },
@@ -63,15 +94,29 @@
       "layers": ["data", "orchestration"],
       "tags": ["Mirroring", "OneLake"],
       "evidence": [
-        { "sourceKey": "mirroring-overview", "note": "Fabric Mirroring is a fully managed, serverless replication service that continuously brings data from external operational and analytical databases into OneLake, converting it to Parquet files in Delta Lake format, without requiring users to build or maintain ETL pipelines." }
+        {
+          "sourceKey": "mirroring-overview",
+          "note": "Fabric Mirroring is a fully managed, serverless replication service that continuously brings data from external operational and analytical databases into OneLake, converting it to Parquet files in Delta Lake format, without requiring users to build or maintain ETL pipelines."
+        }
       ],
       "drill": {
-        "inputs": ["The source database type (Azure SQL, Cosmos DB, Snowflake, Oracle, SAP, PostgreSQL, SQL Server, open mirroring, etc.)", "Tenant network setting for Block Public Internet Access"],
-        "processing": ["Confirm the source type appears on the current supported database mirroring list", "Check whether Block Public Internet Access is enabled at the tenant", "If enabled, confirm the source is one of the connectors that still functions under that restriction"],
+        "inputs": [
+          "The source database type (Azure SQL, Cosmos DB, Snowflake, Oracle, SAP, PostgreSQL, SQL Server, open mirroring, etc.)",
+          "Tenant network setting for Block Public Internet Access"
+        ],
+        "processing": [
+          "Confirm the source type appears on the current supported database mirroring list",
+          "Check whether Block Public Internet Access is enabled at the tenant",
+          "If enabled, confirm the source is one of the connectors that still functions under that restriction"
+        ],
         "outputs": ["A go/no-go on Mirroring for this specific source and network posture"],
         "example": "A team plans to mirror an on-prem SQL Server 2019 instance, but the tenant has Block Public Internet Access enabled; since only SQL Server 2025, Cosmos DB, Azure SQL Managed Instance, and Open Mirroring keep functioning under that restriction, this source routes to a pipeline instead.",
-        "controls": ["Verify the supported-source list and network posture before scoping the integration as a Mirroring project"],
-        "failureModes": ["Scoping and building a Mirroring integration before checking the tenant's Block Public Internet Access setting, discovering the connector is paused only after deployment"]
+        "controls": [
+          "Verify the supported-source list and network posture before scoping the integration as a Mirroring project"
+        ],
+        "failureModes": [
+          "Scoping and building a Mirroring integration before checking the tenant's Block Public Internet Access setting, discovering the connector is paused only after deployment"
+        ]
       }
     },
     {
@@ -84,16 +129,33 @@
       "layers": ["data", "compute"],
       "tags": ["Mirroring", "OneLake", "DeltaLake"],
       "evidence": [
-        { "sourceKey": "mirroring-overview", "note": "For database and open mirroring, changes from the source can propagate into OneLake in as little as 15 seconds under optimal conditions; mirroring storage is free up to one terabyte per capacity unit purchased." },
-        { "sourceKey": "mirroring-overview", "note": "Because mirrored data lands in Delta Lake format in OneLake, Power BI semantic models can connect using Direct Lake mode for near-real-time reporting without importing or duplicating the data." }
+        {
+          "sourceKey": "mirroring-overview",
+          "note": "For database and open mirroring, changes from the source can propagate into OneLake in as little as 15 seconds under optimal conditions; mirroring storage is free up to one terabyte per capacity unit purchased."
+        },
+        {
+          "sourceKey": "mirroring-overview",
+          "note": "Because mirrored data lands in Delta Lake format in OneLake, Power BI semantic models can connect using Direct Lake mode for near-real-time reporting without importing or duplicating the data."
+        }
       ],
       "drill": {
         "inputs": ["A supported source database with the required network path open"],
-        "processing": ["Enable mirroring on the source and let the initial full replication seed the target Delta tables", "Internal replicator polls the landing zone and merges incremental Delta files continuously", "Backoff logic scales polling down when source activity is low"],
-        "outputs": ["A continuously updated Delta replica in OneLake, queryable by Spark, SQL, Power BI Direct Lake, and cross-database T-SQL"],
+        "processing": [
+          "Enable mirroring on the source and let the initial full replication seed the target Delta tables",
+          "Internal replicator polls the landing zone and merges incremental Delta files continuously",
+          "Backoff logic scales polling down when source activity is low"
+        ],
+        "outputs": [
+          "A continuously updated Delta replica in OneLake, queryable by Spark, SQL, Power BI Direct Lake, and cross-database T-SQL"
+        ],
         "example": "An Azure SQL Database order system is mirrored into OneLake; a Direct Lake semantic model reports on near-current order status without a nightly refresh job.",
-        "controls": ["Retention/vacuum period on the mirrored Delta tables (default 1 day for newer databases)", "Whether to read via the SQL analytics endpoint (adds sync delay) or directly via Spark for the freshest data"],
-        "failureModes": ["Stopping and restarting mirroring triggers a full reseed from current source state, not a resume — see the warning node for the full implication"]
+        "controls": [
+          "Retention/vacuum period on the mirrored Delta tables (default 1 day for newer databases)",
+          "Whether to read via the SQL analytics endpoint (adds sync delay) or directly via Spark for the freshest data"
+        ],
+        "failureModes": [
+          "Stopping and restarting mirroring triggers a full reseed from current source state, not a resume — see the warning node for the full implication"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "mirroring", "label": "Mirroring" }
     },
@@ -107,15 +169,33 @@
       "layers": ["data", "security"],
       "tags": ["Mirroring", "Networking"],
       "evidence": [
-        { "sourceKey": "bradcoles-fabric-mirroring-before-you-commit", "note": "When Block Public Internet Access is enabled at the Fabric tenant level, the majority of native database mirroring connectors enter a paused state and stop replicating; only Open Mirroring, Cosmos DB, Azure SQL Managed Instance, and SQL Server 2025 continue to function under that restriction." }
+        {
+          "sourceKey": "bradcoles-fabric-mirroring-before-you-commit",
+          "note": "When Block Public Internet Access is enabled at the Fabric tenant level, the majority of native database mirroring connectors enter a paused state and stop replicating; only Open Mirroring, Cosmos DB, Azure SQL Managed Instance, and SQL Server 2025 continue to function under that restriction."
+        }
       ],
       "drill": {
-        "inputs": ["A tenant with Mirroring integrations already in production", "A governance change enabling Block Public Internet Access tenant-wide"],
-        "processing": ["The setting is enabled, typically for unrelated security hardening reasons", "Mirroring connectors outside the small exception list detect the network restriction and pause", "Replication silently stops; the mirrored table stops advancing but isn't deleted"],
-        "outputs": ["Stale mirrored data with no error visible in the consuming report unless someone checks replication status"],
+        "inputs": [
+          "A tenant with Mirroring integrations already in production",
+          "A governance change enabling Block Public Internet Access tenant-wide"
+        ],
+        "processing": [
+          "The setting is enabled, typically for unrelated security hardening reasons",
+          "Mirroring connectors outside the small exception list detect the network restriction and pause",
+          "Replication silently stops; the mirrored table stops advancing but isn't deleted"
+        ],
+        "outputs": [
+          "Stale mirrored data with no error visible in the consuming report unless someone checks replication status"
+        ],
         "example": "A security team enables Block Public Internet Access tenant-wide to satisfy a compliance requirement; three Azure SQL Database mirrors quietly stop updating, and a Direct Lake dashboard keeps showing last week's numbers as current.",
-        "controls": ["Coordinate network policy changes with data platform owners before enabling tenant-wide network restrictions", "Monitor mirroring replication status/lag as an operational signal, not just pipeline success/failure"],
-        "failureModes": ["Nobody notices the pause because the mirrored table still exists and queries succeed, just against stale data", "Re-scoping to Open Mirroring or a pipeline after the fact costs a redesign that checking this gate upfront would have avoided"]
+        "controls": [
+          "Coordinate network policy changes with data platform owners before enabling tenant-wide network restrictions",
+          "Monitor mirroring replication status/lag as an operational signal, not just pipeline success/failure"
+        ],
+        "failureModes": [
+          "Nobody notices the pause because the mirrored table still exists and queries succeed, just against stale data",
+          "Re-scoping to Open Mirroring or a pipeline after the fact costs a redesign that checking this gate upfront would have avoided"
+        ]
       }
     },
     {
@@ -128,16 +208,36 @@
       "layers": ["data", "orchestration"],
       "tags": ["DataFactory", "CopyActivity", "CopyJob"],
       "evidence": [
-        { "sourceKey": "data-factory-overview", "note": "Data Factory offers three distinct data-movement options: Copy job for simplified movement with built-in delivery styles (bulk, incremental, CDC replication), Copy activity for fully customizable movement with manual parallelism control, and Mirroring for near-real-time database replication into OneLake." },
-        { "sourceKey": "copy-activity-performance-and-scalability", "note": "Data Factory pipelines with Copy activity are Microsoft's recommended mechanism for large-scale one-time migrations into OneLake and for high-volume recurring ingestion." }
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "Data Factory offers three distinct data-movement options: Copy job for simplified movement with built-in delivery styles (bulk, incremental, CDC replication), Copy activity for fully customizable movement with manual parallelism control, and Mirroring for near-real-time database replication into OneLake."
+        },
+        {
+          "sourceKey": "copy-activity-performance-and-scalability",
+          "note": "Data Factory pipelines with Copy activity are Microsoft's recommended mechanism for large-scale one-time migrations into OneLake and for high-volume recurring ingestion."
+        }
       ],
       "drill": {
-        "inputs": ["A source not supported by Mirroring, or a freshness/volume profile that doesn't need continuous replication", "A requirement for transformation, orchestration, or scheduled/event-triggered movement"],
-        "processing": ["Choose Copy job for simplified bulk/incremental/CDC delivery with less manual tuning", "Choose Copy activity when parallelism, throughput tuning, or complex mappings are required", "Wrap in a pipeline for orchestration, control flow, and chaining with transformation activities"],
-        "outputs": ["Data landed in OneLake on a schedule or event trigger, with orchestration and retry handling"],
+        "inputs": [
+          "A source not supported by Mirroring, or a freshness/volume profile that doesn't need continuous replication",
+          "A requirement for transformation, orchestration, or scheduled/event-triggered movement"
+        ],
+        "processing": [
+          "Choose Copy job for simplified bulk/incremental/CDC delivery with less manual tuning",
+          "Choose Copy activity when parallelism, throughput tuning, or complex mappings are required",
+          "Wrap in a pipeline for orchestration, control flow, and chaining with transformation activities"
+        ],
+        "outputs": [
+          "Data landed in OneLake on a schedule or event trigger, with orchestration and retry handling"
+        ],
         "example": "A one-time migration of a 5 TB on-prem data warehouse into OneLake uses a Copy activity with tuned parallelism, run once inside a pipeline that also validates row counts afterward.",
-        "controls": ["Degree of copy parallelism and intelligent throughput optimization preset for Copy activity", "Event-driven trigger via an Activator rule invoking a Copy job directly, replacing a fixed schedule"],
-        "failureModes": ["Tuning throughput settings without first identifying whether the source, destination, or network is the actual bottleneck wastes effort, since raising settings can't exceed an external limit"]
+        "controls": [
+          "Degree of copy parallelism and intelligent throughput optimization preset for Copy activity",
+          "Event-driven trigger via an Activator rule invoking a Copy job directly, replacing a fixed schedule"
+        ],
+        "failureModes": [
+          "Tuning throughput settings without first identifying whether the source, destination, or network is the actual bottleneck wastes effort, since raising settings can't exceed an external limit"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "data-factory", "label": "Data Factory" }
     },
@@ -151,36 +251,140 @@
       "layers": ["data", "governance"],
       "tags": ["Mirroring", "AntiPattern"],
       "evidence": [
-        { "sourceKey": "bradcoles-fabric-mirroring-before-you-commit", "note": "Mirroring delivers a continuously updated current-state replica, not a change-event stream; stopping and restarting causes a full reseed, erasing the ability to replay prior changes. Mirroring does not constitute a disaster-recovery backup, since mass deletion or corruption at the source eventually replicates into the mirror." },
-        { "sourceKey": "bradcoles-fabric-mirroring-before-you-commit", "note": "For workloads that require both current-state query access and an immutable historical record, the recommended approach combines mirroring for the live replica with a separate lightweight append-only ingestion pipeline." }
+        {
+          "sourceKey": "bradcoles-fabric-mirroring-before-you-commit",
+          "note": "Mirroring delivers a continuously updated current-state replica, not a change-event stream; stopping and restarting causes a full reseed, erasing the ability to replay prior changes. Mirroring does not constitute a disaster-recovery backup, since mass deletion or corruption at the source eventually replicates into the mirror."
+        },
+        {
+          "sourceKey": "bradcoles-fabric-mirroring-before-you-commit",
+          "note": "For workloads that require both current-state query access and an immutable historical record, the recommended approach combines mirroring for the live replica with a separate lightweight append-only ingestion pipeline."
+        }
       ],
       "drill": {
-        "inputs": ["A requirement, discovered late, for replayable change history or a recovery point independent of the source"],
-        "processing": ["Recognize Mirroring alone cannot satisfy either requirement", "Pair Mirroring with a separate append-only pipeline for immutable history where audit/replay is required", "Treat backups/DR as a separate, source-side or pipeline-based concern"],
-        "outputs": ["A design that uses Mirroring for current-state analytics and a distinct mechanism for history or recovery"],
+        "inputs": [
+          "A requirement, discovered late, for replayable change history or a recovery point independent of the source"
+        ],
+        "processing": [
+          "Recognize Mirroring alone cannot satisfy either requirement",
+          "Pair Mirroring with a separate append-only pipeline for immutable history where audit/replay is required",
+          "Treat backups/DR as a separate, source-side or pipeline-based concern"
+        ],
+        "outputs": [
+          "A design that uses Mirroring for current-state analytics and a distinct mechanism for history or recovery"
+        ],
         "example": "A team assumes their mirrored Azure SQL Database doubles as a recovery point; after an accidental mass delete at the source replicates into the mirror within minutes, they realize Mirroring only ever reflects current state and had no backup role.",
-        "controls": ["Pair Mirroring with an append-only pipeline when audit history is required", "Keep source-side backup/DR as its own explicit control, not an assumed side effect of Mirroring"],
-        "failureModes": ["Discovering the reseed-on-restart behavior only after an operational restart erases replay-relevant history", "Assuming the mirror is a DR copy and having no independent recovery point when the source is corrupted"]
+        "controls": [
+          "Pair Mirroring with an append-only pipeline when audit history is required",
+          "Keep source-side backup/DR as its own explicit control, not an assumed side effect of Mirroring"
+        ],
+        "failureModes": [
+          "Discovering the reseed-on-restart behavior only after an operational restart erases replay-relevant history",
+          "Assuming the mirror is a DR copy and having no independent recovery point when the source is corrupted"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-start-shortcut", "from": "start-question", "to": "shortcut-path", "label": "source stays owned/governed at origin", "layer": "data", "kind": "branch" },
-    { "id": "e-start-mirroring", "from": "start-question", "to": "mirroring-question", "label": "need a continuously current replica", "layer": "data", "kind": "branch" },
-    { "id": "e-start-pipeline", "from": "start-question", "to": "pipeline-question", "label": "controlled batch, transform, or event movement", "layer": "data", "kind": "branch" },
-    { "id": "e-mirroring-viable", "from": "mirroring-question", "to": "mirroring-path", "label": "source supported and network allows it", "layer": "data", "kind": "branch" },
-    { "id": "e-mirroring-blocked", "from": "mirroring-question", "to": "network-gate-warning", "label": "Block Public Internet Access enabled", "layer": "security", "kind": "branch" },
-    { "id": "e-blocked-pipeline", "from": "network-gate-warning", "to": "pipeline-question", "label": "fall back to pipeline movement", "layer": "orchestration", "kind": "flow" },
-    { "id": "e-mirroring-misuse", "from": "mirroring-path", "to": "mirroring-misuse-warning", "label": "if treated as event log or DR", "layer": "governance", "kind": "branch" },
-    { "id": "e-misuse-pipeline", "from": "mirroring-misuse-warning", "to": "pipeline-question", "label": "pair with append-only pipeline for history", "layer": "orchestration", "kind": "feedback" }
+    {
+      "id": "e-start-shortcut",
+      "from": "start-question",
+      "to": "shortcut-path",
+      "label": "source stays owned/governed at origin",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-mirroring",
+      "from": "start-question",
+      "to": "mirroring-question",
+      "label": "need a continuously current replica",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-pipeline",
+      "from": "start-question",
+      "to": "pipeline-question",
+      "label": "controlled batch, transform, or event movement",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-mirroring-viable",
+      "from": "mirroring-question",
+      "to": "mirroring-path",
+      "label": "source supported and network allows it",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-mirroring-blocked",
+      "from": "mirroring-question",
+      "to": "network-gate-warning",
+      "label": "Block Public Internet Access enabled",
+      "layer": "security",
+      "kind": "branch"
+    },
+    {
+      "id": "e-blocked-pipeline",
+      "from": "network-gate-warning",
+      "to": "pipeline-question",
+      "label": "fall back to pipeline movement",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-mirroring-misuse",
+      "from": "mirroring-path",
+      "to": "mirroring-misuse-warning",
+      "label": "if treated as event log or DR",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e-misuse-pipeline",
+      "from": "mirroring-misuse-warning",
+      "to": "pipeline-question",
+      "label": "pair with append-only pipeline for history",
+      "layer": "orchestration",
+      "kind": "feedback"
+    }
   ],
   "walkthrough": [
-    { "nodeId": "start-question", "title": "1. Decide the integration contract first", "explanation": "Reference, replicate, or copy — the choice depends on source ownership and freshness needs, not which connector happens to exist." },
-    { "nodeId": "shortcut-path", "title": "2. Shortcut: zero-copy reference", "explanation": "When the source should stay authoritative at its origin, a shortcut makes it appear local with no duplication." },
-    { "nodeId": "mirroring-question", "title": "3. Check Mirroring's two gates", "explanation": "Before committing to Mirroring, confirm the source type is supported and that Block Public Internet Access won't pause the connector." },
-    { "nodeId": "network-gate-warning", "title": "4. Warning: the network gate pauses most connectors", "explanation": "Block Public Internet Access silently pauses most native mirroring connectors, leaving only a small exception list functioning — a trap that routes back to a pipeline." },
-    { "nodeId": "mirroring-path", "title": "5. Mirroring: continuous current-state replica", "explanation": "When viable, Mirroring keeps a supported source continuously current in OneLake Delta with no hand-built ETL." },
-    { "nodeId": "mirroring-misuse-warning", "title": "6. Warning: Mirroring is not an event log or DR copy", "explanation": "Mirroring reseeds on restart and follows source deletions into the mirror — pair it with an append-only pipeline when history or recovery independence is required." },
-    { "nodeId": "pipeline-question", "title": "7. Pipeline: controlled, scheduled, or event-triggered movement", "explanation": "Data Factory Copy activity or Copy job handles everything shortcuts and Mirroring don't: unsupported sources, transformation, and one-time migrations." }
+    {
+      "nodeId": "start-question",
+      "title": "1. Decide the integration contract first",
+      "explanation": "Reference, replicate, or copy — the choice depends on source ownership and freshness needs, not which connector happens to exist."
+    },
+    {
+      "nodeId": "shortcut-path",
+      "title": "2. Shortcut: zero-copy reference",
+      "explanation": "When the source should stay authoritative at its origin, a shortcut makes it appear local with no duplication."
+    },
+    {
+      "nodeId": "mirroring-question",
+      "title": "3. Check Mirroring's two gates",
+      "explanation": "Before committing to Mirroring, confirm the source type is supported and that Block Public Internet Access won't pause the connector."
+    },
+    {
+      "nodeId": "network-gate-warning",
+      "title": "4. Warning: the network gate pauses most connectors",
+      "explanation": "Block Public Internet Access silently pauses most native mirroring connectors, leaving only a small exception list functioning — a trap that routes back to a pipeline."
+    },
+    {
+      "nodeId": "mirroring-path",
+      "title": "5. Mirroring: continuous current-state replica",
+      "explanation": "When viable, Mirroring keeps a supported source continuously current in OneLake Delta with no hand-built ETL."
+    },
+    {
+      "nodeId": "mirroring-misuse-warning",
+      "title": "6. Warning: Mirroring is not an event log or DR copy",
+      "explanation": "Mirroring reseeds on restart and follows source deletions into the mirror — pair it with an append-only pipeline when history or recovery independence is required."
+    },
+    {
+      "nodeId": "pipeline-question",
+      "title": "7. Pipeline: controlled, scheduled, or event-triggered movement",
+      "explanation": "Data Factory Copy activity or Copy job handles everything shortcuts and Mirroring don't: unsupported sources, transformation, and one-time migrations."
+    }
   ]
 }

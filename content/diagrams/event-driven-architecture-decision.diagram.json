@@ -22,15 +22,25 @@
       "evidence": [],
       "tags": ["DecisionPoint", "ArchitecturePattern"],
       "drill": {
-        "inputs": ["Business SLA for reacting to the triggering condition", "Cost tolerance for continuous evaluation vs. periodic checks"],
+        "inputs": [
+          "Business SLA for reacting to the triggering condition",
+          "Cost tolerance for continuous evaluation vs. periodic checks"
+        ],
         "processing": [
           "Identify the actual downstream consumer of the reaction and its real freshness need",
           "Compare against what a scheduled or interval-based pipeline can deliver"
         ],
-        "outputs": ["A latency requirement in seconds/minutes/hours that determines the next branch"],
+        "outputs": [
+          "A latency requirement in seconds/minutes/hours that determines the next branch"
+        ],
         "example": "A fraud-review team needs to block a high-value order within seconds of it being placed — that is a seconds-scale requirement, not a batch one.",
-        "controls": ["Document the actual business SLA before choosing infrastructure", "Avoid defaulting to event-driven because it feels more modern"],
-        "failureModes": ["Building event infrastructure for a report that is only reviewed once a day"]
+        "controls": [
+          "Document the actual business SLA before choosing infrastructure",
+          "Avoid defaulting to event-driven because it feels more modern"
+        ],
+        "failureModes": [
+          "Building event infrastructure for a report that is only reviewed once a day"
+        ]
       }
     },
     {
@@ -57,8 +67,14 @@
         ],
         "outputs": ["Predictable, scheduled pipeline runs with bounded concurrency"],
         "example": "A daily sales-summary pipeline runs on a fixed 2am schedule with an end date set five years out; no event infrastructure is needed because nothing downstream reads it before morning.",
-        "controls": ["Schedule frequency vs. cost tradeoff", "Up to 20 schedules per pipeline for multiple cadences", "Interval schedules for time-sliced incremental loads"],
-        "failureModes": ["Interval-based schedules (preview) cannot be edited/enabled/disabled after creation and lack backfill, limiting production windowed-load use"],
+        "controls": [
+          "Schedule frequency vs. cost tradeoff",
+          "Up to 20 schedules per pipeline for multiple cadences",
+          "Interval schedules for time-sliced incremental loads"
+        ],
+        "failureModes": [
+          "Interval-based schedules (preview) cannot be edited/enabled/disabled after creation and lack backfill, limiting production windowed-load use"
+        ],
         "metrics": [
           { "label": "Max schedules per pipeline", "value": "20", "sourceKey": "pipeline-runs" }
         ]
@@ -76,15 +92,23 @@
       "evidence": [],
       "tags": ["DecisionPoint", "ArchitecturePattern"],
       "drill": {
-        "inputs": ["Whether any downstream process needs to query this event's history later", "Whether the event has intrinsic business value beyond triggering an action"],
+        "inputs": [
+          "Whether any downstream process needs to query this event's history later",
+          "Whether the event has intrinsic business value beyond triggering an action"
+        ],
         "processing": [
           "Ask whether losing the event after the action fires would cause real data loss",
           "Ask whether audit, replay, or historical analytics needs to reference this event later"
         ],
         "outputs": ["A durable-state branch or a transient-signal branch"],
         "example": "An order.created event is durable business state (it must be queryable for months); a CPU-threshold-crossed heartbeat used only to page an operator is transient.",
-        "controls": ["Distinguish state-carrying events from pure signals during event contract design"],
-        "failureModes": ["Treating a transient signal as durable state and over-building storage for it", "Treating durable state as transient and losing it after the alert fires"]
+        "controls": [
+          "Distinguish state-carrying events from pure signals during event contract design"
+        ],
+        "failureModes": [
+          "Treating a transient signal as durable state and over-building storage for it",
+          "Treating durable state as transient and losing it after the alert fires"
+        ]
       }
     },
     {
@@ -106,8 +130,13 @@
         ],
         "outputs": ["Fired action only; no durable record retained"],
         "example": "A capacity-threshold-crossed signal pages an on-call engineer via Power Automate; once the page is sent there is no requirement to query that specific crossing again next month.",
-        "controls": ["Confirm no compliance or audit requirement exists before skipping the cold path", "Revisit if the signal later gains business value"],
-        "failureModes": ["A signal quietly becomes business-critical and the missing durable history is discovered only during an incident review"]
+        "controls": [
+          "Confirm no compliance or audit requirement exists before skipping the cold path",
+          "Revisit if the signal later gains business value"
+        ],
+        "failureModes": [
+          "A signal quietly becomes business-critical and the missing durable history is discovered only during an incident review"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "rti", "label": "Open Real-Time Intelligence" }
     },
@@ -135,10 +164,19 @@
         ],
         "outputs": ["Immediate action plus a durable, replayable event history"],
         "example": "An order.created event triggers a fraud-check alert via Activator while independently landing in an Eventhouse table for compliance queries six months later.",
-        "controls": ["Both paths must be provisioned and tested independently, since they are separate subscriptions", "Retention and caching policy sized to the required query window"],
-        "failureModes": ["Building the hot path first and treating the cold path as an afterthought, producing the notification-as-state risk"]
+        "controls": [
+          "Both paths must be provisioned and tested independently, since they are separate subscriptions",
+          "Retention and caching policy sized to the required query window"
+        ],
+        "failureModes": [
+          "Building the hot path first and treating the cold path as an afterthought, producing the notification-as-state risk"
+        ]
       },
-      "drillTarget": { "kind": "topic", "slug": "event-driven-architecture", "label": "Open Event-Driven Architecture" }
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "event-driven-architecture",
+        "label": "Open Event-Driven Architecture"
+      }
     },
     {
       "id": "q-replay-required",
@@ -151,15 +189,22 @@
       "evidence": [],
       "tags": ["DecisionPoint", "Replay", "Idempotency"],
       "drill": {
-        "inputs": ["Business tolerance for a permanently lost action on downstream failure", "Compliance/audit requirement to guarantee eventual processing"],
+        "inputs": [
+          "Business tolerance for a permanently lost action on downstream failure",
+          "Compliance/audit requirement to guarantee eventual processing"
+        ],
         "processing": [
           "Determine whether a missed action requires guaranteed eventual reprocessing",
           "Weigh the cost of building an idempotent replay path against manual recovery"
         ],
         "outputs": ["A replay-required branch or a no-replay branch"],
         "example": "A payment-settlement event must always eventually process, even after a downstream outage — that requires replay. A dashboard-refresh trigger does not — a missed refresh is caught on the next event.",
-        "controls": ["Classify each event type's replay requirement explicitly during design, not after an incident"],
-        "failureModes": ["No replay path exists and a downstream outage causes silent, permanent data loss for events that needed guaranteed processing"]
+        "controls": [
+          "Classify each event type's replay requirement explicitly during design, not after an incident"
+        ],
+        "failureModes": [
+          "No replay path exists and a downstream outage causes silent, permanent data loss for events that needed guaranteed processing"
+        ]
       }
     },
     {
@@ -181,8 +226,13 @@
         ],
         "outputs": ["Reliable eventual processing with no duplicate side effects"],
         "example": "A settlement event that failed due to a downstream outage is replayed from Eventhouse history; the idempotency key on the settlement write ensures the second attempt updates, not duplicates, the ledger entry.",
-        "controls": ["Idempotency key design (natural key, not a generated retry id)", "Dead-letter monitoring and alerting"],
-        "failureModes": ["Idempotency key derived from a retry attempt id instead of the business event id, defeating its purpose"]
+        "controls": [
+          "Idempotency key design (natural key, not a generated retry id)",
+          "Dead-letter monitoring and alerting"
+        ],
+        "failureModes": [
+          "Idempotency key derived from a retry attempt id instead of the business event id, defeating its purpose"
+        ]
       }
     },
     {
@@ -196,7 +246,10 @@
       "evidence": [],
       "tags": ["ArchitecturePattern", "Scope"],
       "drill": {
-        "inputs": ["Durable Eventhouse history", "Failed hot-path action, logged but not auto-replayed"],
+        "inputs": [
+          "Durable Eventhouse history",
+          "Failed hot-path action, logged but not auto-replayed"
+        ],
         "processing": [
           "Log the failure with enough context to investigate manually",
           "Leave reprocessing, if ever needed, as a manual, ad hoc query against Eventhouse history"
@@ -204,7 +257,9 @@
         "outputs": ["Auditable durable history; no automated replay pipeline"],
         "example": "A dashboard-refresh trigger occasionally fails; the durable Eventhouse log lets an engineer confirm what happened, but no automated replay is built because a missed refresh self-corrects on the next event.",
         "controls": ["Revisit this decision if the event type's business criticality changes"],
-        "failureModes": ["Business criticality of the event grows over time and nobody revisits the no-replay decision"]
+        "failureModes": [
+          "Business criticality of the event grows over time and nobody revisits the no-replay decision"
+        ]
       }
     }
   ],

@@ -20,15 +20,25 @@
       "classification": "fact",
       "layers": ["data", "compute"],
       "evidence": [
-        { "sourceKey": "warehouse-overview", "note": "Cross-database queries let a single T-SQL statement combine multiple Fabric data sources in the workspace with zero data duplication." }
+        {
+          "sourceKey": "warehouse-overview",
+          "note": "Cross-database queries let a single T-SQL statement combine multiple Fabric data sources in the workspace with zero data duplication."
+        }
       ],
       "drill": {
         "inputs": ["lh_analytics.silver.positions Delta table"],
-        "processing": ["dbt source() reference resolves via sources.yml to the three-part cross-database name", "Light column renaming/casting, no aggregation"],
-        "outputs": ["stg_positions view, the single read point for all downstream position-related models"],
+        "processing": [
+          "dbt source() reference resolves via sources.yml to the three-part cross-database name",
+          "Light column renaming/casting, no aggregation"
+        ],
+        "outputs": [
+          "stg_positions view, the single read point for all downstream position-related models"
+        ],
         "example": "A downstream fact model references ref('stg_positions') rather than the raw silver table directly, so a later rename of the silver column only needs a fix in one staging model.",
         "controls": ["sources.yml database/schema/table declaration"],
-        "failureModes": ["Downstream models bypassing the staging view and querying silver directly, duplicating cleanup logic and drifting out of sync"]
+        "failureModes": [
+          "Downstream models bypassing the staging view and querying silver directly, duplicating cleanup logic and drifting out of sync"
+        ]
       }
     },
     {
@@ -40,15 +50,23 @@
       "classification": "fact",
       "layers": ["data", "compute"],
       "evidence": [
-        { "sourceKey": "warehouse-overview", "note": "Cross-database queries let a single T-SQL statement combine multiple Fabric data sources in the workspace with zero data duplication." }
+        {
+          "sourceKey": "warehouse-overview",
+          "note": "Cross-database queries let a single T-SQL statement combine multiple Fabric data sources in the workspace with zero data duplication."
+        }
       ],
       "drill": {
         "inputs": ["lh_analytics.silver.returns_daily Delta table"],
-        "processing": ["dbt source() reference resolves via sources.yml", "Light column renaming/casting"],
+        "processing": [
+          "dbt source() reference resolves via sources.yml",
+          "Light column renaming/casting"
+        ],
         "outputs": ["stg_returns view feeding fact_returns_daily and fact_risk_measures"],
         "example": "A benchmark-return column added to silver later only requires exposing it in stg_returns for both dependent fact models to gain it.",
         "controls": ["sources.yml declaration"],
-        "failureModes": ["Silent silver schema drift not caught until a downstream fact model's test fails, rather than at the staging layer"]
+        "failureModes": [
+          "Silent silver schema drift not caught until a downstream fact model's test fails, rather than at the staging layer"
+        ]
       }
     },
     {
@@ -62,11 +80,15 @@
       "evidence": [],
       "drill": {
         "inputs": ["A generated date spine covering the reporting horizon"],
-        "processing": ["Derive fiscal period, trading-day flags, and other calendar attributes per date"],
+        "processing": [
+          "Derive fiscal period, trading-day flags, and other calendar attributes per date"
+        ],
         "outputs": ["dim_date, joined by every fact model"],
         "example": "fact_positions_daily and fact_returns_daily both join dim_date on position_date/return_date, letting a single report compare positions and returns for the same trading day.",
         "controls": ["Reporting horizon (start/end date) the spine covers"],
-        "failureModes": ["A fact's date column falling outside the generated spine's range, producing an unmatched join with no error"]
+        "failureModes": [
+          "A fact's date column falling outside the generated spine's range, producing an unmatched join with no error"
+        ]
       }
     },
     {
@@ -80,11 +102,20 @@
       "evidence": [],
       "drill": {
         "inputs": ["Distinct portfolio records from stg_positions"],
-        "processing": ["Deduplicate to one row per portfolio_id", "Overwrite attributes in place on change (Type 1, no history)"],
-        "outputs": ["dim_portfolio, joined by fact_positions, fact_returns_daily, fact_risk_measures, and fact_transactions"],
+        "processing": [
+          "Deduplicate to one row per portfolio_id",
+          "Overwrite attributes in place on change (Type 1, no history)"
+        ],
+        "outputs": [
+          "dim_portfolio, joined by fact_positions, fact_returns_daily, fact_risk_measures, and fact_transactions"
+        ],
         "example": "A portfolio's name changes after a rebrand; dim_portfolio overwrites the old name, so historical facts now display under the new name too — the explicit Type 1 trade-off this dimension makes.",
-        "controls": ["Choosing Type 1 (overwrite) rather than tracking portfolio-attribute history"],
-        "failureModes": ["Needing historical portfolio names/attributes for an audit and discovering Type 1 already overwrote them — the case the SCD Type 2 warning node contrasts against"]
+        "controls": [
+          "Choosing Type 1 (overwrite) rather than tracking portfolio-attribute history"
+        ],
+        "failureModes": [
+          "Needing historical portfolio names/attributes for an audit and discovering Type 1 already overwrote them — the case the SCD Type 2 warning node contrasts against"
+        ]
       }
     },
     {
@@ -98,11 +129,16 @@
       "evidence": [],
       "drill": {
         "inputs": ["Distinct benchmark references in stg_returns"],
-        "processing": ["Deduplicate to one row per benchmark", "Overwrite attributes in place on change"],
+        "processing": [
+          "Deduplicate to one row per benchmark",
+          "Overwrite attributes in place on change"
+        ],
         "outputs": ["dim_benchmark, joined by fact_returns_daily and fact_risk_measures"],
         "example": "fact_returns_daily joins dim_benchmark to compute a portfolio's return relative to its assigned benchmark for a given trading day.",
         "controls": ["Which benchmark identifier is treated as the conformed key across sources"],
-        "failureModes": ["A portfolio's benchmark reassignment mid-period being applied retroactively under Type 1 overwrite, silently changing historical relative-performance figures"]
+        "failureModes": [
+          "A portfolio's benchmark reassignment mid-period being applied retroactively under Type 1 overwrite, silently changing historical relative-performance figures"
+        ]
       }
     },
     {
@@ -116,11 +152,20 @@
       "evidence": [],
       "drill": {
         "inputs": ["Distinct instrument records and their attributes from stg_positions"],
-        "processing": ["On a tracked-attribute change, end-date the existing current row and insert a new row with an open effective-from date", "Non-tracked attributes update in place as Type 1 columns within the same table"],
-        "outputs": ["dim_instrument with full point-in-time history for tracked attributes, joined by facts using an effective-dated key"],
+        "processing": [
+          "On a tracked-attribute change, end-date the existing current row and insert a new row with an open effective-from date",
+          "Non-tracked attributes update in place as Type 1 columns within the same table"
+        ],
+        "outputs": [
+          "dim_instrument with full point-in-time history for tracked attributes, joined by facts using an effective-dated key"
+        ],
         "example": "An instrument's sector reclassification is captured as a new dim_instrument row; a report as of last quarter still joins to the sector value that was current then, not today's.",
-        "controls": ["Which instrument attributes are tracked (Type 2) versus overwritten (Type 1) within the same table"],
-        "failureModes": ["See the SCD Type 2 consistency warning node — mixing Type 1 and Type 2 columns in one table is easy to get wrong at merge time"]
+        "controls": [
+          "Which instrument attributes are tracked (Type 2) versus overwritten (Type 1) within the same table"
+        ],
+        "failureModes": [
+          "See the SCD Type 2 consistency warning node — mixing Type 1 and Type 2 columns in one table is easy to get wrong at merge time"
+        ]
       }
     },
     {
@@ -133,12 +178,25 @@
       "layers": ["data"],
       "evidence": [],
       "drill": {
-        "inputs": ["Fact models joining both a Type 2 dimension (dim_instrument) and Type 1 dimensions in the same query"],
-        "processing": ["Correct joins use dim_instrument's effective-dated key matched against the fact's transaction/position date", "Incorrect joins use dim_instrument's surrogate key naively, matching only the current row"],
-        "outputs": ["Either point-in-time-correct risk/performance attribution, or silently mis-attributed historical figures"],
+        "inputs": [
+          "Fact models joining both a Type 2 dimension (dim_instrument) and Type 1 dimensions in the same query"
+        ],
+        "processing": [
+          "Correct joins use dim_instrument's effective-dated key matched against the fact's transaction/position date",
+          "Incorrect joins use dim_instrument's surrogate key naively, matching only the current row"
+        ],
+        "outputs": [
+          "Either point-in-time-correct risk/performance attribution, or silently mis-attributed historical figures"
+        ],
         "example": "fact_risk_measures joins dim_instrument on instrument_id alone instead of an effective-dated join; every historical VaR calculation ends up attributed to whatever sector the instrument is classified as today, not the sector at calculation time.",
-        "controls": ["A written, tested join convention for every fact model that touches dim_instrument", "dbt tests asserting no fact row's date falls outside its matched dim_instrument row's effective range"],
-        "failureModes": ["A new fact model added later without following the effective-dated join convention, since nothing in the schema enforces it structurally", "Reviewers not catching the join-key inconsistency because the query still returns rows — it just returns the wrong ones"]
+        "controls": [
+          "A written, tested join convention for every fact model that touches dim_instrument",
+          "dbt tests asserting no fact row's date falls outside its matched dim_instrument row's effective range"
+        ],
+        "failureModes": [
+          "A new fact model added later without following the effective-dated join convention, since nothing in the schema enforces it structurally",
+          "Reviewers not catching the join-key inconsistency because the query still returns rows — it just returns the wrong ones"
+        ]
       }
     },
     {
@@ -150,15 +208,25 @@
       "classification": "fact",
       "layers": ["data", "compute"],
       "evidence": [
-        { "sourceKey": "dbt-fabric-warehouse", "note": "The dbt-fabric adapter implements certain T-SQL operations dbt models rely on — including behaviors equivalent to MERGE — by translating them into CREATE TABLE AS SELECT (CTAS) plus DROP/CREATE sequences, because Fabric Data Warehouse's T-SQL surface does not support the same command set as SQL Server." }
+        {
+          "sourceKey": "dbt-fabric-warehouse",
+          "note": "The dbt-fabric adapter implements certain T-SQL operations dbt models rely on — including behaviors equivalent to MERGE — by translating them into CREATE TABLE AS SELECT (CTAS) plus DROP/CREATE sequences, because Fabric Data Warehouse's T-SQL surface does not support the same command set as SQL Server."
+        }
       ],
       "drill": {
-        "inputs": ["stg_positions joined to dim_portfolio, dim_instrument (effective-dated), and dim_date"],
-        "processing": ["dbt incremental materialization filters to rows newer than the fact's current max date on each run", "Merge strategy applies new/changed rows without a full table rebuild"],
+        "inputs": [
+          "stg_positions joined to dim_portfolio, dim_instrument (effective-dated), and dim_date"
+        ],
+        "processing": [
+          "dbt incremental materialization filters to rows newer than the fact's current max date on each run",
+          "Merge strategy applies new/changed rows without a full table rebuild"
+        ],
         "outputs": ["fact_positions_daily in wh_gold, growing incrementally"],
         "example": "A nightly run only processes yesterday's new position rows rather than reprocessing years of history, keeping the dbt build time roughly constant as the table grows.",
         "controls": ["The incremental filter's watermark column and grain"],
-        "failureModes": ["An incremental filter based on the wrong watermark column silently skipping late-arriving position corrections"]
+        "failureModes": [
+          "An incremental filter based on the wrong watermark column silently skipping late-arriving position corrections"
+        ]
       }
     },
     {
@@ -170,7 +238,10 @@
       "classification": "fact",
       "layers": ["data", "compute"],
       "evidence": [
-        { "sourceKey": "dbt-fabric-warehouse", "note": "The dbt-fabric adapter translates dbt's incremental MERGE behavior into CTAS plus DROP/CREATE sequences to work around Fabric Warehouse's T-SQL surface limitations relative to SQL Server." }
+        {
+          "sourceKey": "dbt-fabric-warehouse",
+          "note": "The dbt-fabric adapter translates dbt's incremental MERGE behavior into CTAS plus DROP/CREATE sequences to work around Fabric Warehouse's T-SQL surface limitations relative to SQL Server."
+        }
       ],
       "drill": {
         "inputs": ["stg_returns joined to dim_portfolio, dim_benchmark, and dim_date"],
@@ -178,7 +249,9 @@
         "outputs": ["fact_returns_daily, the base series for performance attribution"],
         "example": "A quarterly attribution report aggregates fact_returns_daily over the period, joined to dim_benchmark to compute relative performance.",
         "controls": ["Return calculation methodology upstream in silver, not redefined here"],
-        "failureModes": ["A benchmark reassignment (see dim_benchmark's failure mode) propagating into historical attribution via the Type 1 join"]
+        "failureModes": [
+          "A benchmark reassignment (see dim_benchmark's failure mode) propagating into historical attribution via the Type 1 join"
+        ]
       }
     },
     {
@@ -190,15 +263,25 @@
       "classification": "fact",
       "layers": ["data", "compute"],
       "evidence": [
-        { "sourceKey": "dbt-fabric-warehouse", "note": "The dbt-fabric adapter implements MERGE-equivalent behavior via CTAS plus DROP/CREATE because Fabric Data Warehouse's T-SQL surface does not support the same command set as SQL Server." }
+        {
+          "sourceKey": "dbt-fabric-warehouse",
+          "note": "The dbt-fabric adapter implements MERGE-equivalent behavior via CTAS plus DROP/CREATE because Fabric Data Warehouse's T-SQL surface does not support the same command set as SQL Server."
+        }
       ],
       "drill": {
-        "inputs": ["Risk calculation records joined to dim_portfolio, dim_instrument (effective-dated), dim_date"],
-        "processing": ["Incremental merge processes new risk measures per run", "measure_type distinguishes VaR/exposure/sensitivity/stress within one table instead of four"],
+        "inputs": [
+          "Risk calculation records joined to dim_portfolio, dim_instrument (effective-dated), dim_date"
+        ],
+        "processing": [
+          "Incremental merge processes new risk measures per run",
+          "measure_type distinguishes VaR/exposure/sensitivity/stress within one table instead of four"
+        ],
         "outputs": ["fact_risk_measures, the source for VaR dashboards and exposure reports"],
         "example": "A VaR calculation from three months ago still joins to the instrument's sector classification as it was three months ago, because the join uses dim_instrument's effective-dated key correctly.",
         "controls": ["The effective-dated join convention (see the SCD Type 2 warning node)"],
-        "failureModes": ["The exact silent mis-attribution failure mode described in the SCD Type 2 warning node — this is the fact model most exposed to it"]
+        "failureModes": [
+          "The exact silent mis-attribution failure mode described in the SCD Type 2 warning node — this is the fact model most exposed to it"
+        ]
       }
     },
     {
@@ -210,15 +293,25 @@
       "classification": "fact",
       "layers": ["data", "compute"],
       "evidence": [
-        { "sourceKey": "dbt-fabric-warehouse", "note": "The dbt-fabric adapter's MERGE-equivalent behavior via CTAS plus DROP/CREATE is what makes dbt's incremental strategy work against Fabric Warehouse at all, given the T-SQL surface gap versus SQL Server." }
+        {
+          "sourceKey": "dbt-fabric-warehouse",
+          "note": "The dbt-fabric adapter's MERGE-equivalent behavior via CTAS plus DROP/CREATE is what makes dbt's incremental strategy work against Fabric Warehouse at all, given the T-SQL surface gap versus SQL Server."
+        }
       ],
       "drill": {
         "inputs": ["Transaction records joined to dim_portfolio, dim_instrument, and dim_date"],
-        "processing": ["Incremental merge keyed on (source_system, transaction_id), not a date watermark", "New and corrected transactions merge in on each run"],
+        "processing": [
+          "Incremental merge keyed on (source_system, transaction_id), not a date watermark",
+          "New and corrected transactions merge in on each run"
+        ],
         "outputs": ["fact_transactions, the transaction-level audit trail in gold"],
         "example": "A corrected trade booked two days after the original transaction date still merges correctly into fact_transactions because the incremental key is the transaction id, not the transaction date.",
-        "controls": ["The (source_system, transaction_id) incremental key choice, deliberately not date-based"],
-        "failureModes": ["Using a date-based incremental filter instead of the transaction-id key would silently drop out-of-order corrections — the reason this fact model's key differs from the others"]
+        "controls": [
+          "The (source_system, transaction_id) incremental key choice, deliberately not date-based"
+        ],
+        "failureModes": [
+          "Using a date-based incremental filter instead of the transaction-id key would silently drop out-of-order corrections — the reason this fact model's key differs from the others"
+        ]
       }
     },
     {
@@ -230,45 +323,207 @@
       "classification": "fact",
       "layers": ["data"],
       "evidence": [
-        { "sourceKey": "warehouse-overview", "note": "Fabric Data Warehouse is an enterprise-scale relational warehouse built on a data lake foundation, aimed at star/snowflake schemas, curated corporate data marts, and governed semantic models for BI." }
+        {
+          "sourceKey": "warehouse-overview",
+          "note": "Fabric Data Warehouse is an enterprise-scale relational warehouse built on a data lake foundation, aimed at star/snowflake schemas, curated corporate data marts, and governed semantic models for BI."
+        }
       ],
       "drill": {
-        "inputs": ["fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions, and all five dimensions"],
-        "processing": ["dbt test runs uniqueness/not-null tests on facts as a build gate", "No further transformation here — this is the published state"],
-        "outputs": ["A governed star schema in wh_gold, queryable via T-SQL or served through Direct Lake"],
+        "inputs": [
+          "fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions, and all five dimensions"
+        ],
+        "processing": [
+          "dbt test runs uniqueness/not-null tests on facts as a build gate",
+          "No further transformation here — this is the published state"
+        ],
+        "outputs": [
+          "A governed star schema in wh_gold, queryable via T-SQL or served through Direct Lake"
+        ],
         "example": "A single T-SQL query joins fact_risk_measures to fact_returns_daily via dim_portfolio and dim_date to compare risk-adjusted returns for a book, without touching silver at all.",
-        "controls": ["dbt test coverage as the quality gate before a build is considered complete", "Access grants scoping who can query wh_gold directly vs only through the semantic model"],
-        "failureModes": ["A downstream consumer bypassing the semantic model and running unbounded ad hoc queries directly against wh_gold, competing with the nightly dbt build for warehouse compute"]
+        "controls": [
+          "dbt test coverage as the quality gate before a build is considered complete",
+          "Access grants scoping who can query wh_gold directly vs only through the semantic model"
+        ],
+        "failureModes": [
+          "A downstream consumer bypassing the semantic model and running unbounded ad hoc queries directly against wh_gold, competing with the nightly dbt build for warehouse compute"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     }
   ],
   "edges": [
-    { "id": "e-stgpos-dimportfolio", "from": "stg-positions", "to": "dim-portfolio", "label": "distinct portfolios", "layer": "data", "kind": "flow" },
-    { "id": "e-stgpos-diminstrument", "from": "stg-positions", "to": "dim-instrument-scd2", "label": "distinct instruments", "layer": "data", "kind": "flow" },
-    { "id": "e-stgret-dimbenchmark", "from": "stg-returns", "to": "dim-benchmark", "label": "distinct benchmarks", "layer": "data", "kind": "flow" },
-    { "id": "e-diminstrument-warning", "from": "dim-instrument-scd2", "to": "scd2-consistency-warning", "label": "effective-dated join required downstream", "layer": "data", "kind": "branch" },
-    { "id": "e-stgpos-factpositions", "from": "stg-positions", "to": "fact-positions", "label": "position rows", "layer": "compute", "kind": "flow" },
-    { "id": "e-dimportfolio-factpositions", "from": "dim-portfolio", "to": "fact-positions", "label": "portfolio key", "layer": "data", "kind": "flow" },
-    { "id": "e-diminstrument-factpositions", "from": "dim-instrument-scd2", "to": "fact-positions", "label": "effective-dated instrument key", "layer": "data", "kind": "flow" },
-    { "id": "e-dimdate-factpositions", "from": "dim-date", "to": "fact-positions", "label": "date key", "layer": "data", "kind": "flow" },
-    { "id": "e-stgret-factreturns", "from": "stg-returns", "to": "fact-returns-daily", "label": "daily return rows", "layer": "compute", "kind": "flow" },
-    { "id": "e-dimbenchmark-factreturns", "from": "dim-benchmark", "to": "fact-returns-daily", "label": "benchmark key", "layer": "data", "kind": "flow" },
-    { "id": "e-stgret-factrisk", "from": "stg-returns", "to": "fact-risk-measures", "label": "risk calculation rows", "layer": "compute", "kind": "flow" },
-    { "id": "e-diminstrument-factrisk", "from": "dim-instrument-scd2", "to": "fact-risk-measures", "label": "effective-dated instrument key", "layer": "data", "kind": "flow" },
-    { "id": "e-stgpos-facttxn", "from": "stg-positions", "to": "fact-transactions", "label": "transaction rows", "layer": "compute", "kind": "flow" },
-    { "id": "e-factpositions-star", "from": "fact-positions", "to": "wh-gold-star", "label": "published fact", "layer": "data", "kind": "flow" },
-    { "id": "e-factreturns-star", "from": "fact-returns-daily", "to": "wh-gold-star", "label": "published fact", "layer": "data", "kind": "flow" },
-    { "id": "e-factrisk-star", "from": "fact-risk-measures", "to": "wh-gold-star", "label": "published fact", "layer": "data", "kind": "flow" },
-    { "id": "e-facttxn-star", "from": "fact-transactions", "to": "wh-gold-star", "label": "published fact", "layer": "data", "kind": "flow" }
+    {
+      "id": "e-stgpos-dimportfolio",
+      "from": "stg-positions",
+      "to": "dim-portfolio",
+      "label": "distinct portfolios",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-stgpos-diminstrument",
+      "from": "stg-positions",
+      "to": "dim-instrument-scd2",
+      "label": "distinct instruments",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-stgret-dimbenchmark",
+      "from": "stg-returns",
+      "to": "dim-benchmark",
+      "label": "distinct benchmarks",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-diminstrument-warning",
+      "from": "dim-instrument-scd2",
+      "to": "scd2-consistency-warning",
+      "label": "effective-dated join required downstream",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-stgpos-factpositions",
+      "from": "stg-positions",
+      "to": "fact-positions",
+      "label": "position rows",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-dimportfolio-factpositions",
+      "from": "dim-portfolio",
+      "to": "fact-positions",
+      "label": "portfolio key",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-diminstrument-factpositions",
+      "from": "dim-instrument-scd2",
+      "to": "fact-positions",
+      "label": "effective-dated instrument key",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-dimdate-factpositions",
+      "from": "dim-date",
+      "to": "fact-positions",
+      "label": "date key",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-stgret-factreturns",
+      "from": "stg-returns",
+      "to": "fact-returns-daily",
+      "label": "daily return rows",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-dimbenchmark-factreturns",
+      "from": "dim-benchmark",
+      "to": "fact-returns-daily",
+      "label": "benchmark key",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-stgret-factrisk",
+      "from": "stg-returns",
+      "to": "fact-risk-measures",
+      "label": "risk calculation rows",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-diminstrument-factrisk",
+      "from": "dim-instrument-scd2",
+      "to": "fact-risk-measures",
+      "label": "effective-dated instrument key",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-stgpos-facttxn",
+      "from": "stg-positions",
+      "to": "fact-transactions",
+      "label": "transaction rows",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-factpositions-star",
+      "from": "fact-positions",
+      "to": "wh-gold-star",
+      "label": "published fact",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-factreturns-star",
+      "from": "fact-returns-daily",
+      "to": "wh-gold-star",
+      "label": "published fact",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-factrisk-star",
+      "from": "fact-risk-measures",
+      "to": "wh-gold-star",
+      "label": "published fact",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-facttxn-star",
+      "from": "fact-transactions",
+      "to": "wh-gold-star",
+      "label": "published fact",
+      "layer": "data",
+      "kind": "flow"
+    }
   ],
   "walkthrough": [
-    { "nodeId": "stg-positions", "title": "1. Staging: read silver once, per entity", "explanation": "stg_positions and stg_returns are the single read point over silver for every downstream model, using cross-database T-SQL with zero duplication." },
-    { "nodeId": "dim-portfolio", "title": "2. Three Type 1 dimensions build first", "explanation": "dim_portfolio, dim_date, and dim_benchmark overwrite in place — the conventional shape for reference data that doesn't need history." },
-    { "nodeId": "dim-instrument-scd2", "title": "3. One dimension carries full history", "explanation": "dim_instrument alone is SCD Type 2, because risk attribution needs to know an instrument's classification at the time, not today." },
-    { "nodeId": "scd2-consistency-warning", "title": "4. The trap: inconsistent join keys across facts", "explanation": "Mixing one Type 2 dimension with three Type 1 dimensions means fact models must use different join conventions for each — getting this wrong silently mis-attributes history." },
-    { "nodeId": "fact-positions", "title": "5. Four incremental facts build on the dimensions", "explanation": "fact_positions, fact_returns_daily, fact_risk_measures, and fact_transactions each join staging views to the dimensions, materialized incrementally so nightly builds stay fast." },
-    { "nodeId": "fact-risk-measures", "title": "6. Risk measures are where the SCD Type 2 join matters most", "explanation": "fact_risk_measures joins dim_instrument via its effective-dated key — getting this join wrong is exactly the failure mode the warning node describes." },
-    { "nodeId": "wh-gold-star", "title": "7. Convergence: the published star schema", "explanation": "All four facts converge into wh_gold, the stable contract Power BI and any T-SQL consumer builds on." }
+    {
+      "nodeId": "stg-positions",
+      "title": "1. Staging: read silver once, per entity",
+      "explanation": "stg_positions and stg_returns are the single read point over silver for every downstream model, using cross-database T-SQL with zero duplication."
+    },
+    {
+      "nodeId": "dim-portfolio",
+      "title": "2. Three Type 1 dimensions build first",
+      "explanation": "dim_portfolio, dim_date, and dim_benchmark overwrite in place — the conventional shape for reference data that doesn't need history."
+    },
+    {
+      "nodeId": "dim-instrument-scd2",
+      "title": "3. One dimension carries full history",
+      "explanation": "dim_instrument alone is SCD Type 2, because risk attribution needs to know an instrument's classification at the time, not today."
+    },
+    {
+      "nodeId": "scd2-consistency-warning",
+      "title": "4. The trap: inconsistent join keys across facts",
+      "explanation": "Mixing one Type 2 dimension with three Type 1 dimensions means fact models must use different join conventions for each — getting this wrong silently mis-attributes history."
+    },
+    {
+      "nodeId": "fact-positions",
+      "title": "5. Four incremental facts build on the dimensions",
+      "explanation": "fact_positions, fact_returns_daily, fact_risk_measures, and fact_transactions each join staging views to the dimensions, materialized incrementally so nightly builds stay fast."
+    },
+    {
+      "nodeId": "fact-risk-measures",
+      "title": "6. Risk measures are where the SCD Type 2 join matters most",
+      "explanation": "fact_risk_measures joins dim_instrument via its effective-dated key — getting this join wrong is exactly the failure mode the warning node describes."
+    },
+    {
+      "nodeId": "wh-gold-star",
+      "title": "7. Convergence: the published star schema",
+      "explanation": "All four facts converge into wh_gold, the stable contract Power BI and any T-SQL consumer builds on."
+    }
   ]
 }

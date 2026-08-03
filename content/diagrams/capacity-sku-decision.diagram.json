@@ -52,16 +52,23 @@
       "layers": ["compute"],
       "tags": ["Spark", "Autoscale", "Billing", "Capacity"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "Bursting and smoothing do not apply when a capacity admin has enabled Autoscale Billing for Spark; in that configuration Spark usage operates in pay-as-you-go mode only." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Bursting and smoothing do not apply when a capacity admin has enabled Autoscale Billing for Spark; in that configuration Spark usage operates in pay-as-you-go mode only."
+        }
       ],
       "drill": {
-        "inputs": ["A capacity where Spark is confirmed (via profiling) as the bursty, unpredictable CU driver"],
+        "inputs": [
+          "A capacity where Spark is confirmed (via profiling) as the bursty, unpredictable CU driver"
+        ],
         "processing": [
           "Capacity admin enables Autoscale Billing for Spark at the capacity level",
           "Subsequent Spark sessions on that capacity bill pay-as-you-go instead of drawing the smoothed CU pool",
           "Non-Spark workloads on the same capacity keep normal bursting/smoothing behavior"
         ],
-        "outputs": ["Spark usage isolated from the shared CU pool's smoothing accounting, billed separately"],
+        "outputs": [
+          "Spark usage isolated from the shared CU pool's smoothing accounting, billed separately"
+        ],
         "example": "A team running ad-hoc exploration notebooks alongside a steady warehouse ELT schedule enables Autoscale Billing for Spark; the notebooks' unpredictable spikes stop pushing the capacity toward the 60-minute rejection threshold that was previously delaying the warehouse's interactive dashboard queries.",
         "controls": [
           "Enable this only after confirming Spark specifically (not the warehouse or Direct Lake) is the bursty driver",
@@ -83,7 +90,10 @@
       "layers": ["compute"],
       "tags": ["Spark", "Autoscale", "Billing"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "Bursting and smoothing do not apply when a capacity admin has enabled Autoscale Billing for Spark; in that configuration Spark usage operates in pay-as-you-go mode only." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Bursting and smoothing do not apply when a capacity admin has enabled Autoscale Billing for Spark; in that configuration Spark usage operates in pay-as-you-go mode only."
+        }
       ],
       "drill": {
         "inputs": ["A capacity that just enabled Autoscale Billing for Spark"],
@@ -91,7 +101,9 @@
           "Spark sessions run and bill pay-as-you-go with no smoothing window spreading the cost",
           "A cost or usage spike that would previously have been smoothed over minutes-to-hours now lands as immediate pay-as-you-go consumption"
         ],
-        "outputs": ["Unsmoothed, directly-billed Spark cost that can surprise teams expecting bursting/smoothing coverage"],
+        "outputs": [
+          "Unsmoothed, directly-billed Spark cost that can surprise teams expecting bursting/smoothing coverage"
+        ],
         "example": "A team enables Autoscale Billing expecting their occasional large backfill job to be smoothed the way it was before; instead the backfill's cost lands immediately and in full, because smoothing no longer applies to Spark usage under Autoscale Billing.",
         "controls": [
           "Read the billing-mode change carefully before enabling Autoscale Billing, not after the first invoice",
@@ -113,16 +125,23 @@
       "layers": ["compute"],
       "tags": ["Capacity", "SKU", "FabricCapacity"],
       "evidence": [
-        { "sourceKey": "fabric-platform-licenses-capacities", "note": "Fabric F SKUs run from F2 up to F2048, and the SKU number equals its capacity units — an F64 supplies 64 CUs — with each step up the ladder doubling the compute of the previous size." }
+        {
+          "sourceKey": "fabric-platform-licenses-capacities",
+          "note": "Fabric F SKUs run from F2 up to F2048, and the SKU number equals its capacity units — an F64 supplies 64 CUs — with each step up the ladder doubling the compute of the previous size."
+        }
       ],
       "drill": {
-        "inputs": ["A capacity confirmed (via profiling) to have sustained, predictable CU-constrained load, not a single bursty workload"],
+        "inputs": [
+          "A capacity confirmed (via profiling) to have sustained, predictable CU-constrained load, not a single bursty workload"
+        ],
         "processing": [
           "Identify the current SKU and the next step up the doubling ladder (e.g. F32 to F64)",
           "Check the sizing checklist's three ceilings before committing",
           "Apply the SKU change and monitor whether throttling incidents actually stop"
         ],
-        "outputs": ["A larger F-SKU capacity with proportionally more CUs, Spark vCores, and Direct Lake memory headroom"],
+        "outputs": [
+          "A larger F-SKU capacity with proportionally more CUs, Spark vCores, and Direct Lake memory headroom"
+        ],
         "example": "A capacity running steady nightly warehouse ELT plus growing daytime Direct Lake report traffic consistently hits the 10-minute overage-protection ceiling; profiling shows no single bursty workload to isolate, so the team moves the capacity from F32 to F64, doubling CUs and crossing the F64 licensing threshold in the same step.",
         "controls": [
           "Confirm the load is sustained, not a single isolatable bursty workload, before scaling",
@@ -145,9 +164,18 @@
       "layers": ["compute", "data"],
       "tags": ["Capacity", "Spark", "DirectLake", "Licensing"],
       "evidence": [
-        { "sourceKey": "spark-compute-pools", "note": "Each Fabric capacity unit grants two Spark vCores, and a 3x burst multiplier applies on top; an F64 SKU therefore exposes 384 Spark vCores (64 CU x 2 x 3), which caps the total vCores a custom Spark pool can be configured with." },
-        { "sourceKey": "direct-lake-how-it-works", "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once." },
-        { "sourceKey": "fabric-platform-licenses-capacities", "note": "F64 is the licensing threshold for broad report consumption: on an F64 or larger capacity, users holding only a free Fabric license can view Power BI content if they have a workspace viewer role, whereas on smaller F SKUs every viewer needs a Pro or PPU license." }
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "Each Fabric capacity unit grants two Spark vCores, and a 3x burst multiplier applies on top; an F64 SKU therefore exposes 384 Spark vCores (64 CU x 2 x 3), which caps the total vCores a custom Spark pool can be configured with."
+        },
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once."
+        },
+        {
+          "sourceKey": "fabric-platform-licenses-capacities",
+          "note": "F64 is the licensing threshold for broad report consumption: on an F64 or larger capacity, users holding only a free Fabric license can view Power BI content if they have a workspace viewer role, whereas on smaller F SKUs every viewer needs a Pro or PPU license."
+        }
       ],
       "drill": {
         "inputs": ["A candidate target SKU from the scale-up branch"],
@@ -156,7 +184,9 @@
           "Check whether the candidate SKU's Direct Lake memory ceiling covers the largest Direct Lake model's resident column footprint",
           "Check whether crossing F64 changes the Power BI licensing plan for viewers"
         ],
-        "outputs": ["A validated SKU choice, or a signal that a different remedy (split or Autoscale) actually addresses the binding ceiling"],
+        "outputs": [
+          "A validated SKU choice, or a signal that a different remedy (split or Autoscale) actually addresses the binding ceiling"
+        ],
         "example": "A team evaluating F32 to F64 discovers their largest Direct Lake model is already hitting memory-driven cold reads at F32; the memory ceiling, not raw CU count, was the binding constraint, confirming F64 (not a workload split) is the right fix.",
         "controls": [
           "Always compute the burst ceiling, not the sustained one, since custom Spark pool sizing is capped by the burst number",
@@ -167,7 +197,11 @@
           "Crossing F64 for compute reasons without realizing it also changes who can view Power BI content for free"
         ],
         "metrics": [
-          { "label": "Spark vCore burst ceiling on F64", "value": "384 vCores (64 CU x 2 x 3)", "sourceKey": "spark-compute-pools" }
+          {
+            "label": "Spark vCore burst ceiling on F64",
+            "value": "384 vCores (64 CU x 2 x 3)",
+            "sourceKey": "spark-compute-pools"
+          }
         ]
       }
     },
@@ -181,17 +215,27 @@
       "layers": ["governance", "compute"],
       "tags": ["Capacity", "Isolation", "Throttling"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "Fabric enforces throttling at the capacity level rather than the tenant level, so a saturated capacity only affects the workspaces assigned to it; other capacities continue operating normally." },
-        { "sourceKey": "fabric-platform-licenses-capacities", "note": "Each Fabric capacity is a distinct resource pool living inside a Microsoft Entra tenant; the SKU size determines how much compute power the pool provides, and a tenant can hold as many capacities as the organization needs — often aligned to geography or business unit." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Fabric enforces throttling at the capacity level rather than the tenant level, so a saturated capacity only affects the workspaces assigned to it; other capacities continue operating normally."
+        },
+        {
+          "sourceKey": "fabric-platform-licenses-capacities",
+          "note": "Each Fabric capacity is a distinct resource pool living inside a Microsoft Entra tenant; the SKU size determines how much compute power the pool provides, and a tenant can hold as many capacities as the organization needs — often aligned to geography or business unit."
+        }
       ],
       "drill": {
-        "inputs": ["Two or more workloads sharing one capacity where one workload's risk profile threatens another's SLA"],
+        "inputs": [
+          "Two or more workloads sharing one capacity where one workload's risk profile threatens another's SLA"
+        ],
         "processing": [
           "Identify the SLA-bound workload that must be protected (e.g. an executive dashboard)",
           "Provision or reassign a separate capacity for the riskier workload (e.g. ad-hoc Spark exploration, a large batch job)",
           "Move the corresponding workspace(s) to the new capacity"
         ],
-        "outputs": ["Two independently throttled capacities where a saturation event on one cannot delay or reject requests on the other"],
+        "outputs": [
+          "Two independently throttled capacities where a saturation event on one cannot delay or reject requests on the other"
+        ],
         "example": "An executive Power BI dashboard and an unpredictable Spark exploration workload share one F64 capacity; the exploration workload is moved to its own smaller capacity, so a runaway notebook can throttle itself into rejection without ever touching the dashboard's CU budget.",
         "controls": [
           "Decide the isolation boundary by SLA risk, not just by team or project organizationally",
@@ -214,10 +258,15 @@
       "layers": ["compute", "observability"],
       "tags": ["Capacity", "Throttling"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "Throttling is staged progressively across four thresholds keyed to how much future capacity has been consumed: up to 10 minutes of future usage triggers no throttling (overage protection); between 10 and 60 minutes triggers a 20-second delay on new interactive operations; between 60 minutes and 24 hours causes interactive operations to be rejected outright while background operations may still start; beyond 24 hours all new requests are rejected." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Throttling is staged progressively across four thresholds keyed to how much future capacity has been consumed: up to 10 minutes of future usage triggers no throttling (overage protection); between 10 and 60 minutes triggers a 20-second delay on new interactive operations; between 60 minutes and 24 hours causes interactive operations to be rejected outright while background operations may still start; beyond 24 hours all new requests are rejected."
+        }
       ],
       "drill": {
-        "inputs": ["Capacity Metrics data showing how far into the throttling ladder a capacity is running"],
+        "inputs": [
+          "Capacity Metrics data showing how far into the throttling ladder a capacity is running"
+        ],
         "processing": [
           "Read the current throttling stage from the Capacity Metrics app's overages view",
           "Map the stage to urgency: overage-protection is informational, delay and rejection stages need a remedy",
@@ -233,13 +282,62 @@
     }
   ],
   "edges": [
-    { "id": "e-question-autoscale", "from": "contention-question", "to": "autoscale-spark-branch", "label": "bursty, unpredictable Spark load", "layer": "compute", "kind": "branch" },
-    { "id": "e-question-sku", "from": "contention-question", "to": "sku-scale-branch", "label": "predictable, sustained CU-constrained load", "layer": "compute", "kind": "branch" },
-    { "id": "e-question-split", "from": "contention-question", "to": "split-capacity-branch", "label": "one workload's risk threatens another's SLA", "layer": "governance", "kind": "branch" },
-    { "id": "e-autoscale-warning", "from": "autoscale-spark-branch", "to": "autoscale-smoothing-warning", "label": "billing-behavior trap", "layer": "compute", "kind": "branch" },
-    { "id": "e-sku-checklist", "from": "sku-scale-branch", "to": "sizing-checklist", "label": "check before committing", "layer": "compute", "kind": "flow" },
-    { "id": "e-split-boundary", "from": "split-capacity-branch", "to": "throttling-boundary", "label": "isolation works because throttling is per-capacity", "layer": "compute", "kind": "flow" },
-    { "id": "e-boundary-question", "from": "throttling-boundary", "to": "contention-question", "label": "severity read informs which branch to take", "layer": "observability", "kind": "feedback" }
+    {
+      "id": "e-question-autoscale",
+      "from": "contention-question",
+      "to": "autoscale-spark-branch",
+      "label": "bursty, unpredictable Spark load",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-question-sku",
+      "from": "contention-question",
+      "to": "sku-scale-branch",
+      "label": "predictable, sustained CU-constrained load",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-question-split",
+      "from": "contention-question",
+      "to": "split-capacity-branch",
+      "label": "one workload's risk threatens another's SLA",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e-autoscale-warning",
+      "from": "autoscale-spark-branch",
+      "to": "autoscale-smoothing-warning",
+      "label": "billing-behavior trap",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-sku-checklist",
+      "from": "sku-scale-branch",
+      "to": "sizing-checklist",
+      "label": "check before committing",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-split-boundary",
+      "from": "split-capacity-branch",
+      "to": "throttling-boundary",
+      "label": "isolation works because throttling is per-capacity",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-boundary-question",
+      "from": "throttling-boundary",
+      "to": "contention-question",
+      "label": "severity read informs which branch to take",
+      "layer": "observability",
+      "kind": "feedback"
+    }
   ],
   "walkthrough": [
     {

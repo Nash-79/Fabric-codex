@@ -10,9 +10,9 @@ workflow: a human driving the Claude Code / Codex subagents in `.claude/agents/`
 ## Why it exists
 
 `content-orchestrator.md` already plays the planning-layer role described in
-`../CLAUDE.md`'s "Deliberate non-goals": *"One generation model with good retrieval and
+`../CLAUDE.md`'s "Deliberate non-goals": _"One generation model with good retrieval and
 one validation pass delivers ~90% of the value... add a new agent only when a concrete
-need forces it."* This directory does not add a new agent mesh — it is scaffolding for
+need forces it."_ This directory does not add a new agent mesh — it is scaffolding for
 the specific concrete need `content-orchestrator` can't cover: a **scheduled or headless**
 run (e.g. cron-triggered nightly content refresh) where no human is present to drive
 subagents turn by turn, so the routing/interrupt logic that a human normally provides
@@ -42,7 +42,7 @@ needs to live in code instead.
   (SVG + mandatory evidence sidecar, official-icon policy) — do not invent a second
   diagram-quality standard here.
 - Any Supabase write is still a human/service-role-key action taken in Lovable Settings
-  → Publish, per every other agent in this repo. A LangGraph node may *draft* files under
+  → Publish, per every other agent in this repo. A LangGraph node may _draft_ files under
   `content/`; it must not attempt to reach Supabase with a service-role key.
 - Keep `requirements.txt` scoped to this directory — the main FastAPI backend
   (`backend/requirements.txt`) has no LangGraph dependency and should not gain one just

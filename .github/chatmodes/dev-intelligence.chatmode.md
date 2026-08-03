@@ -1,7 +1,7 @@
 ---
 description: Development intelligence — change impact, schema blast radius, lineage, hotspots, pre-PR docs, following .claude/agents/dev-intelligence.md
 model: Claude Sonnet 4.5
-tools: ['codebase', 'search', 'usages', 'changes', 'problems']
+tools: ["codebase", "search", "usages", "changes", "problems"]
 x-ucp-tier: standard
 ---
 

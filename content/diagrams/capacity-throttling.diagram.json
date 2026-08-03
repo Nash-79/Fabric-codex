@@ -21,16 +21,32 @@
       "layers": ["compute"],
       "tags": ["Capacity", "CapacityUnits"],
       "evidence": [
-        { "sourceKey": "fabric-platform-terminology", "note": "A capacity is a dedicated pool of resources that performs work in Fabric; capacity units (CUs) are the single unit of compute measurement, drawn from the available pool by every workload and operation." },
-        { "sourceKey": "capacity-throttling", "note": "Fabric enforces throttling at the capacity level rather than the tenant level, so a saturated capacity only affects the workspaces assigned to it." }
+        {
+          "sourceKey": "fabric-platform-terminology",
+          "note": "A capacity is a dedicated pool of resources that performs work in Fabric; capacity units (CUs) are the single unit of compute measurement, drawn from the available pool by every workload and operation."
+        },
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Fabric enforces throttling at the capacity level rather than the tenant level, so a saturated capacity only affects the workspaces assigned to it."
+        }
       ],
       "drill": {
-        "inputs": ["A user or scheduled action: a report query, a pipeline run, a Spark job, a semantic model refresh"],
-        "processing": ["Operation is attributed to the workspace's assigned capacity", "CU cost begins accruing against that capacity's pool"],
+        "inputs": [
+          "A user or scheduled action: a report query, a pipeline run, a Spark job, a semantic model refresh"
+        ],
+        "processing": [
+          "Operation is attributed to the workspace's assigned capacity",
+          "CU cost begins accruing against that capacity's pool"
+        ],
         "outputs": ["An operation queued for classification"],
         "example": "A scheduled semantic model refresh on Workspace A (capacity C1) begins consuming CUs from C1 only; Workspace B on capacity C2 sees no effect even if C1 is saturated.",
-        "controls": ["Which capacity a workspace is assigned to", "SKU size, which sets the steady-state CU pool"],
-        "failureModes": ["Assigning many unrelated high-load workspaces to one capacity, concentrating throttling risk that per-capacity isolation was meant to avoid"]
+        "controls": [
+          "Which capacity a workspace is assigned to",
+          "SKU size, which sets the steady-state CU pool"
+        ],
+        "failureModes": [
+          "Assigning many unrelated high-load workspaces to one capacity, concentrating throttling risk that per-capacity isolation was meant to avoid"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
     },
@@ -44,15 +60,27 @@
       "layers": ["compute"],
       "tags": ["Throttling", "Smoothing"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "The throttling system classifies operations at submission time before execution begins, so classification can change once runtime information becomes available; ambiguous cases default toward the conservative classification." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "The throttling system classifies operations at submission time before execution begins, so classification can change once runtime information becomes available; ambiguous cases default toward the conservative classification."
+        }
       ],
       "drill": {
         "inputs": ["The submitted operation and its declared/inferred type"],
-        "processing": ["Determine interactive (DAX query, report view, on-demand refresh) vs background (scheduled refresh, pipeline, Spark batch job)", "Default to the conservative classification when ambiguous"],
-        "outputs": ["An interactive or background label that sets the smoothing window used downstream"],
+        "processing": [
+          "Determine interactive (DAX query, report view, on-demand refresh) vs background (scheduled refresh, pipeline, Spark batch job)",
+          "Default to the conservative classification when ambiguous"
+        ],
+        "outputs": [
+          "An interactive or background label that sets the smoothing window used downstream"
+        ],
         "example": "A user opening a Power BI report is classified interactive; the same report's overnight scheduled refresh is classified background, even though both eventually touch the same semantic model.",
-        "controls": ["No direct admin control over classification; it follows from the operation type itself"],
-        "failureModes": ["Assuming a mixed workload is uniformly interactive, then being surprised when its background component smooths over 24 hours instead of minutes"]
+        "controls": [
+          "No direct admin control over classification; it follows from the operation type itself"
+        ],
+        "failureModes": [
+          "Assuming a mixed workload is uniformly interactive, then being surprised when its background component smooths over 24 hours instead of minutes"
+        ]
       }
     },
     {
@@ -65,15 +93,27 @@
       "layers": ["compute"],
       "tags": ["Bursting", "Throttling"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "Fabric uses two complementary mechanisms — bursting (letting an operation consume more CUs than the SKU provision allows so it completes quickly) and smoothing (spreading that consumed CU cost across future timepoints)." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Fabric uses two complementary mechanisms — bursting (letting an operation consume more CUs than the SKU provision allows so it completes quickly) and smoothing (spreading that consumed CU cost across future timepoints)."
+        }
       ],
       "drill": {
         "inputs": ["A classified operation whose demand exceeds the SKU's steady-state CU rate"],
-        "processing": ["Allow the operation to draw above the steady-state CU allowance", "Complete execution at normal wall-clock speed"],
-        "outputs": ["A completed operation and a bursted CU cost handed to smoothing for accounting"],
+        "processing": [
+          "Allow the operation to draw above the steady-state CU allowance",
+          "Complete execution at normal wall-clock speed"
+        ],
+        "outputs": [
+          "A completed operation and a bursted CU cost handed to smoothing for accounting"
+        ],
         "example": "A large ad-hoc DAX query on an F64 briefly draws well above F64's steady-state CU rate to return in a couple of seconds instead of stalling — the accounting for that extra draw is deferred to smoothing.",
-        "controls": ["No admin toggle for bursting itself; it applies automatically unless Autoscale Billing for Spark is enabled (see the warning node)"],
-        "failureModes": ["Reading 'no visible slowdown' as 'no cost' — the bursted CU cost still has to be paid back through smoothing"]
+        "controls": [
+          "No admin toggle for bursting itself; it applies automatically unless Autoscale Billing for Spark is enabled (see the warning node)"
+        ],
+        "failureModes": [
+          "Reading 'no visible slowdown' as 'no cost' — the bursted CU cost still has to be paid back through smoothing"
+        ]
       }
     },
     {
@@ -86,17 +126,33 @@
       "layers": ["compute"],
       "tags": ["Smoothing", "Timepoint"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "A Fabric timepoint is 30 seconds long, with 2,880 timepoints in a 24-hour window; smoothing distributes an operation's CU cost across future timepoints." },
-        { "sourceKey": "capacity-throttling", "note": "Interactive operations are smoothed over a minimum of 5 minutes and up to 64 minutes depending on total CU consumption; background operations are always smoothed over a full 24-hour window." },
-        { "sourceKey": "ultimateinfoguide-capacity-optimization", "note": "Smoothing only changes how Capacity Unit consumption is accounted for over the smoothing window, not the wall-clock execution time of the underlying operation." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "A Fabric timepoint is 30 seconds long, with 2,880 timepoints in a 24-hour window; smoothing distributes an operation's CU cost across future timepoints."
+        },
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Interactive operations are smoothed over a minimum of 5 minutes and up to 64 minutes depending on total CU consumption; background operations are always smoothed over a full 24-hour window."
+        },
+        {
+          "sourceKey": "ultimateinfoguide-capacity-optimization",
+          "note": "Smoothing only changes how Capacity Unit consumption is accounted for over the smoothing window, not the wall-clock execution time of the underlying operation."
+        }
       ],
       "drill": {
         "inputs": ["A bursted operation's CU cost", "Its interactive/background classification"],
-        "processing": ["Spread the CU cost across 30-second timepoints out to 5–64 minutes (interactive) or 24 hours (background)", "Accumulate the spread cost into the capacity's future-usage ledger"],
+        "processing": [
+          "Spread the CU cost across 30-second timepoints out to 5–64 minutes (interactive) or 24 hours (background)",
+          "Accumulate the spread cost into the capacity's future-usage ledger"
+        ],
         "outputs": ["A future-usage commitment that the overage-protection window checks next"],
         "example": "A background pipeline job's burst cost is spread evenly across the next 24 hours of 30-second timepoints, so its accounting impact on any single timepoint is small even though the job itself finished in minutes.",
-        "controls": ["No direct admin control over the smoothing window length; it follows from the interactive/background classification and total CU consumed"],
-        "failureModes": ["Not realizing that many smoothed operations stacking on the same future timepoints is what eventually triggers throttling, even though each individual operation looked fine in isolation"]
+        "controls": [
+          "No direct admin control over the smoothing window length; it follows from the interactive/background classification and total CU consumed"
+        ],
+        "failureModes": [
+          "Not realizing that many smoothed operations stacking on the same future timepoints is what eventually triggers throttling, even though each individual operation looked fine in isolation"
+        ]
       }
     },
     {
@@ -109,15 +165,25 @@
       "layers": ["compute"],
       "tags": ["Throttling", "OverageProtection"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "Throttling is staged progressively across four thresholds keyed to how much future capacity has been consumed: up to 10 minutes of future usage triggers no throttling (overage protection)." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Throttling is staged progressively across four thresholds keyed to how much future capacity has been consumed: up to 10 minutes of future usage triggers no throttling (overage protection)."
+        }
       ],
       "drill": {
         "inputs": ["The capacity's accumulated future-usage ledger from smoothing"],
-        "processing": ["Compare accumulated future CU commitment against the 10-minute overage-protection threshold", "Route to no-throttling or to the escalating stages based on the result"],
+        "processing": [
+          "Compare accumulated future CU commitment against the 10-minute overage-protection threshold",
+          "Route to no-throttling or to the escalating stages based on the result"
+        ],
         "outputs": ["A throttling stage decision applied to new operation submissions"],
         "example": "A capacity with three concurrent heavy background jobs accumulates 14 minutes of future usage, crossing the 10-minute threshold and entering the first throttling stage for any new interactive request.",
-        "controls": ["Reducing concurrent load, rescheduling background jobs off-peak, or scaling the SKU before the threshold is crossed"],
-        "failureModes": ["Monitoring only current CPU/CU usage and missing that the future-usage ledger, not current load, is what determines throttling"]
+        "controls": [
+          "Reducing concurrent load, rescheduling background jobs off-peak, or scaling the SKU before the threshold is crossed"
+        ],
+        "failureModes": [
+          "Monitoring only current CPU/CU usage and missing that the future-usage ledger, not current load, is what determines throttling"
+        ]
       }
     },
     {
@@ -130,15 +196,25 @@
       "layers": ["compute"],
       "tags": ["Throttling"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "Up to 10 minutes of future usage triggers no throttling (overage protection)." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Up to 10 minutes of future usage triggers no throttling (overage protection)."
+        }
       ],
       "drill": {
         "inputs": ["An overage-protection check result under 10 minutes of future usage"],
-        "processing": ["No delay or rejection applied", "New operations submit and execute normally"],
+        "processing": [
+          "No delay or rejection applied",
+          "New operations submit and execute normally"
+        ],
         "outputs": ["Normal operation submission and execution"],
         "example": "A steady daytime workload of report queries and small scheduled refreshes keeps future usage around 3–4 minutes on an F64, never approaching the threshold.",
-        "controls": ["Right-sizing the SKU to average sustained load, per Microsoft's own capacity-optimization guidance"],
-        "failureModes": ["Sizing for this comfortable steady state without headroom for real bursts, so a single busy month-end pushes straight past it"]
+        "controls": [
+          "Right-sizing the SKU to average sustained load, per Microsoft's own capacity-optimization guidance"
+        ],
+        "failureModes": [
+          "Sizing for this comfortable steady state without headroom for real bursts, so a single busy month-end pushes straight past it"
+        ]
       }
     },
     {
@@ -151,16 +227,32 @@
       "layers": ["compute"],
       "tags": ["Throttling", "InteractiveDelay"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "Throttling is staged progressively; between the overage-protection window and further thresholds, new interactive operations are delayed." },
-        { "sourceKey": "capacity-throttling", "note": "Operations that were already in flight when a capacity enters a throttling state are always allowed to run to completion; only new operation submissions are subject to delay or rejection." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Throttling is staged progressively; between the overage-protection window and further thresholds, new interactive operations are delayed."
+        },
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Operations that were already in flight when a capacity enters a throttling state are always allowed to run to completion; only new operation submissions are subject to delay or rejection."
+        }
       ],
       "drill": {
-        "inputs": ["An overage-protection check result past the 10-minute threshold, first escalation band"],
-        "processing": ["New interactive operation submissions are held before executing", "In-flight operations continue unaffected"],
+        "inputs": [
+          "An overage-protection check result past the 10-minute threshold, first escalation band"
+        ],
+        "processing": [
+          "New interactive operation submissions are held before executing",
+          "In-flight operations continue unaffected"
+        ],
         "outputs": ["Slower-feeling but still-succeeding interactive requests"],
         "example": "A user opening a report during a month-end batch surge experiences a multi-second delay before the visuals render, while the batch job that was already running finishes on schedule.",
-        "controls": ["Rescheduling background jobs off-peak", "Splitting workloads across multiple capacities"],
-        "failureModes": ["Dismissing delayed-but-successful queries as 'just slow today' instead of reading them as an early throttling signal"]
+        "controls": [
+          "Rescheduling background jobs off-peak",
+          "Splitting workloads across multiple capacities"
+        ],
+        "failureModes": [
+          "Dismissing delayed-but-successful queries as 'just slow today' instead of reading them as an early throttling signal"
+        ]
       }
     },
     {
@@ -173,15 +265,28 @@
       "layers": ["compute"],
       "tags": ["Throttling", "CapacityLimitExceeded"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "When a capacity rejects requests, users receive HTTP status code CapacityLimitExceeded along with error messages indicating that compute capacity limits have been reached." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "When a capacity rejects requests, users receive HTTP status code CapacityLimitExceeded along with error messages indicating that compute capacity limits have been reached."
+        }
       ],
       "drill": {
         "inputs": ["Future usage escalated well past the overage-protection window with no relief"],
-        "processing": ["New interactive submissions are rejected at the API level", "In-flight operations still run to completion"],
-        "outputs": ["CapacityLimitExceeded errors surfaced to users attempting new interactive actions"],
+        "processing": [
+          "New interactive submissions are rejected at the API level",
+          "In-flight operations still run to completion"
+        ],
+        "outputs": [
+          "CapacityLimitExceeded errors surfaced to users attempting new interactive actions"
+        ],
         "example": "During a sustained overload, a user opening a new report gets a CapacityLimitExceeded error while an already-open report's visuals, mid-render before the stage escalated, still complete.",
-        "controls": ["Emergency SKU scale-up", "Pausing non-critical background jobs to let carryforward CUs drain"],
-        "failureModes": ["No alerting on the delay stage means this rejection stage is the first anyone notices a problem, well after the leading indicator was available"]
+        "controls": [
+          "Emergency SKU scale-up",
+          "Pausing non-critical background jobs to let carryforward CUs drain"
+        ],
+        "failureModes": [
+          "No alerting on the delay stage means this rejection stage is the first anyone notices a problem, well after the leading indicator was available"
+        ]
       }
     },
     {
@@ -194,16 +299,32 @@
       "layers": ["compute"],
       "tags": ["Throttling", "CarryforwardCU"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "Throttling escalates through further thresholds until background operations are rejected in addition to interactive ones." },
-        { "sourceKey": "capacity-throttling", "note": "When accumulated future-capacity usage exceeds the overage protection window, the excess is recorded as carryforward CUs; each subsequent timepoint with idle capacity reduces this carryforward." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Throttling escalates through further thresholds until background operations are rejected in addition to interactive ones."
+        },
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "When accumulated future-capacity usage exceeds the overage protection window, the excess is recorded as carryforward CUs; each subsequent timepoint with idle capacity reduces this carryforward."
+        }
       ],
       "drill": {
-        "inputs": ["Sustained accumulated future usage that never eased through the delay or interactive-rejection stages"],
-        "processing": ["New background submissions rejected alongside interactive ones", "Carryforward CU balance drains only at timepoints with idle capacity"],
+        "inputs": [
+          "Sustained accumulated future usage that never eased through the delay or interactive-rejection stages"
+        ],
+        "processing": [
+          "New background submissions rejected alongside interactive ones",
+          "Carryforward CU balance drains only at timepoints with idle capacity"
+        ],
         "outputs": ["A capacity that accepts no new work of either kind until carryforward drains"],
         "example": "A capacity running a multi-hour Spark backfill alongside heavy report traffic hits stage 4; new pipeline triggers and new report opens both fail until the backfill finishes and carryforward CUs drain over subsequent idle timepoints.",
-        "controls": ["Splitting the offending workload onto a separate capacity", "Scaling the SKU up before recurring peak windows"],
-        "failureModes": ["Treating this as a bug to retry through, when the actual fix is reducing load or increasing capacity so carryforward can drain"]
+        "controls": [
+          "Splitting the offending workload onto a separate capacity",
+          "Scaling the SKU up before recurring peak windows"
+        ],
+        "failureModes": [
+          "Treating this as a bug to retry through, when the actual fix is reducing load or increasing capacity so carryforward can drain"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
     },
@@ -217,15 +338,26 @@
       "layers": ["compute"],
       "tags": ["Spark", "AutoscaleBilling"],
       "evidence": [
-        { "sourceKey": "capacity-throttling", "note": "Bursting and smoothing do not apply when a capacity admin has enabled Autoscale Billing for Spark; in that configuration Spark usage operates in pay-as-you-go mode only." }
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Bursting and smoothing do not apply when a capacity admin has enabled Autoscale Billing for Spark; in that configuration Spark usage operates in pay-as-you-go mode only."
+        }
       ],
       "drill": {
         "inputs": ["A capacity with Autoscale Billing for Spark enabled by an admin"],
-        "processing": ["Spark jobs are metered as pay-as-you-go compute, independent of the capacity's bursting/smoothing ledger"],
-        "outputs": ["Spark cost and contention that never appears in the throttling stages diagrammed above"],
+        "processing": [
+          "Spark jobs are metered as pay-as-you-go compute, independent of the capacity's bursting/smoothing ledger"
+        ],
+        "outputs": [
+          "Spark cost and contention that never appears in the throttling stages diagrammed above"
+        ],
         "example": "A capacity shows no throttling stage escalation despite heavy concurrent Spark notebooks, because Autoscale Billing routes that Spark usage around the smoothing ladder entirely — the cost shows up as separate pay-as-you-go billing instead.",
-        "controls": ["Deciding per capacity whether Autoscale Billing for Spark is worth trading smoothing protection for predictable per-job billing"],
-        "failureModes": ["Assuming Spark contention will show up as capacity throttling like everything else, and missing a real cost/performance signal because it is routed elsewhere"]
+        "controls": [
+          "Deciding per capacity whether Autoscale Billing for Spark is worth trading smoothing protection for predictable per-job billing"
+        ],
+        "failureModes": [
+          "Assuming Spark contention will show up as capacity throttling like everything else, and missing a real cost/performance signal because it is routed elsewhere"
+        ]
       }
     },
     {
@@ -238,30 +370,122 @@
       "layers": ["compute", "security"],
       "tags": ["DirectLake", "PrivateLink", "BlockPublicInternetAccess"],
       "evidence": [
-        { "sourceKey": "bradcoles-fabric-private-links", "note": "Direct Lake connections fail when the Block Public Internet Access tenant setting is active. Semantic models relying on Direct Lake mode must route through public endpoints." }
+        {
+          "sourceKey": "bradcoles-fabric-private-links",
+          "note": "Direct Lake connections fail when the Block Public Internet Access tenant setting is active. Semantic models relying on Direct Lake mode must route through public endpoints."
+        }
       ],
       "drill": {
-        "inputs": ["A tenant with Block Public Internet Access enabled", "Semantic models configured for Direct Lake"],
-        "processing": ["Direct Lake attempts to route through the public endpoint that is now blocked", "Connection fails, independent of the capacity's CU or throttling state"],
-        "outputs": ["Direct Lake models that fail to connect even on an otherwise healthy, unthrottled capacity"],
+        "inputs": [
+          "A tenant with Block Public Internet Access enabled",
+          "Semantic models configured for Direct Lake"
+        ],
+        "processing": [
+          "Direct Lake attempts to route through the public endpoint that is now blocked",
+          "Connection fails, independent of the capacity's CU or throttling state"
+        ],
+        "outputs": [
+          "Direct Lake models that fail to connect even on an otherwise healthy, unthrottled capacity"
+        ],
         "example": "A capacity shows no throttling and plenty of headroom, yet Direct Lake reports fail to load after a tenant admin enables Block Public Internet Access for network isolation — the two problems are unrelated but easy to conflate during troubleshooting.",
-        "controls": ["Evaluate private-link and network-isolation settings and Direct Lake dependency together before enabling Block Public Internet Access"],
-        "failureModes": ["Diagnosing a Direct Lake outage as a capacity or throttling problem and scaling the SKU, when the actual cause is a network setting"]
+        "controls": [
+          "Evaluate private-link and network-isolation settings and Direct Lake dependency together before enabling Block Public Internet Access"
+        ],
+        "failureModes": [
+          "Diagnosing a Direct Lake outage as a capacity or throttling problem and scaling the SKU, when the actual cause is a network setting"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-submit-classify", "from": "op-submit", "to": "classify", "label": "operation submitted", "layer": "compute", "kind": "flow" },
-    { "id": "e-classify-burst", "from": "classify", "to": "bursting", "label": "interactive or background", "layer": "compute", "kind": "flow" },
-    { "id": "e-burst-smooth", "from": "bursting", "to": "smoothing", "label": "bursted CU cost", "layer": "compute", "kind": "flow" },
-    { "id": "e-smooth-check", "from": "smoothing", "to": "overage-check", "label": "future-usage ledger updated", "layer": "compute", "kind": "flow" },
-    { "id": "e-check-none", "from": "overage-check", "to": "stage-none", "label": "under 10 minutes", "layer": "compute", "kind": "branch" },
-    { "id": "e-check-delay", "from": "overage-check", "to": "stage-delay", "label": "past 10 minutes", "layer": "compute", "kind": "branch" },
-    { "id": "e-delay-reject-interactive", "from": "stage-delay", "to": "stage-reject-interactive", "label": "usage keeps growing", "layer": "compute", "kind": "flow" },
-    { "id": "e-reject-interactive-all", "from": "stage-reject-interactive", "to": "stage-reject-all", "label": "usage keeps growing further", "layer": "compute", "kind": "flow" },
-    { "id": "e-rejectall-drain", "from": "stage-reject-all", "to": "overage-check", "label": "carryforward CUs drain at idle timepoints", "layer": "compute", "kind": "feedback" },
-    { "id": "e-burst-autoscale-warning", "from": "bursting", "to": "autoscale-spark-warning", "label": "bypassed if Autoscale Billing for Spark is on", "layer": "compute", "kind": "branch" },
-    { "id": "e-submit-privatelink-warning", "from": "op-submit", "to": "private-link-warning", "label": "independent risk: network isolation, not load", "layer": "security", "kind": "branch" }
+    {
+      "id": "e-submit-classify",
+      "from": "op-submit",
+      "to": "classify",
+      "label": "operation submitted",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-classify-burst",
+      "from": "classify",
+      "to": "bursting",
+      "label": "interactive or background",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-burst-smooth",
+      "from": "bursting",
+      "to": "smoothing",
+      "label": "bursted CU cost",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-smooth-check",
+      "from": "smoothing",
+      "to": "overage-check",
+      "label": "future-usage ledger updated",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-check-none",
+      "from": "overage-check",
+      "to": "stage-none",
+      "label": "under 10 minutes",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-check-delay",
+      "from": "overage-check",
+      "to": "stage-delay",
+      "label": "past 10 minutes",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-delay-reject-interactive",
+      "from": "stage-delay",
+      "to": "stage-reject-interactive",
+      "label": "usage keeps growing",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-reject-interactive-all",
+      "from": "stage-reject-interactive",
+      "to": "stage-reject-all",
+      "label": "usage keeps growing further",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-rejectall-drain",
+      "from": "stage-reject-all",
+      "to": "overage-check",
+      "label": "carryforward CUs drain at idle timepoints",
+      "layer": "compute",
+      "kind": "feedback"
+    },
+    {
+      "id": "e-burst-autoscale-warning",
+      "from": "bursting",
+      "to": "autoscale-spark-warning",
+      "label": "bypassed if Autoscale Billing for Spark is on",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-submit-privatelink-warning",
+      "from": "op-submit",
+      "to": "private-link-warning",
+      "label": "independent risk: network isolation, not load",
+      "layer": "security",
+      "kind": "branch"
+    }
   ],
   "walkthrough": [
     {

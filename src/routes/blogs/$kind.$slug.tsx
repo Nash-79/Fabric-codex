@@ -36,7 +36,6 @@ const topicsQO = queryOptions({
   staleTime: 30 * 60 * 1000,
 });
 
-
 export const Route = createFileRoute("/blogs/$kind/$slug")({
   validateSearch: (search: Record<string, unknown>): BlogDetailSearch => ({
     from: typeof search.from === "string" ? search.from : undefined,

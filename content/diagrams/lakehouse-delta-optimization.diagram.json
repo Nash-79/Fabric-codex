@@ -22,12 +22,25 @@
       "tags": ["DeltaLake", "decision-root"],
       "evidence": [],
       "drill": {
-        "inputs": ["Query patterns against the table (dashboard refresh frequency, ad-hoc scan volume)", "Write patterns (batch size, streaming micro-batch cadence, UPDATE/DELETE/MERGE frequency)"],
-        "processing": ["Profile whether reads or writes dominate the table's traffic", "Check whether the table receives row-level mutations versus append-only writes", "Route to the matching optimization branch, possibly more than one"],
-        "outputs": ["A classified workload pattern that determines which write-time optimization(s) apply"],
+        "inputs": [
+          "Query patterns against the table (dashboard refresh frequency, ad-hoc scan volume)",
+          "Write patterns (batch size, streaming micro-batch cadence, UPDATE/DELETE/MERGE frequency)"
+        ],
+        "processing": [
+          "Profile whether reads or writes dominate the table's traffic",
+          "Check whether the table receives row-level mutations versus append-only writes",
+          "Route to the matching optimization branch, possibly more than one"
+        ],
+        "outputs": [
+          "A classified workload pattern that determines which write-time optimization(s) apply"
+        ],
         "example": "A gold-layer sales_summary table refreshed nightly and queried by dozens of Power BI reports all day is clearly read-heavy; a bronze_events table receiving a Spark Structured Streaming micro-batch every 30 seconds is clearly write-heavy.",
-        "controls": ["Classify workload pattern explicitly per table rather than applying one Fabric-wide default"],
-        "failureModes": ["Leaving every table on Fabric's workspace-wide default and never revisiting it as the table's actual usage pattern emerges"]
+        "controls": [
+          "Classify workload pattern explicitly per table rather than applying one Fabric-wide default"
+        ],
+        "failureModes": [
+          "Leaving every table on Fabric's workspace-wide default and never revisiting it as the table's actual usage pattern emerges"
+        ]
       }
     },
     {
@@ -40,19 +53,44 @@
       "layers": ["data", "compute"],
       "tags": ["VOrder", "Lakehouse", "DeltaLake"],
       "evidence": [
-        { "sourceKey": "delta-optimization-and-v-order", "note": "V-Order is a write-time optimization for Parquet files that improves downstream read performance across Fabric engines; it pays off most in read-heavy patterns like dashboarding, interactive analytics, and repeated scans." },
-        { "sourceKey": "delta-optimization-and-v-order", "note": "V-Order is disabled by default in all newly created Fabric workspaces (spark.sql.parquet.vorder.default=false), a deliberate default favoring write-heavy ingestion pipelines over read optimization." },
-        { "sourceKey": "delta-optimization-and-v-order", "note": "Microsoft states the typical V-Order tradeoff as writes taking roughly 15% longer on average, in exchange for reads that can improve significantly depending on the workload." }
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "V-Order is a write-time optimization for Parquet files that improves downstream read performance across Fabric engines; it pays off most in read-heavy patterns like dashboarding, interactive analytics, and repeated scans."
+        },
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "V-Order is disabled by default in all newly created Fabric workspaces (spark.sql.parquet.vorder.default=false), a deliberate default favoring write-heavy ingestion pipelines over read optimization."
+        },
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "Microsoft states the typical V-Order tradeoff as writes taking roughly 15% longer on average, in exchange for reads that can improve significantly depending on the workload."
+        }
       ],
       "drill": {
-        "inputs": ["An identified read-heavy Delta table (dashboard source, frequently scanned gold table)"],
-        "processing": ["Enable V-Order at session (spark.sql.parquet.vorder.default), table property (delta.parquet.vorder.enabled), or per-write level", "Or select the readHeavyforSpark / ReadHeavy Spark resource profile, which turns it on automatically"],
-        "outputs": ["Parquet files with reorganized row-group layout, encoding, and compression — unchanged logical rows, faster scans"],
+        "inputs": [
+          "An identified read-heavy Delta table (dashboard source, frequently scanned gold table)"
+        ],
+        "processing": [
+          "Enable V-Order at session (spark.sql.parquet.vorder.default), table property (delta.parquet.vorder.enabled), or per-write level",
+          "Or select the readHeavyforSpark / ReadHeavy Spark resource profile, which turns it on automatically"
+        ],
+        "outputs": [
+          "Parquet files with reorganized row-group layout, encoding, and compression — unchanged logical rows, faster scans"
+        ],
         "example": "A gold sales_summary table read by 40 Power BI reports enables delta.parquet.vorder.enabled=true at the table level; nightly writes take about 15% longer but every report query scans faster all day.",
-        "controls": ["Choose the scope: session-wide, per-table property, or per-write, since session/write settings override the table property"],
-        "failureModes": ["Enabling V-Order workspace-wide and paying the write penalty on write-dominated ingestion tables that never benefit", "Assuming toggling the table property alone fixes existing files — it only affects future writes"],
+        "controls": [
+          "Choose the scope: session-wide, per-table property, or per-write, since session/write settings override the table property"
+        ],
+        "failureModes": [
+          "Enabling V-Order workspace-wide and paying the write penalty on write-dominated ingestion tables that never benefit",
+          "Assuming toggling the table property alone fixes existing files — it only affects future writes"
+        ],
         "metrics": [
-          { "label": "Typical write-time cost", "value": "~15% longer writes", "sourceKey": "delta-optimization-and-v-order" }
+          {
+            "label": "Typical write-time cost",
+            "value": "~15% longer writes",
+            "sourceKey": "delta-optimization-and-v-order"
+          }
         ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
@@ -67,17 +105,35 @@
       "layers": ["compute", "data"],
       "tags": ["OptimizedWrite", "Spark", "DeltaLake"],
       "evidence": [
-        { "sourceKey": "milescole-optimized-write-fabric", "note": "Optimized Write addresses the small file problem by shuffling data across executors before writing, so each partition is handled by a single executor and produces fewer, larger files." },
-        { "sourceKey": "milescole-optimized-write-fabric", "note": "For streaming jobs that produce micro-batches, Optimized Write is recommended because each micro-batch naturally generates many small files; enabling the feature consolidates those files at write time." },
-        { "sourceKey": "milescole-optimized-write-fabric", "note": "The target file size for Optimized Write is governed by the BinSize configuration key; in Fabric the default is 1 GB, with 256 MB recommended for general workloads or 128 MB for small workloads." }
+        {
+          "sourceKey": "milescole-optimized-write-fabric",
+          "note": "Optimized Write addresses the small file problem by shuffling data across executors before writing, so each partition is handled by a single executor and produces fewer, larger files."
+        },
+        {
+          "sourceKey": "milescole-optimized-write-fabric",
+          "note": "For streaming jobs that produce micro-batches, Optimized Write is recommended because each micro-batch naturally generates many small files; enabling the feature consolidates those files at write time."
+        },
+        {
+          "sourceKey": "milescole-optimized-write-fabric",
+          "note": "The target file size for Optimized Write is governed by the BinSize configuration key; in Fabric the default is 1 GB, with 256 MB recommended for general workloads or 128 MB for small workloads."
+        }
       ],
       "drill": {
         "inputs": ["A write-heavy or streaming table producing many small files per batch"],
-        "processing": ["Enable the BinSize/optimizeWrite Spark config for the session or table", "Set BinSize to 256 MB (general) or 128 MB (small workloads) rather than the 1 GB default when over-consolidation is a risk"],
+        "processing": [
+          "Enable the BinSize/optimizeWrite Spark config for the session or table",
+          "Set BinSize to 256 MB (general) or 128 MB (small workloads) rather than the 1 GB default when over-consolidation is a risk"
+        ],
         "outputs": ["Fewer, larger Parquet files per write, closer to the target BinSize"],
         "example": "A Spark Structured Streaming job writing a 30-second micro-batch to bronze_events enables Optimized Write; file count per batch drops from dozens to one or two, avoiding the small-file backlog that would otherwise need a separate compaction pass.",
-        "controls": ["BinSize target size", "Whether to disable it for non-partitioned tables, where it can hurt read parallelism"],
-        "failureModes": ["Combining Optimized Write with Liquid Clustering, which is functionally incompatible and should be disabled for those tables", "Enabling it on a non-partitioned table where fewer files reduces read parallelism instead of helping — the author's benchmark showed disabling it produced 2x faster queries in that specific case"]
+        "controls": [
+          "BinSize target size",
+          "Whether to disable it for non-partitioned tables, where it can hurt read parallelism"
+        ],
+        "failureModes": [
+          "Combining Optimized Write with Liquid Clustering, which is functionally incompatible and should be disabled for those tables",
+          "Enabling it on a non-partitioned table where fewer files reduces read parallelism instead of helping — the author's benchmark showed disabling it produced 2x faster queries in that specific case"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -91,20 +147,50 @@
       "layers": ["data", "compute"],
       "tags": ["DeletionVectors", "DeltaLake"],
       "evidence": [
-        { "sourceKey": "milescole-deletion-vectors", "note": "Deletion vectors shift Delta Lake mutations from copy-on-write to merge-on-read: rather than rewriting entire Parquet files for a changed record, the system records affected row positions in a small binary file and filters them at query time." },
-        { "sourceKey": "milescole-deletion-vectors", "note": "Enabling deletion vectors permanently raises a table's minReaderVersion to 3 and minWriterVersion to 7, requiring Delta protocol version 2.3 or later; older readers cannot read the table." },
-        { "sourceKey": "milescole-deletion-vectors", "note": "Deletion vectors are unsupported by Fabric's COPY Activity connector: deleted or updated rows will reappear in the destination unless OPTIMIZE runs immediately before each copy." }
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "Deletion vectors shift Delta Lake mutations from copy-on-write to merge-on-read: rather than rewriting entire Parquet files for a changed record, the system records affected row positions in a small binary file and filters them at query time."
+        },
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "Enabling deletion vectors permanently raises a table's minReaderVersion to 3 and minWriterVersion to 7, requiring Delta protocol version 2.3 or later; older readers cannot read the table."
+        },
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "Deletion vectors are unsupported by Fabric's COPY Activity connector: deleted or updated rows will reappear in the destination unless OPTIMIZE runs immediately before each copy."
+        }
       ],
       "drill": {
         "inputs": ["A table with frequent row-level UPDATE, DELETE, or MERGE traffic"],
-        "processing": ["Enable deletion vectors on the table (raises minReaderVersion/minWriterVersion)", "Route mutations through the merge-on-read path instead of full-file rewrite", "Pair with a periodic OPTIMIZE schedule, since deletion vectors alone do not eliminate the maintenance need"],
-        "outputs": ["Faster individual mutations and lower storage before compaction, at the cost of a stricter Delta protocol version and a dependency on regular OPTIMIZE"],
+        "processing": [
+          "Enable deletion vectors on the table (raises minReaderVersion/minWriterVersion)",
+          "Route mutations through the merge-on-read path instead of full-file rewrite",
+          "Pair with a periodic OPTIMIZE schedule, since deletion vectors alone do not eliminate the maintenance need"
+        ],
+        "outputs": [
+          "Faster individual mutations and lower storage before compaction, at the cost of a stricter Delta protocol version and a dependency on regular OPTIMIZE"
+        ],
         "example": "A customer table processing daily GDPR delete requests enables deletion vectors; single-row deletes speed up roughly 8x in Miles Cole's benchmark, and a weekly OPTIMIZE keeps read performance from degrading as markers accumulate.",
-        "controls": ["Confirm downstream consumers support Delta protocol 2.3+ before enabling", "Schedule OPTIMIZE on a cadence matched to mutation volume", "Avoid deletion vectors on tables read by Fabric COPY Activity, or run OPTIMIZE immediately before each copy"],
-        "failureModes": ["Enabling deletion vectors and never scheduling OPTIMIZE, letting read performance silently degrade — see the warning node", "Using a downstream tool or older reader incompatible with Delta protocol 2.3+ and losing read access to the table"],
+        "controls": [
+          "Confirm downstream consumers support Delta protocol 2.3+ before enabling",
+          "Schedule OPTIMIZE on a cadence matched to mutation volume",
+          "Avoid deletion vectors on tables read by Fabric COPY Activity, or run OPTIMIZE immediately before each copy"
+        ],
+        "failureModes": [
+          "Enabling deletion vectors and never scheduling OPTIMIZE, letting read performance silently degrade — see the warning node",
+          "Using a downstream tool or older reader incompatible with Delta protocol 2.3+ and losing read access to the table"
+        ],
         "metrics": [
-          { "label": "Single-row delete speedup in benchmark", "value": "~8x faster", "sourceKey": "milescole-deletion-vectors" },
-          { "label": "Pre-OPTIMIZE storage reduction in benchmark", "value": "~3x smaller", "sourceKey": "milescole-deletion-vectors" }
+          {
+            "label": "Single-row delete speedup in benchmark",
+            "value": "~8x faster",
+            "sourceKey": "milescole-deletion-vectors"
+          },
+          {
+            "label": "Pre-OPTIMIZE storage reduction in benchmark",
+            "value": "~3x smaller",
+            "sourceKey": "milescole-deletion-vectors"
+          }
         ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
@@ -119,16 +205,34 @@
       "layers": ["data", "compute"],
       "tags": ["DeletionVectors", "AntiPattern"],
       "evidence": [
-        { "sourceKey": "milescole-deletion-vectors", "note": "If deletion vectors accumulate without periodic OPTIMIZE, read performance degrades: a benchmark scenario with 53% non-append changes and no compaction ran 2.3x slower, and a MERGE-only scenario ran 1.5x slower than the copy-on-write baseline." },
-        { "sourceKey": "milescole-deletion-vectors", "note": "After running OPTIMIZE to compact accumulated deletion vectors, read performance was identical between deletion-vector and copy-on-write tables, confirming regular compaction eliminates the read overhead." }
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "If deletion vectors accumulate without periodic OPTIMIZE, read performance degrades: a benchmark scenario with 53% non-append changes and no compaction ran 2.3x slower, and a MERGE-only scenario ran 1.5x slower than the copy-on-write baseline."
+        },
+        {
+          "sourceKey": "milescole-deletion-vectors",
+          "note": "After running OPTIMIZE to compact accumulated deletion vectors, read performance was identical between deletion-vector and copy-on-write tables, confirming regular compaction eliminates the read overhead."
+        }
       ],
       "drill": {
         "inputs": ["A table with deletion vectors enabled and no scheduled OPTIMIZE job"],
-        "processing": ["Every mutation adds a marker file instead of rewriting data", "Reads must filter out an accumulating set of marked rows on every scan", "Without compaction, the marker set — and the per-query filtering cost — keeps growing"],
-        "outputs": ["Progressively slower reads on an otherwise unchanged logical table, with no corresponding change in write behavior to signal the problem"],
+        "processing": [
+          "Every mutation adds a marker file instead of rewriting data",
+          "Reads must filter out an accumulating set of marked rows on every scan",
+          "Without compaction, the marker set — and the per-query filtering cost — keeps growing"
+        ],
+        "outputs": [
+          "Progressively slower reads on an otherwise unchanged logical table, with no corresponding change in write behavior to signal the problem"
+        ],
         "example": "A team enables deletion vectors on a heavily-updated customer table for the write-time speedup and never schedules OPTIMIZE; six months later, dashboard queries against that table are running over 2x slower with no code change, because the accumulated markers are now the dominant scan cost.",
-        "controls": ["Always pair deletion vectors with a scheduled OPTIMIZE cadence, never enable one without the other", "Monitor marker/deletion-vector file growth as a leading indicator, not just query latency"],
-        "failureModes": ["Diagnosing the resulting slowdown as a capacity or SKU problem instead of a missing compaction job", "Assuming deletion vectors are a one-time enable-and-forget setting rather than a feature that depends on ongoing maintenance"]
+        "controls": [
+          "Always pair deletion vectors with a scheduled OPTIMIZE cadence, never enable one without the other",
+          "Monitor marker/deletion-vector file growth as a leading indicator, not just query latency"
+        ],
+        "failureModes": [
+          "Diagnosing the resulting slowdown as a capacity or SKU problem instead of a missing compaction job",
+          "Assuming deletion vectors are a one-time enable-and-forget setting rather than a feature that depends on ongoing maintenance"
+        ]
       }
     },
     {
@@ -143,11 +247,17 @@
       "evidence": [],
       "drill": {
         "inputs": ["A table's approximate current or projected size", "Its growth rate over time"],
-        "processing": ["Estimate current table size", "Route sub-1 GB tables to Auto Compaction alone", "Route larger tables to Auto Compaction plus a scheduled OPTIMIZE cadence"],
+        "processing": [
+          "Estimate current table size",
+          "Route sub-1 GB tables to Auto Compaction alone",
+          "Route larger tables to Auto Compaction plus a scheduled OPTIMIZE cadence"
+        ],
         "outputs": ["A sized compaction strategy matched to table volume"],
         "example": "A newly created staging table under 500 MB relies on Auto Compaction with no extra scheduling; a multi-terabyte fact table gets Auto Compaction plus a weekly OPTIMIZE job targeting 500 MB–1 GB files.",
         "controls": ["Revisit the size threshold periodically as a table grows past 1 GB"],
-        "failureModes": ["Assuming a table will stay small forever and never adding scheduled OPTIMIZE as it grows"]
+        "failureModes": [
+          "Assuming a table will stay small forever and never adding scheduled OPTIMIZE as it grows"
+        ]
       }
     },
     {
@@ -160,17 +270,35 @@
       "layers": ["data", "compute"],
       "tags": ["Compaction", "DeltaLake"],
       "evidence": [
-        { "sourceKey": "milescole-table-compaction", "note": "Auto Compaction triggers automatically after write operations when the number of small files in a table partition exceeds a configurable threshold, merging undersized files into larger ones without requiring a scheduled job." },
-        { "sourceKey": "milescole-table-compaction", "note": "For tables smaller than 1 GB, Auto Compaction alone is sufficient for file management." },
-        { "sourceKey": "milescole-table-compaction", "note": "In benchmark testing, combining Auto Compaction with Optimized Write achieved the best outcome across five tested configurations: lowest total runtime and lowest file-count variance." }
+        {
+          "sourceKey": "milescole-table-compaction",
+          "note": "Auto Compaction triggers automatically after write operations when the number of small files in a table partition exceeds a configurable threshold, merging undersized files into larger ones without requiring a scheduled job."
+        },
+        {
+          "sourceKey": "milescole-table-compaction",
+          "note": "For tables smaller than 1 GB, Auto Compaction alone is sufficient for file management."
+        },
+        {
+          "sourceKey": "milescole-table-compaction",
+          "note": "In benchmark testing, combining Auto Compaction with Optimized Write achieved the best outcome across five tested configurations: lowest total runtime and lowest file-count variance."
+        }
       ],
       "drill": {
         "inputs": ["A table under roughly 1 GB accumulating small files from repeated writes"],
-        "processing": ["Auto Compaction monitors file count against minNumFiles (default 50) after each write", "When the threshold is crossed, it merges undersized files toward maxFileSize (default 128 MB)"],
-        "outputs": ["A table that stays at a manageable file count without a scheduled maintenance job"],
+        "processing": [
+          "Auto Compaction monitors file count against minNumFiles (default 50) after each write",
+          "When the threshold is crossed, it merges undersized files toward maxFileSize (default 128 MB)"
+        ],
+        "outputs": [
+          "A table that stays at a manageable file count without a scheduled maintenance job"
+        ],
         "example": "A 300 MB dimension table receiving small daily upserts relies solely on Auto Compaction; file count stays stable without anyone scheduling an OPTIMIZE job.",
-        "controls": ["Tune maxFileSize, minFileSize, and minNumFiles if the defaults don't match the table's write pattern"],
-        "failureModes": ["An earlier Fabric Spark Runtime bug caused Auto Compaction to over-trigger on tables exceeding 1 GB by miscounting already-compacted files — since fixed, but a reason the 1 GB threshold in this decision matters"]
+        "controls": [
+          "Tune maxFileSize, minFileSize, and minNumFiles if the defaults don't match the table's write pattern"
+        ],
+        "failureModes": [
+          "An earlier Fabric Spark Runtime bug caused Auto Compaction to over-trigger on tables exceeding 1 GB by miscounting already-compacted files — since fixed, but a reason the 1 GB threshold in this decision matters"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -184,43 +312,162 @@
       "layers": ["data", "compute"],
       "tags": ["Compaction", "DeltaLake", "OPTIMIZE"],
       "evidence": [
-        { "sourceKey": "milescole-table-compaction", "note": "For larger tables, the recommended long-term strategy is to combine Auto Compaction with periodic ad-hoc OPTIMIZE runs targeting 500 MB to 1 GB file sizes." },
-        { "sourceKey": "fabric-blog-lakehouse-table-health", "note": "Running OPTIMIZE on a fixed schedule regardless of actual table condition is an antipattern: it wastes compute on already-healthy tables while tables that truly need attention can still be missed." },
-        { "sourceKey": "fabric-blog-lakehouse-table-health", "note": "A recommended check-then-act pipeline pattern runs sp_get_table_health_metrics first, then conditionally triggers a Spark OPTIMIZE only if an anomaly was detected." }
+        {
+          "sourceKey": "milescole-table-compaction",
+          "note": "For larger tables, the recommended long-term strategy is to combine Auto Compaction with periodic ad-hoc OPTIMIZE runs targeting 500 MB to 1 GB file sizes."
+        },
+        {
+          "sourceKey": "fabric-blog-lakehouse-table-health",
+          "note": "Running OPTIMIZE on a fixed schedule regardless of actual table condition is an antipattern: it wastes compute on already-healthy tables while tables that truly need attention can still be missed."
+        },
+        {
+          "sourceKey": "fabric-blog-lakehouse-table-health",
+          "note": "A recommended check-then-act pipeline pattern runs sp_get_table_health_metrics first, then conditionally triggers a Spark OPTIMIZE only if an anomaly was detected."
+        }
       ],
       "drill": {
         "inputs": ["A table larger than ~1 GB with Auto Compaction already running"],
-        "processing": ["Optionally run sp_get_table_health_metrics via the SQL analytics endpoint to check for small-file or fragmentation anomalies", "Trigger a scheduled or conditional Spark OPTIMIZE job targeting 500 MB–1 GB files when needed"],
-        "outputs": ["A large table held in the target file-size range without wasting compute on unnecessary OPTIMIZE runs"],
+        "processing": [
+          "Optionally run sp_get_table_health_metrics via the SQL analytics endpoint to check for small-file or fragmentation anomalies",
+          "Trigger a scheduled or conditional Spark OPTIMIZE job targeting 500 MB–1 GB files when needed"
+        ],
+        "outputs": [
+          "A large table held in the target file-size range without wasting compute on unnecessary OPTIMIZE runs"
+        ],
         "example": "A multi-terabyte fact table runs sp_get_table_health_metrics nightly through a Fabric pipeline; only when it flags a small-file anomaly does an if-condition trigger the Spark notebook that runs OPTIMIZE, instead of compacting on a blind nightly schedule.",
-        "controls": ["OPTIMIZE cadence or health-check-triggered conditional execution", "Target file-size range (500 MB–1 GB)"],
-        "failureModes": ["Scheduling OPTIMIZE blindly on every table regardless of condition, wasting capacity units", "Relying on Auto Compaction's smaller maxFileSize default alone for a large table and never scheduling the larger OPTIMIZE pass it also needs"],
+        "controls": [
+          "OPTIMIZE cadence or health-check-triggered conditional execution",
+          "Target file-size range (500 MB–1 GB)"
+        ],
+        "failureModes": [
+          "Scheduling OPTIMIZE blindly on every table regardless of condition, wasting capacity units",
+          "Relying on Auto Compaction's smaller maxFileSize default alone for a large table and never scheduling the larger OPTIMIZE pass it also needs"
+        ],
         "metrics": [
-          { "label": "Worst case: no compaction at all, benchmark runtime", "value": "33.27 min vs 12.77 min with Auto Compaction + Optimized Write", "sourceKey": "milescole-table-compaction" }
+          {
+            "label": "Worst case: no compaction at all, benchmark runtime",
+            "value": "33.27 min vs 12.77 min with Auto Compaction + Optimized Write",
+            "sourceKey": "milescole-table-compaction"
+          }
         ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     }
   ],
   "edges": [
-    { "id": "e-question-vorder", "from": "workload-question", "to": "v-order", "label": "read-heavy (dashboards, repeated scans)", "layer": "data", "kind": "branch" },
-    { "id": "e-question-optwrite", "from": "workload-question", "to": "optimized-write", "label": "write-heavy or streaming ingestion", "layer": "compute", "kind": "branch" },
-    { "id": "e-question-dv", "from": "workload-question", "to": "deletion-vectors", "label": "frequent row-level UPDATE/DELETE/MERGE", "layer": "data", "kind": "branch" },
-    { "id": "e-dv-trap", "from": "deletion-vectors", "to": "deletion-vector-trap", "label": "risk if OPTIMIZE is skipped", "layer": "data", "kind": "branch" },
-    { "id": "e-vorder-compaction", "from": "v-order", "to": "compaction-question", "label": "still needs periodic maintenance", "layer": "data", "kind": "flow" },
-    { "id": "e-optwrite-compaction", "from": "optimized-write", "to": "compaction-question", "label": "still needs periodic maintenance", "layer": "data", "kind": "flow" },
-    { "id": "e-dv-compaction", "from": "deletion-vectors", "to": "compaction-question", "label": "still needs periodic maintenance", "layer": "data", "kind": "flow" },
-    { "id": "e-compaction-auto", "from": "compaction-question", "to": "auto-compaction", "label": "under ~1 GB", "layer": "data", "kind": "branch" },
-    { "id": "e-compaction-scheduled", "from": "compaction-question", "to": "scheduled-optimize", "label": "over ~1 GB", "layer": "data", "kind": "branch" }
+    {
+      "id": "e-question-vorder",
+      "from": "workload-question",
+      "to": "v-order",
+      "label": "read-heavy (dashboards, repeated scans)",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-question-optwrite",
+      "from": "workload-question",
+      "to": "optimized-write",
+      "label": "write-heavy or streaming ingestion",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-question-dv",
+      "from": "workload-question",
+      "to": "deletion-vectors",
+      "label": "frequent row-level UPDATE/DELETE/MERGE",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-dv-trap",
+      "from": "deletion-vectors",
+      "to": "deletion-vector-trap",
+      "label": "risk if OPTIMIZE is skipped",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-vorder-compaction",
+      "from": "v-order",
+      "to": "compaction-question",
+      "label": "still needs periodic maintenance",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-optwrite-compaction",
+      "from": "optimized-write",
+      "to": "compaction-question",
+      "label": "still needs periodic maintenance",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-dv-compaction",
+      "from": "deletion-vectors",
+      "to": "compaction-question",
+      "label": "still needs periodic maintenance",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-compaction-auto",
+      "from": "compaction-question",
+      "to": "auto-compaction",
+      "label": "under ~1 GB",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-compaction-scheduled",
+      "from": "compaction-question",
+      "to": "scheduled-optimize",
+      "label": "over ~1 GB",
+      "layer": "data",
+      "kind": "branch"
+    }
   ],
   "walkthrough": [
-    { "nodeId": "workload-question", "title": "1. Start from the workload, not the feature list", "explanation": "Classify the table's dominant traffic first — read-heavy, write-heavy, or mutation-heavy — because each routes to a different primary lever." },
-    { "nodeId": "v-order", "title": "2a. Read-heavy: V-Order", "explanation": "Pays a ~15% write-time cost to speed up every subsequent read; the right call only when reads genuinely dominate." },
-    { "nodeId": "optimized-write", "title": "2b. Write-heavy: Optimized Write", "explanation": "Shuffles data before writing so each partition lands in fewer, larger files — the default fix for streaming micro-batch small-file bloat." },
-    { "nodeId": "deletion-vectors", "title": "2c. Mutation-heavy: deletion vectors", "explanation": "Converts row-level UPDATE/DELETE/MERGE into a cheap marker write instead of a full-file rewrite — but this path has a dependency the warning node makes explicit." },
-    { "nodeId": "deletion-vector-trap", "title": "Warning: deletion vectors need OPTIMIZE to stay fast", "explanation": "Skipping periodic OPTIMIZE lets unmerged markers accumulate and measurably slows reads — a benchmarked 2.3x regression in one no-compaction scenario." },
-    { "nodeId": "compaction-question", "title": "3. Every path converges on compaction", "explanation": "None of the three optimizations replace periodic maintenance; this question sizes the compaction strategy to the table." },
-    { "nodeId": "auto-compaction", "title": "4a. Small tables: Auto Compaction alone", "explanation": "Automatic post-write compaction is sufficient for tables under roughly 1 GB, with no scheduling required." },
-    { "nodeId": "scheduled-optimize", "title": "4b. Large tables: Auto Compaction plus scheduled OPTIMIZE", "explanation": "Larger tables need a periodic OPTIMIZE pass on top of Auto Compaction, ideally triggered by a health check rather than a blind fixed schedule." }
+    {
+      "nodeId": "workload-question",
+      "title": "1. Start from the workload, not the feature list",
+      "explanation": "Classify the table's dominant traffic first — read-heavy, write-heavy, or mutation-heavy — because each routes to a different primary lever."
+    },
+    {
+      "nodeId": "v-order",
+      "title": "2a. Read-heavy: V-Order",
+      "explanation": "Pays a ~15% write-time cost to speed up every subsequent read; the right call only when reads genuinely dominate."
+    },
+    {
+      "nodeId": "optimized-write",
+      "title": "2b. Write-heavy: Optimized Write",
+      "explanation": "Shuffles data before writing so each partition lands in fewer, larger files — the default fix for streaming micro-batch small-file bloat."
+    },
+    {
+      "nodeId": "deletion-vectors",
+      "title": "2c. Mutation-heavy: deletion vectors",
+      "explanation": "Converts row-level UPDATE/DELETE/MERGE into a cheap marker write instead of a full-file rewrite — but this path has a dependency the warning node makes explicit."
+    },
+    {
+      "nodeId": "deletion-vector-trap",
+      "title": "Warning: deletion vectors need OPTIMIZE to stay fast",
+      "explanation": "Skipping periodic OPTIMIZE lets unmerged markers accumulate and measurably slows reads — a benchmarked 2.3x regression in one no-compaction scenario."
+    },
+    {
+      "nodeId": "compaction-question",
+      "title": "3. Every path converges on compaction",
+      "explanation": "None of the three optimizations replace periodic maintenance; this question sizes the compaction strategy to the table."
+    },
+    {
+      "nodeId": "auto-compaction",
+      "title": "4a. Small tables: Auto Compaction alone",
+      "explanation": "Automatic post-write compaction is sufficient for tables under roughly 1 GB, with no scheduling required."
+    },
+    {
+      "nodeId": "scheduled-optimize",
+      "title": "4b. Large tables: Auto Compaction plus scheduled OPTIMIZE",
+      "explanation": "Larger tables need a periodic OPTIMIZE pass on top of Auto Compaction, ideally triggered by a health check rather than a blind fixed schedule."
+    }
   ]
 }

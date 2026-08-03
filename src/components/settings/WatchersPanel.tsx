@@ -171,10 +171,7 @@ export function WatchersPanel() {
     },
     onError: (e) => toast.error((e as Error).message),
   });
-  const applyPollResult = (r: {
-    results: PollOutcome[];
-    totalQueued: number;
-  }) => {
+  const applyPollResult = (r: { results: PollOutcome[]; totalQueued: number }) => {
     const failed = r.results.filter((x) => x.error).length;
     setPollSummary(r.results.map((x) => explainPollResult(x)));
     toast[failed ? "warning" : "success"](

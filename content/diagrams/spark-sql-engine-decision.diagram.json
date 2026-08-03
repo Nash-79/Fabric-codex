@@ -22,12 +22,24 @@
       "evidence": [],
       "tags": ["decision-root", "Spark", "Warehouse", "Eventhouse-KQL"],
       "drill": {
-        "inputs": ["Whether the workload writes data or only reads it", "The team's primary language and skillset (Spark vs T-SQL vs KQL)", "Whether the data is relational/tabular or high-volume time-series/telemetry"],
-        "processing": ["Determine read-only vs read/write requirement first", "Match the team's skillset to a candidate engine", "Check whether the data shape (time-series vs relational) overrides the skillset preference"],
-        "outputs": ["A routed choice among Spark SQL, the SQL analytics endpoint, Warehouse T-SQL, or KQL"],
+        "inputs": [
+          "Whether the workload writes data or only reads it",
+          "The team's primary language and skillset (Spark vs T-SQL vs KQL)",
+          "Whether the data is relational/tabular or high-volume time-series/telemetry"
+        ],
+        "processing": [
+          "Determine read-only vs read/write requirement first",
+          "Match the team's skillset to a candidate engine",
+          "Check whether the data shape (time-series vs relational) overrides the skillset preference"
+        ],
+        "outputs": [
+          "A routed choice among Spark SQL, the SQL analytics endpoint, Warehouse T-SQL, or KQL"
+        ],
         "example": "A data engineering team building nightly transformations with write-heavy Delta merges routes to Spark SQL; a BI analyst running ad hoc read-only reports against already-landed lakehouse tables routes instead to the SQL analytics endpoint.",
         "controls": ["Write the read/write requirement down explicitly before comparing engines"],
-        "failureModes": ["Choosing an engine by team habit rather than by the workload's actual read/write and data-shape requirements"]
+        "failureModes": [
+          "Choosing an engine by team habit rather than by the workload's actual read/write and data-shape requirements"
+        ]
       }
     },
     {
@@ -39,17 +51,34 @@
       "classification": "fact",
       "layers": ["compute"],
       "evidence": [
-        { "sourceKey": "spark-sql-fabric", "note": "Fabric notebooks support four Apache Spark cell languages — PySpark, Scala, Spark SQL, and SparkR — switched per cell with a language magic command, independent of the notebook's overall primary language." },
-        { "sourceKey": "spark-sql-fabric", "note": "A %%sql cell executes its query as SparkSQL against the notebook's Apache Spark context, sharing the same running Spark session, cluster, and attached lakehouse as PySpark or Scala cells." }
+        {
+          "sourceKey": "spark-sql-fabric",
+          "note": "Fabric notebooks support four Apache Spark cell languages — PySpark, Scala, Spark SQL, and SparkR — switched per cell with a language magic command, independent of the notebook's overall primary language."
+        },
+        {
+          "sourceKey": "spark-sql-fabric",
+          "note": "A %%sql cell executes its query as SparkSQL against the notebook's Apache Spark context, sharing the same running Spark session, cluster, and attached lakehouse as PySpark or Scala cells."
+        }
       ],
       "tags": ["Spark", "SparkSQL", "Notebooks"],
       "drill": {
-        "inputs": ["A transformation workload needing both SQL aggregation and Spark DataFrame/Python logic in one place"],
-        "processing": ["Author %%sql cells alongside PySpark cells in the same notebook", "Read and write Delta tables directly through the shared Spark session"],
-        "outputs": ["Transformed Delta tables written back to the lakehouse, and any read-only reporting queries the same session can also serve"],
+        "inputs": [
+          "A transformation workload needing both SQL aggregation and Spark DataFrame/Python logic in one place"
+        ],
+        "processing": [
+          "Author %%sql cells alongside PySpark cells in the same notebook",
+          "Read and write Delta tables directly through the shared Spark session"
+        ],
+        "outputs": [
+          "Transformed Delta tables written back to the lakehouse, and any read-only reporting queries the same session can also serve"
+        ],
         "example": "A silver-layer notebook uses a %%sql cell to aggregate daily order totals and a PySpark cell immediately after to apply a custom deduplication function to the same DataFrame, both in one session.",
-        "controls": ["Which cell language to use per step — SQL for set-based logic, PySpark/Scala for procedural logic"],
-        "failureModes": ["Splitting logically related transformation logic across a %%sql cell and a separate notebook unnecessarily, when both could share one session"]
+        "controls": [
+          "Which cell language to use per step — SQL for set-based logic, PySpark/Scala for procedural logic"
+        ],
+        "failureModes": [
+          "Splitting logically related transformation logic across a %%sql cell and a separate notebook unnecessarily, when both could share one session"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark" }
     },
@@ -64,12 +93,21 @@
       "evidence": [],
       "tags": ["Lakehouse", "SQLAnalyticsEndpoint"],
       "drill": {
-        "inputs": ["An ad hoc or BI-style read-only query against already-landed lakehouse Delta tables"],
-        "processing": ["Connect a T-SQL client or Power BI DirectQuery to the SQL analytics endpoint", "Query the same Delta tables the lakehouse's Spark session writes"],
-        "outputs": ["Query results against current lakehouse table state, with no data movement or export"],
+        "inputs": [
+          "An ad hoc or BI-style read-only query against already-landed lakehouse Delta tables"
+        ],
+        "processing": [
+          "Connect a T-SQL client or Power BI DirectQuery to the SQL analytics endpoint",
+          "Query the same Delta tables the lakehouse's Spark session writes"
+        ],
+        "outputs": [
+          "Query results against current lakehouse table state, with no data movement or export"
+        ],
         "example": "A BI analyst runs an ad hoc T-SQL query against a gold-layer lakehouse table through the SQL analytics endpoint to validate a number before building a report, without touching Spark at all.",
         "controls": ["No write attempts should ever be routed here — see the warning node"],
-        "failureModes": ["Assuming the endpoint supports writes because it looks like a normal SQL database — see the dedicated warning node for this exact trap"]
+        "failureModes": [
+          "Assuming the endpoint supports writes because it looks like a normal SQL database — see the dedicated warning node for this exact trap"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -84,12 +122,23 @@
       "evidence": [],
       "tags": ["Warehouse", "TSQL"],
       "drill": {
-        "inputs": ["A write workload requiring multi-table transactional consistency, expressed as T-SQL"],
-        "processing": ["Load and transform data with T-SQL CTAS, MERGE, and stored procedures inside a governed warehouse", "Commit multi-table transactions as a single unit"],
-        "outputs": ["A transactionally consistent warehouse whose tables are still open Delta files in OneLake"],
+        "inputs": [
+          "A write workload requiring multi-table transactional consistency, expressed as T-SQL"
+        ],
+        "processing": [
+          "Load and transform data with T-SQL CTAS, MERGE, and stored procedures inside a governed warehouse",
+          "Commit multi-table transactions as a single unit"
+        ],
+        "outputs": [
+          "A transactionally consistent warehouse whose tables are still open Delta files in OneLake"
+        ],
         "example": "A nightly load updates a fact table and three dimension tables inside one multi-table transaction, so a mid-load failure never leaves a partially-updated star schema visible to reports.",
-        "controls": ["Whether the workload actually uses the transaction boundary, or whether a simpler engine would suffice"],
-        "failureModes": ["Choosing Warehouse for a purely read-only reporting workload that the SQL analytics endpoint could serve for free"]
+        "controls": [
+          "Whether the workload actually uses the transaction boundary, or whether a simpler engine would suffice"
+        ],
+        "failureModes": [
+          "Choosing Warehouse for a purely read-only reporting workload that the SQL analytics endpoint could serve for free"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     },
@@ -108,8 +157,12 @@
         "processing": ["Query an Eventhouse KQL database using KQL rather than T-SQL or Spark SQL"],
         "outputs": ["Sub-second query results over recent and historical event data"],
         "example": "An operations team queries IoT sensor telemetry ingested through Eventstream into an Eventhouse, using KQL time-window aggregations that would be awkward to express as T-SQL joins.",
-        "controls": ["Whether the workload's data shape is genuinely time-series/event data versus relational, which is the real branch condition here"],
-        "failureModes": ["Forcing relational reporting data into an Eventhouse just because KQL feels novel, when a lakehouse or warehouse fits the shape better"]
+        "controls": [
+          "Whether the workload's data shape is genuinely time-series/event data versus relational, which is the real branch condition here"
+        ],
+        "failureModes": [
+          "Forcing relational reporting data into an Eventhouse just because KQL feels novel, when a lakehouse or warehouse fits the shape better"
+        ]
       }
     },
     {
@@ -123,28 +176,100 @@
       "evidence": [],
       "tags": ["Lakehouse", "SQLAnalyticsEndpoint", "AntiPattern"],
       "drill": {
-        "inputs": ["A workload originally designed as read-only against the SQL analytics endpoint that later needs to write"],
-        "processing": ["Attempt an INSERT/UPDATE/MERGE against the endpoint (fails)", "Recognize the endpoint is read-only by design", "Reroute the write path to Spark SQL in a notebook or to Warehouse T-SQL"],
-        "outputs": ["A corrected architecture with reads still against the endpoint (or the new write-capable engine) and writes routed to a write-capable surface"],
+        "inputs": [
+          "A workload originally designed as read-only against the SQL analytics endpoint that later needs to write"
+        ],
+        "processing": [
+          "Attempt an INSERT/UPDATE/MERGE against the endpoint (fails)",
+          "Recognize the endpoint is read-only by design",
+          "Reroute the write path to Spark SQL in a notebook or to Warehouse T-SQL"
+        ],
+        "outputs": [
+          "A corrected architecture with reads still against the endpoint (or the new write-capable engine) and writes routed to a write-capable surface"
+        ],
         "example": "A reporting workload built entirely against the SQL analytics endpoint later needs a scheduled correction job to patch bad rows; the fix has to be written as a Spark SQL notebook cell against the lakehouse, not as a T-SQL UPDATE against the endpoint.",
-        "controls": ["Confirm read/write requirements before committing an architecture to the SQL analytics endpoint alone"],
-        "failureModes": ["Discovering the read-only limitation only when a write statement fails in production or during a late-stage requirement change", "Working around it by writing directly to the underlying Delta files outside Fabric's managed paths, bypassing governance"]
+        "controls": [
+          "Confirm read/write requirements before committing an architecture to the SQL analytics endpoint alone"
+        ],
+        "failureModes": [
+          "Discovering the read-only limitation only when a write statement fails in production or during a late-stage requirement change",
+          "Working around it by writing directly to the underlying Delta files outside Fabric's managed paths, bypassing governance"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-start-spark", "from": "start-question", "to": "spark-sql-branch", "label": "Spark transformation, read/write", "layer": "compute", "kind": "branch" },
-    { "id": "e-start-endpoint", "from": "start-question", "to": "sql-endpoint-branch", "label": "ad hoc T-SQL, read-only lakehouse data", "layer": "compute", "kind": "branch" },
-    { "id": "e-start-warehouse", "from": "start-question", "to": "warehouse-tsql-branch", "label": "governed T-SQL, multi-table writes", "layer": "compute", "kind": "branch" },
-    { "id": "e-start-kql", "from": "start-question", "to": "kql-branch", "label": "time-series / telemetry data shape", "layer": "compute", "kind": "branch" },
-    { "id": "e-endpoint-trap", "from": "sql-endpoint-branch", "to": "endpoint-write-trap", "label": "if a write is later attempted", "layer": "compute", "kind": "branch" }
+    {
+      "id": "e-start-spark",
+      "from": "start-question",
+      "to": "spark-sql-branch",
+      "label": "Spark transformation, read/write",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-endpoint",
+      "from": "start-question",
+      "to": "sql-endpoint-branch",
+      "label": "ad hoc T-SQL, read-only lakehouse data",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-warehouse",
+      "from": "start-question",
+      "to": "warehouse-tsql-branch",
+      "label": "governed T-SQL, multi-table writes",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-kql",
+      "from": "start-question",
+      "to": "kql-branch",
+      "label": "time-series / telemetry data shape",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-endpoint-trap",
+      "from": "sql-endpoint-branch",
+      "to": "endpoint-write-trap",
+      "label": "if a write is later attempted",
+      "layer": "compute",
+      "kind": "branch"
+    }
   ],
   "walkthrough": [
-    { "nodeId": "start-question", "title": "1. Ask read/write, skillset, and data shape", "explanation": "The engine choice follows from whether the workload writes, what language the team knows, and whether the data is relational or time-series." },
-    { "nodeId": "spark-sql-branch", "title": "2. Spark SQL for read/write transformation", "explanation": "Shares the notebook's Spark session with PySpark and Scala cells — the right fit whenever the workload does more than ad hoc querying." },
-    { "nodeId": "sql-endpoint-branch", "title": "3. SQL analytics endpoint for read-only T-SQL", "explanation": "Auto-provisioned, zero-ETL T-SQL access to lakehouse Delta tables — but read-only, which the warning node explains." },
-    { "nodeId": "warehouse-tsql-branch", "title": "4. Warehouse for governed, transactional writes", "explanation": "The only branch offering full write-capable T-SQL with multi-table ACID transactions." },
-    { "nodeId": "kql-branch", "title": "5. KQL for time-series and telemetry data", "explanation": "Selected by data shape, not skillset — high-volume event data belongs in an Eventhouse, not a relational engine." },
-    { "nodeId": "endpoint-write-trap", "title": "6. Warning: the endpoint's T-SQL surface hides its read-only nature", "explanation": "A workload that grows a write requirement after being built against the SQL analytics endpoint has to move that write path elsewhere entirely." }
+    {
+      "nodeId": "start-question",
+      "title": "1. Ask read/write, skillset, and data shape",
+      "explanation": "The engine choice follows from whether the workload writes, what language the team knows, and whether the data is relational or time-series."
+    },
+    {
+      "nodeId": "spark-sql-branch",
+      "title": "2. Spark SQL for read/write transformation",
+      "explanation": "Shares the notebook's Spark session with PySpark and Scala cells — the right fit whenever the workload does more than ad hoc querying."
+    },
+    {
+      "nodeId": "sql-endpoint-branch",
+      "title": "3. SQL analytics endpoint for read-only T-SQL",
+      "explanation": "Auto-provisioned, zero-ETL T-SQL access to lakehouse Delta tables — but read-only, which the warning node explains."
+    },
+    {
+      "nodeId": "warehouse-tsql-branch",
+      "title": "4. Warehouse for governed, transactional writes",
+      "explanation": "The only branch offering full write-capable T-SQL with multi-table ACID transactions."
+    },
+    {
+      "nodeId": "kql-branch",
+      "title": "5. KQL for time-series and telemetry data",
+      "explanation": "Selected by data shape, not skillset — high-volume event data belongs in an Eventhouse, not a relational engine."
+    },
+    {
+      "nodeId": "endpoint-write-trap",
+      "title": "6. Warning: the endpoint's T-SQL surface hides its read-only nature",
+      "explanation": "A workload that grows a write requirement after being built against the SQL analytics endpoint has to move that write path elsewhere entirely."
+    }
   ]
 }

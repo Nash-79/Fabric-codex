@@ -20,20 +20,33 @@
       "classification": "fact",
       "layers": ["data"],
       "evidence": [
-        { "sourceKey": "ultimateinfoguide-lakehouse-tutorial", "note": "When data lands in the managed Tables area, Fabric automatically validates the format (Delta only at present), extracts column names, types, compression, and partitioning metadata, and registers the table in the metastore so it is immediately queryable from Spark SQL or T-SQL without a manual CREATE TABLE." }
+        {
+          "sourceKey": "ultimateinfoguide-lakehouse-tutorial",
+          "note": "When data lands in the managed Tables area, Fabric automatically validates the format (Delta only at present), extracts column names, types, compression, and partitioning metadata, and registers the table in the metastore so it is immediately queryable from Spark SQL or T-SQL without a manual CREATE TABLE."
+        }
       ],
       "tags": ["lakehouse", "delta-lake", "bronze"],
       "drill": {
-        "inputs": ["Source system extracts (CDC feed, API pull, file drop) landed as raw Delta via a pipeline copy activity or notebook write"],
+        "inputs": [
+          "Source system extracts (CDC feed, API pull, file drop) landed as raw Delta via a pipeline copy activity or notebook write"
+        ],
         "processing": [
           "Fabric validates the incoming write is Delta format",
           "Extracts column names, types, compression, and partitioning metadata",
           "Registers or updates the table in the metastore"
         ],
-        "outputs": ["A queryable bronze Delta table under Tables/, visible immediately to Spark SQL and the SQL analytics endpoint"],
+        "outputs": [
+          "A queryable bronze Delta table under Tables/, visible immediately to Spark SQL and the SQL analytics endpoint"
+        ],
         "example": "A pipeline copy activity lands a nightly CDC extract from an order-management system into Tables/bronze_orders; no manual DDL runs — the table appears in the lakehouse explorer as soon as the write commits.",
-        "controls": ["Choice of ingestion route (notebook vs pipeline vs Dataflow Gen2 vs shortcut)", "Partition column selection on first write"],
-        "failureModes": ["Landing non-Delta formats (CSV/Parquet) directly and expecting auto-registration — only Delta is auto-discovered", "Schema drift on the source system silently changing bronze column types between loads"]
+        "controls": [
+          "Choice of ingestion route (notebook vs pipeline vs Dataflow Gen2 vs shortcut)",
+          "Partition column selection on first write"
+        ],
+        "failureModes": [
+          "Landing non-Delta formats (CSV/Parquet) directly and expecting auto-registration — only Delta is auto-discovered",
+          "Schema drift on the source system silently changing bronze column types between loads"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -48,7 +61,9 @@
       "evidence": [],
       "tags": ["conformance", "spark", "notebook"],
       "drill": {
-        "inputs": ["Raw bronze columns with source-native types, e.g. string dates or inconsistent key casing"],
+        "inputs": [
+          "Raw bronze columns with source-native types, e.g. string dates or inconsistent key casing"
+        ],
         "processing": [
           "Cast columns to the target silver schema's types",
           "Rename to conformed column names",
@@ -56,8 +71,14 @@
         ],
         "outputs": ["A typed, key-normalised DataFrame ready for deduplication"],
         "example": "order_dt arrives as a string in one source and an epoch long in another; both are cast to a single timestamp column, and OrderID/CustomerID are trimmed and upper-cased so the same customer joins consistently across sources.",
-        "controls": ["Target schema/type mapping definition", "Key-resolution logic when the same entity has different natural keys per source"],
-        "failureModes": ["Implicit type coercion silently truncating or nulling malformed values instead of failing loud", "Key normalisation logic diverging between two pipelines feeding the same silver table"]
+        "controls": [
+          "Target schema/type mapping definition",
+          "Key-resolution logic when the same entity has different natural keys per source"
+        ],
+        "failureModes": [
+          "Implicit type coercion silently truncating or nulling malformed values instead of failing loud",
+          "Key normalisation logic diverging between two pipelines feeding the same silver table"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -72,16 +93,25 @@
       "evidence": [],
       "tags": ["deduplication", "historization", "scd"],
       "drill": {
-        "inputs": ["Standardised, typed records for the batch, potentially containing multiple updates per business key"],
+        "inputs": [
+          "Standardised, typed records for the batch, potentially containing multiple updates per business key"
+        ],
         "processing": [
           "Partition by business key",
           "Order rows within each partition by a deterministic commit-time or monotonically increasing sequence column",
           "Keep only the last row per key"
         ],
-        "outputs": ["One row per business key per batch, ready for the schema-evolution guard and quality gate"],
+        "outputs": [
+          "One row per business key per batch, ready for the schema-evolution guard and quality gate"
+        ],
         "example": "Three updates for CustomerID=4471 arrive in one CDC batch; ordering by the source system's commit_ts and keeping the last row collapses them into the single correct end-state row for the merge.",
-        "controls": ["Choice of ordering column, which must be monotonic and trustworthy (source commit timestamp or LSN, not ingestion arrival time)", "Tie-breaking rule when two records share the same ordering value"],
-        "failureModes": ["Using ingestion/arrival time instead of source commit time as the ordering key, which reorders records under retries or out-of-order delivery — this is the exact scenario the diagram's warning node describes"]
+        "controls": [
+          "Choice of ordering column, which must be monotonic and trustworthy (source commit timestamp or LSN, not ingestion arrival time)",
+          "Tie-breaking rule when two records share the same ordering value"
+        ],
+        "failureModes": [
+          "Using ingestion/arrival time instead of source commit time as the ordering key, which reorders records under retries or out-of-order delivery — this is the exact scenario the diagram's warning node describes"
+        ]
       }
     },
     {
@@ -95,17 +125,28 @@
       "evidence": [],
       "tags": ["schema-evolution", "delta-lake", "governance"],
       "drill": {
-        "inputs": ["Deduplicated rows whose schema may differ from the current silver table's schema (new columns, widened types)"],
+        "inputs": [
+          "Deduplicated rows whose schema may differ from the current silver table's schema (new columns, widened types)"
+        ],
         "processing": [
           "Evaluate whether the incoming schema change is additive (new column) or breaking (type narrowing, column removal)",
           "Apply additive changes via mergeSchema on the MERGE/write operation",
           "Route breaking changes to explicit review rather than auto-apply",
           "Check whether a foreign key constraint on the target table is currently freezing evolution"
         ],
-        "outputs": ["A merge-ready schema for the SCD Type 2 merge stage, with any breaking change flagged rather than silently applied"],
+        "outputs": [
+          "A merge-ready schema for the SCD Type 2 merge stage, with any breaking change flagged rather than silently applied"
+        ],
         "example": "A new loyalty_tier column appears in bronze; mergeSchema lets it flow into silver additively. Separately, a foreign key constraint added between two mirrored endpoint tables is later found to have silently frozen schema sync for weeks until the constraint was addressed.",
-        "controls": ["mergeSchema / overwriteSchema settings on the write path", "Review gate for breaking schema changes", "Audit of foreign key constraints that could freeze evolution"],
-        "failureModes": ["A foreign key constraint silently freezing schema evolution on the target table, with no visible error — only a stalled sync", "Auto-applying a breaking type change without review, corrupting downstream consumers expecting the old type"]
+        "controls": [
+          "mergeSchema / overwriteSchema settings on the write path",
+          "Review gate for breaking schema changes",
+          "Audit of foreign key constraints that could freeze evolution"
+        ],
+        "failureModes": [
+          "A foreign key constraint silently freezing schema evolution on the target table, with no visible error — only a stalled sync",
+          "Auto-applying a breaking type change without review, corrupting downstream consumers expecting the old type"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -125,10 +166,19 @@
           "Evaluate each row against the rule set: required-field nulls, referential integrity against conformed dimensions, value-range/format checks",
           "Tag each row pass or fail with a reason code"
         ],
-        "outputs": ["Pass path: records forwarded to the SCD Type 2 merge", "Fail path: records plus reason code forwarded to quarantine"],
+        "outputs": [
+          "Pass path: records forwarded to the SCD Type 2 merge",
+          "Fail path: records plus reason code forwarded to quarantine"
+        ],
         "example": "A row whose CustomerID doesn't resolve against the conformed customer dimension is tagged fail:unresolved_fk and routed to quarantine instead of merging with a null or garbage key.",
-        "controls": ["The rule set definition itself (which fields are required, which FKs are checked)", "Whether a rule failure quarantines the whole row or just flags a column"],
-        "failureModes": ["Rule set drifting out of sync with schema changes upstream, silently passing rows it should be catching", "Over-broad rules quarantining a high volume of otherwise-valid records and masking a real upstream break"]
+        "controls": [
+          "The rule set definition itself (which fields are required, which FKs are checked)",
+          "Whether a rule failure quarantines the whole row or just flags a column"
+        ],
+        "failureModes": [
+          "Rule set drifting out of sync with schema changes upstream, silently passing rows it should be catching",
+          "Over-broad rules quarantining a high volume of otherwise-valid records and masking a real upstream break"
+        ]
       }
     },
     {
@@ -142,16 +192,26 @@
       "evidence": [],
       "tags": ["scd", "historization", "delta-merge"],
       "drill": {
-        "inputs": ["Quality-gate-passed records for this batch, plus any replayed corrected quarantine records"],
+        "inputs": [
+          "Quality-gate-passed records for this batch, plus any replayed corrected quarantine records"
+        ],
         "processing": [
           "MERGE INTO the silver Delta table on business key",
           "Where a tracked attribute differs and the existing row is current: end-date the existing row",
           "Insert a new current row with an open effective-from date"
         ],
-        "outputs": ["Updated silver Delta table with correct current and historical rows per business key"],
+        "outputs": [
+          "Updated silver Delta table with correct current and historical rows per business key"
+        ],
         "example": "A customer's address changes; the merge closes the prior address row (is_current=false, effective_to=batch_ts) and inserts a new row with the new address and is_current=true, so a query 'as of last quarter' still returns the old address.",
-        "controls": ["Which attributes are tracked for history versus overwritten in place (Type 1 columns mixed into an otherwise Type 2 table)", "The merge join condition and effective-dating column names"],
-        "failureModes": ["Determining 'latest row' without a deterministic ordering key — see the warning node for the specific failure this causes", "Merge condition matching on the wrong grain, silently overwriting unrelated history rows"]
+        "controls": [
+          "Which attributes are tracked for history versus overwritten in place (Type 1 columns mixed into an otherwise Type 2 table)",
+          "The merge join condition and effective-dating column names"
+        ],
+        "failureModes": [
+          "Determining 'latest row' without a deterministic ordering key — see the warning node for the specific failure this causes",
+          "Merge condition matching on the wrong grain, silently overwriting unrelated history rows"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -167,11 +227,22 @@
       "tags": ["quarantine", "data-quality", "anti-pattern"],
       "drill": {
         "inputs": ["Records tagged fail by the quality-gate, with their reason code"],
-        "processing": ["Append to the quarantine Delta table with batch id, timestamp, and failure reason", "Optionally alert an owner when volume crosses a threshold"],
-        "outputs": ["An auditable record of every rejected row, queryable independently of the silver tables"],
+        "processing": [
+          "Append to the quarantine Delta table with batch id, timestamp, and failure reason",
+          "Optionally alert an owner when volume crosses a threshold"
+        ],
+        "outputs": [
+          "An auditable record of every rejected row, queryable independently of the silver tables"
+        ],
         "example": "62 rows fail the referential-integrity rule in one nightly batch; they land in silver_quarantine_orders with reason=unresolved_customer_fk, and the data-quality owner reviews them the next morning instead of them vanishing from the pipeline.",
-        "controls": ["Retention policy on the quarantine table", "Alerting threshold on quarantine volume"],
-        "failureModes": ["Quarantine table growing unbounded with no triage process, becoming a write-only graveyard nobody reviews", "No alerting, so a broken upstream feed quarantines most records for days before anyone notices"]
+        "controls": [
+          "Retention policy on the quarantine table",
+          "Alerting threshold on quarantine volume"
+        ],
+        "failureModes": [
+          "Quarantine table growing unbounded with no triage process, becoming a write-only graveyard nobody reviews",
+          "No alerting, so a broken upstream feed quarantines most records for days before anyone notices"
+        ]
       }
     },
     {
@@ -185,15 +256,25 @@
       "evidence": [],
       "tags": ["anti-pattern", "scd", "failure-mode"],
       "drill": {
-        "inputs": ["Same source batch replayed twice, e.g. once normally and once after a job retry following a transient failure"],
+        "inputs": [
+          "Same source batch replayed twice, e.g. once normally and once after a job retry following a transient failure"
+        ],
         "processing": [
           "Both runs execute the identical dedup and merge logic",
           "But 'latest' is resolved by arrival order or unspecified row order, which differs between the two executions"
         ],
-        "outputs": ["Two different 'current' rows and two different history timelines for the same business key, depending on which run is inspected"],
+        "outputs": [
+          "Two different 'current' rows and two different history timelines for the same business key, depending on which run is inspected"
+        ],
         "example": "A Spark retry re-reads the same micro-batch after a transient executor failure; because the dedup stage ordered by ingestion timestamp (which shifts on retry) rather than the source system's commit sequence, the retried run picks a different row as 'latest' than the original attempt, silently rewriting which address is marked current for that customer.",
-        "controls": ["Always order by a source-provided, monotonic commit/sequence column — never by ingestion/arrival time or unspecified row order", "Make dedup and merge idempotent: the same input batch, run twice, must produce byte-identical output"],
-        "failureModes": ["Silent history corruption discovered only during an audit or a customer dispute, long after the offending batch has aged out of retention", "Idempotency gaps compounding: each retry after a transient failure introduces another possible divergent 'latest' resolution"]
+        "controls": [
+          "Always order by a source-provided, monotonic commit/sequence column — never by ingestion/arrival time or unspecified row order",
+          "Make dedup and merge idempotent: the same input batch, run twice, must produce byte-identical output"
+        ],
+        "failureModes": [
+          "Silent history corruption discovered only during an audit or a customer dispute, long after the offending batch has aged out of retention",
+          "Idempotency gaps compounding: each retry after a transient failure introduces another possible divergent 'latest' resolution"
+        ]
       }
     },
     {
@@ -205,21 +286,38 @@
       "classification": "fact",
       "layers": ["data", "compute"],
       "evidence": [
-        { "sourceKey": "delta-optimization-and-v-order", "note": "Toggling the V-Order table property only affects future writes; files already on disk keep the layout they were written with, so applying or removing V-Order on existing data requires a physical rewrite via table compaction (OPTIMIZE)." }
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "Toggling the V-Order table property only affects future writes; files already on disk keep the layout they were written with, so applying or removing V-Order on existing data requires a physical rewrite via table compaction (OPTIMIZE)."
+        }
       ],
       "tags": ["v-order", "optimize", "delta-lake"],
       "drill": {
-        "inputs": ["The silver Delta table after repeated small-batch SCD merges, with many small Parquet files"],
+        "inputs": [
+          "The silver Delta table after repeated small-batch SCD merges, with many small Parquet files"
+        ],
         "processing": [
           "Run OPTIMIZE to compact small files into larger ones",
           "Optionally enable V-Order (session, table property, or per-write) so the compaction rewrite also applies V-Order layout"
         ],
-        "outputs": ["A silver table with fewer, larger, optionally V-Ordered Parquet files, with unchanged logical rows"],
+        "outputs": [
+          "A silver table with fewer, larger, optionally V-Ordered Parquet files, with unchanged logical rows"
+        ],
         "example": "A silver_customers table accumulates hundreds of small files from a month of nightly SCD merges; a weekly OPTIMIZE job with V-Order enabled rewrites them into far fewer, larger, V-Ordered files, improving downstream dashboard scan times without touching a single logical row.",
-        "controls": ["Compaction cadence (e.g. nightly vs weekly)", "Whether V-Order is enabled for this compaction (read-heavy tables benefit; write-dominated tables should skip it per Microsoft's guidance)"],
-        "failureModes": ["Never compacting, letting small-file counts silently degrade read performance", "Enabling V-Order on the compaction of a table that is actually write-dominated downstream, paying the write-time cost for no read benefit"],
+        "controls": [
+          "Compaction cadence (e.g. nightly vs weekly)",
+          "Whether V-Order is enabled for this compaction (read-heavy tables benefit; write-dominated tables should skip it per Microsoft's guidance)"
+        ],
+        "failureModes": [
+          "Never compacting, letting small-file counts silently degrade read performance",
+          "Enabling V-Order on the compaction of a table that is actually write-dominated downstream, paying the write-time cost for no read benefit"
+        ],
         "metrics": [
-          { "label": "Typical V-Order write overhead", "value": "~15% longer writes", "sourceKey": "delta-optimization-and-v-order" }
+          {
+            "label": "Typical V-Order write overhead",
+            "value": "~15% longer writes",
+            "sourceKey": "delta-optimization-and-v-order"
+          }
         ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
@@ -233,7 +331,10 @@
       "classification": "fact",
       "layers": ["data"],
       "evidence": [
-        { "sourceKey": "ultimateinfoguide-lakehouse-tutorial", "note": "The medallion architecture (bronze/silver/gold) can be implemented either as separate schemas within a single Lakehouse, which suits small-to-medium teams sharing one workspace, or as separate Lakehouses per layer, which suits larger teams needing independent ownership, differing security policies, or the need to share the gold layer across workspaces via shortcuts." }
+        {
+          "sourceKey": "ultimateinfoguide-lakehouse-tutorial",
+          "note": "The medallion architecture (bronze/silver/gold) can be implemented either as separate schemas within a single Lakehouse, which suits small-to-medium teams sharing one workspace, or as separate Lakehouses per layer, which suits larger teams needing independent ownership, differing security policies, or the need to share the gold layer across workspaces via shortcuts."
+        }
       ],
       "tags": ["lakehouse", "delta-lake", "silver", "canonical"],
       "drill": {
@@ -242,26 +343,115 @@
           "No further transformation at this stage — represents the published state",
           "Table is registered and queryable via both Spark SQL and the SQL analytics endpoint"
         ],
-        "outputs": ["Queryable canonical silver tables for Warehouse, gold Lakehouse, and semantic-model consumption"],
+        "outputs": [
+          "Queryable canonical silver tables for Warehouse, gold Lakehouse, and semantic-model consumption"
+        ],
         "example": "A BI team's semantic model queries silver_customers via the SQL analytics endpoint for a slowly-changing 'customer as of report date' report, while a data science notebook reads the same table with Spark for feature engineering — both against the identical conformed table.",
-        "controls": ["Access grants on the silver tables/workspace", "Separate-schema vs separate-Lakehouse layout choice for the medallion layers"],
-        "failureModes": ["Downstream consumers bypassing silver and reading bronze directly, reintroducing the dedup/quality problems silver exists to solve", "Schema changes to silver tables breaking downstream gold jobs with no contract/versioning in place"]
+        "controls": [
+          "Access grants on the silver tables/workspace",
+          "Separate-schema vs separate-Lakehouse layout choice for the medallion layers"
+        ],
+        "failureModes": [
+          "Downstream consumers bypassing silver and reading bronze directly, reintroducing the dedup/quality problems silver exists to solve",
+          "Schema changes to silver tables breaking downstream gold jobs with no contract/versioning in place"
+        ]
       },
-      "drillTarget": { "kind": "topic", "slug": "silver-layer-modelling", "label": "Silver Layer Modelling" }
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "silver-layer-modelling",
+        "label": "Silver Layer Modelling"
+      }
     }
   ],
   "edges": [
-    { "id": "e-bronze-standardise", "from": "bronze-intake", "to": "standardise", "label": "read bronze Delta table", "layer": "data", "kind": "flow" },
-    { "id": "e-standardise-dedup", "from": "standardise", "to": "dedup-historize", "label": "typed, key-normalised rows", "layer": "data", "kind": "flow" },
-    { "id": "e-dedup-schema", "from": "dedup-historize", "to": "schema-evolution-guard", "label": "one row per key per batch", "layer": "data", "kind": "flow" },
-    { "id": "e-schema-quality", "from": "schema-evolution-guard", "to": "quality-gate", "label": "schema-safe rows", "layer": "governance", "kind": "flow" },
-    { "id": "e-quality-merge", "from": "quality-gate", "to": "scd-merge", "label": "pass", "layer": "data", "kind": "flow" },
-    { "id": "e-quality-quarantine", "from": "quality-gate", "to": "quarantine", "label": "fail (reason code)", "layer": "governance", "kind": "branch" },
-    { "id": "e-quarantine-merge", "from": "quarantine", "to": "scd-merge", "label": "replay corrected rows", "layer": "data", "kind": "feedback" },
-    { "id": "e-dedup-warning", "from": "dedup-historize", "to": "nondeterministic-order-warning", "label": "unstable ordering-key risk", "layer": "observability", "kind": "branch" },
-    { "id": "e-warning-merge", "from": "nondeterministic-order-warning", "to": "scd-merge", "label": "corrupts SCD history on retry", "layer": "observability", "kind": "branch" },
-    { "id": "e-merge-optimize", "from": "scd-merge", "to": "optimize-vorder", "label": "accumulated small files", "layer": "compute", "kind": "flow" },
-    { "id": "e-optimize-silver", "from": "optimize-vorder", "to": "canonical-silver-entities", "label": "compacted, optionally V-Ordered table", "layer": "data", "kind": "flow" }
+    {
+      "id": "e-bronze-standardise",
+      "from": "bronze-intake",
+      "to": "standardise",
+      "label": "read bronze Delta table",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-standardise-dedup",
+      "from": "standardise",
+      "to": "dedup-historize",
+      "label": "typed, key-normalised rows",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-dedup-schema",
+      "from": "dedup-historize",
+      "to": "schema-evolution-guard",
+      "label": "one row per key per batch",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-schema-quality",
+      "from": "schema-evolution-guard",
+      "to": "quality-gate",
+      "label": "schema-safe rows",
+      "layer": "governance",
+      "kind": "flow"
+    },
+    {
+      "id": "e-quality-merge",
+      "from": "quality-gate",
+      "to": "scd-merge",
+      "label": "pass",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-quality-quarantine",
+      "from": "quality-gate",
+      "to": "quarantine",
+      "label": "fail (reason code)",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e-quarantine-merge",
+      "from": "quarantine",
+      "to": "scd-merge",
+      "label": "replay corrected rows",
+      "layer": "data",
+      "kind": "feedback"
+    },
+    {
+      "id": "e-dedup-warning",
+      "from": "dedup-historize",
+      "to": "nondeterministic-order-warning",
+      "label": "unstable ordering-key risk",
+      "layer": "observability",
+      "kind": "branch"
+    },
+    {
+      "id": "e-warning-merge",
+      "from": "nondeterministic-order-warning",
+      "to": "scd-merge",
+      "label": "corrupts SCD history on retry",
+      "layer": "observability",
+      "kind": "branch"
+    },
+    {
+      "id": "e-merge-optimize",
+      "from": "scd-merge",
+      "to": "optimize-vorder",
+      "label": "accumulated small files",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-optimize-silver",
+      "from": "optimize-vorder",
+      "to": "canonical-silver-entities",
+      "label": "compacted, optionally V-Ordered table",
+      "layer": "data",
+      "kind": "flow"
+    }
   ],
   "walkthrough": [
     {

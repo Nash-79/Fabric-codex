@@ -141,7 +141,15 @@ function Landing() {
     { data: contentItems },
     { data: roadmap },
   ] = useSuspenseQueries({
-    queries: [topicsQO, sourcesQO, capabilitiesQO, claimCountsQO, diagramsQO, contentItemsQO, roadmapQO],
+    queries: [
+      topicsQO,
+      sourcesQO,
+      capabilitiesQO,
+      claimCountsQO,
+      diagramsQO,
+      contentItemsQO,
+      roadmapQO,
+    ],
   });
   const navigate = useNavigate({ from: "/" });
   const search = Route.useSearch();

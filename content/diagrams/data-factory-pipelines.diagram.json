@@ -6,11 +6,7 @@
   "longDescription": "This diagram separates two things that are easy to conflate: how a pipeline run starts, and how it moves data once started. Three trigger paths converge on the same pipeline run: an on-demand manual run, a time-based schedule (up to 20 per pipeline, each requiring both a start and end date), and a storage event trigger. The event trigger path is drawn as flowing through Fabric's existing eventstream and Data Activator (Reflex) plumbing rather than a separate trigger subsystem, because that is literally how it is implemented — defining a storage event trigger creates an eventstream object plus a Reflex alert in the workspace. Once a run starts, the pipeline executes a Copy activity, which exposes three independently tunable parallelism levels (control-flow fan-out via ForEach, Intelligent Throughput Optimization for per-activity compute sizing, and a thread-count cap within one activity). A second, parallel path shows that a pipeline is not the only way to move data: Copy job and Mirroring are lighter-weight primitives that can run independently of a full pipeline, and the newer GA pattern lets a Data Activator rule invoke a Copy job directly with no pipeline in between at all — the same eventing plumbing driving both the pipeline trigger and this Copy-job-only path. Two warning nodes capture real, sourced traps: tuning throughput settings past the actual source/destination/network bottleneck has no effect, and Warehouse and Eventhouse are unsupported Copy destinations under private-link configurations.",
   "type": "flow",
   "topicSlug": "data-factory",
-  "capabilityIds": [
-    "data-factory",
-    "rti",
-    "mirroring"
-  ],
+  "capabilityIds": ["data-factory", "rti", "mirroring"],
   "revision": "3",
   "qaStatus": "draft",
   "staticPath": "/diagrams/data-factory-pipelines.svg",
@@ -22,13 +18,8 @@
       "detail": "The simplest of the three ways to start a pipeline run: triggered manually from the pipeline editor, with no schedule or event involved. Useful for testing and ad-hoc execution.",
       "whyItMatters": "On-demand runs are how pipelines get validated during development, but they carry an operational gap worth knowing before relying on them in production diagnostics: failure email notifications don't fire for them.",
       "classification": "fact",
-      "layers": [
-        "orchestration"
-      ],
-      "tags": [
-        "DataFactory",
-        "Pipelines"
-      ],
+      "layers": ["orchestration"],
+      "tags": ["DataFactory", "Pipelines"],
       "evidence": [
         {
           "sourceKey": "pipeline-runs",
@@ -36,19 +27,13 @@
         }
       ],
       "drill": {
-        "inputs": [
-          "A user manually invoking Run in the pipeline editor"
-        ],
+        "inputs": ["A user manually invoking Run in the pipeline editor"],
         "processing": [
           "Pipeline executes immediately with the parameter values supplied at invocation, or defaults if none are supplied"
         ],
-        "outputs": [
-          "A pipeline run instance, visible in the Monitor hub like any other run"
-        ],
+        "outputs": ["A pipeline run instance, visible in the Monitor hub like any other run"],
         "example": "A developer manually runs a newly authored pipeline to validate a Copy activity's mapping before wiring up a schedule.",
-        "controls": [
-          "Parameter values supplied at manual invocation"
-        ],
+        "controls": ["Parameter values supplied at manual invocation"],
         "failureModes": [
           "Assuming a manual test run will alert on failure the same way a scheduled run would — it will not, since email notifications only fire for scheduled runs"
         ]
@@ -61,13 +46,8 @@
       "detail": "Fabric pipeline schedules have no open-ended option — every schedule requires both a start and an end date, so a long-running pipeline stays alive by setting an end date far in the future. A single pipeline can carry up to 20 schedules at once, each with its own frequency, dates, and time zone, letting one pipeline serve multiple delivery cadences without duplicating the pipeline itself.",
       "whyItMatters": "Because schedule parameters must match the pipeline's parameter names exactly and mismatches fail silently, schedule configuration is a common, hard-to-notice source of runs executing on default values instead of the intended ones.",
       "classification": "fact",
-      "layers": [
-        "orchestration"
-      ],
-      "tags": [
-        "DataFactory",
-        "Scheduling"
-      ],
+      "layers": ["orchestration"],
+      "tags": ["DataFactory", "Scheduling"],
       "evidence": [
         {
           "sourceKey": "pipeline-runs",
@@ -103,16 +83,8 @@
       "detail": "Event-based pipeline triggers are not a bespoke trigger subsystem: defining a storage event trigger creates an eventstream object plus a Data Activator alert stored as a Reflex item in the workspace. Triggers can respond to file events, job events, and workspace events on OneLake or Azure Blob Storage. Events follow the CloudEvents schema, and filtering on file name or folder path targets the event's Subject field, since those aren't exposed as separate properties.",
       "whyItMatters": "Because the trigger is built on general Fabric eventing/alerting primitives rather than a separate implementation, understanding eventstreams and Activator directly explains how pipeline event triggers behave — including why trigger metadata needs null-safe expression syntax during manual test runs.",
       "classification": "fact",
-      "layers": [
-        "orchestration",
-        "observability"
-      ],
-      "tags": [
-        "DataFactory",
-        "Eventstream",
-        "DataActivator",
-        "RTI"
-      ],
+      "layers": ["orchestration", "observability"],
+      "tags": ["DataFactory", "Eventstream", "DataActivator", "RTI"],
       "evidence": [
         {
           "sourceKey": "pipeline-runs",
@@ -158,14 +130,8 @@
       "detail": "Pipelines sit above individual data-movement activities and act as the orchestration layer. A single pipeline can chain Copy activities, Fabric notebook runs, Spark job definitions, HDInsight tasks, stored procedures, SQL scripts, and dbt jobs, wired together with loops and conditionals, authored in a low-code visual designer — or expressed as Python DAGs via the Apache Airflow integration for code-first teams.",
       "whyItMatters": "This is the layer that turns a single Copy step into a real workflow: retries, conditionals, and multi-activity sequencing all live here, which is exactly what separates a pipeline from a bare Copy job.",
       "classification": "fact",
-      "layers": [
-        "orchestration"
-      ],
-      "tags": [
-        "DataFactory",
-        "Pipelines",
-        "Orchestration"
-      ],
+      "layers": ["orchestration"],
+      "tags": ["DataFactory", "Pipelines", "Orchestration"],
       "evidence": [
         {
           "sourceKey": "data-factory-overview",
@@ -205,14 +171,8 @@
       "detail": "The Copy activity runs on a serverless architecture exposing parallelism at three distinct levels: control-flow concurrency (many Copy activities launched at once, e.g. from a ForEach loop), Intelligent Throughput Optimization (a per-activity compute-sizing lever with Auto/Standard/Balanced/Maximum presets or a 4-256 numeric value), and degree of copy parallelism (a thread cap within one activity). All three are independently tunable and by default the service picks parallelism dynamically.",
       "whyItMatters": "Understanding that these three levers are orthogonal — and which one actually addresses a given bottleneck — is the difference between tuning that helps and tuning that just adds cost for no throughput gain.",
       "classification": "fact",
-      "layers": [
-        "data",
-        "compute"
-      ],
-      "tags": [
-        "DataFactory",
-        "CopyActivity"
-      ],
+      "layers": ["data", "compute"],
+      "tags": ["DataFactory", "CopyActivity"],
       "evidence": [
         {
           "sourceKey": "copy-activity-performance-and-scalability",
@@ -259,15 +219,8 @@
       "detail": "Achievable end-to-end throughput can be estimated as the minimum of three numbers: what the source store can serve, what the destination store can absorb, and the network bandwidth between them. If the constraint is the source store's IOPS or the network path, raising Intelligent Throughput Optimization or parallelism settings on the Copy activity cannot push throughput past that external limit — it just adds cost for no gain.",
       "whyItMatters": "This is the single most common wasted-effort pattern in Copy activity tuning: teams raise ITO to Maximum and add parallelism against a throttled REST API source, paying more for identical throughput, because the ceiling was never the Copy activity's own settings.",
       "classification": "warning",
-      "layers": [
-        "data",
-        "compute"
-      ],
-      "tags": [
-        "DataFactory",
-        "CopyActivity",
-        "Performance"
-      ],
+      "layers": ["data", "compute"],
+      "tags": ["DataFactory", "CopyActivity", "Performance"],
       "evidence": [
         {
           "sourceKey": "copy-activity-performance-and-scalability",
@@ -287,9 +240,7 @@
           "Either a correctly targeted tuning change, or confirmation that no Copy-activity setting can help and the constraint must be addressed upstream/downstream"
         ],
         "example": "A team raises ITO to Maximum and parallelCopies to 32 against a rate-limited REST API source and sees no throughput change, because the API's own rate limit — not Fabric's compute — was always the ceiling; reverting to Balanced and parallelCopies of 4 produces identical throughput at lower cost.",
-        "controls": [
-          "Measure via Monitor hub activity detail before changing any setting"
-        ],
+        "controls": ["Measure via Monitor hub activity detail before changing any setting"],
         "failureModes": [
           "Escalating ITO/parallelism repeatedly with no throughput gain, mistaking the lack of effect for a Fabric limitation instead of an external one"
         ]
@@ -302,15 +253,8 @@
       "detail": "Copy job is described as Fabric's simplest and most scalable mechanism for moving data across multiple clouds and tenants, with built-in delivery styles: bulk load, incremental load, and change-data-capture replication. It runs independently of a full pipeline, trading some of the Copy activity's manual control for a much smaller build-and-maintenance surface. Mirroring is a separate, complementary primitive surfaced from Data Factory: it keeps a near-real-time replica of an operational database inside OneLake, so analytics and reporting can run against the replica instead of the source system, without building a separate ingestion pipeline.",
       "whyItMatters": "Copy job is the right choice when the job really is just moving data with one of its built-in delivery styles — building a full pipeline around it adds orchestration overhead with no benefit if there's no other activity to chain. Mirroring covers a different shape again — a continuously-replicated operational database rather than a scheduled or triggered movement — so picking between Copy job and Mirroring depends on whether the source is a database needing continuous sync or a discrete dataset needing a delivery-mode copy.",
       "classification": "fact",
-      "layers": [
-        "data"
-      ],
-      "tags": [
-        "DataFactory",
-        "CopyJob",
-        "Mirroring",
-        "OneLake"
-      ],
+      "layers": ["data"],
+      "tags": ["DataFactory", "CopyJob", "Mirroring", "OneLake"],
       "evidence": [
         {
           "sourceKey": "data-factory-overview",
@@ -340,9 +284,7 @@
           "Mirroring output: a continuously updated OneLake Delta replica, queryable by Spark, SQL, and Direct Lake"
         ],
         "example": "A team replicating a handful of source tables into a lakehouse on a nightly incremental cadence uses Copy job directly rather than building a pipeline wrapper, since there's no other orchestration step needed. Separately, a team needing near-real-time analytical access to an operational Azure SQL Database uses Mirroring instead, since the source is a live database rather than a discrete dataset to copy.",
-        "controls": [
-          "Delivery mode selection (bulk vs incremental vs CDC)"
-        ],
+        "controls": ["Delivery mode selection (bulk vs incremental vs CDC)"],
         "failureModes": [
           "Choosing Copy job when the scenario actually needs pipeline-level control flow (conditionals, multi-activity retries), then hitting its smaller feature surface mid-build",
           "Building a redundant hand-rolled CDC pipeline for a source that Mirroring already covers, duplicating maintenance effort"
@@ -361,16 +303,8 @@
       "detail": "Fabric Activator can now directly invoke a Copy job as a rule action, without requiring an intermediate Data Factory pipeline, and this capability is Generally Available. The documented pattern is a two-step build: define the Copy job first (source, destination, mode, mappings), then create an Activator rule whose condition — file-created, table-updated, or metric-threshold — triggers that Copy job as its action.",
       "whyItMatters": "This removes an orchestration layer that was previously required just to get event-driven behavior out of a Copy job, which matters specifically for teams managing large numbers of scheduled tables where empty runs and schedule sprawl were a real, accumulating operational cost.",
       "classification": "fact",
-      "layers": [
-        "orchestration",
-        "observability"
-      ],
-      "tags": [
-        "DataActivator",
-        "CopyJob",
-        "RTI",
-        "EventDriven"
-      ],
+      "layers": ["orchestration", "observability"],
+      "tags": ["DataActivator", "CopyJob", "RTI", "EventDriven"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-activator-copy-job",
@@ -397,9 +331,7 @@
           "The Copy job runs only when the real-world event actually occurs, with no empty scheduled runs"
         ],
         "example": "Instead of a Copy job scheduled hourly against a table that changes a few times a day, an Activator rule watches for the table-updated event on that OneLake table and invokes the Copy job only when a change actually lands — eliminating the empty hourly runs entirely.",
-        "controls": [
-          "Which Activator condition type drives the rule (file/table/metric)"
-        ],
+        "controls": ["Which Activator condition type drives the rule (file/table/metric)"],
         "failureModes": [
           "Underestimating event volume and getting far more Copy job invocations than the old fixed schedule would have produced, if the source changes more often than expected"
         ]
@@ -417,16 +349,8 @@
       "detail": "Pipeline Copy activity to and from Fabric Data Warehouse is unsupported when private links are enabled, and Eventhouse is unsupported as a direct Copy pipeline destination under both tenant-level and workspace-level private link configurations.",
       "whyItMatters": "Teams that adopt private links tenant-wide for compliance reasons can discover this constraint only after designing a pipeline around a Warehouse or Eventhouse Copy destination — retrofitting around it after the fact is expensive.",
       "classification": "warning",
-      "layers": [
-        "data",
-        "security"
-      ],
-      "tags": [
-        "DataFactory",
-        "PrivateLinks",
-        "Warehouse",
-        "Eventhouse"
-      ],
+      "layers": ["data", "security"],
+      "tags": ["DataFactory", "PrivateLinks", "Warehouse", "Eventhouse"],
       "evidence": [
         {
           "sourceKey": "bradcoles-fabric-private-links",

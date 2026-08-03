@@ -19,23 +19,23 @@ Only icons used by Fabric Atlas diagrams are kept, not the full 1,659-file colle
 workload icons use the upstream `_color` variant (preserves official multi-tone fill); Fabric item
 icons use the upstream `_item` variant (no separate color variant exists for items upstream).
 
-| File | Upstream source | Represents |
-|---|---|---|
-| `svg/data_factory_32_color.svg` | `data_factory_32_color.svg` | Data Factory workload |
-| `svg/data_science_32_color.svg` | `data_science_32_color.svg` | Data Science workload |
-| `svg/data_warehouse_32_color.svg` | `data_warehouse_32_color.svg` | Data Warehouse workload |
-| `svg/power_bi_32_color.svg` | `power_bi_32_color.svg` | Power BI workload |
-| `svg/copilot_32_color.svg` | `copilot_32_color.svg` | Copilot (embedded AI) |
-| `svg/purview_32_color.svg` | `purview_32_color.svg` | Purview governance |
+| File                                      | Upstream source                       | Represents                      |
+| ----------------------------------------- | ------------------------------------- | ------------------------------- |
+| `svg/data_factory_32_color.svg`           | `data_factory_32_color.svg`           | Data Factory workload           |
+| `svg/data_science_32_color.svg`           | `data_science_32_color.svg`           | Data Science workload           |
+| `svg/data_warehouse_32_color.svg`         | `data_warehouse_32_color.svg`         | Data Warehouse workload         |
+| `svg/power_bi_32_color.svg`               | `power_bi_32_color.svg`               | Power BI workload               |
+| `svg/copilot_32_color.svg`                | `copilot_32_color.svg`                | Copilot (embedded AI)           |
+| `svg/purview_32_color.svg`                | `purview_32_color.svg`                | Purview governance              |
 | `svg/real_time_intelligence_32_color.svg` | `real_time_intelligence_32_color.svg` | Real-Time Intelligence workload |
-| `svg/one_lake_32_color.svg` | `one_lake_32_color.svg` | OneLake |
-| `svg/lakehouse_item_32.svg` | `lakehouse_32_item.svg` | Lakehouse item |
-| `svg/notebook_item_32.svg` | `notebook_32_item.svg` | Notebook item |
-| `svg/dataflow_gen2_item_32.svg` | `dataflow_gen2_32_item.svg` | Dataflow Gen2 item |
-| `svg/eventstream_item_32.svg` | `eventstream_32_item.svg` | Eventstream item |
-| `svg/event_house_item_32.svg` | `event_house_32_item.svg` | Eventhouse item |
-| `svg/semantic_model_item_32.svg` | `semantic_model_32_item.svg` | Semantic model item |
-| `svg/data_warehouse_item_32.svg` | `data_warehouse_32_item.svg` | Warehouse item |
+| `svg/one_lake_32_color.svg`               | `one_lake_32_color.svg`               | OneLake                         |
+| `svg/lakehouse_item_32.svg`               | `lakehouse_32_item.svg`               | Lakehouse item                  |
+| `svg/notebook_item_32.svg`                | `notebook_32_item.svg`                | Notebook item                   |
+| `svg/dataflow_gen2_item_32.svg`           | `dataflow_gen2_32_item.svg`           | Dataflow Gen2 item              |
+| `svg/eventstream_item_32.svg`             | `eventstream_32_item.svg`             | Eventstream item                |
+| `svg/event_house_item_32.svg`             | `event_house_32_item.svg`             | Eventhouse item                 |
+| `svg/semantic_model_item_32.svg`          | `semantic_model_32_item.svg`          | Semantic model item             |
+| `svg/data_warehouse_item_32.svg`          | `data_warehouse_32_item.svg`          | Warehouse item                  |
 
 ## Required practice (per official-icon-policy.md)
 

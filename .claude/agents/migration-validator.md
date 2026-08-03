@@ -58,7 +58,7 @@ tables, `kind IN ('article','design','lesson')`; `content_item_sources` replaces
    For each row with a `featured_diagram` value, check
    `curl -s "$SB/diagrams?slug=eq.<value>&select=slug" -H "$H1" -H "$H2"` returns a row. This
    complements — not duplicates — `validate-content.mjs`'s pre-publish check on the git-tracked
-   `content/*.json` files: this check catches drift in the *published* Supabase row, e.g. a
+   `content/*.json` files: this check catches drift in the _published_ Supabase row, e.g. a
    diagram deregistered after the article went live, or a stale profile landed by a direct edit.
    A dangling `featured_diagram` is a warning (a broken hero image, not a data-integrity failure).
 

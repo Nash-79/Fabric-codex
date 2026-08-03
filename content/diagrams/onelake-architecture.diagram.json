@@ -21,15 +21,32 @@
       "layers": ["data", "governance"],
       "tags": ["OneLake", "MicrosoftFabric", "Tenancy"],
       "evidence": [
-        { "sourceKey": "onelake-overview", "note": "Every Fabric tenant is provisioned with exactly one OneLake; tenants cannot create additional instances or delete the existing one, and no separate storage resources need to be provisioned or managed." }
+        {
+          "sourceKey": "onelake-overview",
+          "note": "Every Fabric tenant is provisioned with exactly one OneLake; tenants cannot create additional instances or delete the existing one, and no separate storage resources need to be provisioned or managed."
+        }
       ],
       "drill": {
-        "inputs": ["A newly created Microsoft Fabric tenant, mapped one-to-one with a Microsoft Entra tenant"],
-        "processing": ["Fabric provisions OneLake automatically at tenant creation", "OneLake is layered on Azure Data Lake Storage Gen2 and exposes ADLS Gen2 APIs/SDKs", "The tenant maps to the root of one continuous file-system namespace"],
-        "outputs": ["A single, always-present OneLake ready to hold workspaces and items with no manual storage provisioning"],
+        "inputs": [
+          "A newly created Microsoft Fabric tenant, mapped one-to-one with a Microsoft Entra tenant"
+        ],
+        "processing": [
+          "Fabric provisions OneLake automatically at tenant creation",
+          "OneLake is layered on Azure Data Lake Storage Gen2 and exposes ADLS Gen2 APIs/SDKs",
+          "The tenant maps to the root of one continuous file-system namespace"
+        ],
+        "outputs": [
+          "A single, always-present OneLake ready to hold workspaces and items with no manual storage provisioning"
+        ],
         "example": "A new organization signs up for Fabric; before any workspace is created, OneLake already exists as the tenant's storage root — the first workspace created simply becomes a container inside it, with no separate storage-account setup step.",
-        "controls": ["None at the OneLake-existence level — this is not a configurable choice", "Tenant-level security, compliance, and data-management policy set once, applying to everything that later lands in OneLake"],
-        "failureModes": ["Assuming a new business unit needs its own OneLake or storage account, and provisioning one unnecessarily", "Treating OneLake as optional infrastructure to configure rather than the default, always-on substrate"]
+        "controls": [
+          "None at the OneLake-existence level — this is not a configurable choice",
+          "Tenant-level security, compliance, and data-management policy set once, applying to everything that later lands in OneLake"
+        ],
+        "failureModes": [
+          "Assuming a new business unit needs its own OneLake or storage account, and provisioning one unnecessarily",
+          "Treating OneLake as optional infrastructure to configure rather than the default, always-on substrate"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
     },
@@ -43,15 +60,33 @@
       "layers": ["data", "metadata"],
       "tags": ["OneLake", "Namespace", "Workspaces"],
       "evidence": [
-        { "sourceKey": "onelake-overview", "note": "OneLake's addressing model virtualizes the whole tenant as one giant ADLS storage account: each workspace surfaces as a container, and each data item surfaces as a folder inside its workspace container." }
+        {
+          "sourceKey": "onelake-overview",
+          "note": "OneLake's addressing model virtualizes the whole tenant as one giant ADLS storage account: each workspace surfaces as a container, and each data item surfaces as a folder inside its workspace container."
+        }
       ],
       "drill": {
-        "inputs": ["Workspaces created under the tenant, each attached to a capacity in a region", "Items created inside those workspaces (lakehouse, warehouse, eventhouse, KQL database, etc.)"],
-        "processing": ["Fabric assigns each workspace a container path under the tenant's OneLake account", "Fabric assigns each item a folder path inside its workspace container", "The resulting ABFSS-style path becomes the single canonical address for that item's data"],
-        "outputs": ["A globally unique, ADLS-compatible path per item, addressable identically from Spark, T-SQL, Power BI, and external ADLS-aware tools"],
+        "inputs": [
+          "Workspaces created under the tenant, each attached to a capacity in a region",
+          "Items created inside those workspaces (lakehouse, warehouse, eventhouse, KQL database, etc.)"
+        ],
+        "processing": [
+          "Fabric assigns each workspace a container path under the tenant's OneLake account",
+          "Fabric assigns each item a folder path inside its workspace container",
+          "The resulting ABFSS-style path becomes the single canonical address for that item's data"
+        ],
+        "outputs": [
+          "A globally unique, ADLS-compatible path per item, addressable identically from Spark, T-SQL, Power BI, and external ADLS-aware tools"
+        ],
         "example": "A lakehouse named 'sales' in workspace 'analytics-prod' resolves to one fixed OneLake path; a Spark notebook, a T-SQL query against the SQL analytics endpoint, and an external Databricks job referencing the same abfss:// path all read the identical underlying files.",
-        "controls": ["Workspace-to-capacity and workspace-to-region assignment at creation time", "Item naming, which becomes part of the permanent addressable path"],
-        "failureModes": ["Renaming an item and assuming external tools referencing the old path will still resolve", "Treating workspace/item paths as arbitrary strings rather than the actual addressing contract other engines depend on"]
+        "controls": [
+          "Workspace-to-capacity and workspace-to-region assignment at creation time",
+          "Item naming, which becomes part of the permanent addressable path"
+        ],
+        "failureModes": [
+          "Renaming an item and assuming external tools referencing the old path will still resolve",
+          "Treating workspace/item paths as arbitrary strings rather than the actual addressing contract other engines depend on"
+        ]
       }
     },
     {
@@ -64,15 +99,32 @@
       "layers": ["data"],
       "tags": ["OneLake", "DeltaLake", "Parquet"],
       "evidence": [
-        { "sourceKey": "onelake-overview", "note": "All Fabric data items automatically persist their tabular data in OneLake using the open Delta Parquet format, regardless of which engine wrote the data; this one-copy design lets multiple engines operate over the same physical data without duplication or lock-in." }
+        {
+          "sourceKey": "onelake-overview",
+          "note": "All Fabric data items automatically persist their tabular data in OneLake using the open Delta Parquet format, regardless of which engine wrote the data; this one-copy design lets multiple engines operate over the same physical data without duplication or lock-in."
+        }
       ],
       "drill": {
-        "inputs": ["Writes from any Fabric engine (Spark job, warehouse T-SQL insert, pipeline copy activity, mirroring change feed)"],
-        "processing": ["Engine writes Parquet data files plus a Delta transaction log entry", "OneLake registers the resulting table/folder under the item's canonical path", "No format conversion step exists between engines"],
-        "outputs": ["A single physical copy of Delta Parquet data, immediately queryable by every engine that can read Delta"],
+        "inputs": [
+          "Writes from any Fabric engine (Spark job, warehouse T-SQL insert, pipeline copy activity, mirroring change feed)"
+        ],
+        "processing": [
+          "Engine writes Parquet data files plus a Delta transaction log entry",
+          "OneLake registers the resulting table/folder under the item's canonical path",
+          "No format conversion step exists between engines"
+        ],
+        "outputs": [
+          "A single physical copy of Delta Parquet data, immediately queryable by every engine that can read Delta"
+        ],
         "example": "A Spark job writes a gold sales table; without any export or ETL step, the warehouse's T-SQL engine and a Power BI Direct Lake model both read that exact same Delta table the moment the Spark write commits.",
-        "controls": ["Choice of writing engine (does not affect the resulting open format)", "V-Order and compaction settings that shape the physical Parquet layout without changing logical data"],
-        "failureModes": ["Building an export/copy pipeline between engines out of habit, recreating the duplication OneLake's one-copy model is meant to eliminate", "Assuming a non-Delta write (raw CSV/Parquet dropped into Files/) gets the same auto-registration and multi-engine guarantees — it does not"]
+        "controls": [
+          "Choice of writing engine (does not affect the resulting open format)",
+          "V-Order and compaction settings that shape the physical Parquet layout without changing logical data"
+        ],
+        "failureModes": [
+          "Building an export/copy pipeline between engines out of habit, recreating the duplication OneLake's one-copy model is meant to eliminate",
+          "Assuming a non-Delta write (raw CSV/Parquet dropped into Files/) gets the same auto-registration and multi-engine guarantees — it does not"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
     },
@@ -86,15 +138,30 @@
       "layers": ["compute", "data"],
       "tags": ["OneLake", "MultiEngine", "Spark", "DirectLake"],
       "evidence": [
-        { "sourceKey": "onelake-overview", "note": "The one-copy design lets multiple Fabric engines — T-SQL, Apache Spark, Analysis Services, and others — operate over the same physical Delta Parquet data, so teams do not duplicate datasets per engine." }
+        {
+          "sourceKey": "onelake-overview",
+          "note": "The one-copy design lets multiple Fabric engines — T-SQL, Apache Spark, Analysis Services, and others — operate over the same physical Delta Parquet data, so teams do not duplicate datasets per engine."
+        }
       ],
       "drill": {
         "inputs": ["A Delta table already resident in OneLake under an item's canonical path"],
-        "processing": ["Spark reads/writes via Spark SQL or the DataFrame API", "T-SQL reads via the SQL analytics endpoint (lakehouse/mirrored/SQL database) or full warehouse engine", "Analysis Services reads directly in Direct Lake mode for a Power BI semantic model, with no import refresh"],
-        "outputs": ["Three concurrently valid query surfaces over the same physical data, each reflecting the latest committed state"],
+        "processing": [
+          "Spark reads/writes via Spark SQL or the DataFrame API",
+          "T-SQL reads via the SQL analytics endpoint (lakehouse/mirrored/SQL database) or full warehouse engine",
+          "Analysis Services reads directly in Direct Lake mode for a Power BI semantic model, with no import refresh"
+        ],
+        "outputs": [
+          "Three concurrently valid query surfaces over the same physical data, each reflecting the latest committed state"
+        ],
         "example": "A data engineer writes a new partition with Spark at 9:00am; by 9:01am an analyst's Direct Lake report and a separate T-SQL ad hoc query against the SQL analytics endpoint both reflect the new rows, with no refresh or export triggered in between.",
-        "controls": ["Which engine a given workload uses is a skills/workload choice, not a data-availability constraint", "Direct Lake vs Import vs DirectQuery mode selection on the semantic model layer"],
-        "failureModes": ["Assuming an engine change requires a data migration, when it is usually just a different query surface over the same files", "Building custom sync jobs between engines that are already reading the same physical data"]
+        "controls": [
+          "Which engine a given workload uses is a skills/workload choice, not a data-availability constraint",
+          "Direct Lake vs Import vs DirectQuery mode selection on the semantic model layer"
+        ],
+        "failureModes": [
+          "Assuming an engine change requires a data migration, when it is usually just a different query surface over the same files",
+          "Building custom sync jobs between engines that are already reading the same physical data"
+        ]
       }
     },
     {
@@ -107,15 +174,32 @@
       "layers": ["data", "metadata"],
       "tags": ["OneLake", "Shortcuts", "DataVirtualization"],
       "evidence": [
-        { "sourceKey": "onelake-shortcuts", "note": "A OneLake shortcut is an object that points from a shortcut path to a target path in another storage location; it behaves like a symbolic link, and is transparent to consumers — Spark, SQL, RTI, and non-Fabric ADLS-compatible tools all query shortcut data with no shortcut-specific logic." }
+        {
+          "sourceKey": "onelake-shortcuts",
+          "note": "A OneLake shortcut is an object that points from a shortcut path to a target path in another storage location; it behaves like a symbolic link, and is transparent to consumers — Spark, SQL, RTI, and non-Fabric ADLS-compatible tools all query shortcut data with no shortcut-specific logic."
+        }
       ],
       "drill": {
-        "inputs": ["A target path: another item in the same or a different workspace/tenant, or an external store (ADLS Gen2, S3, GCS, Dataverse)"],
-        "processing": ["Create the shortcut interactively in the Fabric portal or programmatically via the OneLake shortcuts REST API", "Fabric registers the shortcut as a folder reference at the chosen path", "Any Delta-format target under Tables/ auto-registers as a queryable table"],
-        "outputs": ["A folder that reads and queries exactly like native data, with zero bytes duplicated"],
+        "inputs": [
+          "A target path: another item in the same or a different workspace/tenant, or an external store (ADLS Gen2, S3, GCS, Dataverse)"
+        ],
+        "processing": [
+          "Create the shortcut interactively in the Fabric portal or programmatically via the OneLake shortcuts REST API",
+          "Fabric registers the shortcut as a folder reference at the chosen path",
+          "Any Delta-format target under Tables/ auto-registers as a queryable table"
+        ],
+        "outputs": [
+          "A folder that reads and queries exactly like native data, with zero bytes duplicated"
+        ],
         "example": "An analytics lakehouse creates a shortcut into a supply-chain team's lakehouse Tables/inventory folder; a Spark notebook in the analytics workspace reads Tables/inventory_shortcut as though it were a local table, with no copy job involved.",
-        "controls": ["Shortcut target selection and naming (no spaces — Delta format disallows them in table names)", "Whether the shortcut is created at the top level of Tables/ (auto-discovered) or nested in Files/ (not auto-discovered)"],
-        "failureModes": ["Naming a table shortcut with a space, which the Delta format rejects, silently preventing table auto-registration", "Deleting or renaming a shortcut target without updating dependents, breaking every shortcut that points at it"]
+        "controls": [
+          "Shortcut target selection and naming (no spaces — Delta format disallows them in table names)",
+          "Whether the shortcut is created at the top level of Tables/ (auto-discovered) or nested in Files/ (not auto-discovered)"
+        ],
+        "failureModes": [
+          "Naming a table shortcut with a space, which the Delta format rejects, silently preventing table auto-registration",
+          "Deleting or renaming a shortcut target without updating dependents, breaking every shortcut that points at it"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
     },
@@ -129,16 +213,32 @@
       "layers": ["data", "security"],
       "tags": ["OneLake", "Shortcuts", "IdentityPassthrough"],
       "evidence": [
-        { "sourceKey": "onelake-shortcuts", "note": "Internal OneLake shortcuts can target data in other Fabric items across items and workspaces, and access through them is authorized with the calling user's own identity, which must hold read permission at the target." },
-        { "sourceKey": "fabric-blog-zero-copy-security-shortcuts", "note": "For pass-through shortcuts, OneLake security cannot be additionally configured on the shortcut path itself; access is evaluated only at the target, so the data owner retains full, exclusive control regardless of which shortcut path is used." }
+        {
+          "sourceKey": "onelake-shortcuts",
+          "note": "Internal OneLake shortcuts can target data in other Fabric items across items and workspaces, and access through them is authorized with the calling user's own identity, which must hold read permission at the target."
+        },
+        {
+          "sourceKey": "fabric-blog-zero-copy-security-shortcuts",
+          "note": "For pass-through shortcuts, OneLake security cannot be additionally configured on the shortcut path itself; access is evaluated only at the target, so the data owner retains full, exclusive control regardless of which shortcut path is used."
+        }
       ],
       "drill": {
-        "inputs": ["A shortcut pointing at another Fabric item's table or folder", "The calling user's own Entra ID identity and their OneLake security grants at the target"],
-        "processing": ["OneLake evaluates the caller's identity against the target item's permissions, not the shortcut path's", "If the caller lacks read permission at the target, the read fails even though the shortcut itself exists"],
+        "inputs": [
+          "A shortcut pointing at another Fabric item's table or folder",
+          "The calling user's own Entra ID identity and their OneLake security grants at the target"
+        ],
+        "processing": [
+          "OneLake evaluates the caller's identity against the target item's permissions, not the shortcut path's",
+          "If the caller lacks read permission at the target, the read fails even though the shortcut itself exists"
+        ],
         "outputs": ["A read authorized exactly as if the caller queried the target item directly"],
         "example": "Two teams share an analytics workspace with a shortcut into a finance lakehouse; an analyst without read permission on the finance lakehouse still cannot query the shortcut, even though it appears in their own workspace's Tables folder.",
-        "controls": ["Grant/revoke read permission at the target item, which immediately propagates to every internal shortcut pointing at it"],
-        "failureModes": ["Assuming DirectLake-over-SQL or T-SQL delegated-identity mode preserves per-user passthrough through a shortcut — those specific modes actually authorize as the item owner, not the caller"]
+        "controls": [
+          "Grant/revoke read permission at the target item, which immediately propagates to every internal shortcut pointing at it"
+        ],
+        "failureModes": [
+          "Assuming DirectLake-over-SQL or T-SQL delegated-identity mode preserves per-user passthrough through a shortcut — those specific modes actually authorize as the item owner, not the caller"
+        ]
       }
     },
     {
@@ -151,17 +251,41 @@
       "layers": ["data", "security"],
       "tags": ["OneLake", "Shortcuts", "DelegatedIdentity", "CrossTenant"],
       "evidence": [
-        { "sourceKey": "onelake-shortcuts", "note": "ADLS and S3 shortcuts delegate authorization to a cloud connection bound at shortcut creation; binding is a privileged operation, so a user without permission on the connection cannot create new shortcuts that use it." },
-        { "sourceKey": "fabric-blog-delegated-shortcuts", "note": "Delegated OneLake Shortcuts add a second shortcut authentication mode where access flows through one configured connection identity instead of each signed-in user's identity; the identity can be an organizational account, service principal, or workspace identity, and delegation is optional per shortcut." },
-        { "sourceKey": "fabric-blog-delegated-shortcuts", "note": "Delegated shortcuts support cross-tenant sharing: one Fabric tenant can shortcut to OneLake data in a different organization's tenant, authenticating with an identity from that other tenant." }
+        {
+          "sourceKey": "onelake-shortcuts",
+          "note": "ADLS and S3 shortcuts delegate authorization to a cloud connection bound at shortcut creation; binding is a privileged operation, so a user without permission on the connection cannot create new shortcuts that use it."
+        },
+        {
+          "sourceKey": "fabric-blog-delegated-shortcuts",
+          "note": "Delegated OneLake Shortcuts add a second shortcut authentication mode where access flows through one configured connection identity instead of each signed-in user's identity; the identity can be an organizational account, service principal, or workspace identity, and delegation is optional per shortcut."
+        },
+        {
+          "sourceKey": "fabric-blog-delegated-shortcuts",
+          "note": "Delegated shortcuts support cross-tenant sharing: one Fabric tenant can shortcut to OneLake data in a different organization's tenant, authenticating with an identity from that other tenant."
+        }
       ],
       "drill": {
-        "inputs": ["An external target (ADLS Gen2, S3, GCS, Dataverse) or a cross-tenant/cross-workspace Fabric target", "A bound connection identity: cloud connection, org account, service principal, or workspace identity"],
-        "processing": ["Bind a connection/identity at shortcut creation (privileged operation)", "OneLake authorizes reads through that bound identity rather than the caller's own", "For delegated OneLake shortcuts specifically, the effective access is the intersection of the delegated identity's permissions and the end user's own OneLake security grant"],
-        "outputs": ["A shortcut usable by many downstream consumers without provisioning each one individually at the source"],
+        "inputs": [
+          "An external target (ADLS Gen2, S3, GCS, Dataverse) or a cross-tenant/cross-workspace Fabric target",
+          "A bound connection identity: cloud connection, org account, service principal, or workspace identity"
+        ],
+        "processing": [
+          "Bind a connection/identity at shortcut creation (privileged operation)",
+          "OneLake authorizes reads through that bound identity rather than the caller's own",
+          "For delegated OneLake shortcuts specifically, the effective access is the intersection of the delegated identity's permissions and the end user's own OneLake security grant"
+        ],
+        "outputs": [
+          "A shortcut usable by many downstream consumers without provisioning each one individually at the source"
+        ],
         "example": "A central sales lakehouse creates a delegated shortcut into an EMEA regional workspace using service principal spn-emea-reader, scoped via OneLake security to EMEA rows only; EMEA analysts see the intersection of what spn-emea-reader can read and what their own OneLake role grants — never more than the service principal's own scope.",
-        "controls": ["Scope the delegated identity's own permissions narrowly at the source — this is what actually caps downstream exposure", "Choose pass-through vs. delegated deliberately at creation time; switching later requires deleting and recreating the shortcut"],
-        "failureModes": ["Treating the delegated identity as a blank check and relying only on the consuming workspace's own permissions, without also constraining the delegated identity at the source", "Assuming a mode switch (pass-through to delegated) is an in-place setting — it requires delete and recreate"]
+        "controls": [
+          "Scope the delegated identity's own permissions narrowly at the source — this is what actually caps downstream exposure",
+          "Choose pass-through vs. delegated deliberately at creation time; switching later requires deleting and recreating the shortcut"
+        ],
+        "failureModes": [
+          "Treating the delegated identity as a blank check and relying only on the consuming workspace's own permissions, without also constraining the delegated identity at the source",
+          "Assuming a mode switch (pass-through to delegated) is an in-place setting — it requires delete and recreate"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
     },
@@ -175,16 +299,38 @@
       "layers": ["security", "governance"],
       "tags": ["OneLake", "Security", "RBAC"],
       "evidence": [
-        { "sourceKey": "onelake-security", "note": "OneLake security operates on two planes: control plane permissions decide what users can do, while data plane permissions (the OneLake security model) decide what data users can read; control plane grants often confer data access by default." },
-        { "sourceKey": "onelake-security", "note": "A OneLake security role is composed of the data (tables or folders) in scope, the permission granted, the member users, and optional constraints that carve out specific rows or columns, enabling table, folder, row-level, and column-level security." }
+        {
+          "sourceKey": "onelake-security",
+          "note": "OneLake security operates on two planes: control plane permissions decide what users can do, while data plane permissions (the OneLake security model) decide what data users can read; control plane grants often confer data access by default."
+        },
+        {
+          "sourceKey": "onelake-security",
+          "note": "A OneLake security role is composed of the data (tables or folders) in scope, the permission granted, the member users, and optional constraints that carve out specific rows or columns, enabling table, folder, row-level, and column-level security."
+        }
       ],
       "drill": {
-        "inputs": ["Workspace role assignments (Admin/Member/Contributor/Viewer)", "Item-level sharing grants (Write/Read/ReadData/ReadAll)", "Custom OneLake security role definitions scoped to specific tables/folders"],
-        "processing": ["Evaluate the caller's workspace role first — Admin/Member/Contributor can read/write OneLake data outright; Viewer needs an explicit OneLake security role", "Apply item-level sharing scope if the caller reached the item via sharing rather than workspace membership", "Apply any custom OneLake security role constraints (row/column scope) on top"],
-        "outputs": ["An effective read/write decision per request, consistent whether the request came via direct query, internal shortcut, or delegated shortcut"],
+        "inputs": [
+          "Workspace role assignments (Admin/Member/Contributor/Viewer)",
+          "Item-level sharing grants (Write/Read/ReadData/ReadAll)",
+          "Custom OneLake security role definitions scoped to specific tables/folders"
+        ],
+        "processing": [
+          "Evaluate the caller's workspace role first — Admin/Member/Contributor can read/write OneLake data outright; Viewer needs an explicit OneLake security role",
+          "Apply item-level sharing scope if the caller reached the item via sharing rather than workspace membership",
+          "Apply any custom OneLake security role constraints (row/column scope) on top"
+        ],
+        "outputs": [
+          "An effective read/write decision per request, consistent whether the request came via direct query, internal shortcut, or delegated shortcut"
+        ],
         "example": "A Viewer with no explicit OneLake role queries a lakehouse's SQL analytics endpoint and is denied, despite being able to see the item exists in the workspace; granting them ReadData or a scoped OneLake security role resolves it without changing their workspace role.",
-        "controls": ["Scope custom OneLake security roles narrowly to specific tables/folders rather than relying on the broad built-in DefaultReader role", "Choose the correct item-sharing grant (Read vs ReadData vs ReadAll) for the access pattern actually needed"],
-        "failureModes": ["Relying on OneLake security roles to restrict workspace Admins, Members, or Contributors — those roles bypass OneLake security entirely and can read/write all item data", "Leaving the built-in DefaultReader role unedited, granting any ReadAll-permitted user access to all lakehouse data"]
+        "controls": [
+          "Scope custom OneLake security roles narrowly to specific tables/folders rather than relying on the broad built-in DefaultReader role",
+          "Choose the correct item-sharing grant (Read vs ReadData vs ReadAll) for the access pattern actually needed"
+        ],
+        "failureModes": [
+          "Relying on OneLake security roles to restrict workspace Admins, Members, or Contributors — those roles bypass OneLake security entirely and can read/write all item data",
+          "Leaving the built-in DefaultReader role unedited, granting any ReadAll-permitted user access to all lakehouse data"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
     },
@@ -198,29 +344,116 @@
       "layers": ["data", "governance"],
       "tags": ["OneLake", "Antipattern", "DataArchitecture"],
       "evidence": [
-        { "sourceKey": "onelake-overview", "note": "Standing up separate physical data lakes per business group is an antipattern in Fabric because it recreates the resource-management overhead and data duplication that the single tenant-wide OneLake with workspaces and shortcuts is designed to eliminate." }
+        {
+          "sourceKey": "onelake-overview",
+          "note": "Standing up separate physical data lakes per business group is an antipattern in Fabric because it recreates the resource-management overhead and data duplication that the single tenant-wide OneLake with workspaces and shortcuts is designed to eliminate."
+        }
       ],
       "drill": {
-        "inputs": ["A migration or new-project plan that defaults to 'give each team its own storage account/lake'"],
-        "processing": ["Team requests isolated storage instead of a workspace inside the tenant's one OneLake", "A second physical lake is provisioned, requiring its own governance, backup, and security configuration", "Data that could have been a shortcut is instead copied or pipeline-synced into the new lake"],
-        "outputs": ["Duplicate physical copies of data that drift out of sync, plus doubled operational overhead"],
+        "inputs": [
+          "A migration or new-project plan that defaults to 'give each team its own storage account/lake'"
+        ],
+        "processing": [
+          "Team requests isolated storage instead of a workspace inside the tenant's one OneLake",
+          "A second physical lake is provisioned, requiring its own governance, backup, and security configuration",
+          "Data that could have been a shortcut is instead copied or pipeline-synced into the new lake"
+        ],
+        "outputs": [
+          "Duplicate physical copies of data that drift out of sync, plus doubled operational overhead"
+        ],
         "example": "A newly onboarded business unit is given its own ADLS Gen2 storage account 'for isolation' instead of a Fabric workspace with scoped OneLake security roles; six months later its data has diverged from the source system because nobody maintained the sync pipeline between the two.",
-        "controls": ["Default new team onboarding to a workspace inside the existing OneLake, not a new storage account", "Use workspace-level and OneLake-security-role scoping to achieve organizational separation instead of physical isolation"],
-        "failureModes": ["Data duplication and drift between the siloed lake and the source of truth", "Doubled security, backup, and compliance surface area with no corresponding benefit"]
+        "controls": [
+          "Default new team onboarding to a workspace inside the existing OneLake, not a new storage account",
+          "Use workspace-level and OneLake-security-role scoping to achieve organizational separation instead of physical isolation"
+        ],
+        "failureModes": [
+          "Data duplication and drift between the siloed lake and the source of truth",
+          "Doubled security, backup, and compliance surface area with no corresponding benefit"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-tenant-namespace", "from": "tenant-onelake", "to": "namespace-hierarchy", "label": "virtualizes as one ADLS-compatible namespace", "layer": "data", "kind": "flow" },
-    { "id": "e-namespace-delta", "from": "namespace-hierarchy", "to": "delta-storage", "label": "item data lands as", "layer": "data", "kind": "flow" },
-    { "id": "e-delta-multiengine", "from": "delta-storage", "to": "multi-engine-consumption", "label": "read directly by", "layer": "compute", "kind": "flow" },
-    { "id": "e-delta-shortcuts", "from": "delta-storage", "to": "shortcuts", "label": "referenced without copying via", "layer": "data", "kind": "flow" },
-    { "id": "e-shortcuts-internal", "from": "shortcuts", "to": "internal-shortcuts", "label": "within-tenant Fabric item target", "layer": "security", "kind": "branch" },
-    { "id": "e-shortcuts-external", "from": "shortcuts", "to": "external-delegated-shortcuts", "label": "external store or cross-tenant target", "layer": "security", "kind": "branch" },
-    { "id": "e-multiengine-security", "from": "multi-engine-consumption", "to": "onelake-security-model", "label": "every query authorized by", "layer": "security", "kind": "flow" },
-    { "id": "e-internal-security", "from": "internal-shortcuts", "to": "onelake-security-model", "label": "caller identity checked against", "layer": "security", "kind": "flow" },
-    { "id": "e-external-security", "from": "external-delegated-shortcuts", "to": "onelake-security-model", "label": "intersection checked against", "layer": "security", "kind": "flow" },
-    { "id": "e-namespace-warning", "from": "namespace-hierarchy", "to": "siloed-lakes-antipattern", "label": "if teams bypass workspaces for separate lakes", "layer": "governance", "kind": "branch" }
+    {
+      "id": "e-tenant-namespace",
+      "from": "tenant-onelake",
+      "to": "namespace-hierarchy",
+      "label": "virtualizes as one ADLS-compatible namespace",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-namespace-delta",
+      "from": "namespace-hierarchy",
+      "to": "delta-storage",
+      "label": "item data lands as",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-delta-multiengine",
+      "from": "delta-storage",
+      "to": "multi-engine-consumption",
+      "label": "read directly by",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-delta-shortcuts",
+      "from": "delta-storage",
+      "to": "shortcuts",
+      "label": "referenced without copying via",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-shortcuts-internal",
+      "from": "shortcuts",
+      "to": "internal-shortcuts",
+      "label": "within-tenant Fabric item target",
+      "layer": "security",
+      "kind": "branch"
+    },
+    {
+      "id": "e-shortcuts-external",
+      "from": "shortcuts",
+      "to": "external-delegated-shortcuts",
+      "label": "external store or cross-tenant target",
+      "layer": "security",
+      "kind": "branch"
+    },
+    {
+      "id": "e-multiengine-security",
+      "from": "multi-engine-consumption",
+      "to": "onelake-security-model",
+      "label": "every query authorized by",
+      "layer": "security",
+      "kind": "flow"
+    },
+    {
+      "id": "e-internal-security",
+      "from": "internal-shortcuts",
+      "to": "onelake-security-model",
+      "label": "caller identity checked against",
+      "layer": "security",
+      "kind": "flow"
+    },
+    {
+      "id": "e-external-security",
+      "from": "external-delegated-shortcuts",
+      "to": "onelake-security-model",
+      "label": "intersection checked against",
+      "layer": "security",
+      "kind": "flow"
+    },
+    {
+      "id": "e-namespace-warning",
+      "from": "namespace-hierarchy",
+      "to": "siloed-lakes-antipattern",
+      "label": "if teams bypass workspaces for separate lakes",
+      "layer": "governance",
+      "kind": "branch"
+    }
   ],
   "walkthrough": [
     {

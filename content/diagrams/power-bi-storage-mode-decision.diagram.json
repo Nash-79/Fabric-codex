@@ -20,16 +20,33 @@
       "classification": "fact",
       "layers": ["compute", "data"],
       "evidence": [
-        { "sourceKey": "semantic-model-understand", "note": "Power BI Desktop supports three model storage modes — Import, DirectQuery, and Composite — distinguished by whether data is copied into the model or left in the underlying source at query time." }
+        {
+          "sourceKey": "semantic-model-understand",
+          "note": "Power BI Desktop supports three model storage modes — Import, DirectQuery, and Composite — distinguished by whether data is copied into the model or left in the underlying source at query time."
+        }
       ],
       "tags": ["SemanticModel", "PowerBI", "decision-root"],
       "drill": {
-        "inputs": ["A table or set of tables to be modelled", "A stated freshness requirement (real-time vs periodic refresh acceptable)", "Where the data physically lives (OneLake Delta vs an external source)"],
-        "processing": ["Ask whether the table must reflect the source at query time or a refreshed snapshot is acceptable", "Ask whether the table's data is Delta in OneLake or lives outside Fabric", "Route to Import, DirectQuery, or Direct Lake per table, allowing a composite mix"],
+        "inputs": [
+          "A table or set of tables to be modelled",
+          "A stated freshness requirement (real-time vs periodic refresh acceptable)",
+          "Where the data physically lives (OneLake Delta vs an external source)"
+        ],
+        "processing": [
+          "Ask whether the table must reflect the source at query time or a refreshed snapshot is acceptable",
+          "Ask whether the table's data is Delta in OneLake or lives outside Fabric",
+          "Route to Import, DirectQuery, or Direct Lake per table, allowing a composite mix"
+        ],
         "outputs": ["A storage mode assignment per table, feeding the rest of the decision tree"],
         "example": "A finance team models a billion-row OneLake sales fact (route to Direct Lake) alongside a small external currency-rates table that must reflect the vendor API in real time (route to DirectQuery) in one composite model.",
-        "controls": ["Per-table mode assignment in a composite model rather than one mode for the whole model", "Explicit freshness requirement documented before modelling starts"],
-        "failureModes": ["Defaulting an entire model to Import out of habit and inheriting a refresh window nobody actually needed", "Treating storage mode as a one-time platform setting instead of a per-table modelling decision"]
+        "controls": [
+          "Per-table mode assignment in a composite model rather than one mode for the whole model",
+          "Explicit freshness requirement documented before modelling starts"
+        ],
+        "failureModes": [
+          "Defaulting an entire model to Import out of habit and inheriting a refresh window nobody actually needed",
+          "Treating storage mode as a one-time platform setting instead of a per-table modelling decision"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic model" }
     },
@@ -42,17 +59,38 @@
       "classification": "fact",
       "layers": ["compute"],
       "evidence": [
-        { "sourceKey": "semantic-model-understand", "note": "An Import-mode model hosted in the Power BI service must be loaded entirely into memory before it can answer queries; Import-mode models serve a snapshot and rely on scheduled or on-demand refresh to stay current." },
-        { "sourceKey": "semantic-model-large-format", "note": "Default model size limit without the large storage format is 1 GB; enabling it raises the ceiling to the size of the Fabric capacity or an admin-set maximum, while the Desktop upload limit stays at 10 GB regardless — growth past that happens in-service via refresh, typically incremental refresh." }
+        {
+          "sourceKey": "semantic-model-understand",
+          "note": "An Import-mode model hosted in the Power BI service must be loaded entirely into memory before it can answer queries; Import-mode models serve a snapshot and rely on scheduled or on-demand refresh to stay current."
+        },
+        {
+          "sourceKey": "semantic-model-large-format",
+          "note": "Default model size limit without the large storage format is 1 GB; enabling it raises the ceiling to the size of the Fabric capacity or an admin-set maximum, while the Desktop upload limit stays at 10 GB regardless — growth past that happens in-service via refresh, typically incremental refresh."
+        }
       ],
       "tags": ["Import", "SemanticModel", "VertiPaq"],
       "drill": {
-        "inputs": ["Source data to be copied in on a defined schedule", "A refresh cadence (scheduled or on-demand)"],
-        "processing": ["Load all required columns into the in-memory VertiPaq engine", "Run scheduled or on-demand refresh to replace the snapshot", "Optionally apply incremental refresh to limit how much of the table reloads each cycle"],
-        "outputs": ["A fast, fully in-memory model bounded by the size ceiling and the refresh cadence"],
+        "inputs": [
+          "Source data to be copied in on a defined schedule",
+          "A refresh cadence (scheduled or on-demand)"
+        ],
+        "processing": [
+          "Load all required columns into the in-memory VertiPaq engine",
+          "Run scheduled or on-demand refresh to replace the snapshot",
+          "Optionally apply incremental refresh to limit how much of the table reloads each cycle"
+        ],
+        "outputs": [
+          "A fast, fully in-memory model bounded by the size ceiling and the refresh cadence"
+        ],
         "example": "A regional sales model imports 400 MB of aggregated daily data and refreshes twice a day; analysts get sub-second query response, at the cost of the data being up to 12 hours stale between refreshes.",
-        "controls": ["Refresh schedule and incremental refresh policy", "Enabling the large storage format when XMLA write tools will target the model, since it also improves XMLA write performance"],
-        "failureModes": ["Refreshing a model whose size approaches half the capacity's memory, risking an out-of-memory failure mid-refresh", "Relying on full refreshes instead of incremental refresh or the enhanced refresh API as the model grows"]
+        "controls": [
+          "Refresh schedule and incremental refresh policy",
+          "Enabling the large storage format when XMLA write tools will target the model, since it also improves XMLA write performance"
+        ],
+        "failureModes": [
+          "Refreshing a model whose size approaches half the capacity's memory, risking an out-of-memory failure mid-refresh",
+          "Relying on full refreshes instead of incremental refresh or the enhanced refresh API as the model grows"
+        ]
       }
     },
     {
@@ -64,16 +102,31 @@
       "classification": "fact",
       "layers": ["compute"],
       "evidence": [
-        { "sourceKey": "semantic-model-understand", "note": "Import-mode models rely on scheduled or on-demand refresh to stay current, whereas DirectQuery models forward queries to the source so results always reflect current source data; both need an on-premises data gateway when source data isn't reachable directly." }
+        {
+          "sourceKey": "semantic-model-understand",
+          "note": "Import-mode models rely on scheduled or on-demand refresh to stay current, whereas DirectQuery models forward queries to the source so results always reflect current source data; both need an on-premises data gateway when source data isn't reachable directly."
+        }
       ],
       "tags": ["DirectQuery", "SemanticModel"],
       "drill": {
-        "inputs": ["A source that must remain authoritative at query time", "A network path to the source (direct, or via an on-premises data gateway)"],
-        "processing": ["Forward each visual's query to the source engine at interaction time", "Return live results with no local cache maintained by the model"],
+        "inputs": [
+          "A source that must remain authoritative at query time",
+          "A network path to the source (direct, or via an on-premises data gateway)"
+        ],
+        "processing": [
+          "Forward each visual's query to the source engine at interaction time",
+          "Return live results with no local cache maintained by the model"
+        ],
         "outputs": ["Always-current results with no refresh operation to schedule or monitor"],
         "example": "A currency-conversion table pulls live rates from an external API-backed database; every report visual using it queries the source directly so rates are never more than a few seconds stale.",
-        "controls": ["On-premises data gateway configuration where the source is not directly reachable", "Query folding and source-side indexing to keep round-trip latency acceptable"],
-        "failureModes": ["Building a DAX-heavy model over DirectQuery and discovering the source engine cannot execute the generated queries efficiently", "Underestimating gateway capacity and creating a bottleneck under concurrent report load"]
+        "controls": [
+          "On-premises data gateway configuration where the source is not directly reachable",
+          "Query folding and source-side indexing to keep round-trip latency acceptable"
+        ],
+        "failureModes": [
+          "Building a DAX-heavy model over DirectQuery and discovering the source engine cannot execute the generated queries efficiently",
+          "Underestimating gateway capacity and creating a bottleneck under concurrent report load"
+        ]
       }
     },
     {
@@ -85,18 +138,39 @@
       "classification": "fact",
       "layers": ["compute", "data"],
       "evidence": [
-        { "sourceKey": "power-bi-overview", "note": "Direct Lake mode, available to Power BI through Fabric, lets reports query data sitting in OneLake directly, without importing it into the model or maintaining a separate cache." },
-        { "sourceKey": "example-direct-lake", "note": "A semantic model in Direct Lake mode loads columns from Delta tables in OneLake on demand rather than importing all data." },
-        { "sourceKey": "direct-lake-develop", "note": "Direct Lake on OneLake supports composite models, so very large fact tables can stay in Direct Lake mode (avoiding refresh cost) while dimension tables use Import or DirectQuery in the same model." }
+        {
+          "sourceKey": "power-bi-overview",
+          "note": "Direct Lake mode, available to Power BI through Fabric, lets reports query data sitting in OneLake directly, without importing it into the model or maintaining a separate cache."
+        },
+        {
+          "sourceKey": "example-direct-lake",
+          "note": "A semantic model in Direct Lake mode loads columns from Delta tables in OneLake on demand rather than importing all data."
+        },
+        {
+          "sourceKey": "direct-lake-develop",
+          "note": "Direct Lake on OneLake supports composite models, so very large fact tables can stay in Direct Lake mode (avoiding refresh cost) while dimension tables use Import or DirectQuery in the same model."
+        }
       ],
       "tags": ["DirectLake", "OneLake", "SemanticModel", "PowerBI"],
       "drill": {
         "inputs": ["Delta tables already published in OneLake by a lakehouse or warehouse"],
-        "processing": ["Read Delta table columns from OneLake into memory on demand as queries request them", "Reframe periodically to pick up new Delta commits without a manual refresh job", "Route the flavor sub-decision (OneLake vs SQL) based on security and fallback needs"],
-        "outputs": ["A semantic model with no refresh schedule, reading current OneLake data at near-Import query speed once warm"],
+        "processing": [
+          "Read Delta table columns from OneLake into memory on demand as queries request them",
+          "Reframe periodically to pick up new Delta commits without a manual refresh job",
+          "Route the flavor sub-decision (OneLake vs SQL) based on security and fallback needs"
+        ],
+        "outputs": [
+          "A semantic model with no refresh schedule, reading current OneLake data at near-Import query speed once warm"
+        ],
         "example": "A lakehouse gold sales table is queried directly by a Direct Lake model with no separate import job; when the Spark job that writes the gold table commits a new version, the next report query sees it after the model reframes.",
-        "controls": ["Choice between Direct Lake on OneLake and Direct Lake on SQL", "Table file layout (row group sizing, V-Order) that governs how fast columns transcode into memory"],
-        "failureModes": ["Assuming Direct Lake needs zero capacity planning because there is no refresh — it still consumes SKU memory for resident columns", "Not knowing which Direct Lake flavor a model uses, which hides why fallback behavior differs between two apparently identical models"]
+        "controls": [
+          "Choice between Direct Lake on OneLake and Direct Lake on SQL",
+          "Table file layout (row group sizing, V-Order) that governs how fast columns transcode into memory"
+        ],
+        "failureModes": [
+          "Assuming Direct Lake needs zero capacity planning because there is no refresh — it still consumes SKU memory for resident columns",
+          "Not knowing which Direct Lake flavor a model uses, which hides why fallback behavior differs between two apparently identical models"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
     },
@@ -109,17 +183,37 @@
       "classification": "fact",
       "layers": ["compute", "security"],
       "evidence": [
-        { "sourceKey": "direct-lake-develop", "note": "Direct Lake comes in two storage-mode flavors: Direct Lake on OneLake (OneLake security, richer modeling features, faster queries) and Direct Lake on SQL (needed for SQL-endpoint security rules under delegated identity, or when DirectQuery fallback is required)." },
-        { "sourceKey": "direct-lake-develop", "note": "When creating a model from the SQL analytics endpoint, the type dialog defaults to Direct Lake on OneLake if the endpoint runs in user identity mode and to Direct Lake on SQL if it runs in delegated identity mode." }
+        {
+          "sourceKey": "direct-lake-develop",
+          "note": "Direct Lake comes in two storage-mode flavors: Direct Lake on OneLake (OneLake security, richer modeling features, faster queries) and Direct Lake on SQL (needed for SQL-endpoint security rules under delegated identity, or when DirectQuery fallback is required)."
+        },
+        {
+          "sourceKey": "direct-lake-develop",
+          "note": "When creating a model from the SQL analytics endpoint, the type dialog defaults to Direct Lake on OneLake if the endpoint runs in user identity mode and to Direct Lake on SQL if it runs in delegated identity mode."
+        }
       ],
       "tags": ["DirectLake", "OneLake", "Security"],
       "drill": {
-        "inputs": ["A Direct Lake-routed table", "The SQL analytics endpoint's identity mode (user vs delegated)", "Whether a governed DirectQuery fallback is a stated requirement"],
-        "processing": ["Default to Direct Lake on OneLake unless a specific reason says otherwise", "Switch to Direct Lake on SQL only for delegated-identity SQL-endpoint security or required fallback", "Confirm the flavor via the model's M expression connector (Azure Data Lake Storage vs SQL Server/OneLake.SqlAnalytics) in TMDL view"],
+        "inputs": [
+          "A Direct Lake-routed table",
+          "The SQL analytics endpoint's identity mode (user vs delegated)",
+          "Whether a governed DirectQuery fallback is a stated requirement"
+        ],
+        "processing": [
+          "Default to Direct Lake on OneLake unless a specific reason says otherwise",
+          "Switch to Direct Lake on SQL only for delegated-identity SQL-endpoint security or required fallback",
+          "Confirm the flavor via the model's M expression connector (Azure Data Lake Storage vs SQL Server/OneLake.SqlAnalytics) in TMDL view"
+        ],
         "outputs": ["A deliberately chosen Direct Lake flavor with the reason recorded"],
         "example": "A workspace using delegated-identity SQL endpoint security for row-level access control creates its model from the SQL analytics endpoint page, which defaults to Direct Lake on SQL — the right outcome for that security requirement, not an accident of which page was used.",
-        "controls": ["Check the SQL analytics endpoint's identity mode before creating the model", "Verify flavor after creation via the TMDL connector rather than assuming"],
-        "failureModes": ["Ending up on Direct Lake on SQL by accident because the model was created from the SQL analytics endpoint page, and losing OneLake's faster path for no reason", "Not knowing which flavor is in use, which makes the view-based fallback trap invisible until reports slow down"]
+        "controls": [
+          "Check the SQL analytics endpoint's identity mode before creating the model",
+          "Verify flavor after creation via the TMDL connector rather than assuming"
+        ],
+        "failureModes": [
+          "Ending up on Direct Lake on SQL by accident because the model was created from the SQL analytics endpoint page, and losing OneLake's faster path for no reason",
+          "Not knowing which flavor is in use, which makes the view-based fallback trap invisible until reports slow down"
+        ]
       }
     },
     {
@@ -131,26 +225,82 @@
       "classification": "warning",
       "layers": ["compute", "data"],
       "evidence": [
-        { "sourceKey": "direct-lake-develop", "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode." },
-        { "sourceKey": "semantic-model-direct-lake-reporting", "note": "A Direct Lake on SQL table can fall back to DirectQuery through the SQL analytics endpoint when Direct Lake mode cannot be used, and this fallback is governed by the model's Direct Lake behavior property." }
+        {
+          "sourceKey": "direct-lake-develop",
+          "note": "Basing a Direct Lake on SQL model table on a SQL view forces every query against that table into DirectQuery fallback, which usually slows it down; prefer base tables for Direct Lake mode."
+        },
+        {
+          "sourceKey": "semantic-model-direct-lake-reporting",
+          "note": "A Direct Lake on SQL table can fall back to DirectQuery through the SQL analytics endpoint when Direct Lake mode cannot be used, and this fallback is governed by the model's Direct Lake behavior property."
+        }
       ],
       "tags": ["DirectLake", "DirectQuery", "AntiPattern"],
       "drill": {
-        "inputs": ["A Direct Lake on SQL model with one or more tables sourced from a SQL view instead of a base table"],
-        "processing": ["Audit each model table's M expression source for view vs base table", "Repoint view-based tables at the underlying base Delta table", "Push any transformation logic the view performed back into a materialized silver/gold table upstream instead"],
-        "outputs": ["Model tables that read directly from OneLake instead of silently falling back to DirectQuery"],
+        "inputs": [
+          "A Direct Lake on SQL model with one or more tables sourced from a SQL view instead of a base table"
+        ],
+        "processing": [
+          "Audit each model table's M expression source for view vs base table",
+          "Repoint view-based tables at the underlying base Delta table",
+          "Push any transformation logic the view performed back into a materialized silver/gold table upstream instead"
+        ],
+        "outputs": [
+          "Model tables that read directly from OneLake instead of silently falling back to DirectQuery"
+        ],
         "example": "A convenience SQL view joining two warehouse tables for a report is replaced by a materialized gold table; the model table is repointed at it and query latency for that table drops back to Direct Lake speed.",
-        "controls": ["Prefer base tables for every Direct Lake model table", "Treat any view in a Direct Lake on SQL model as a defect requiring justification, not a default choice", "Check the model's Direct Lake behavior property to see whether fallback is silently permitted"],
-        "failureModes": ["Diagnosing the resulting slowness as a capacity problem and scaling the SKU rather than fixing the view", "Adding more views for modelling convenience over time and progressively converting the whole model to DirectQuery without noticing"]
+        "controls": [
+          "Prefer base tables for every Direct Lake model table",
+          "Treat any view in a Direct Lake on SQL model as a defect requiring justification, not a default choice",
+          "Check the model's Direct Lake behavior property to see whether fallback is silently permitted"
+        ],
+        "failureModes": [
+          "Diagnosing the resulting slowness as a capacity problem and scaling the SKU rather than fixing the view",
+          "Adding more views for modelling convenience over time and progressively converting the whole model to DirectQuery without noticing"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-mode-import", "from": "mode-question", "to": "import-mode", "label": "snapshot acceptable, needs full DAX freedom", "layer": "compute", "kind": "branch" },
-    { "id": "e-mode-directquery", "from": "mode-question", "to": "directquery-mode", "label": "source must stay authoritative at query time", "layer": "compute", "kind": "branch" },
-    { "id": "e-mode-directlake", "from": "mode-question", "to": "direct-lake-mode", "label": "OneLake Delta data, no refresh wanted", "layer": "compute", "kind": "branch" },
-    { "id": "e-directlake-flavor", "from": "direct-lake-mode", "to": "flavor-question", "label": "resolve OneLake vs SQL", "layer": "compute", "kind": "flow" },
-    { "id": "e-flavor-warning", "from": "flavor-question", "to": "fallback-trap", "label": "if the model table is built on a SQL view", "layer": "data", "kind": "branch" }
+    {
+      "id": "e-mode-import",
+      "from": "mode-question",
+      "to": "import-mode",
+      "label": "snapshot acceptable, needs full DAX freedom",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-mode-directquery",
+      "from": "mode-question",
+      "to": "directquery-mode",
+      "label": "source must stay authoritative at query time",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-mode-directlake",
+      "from": "mode-question",
+      "to": "direct-lake-mode",
+      "label": "OneLake Delta data, no refresh wanted",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-directlake-flavor",
+      "from": "direct-lake-mode",
+      "to": "flavor-question",
+      "label": "resolve OneLake vs SQL",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-flavor-warning",
+      "from": "flavor-question",
+      "to": "fallback-trap",
+      "label": "if the model table is built on a SQL view",
+      "layer": "data",
+      "kind": "branch"
+    }
   ],
   "walkthrough": [
     {

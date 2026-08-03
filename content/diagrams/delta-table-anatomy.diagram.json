@@ -21,15 +21,29 @@
       "layers": ["data"],
       "tags": ["DeltaLake", "OneLake"],
       "evidence": [
-        { "sourceKey": "delta-lake-storage-internals", "note": "OneLake's Delta-format tables store data as immutable Parquet objects plus a write-ahead transaction log in a _delta_log subfolder; the log, not a directory listing, is the single source of truth for which Parquet objects currently belong to the table." }
+        {
+          "sourceKey": "delta-lake-storage-internals",
+          "note": "OneLake's Delta-format tables store data as immutable Parquet objects plus a write-ahead transaction log in a _delta_log subfolder; the log, not a directory listing, is the single source of truth for which Parquet objects currently belong to the table."
+        }
       ],
       "drill": {
         "inputs": ["Row data from a Spark write, MERGE, or T-SQL DML operation"],
-        "processing": ["Rows are serialised into one or more new Parquet objects", "Existing objects affected by the write are marked for removal in the upcoming commit, never edited in place"],
-        "outputs": ["A set of new Parquet objects, staged in storage but not yet part of the table until the commit lands"],
+        "processing": [
+          "Rows are serialised into one or more new Parquet objects",
+          "Existing objects affected by the write are marked for removal in the upcoming commit, never edited in place"
+        ],
+        "outputs": [
+          "A set of new Parquet objects, staged in storage but not yet part of the table until the commit lands"
+        ],
         "example": "An UPDATE affecting 200 rows in a 50-file table writes new Parquet objects containing the updated rows' file(s) and marks the original file(s) containing those rows for removal — no existing Parquet file's bytes are ever rewritten.",
-        "controls": ["File size targets (BinSize) that determine how many new objects a write produces", "V-Order and compression settings applied at write time"],
-        "failureModes": ["Unmanaged small-file accumulation from many small commits, since old objects are never rewritten in place — only compaction consolidates them", "Assuming an in-place edit occurred when in fact old and new objects briefly coexist until commit"]
+        "controls": [
+          "File size targets (BinSize) that determine how many new objects a write produces",
+          "V-Order and compression settings applied at write time"
+        ],
+        "failureModes": [
+          "Unmanaged small-file accumulation from many small commits, since old objects are never rewritten in place — only compaction consolidates them",
+          "Assuming an in-place edit occurred when in fact old and new objects briefly coexist until commit"
+        ]
       }
     },
     {
@@ -42,15 +56,25 @@
       "layers": ["data", "metadata"],
       "tags": ["DeltaLake", "TransactionLog"],
       "evidence": [
-        { "sourceKey": "delta-lake-storage-internals", "note": "Each commit to a Delta table in OneLake is a zero-padded, sequentially numbered JSON file in _delta_log (e.g. 000003.json) holding an array of actions: add and remove record which Parquet objects entered or left the table, metaData and protocol record schema/configuration." }
+        {
+          "sourceKey": "delta-lake-storage-internals",
+          "note": "Each commit to a Delta table in OneLake is a zero-padded, sequentially numbered JSON file in _delta_log (e.g. 000003.json) holding an array of actions: add and remove record which Parquet objects entered or left the table, metaData and protocol record schema/configuration."
+        }
       ],
       "drill": {
         "inputs": ["Staged new Parquet objects and the set of objects being removed by this write"],
-        "processing": ["Assemble the add/remove/metaData/commitInfo actions describing this write", "Attempt to write them as the next sequentially numbered JSON file"],
-        "outputs": ["A new immutable commit record that, once it lands, becomes the new authoritative table state"],
+        "processing": [
+          "Assemble the add/remove/metaData/commitInfo actions describing this write",
+          "Attempt to write them as the next sequentially numbered JSON file"
+        ],
+        "outputs": [
+          "A new immutable commit record that, once it lands, becomes the new authoritative table state"
+        ],
         "example": "Commit 000047.json records that Parquet files part-01a.parquet and part-01b.parquet were added while part-00f.parquet was removed, alongside commitInfo noting it was an UPDATE operation.",
         "controls": ["Commit granularity (one logical operation per commit)"],
-        "failureModes": ["Treating a directory listing of the Parquet folder as the table state instead of reading the log — this omits removed-but-not-yet-vacuumed files and orphaned uncommitted objects"]
+        "failureModes": [
+          "Treating a directory listing of the Parquet folder as the table state instead of reading the log — this omits removed-but-not-yet-vacuumed files and orphaned uncommitted objects"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -64,16 +88,32 @@
       "layers": ["data", "compute"],
       "tags": ["DeltaLake", "Concurrency"],
       "evidence": [
-        { "sourceKey": "delta-lake-storage-internals", "note": "OneLake's Delta tables achieve write serializability through optimistic concurrency rather than locking: a writer stages new Parquet objects independently, then atomically creates the single next-numbered log JSON file; only one writer can win that specific commit number." },
-        { "sourceKey": "delta-lake-storage-internals", "note": "The atomic 'only one writer wins this commit number' guarantee is implemented differently per storage backend; on ADLS Gen2 (which OneLake is built on) that atomicity is implemented via an atomic rename that fails if the target name already exists." }
+        {
+          "sourceKey": "delta-lake-storage-internals",
+          "note": "OneLake's Delta tables achieve write serializability through optimistic concurrency rather than locking: a writer stages new Parquet objects independently, then atomically creates the single next-numbered log JSON file; only one writer can win that specific commit number."
+        },
+        {
+          "sourceKey": "delta-lake-storage-internals",
+          "note": "The atomic 'only one writer wins this commit number' guarantee is implemented differently per storage backend; on ADLS Gen2 (which OneLake is built on) that atomicity is implemented via an atomic rename that fails if the target name already exists."
+        }
       ],
       "drill": {
-        "inputs": ["Two or more writers with staged Parquet objects, both attempting to commit against the same current table version"],
-        "processing": ["Each writer attempts an atomic create/rename of the same next-numbered log file", "Only one create succeeds; the storage layer's atomicity guarantee prevents both from winning"],
-        "outputs": ["One winning commit that becomes the new table state; one (or more) losing attempts that must retry"],
+        "inputs": [
+          "Two or more writers with staged Parquet objects, both attempting to commit against the same current table version"
+        ],
+        "processing": [
+          "Each writer attempts an atomic create/rename of the same next-numbered log file",
+          "Only one create succeeds; the storage layer's atomicity guarantee prevents both from winning"
+        ],
+        "outputs": [
+          "One winning commit that becomes the new table state; one (or more) losing attempts that must retry"
+        ],
         "example": "Two Spark jobs both try to write commit 000048.json at the same moment; the storage layer's atomic rename lets only one succeed, and the second job's write fails with a conflict, triggering its retry logic.",
         "controls": ["Retry logic and backoff in the writing engine"],
-        "failureModes": ["A writer with no retry logic simply failing on collision instead of rereading state and reattempting — see the warning node", "High-concurrency write patterns against one table causing repeated retries and wasted work under contention"]
+        "failureModes": [
+          "A writer with no retry logic simply failing on collision instead of rereading state and reattempting — see the warning node",
+          "High-concurrency write patterns against one table causing repeated retries and wasted work under contention"
+        ]
       }
     },
     {
@@ -86,15 +126,28 @@
       "layers": ["data", "compute"],
       "tags": ["DeltaLake", "Concurrency"],
       "evidence": [
-        { "sourceKey": "delta-lake-storage-internals", "note": "Only one writer can win a specific commit number in OneLake's optimistic concurrency model; a losing writer must reread state and retry rather than assume its write succeeded." }
+        {
+          "sourceKey": "delta-lake-storage-internals",
+          "note": "Only one writer can win a specific commit number in OneLake's optimistic concurrency model; a losing writer must reread state and retry rather than assume its write succeeded."
+        }
       ],
       "drill": {
         "inputs": ["Two or more writers concurrently targeting the same Delta table"],
-        "processing": ["Detect a failed atomic commit as a normal, expected outcome under concurrency, not an error to surface to the user", "Reread the latest table version and retry the write at the next commit number"],
-        "outputs": ["Both writers eventually succeed (serialised), rather than one failing outright"],
+        "processing": [
+          "Detect a failed atomic commit as a normal, expected outcome under concurrency, not an error to surface to the user",
+          "Reread the latest table version and retry the write at the next commit number"
+        ],
+        "outputs": [
+          "Both writers eventually succeed (serialised), rather than one failing outright"
+        ],
         "example": "A high-frequency streaming job and a scheduled batch job both write to the same table; without retry handling, the batch job's commit fails outright during a collision window instead of quietly retrying and succeeding moments later.",
-        "controls": ["Using a Delta-aware engine (Spark, the documented Delta connectors) that implements retry natively rather than a hand-rolled writer"],
-        "failureModes": ["Intermittent, hard-to-reproduce write failures under concurrent load that look like flaky infrastructure but are actually unhandled commit collisions", "High-concurrency write patterns against one table amplifying retry storms if backoff is not implemented"]
+        "controls": [
+          "Using a Delta-aware engine (Spark, the documented Delta connectors) that implements retry natively rather than a hand-rolled writer"
+        ],
+        "failureModes": [
+          "Intermittent, hard-to-reproduce write failures under concurrent load that look like flaky infrastructure but are actually unhandled commit collisions",
+          "High-concurrency write patterns against one table amplifying retry storms if backoff is not implemented"
+        ]
       }
     },
     {
@@ -107,16 +160,30 @@
       "layers": ["metadata", "compute"],
       "tags": ["DeltaLake", "Checkpoint"],
       "evidence": [
-        { "sourceKey": "delta-lake-storage-internals", "note": "To keep metadata reads fast as a Delta table accumulates history, OneLake's underlying Delta engine periodically compacts the log into a Parquet checkpoint (every 10 commits by default) that folds in every still-relevant add/remove/metadata action and drops superseded ones." },
-        { "sourceKey": "delta-lake-storage-internals", "note": "Checkpoint compaction is safe to skip or fail: since checkpoint writing and the pointer file that records the newest checkpoint ID are both best-effort and separate from the atomic commit itself, a client that crashes mid-checkpoint leaves the table's actual data unaffected." }
+        {
+          "sourceKey": "delta-lake-storage-internals",
+          "note": "To keep metadata reads fast as a Delta table accumulates history, OneLake's underlying Delta engine periodically compacts the log into a Parquet checkpoint (every 10 commits by default) that folds in every still-relevant add/remove/metadata action and drops superseded ones."
+        },
+        {
+          "sourceKey": "delta-lake-storage-internals",
+          "note": "Checkpoint compaction is safe to skip or fail: since checkpoint writing and the pointer file that records the newest checkpoint ID are both best-effort and separate from the atomic commit itself, a client that crashes mid-checkpoint leaves the table's actual data unaffected."
+        }
       ],
       "drill": {
         "inputs": ["The accumulated sequence of JSON commit files since the last checkpoint"],
-        "processing": ["Fold every still-relevant add/remove/metadata action into one Parquet checkpoint file", "Update the pointer file recording the newest checkpoint ID"],
-        "outputs": ["A consolidated Parquet checkpoint that summarises table state as of that commit, replacing the need to replay from commit zero"],
+        "processing": [
+          "Fold every still-relevant add/remove/metadata action into one Parquet checkpoint file",
+          "Update the pointer file recording the newest checkpoint ID"
+        ],
+        "outputs": [
+          "A consolidated Parquet checkpoint that summarises table state as of that commit, replacing the need to replay from commit zero"
+        ],
         "example": "A table at commit 000090 has a checkpoint written at commit 000090 (a multiple of 10); a reader at commit 000094 reads that checkpoint plus commits 91-94, rather than all 94 commits from the start.",
         "controls": ["Checkpoint interval (default every 10 commits)"],
-        "failureModes": ["A crash mid-checkpoint-write, which is safe by design since the commit itself is unaffected, but can leave a stale or missing checkpoint pointer requiring the next checkpoint attempt to catch up", "Extremely long gaps without a successful checkpoint (e.g. from repeated failures) slowing metadata reads back down toward full-log replay"]
+        "failureModes": [
+          "A crash mid-checkpoint-write, which is safe by design since the commit itself is unaffected, but can leave a stale or missing checkpoint pointer requiring the next checkpoint attempt to catch up",
+          "Extremely long gaps without a successful checkpoint (e.g. from repeated failures) slowing metadata reads back down toward full-log replay"
+        ]
       }
     },
     {
@@ -129,27 +196,83 @@
       "layers": ["data", "compute"],
       "tags": ["DeltaLake", "SnapshotIsolation"],
       "evidence": [
-        { "sourceKey": "delta-lake-storage-internals", "note": "Delta table readers achieve snapshot isolation by pinning their read to whatever the newest fully-committed log record ID is at the moment they start: they reconstruct table state as of that version and never observe files added or removed by commits that land after the read began." },
-        { "sourceKey": "delta-lake-storage-internals", "note": "Because every add and remove action in the log stays immutable and versioned, OneLake's Delta tables support time travel: a client can reconstruct any earlier table state by replaying the log only up to an older commit ID, which is also how accidental overwrites can be corrected." }
+        {
+          "sourceKey": "delta-lake-storage-internals",
+          "note": "Delta table readers achieve snapshot isolation by pinning their read to whatever the newest fully-committed log record ID is at the moment they start: they reconstruct table state as of that version and never observe files added or removed by commits that land after the read began."
+        },
+        {
+          "sourceKey": "delta-lake-storage-internals",
+          "note": "Because every add and remove action in the log stays immutable and versioned, OneLake's Delta tables support time travel: a client can reconstruct any earlier table state by replaying the log only up to an older commit ID, which is also how accidental overwrites can be corrected."
+        }
       ],
       "drill": {
         "inputs": ["The latest checkpoint plus trailing commits as of the moment a query starts"],
-        "processing": ["Reconstruct the table's file manifest as of the pinned commit version", "Read only the Parquet objects present in that reconstructed snapshot"],
-        "outputs": ["Query results consistent with a single point-in-time table version, unaffected by concurrent writers"],
+        "processing": [
+          "Reconstruct the table's file manifest as of the pinned commit version",
+          "Read only the Parquet objects present in that reconstructed snapshot"
+        ],
+        "outputs": [
+          "Query results consistent with a single point-in-time table version, unaffected by concurrent writers"
+        ],
         "example": "A five-minute analytical query starts against commit 000094; three new commits land from a concurrent Spark job while it runs, but the query's results reflect only the state as of 000094, exactly as if no writes had occurred.",
         "controls": ["Time-travel version/timestamp selection for historical queries"],
-        "failureModes": ["Assuming a long-running read reflects writes that landed mid-query — it does not, by design", "VACUUM removing Parquet objects still referenced by an old commit a time-travel query needs, if run with too short a retention window"]
+        "failureModes": [
+          "Assuming a long-running read reflects writes that landed mid-query — it does not, by design",
+          "VACUUM removing Parquet objects still referenced by an old commit a time-travel query needs, if run with too short a retention window"
+        ]
       },
       "drillTarget": { "kind": "topic", "slug": "lakehouse", "label": "Lakehouse" }
     }
   ],
   "edges": [
-    { "id": "e-parquet-log", "from": "parquet-objects", "to": "delta-log-commit", "label": "staged objects referenced by add/remove actions", "layer": "data", "kind": "flow" },
-    { "id": "e-log-concurrency", "from": "delta-log-commit", "to": "optimistic-concurrency", "label": "commit attempt races for the next number", "layer": "data", "kind": "flow" },
-    { "id": "e-concurrency-warning", "from": "optimistic-concurrency", "to": "commit-race-warning", "label": "risk if the loser has no retry logic", "layer": "compute", "kind": "branch" },
-    { "id": "e-concurrency-retry", "from": "commit-race-warning", "to": "delta-log-commit", "label": "losing writer rereads state and retries", "layer": "data", "kind": "feedback" },
-    { "id": "e-log-checkpoint", "from": "delta-log-commit", "to": "checkpoint", "label": "every 10 commits, folded into a checkpoint", "layer": "metadata", "kind": "flow" },
-    { "id": "e-checkpoint-read", "from": "checkpoint", "to": "snapshot-read", "label": "readers reconstruct state from checkpoint + trailing commits", "layer": "data", "kind": "flow" }
+    {
+      "id": "e-parquet-log",
+      "from": "parquet-objects",
+      "to": "delta-log-commit",
+      "label": "staged objects referenced by add/remove actions",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-log-concurrency",
+      "from": "delta-log-commit",
+      "to": "optimistic-concurrency",
+      "label": "commit attempt races for the next number",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-concurrency-warning",
+      "from": "optimistic-concurrency",
+      "to": "commit-race-warning",
+      "label": "risk if the loser has no retry logic",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-concurrency-retry",
+      "from": "commit-race-warning",
+      "to": "delta-log-commit",
+      "label": "losing writer rereads state and retries",
+      "layer": "data",
+      "kind": "feedback"
+    },
+    {
+      "id": "e-log-checkpoint",
+      "from": "delta-log-commit",
+      "to": "checkpoint",
+      "label": "every 10 commits, folded into a checkpoint",
+      "layer": "metadata",
+      "kind": "flow"
+    },
+    {
+      "id": "e-checkpoint-read",
+      "from": "checkpoint",
+      "to": "snapshot-read",
+      "label": "readers reconstruct state from checkpoint + trailing commits",
+      "layer": "data",
+      "kind": "flow"
+    }
   ],
   "walkthrough": [
     {

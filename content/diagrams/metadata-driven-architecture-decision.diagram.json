@@ -20,12 +20,21 @@
       "classification": "fact",
       "layers": ["metadata", "orchestration"],
       "evidence": [
-        { "sourceKey": "data-factory-overview", "note": "Pipelines chain data movement, transformation activities, and control-flow constructs (loops, conditionals) in one low-code designer — the orchestration substrate either branch below is built on." },
-        { "sourceKey": "data-factory-overview", "note": "If-Condition, Until, and ForEach iterators are the workflow-control primitives that make a single reusable pipeline capable of driving many differently-parameterized runs." }
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "Pipelines chain data movement, transformation activities, and control-flow constructs (loops, conditionals) in one low-code designer — the orchestration substrate either branch below is built on."
+        },
+        {
+          "sourceKey": "data-factory-overview",
+          "note": "If-Condition, Until, and ForEach iterators are the workflow-control primitives that make a single reusable pipeline capable of driving many differently-parameterized runs."
+        }
       ],
       "tags": ["decision-root", "data-factory"],
       "drill": {
-        "inputs": ["List of data objects the team needs to load", "For each object: source type, target Fabric item, load cadence"],
+        "inputs": [
+          "List of data objects the team needs to load",
+          "For each object: source type, target Fabric item, load cadence"
+        ],
         "processing": [
           "Count distinct objects in scope",
           "Group objects by load shape: same source type + same target pattern + same quality-rule class counts as 'same shape'",
@@ -33,7 +42,9 @@
         ],
         "outputs": ["A shape-group count that routes to one of the three branches below"],
         "example": "A team has 40 source tables from the same operational database, all incremental loads into bronze lakehouse tables with the same not-null/uniqueness rule pattern — one shape group of 40, routing toward the metadata-driven branch.",
-        "controls": ["How strictly 'same shape' is defined — too loose a definition forces unlike objects into one contract"],
+        "controls": [
+          "How strictly 'same shape' is defined — too loose a definition forces unlike objects into one contract"
+        ],
         "failureModes": [
           "Grouping objects as 'same shape' because they're all databases, when their actual load logic differs enough to need separate handling"
         ]
@@ -57,7 +68,9 @@
         ],
         "outputs": ["A working, simple pipeline with no separate metadata layer to maintain"],
         "example": "A one-time historical backfill from a retiring legacy system into a lakehouse table is built as a single pipeline with environment parameters, with no expectation it will ever run again after the backfill.",
-        "controls": ["Environment parameterization via variable library, even for a one-off pipeline"],
+        "controls": [
+          "Environment parameterization via variable library, even for a one-off pipeline"
+        ],
         "failureModes": [
           "The 'one-off' load quietly gains siblings over time and nobody revisits the architecture decision, leading to copy-pasted pipelines instead of a deliberate framework"
         ]
@@ -74,15 +87,24 @@
       "evidence": [],
       "tags": ["decision-fork"],
       "drill": {
-        "inputs": ["Object count in the shared-shape group", "Applicable compliance/audit requirements", "Team's tooling maturity"],
+        "inputs": [
+          "Object count in the shared-shape group",
+          "Applicable compliance/audit requirements",
+          "Team's tooling maturity"
+        ],
         "processing": [
           "Estimate object count and expected growth rate",
           "Check whether sensitivity labels, DLP, or lineage requirements apply (governance-relevant data)",
           "Weigh the operational cost of building/maintaining an external contract store against the cost of parameter sprawl in pipeline definitions"
         ],
-        "outputs": ["A routing decision between the lightweight-config and externalized-contract branches"],
+        "outputs": [
+          "A routing decision between the lightweight-config and externalized-contract branches"
+        ],
         "example": "A team with 12 internal reporting tables and no regulatory scope chooses lightweight pipeline parameters; a team with 60 objects feeding a HIPAA-scoped reporting layer chooses an externalized, versioned contract with full lineage capture.",
-        "controls": ["Threshold at which the team commits to building the external contract store", "Whether governance requirements are already known or discovered later"],
+        "controls": [
+          "Threshold at which the team commits to building the external contract store",
+          "Whether governance requirements are already known or discovered later"
+        ],
         "failureModes": [
           "Starting lightweight and never revisiting the decision as object count and compliance scope both grow past the point where parameters-in-pipeline is still manageable"
         ]
@@ -97,12 +119,22 @@
       "classification": "fact",
       "layers": ["metadata", "orchestration"],
       "evidence": [
-        { "sourceKey": "pipeline-runs", "note": "Schedules can pass parameter values into the pipeline at each run, sourced from a variable library reference, centralizing configuration for promotion across environments — exactly the lightweight-config mechanism this outcome recommends." }
+        {
+          "sourceKey": "pipeline-runs",
+          "note": "Schedules can pass parameter values into the pipeline at each run, sourced from a variable library reference, centralizing configuration for promotion across environments — exactly the lightweight-config mechanism this outcome recommends."
+        }
       ],
       "tags": ["outcome", "lightweight", "data-factory"],
-      "drillTarget": { "kind": "capability", "slug": "data-factory", "label": "Data Factory capability" },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "data-factory",
+        "label": "Data Factory capability"
+      },
       "drill": {
-        "inputs": ["Small object list (roughly single digits to low tens)", "Shared load shape across those objects"],
+        "inputs": [
+          "Small object list (roughly single digits to low tens)",
+          "Shared load shape across those objects"
+        ],
         "processing": [
           "Store per-object values (connection name, target table, watermark column) in a variable library",
           "Reference the variable library from the pipeline's schedule so parameter values are centralized for promotion across environments",
@@ -110,7 +142,9 @@
         ],
         "outputs": ["A small, auditable set of parameter entries and a working reusable pipeline"],
         "example": "Twelve internal reporting tables share one pipeline; each table's connection string and target path live as entries in a variable library referenced by the pipeline's schedule.",
-        "controls": ["Parameter name matching between the variable library entry and the pipeline's declared parameters"],
+        "controls": [
+          "Parameter name matching between the variable library entry and the pipeline's declared parameters"
+        ],
         "failureModes": [
           "A parameter name mismatch between the schedule and the pipeline's declared parameter names is silently ignored at run time rather than raising an error, so a typo produces a default value instead of a failure"
         ],
@@ -128,13 +162,26 @@
       "classification": "fact",
       "layers": ["metadata", "governance", "observability"],
       "evidence": [
-        { "sourceKey": "governance-compliance-overview", "note": "Purview Data Map scans Fabric items to extract item-level metadata and lineage via Atlas APIs — the governance surface an externalized contract's run ledger wires into for audit." },
-        { "sourceKey": "data-factory-monitor-pipeline-runs", "note": "The Monitor hub shows per-run and per-activity execution detail (row counts, skipped rows, Spark job IDs) — the platform telemetry a dedicated run ledger builds on top of." }
+        {
+          "sourceKey": "governance-compliance-overview",
+          "note": "Purview Data Map scans Fabric items to extract item-level metadata and lineage via Atlas APIs — the governance surface an externalized contract's run ledger wires into for audit."
+        },
+        {
+          "sourceKey": "data-factory-monitor-pipeline-runs",
+          "note": "The Monitor hub shows per-run and per-activity execution detail (row counts, skipped rows, Spark job IDs) — the platform telemetry a dedicated run ledger builds on top of."
+        }
       ],
       "tags": ["outcome", "full-framework"],
-      "drillTarget": { "kind": "diagram", "slug": "metadata-driven-architecture-architecture", "label": "See the full architecture" },
+      "drillTarget": {
+        "kind": "diagram",
+        "slug": "metadata-driven-architecture-architecture",
+        "label": "See the full architecture"
+      },
       "drill": {
-        "inputs": ["Larger object list (tens or more) sharing a load shape", "Compliance/audit or lineage requirements"],
+        "inputs": [
+          "Larger object list (tens or more) sharing a load shape",
+          "Compliance/audit or lineage requirements"
+        ],
         "processing": [
           "Externalize the contract into its own versioned store, separate from any single pipeline definition",
           "Build a config-resolution step that reads the contract plus the run ledger's watermark",
@@ -142,7 +189,10 @@
         ],
         "outputs": ["The full metadata-driven pipeline shown on the architecture diagram"],
         "example": "A 60-object, HIPAA-scoped reporting layer gets a dedicated contract store, a config-resolution notebook, and a run ledger table whose entries are scanned by Purview Data Map for lineage.",
-        "controls": ["Contract schema governance (who approves new fields/entries)", "Which run outcome advances the watermark"],
+        "controls": [
+          "Contract schema governance (who approves new fields/entries)",
+          "Which run outcome advances the watermark"
+        ],
         "failureModes": [
           "Building the full framework's machinery before validating it against one real object end-to-end, discovering structural problems only after generalizing"
         ]
@@ -158,16 +208,24 @@
       "layers": ["metadata"],
       "evidence": [],
       "tags": ["antipattern", "outcome"],
-      "drillTarget": { "kind": "diagram", "slug": "metadata-driven-architecture-architecture", "label": "See the failure mode on the architecture diagram" },
+      "drillTarget": {
+        "kind": "diagram",
+        "slug": "metadata-driven-architecture-architecture",
+        "label": "See the failure mode on the architecture diagram"
+      },
       "drill": {
         "inputs": ["Many objects incorrectly grouped as 'same shape' during the root question"],
         "processing": [
           "Attempt to fit dissimilar load logic (differing source types, target structures, rule classes) into one contract schema",
           "Add conditional fields and per-object overrides to accommodate each mismatch as it's discovered"
         ],
-        "outputs": ["A single, overloaded contract that no longer functions as declarative configuration"],
+        "outputs": [
+          "A single, overloaded contract that no longer functions as declarative configuration"
+        ],
         "example": "A team forces five REST API sources, three file drops, and two database sources into one contract schema; the entry for each source type ends up with a different, mutually exclusive set of fields, and the resolution logic has to special-case each source type anyway.",
-        "controls": ["Splitting into multiple narrower contracts, one per genuinely shared shape, instead of one universal contract"],
+        "controls": [
+          "Splitting into multiple narrower contracts, one per genuinely shared shape, instead of one universal contract"
+        ],
         "failureModes": [
           "The single contract becomes unreadable without also reading the resolution code, defeating the purpose of externalizing configuration",
           "Onboarding a new source type requires understanding the entire existing contract's conditional logic rather than adding one new, independent entry"
@@ -176,11 +234,46 @@
     }
   ],
   "edges": [
-    { "id": "e-start-oneoff", "from": "start-question", "to": "outcome-one-off", "label": "one source, one-off shape", "layer": "metadata", "kind": "branch" },
-    { "id": "e-start-scale", "from": "start-question", "to": "check-scale-governance", "label": "many sources, same shape", "layer": "metadata", "kind": "branch" },
-    { "id": "e-start-mismatch", "from": "start-question", "to": "outcome-shape-mismatch-warning", "label": "many sources, different shapes", "layer": "metadata", "kind": "branch" },
-    { "id": "e-scale-lightweight", "from": "check-scale-governance", "to": "outcome-lightweight-config", "label": "modest scale, modest audit needs", "layer": "metadata", "kind": "branch" },
-    { "id": "e-scale-externalized", "from": "check-scale-governance", "to": "outcome-externalized-contract", "label": "larger scale or audit-driven", "layer": "governance", "kind": "branch" }
+    {
+      "id": "e-start-oneoff",
+      "from": "start-question",
+      "to": "outcome-one-off",
+      "label": "one source, one-off shape",
+      "layer": "metadata",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-scale",
+      "from": "start-question",
+      "to": "check-scale-governance",
+      "label": "many sources, same shape",
+      "layer": "metadata",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-mismatch",
+      "from": "start-question",
+      "to": "outcome-shape-mismatch-warning",
+      "label": "many sources, different shapes",
+      "layer": "metadata",
+      "kind": "branch"
+    },
+    {
+      "id": "e-scale-lightweight",
+      "from": "check-scale-governance",
+      "to": "outcome-lightweight-config",
+      "label": "modest scale, modest audit needs",
+      "layer": "metadata",
+      "kind": "branch"
+    },
+    {
+      "id": "e-scale-externalized",
+      "from": "check-scale-governance",
+      "to": "outcome-externalized-contract",
+      "label": "larger scale or audit-driven",
+      "layer": "governance",
+      "kind": "branch"
+    }
   ],
   "walkthrough": [
     {

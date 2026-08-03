@@ -43,7 +43,7 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
      "Tracked in `content/queue.md`" assertion with no queue line is a CI failure.
    - `*Workload-specific.*` — for pattern/blueprint designs whose numbers genuinely depend on
      the reader's workload. Not a gap; never add a queue line for it.
-   Never fabricate internals to avoid a placeholder.
+     Never fabricate internals to avoid a placeholder.
 
    **Do NOT write a "Source Legend" section.** The portal renders the citation legend
    automatically from `cited_source_keys` (the right-rail Sources panel). Emitting your own
@@ -52,6 +52,7 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
 
    Save **both** the prose and a JSON envelope so it can be published:
    `content/designs/<slug>.json` shaped:
+
    ```json
    {
      "slug": "...",
@@ -62,9 +63,10 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
      "scenario": "...",
      "tags": ["MicrosoftFabric", "..."],
      "cited_source_keys": ["<source slug>", "..."],
-     "presentation_profile": {"archetype": "architecture"}
+     "presentation_profile": { "archetype": "architecture" }
    }
    ```
+
    `cited_source_keys` are source `slug`s ordered to match S1, S2, … (resolved → ids at publish).
    `presentation_profile` should be populated for every new design going forward — set
    `archetype` (usually `architecture`, occasionally `deep-dive` for an internals-heavy design) to
@@ -78,6 +80,7 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
    page alongside articles and lessons, so an unset `topic_slug` means the design stays
    undiscoverable from topic browsing (findable only via the global `/content` list). Leave it out
    only when the design genuinely spans multiple topics with no clear primary one.
+
 3. If a diagram would help, hand off to the **diagram-author** agent to produce an original
    architecture diagram (a generated asset) — do not copy any source image. Once it registers the
    diagram, update `content/designs/<slug>.json`'s `presentation_profile.featured_diagram` with

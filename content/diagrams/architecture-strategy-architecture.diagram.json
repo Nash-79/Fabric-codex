@@ -35,16 +35,27 @@
       ],
       "tags": ["Tenant", "Domain", "Workspace", "OperatingModel"],
       "drill": {
-        "inputs": ["Microsoft Entra tenant identity", "Business-unit boundaries for domain grouping", "Team/project boundaries for workspace creation"],
+        "inputs": [
+          "Microsoft Entra tenant identity",
+          "Business-unit boundaries for domain grouping",
+          "Team/project boundaries for workspace creation"
+        ],
         "processing": [
           "Establish the one Fabric tenant bound to the organization's Entra tenant",
           "Group workspaces into domains aligned to functional business units, not the org chart",
           "Create workspaces underneath each domain scoped to a team or bounded data product",
           "Assign each workspace to a capacity for compute and to a domain for delegated governance"
         ],
-        "outputs": ["A domain-scoped set of workspaces with delegated admin authority", "A stable place for capacity assignment and governance policy to attach"],
+        "outputs": [
+          "A domain-scoped set of workspaces with delegated admin authority",
+          "A stable place for capacity assignment and governance policy to attach"
+        ],
         "example": "A retail organization creates a 'Merchandising' domain containing 14 workspaces (one per regional team plus shared platform workspaces), delegating domain-level governance to a merchandising data lead instead of routing every policy change through tenant admins.",
-        "controls": ["Domain boundary definition (business capability vs org chart)", "Workspace count per domain (target 15-20 before splitting)", "Which settings are delegated to domain admins vs kept tenant-wide"],
+        "controls": [
+          "Domain boundary definition (business capability vs org chart)",
+          "Workspace count per domain (target 15-20 before splitting)",
+          "Which settings are delegated to domain admins vs kept tenant-wide"
+        ],
         "failureModes": [
           "Domains mirroring the org chart instead of business capability, so a reorg forces a governance re-architecture",
           "Workspace sprawl inside a single domain past the ~15-20 guideline, making delegated administration unmanageable"
@@ -71,15 +82,24 @@
       ],
       "tags": ["Workloads", "OneLake", "SaaS", "DataFactory", "DataWarehouse", "PowerBI"],
       "drill": {
-        "inputs": ["A workspace scoped to a domain and assigned a capacity", "The data shape and consumption pattern the domain needs to serve"],
+        "inputs": [
+          "A workspace scoped to a domain and assigned a capacity",
+          "The data shape and consumption pattern the domain needs to serve"
+        ],
         "processing": [
           "Enable the role-oriented workload(s) that fit the domain's ingestion, transform, and consumption needs inside the workspace",
           "Each workload creates its own item types (pipelines, lakehouses, warehouses, semantic models)",
           "Every item's tabular data persists automatically to the same tenant-wide OneLake as open Delta Parquet"
         ],
-        "outputs": ["Items owned by the workspace, addressable by every other Fabric engine through OneLake", "No workload-private storage silo to reconcile later"],
+        "outputs": [
+          "Items owned by the workspace, addressable by every other Fabric engine through OneLake",
+          "No workload-private storage silo to reconcile later"
+        ],
         "example": "A finance workspace enables Data Factory to orchestrate nightly ingestion, Data Warehouse for the T-SQL-first ledger transformation, and Power BI for the reporting layer — three workloads, one workspace, one OneLake copy of the underlying Delta tables.",
-        "controls": ["Which workloads are enabled per workspace", "Item-level ownership and naming inside the workspace"],
+        "controls": [
+          "Which workloads are enabled per workspace",
+          "Item-level ownership and naming inside the workspace"
+        ],
         "failureModes": [
           "Standing up a workload-private data store instead of writing to OneLake, breaking the one-copy guarantee for that dataset",
           "Assuming Fabric SaaS abstracts away governance and capacity decisions the same way it abstracts away infrastructure provisioning"
@@ -102,13 +122,17 @@
       ],
       "tags": ["OneLake", "PlatformLayer", "DeltaLake"],
       "drill": {
-        "inputs": ["Delta Parquet tables written by any enabled workload in any workspace across the tenant"],
+        "inputs": [
+          "Delta Parquet tables written by any enabled workload in any workspace across the tenant"
+        ],
         "processing": [
           "Hold each workload's tabular output as open Delta Parquet under the tenant's single OneLake namespace",
           "Expose that same physical data to every other Fabric engine without a copy step",
           "Serve as the attachment point for the governance and capacity controls shown in the panels below"
         ],
-        "outputs": ["One physical, addressable copy of each dataset for every engine and every governance/capacity control to reference"],
+        "outputs": [
+          "One physical, addressable copy of each dataset for every engine and every governance/capacity control to reference"
+        ],
         "example": "A Data Warehouse item and a Data Engineering lakehouse in different workspaces both persist to the same tenant OneLake; a Power BI semantic model reads either directly without an import step.",
         "controls": ["Whether an item's data is native OneLake or a shortcut to external storage"],
         "failureModes": [
@@ -136,16 +160,27 @@
       ],
       "tags": ["Purview", "Governance", "Domains"],
       "drill": {
-        "inputs": ["Tenant-wide governance defaults set by Fabric admins", "Domain-level delegation scope", "Item sensitivity classification needs"],
+        "inputs": [
+          "Tenant-wide governance defaults set by Fabric admins",
+          "Domain-level delegation scope",
+          "Item sensitivity classification needs"
+        ],
         "processing": [
           "Fabric admins set tenant-wide defaults for the four governance areas",
           "Domain admins override delegated settings for their business area",
           "Workspace owners apply the most granular, workspace-level controls",
           "Sensitivity labels, DLP, and lineage tracking apply through the OneLake catalog regardless of which tier set the policy"
         ],
-        "outputs": ["A governance policy resolved per item from the most specific applicable tier", "An audit and lineage trail visible in the OneLake catalog"],
+        "outputs": [
+          "A governance policy resolved per item from the most specific applicable tier",
+          "An audit and lineage trail visible in the OneLake catalog"
+        ],
         "example": "A tenant admin sets a default sensitivity-label policy tenant-wide; the Finance domain admin overrides it to require a stricter 'Confidential' default for their domain's workspaces; a workspace owner inside that domain still cannot loosen the domain override.",
-        "controls": ["Which settings tenant admins choose to leave delegable to domains", "Domain-level override policy", "Workspace-level access controls within domain constraints"],
+        "controls": [
+          "Which settings tenant admins choose to leave delegable to domains",
+          "Domain-level override policy",
+          "Workspace-level access controls within domain constraints"
+        ],
         "failureModes": [
           "Domain admins unaware a setting is not delegable, assuming a workspace-level fix is possible when it isn't",
           "Governance policy drift when tenant defaults change but domain overrides are never revisited"
@@ -176,15 +211,24 @@
       ],
       "tags": ["Capacity", "Isolation", "Cost", "SKU"],
       "drill": {
-        "inputs": ["Environment stage of each workspace (dev/test/acceptance/production)", "Contention sensitivity of specific high-priority workloads"],
+        "inputs": [
+          "Environment stage of each workspace (dev/test/acceptance/production)",
+          "Contention sensitivity of specific high-priority workloads"
+        ],
         "processing": [
           "Assign each workspace's environment-stage workspaces to a dedicated capacity rather than sharing one capacity across stages",
           "Size the production capacity for mission-critical workload demand",
           "Optionally split off a dedicated capacity for executive-facing reports that cannot tolerate contention from other workloads"
         ],
-        "outputs": ["Cost attribution per environment/business area via capacity-level billing", "Throttling isolation, since Fabric enforces throttling per capacity, not tenant-wide"],
+        "outputs": [
+          "Cost attribution per environment/business area via capacity-level billing",
+          "Throttling isolation, since Fabric enforces throttling per capacity, not tenant-wide"
+        ],
         "example": "A tenant runs a Production F64 capacity for the merchandising domain's live reports, a shared Dev/Test F8 capacity for all domains' pre-production workspaces, and a dedicated F16 capacity reserved solely for the CFO's executive dashboard so a dev workload spike can never throttle it.",
-        "controls": ["Capacity SKU size per environment stage", "Whether a contention-sensitive workload gets its own dedicated capacity"],
+        "controls": [
+          "Capacity SKU size per environment stage",
+          "Whether a contention-sensitive workload gets its own dedicated capacity"
+        ],
         "failureModes": [
           "Sharing one capacity across dev, test, and production so a runaway dev job throttles production reporting",
           "No dedicated capacity for executive-facing content, so unrelated workload spikes visibly degrade leadership-facing dashboards"
@@ -207,16 +251,26 @@
       ],
       "tags": ["CI/CD", "DeploymentPipelines", "GitIntegration"],
       "drill": {
-        "inputs": ["Items authored and validated in a Dev workspace", "Environment-specific configuration values held in a Variable Library"],
+        "inputs": [
+          "Items authored and validated in a Dev workspace",
+          "Environment-specific configuration values held in a Variable Library"
+        ],
         "processing": [
           "Promote items from Dev to Test via Deployment Pipelines",
           "Variable Libraries swap in Test-scoped connection strings and configuration at promotion time",
           "Require an approved pull request before the Test-to-Production promotion step executes",
           "Variable Libraries swap in Production-scoped configuration on final promotion"
         ],
-        "outputs": ["A validated, environment-appropriate item deployed to Production without manual config edits", "An auditable promotion history per pipeline stage"],
+        "outputs": [
+          "A validated, environment-appropriate item deployed to Production without manual config edits",
+          "An auditable promotion history per pipeline stage"
+        ],
         "example": "A pipeline item authored in Dev references a Dev-scoped SQL connection string via a Variable Library; promoting through Test then Production automatically swaps in the Test and Production connection strings respectively, with the Production promotion blocked until a reviewer approves the pull request.",
-        "controls": ["Which items are included in the deployment pipeline's content scope", "Variable Library value sets per stage", "Whether pull-request review is enforced as a hard gate"],
+        "controls": [
+          "Which items are included in the deployment pipeline's content scope",
+          "Variable Library value sets per stage",
+          "Whether pull-request review is enforced as a hard gate"
+        ],
         "failureModes": [
           "Hardcoding a connection string instead of using a Variable Library, so promotion silently points production at a dev/test resource",
           "Skipping the pull-request gate under deadline pressure, losing the review step meant to catch breaking changes before production"
@@ -247,16 +301,26 @@
       ],
       "tags": ["PrivateLink", "NetworkIsolation", "Migration", "BlockPublicInternetAccess"],
       "drill": {
-        "inputs": ["Whether the estate has any on-premises data gateway dependency", "SKU tier of affected workspaces", "Regulatory requirement (or absence of one) for network-level isolation"],
+        "inputs": [
+          "Whether the estate has any on-premises data gateway dependency",
+          "SKU tier of affected workspaces",
+          "Regulatory requirement (or absence of one) for network-level isolation"
+        ],
         "processing": [
           "Confirm no on-premises gateway dependency exists before considering any private link scope",
           "If isolation is required tenant-wide and the estate is pure cloud-to-cloud, evaluate tenant-level private links on any paid SKU",
           "If only specific workspaces need isolation, evaluate workspace-level private links, available on F SKUs only, to keep the rest of the tenant public",
           "If no explicit regulatory mandate exists, evaluate Conditional Access plus an IP firewall as a lighter-weight alternative to either private link scope"
         ],
-        "outputs": ["A chosen network-isolation posture that either preserves or knowingly breaks on-premises gateway and specific Power BI feature availability"],
+        "outputs": [
+          "A chosen network-isolation posture that either preserves or knowingly breaks on-premises gateway and specific Power BI feature availability"
+        ],
         "example": "A hybrid organization migrating from an on-premises warehouse still depends on an on-premises gateway for a legacy source feed; the architecture team rejects tenant-wide private link, since it would deregister that gateway with no workaround, and instead isolates only the F64 workspace handling the regulated dataset with workspace-level private link.",
-        "controls": ["Private link scope selection (tenant vs workspace vs none)", "SKU tier (workspace-level private link requires F SKU)", "Whether Conditional Access plus IP firewall substitutes for private link entirely"],
+        "controls": [
+          "Private link scope selection (tenant vs workspace vs none)",
+          "SKU tier (workspace-level private link requires F SKU)",
+          "Whether Conditional Access plus IP firewall substitutes for private link entirely"
+        ],
         "failureModes": [
           "Enabling tenant-wide Block Public Internet Access without auditing on-premises gateway dependencies first, silently breaking legacy connectivity tenant-wide",
           "Provisioning a new capacity while tenant-level private links are active without accounting for the documented DNS propagation delay of up to 24 hours"
@@ -279,12 +343,16 @@
       ],
       "tags": ["SaaS", "OperatingModel"],
       "drill": {
-        "inputs": ["All architecture decisions made across the tenancy, workload, governance, capacity, deployment, and network-isolation panels above"],
+        "inputs": [
+          "All architecture decisions made across the tenancy, workload, governance, capacity, deployment, and network-isolation panels above"
+        ],
         "processing": [
           "Confirm no Azure resource group, ARM template, or VNet needs to be provisioned to realize any decision above",
           "Treat capacity SKU sizing, not infrastructure sizing, as the resource-planning axis"
         ],
-        "outputs": ["An architecture expressed entirely in Fabric-native constructs: tenant, domain, workspace, capacity, item"],
+        "outputs": [
+          "An architecture expressed entirely in Fabric-native constructs: tenant, domain, workspace, capacity, item"
+        ],
         "example": "A team migrating from a self-managed Synapse/Azure SQL estate initially plans an Azure landing zone for Fabric before realizing capacity provisioning replaces the resource-group/VNet exercise entirely.",
         "controls": ["None — this is a platform characteristic, not a configurable control"],
         "failureModes": [

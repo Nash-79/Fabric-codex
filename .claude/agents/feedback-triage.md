@@ -79,7 +79,7 @@ For each `new` feedback row:
    `/ingest-batch` → human-verify pipeline. Do not invent a new publish path.
 5. **Write the results file** to `content/feedback-triage/<batch-timestamp-or-slug>.json`: an array
    of `{ "id": "<content_feedback.id>", "status": "triaged" | "dismissed", "ai_analysis": { ...the
-   object above } }`. Use `status: "dismissed"` only for `suggested_action: "dismiss"`; everything
+object above } }`. Use `status: "dismissed"` only for `suggested_action: "dismiss"`; everything
    else is `"triaged"` (a human marks `actioned` later once the fix ships).
 
 ## Rules

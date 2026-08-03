@@ -22,12 +22,25 @@
       "tags": ["DataTransformation", "decision-root"],
       "evidence": [],
       "drill": {
-        "inputs": ["The transformation requirement in plain language", "Where the source data currently lives (Warehouse vs Lakehouse/OneLake)", "Whether tests, lineage, and code review are a stated requirement"],
-        "processing": ["State whether the target of the write is the Warehouse or the Lakehouse", "Decide whether version control and automated testing are required for this layer", "Identify who will own and maintain the logic day to day"],
+        "inputs": [
+          "The transformation requirement in plain language",
+          "Where the source data currently lives (Warehouse vs Lakehouse/OneLake)",
+          "Whether tests, lineage, and code review are a stated requirement"
+        ],
+        "processing": [
+          "State whether the target of the write is the Warehouse or the Lakehouse",
+          "Decide whether version control and automated testing are required for this layer",
+          "Identify who will own and maintain the logic day to day"
+        ],
         "outputs": ["A routed decision into one of the four transformation-surface branches"],
         "example": "A team standing up a tested, version-controlled star schema on top of already-landed Warehouse silver tables identifies this as SQL-first modelling with lineage requirements, routing toward dbt rather than a dataflow or notebook.",
-        "controls": ["Write down the target engine and the testing requirement before picking a tool"],
-        "failureModes": ["Picking a tool by team familiarity rather than the actual shape of the work", "Letting analysts and engineers each build a parallel transformation layer for the same data because nobody named the boundary"]
+        "controls": [
+          "Write down the target engine and the testing requirement before picking a tool"
+        ],
+        "failureModes": [
+          "Picking a tool by team familiarity rather than the actual shape of the work",
+          "Letting analysts and engineers each build a parallel transformation layer for the same data because nobody named the boundary"
+        ]
       }
     },
     {
@@ -40,16 +53,37 @@
       "layers": ["compute", "data"],
       "tags": ["dbt", "Warehouse", "SQL"],
       "evidence": [
-        { "sourceKey": "dbt-fabric-warehouse", "note": "Fabric Data Warehouse is supported as a dbt target via the dbt-fabric adapter, a Python package published on PyPI and installed with `pip install dbt-fabric`, rather than through a Fabric-native dbt integration." },
-        { "sourceKey": "dbt-fabric-warehouse", "note": "A dbt project connects to Fabric Warehouse through a profiles.yml output block that sets type: fabric, the SQL analytics endpoint host, database/schema names, an ODBC driver string, and an authentication mode." }
+        {
+          "sourceKey": "dbt-fabric-warehouse",
+          "note": "Fabric Data Warehouse is supported as a dbt target via the dbt-fabric adapter, a Python package published on PyPI and installed with `pip install dbt-fabric`, rather than through a Fabric-native dbt integration."
+        },
+        {
+          "sourceKey": "dbt-fabric-warehouse",
+          "note": "A dbt project connects to Fabric Warehouse through a profiles.yml output block that sets type: fabric, the SQL analytics endpoint host, database/schema names, an ODBC driver string, and an authentication mode."
+        }
       ],
       "drill": {
-        "inputs": ["Already-landed silver data in a Fabric Warehouse (or reachable via cross-database three-part names from a lakehouse's SQL analytics endpoint)", "A dbt project with models, tests, and a profiles.yml pointing at the warehouse"],
-        "processing": ["Install the dbt-fabric adapter and configure profiles.yml with type: fabric and the SQL analytics endpoint host", "Author models as SQL SELECT statements with ref()/source() dependencies", "Run dbt debug/seed/run/test to validate connectivity and materialize models as warehouse tables/views"],
-        "outputs": ["Tested, version-controlled warehouse tables and views with dbt-generated lineage documentation"],
+        "inputs": [
+          "Already-landed silver data in a Fabric Warehouse (or reachable via cross-database three-part names from a lakehouse's SQL analytics endpoint)",
+          "A dbt project with models, tests, and a profiles.yml pointing at the warehouse"
+        ],
+        "processing": [
+          "Install the dbt-fabric adapter and configure profiles.yml with type: fabric and the SQL analytics endpoint host",
+          "Author models as SQL SELECT statements with ref()/source() dependencies",
+          "Run dbt debug/seed/run/test to validate connectivity and materialize models as warehouse tables/views"
+        ],
+        "outputs": [
+          "Tested, version-controlled warehouse tables and views with dbt-generated lineage documentation"
+        ],
         "example": "A team builds a star schema gold layer in wh_gold from silver tables in lakehouse lh_analytics, referencing the lakehouse through cross-database three-part names, with relationship and grain tests defined per model.",
-        "controls": ["Choice of Entra ID auth mode (CLI for developers, service principal for CI/production)", "Which models are materialized as tables vs views"],
-        "failureModes": ["Assuming dbt is a first-party Fabric feature and expecting Fabric-native scheduling or support", "Targeting a Lakehouse SQL analytics endpoint expecting writes — it is read-only for T-SQL, so dbt cannot materialize tables there"]
+        "controls": [
+          "Choice of Entra ID auth mode (CLI for developers, service principal for CI/production)",
+          "Which models are materialized as tables vs views"
+        ],
+        "failureModes": [
+          "Assuming dbt is a first-party Fabric feature and expecting Fabric-native scheduling or support",
+          "Targeting a Lakehouse SQL analytics endpoint expecting writes — it is read-only for T-SQL, so dbt cannot materialize tables there"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     },
@@ -64,12 +98,25 @@
       "tags": ["DataflowGen2", "PowerQuery"],
       "evidence": [],
       "drill": {
-        "inputs": ["Source connections via Power Query connectors", "Analyst-authored shaping steps (filters, joins, type conversions)"],
-        "processing": ["Connect to sources through Power Query's connector library", "Apply low-code transformation steps in the Dataflow Gen2 editor", "Land the shaped output into a Fabric destination (lakehouse, warehouse, or external)"],
+        "inputs": [
+          "Source connections via Power Query connectors",
+          "Analyst-authored shaping steps (filters, joins, type conversions)"
+        ],
+        "processing": [
+          "Connect to sources through Power Query's connector library",
+          "Apply low-code transformation steps in the Dataflow Gen2 editor",
+          "Land the shaped output into a Fabric destination (lakehouse, warehouse, or external)"
+        ],
         "outputs": ["Shaped, landed data ready for downstream consumption or further modelling"],
         "example": "An analyst ingests a CRM export and a spreadsheet of budget targets, joins and reshapes them with Power Query steps, and lands the result into a lakehouse table for a Spark notebook to conform further.",
-        "controls": ["Which connector and refresh cadence is used per source", "Whether the dataflow output feeds a downstream dbt or notebook stage rather than being treated as a final model"],
-        "failureModes": ["Using Dataflow Gen2 to own a large, interdependent transformation codebase it wasn't designed for, losing maintainability as step counts grow", "Building modelling logic in a dataflow that a downstream dbt project can't see, fragmenting lineage"]
+        "controls": [
+          "Which connector and refresh cadence is used per source",
+          "Whether the dataflow output feeds a downstream dbt or notebook stage rather than being treated as a final model"
+        ],
+        "failureModes": [
+          "Using Dataflow Gen2 to own a large, interdependent transformation codebase it wasn't designed for, losing maintainability as step counts grow",
+          "Building modelling logic in a dataflow that a downstream dbt project can't see, fragmenting lineage"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "dataflow-gen2", "label": "Dataflow Gen2" }
     },
@@ -84,12 +131,25 @@
       "tags": ["Spark", "Notebooks"],
       "evidence": [],
       "drill": {
-        "inputs": ["Raw or semi-structured data in Lakehouse Files/Tables or OneLake", "Python/Scala transformation logic, potentially including ML feature engineering"],
-        "processing": ["Read source data with Spark DataFrame APIs or Spark SQL", "Apply transformation, feature engineering, or unstructured-data parsing logic in Python/Scala", "Write conformed output back to Lakehouse Delta tables"],
+        "inputs": [
+          "Raw or semi-structured data in Lakehouse Files/Tables or OneLake",
+          "Python/Scala transformation logic, potentially including ML feature engineering"
+        ],
+        "processing": [
+          "Read source data with Spark DataFrame APIs or Spark SQL",
+          "Apply transformation, feature engineering, or unstructured-data parsing logic in Python/Scala",
+          "Write conformed output back to Lakehouse Delta tables"
+        ],
         "outputs": ["Conformed Delta tables or ML feature sets in the lakehouse"],
         "example": "A notebook parses semi-structured JSON event logs, extracts and casts fields, and writes a conformed bronze-to-silver table — a shape of work dbt's SQL-only models can't express directly.",
-        "controls": ["Choice of Spark pool sizing and autoscale settings", "Whether the notebook's output feeds a downstream dbt gold-layer stage"],
-        "failureModes": ["Using notebooks for what is really a tested SQL modelling problem, losing dbt's version control and test framework for no benefit", "Letting notebook logic and dbt logic both claim ownership of the same conform step, duplicating and diverging over time"]
+        "controls": [
+          "Choice of Spark pool sizing and autoscale settings",
+          "Whether the notebook's output feeds a downstream dbt gold-layer stage"
+        ],
+        "failureModes": [
+          "Using notebooks for what is really a tested SQL modelling problem, losing dbt's version control and test framework for no benefit",
+          "Letting notebook logic and dbt logic both claim ownership of the same conform step, duplicating and diverging over time"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark" }
     },
@@ -105,11 +165,23 @@
       "evidence": [],
       "drill": {
         "inputs": ["Warehouse tables and the transformation logic to embed in T-SQL"],
-        "processing": ["Write CREATE PROCEDURE definitions implementing the transformation steps", "Schedule execution via a pipeline or external scheduler", "Maintain logic directly in the Warehouse with no separate project/version-control layer unless one is built manually"],
-        "outputs": ["Transformed warehouse tables, produced by procedural T-SQL with no dbt-style lineage graph"],
+        "processing": [
+          "Write CREATE PROCEDURE definitions implementing the transformation steps",
+          "Schedule execution via a pipeline or external scheduler",
+          "Maintain logic directly in the Warehouse with no separate project/version-control layer unless one is built manually"
+        ],
+        "outputs": [
+          "Transformed warehouse tables, produced by procedural T-SQL with no dbt-style lineage graph"
+        ],
         "example": "A team with an existing library of SQL Server stored procedures ports them largely as-is into the Warehouse rather than rewriting the same logic as dbt models, accepting the loss of dbt's dependency graph in exchange for not adopting new tooling.",
-        "controls": ["Manual version control (e.g. checking procedure DDL into git) since none is built in", "Manual dependency tracking between procedures"],
-        "failureModes": ["No automated testing framework, so regressions in a procedure surface only in downstream reports", "Procedure dependency order becoming implicit and undocumented as the number of procedures grows"]
+        "controls": [
+          "Manual version control (e.g. checking procedure DDL into git) since none is built in",
+          "Manual dependency tracking between procedures"
+        ],
+        "failureModes": [
+          "No automated testing framework, so regressions in a procedure surface only in downstream reports",
+          "Procedure dependency order becoming implicit and undocumented as the number of procedures grows"
+        ]
       }
     },
     {
@@ -122,16 +194,36 @@
       "layers": ["compute", "data"],
       "tags": ["Warehouse", "TSQL", "AntiPattern"],
       "evidence": [
-        { "sourceKey": "dbt-fabric-warehouse", "note": "The dbt-fabric adapter implements T-SQL operations dbt relies on — equivalent to ALTER TABLE ADD/ALTER/DROP COLUMN, MERGE, TRUNCATE, and sp_rename — by translating them into CTAS plus DROP/CREATE sequences, because Fabric Warehouse's T-SQL surface does not support the same command set as SQL Server." },
-        { "sourceKey": "dbt-fabric-warehouse", "note": "dbt projects targeting Fabric Warehouse are subject to Fabric's general T-SQL command limitations and unsupported data types for tables — the same platform-wide constraints that apply outside of dbt, not adapter-specific restrictions." }
+        {
+          "sourceKey": "dbt-fabric-warehouse",
+          "note": "The dbt-fabric adapter implements T-SQL operations dbt relies on — equivalent to ALTER TABLE ADD/ALTER/DROP COLUMN, MERGE, TRUNCATE, and sp_rename — by translating them into CTAS plus DROP/CREATE sequences, because Fabric Warehouse's T-SQL surface does not support the same command set as SQL Server."
+        },
+        {
+          "sourceKey": "dbt-fabric-warehouse",
+          "note": "dbt projects targeting Fabric Warehouse are subject to Fabric's general T-SQL command limitations and unsupported data types for tables — the same platform-wide constraints that apply outside of dbt, not adapter-specific restrictions."
+        }
       ],
       "drill": {
-        "inputs": ["A dbt project or stored-procedure library authored against, or ported from, full SQL Server semantics"],
-        "processing": ["Audit model/procedure SQL and seed/data types against Fabric Warehouse's documented T-SQL surface before migration", "Expect schema-evolution changes to run as rebuild-style DDL (CTAS + DROP/CREATE) rather than in-place ALTER", "Treat model or procedure contract changes as full-table events for capacity and downtime planning"],
-        "outputs": ["Models/procedures validated against Fabric's actual T-SQL and data-type surface before they hit production"],
+        "inputs": [
+          "A dbt project or stored-procedure library authored against, or ported from, full SQL Server semantics"
+        ],
+        "processing": [
+          "Audit model/procedure SQL and seed/data types against Fabric Warehouse's documented T-SQL surface before migration",
+          "Expect schema-evolution changes to run as rebuild-style DDL (CTAS + DROP/CREATE) rather than in-place ALTER",
+          "Treat model or procedure contract changes as full-table events for capacity and downtime planning"
+        ],
+        "outputs": [
+          "Models/procedures validated against Fabric's actual T-SQL and data-type surface before they hit production"
+        ],
         "example": "A dbt model that adds a nullable column via what would be a cheap ALTER TABLE on SQL Server instead triggers a full CTAS rebuild of the table under dbt-fabric, which the team only discovers when a routine schema change takes materially longer than expected on a large fact table.",
-        "controls": ["Validate SQL Server-specific types/commands against Fabric's documented T-SQL surface before migration, not after", "Plan capacity and maintenance windows around rebuild-style DDL for schema changes"],
-        "failureModes": ["Porting a SQL Server dbt project or procedure library assuming full ALTER/MERGE parity and discovering the gap in production", "Underestimating migration effort because the surface gap is invisible until a schema-evolving model actually runs"]
+        "controls": [
+          "Validate SQL Server-specific types/commands against Fabric's documented T-SQL surface before migration, not after",
+          "Plan capacity and maintenance windows around rebuild-style DDL for schema changes"
+        ],
+        "failureModes": [
+          "Porting a SQL Server dbt project or procedure library assuming full ALTER/MERGE parity and discovering the gap in production",
+          "Underestimating migration effort because the surface gap is invisible until a schema-evolving model actually runs"
+        ]
       }
     },
     {
@@ -145,25 +237,102 @@
       "tags": ["dbt", "AntiPattern", "DataArchitecture"],
       "evidence": [],
       "drill": {
-        "inputs": ["A transformation layer that grows over time across multiple tools without an explicit ownership boundary"],
-        "processing": ["Draw an explicit boundary: pipelines/Dataflow Gen2 for ingestion, notebooks for non-tabular/lake-side work, dbt for the modelled, tested, version-controlled layer", "Audit for logic that has drifted into the wrong surface (e.g. modelling joins added to a dataflow instead of a dbt model)", "Migrate stray logic back into the surface that owns that responsibility"],
-        "outputs": ["A transformation layer where each tool's boundary matches its actual responsibility, and dbt's lineage graph reflects the true data flow"],
+        "inputs": [
+          "A transformation layer that grows over time across multiple tools without an explicit ownership boundary"
+        ],
+        "processing": [
+          "Draw an explicit boundary: pipelines/Dataflow Gen2 for ingestion, notebooks for non-tabular/lake-side work, dbt for the modelled, tested, version-controlled layer",
+          "Audit for logic that has drifted into the wrong surface (e.g. modelling joins added to a dataflow instead of a dbt model)",
+          "Migrate stray logic back into the surface that owns that responsibility"
+        ],
+        "outputs": [
+          "A transformation layer where each tool's boundary matches its actual responsibility, and dbt's lineage graph reflects the true data flow"
+        ],
         "example": "A team adds a business-logic join directly inside a Dataflow Gen2 step because it was convenient, while the rest of the star schema is built in dbt models; a later audit finds dbt's lineage graph and tests never covered that join, and a silent data-quality bug in it went undetected for months.",
-        "controls": ["Explicit, documented ownership boundary between ingestion, lake-side transformation, and warehouse modelling", "Periodic lineage audits comparing the tool boundary against where logic actually lives"],
-        "failureModes": ["Modelling logic quietly migrating into a dataflow or notebook over time, outside dbt's test and lineage coverage", "Teams believing they have full lineage/test coverage because dbt reports clean, while untested logic lives elsewhere"]
+        "controls": [
+          "Explicit, documented ownership boundary between ingestion, lake-side transformation, and warehouse modelling",
+          "Periodic lineage audits comparing the tool boundary against where logic actually lives"
+        ],
+        "failureModes": [
+          "Modelling logic quietly migrating into a dataflow or notebook over time, outside dbt's test and lineage coverage",
+          "Teams believing they have full lineage/test coverage because dbt reports clean, while untested logic lives elsewhere"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-start-dbt", "from": "start-question", "to": "dbt-warehouse", "label": "SQL modelling, tests + lineage needed", "layer": "compute", "kind": "branch" },
-    { "id": "e-start-dataflow", "from": "start-question", "to": "dataflow-gen2", "label": "low-code ingestion/shaping for analysts", "layer": "data", "kind": "branch" },
-    { "id": "e-start-notebooks", "from": "start-question", "to": "spark-notebooks", "label": "Python/Spark, non-tabular, or ML work", "layer": "compute", "kind": "branch" },
-    { "id": "e-start-procs", "from": "start-question", "to": "stored-procedures", "label": "T-SQL only, no external tooling wanted", "layer": "compute", "kind": "branch" },
-    { "id": "e-dbt-limits", "from": "dbt-warehouse", "to": "tsql-surface-limits", "label": "inherits Warehouse's T-SQL command limits", "layer": "compute", "kind": "branch" },
-    { "id": "e-procs-limits", "from": "stored-procedures", "to": "tsql-surface-limits", "label": "same platform-wide T-SQL limits apply", "layer": "compute", "kind": "flow" },
-    { "id": "e-dataflow-split", "from": "dataflow-gen2", "to": "split-layer-warning", "label": "risk if modelling logic creeps in here", "layer": "governance", "kind": "branch" },
-    { "id": "e-notebooks-split", "from": "spark-notebooks", "to": "split-layer-warning", "label": "risk if modelling logic creeps in here", "layer": "governance", "kind": "flow" },
-    { "id": "e-dbt-split", "from": "dbt-warehouse", "to": "split-layer-warning", "label": "loses lineage/test value if logic splits away", "layer": "governance", "kind": "flow" }
+    {
+      "id": "e-start-dbt",
+      "from": "start-question",
+      "to": "dbt-warehouse",
+      "label": "SQL modelling, tests + lineage needed",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-dataflow",
+      "from": "start-question",
+      "to": "dataflow-gen2",
+      "label": "low-code ingestion/shaping for analysts",
+      "layer": "data",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-notebooks",
+      "from": "start-question",
+      "to": "spark-notebooks",
+      "label": "Python/Spark, non-tabular, or ML work",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-start-procs",
+      "from": "start-question",
+      "to": "stored-procedures",
+      "label": "T-SQL only, no external tooling wanted",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-dbt-limits",
+      "from": "dbt-warehouse",
+      "to": "tsql-surface-limits",
+      "label": "inherits Warehouse's T-SQL command limits",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-procs-limits",
+      "from": "stored-procedures",
+      "to": "tsql-surface-limits",
+      "label": "same platform-wide T-SQL limits apply",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-dataflow-split",
+      "from": "dataflow-gen2",
+      "to": "split-layer-warning",
+      "label": "risk if modelling logic creeps in here",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "e-notebooks-split",
+      "from": "spark-notebooks",
+      "to": "split-layer-warning",
+      "label": "risk if modelling logic creeps in here",
+      "layer": "governance",
+      "kind": "flow"
+    },
+    {
+      "id": "e-dbt-split",
+      "from": "dbt-warehouse",
+      "to": "split-layer-warning",
+      "label": "loses lineage/test value if logic splits away",
+      "layer": "governance",
+      "kind": "flow"
+    }
   ],
   "walkthrough": [
     {

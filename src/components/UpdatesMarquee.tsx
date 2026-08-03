@@ -25,9 +25,17 @@ function relative(when: string | null | undefined): string {
 }
 
 const kindMeta = {
-  article: { label: "Article", icon: BookOpen, cls: "text-teal-300 border-teal-500/30 bg-teal-500/10" },
+  article: {
+    label: "Article",
+    icon: BookOpen,
+    cls: "text-teal-300 border-teal-500/30 bg-teal-500/10",
+  },
   source: { label: "Source", icon: Database, cls: "text-sky-300 border-sky-500/30 bg-sky-500/10" },
-  roadmap: { label: "Roadmap", icon: Milestone, cls: "text-amber-300 border-amber-500/30 bg-amber-500/10" },
+  roadmap: {
+    label: "Roadmap",
+    icon: Milestone,
+    cls: "text-amber-300 border-amber-500/30 bg-amber-500/10",
+  },
 } as const;
 
 export function UpdatesMarquee({
@@ -35,9 +43,21 @@ export function UpdatesMarquee({
   sources,
   roadmap,
 }: {
-  articles: Array<{ slug: string; kind?: string; title: string; updated_at?: string; created_at?: string }>;
+  articles: Array<{
+    slug: string;
+    kind?: string;
+    title: string;
+    updated_at?: string;
+    created_at?: string;
+  }>;
   sources: Array<{ slug: string; title: string; created_at?: string }>;
-  roadmap: Array<{ id?: string; guid?: string; title: string; link?: string; pub_date?: string | null }>;
+  roadmap: Array<{
+    id?: string;
+    guid?: string;
+    title: string;
+    link?: string;
+    pub_date?: string | null;
+  }>;
 }) {
   const items = useMemo<FeedItem[]>(() => {
     const a: FeedItem[] = articles.slice(0, 8).map((i) => ({
@@ -130,9 +150,13 @@ export function UpdatesMarquee({
                     <Icon className="h-3 w-3" />
                     {meta.label}
                   </span>
-                  <span className="text-foreground/90 group-hover:text-foreground">{item.title}</span>
+                  <span className="text-foreground/90 group-hover:text-foreground">
+                    {item.title}
+                  </span>
                   {item.when && (
-                    <span className="text-[11px] text-muted-foreground">· {relative(item.when)}</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      · {relative(item.when)}
+                    </span>
                   )}
                 </span>
               );

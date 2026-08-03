@@ -20,17 +20,33 @@
       "classification": "fact",
       "layers": ["data"],
       "evidence": [
-        { "sourceKey": "semantic-model-direct-lake-reporting", "note": "Reports built on a published semantic model use a live connection, so the report can be authored and edited without changing the model itself; at least Build permission on the model is required to live-connect." },
-        { "sourceKey": "power-bi-overview", "note": "Direct Lake mode, available to Power BI through Fabric, lets reports query data sitting in OneLake directly, without importing it into the model or maintaining a separate cache." }
+        {
+          "sourceKey": "semantic-model-direct-lake-reporting",
+          "note": "Reports built on a published semantic model use a live connection, so the report can be authored and edited without changing the model itself; at least Build permission on the model is required to live-connect."
+        },
+        {
+          "sourceKey": "power-bi-overview",
+          "note": "Direct Lake mode, available to Power BI through Fabric, lets reports query data sitting in OneLake directly, without importing it into the model or maintaining a separate cache."
+        }
       ],
       "tags": ["power-bi", "reporting", "live-connection"],
       "drill": {
-        "inputs": ["An end user opening a report page, which triggers each visual to request its data"],
-        "processing": ["Each visual generates a DAX query", "The query is sent over the live connection to the published semantic model"],
+        "inputs": [
+          "An end user opening a report page, which triggers each visual to request its data"
+        ],
+        "processing": [
+          "Each visual generates a DAX query",
+          "The query is sent over the live connection to the published semantic model"
+        ],
         "outputs": ["Rendered visuals populated from the model's query results"],
         "example": "A sales dashboard's 12 visuals each emit a DAX query on page load; all resolve against the same live-connected Direct Lake model with no data copied into the .pbix.",
-        "controls": ["Build permission granted to report authors", "Report-level measures defined without writing into the shared model"],
-        "failureModes": ["Authoring a local Import/DirectQuery model bundled with the report instead of live-connecting, which reintroduces a copy and a refresh"]
+        "controls": [
+          "Build permission granted to report authors",
+          "Report-level measures defined without writing into the shared model"
+        ],
+        "failureModes": [
+          "Authoring a local Import/DirectQuery model bundled with the report instead of live-connecting, which reintroduces a copy and a refresh"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "semantic-model", "label": "Semantic model" }
     },
@@ -43,9 +59,18 @@
       "classification": "fact",
       "layers": ["compute", "data"],
       "evidence": [
-        { "sourceKey": "fabric-platform-terminology", "note": "Direct Lake is a semantic-model storage mode in which the model reads Delta tables straight from OneLake, avoiding both data import and DirectQuery, and so pairs import-like performance with DirectQuery-like freshness." },
-        { "sourceKey": "direct-lake-how-it-works", "note": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes columns needed by relationships and measures. Direct Lake on OneLake never falls back to DirectQuery and skips SQL-endpoint coupling, enabling more efficient DAX query plans." },
-        { "sourceKey": "semantic-model-direct-lake-reporting", "note": "When a report visual requests data from a Direct Lake table, the semantic model reads the Delta table in OneLake directly and may retain recently accessed data in an in-memory cache to serve subsequent queries efficiently." }
+        {
+          "sourceKey": "fabric-platform-terminology",
+          "note": "Direct Lake is a semantic-model storage mode in which the model reads Delta tables straight from OneLake, avoiding both data import and DirectQuery, and so pairs import-like performance with DirectQuery-like freshness."
+        },
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "Direct Lake loads column data from OneLake lazily: nothing is read until a query first touches a column, and the load set includes columns needed by relationships and measures. Direct Lake on OneLake never falls back to DirectQuery and skips SQL-endpoint coupling, enabling more efficient DAX query plans."
+        },
+        {
+          "sourceKey": "semantic-model-direct-lake-reporting",
+          "note": "When a report visual requests data from a Direct Lake table, the semantic model reads the Delta table in OneLake directly and may retain recently accessed data in an in-memory cache to serve subsequent queries efficiently."
+        }
       ],
       "tags": ["direct-lake", "semantic-model", "onelake"],
       "drill": {
@@ -57,8 +82,14 @@
         ],
         "outputs": ["Query result to the visual; warmed resident columns for the next query"],
         "example": "A visual grouping revenue by region loads the region, revenue, and the relationship key columns on first use; a follow-up visual filtering the same region reuses those now-resident columns.",
-        "controls": ["Direct Lake flavor choice (OneLake vs SQL) — OneLake is the recommended default here", "Automatic-updates setting governing when framing runs"],
-        "failureModes": ["Choosing Direct Lake on SQL and basing a table on a SQL view, forcing every query into DirectQuery fallback", "OneSecurity on the source lakehouse reportedly forcing fallback"]
+        "controls": [
+          "Direct Lake flavor choice (OneLake vs SQL) — OneLake is the recommended default here",
+          "Automatic-updates setting governing when framing runs"
+        ],
+        "failureModes": [
+          "Choosing Direct Lake on SQL and basing a table on a SQL view, forcing every query into DirectQuery fallback",
+          "OneSecurity on the source lakehouse reportedly forcing fallback"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
     },
@@ -71,10 +102,22 @@
       "classification": "pattern",
       "layers": ["data"],
       "evidence": [
-        { "sourceKey": "lakehouse-overview", "note": "All managed lakehouse tables use the Delta Lake storage format, which supplies ACID transactions, schema enforcement, and time travel over the underlying Parquet files." },
-        { "sourceKey": "onelake-overview", "note": "All Fabric data items automatically persist their tabular data in OneLake using the open Delta Parquet format regardless of engine, and the one-copy design lets multiple Fabric engines operate over the same physical Delta Parquet data." },
-        { "sourceKey": "milescole-optimized-write-fabric", "note": "A 1 GB BinSize target is recommended when writing Delta tables that back Power BI Direct Lake semantic models, because larger files align with the Direct Lake loading pattern and reduce the number of segment loads needed." },
-        { "sourceKey": "direct-lake-understand-storage", "note": "Partition Delta tables only on low-cardinality columns (Microsoft suggests under about 100-200 distinct values); over-partitioning multiplies small files and row groups, inflating segment counts in the model." }
+        {
+          "sourceKey": "lakehouse-overview",
+          "note": "All managed lakehouse tables use the Delta Lake storage format, which supplies ACID transactions, schema enforcement, and time travel over the underlying Parquet files."
+        },
+        {
+          "sourceKey": "onelake-overview",
+          "note": "All Fabric data items automatically persist their tabular data in OneLake using the open Delta Parquet format regardless of engine, and the one-copy design lets multiple Fabric engines operate over the same physical Delta Parquet data."
+        },
+        {
+          "sourceKey": "milescole-optimized-write-fabric",
+          "note": "A 1 GB BinSize target is recommended when writing Delta tables that back Power BI Direct Lake semantic models, because larger files align with the Direct Lake loading pattern and reduce the number of segment loads needed."
+        },
+        {
+          "sourceKey": "direct-lake-understand-storage",
+          "note": "Partition Delta tables only on low-cardinality columns (Microsoft suggests under about 100-200 distinct values); over-partitioning multiplies small files and row groups, inflating segment counts in the model."
+        }
       ],
       "tags": ["lakehouse", "delta-lake", "onelake", "gold"],
       "drill": {
@@ -86,8 +129,15 @@
         ],
         "outputs": ["Report-ready Delta tables on OneLake that the Direct Lake model binds to"],
         "example": "A gold FactSales table is written V-Ordered with a 1 GB bin size and partitioned by sales_region (12 values), keeping its row-group and segment counts favourable for Direct Lake loading.",
-        "controls": ["V-Order enablement for these read-heavy tables", "Optimized Write bin size", "Partition-column cardinality"],
-        "failureModes": ["Overwrite loads wiping commit history and forcing full cold reloads", "Over-partitioning on a high-cardinality column, inflating segment counts and slowing queries"]
+        "controls": [
+          "V-Order enablement for these read-heavy tables",
+          "Optimized Write bin size",
+          "Partition-column cardinality"
+        ],
+        "failureModes": [
+          "Overwrite loads wiping commit history and forcing full cold reloads",
+          "Over-partitioning on a high-cardinality column, inflating segment counts and slowing queries"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "lakehouse", "label": "Lakehouse" }
     },
@@ -100,8 +150,14 @@
       "classification": "fact",
       "layers": ["compute"],
       "evidence": [
-        { "sourceKey": "direct-lake-understand-storage", "note": "A Direct Lake model occupies one of four memory-residency states — cold, semiwarm, warm, or hot — with query latency improving at each step; hot adds populated VertiScan caches on top of fully resident column data." },
-        { "sourceKey": "direct-lake-how-it-works", "note": "A resident column can be evicted for three reasons: a framing operation after the source Delta table changed, prolonged non-use by queries, or general memory pressure on the capacity from concurrent operations." }
+        {
+          "sourceKey": "direct-lake-understand-storage",
+          "note": "A Direct Lake model occupies one of four memory-residency states — cold, semiwarm, warm, or hot — with query latency improving at each step; hot adds populated VertiScan caches on top of fully resident column data."
+        },
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "A resident column can be evicted for three reasons: a framing operation after the source Delta table changed, prolonged non-use by queries, or general memory pressure on the capacity from concurrent operations."
+        }
       ],
       "tags": ["direct-lake", "memory", "performance"],
       "drill": {
@@ -113,8 +169,14 @@
         ],
         "outputs": ["Query results whose latency depends on the starting residency state"],
         "example": "The first query of the morning hits cold columns and transcodes them; by mid-morning the frequently used columns are hot and queries return at import-like speed.",
-        "controls": ["SKU memory bound (how much can stay resident)", "Concurrency on the capacity (memory pressure evicts columns)"],
-        "failureModes": ["Frequent eviction from memory pressure keeping the model perpetually cold/semiwarm", "A large framing operation dropping the model back to cold at a busy time"]
+        "controls": [
+          "SKU memory bound (how much can stay resident)",
+          "Concurrency on the capacity (memory pressure evicts columns)"
+        ],
+        "failureModes": [
+          "Frequent eviction from memory pressure keeping the model perpetually cold/semiwarm",
+          "A large framing operation dropping the model back to cold at a busy time"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "direct-lake", "label": "Direct Lake" }
     },
@@ -127,20 +189,34 @@
       "classification": "warning",
       "layers": ["compute", "governance"],
       "evidence": [
-        { "sourceKey": "direct-lake-how-it-works", "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once." },
-        { "sourceKey": "ultimateinfoguide-lakehouse-tutorial", "note": "OneLake data access roles (OneSecurity) are described as incompatible with Direct Lake semantic models built on the same Lakehouse: enabling OneSecurity can cause the model to drop out of Direct Lake mode. (Tier-6 community source — treat as verify-before-relying.)" }
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once."
+        },
+        {
+          "sourceKey": "ultimateinfoguide-lakehouse-tutorial",
+          "note": "OneLake data access roles (OneSecurity) are described as incompatible with Direct Lake semantic models built on the same Lakehouse: enabling OneSecurity can cause the model to drop out of Direct Lake mode. (Tier-6 community source — treat as verify-before-relying.)"
+        }
       ],
       "tags": ["direct-lake", "capacity", "onesecurity", "failure-mode"],
       "drill": {
-        "inputs": ["A model whose resident footprint approaches the SKU bound, or a lakehouse where OneSecurity is being considered"],
+        "inputs": [
+          "A model whose resident footprint approaches the SKU bound, or a lakehouse where OneSecurity is being considered"
+        ],
         "processing": [
           "Under memory pressure, columns that don't fit are read on demand (cold) from OneLake",
           "If OneSecurity is enabled on the source lakehouse, queries reportedly fall back to DirectQuery"
         ],
         "outputs": ["Degraded query latency at peak, or a mode change to DirectQuery"],
         "example": "A model sized just under an F-SKU bound runs fine off-peak but hits cold reads during the Monday-morning concurrency spike; separately, a security team enabling OneSecurity on the source lakehouse is reported to knock the model out of Direct Lake mode.",
-        "controls": ["SKU right-sizing with headroom for concurrency", "Deciding RLS/OneSecurity placement (semantic-model layer vs OneLake) before go-live"],
-        "failureModes": ["Sizing to average without headroom, so peak concurrency triggers cold reads", "Enabling OneSecurity on the source lakehouse without testing Direct Lake behaviour first"]
+        "controls": [
+          "SKU right-sizing with headroom for concurrency",
+          "Deciding RLS/OneSecurity placement (semantic-model layer vs OneLake) before go-live"
+        ],
+        "failureModes": [
+          "Sizing to average without headroom, so peak concurrency triggers cold reads",
+          "Enabling OneSecurity on the source lakehouse without testing Direct Lake behaviour first"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
     },
@@ -153,16 +229,27 @@
       "classification": "fact",
       "layers": ["data"],
       "evidence": [
-        { "sourceKey": "onelake-overview", "note": "Every Microsoft Fabric tenant is provisioned with exactly one OneLake; all Fabric data items persist tabular data in OneLake as open Delta Parquet regardless of engine, and the one-copy design lets multiple Fabric engines operate over the same physical data." }
+        {
+          "sourceKey": "onelake-overview",
+          "note": "Every Microsoft Fabric tenant is provisioned with exactly one OneLake; all Fabric data items persist tabular data in OneLake as open Delta Parquet regardless of engine, and the one-copy design lets multiple Fabric engines operate over the same physical data."
+        }
       ],
       "tags": ["onelake", "delta-lake", "one-copy"],
       "drill": {
         "inputs": ["Delta Parquet files written by the lakehouse's transformation jobs"],
-        "processing": ["Store one physical copy per table under the workspace/item namespace", "Serve reads to any Fabric engine over the same files"],
+        "processing": [
+          "Store one physical copy per table under the workspace/item namespace",
+          "Serve reads to any Fabric engine over the same files"
+        ],
         "outputs": ["The single source the Direct Lake model reads from"],
         "example": "The gold FactSales files written by a Spark job are the identical files the Direct Lake model transcodes columns from — no copy step between them.",
-        "controls": ["Workspace/item placement within OneLake", "Table area (Tables/) organisation"],
-        "failureModes": ["Standing up separate physical lakes per team, reintroducing duplication OneLake exists to avoid"]
+        "controls": [
+          "Workspace/item placement within OneLake",
+          "Table area (Tables/) organisation"
+        ],
+        "failureModes": [
+          "Standing up separate physical lakes per team, reintroducing duplication OneLake exists to avoid"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "onelake", "label": "OneLake" }
     },
@@ -175,9 +262,18 @@
       "classification": "fact",
       "layers": ["compute"],
       "evidence": [
-        { "sourceKey": "fabric-platform-licenses-capacities", "note": "Fabric F SKUs run from F2 up to F2048, the SKU number equals its capacity units (F64 = 64 CUs), and each step doubles compute. On F64 or larger, free-license users can view Power BI content with a workspace viewer role, whereas smaller SKUs require paid seats." },
-        { "sourceKey": "direct-lake-how-it-works", "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once." },
-        { "sourceKey": "capacity-throttling", "note": "Interactive operations are smoothed over a minimum of 5 minutes and up to 64 minutes; compound throttling protection charges a fan-out request (a report visual querying a semantic model that reads from OneLake) at most once." }
+        {
+          "sourceKey": "fabric-platform-licenses-capacities",
+          "note": "Fabric F SKUs run from F2 up to F2048, the SKU number equals its capacity units (F64 = 64 CUs), and each step doubles compute. On F64 or larger, free-license users can view Power BI content with a workspace viewer role, whereas smaller SKUs require paid seats."
+        },
+        {
+          "sourceKey": "direct-lake-how-it-works",
+          "note": "The Fabric capacity SKU sets the maximum memory available to each Direct Lake semantic model, which bounds how much column data can be resident at once."
+        },
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "Interactive operations are smoothed over a minimum of 5 minutes and up to 64 minutes; compound throttling protection charges a fan-out request (a report visual querying a semantic model that reads from OneLake) at most once."
+        }
       ],
       "tags": ["capacity", "f-sku", "sizing", "throttling"],
       "drill": {
@@ -187,23 +283,88 @@
           "Raise the floor to F64 if broad free-license viewing is required",
           "Rely on smoothing/bursting to absorb short interactive spikes"
         ],
-        "outputs": ["A single capacity that backs Spark writes, OneLake reads, the model, and report queries"],
+        "outputs": [
+          "A single capacity that backs Spark writes, OneLake reads, the model, and report queries"
+        ],
         "example": "A team picks F64 because 400 free-license users must view the reports, even though the model itself would fit a smaller SKU on memory — licensing sets the floor, not compute.",
-        "controls": ["F-SKU size", "Whether heavy Spark/ETL shares this capacity or gets its own", "Autoscale/reserved-capacity choices"],
-        "failureModes": ["Sizing purely on memory and forgetting the F64 licensing floor", "Co-locating heavy ETL on the same capacity and starving report memory at peak"]
+        "controls": [
+          "F-SKU size",
+          "Whether heavy Spark/ETL shares this capacity or gets its own",
+          "Autoscale/reserved-capacity choices"
+        ],
+        "failureModes": [
+          "Sizing purely on memory and forgetting the F64 licensing floor",
+          "Co-locating heavy ETL on the same capacity and starving report memory at peak"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
     }
   ],
   "edges": [
-    { "id": "e-visuals-model", "from": "report-visuals", "to": "direct-lake-model", "label": "DAX query over live connection", "layer": "data", "kind": "flow" },
-    { "id": "e-model-gold", "from": "direct-lake-model", "to": "gold-lakehouse", "label": "lazily load only touched columns", "layer": "data", "kind": "flow" },
-    { "id": "e-gold-model-framing", "from": "gold-lakehouse", "to": "direct-lake-model", "label": "framing rebinds model to latest Delta commit", "layer": "data", "kind": "feedback" },
-    { "id": "e-residency-model", "from": "column-residency", "to": "direct-lake-model", "label": "resident columns serve subsequent queries", "layer": "compute", "kind": "flow" },
-    { "id": "e-gold-onelake", "from": "gold-lakehouse", "to": "onelake", "label": "one physical Delta/Parquet copy", "layer": "data", "kind": "flow" },
-    { "id": "e-capacity-model", "from": "capacity", "to": "direct-lake-model", "label": "SKU sets the per-model memory bound", "layer": "compute", "kind": "flow" },
-    { "id": "e-capacity-residency", "from": "capacity", "to": "column-residency", "label": "memory bound + concurrency drive residency", "layer": "compute", "kind": "flow" },
-    { "id": "e-warning-capacity", "from": "memory-fallback-warning", "to": "capacity", "label": "over-bound → cold reads; OneSecurity → fallback", "layer": "governance", "kind": "branch" }
+    {
+      "id": "e-visuals-model",
+      "from": "report-visuals",
+      "to": "direct-lake-model",
+      "label": "DAX query over live connection",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-model-gold",
+      "from": "direct-lake-model",
+      "to": "gold-lakehouse",
+      "label": "lazily load only touched columns",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-gold-model-framing",
+      "from": "gold-lakehouse",
+      "to": "direct-lake-model",
+      "label": "framing rebinds model to latest Delta commit",
+      "layer": "data",
+      "kind": "feedback"
+    },
+    {
+      "id": "e-residency-model",
+      "from": "column-residency",
+      "to": "direct-lake-model",
+      "label": "resident columns serve subsequent queries",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-gold-onelake",
+      "from": "gold-lakehouse",
+      "to": "onelake",
+      "label": "one physical Delta/Parquet copy",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-capacity-model",
+      "from": "capacity",
+      "to": "direct-lake-model",
+      "label": "SKU sets the per-model memory bound",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-capacity-residency",
+      "from": "capacity",
+      "to": "column-residency",
+      "label": "memory bound + concurrency drive residency",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-warning-capacity",
+      "from": "memory-fallback-warning",
+      "to": "capacity",
+      "label": "over-bound → cold reads; OneSecurity → fallback",
+      "layer": "governance",
+      "kind": "branch"
+    }
   ],
   "walkthrough": [
     {

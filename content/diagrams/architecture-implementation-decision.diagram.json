@@ -20,19 +20,49 @@
       "classification": "fact",
       "layers": ["governance", "metadata", "orchestration"],
       "evidence": [
-        { "sourceKey": "fabric-platform-licenses-capacities", "note": "A workspace's type dictates which kind of capacity backs it — Fabric F SKU, Power BI Premium P SKU, or the shared Pro/PPU pools — and therefore which experiences its users can run; only Fabric, Trial, and P-SKU workspace types support all Fabric experiences." },
-        { "sourceKey": "ultimateinfoguide-production-stability", "note": "Git integration is enabled by default for newly created Fabric items (Dataflow Gen2, pipelines, notebooks, semantic models, Eventstreams), with item definitions stored as plain-text files that are diffable and revertible." }
+        {
+          "sourceKey": "fabric-platform-licenses-capacities",
+          "note": "A workspace's type dictates which kind of capacity backs it — Fabric F SKU, Power BI Premium P SKU, or the shared Pro/PPU pools — and therefore which experiences its users can run; only Fabric, Trial, and P-SKU workspace types support all Fabric experiences."
+        },
+        {
+          "sourceKey": "ultimateinfoguide-production-stability",
+          "note": "Git integration is enabled by default for newly created Fabric items (Dataflow Gen2, pipelines, notebooks, semantic models, Eventstreams), with item definitions stored as plain-text files that are diffable and revertible."
+        }
       ],
       "tags": ["Environments", "Workspaces", "GitIntegration", "CapacitySKU"],
       "drill": {
-        "inputs": ["Named Dev, Test, and Production workspace plan", "Capacity/SKU assignment per environment", "Git repository and branch strategy"],
-        "processing": ["Provision isolated workspaces per environment", "Confirm workspace type supports the experiences the workload needs", "Connect each workspace to Git and verify item definitions serialize as plain text"],
-        "outputs": ["Three isolated, Git-backed workspaces", "A documented capacity/SKU mapping", "A verified diff-and-revert path for item changes"],
+        "inputs": [
+          "Named Dev, Test, and Production workspace plan",
+          "Capacity/SKU assignment per environment",
+          "Git repository and branch strategy"
+        ],
+        "processing": [
+          "Provision isolated workspaces per environment",
+          "Confirm workspace type supports the experiences the workload needs",
+          "Connect each workspace to Git and verify item definitions serialize as plain text"
+        ],
+        "outputs": [
+          "Three isolated, Git-backed workspaces",
+          "A documented capacity/SKU mapping",
+          "A verified diff-and-revert path for item changes"
+        ],
         "example": "A finance workload's Dev workspace runs on a trial capacity for iteration; Test and Production are promoted to F-SKU workspaces sized for their real load, and every item — pipeline, notebook, semantic model — is tracked in the same Git repository with per-environment branches.",
-        "controls": ["Workspace type selection", "Capacity assignment", "Git connection and branch policy"],
-        "failureModes": ["Dev and Prod sharing one workspace with folder-based separation", "A Pro-only workspace silently rejecting an item type mid-project", "Items created without Git tracking, breaking later diff and rollback"]
+        "controls": [
+          "Workspace type selection",
+          "Capacity assignment",
+          "Git connection and branch policy"
+        ],
+        "failureModes": [
+          "Dev and Prod sharing one workspace with folder-based separation",
+          "A Pro-only workspace silently rejecting an item type mid-project",
+          "Items created without Git tracking, breaking later diff and rollback"
+        ]
       },
-      "drillTarget": { "kind": "topic", "slug": "architecture-implementation", "label": "Open implementation guidance" }
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "architecture-implementation",
+        "label": "Open implementation guidance"
+      }
     },
     {
       "id": "gate-cicd",
@@ -43,17 +73,43 @@
       "classification": "pattern",
       "layers": ["orchestration", "governance"],
       "evidence": [
-        { "sourceKey": "fabric-blog-df-multicloud-patterns", "note": "Fabric Data Factory is framed as a cloud-native, serverless orchestration environment that auto-scales its underlying compute and includes built-in CI/CD and deployment capabilities for multi-cloud pipeline solutions." },
-        { "sourceKey": "ultimateinfoguide-production-stability", "note": "Recommended deployment pattern: Deployment Pipelines promote items across Dev, Test, and Production workspaces, with Variable Libraries injecting environment-specific connection strings, and pull-request gates required before promotion to production." }
+        {
+          "sourceKey": "fabric-blog-df-multicloud-patterns",
+          "note": "Fabric Data Factory is framed as a cloud-native, serverless orchestration environment that auto-scales its underlying compute and includes built-in CI/CD and deployment capabilities for multi-cloud pipeline solutions."
+        },
+        {
+          "sourceKey": "ultimateinfoguide-production-stability",
+          "note": "Recommended deployment pattern: Deployment Pipelines promote items across Dev, Test, and Production workspaces, with Variable Libraries injecting environment-specific connection strings, and pull-request gates required before promotion to production."
+        }
       ],
       "tags": ["CICD", "DeploymentPipelines", "VariableLibrary", "DataFactory", "fabric-cicd"],
       "drill": {
-        "inputs": ["Git-backed items from Gate 1", "A defined Dev → Test → Production pipeline stage order", "Environment-specific configuration values"],
-        "processing": ["Assign each workspace to a Deployment Pipeline stage", "Bind Variable Libraries per stage so connection strings and parameters switch automatically", "Require pull-request approval before the Production promotion step executes"],
-        "outputs": ["A repeatable, auditable promotion path", "Environment-correct configuration with no manual edits", "A review checkpoint immediately before Production"],
+        "inputs": [
+          "Git-backed items from Gate 1",
+          "A defined Dev → Test → Production pipeline stage order",
+          "Environment-specific configuration values"
+        ],
+        "processing": [
+          "Assign each workspace to a Deployment Pipeline stage",
+          "Bind Variable Libraries per stage so connection strings and parameters switch automatically",
+          "Require pull-request approval before the Production promotion step executes"
+        ],
+        "outputs": [
+          "A repeatable, auditable promotion path",
+          "Environment-correct configuration with no manual edits",
+          "A review checkpoint immediately before Production"
+        ],
         "example": "A pipeline promoted from Test to Production automatically picks up the Production Variable Library's warehouse connection string; the promotion itself is blocked until a second engineer approves the pull request.",
-        "controls": ["Deployment Pipeline stage mapping", "Variable Library scoping", "Pull-request approval policy"],
-        "failureModes": ["Hardcoded connection strings copy-pasted between environments", "Promotion to Production with no required reviewer", "fabric-cicd or Deployment Pipelines used for only some item types, leaving others manually copied"]
+        "controls": [
+          "Deployment Pipeline stage mapping",
+          "Variable Library scoping",
+          "Pull-request approval policy"
+        ],
+        "failureModes": [
+          "Hardcoded connection strings copy-pasted between environments",
+          "Promotion to Production with no required reviewer",
+          "fabric-cicd or Deployment Pipelines used for only some item types, leaving others manually copied"
+        ]
       }
     },
     {
@@ -65,16 +121,39 @@
       "classification": "pattern",
       "layers": ["compute", "observability"],
       "evidence": [
-        { "sourceKey": "ultimateinfoguide-production-stability", "note": "Recommended pipeline reliability pattern: three retries with exponential backoff for transient failures, combined with idempotent write logic (Delta MERGE instead of plain INSERT) so reruns do not create duplicate records." }
+        {
+          "sourceKey": "ultimateinfoguide-production-stability",
+          "note": "Recommended pipeline reliability pattern: three retries with exponential backoff for transient failures, combined with idempotent write logic (Delta MERGE instead of plain INSERT) so reruns do not create duplicate records."
+        }
       ],
       "tags": ["Reliability", "Retries", "Idempotency", "DeltaMerge", "Testing"],
       "drill": {
-        "inputs": ["A CI/CD-promoted pipeline from Gate 2", "A defined retry and backoff configuration", "A MERGE key that uniquely identifies each record"],
-        "processing": ["Force a transient failure mid-run in Test", "Confirm the configured retries fire with increasing backoff", "Rerun the full pipeline and verify row counts show no duplication"],
-        "outputs": ["Evidence the retry policy actually executes", "Evidence a full rerun is safe", "A documented, exercised failure-recovery procedure"],
+        "inputs": [
+          "A CI/CD-promoted pipeline from Gate 2",
+          "A defined retry and backoff configuration",
+          "A MERGE key that uniquely identifies each record"
+        ],
+        "processing": [
+          "Force a transient failure mid-run in Test",
+          "Confirm the configured retries fire with increasing backoff",
+          "Rerun the full pipeline and verify row counts show no duplication"
+        ],
+        "outputs": [
+          "Evidence the retry policy actually executes",
+          "Evidence a full rerun is safe",
+          "A documented, exercised failure-recovery procedure"
+        ],
         "example": "An engineer kills a notebook activity after it has written half its output, then reruns the pipeline; the MERGE key ensures the already-written rows are updated in place rather than duplicated, and the run completes without manual cleanup.",
-        "controls": ["Retry count and backoff interval", "MERGE key definition", "Forced-failure test procedure"],
-        "failureModes": ["INSERT-only writes that duplicate rows on any rerun", "A MERGE key that is not actually unique, silently overwriting unrelated rows", "Retries configured but never tested against a real transient failure"]
+        "controls": [
+          "Retry count and backoff interval",
+          "MERGE key definition",
+          "Forced-failure test procedure"
+        ],
+        "failureModes": [
+          "INSERT-only writes that duplicate rows on any rerun",
+          "A MERGE key that is not actually unique, silently overwriting unrelated rows",
+          "Retries configured but never tested against a real transient failure"
+        ]
       }
     },
     {
@@ -86,17 +165,43 @@
       "classification": "pattern",
       "layers": ["security", "governance"],
       "evidence": [
-        { "sourceKey": "ultimateinfoguide-data-pipelines-tutorial", "note": "Recommended pipeline security hardening: connection secrets only in linked-service-backed key vaults (never inline), Notebook activities authenticated via service principal or workspace identity rather than user credentials, service principal permissions scoped to specific OneLake items instead of workspace Admin." },
-        { "sourceKey": "fabric-blog-data-protection-ai-ready", "note": "Because agents and Copilot operate within the querying user's own permissions rather than a separate service identity, tightening access controls on the underlying data directly constrains what an AI experience can retrieve and surface, without any AI-specific configuration." }
+        {
+          "sourceKey": "ultimateinfoguide-data-pipelines-tutorial",
+          "note": "Recommended pipeline security hardening: connection secrets only in linked-service-backed key vaults (never inline), Notebook activities authenticated via service principal or workspace identity rather than user credentials, service principal permissions scoped to specific OneLake items instead of workspace Admin."
+        },
+        {
+          "sourceKey": "fabric-blog-data-protection-ai-ready",
+          "note": "Because agents and Copilot operate within the querying user's own permissions rather than a separate service identity, tightening access controls on the underlying data directly constrains what an AI experience can retrieve and surface, without any AI-specific configuration."
+        }
       ],
       "tags": ["Security", "LeastPrivilege", "KeyVault", "ServicePrincipal", "Copilot"],
       "drill": {
-        "inputs": ["Tested, promoted pipelines from Gate 3", "An inventory of connection secrets and identities in use", "A target least-privilege role assignment per identity"],
-        "processing": ["Move every inline secret into a linked-service-backed key vault", "Switch Notebook activity authentication from user credentials to a service principal or workspace identity", "Scope that identity's role to the specific items it touches, removing workspace Admin"],
-        "outputs": ["No inline secrets remaining in any item definition", "Service-identity authentication on every automated activity", "An access boundary that also bounds what Copilot and agents can surface"],
+        "inputs": [
+          "Tested, promoted pipelines from Gate 3",
+          "An inventory of connection secrets and identities in use",
+          "A target least-privilege role assignment per identity"
+        ],
+        "processing": [
+          "Move every inline secret into a linked-service-backed key vault",
+          "Switch Notebook activity authentication from user credentials to a service principal or workspace identity",
+          "Scope that identity's role to the specific items it touches, removing workspace Admin"
+        ],
+        "outputs": [
+          "No inline secrets remaining in any item definition",
+          "Service-identity authentication on every automated activity",
+          "An access boundary that also bounds what Copilot and agents can surface"
+        ],
         "example": "A notebook that previously ran under a data engineer's personal credentials, with a database password pasted into a cell, is switched to a workspace identity reading its connection from a vaulted linked service scoped only to the lakehouse it needs.",
-        "controls": ["Key vault-backed linked services", "Service principal / workspace identity assignment", "Item-scoped role assignment"],
-        "failureModes": ["Inline secrets surviving in an old notebook cell or pipeline parameter", "A service principal granted workspace Admin instead of an item-scoped role", "Copilot surfacing sensitive rows because the underlying data access was never scoped down"]
+        "controls": [
+          "Key vault-backed linked services",
+          "Service principal / workspace identity assignment",
+          "Item-scoped role assignment"
+        ],
+        "failureModes": [
+          "Inline secrets surviving in an old notebook cell or pipeline parameter",
+          "A service principal granted workspace Admin instead of an item-scoped role",
+          "Copilot surfacing sensitive rows because the underlying data access was never scoped down"
+        ]
       }
     },
     {
@@ -108,19 +213,49 @@
       "classification": "fact",
       "layers": ["observability", "governance"],
       "evidence": [
-        { "sourceKey": "ultimateinfoguide-production-stability", "note": "Deleted items can be restored either through the Workspace Recycle bin in the portal UI or programmatically via a REST API." },
-        { "sourceKey": "ultimateinfoguide-production-stability", "note": "Tenant admins can configure a retention window of up to 90 days for Item Recovery and can adjust that window at any time." }
+        {
+          "sourceKey": "ultimateinfoguide-production-stability",
+          "note": "Deleted items can be restored either through the Workspace Recycle bin in the portal UI or programmatically via a REST API."
+        },
+        {
+          "sourceKey": "ultimateinfoguide-production-stability",
+          "note": "Tenant admins can configure a retention window of up to 90 days for Item Recovery and can adjust that window at any time."
+        }
       ],
       "tags": ["OperationalReadiness", "ItemRecovery", "Monitoring", "SupportOwnership"],
       "drill": {
-        "inputs": ["A security-hardened, tested pipeline from Gate 4", "The tenant's configured Item Recovery retention window", "A named support owner and escalation route"],
-        "processing": ["Delete a non-critical test item and confirm restore via both the Recycle Bin UI and the REST API", "Confirm the retention window matches organizational policy", "Confirm the named support owner can execute the restore procedure without escalation"],
-        "outputs": ["A demonstrated, working restore path", "A retention window matched to policy, not left at the default", "General-availability sign-off for the pattern"],
+        "inputs": [
+          "A security-hardened, tested pipeline from Gate 4",
+          "The tenant's configured Item Recovery retention window",
+          "A named support owner and escalation route"
+        ],
+        "processing": [
+          "Delete a non-critical test item and confirm restore via both the Recycle Bin UI and the REST API",
+          "Confirm the retention window matches organizational policy",
+          "Confirm the named support owner can execute the restore procedure without escalation"
+        ],
+        "outputs": [
+          "A demonstrated, working restore path",
+          "A retention window matched to policy, not left at the default",
+          "General-availability sign-off for the pattern"
+        ],
         "example": "Before go-live, the support owner deliberately deletes a duplicate test semantic model, restores it from the Recycle Bin within minutes, then repeats the restore using the REST API to prove the automation path works too.",
-        "controls": ["Item Recovery retention window", "Recycle Bin and REST API restore procedure", "Named support owner and escalation route"],
-        "failureModes": ["Retention window left at a default that does not match compliance requirements", "Restore procedure documented but never actually executed", "No single owner accountable when the first real deletion happens"]
+        "controls": [
+          "Item Recovery retention window",
+          "Recycle Bin and REST API restore procedure",
+          "Named support owner and escalation route"
+        ],
+        "failureModes": [
+          "Retention window left at a default that does not match compliance requirements",
+          "Restore procedure documented but never actually executed",
+          "No single owner accountable when the first real deletion happens"
+        ]
       },
-      "drillTarget": { "kind": "design", "slug": "architecture-implementation-blueprint", "label": "Open implementation blueprint" }
+      "drillTarget": {
+        "kind": "design",
+        "slug": "architecture-implementation-blueprint",
+        "label": "Open implementation blueprint"
+      }
     },
     {
       "id": "remediation-loop",
@@ -134,11 +269,21 @@
       "tags": ["Remediation", "GateDiscipline"],
       "drill": {
         "inputs": ["A failed gate check", "The specific unmet criterion from that phase"],
-        "processing": ["Stop promotion of the workload past the failed gate", "Assign the remediation to an owner within that phase", "Re-run the same gate check after remediation"],
-        "outputs": ["A closed gap with evidence, not a waived checklist item", "A workload that only advances once every prior gate independently passes"],
+        "processing": [
+          "Stop promotion of the workload past the failed gate",
+          "Assign the remediation to an owner within that phase",
+          "Re-run the same gate check after remediation"
+        ],
+        "outputs": [
+          "A closed gap with evidence, not a waived checklist item",
+          "A workload that only advances once every prior gate independently passes"
+        ],
         "example": "A workload fails Gate 4 because a notebook still authenticates with a personal account; the team fixes the identity and re-runs Gate 4 rather than proceeding to Gate 5 with a tracked exception.",
         "controls": ["Gate re-check requirement", "No-skip promotion policy"],
-        "failureModes": ["Gaps tracked as backlog items while the workload proceeds anyway", "A gate re-checked by the same person who waived it the first time, with no independent verification"]
+        "failureModes": [
+          "Gaps tracked as backlog items while the workload proceeds anyway",
+          "A gate re-checked by the same person who waived it the first time, with no independent verification"
+        ]
       }
     },
     {
@@ -152,40 +297,194 @@
       "evidence": [],
       "tags": ["ConfigurationDrift", "Feedback", "GitIntegration"],
       "drill": {
-        "inputs": ["An observed difference between Production behavior and its Git-tracked item definitions", "The last known-good promoted state"],
-        "processing": ["Diff the live Production item against its Git history", "Determine whether the drift originated from a manual edit or an out-of-band change", "Reconcile Production to a Git-tracked state and re-verify Gate 1"],
-        "outputs": ["Production state that matches its tracked source of truth again", "A documented root cause for the drift", "Re-confirmed environment integrity before any further promotion"],
+        "inputs": [
+          "An observed difference between Production behavior and its Git-tracked item definitions",
+          "The last known-good promoted state"
+        ],
+        "processing": [
+          "Diff the live Production item against its Git history",
+          "Determine whether the drift originated from a manual edit or an out-of-band change",
+          "Reconcile Production to a Git-tracked state and re-verify Gate 1"
+        ],
+        "outputs": [
+          "Production state that matches its tracked source of truth again",
+          "A documented root cause for the drift",
+          "Re-confirmed environment integrity before any further promotion"
+        ],
         "example": "A support engineer manually raises a Production capacity limit during an incident; once resolved, the change is captured back into the environment's tracked configuration instead of being left as an undocumented manual override.",
         "controls": ["Git-based drift detection", "Change reconciliation before further promotion"],
-        "failureModes": ["Manual Production fixes that are never reconciled back into Git", "Drift discovered only when the next promotion overwrites the undocumented manual change"]
+        "failureModes": [
+          "Manual Production fixes that are never reconciled back into Git",
+          "Drift discovered only when the next promotion overwrites the undocumented manual change"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "edge-env-pass", "from": "gate-environments", "to": "gate-cicd", "label": "yes — environments isolated and Git-integrated", "layer": "orchestration", "kind": "branch" },
-    { "id": "edge-cicd-pass", "from": "gate-cicd", "to": "gate-testing", "label": "yes — Deployment Pipelines and PR gate in place", "layer": "orchestration", "kind": "branch" },
-    { "id": "edge-testing-pass", "from": "gate-testing", "to": "gate-security", "label": "yes — retries and idempotent writes proven under a forced failure", "layer": "orchestration", "kind": "branch" },
-    { "id": "edge-security-pass", "from": "gate-security", "to": "gate-operational-readiness", "label": "yes — secrets vaulted and permissions scoped to least privilege", "layer": "security", "kind": "branch" },
-    { "id": "edge-env-fail", "from": "gate-environments", "to": "remediation-loop", "label": "no — environments not isolated or not Git-integrated", "layer": "governance", "kind": "branch" },
-    { "id": "edge-cicd-fail", "from": "gate-cicd", "to": "remediation-loop", "label": "no — promotion is manual or has no PR gate", "layer": "governance", "kind": "branch" },
-    { "id": "edge-testing-fail", "from": "gate-testing", "to": "remediation-loop", "label": "no — reliability pattern untested or duplicates on rerun", "layer": "governance", "kind": "branch" },
-    { "id": "edge-security-fail", "from": "gate-security", "to": "remediation-loop", "label": "no — inline secrets or over-broad identity found", "layer": "governance", "kind": "branch" },
-    { "id": "edge-ops-fail", "from": "gate-operational-readiness", "to": "remediation-loop", "label": "no — restore untested or no support owner confirmed", "layer": "governance", "kind": "branch" },
-    { "id": "edge-remediation-env", "from": "remediation-loop", "to": "gate-environments", "label": "remediate environments, re-enter Gate 1", "layer": "governance", "kind": "feedback" },
-    { "id": "edge-remediation-cicd", "from": "remediation-loop", "to": "gate-cicd", "label": "remediate CI/CD, re-enter Gate 2", "layer": "governance", "kind": "feedback" },
-    { "id": "edge-remediation-testing", "from": "remediation-loop", "to": "gate-testing", "label": "remediate reliability, re-enter Gate 3", "layer": "governance", "kind": "feedback" },
-    { "id": "edge-remediation-security", "from": "remediation-loop", "to": "gate-security", "label": "remediate security, re-enter Gate 4", "layer": "governance", "kind": "feedback" },
-    { "id": "edge-remediation-ops", "from": "remediation-loop", "to": "gate-operational-readiness", "label": "remediate operations, re-enter Gate 5", "layer": "governance", "kind": "feedback" },
-    { "id": "edge-drift-feedback", "from": "gate-operational-readiness", "to": "drift-feedback", "label": "drift discovered in production", "layer": "observability", "kind": "feedback" },
-    { "id": "edge-drift-reopen", "from": "drift-feedback", "to": "gate-environments", "label": "reconcile against Git-tracked baseline, re-open Gate 1", "layer": "governance", "kind": "feedback" }
+    {
+      "id": "edge-env-pass",
+      "from": "gate-environments",
+      "to": "gate-cicd",
+      "label": "yes — environments isolated and Git-integrated",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-cicd-pass",
+      "from": "gate-cicd",
+      "to": "gate-testing",
+      "label": "yes — Deployment Pipelines and PR gate in place",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-testing-pass",
+      "from": "gate-testing",
+      "to": "gate-security",
+      "label": "yes — retries and idempotent writes proven under a forced failure",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-security-pass",
+      "from": "gate-security",
+      "to": "gate-operational-readiness",
+      "label": "yes — secrets vaulted and permissions scoped to least privilege",
+      "layer": "security",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-env-fail",
+      "from": "gate-environments",
+      "to": "remediation-loop",
+      "label": "no — environments not isolated or not Git-integrated",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-cicd-fail",
+      "from": "gate-cicd",
+      "to": "remediation-loop",
+      "label": "no — promotion is manual or has no PR gate",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-testing-fail",
+      "from": "gate-testing",
+      "to": "remediation-loop",
+      "label": "no — reliability pattern untested or duplicates on rerun",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-security-fail",
+      "from": "gate-security",
+      "to": "remediation-loop",
+      "label": "no — inline secrets or over-broad identity found",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-ops-fail",
+      "from": "gate-operational-readiness",
+      "to": "remediation-loop",
+      "label": "no — restore untested or no support owner confirmed",
+      "layer": "governance",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-remediation-env",
+      "from": "remediation-loop",
+      "to": "gate-environments",
+      "label": "remediate environments, re-enter Gate 1",
+      "layer": "governance",
+      "kind": "feedback"
+    },
+    {
+      "id": "edge-remediation-cicd",
+      "from": "remediation-loop",
+      "to": "gate-cicd",
+      "label": "remediate CI/CD, re-enter Gate 2",
+      "layer": "governance",
+      "kind": "feedback"
+    },
+    {
+      "id": "edge-remediation-testing",
+      "from": "remediation-loop",
+      "to": "gate-testing",
+      "label": "remediate reliability, re-enter Gate 3",
+      "layer": "governance",
+      "kind": "feedback"
+    },
+    {
+      "id": "edge-remediation-security",
+      "from": "remediation-loop",
+      "to": "gate-security",
+      "label": "remediate security, re-enter Gate 4",
+      "layer": "governance",
+      "kind": "feedback"
+    },
+    {
+      "id": "edge-remediation-ops",
+      "from": "remediation-loop",
+      "to": "gate-operational-readiness",
+      "label": "remediate operations, re-enter Gate 5",
+      "layer": "governance",
+      "kind": "feedback"
+    },
+    {
+      "id": "edge-drift-feedback",
+      "from": "gate-operational-readiness",
+      "to": "drift-feedback",
+      "label": "drift discovered in production",
+      "layer": "observability",
+      "kind": "feedback"
+    },
+    {
+      "id": "edge-drift-reopen",
+      "from": "drift-feedback",
+      "to": "gate-environments",
+      "label": "reconcile against Git-tracked baseline, re-open Gate 1",
+      "layer": "governance",
+      "kind": "feedback"
+    }
   ],
   "walkthrough": [
-    { "nodeId": "gate-environments", "title": "1. Environments", "explanation": "Isolated, Git-integrated Dev/Test/Prod workspaces on the right workspace type are the foundation every later gate assumes exists." },
-    { "nodeId": "gate-cicd", "title": "2. CI/CD", "explanation": "Deployment Pipelines with Variable Library binding and a pull-request gate turn promotion into a repeatable, reviewed process." },
-    { "nodeId": "gate-testing", "title": "3. Testing", "explanation": "A forced failure and rerun prove — rather than assume — that retries and idempotent MERGE writes actually protect the pipeline." },
-    { "nodeId": "gate-security", "title": "4. Security", "explanation": "Vaulted secrets and least-privilege service identities bound both direct access and what Copilot and agents can surface." },
-    { "nodeId": "gate-operational-readiness", "title": "5. Operational readiness", "explanation": "A tested Item Recovery restore and a named support owner are the evidence that unlocks general availability." },
-    { "nodeId": "remediation-loop", "title": "Any gate can fail", "explanation": "A failed gate returns to that same phase for hardening; the workload never advances on an unresolved gap." },
-    { "nodeId": "drift-feedback", "title": "Drift returns to Gate 1", "explanation": "Configuration drift found in production is reconciled against the Git-tracked baseline, not patched in place." }
+    {
+      "nodeId": "gate-environments",
+      "title": "1. Environments",
+      "explanation": "Isolated, Git-integrated Dev/Test/Prod workspaces on the right workspace type are the foundation every later gate assumes exists."
+    },
+    {
+      "nodeId": "gate-cicd",
+      "title": "2. CI/CD",
+      "explanation": "Deployment Pipelines with Variable Library binding and a pull-request gate turn promotion into a repeatable, reviewed process."
+    },
+    {
+      "nodeId": "gate-testing",
+      "title": "3. Testing",
+      "explanation": "A forced failure and rerun prove — rather than assume — that retries and idempotent MERGE writes actually protect the pipeline."
+    },
+    {
+      "nodeId": "gate-security",
+      "title": "4. Security",
+      "explanation": "Vaulted secrets and least-privilege service identities bound both direct access and what Copilot and agents can surface."
+    },
+    {
+      "nodeId": "gate-operational-readiness",
+      "title": "5. Operational readiness",
+      "explanation": "A tested Item Recovery restore and a named support owner are the evidence that unlocks general availability."
+    },
+    {
+      "nodeId": "remediation-loop",
+      "title": "Any gate can fail",
+      "explanation": "A failed gate returns to that same phase for hardening; the workload never advances on an unresolved gap."
+    },
+    {
+      "nodeId": "drift-feedback",
+      "title": "Drift returns to Gate 1",
+      "explanation": "Configuration drift found in production is reconciled against the Git-tracked baseline, not patched in place."
+    }
   ]
 }

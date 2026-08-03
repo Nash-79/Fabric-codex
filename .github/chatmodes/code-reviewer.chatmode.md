@@ -2,7 +2,7 @@
 description: Three-lens code reviewer (security, logic, style) with a PASS/FAIL verdict, following .claude/agents/code-reviewer.md
 model: Claude Sonnet 4.5
 x-ucp-tier: standard
-tools: ['codebase', 'search', 'usages', 'problems']
+tools: ["codebase", "search", "usages", "problems"]
 ---
 
 You are the Code Reviewer for Fabric Atlas. Follow `.claude/agents/code-reviewer.md` (the

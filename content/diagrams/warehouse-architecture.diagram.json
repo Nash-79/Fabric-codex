@@ -21,16 +21,31 @@
       "layers": ["compute"],
       "tags": ["Warehouse", "TSQL"],
       "evidence": [
-        { "sourceKey": "warehouse-overview", "note": "Fabric Data Warehouse is an enterprise-scale relational warehouse built on a data lake foundation, aimed at star/snowflake schemas, curated corporate data marts, and governed semantic models for BI." },
-        { "sourceKey": "warehouse-overview", "note": "Development is primarily in T-SQL on a large SQL Database Engine surface area, including full multi-table ACID transactions, materialized views, functions, and stored procedures." }
+        {
+          "sourceKey": "warehouse-overview",
+          "note": "Fabric Data Warehouse is an enterprise-scale relational warehouse built on a data lake foundation, aimed at star/snowflake schemas, curated corporate data marts, and governed semantic models for BI."
+        },
+        {
+          "sourceKey": "warehouse-overview",
+          "note": "Development is primarily in T-SQL on a large SQL Database Engine surface area, including full multi-table ACID transactions, materialized views, functions, and stored procedures."
+        }
       ],
       "drill": {
         "inputs": ["T-SQL statements from clients, BI tools, pipelines, or cross-database queries"],
-        "processing": ["Parse and validate the T-SQL statement against the full SQL Database Engine surface", "Route DDL/DML/query statements into the appropriate execution path"],
-        "outputs": ["A validated query or statement ready for compute pool assignment and query planning"],
+        "processing": [
+          "Parse and validate the T-SQL statement against the full SQL Database Engine surface",
+          "Route DDL/DML/query statements into the appropriate execution path"
+        ],
+        "outputs": [
+          "A validated query or statement ready for compute pool assignment and query planning"
+        ],
         "example": "A team migrating from an on-premises SQL Server data warehouse ports stored procedures and multi-table transactions largely unchanged, because the warehouse's T-SQL surface supports the same enterprise features rather than a cut-down analytical dialect.",
-        "controls": ["Object permissions, row-level security, column-level security, and dynamic data masking applied at this layer"],
-        "failureModes": ["Assuming full SQL Server T-SQL parity for every feature without checking the specific warehouse documentation for gaps"]
+        "controls": [
+          "Object permissions, row-level security, column-level security, and dynamic data masking applied at this layer"
+        ],
+        "failureModes": [
+          "Assuming full SQL Server T-SQL parity for every feature without checking the specific warehouse documentation for gaps"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     },
@@ -44,15 +59,27 @@
       "layers": ["compute", "orchestration"],
       "tags": ["Warehouse", "WorkloadManagement"],
       "evidence": [
-        { "sourceKey": "warehouse-workload-management", "note": "By default, the compute available to a Fabric Warehouse is split evenly (50/50) into two isolated resource pools — a SELECT pool for all SELECT queries and a non-SELECT pool for ETL/ingestion operations; each pool scales independently but never exceeds 50% of total compute." }
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "By default, the compute available to a Fabric Warehouse is split evenly (50/50) into two isolated resource pools — a SELECT pool for all SELECT queries and a non-SELECT pool for ETL/ingestion operations; each pool scales independently but never exceeds 50% of total compute."
+        }
       ],
       "drill": {
         "inputs": ["A validated T-SQL statement, classified as SELECT or non-SELECT"],
-        "processing": ["Route the statement to its corresponding resource pool", "Each pool scales its own compute independently within its 50% ceiling"],
-        "outputs": ["Query work isolated from ingestion work, with neither able to fully starve the other"],
+        "processing": [
+          "Route the statement to its corresponding resource pool",
+          "Each pool scales its own compute independently within its 50% ceiling"
+        ],
+        "outputs": [
+          "Query work isolated from ingestion work, with neither able to fully starve the other"
+        ],
         "example": "A large nightly COPY INTO load job saturates the non-SELECT pool; concurrently, morning-shift analysts in a different timezone still get normal SELECT query performance because the two pools cannot cross-consume each other's capacity.",
-        "controls": ["Custom SQL pools, which a workspace admin can define to replace the 50/50 default split"],
-        "failureModes": ["Assuming a single custom SQL pool configuration change applies retroactively to already-running sessions rather than new connections"]
+        "controls": [
+          "Custom SQL pools, which a workspace admin can define to replace the 50/50 default split"
+        ],
+        "failureModes": [
+          "Assuming a single custom SQL pool configuration change applies retroactively to already-running sessions rather than new connections"
+        ]
       }
     },
     {
@@ -65,17 +92,37 @@
       "layers": ["compute"],
       "tags": ["Warehouse", "Polaris", "DistributedQuery"],
       "evidence": [
-        { "sourceKey": "warehouse-workload-management", "note": "The Fabric Warehouse and the SQL analytics endpoint share one underlying distributed processing architecture, and the backend is serverless: compute capacity scales up and down autonomously to match workload demand." },
-        { "sourceKey": "warehouse-workload-management", "note": "The DQP scheduler operates at task level and represents each query as a directed acyclic graph (DAG) of tasks, so tasks without mutual dependencies can execute simultaneously or out of order, giving both intra-query parallelism and cross-query concurrency." },
-        { "sourceKey": "polaris-vldb-paper", "note": "A Polaris task is the physical execution of an operator expression over one hash-distribution of its inputs; a query plan becomes a DAG of task templates whose edges encode dataflow and precedence constraints." }
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "The Fabric Warehouse and the SQL analytics endpoint share one underlying distributed processing architecture, and the backend is serverless: compute capacity scales up and down autonomously to match workload demand."
+        },
+        {
+          "sourceKey": "warehouse-workload-management",
+          "note": "The DQP scheduler operates at task level and represents each query as a directed acyclic graph (DAG) of tasks, so tasks without mutual dependencies can execute simultaneously or out of order, giving both intra-query parallelism and cross-query concurrency."
+        },
+        {
+          "sourceKey": "polaris-vldb-paper",
+          "note": "A Polaris task is the physical execution of an operator expression over one hash-distribution of its inputs; a query plan becomes a DAG of task templates whose edges encode dataflow and precedence constraints."
+        }
       ],
       "drill": {
-        "inputs": ["An optimized query plan handed off from the SQL frontend, assigned to its resource pool"],
-        "processing": ["Compile the plan into a task DAG via a two-phase Cascades-based optimizer", "Schedule tasks (FIFO, switching to best-fit when idle capacity exists) across backend compute nodes", "Autonomously scale the backend node topology when the scheduler detects resource pressure, as an online operation"],
-        "outputs": ["Query or ingestion results computed via parallel task execution across elastically scaled compute"],
+        "inputs": [
+          "An optimized query plan handed off from the SQL frontend, assigned to its resource pool"
+        ],
+        "processing": [
+          "Compile the plan into a task DAG via a two-phase Cascades-based optimizer",
+          "Schedule tasks (FIFO, switching to best-fit when idle capacity exists) across backend compute nodes",
+          "Autonomously scale the backend node topology when the scheduler detects resource pressure, as an online operation"
+        ],
+        "outputs": [
+          "Query or ingestion results computed via parallel task execution across elastically scaled compute"
+        ],
         "example": "A large aggregation query is compiled into a task DAG where per-partition scan-and-filter tasks run in parallel across backend nodes, with independent tasks from a second concurrent query interleaved on the same scaled-out topology.",
         "controls": ["None directly user-facing — workload management is autonomous by design"],
-        "failureModes": ["Expecting consistently sub-second latency on queries needing distributed processing — node acquisition typically takes a few seconds with no SLA, so the engine is not optimized for that latency class", "A single unhealthy backend node failing a whole query instead of being handled — task-level fault tolerance actually redistributes work to healthy nodes rather than failing"]
+        "failureModes": [
+          "Expecting consistently sub-second latency on queries needing distributed processing — node acquisition typically takes a few seconds with no SLA, so the engine is not optimized for that latency class",
+          "A single unhealthy backend node failing a whole query instead of being handled — task-level fault tolerance actually redistributes work to healthy nodes rather than failing"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "polaris", "label": "Polaris" }
     },
@@ -89,17 +136,36 @@
       "layers": ["compute", "data"],
       "tags": ["Warehouse", "Caching"],
       "evidence": [
-        { "sourceKey": "warehouse-caching", "note": "Reading from the data lake is the dominant I/O cost for warehouse queries, so the engine layers local caches (memory and SSD) over remote storage to cut the number of remote reads." },
-        { "sourceKey": "warehouse-caching", "note": "On first access the engine transcodes data from its file-based format into a compressed columnar in-memory representation; anything loaded into the in-memory cache is also serialized to a local SSD disk cache, which acts as a larger second tier." },
-        { "sourceKey": "warehouse-caching", "note": "Cache eviction is recency-based: when the cache hits its capacity threshold while new data is read in, the objects unused for the longest time are removed first. The cache maintains full transactional consistency with DML changes." }
+        {
+          "sourceKey": "warehouse-caching",
+          "note": "Reading from the data lake is the dominant I/O cost for warehouse queries, so the engine layers local caches (memory and SSD) over remote storage to cut the number of remote reads."
+        },
+        {
+          "sourceKey": "warehouse-caching",
+          "note": "On first access the engine transcodes data from its file-based format into a compressed columnar in-memory representation; anything loaded into the in-memory cache is also serialized to a local SSD disk cache, which acts as a larger second tier."
+        },
+        {
+          "sourceKey": "warehouse-caching",
+          "note": "Cache eviction is recency-based: when the cache hits its capacity threshold while new data is read in, the objects unused for the longest time are removed first. The cache maintains full transactional consistency with DML changes."
+        }
       ],
       "drill": {
         "inputs": ["A task's request to read specific columns/row groups of a table"],
-        "processing": ["Check the in-memory columnar cache first", "On miss, check the SSD cache and rehydrate memory from it if present", "On full miss, read from OneLake and populate both cache tiers"],
-        "outputs": ["Data served from the fastest available tier, with transactional consistency honored regardless of cache state"],
+        "processing": [
+          "Check the in-memory columnar cache first",
+          "On miss, check the SSD cache and rehydrate memory from it if present",
+          "On full miss, read from OneLake and populate both cache tiers"
+        ],
+        "outputs": [
+          "Data served from the fastest available tier, with transactional consistency honored regardless of cache state"
+        ],
         "example": "A dashboard query run repeatedly through the morning gets progressively faster after its first (cold) execution, as the touched columns move into and stay resident in the in-memory cache; a query against a rarely-touched archive table falls back to OneLake with each access.",
-        "controls": ["None user-configurable — Microsoft states disabling the cache would visibly degrade performance and offers no manual clear/configure option"],
-        "failureModes": ["Judging warehouse performance from a first (cold-start) query run instead of checking data_scanned_remote_storage_mb in queryinsights.exec_requests_history to detect whether the run was actually served from cache"]
+        "controls": [
+          "None user-configurable — Microsoft states disabling the cache would visibly degrade performance and offers no manual clear/configure option"
+        ],
+        "failureModes": [
+          "Judging warehouse performance from a first (cold-start) query run instead of checking data_scanned_remote_storage_mb in queryinsights.exec_requests_history to detect whether the run was actually served from cache"
+        ]
       }
     },
     {
@@ -112,17 +178,40 @@
       "layers": ["data"],
       "tags": ["Warehouse", "DeltaLake", "OneLake"],
       "evidence": [
-        { "sourceKey": "warehouse-overview", "note": "Warehouse tables are physically stored as Delta tables (Parquet data files plus a file-based transaction log), the same open format used for all Fabric data, so engineers and business users can share data without separate copies." },
-        { "sourceKey": "warehouse-overview", "note": "Warehouse data is automatically published to OneLake Files in Delta format, making the same tables readable by external engines and other Fabric workloads without export jobs." },
-        { "sourceKey": "warehouse-performance-guidelines", "note": "V-Order, a write-time Parquet sorting and compression optimization, is enabled by default on all warehouses to speed reads; it adds a small ingestion overhead, and once disabled on a warehouse it cannot be re-enabled." }
+        {
+          "sourceKey": "warehouse-overview",
+          "note": "Warehouse tables are physically stored as Delta tables (Parquet data files plus a file-based transaction log), the same open format used for all Fabric data, so engineers and business users can share data without separate copies."
+        },
+        {
+          "sourceKey": "warehouse-overview",
+          "note": "Warehouse data is automatically published to OneLake Files in Delta format, making the same tables readable by external engines and other Fabric workloads without export jobs."
+        },
+        {
+          "sourceKey": "warehouse-performance-guidelines",
+          "note": "V-Order, a write-time Parquet sorting and compression optimization, is enabled by default on all warehouses to speed reads; it adds a small ingestion overhead, and once disabled on a warehouse it cannot be re-enabled."
+        }
       ],
       "drill": {
-        "inputs": ["Committed DML writes (INSERT/UPDATE/DELETE) and CTAS/COPY INTO ingestion results"],
-        "processing": ["Write V-Ordered Parquet data files, applying data clustering if configured", "Append a JSON entry to the Delta transaction log, periodically checkpointed", "A background compaction service merges small files and removes logically deleted rows, using lock-aware preemption to avoid conflicting with in-flight user queries"],
-        "outputs": ["A Delta table in OneLake, physically identical in format to any other Fabric-written Delta table"],
+        "inputs": [
+          "Committed DML writes (INSERT/UPDATE/DELETE) and CTAS/COPY INTO ingestion results"
+        ],
+        "processing": [
+          "Write V-Ordered Parquet data files, applying data clustering if configured",
+          "Append a JSON entry to the Delta transaction log, periodically checkpointed",
+          "A background compaction service merges small files and removes logically deleted rows, using lock-aware preemption to avoid conflicting with in-flight user queries"
+        ],
+        "outputs": [
+          "A Delta table in OneLake, physically identical in format to any other Fabric-written Delta table"
+        ],
         "example": "A Spark notebook in a completely different workspace reads a warehouse table's OneLake path directly as a Delta table for a feature-engineering job, with no export, copy, or special connector required.",
-        "controls": ["V-Order on/off at warehouse creation (irreversible once disabled)", "T-SQL data clustering columns for file/row-group skipping on filtered queries"],
-        "failureModes": ["Trickle DML — many small INSERT/UPDATE/DELETE statements — fragmenting row groups and degrading scan performance until compaction catches up", "Assuming V-Order can be re-enabled later after disabling it for a heavy-ingestion staging warehouse — the common pattern is a separate V-Order-disabled staging warehouse feeding a V-Order-enabled warehouse for reads instead"]
+        "controls": [
+          "V-Order on/off at warehouse creation (irreversible once disabled)",
+          "T-SQL data clustering columns for file/row-group skipping on filtered queries"
+        ],
+        "failureModes": [
+          "Trickle DML — many small INSERT/UPDATE/DELETE statements — fragmenting row groups and degrading scan performance until compaction catches up",
+          "Assuming V-Order can be re-enabled later after disabling it for a heavy-ingestion staging warehouse — the common pattern is a separate V-Order-disabled staging warehouse feeding a V-Order-enabled warehouse for reads instead"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     },
@@ -136,16 +225,32 @@
       "layers": ["compute"],
       "tags": ["Warehouse", "GPU", "CoddSpeed"],
       "evidence": [
-        { "sourceKey": "coddspeed-gpu-warehouse", "note": "CoddSpeed is a hardware-accelerated query execution capability now built into Microsoft Fabric's Data Warehouse engine; the accelerated execution path runs transparently under existing SQL — queries do not need to be rewritten or specially hinted." },
-        { "sourceKey": "coddspeed-gpu-warehouse", "note": "The paper reports the accelerated path outperforming the equivalent CPU-only execution by more than an order of magnitude across a mix of production and benchmark scenarios; on TPC-H at 1TB scale, the accelerated engine achieves up to roughly a 30x speedup." }
+        {
+          "sourceKey": "coddspeed-gpu-warehouse",
+          "note": "CoddSpeed is a hardware-accelerated query execution capability now built into Microsoft Fabric's Data Warehouse engine; the accelerated execution path runs transparently under existing SQL — queries do not need to be rewritten or specially hinted."
+        },
+        {
+          "sourceKey": "coddspeed-gpu-warehouse",
+          "note": "The paper reports the accelerated path outperforming the equivalent CPU-only execution by more than an order of magnitude across a mix of production and benchmark scenarios; on TPC-H at 1TB scale, the accelerated engine achieves up to roughly a 30x speedup."
+        }
       ],
       "drill": {
         "inputs": ["A task-DAG query plan from Polaris, evaluated for GPU eligibility"],
-        "processing": ["Route eligible relational operators (filter, join, group-by, order-by) to a tensor-runtime execution path via a coprocessor abstraction layer", "Manage data movement between CPU and GPU memory through a unified data abstraction layer", "Mix accelerated and non-accelerated operators within the same query plan as needed"],
-        "outputs": ["Query results computed with eligible fragments executed on GPU hardware instead of CPU, transparently to the caller"],
+        "processing": [
+          "Route eligible relational operators (filter, join, group-by, order-by) to a tensor-runtime execution path via a coprocessor abstraction layer",
+          "Manage data movement between CPU and GPU memory through a unified data abstraction layer",
+          "Mix accelerated and non-accelerated operators within the same query plan as needed"
+        ],
+        "outputs": [
+          "Query results computed with eligible fragments executed on GPU hardware instead of CPU, transparently to the caller"
+        ],
         "example": "A large join-and-aggregate query against a 1TB-scale fact table runs unchanged but is internally routed through GPU-backed tensor execution for its eligible operators, completing dramatically faster than the CPU-only path with no query hint required.",
-        "controls": ["No user-facing controls — eligibility and routing are decided internally by the engine"],
-        "failureModes": ["Assuming every query benefits equally — gains are explicitly workload-dependent, and end-to-end speedup at the SQL endpoint scales with concurrency rather than being a flat multiplier"]
+        "controls": [
+          "No user-facing controls — eligibility and routing are decided internally by the engine"
+        ],
+        "failureModes": [
+          "Assuming every query benefits equally — gains are explicitly workload-dependent, and end-to-end speedup at the SQL endpoint scales with concurrency rather than being a flat multiplier"
+        ]
       },
       "drillTarget": { "kind": "capability", "slug": "warehouse", "label": "Warehouse" }
     },
@@ -159,25 +264,83 @@
       "layers": ["compute"],
       "tags": ["Warehouse", "AntiPattern", "MPP"],
       "evidence": [
-        { "sourceKey": "warehouse-performance-guidelines", "note": "The warehouse runs on a massively parallel processing (MPP) architecture, but some semantics (TOP, global sorts, final result merging) force single-node execution and trigger a 'non-scalable operation' warning; reduce the filtered dataset or apply OPTION (FORCE DISTRIBUTED PLAN) when single-node execution is not semantically required." }
+        {
+          "sourceKey": "warehouse-performance-guidelines",
+          "note": "The warehouse runs on a massively parallel processing (MPP) architecture, but some semantics (TOP, global sorts, final result merging) force single-node execution and trigger a 'non-scalable operation' warning; reduce the filtered dataset or apply OPTION (FORCE DISTRIBUTED PLAN) when single-node execution is not semantically required."
+        }
       ],
       "drill": {
-        "inputs": ["A query containing TOP, a global ORDER BY, or another operation requiring final single-node result merging"],
-        "processing": ["The optimizer detects the semantic requirement for single-node execution", "Execution collapses onto one node for that portion of the plan, emitting a 'non-scalable operation' warning"],
-        "outputs": ["A correct result, but computed without the distributed engine's parallelism for the affected operation"],
+        "inputs": [
+          "A query containing TOP, a global ORDER BY, or another operation requiring final single-node result merging"
+        ],
+        "processing": [
+          "The optimizer detects the semantic requirement for single-node execution",
+          "Execution collapses onto one node for that portion of the plan, emitting a 'non-scalable operation' warning"
+        ],
+        "outputs": [
+          "A correct result, but computed without the distributed engine's parallelism for the affected operation"
+        ],
         "example": "A report query selecting the top 100 customers by revenue across a huge fact table triggers single-node execution for the final TOP/ORDER BY step; on a very large filtered set, applying OPTION (FORCE DISTRIBUTED PLAN) or narrowing the filter first restores distributed execution.",
-        "controls": ["OPTION (FORCE DISTRIBUTED PLAN) query hint", "Reducing the filtered dataset size before the single-node-forcing operation"],
-        "failureModes": ["Not noticing the 'non-scalable operation' warning in query diagnostics and attributing the resulting slowness to capacity sizing instead of query shape", "Applying FORCE DISTRIBUTED PLAN blindly to a query where single-node execution actually is semantically required, which can produce incorrect results"]
+        "controls": [
+          "OPTION (FORCE DISTRIBUTED PLAN) query hint",
+          "Reducing the filtered dataset size before the single-node-forcing operation"
+        ],
+        "failureModes": [
+          "Not noticing the 'non-scalable operation' warning in query diagnostics and attributing the resulting slowness to capacity sizing instead of query shape",
+          "Applying FORCE DISTRIBUTED PLAN blindly to a query where single-node execution actually is semantically required, which can produce incorrect results"
+        ]
       }
     }
   ],
   "edges": [
-    { "id": "e-tsql-isolation", "from": "tsql-surface", "to": "workload-isolation", "label": "classified as SELECT or non-SELECT", "layer": "compute", "kind": "flow" },
-    { "id": "e-isolation-polaris", "from": "workload-isolation", "to": "polaris-dqp", "label": "handed to distributed engine as a task DAG", "layer": "compute", "kind": "flow" },
-    { "id": "e-polaris-cache", "from": "polaris-dqp", "to": "memory-ssd-cache", "label": "tasks read through", "layer": "compute", "kind": "flow" },
-    { "id": "e-cache-onelake", "from": "memory-ssd-cache", "to": "onelake-delta-storage", "label": "cache miss falls back to", "layer": "data", "kind": "flow" },
-    { "id": "e-polaris-gpu", "from": "polaris-dqp", "to": "gpu-acceleration", "label": "eligible fragments routed to", "layer": "compute", "kind": "branch" },
-    { "id": "e-polaris-warning", "from": "polaris-dqp", "to": "single-node-warning", "label": "TOP / global sort / final merge forces", "layer": "compute", "kind": "branch" }
+    {
+      "id": "e-tsql-isolation",
+      "from": "tsql-surface",
+      "to": "workload-isolation",
+      "label": "classified as SELECT or non-SELECT",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-isolation-polaris",
+      "from": "workload-isolation",
+      "to": "polaris-dqp",
+      "label": "handed to distributed engine as a task DAG",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-polaris-cache",
+      "from": "polaris-dqp",
+      "to": "memory-ssd-cache",
+      "label": "tasks read through",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-cache-onelake",
+      "from": "memory-ssd-cache",
+      "to": "onelake-delta-storage",
+      "label": "cache miss falls back to",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "e-polaris-gpu",
+      "from": "polaris-dqp",
+      "to": "gpu-acceleration",
+      "label": "eligible fragments routed to",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-polaris-warning",
+      "from": "polaris-dqp",
+      "to": "single-node-warning",
+      "label": "TOP / global sort / final merge forces",
+      "layer": "compute",
+      "kind": "branch"
+    }
   ],
   "walkthrough": [
     {

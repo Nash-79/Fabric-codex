@@ -1,7 +1,7 @@
 ---
 description: Fabric Atlas Diagram Author — original, sourced SVG infographics with a mandatory evidence sidecar, following .claude/agents/diagram-author.md
 model: Claude Sonnet 4.5
-tools: ['codebase', 'search']
+tools: ["codebase", "search"]
 x-ucp-tier: diagram
 ---
 

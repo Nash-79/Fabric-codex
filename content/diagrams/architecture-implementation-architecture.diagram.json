@@ -22,14 +22,36 @@
       "evidence": [],
       "tags": ["MicrosoftFabric", "Workspaces", "Environments", "DeploymentPipelines"],
       "drill": {
-        "inputs": ["Workspace naming and capacity assignment plan", "Role assignments per environment", "Source-controlled item definitions"],
-        "processing": ["Provision Dev, Test, and Production workspaces", "Assign each to an appropriately sized capacity", "Restrict write access to Production to the deployment pipeline identity"],
-        "outputs": ["Three staged workspaces ready for pipeline assignment", "Environment-scoped permission boundaries"],
+        "inputs": [
+          "Workspace naming and capacity assignment plan",
+          "Role assignments per environment",
+          "Source-controlled item definitions"
+        ],
+        "processing": [
+          "Provision Dev, Test, and Production workspaces",
+          "Assign each to an appropriately sized capacity",
+          "Restrict write access to Production to the deployment pipeline identity"
+        ],
+        "outputs": [
+          "Three staged workspaces ready for pipeline assignment",
+          "Environment-scoped permission boundaries"
+        ],
         "example": "A sales analytics team provisions fabric-sales-dev, fabric-sales-test, and fabric-sales-prod, with only the deployment pipeline service principal holding write access to fabric-sales-prod.",
-        "controls": ["Workspace role assignments", "Capacity-to-workspace mapping", "Naming convention for pipeline stage matching"],
-        "failureModes": ["Developers push directly to the Production workspace, bypassing the pipeline", "Test workspace under-provisioned relative to Production, hiding capacity issues until release"]
+        "controls": [
+          "Workspace role assignments",
+          "Capacity-to-workspace mapping",
+          "Naming convention for pipeline stage matching"
+        ],
+        "failureModes": [
+          "Developers push directly to the Production workspace, bypassing the pipeline",
+          "Test workspace under-provisioned relative to Production, hiding capacity issues until release"
+        ]
       },
-      "drillTarget": { "kind": "topic", "slug": "architecture-implementation", "label": "Open implementation guidance" }
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "architecture-implementation",
+        "label": "Open implementation guidance"
+      }
     },
     {
       "id": "deployment-pipelines",
@@ -40,17 +62,41 @@
       "classification": "fact",
       "layers": ["orchestration", "governance"],
       "evidence": [
-        { "sourceKey": "ultimateinfoguide-production-stability", "note": "Recommends a deployment pattern using Deployment Pipelines to promote items across Dev, Test, and Production workspaces, with Variable Libraries injecting environment-specific connection strings, and pull-request gates required before promotion to production." },
-        { "sourceKey": "fabric-data-agent-concept", "note": "Deployment pipelines are used for promoting an item from development to production workspaces, alongside Git integration for version control." }
+        {
+          "sourceKey": "ultimateinfoguide-production-stability",
+          "note": "Recommends a deployment pattern using Deployment Pipelines to promote items across Dev, Test, and Production workspaces, with Variable Libraries injecting environment-specific connection strings, and pull-request gates required before promotion to production."
+        },
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "Deployment pipelines are used for promoting an item from development to production workspaces, alongside Git integration for version control."
+        }
       ],
       "tags": ["DeploymentPipelines", "VariableLibraries", "CICD", "PullRequest"],
       "drill": {
-        "inputs": ["Items validated in the Dev workspace", "Variable Library values per target stage", "An open, approved pull request"],
-        "processing": ["Compare source and target stage content", "Substitute stage-specific variable values on promotion", "Block the Production promotion until the PR gate is satisfied"],
-        "outputs": ["Promoted items in the next stage workspace", "An audit record of what was promoted and by whom"],
+        "inputs": [
+          "Items validated in the Dev workspace",
+          "Variable Library values per target stage",
+          "An open, approved pull request"
+        ],
+        "processing": [
+          "Compare source and target stage content",
+          "Substitute stage-specific variable values on promotion",
+          "Block the Production promotion until the PR gate is satisfied"
+        ],
+        "outputs": [
+          "Promoted items in the next stage workspace",
+          "An audit record of what was promoted and by whom"
+        ],
         "example": "A warehouse item promoted from Test to Production automatically repoints its connection string at the production source system via a Variable Library entry, without editing the item's definition by hand.",
-        "controls": ["Variable Library value sets per stage", "Required PR reviewers before Production promotion", "Selective item deployment scope"],
-        "failureModes": ["Missing a stage-specific variable value, so promotion silently carries over a Dev connection string", "Promoting without a merged PR because the gate is only a convention, not an enforced branch policy"]
+        "controls": [
+          "Variable Library value sets per stage",
+          "Required PR reviewers before Production promotion",
+          "Selective item deployment scope"
+        ],
+        "failureModes": [
+          "Missing a stage-specific variable value, so promotion silently carries over a Dev connection string",
+          "Promoting without a merged PR because the gate is only a convention, not an enforced branch policy"
+        ]
       }
     },
     {
@@ -62,16 +108,37 @@
       "classification": "fact",
       "layers": ["data", "observability"],
       "evidence": [
-        { "sourceKey": "bradcoles-fabric-mirroring-before-you-commit", "note": "After a deployment pipeline deploys a mirrored database item to a target workspace, replication does not start automatically; the target receives a configured but empty item and an operator must manually trigger replication, which performs a complete initial load." }
+        {
+          "sourceKey": "bradcoles-fabric-mirroring-before-you-commit",
+          "note": "After a deployment pipeline deploys a mirrored database item to a target workspace, replication does not start automatically; the target receives a configured but empty item and an operator must manually trigger replication, which performs a complete initial load."
+        }
       ],
       "tags": ["Testing", "DataQuality", "Mirroring", "Replication"],
       "drill": {
-        "inputs": ["Freshly promoted items in the Test (or Production) workspace", "Data quality assertions and row-count/schema checks", "Mirrored item replication status"],
-        "processing": ["Manually trigger replication on any promoted mirrored item before testing its data", "Run schema and row-level quality checks against promoted items", "Compare test-run output against expected baselines"],
-        "outputs": ["Pass/fail quality evidence per promoted item", "A replicating (not empty) mirrored database ready for downstream reads"],
+        "inputs": [
+          "Freshly promoted items in the Test (or Production) workspace",
+          "Data quality assertions and row-count/schema checks",
+          "Mirrored item replication status"
+        ],
+        "processing": [
+          "Manually trigger replication on any promoted mirrored item before testing its data",
+          "Run schema and row-level quality checks against promoted items",
+          "Compare test-run output against expected baselines"
+        ],
+        "outputs": [
+          "Pass/fail quality evidence per promoted item",
+          "A replicating (not empty) mirrored database ready for downstream reads"
+        ],
         "example": "A mirrored operational database promoted to Test shows zero rows until an operator manually starts replication, after which quality checks can run against the full initial load.",
-        "controls": ["Manual or scripted replication-trigger step in the release runbook", "Data quality assertion thresholds", "Test-stage sign-off before Production promotion"],
-        "failureModes": ["Quality checks run and 'pass' against an empty mirrored table because zero rows trivially satisfies a null-check", "No runbook step for triggering replication, so testing is silently skipped for mirrored items"]
+        "controls": [
+          "Manual or scripted replication-trigger step in the release runbook",
+          "Data quality assertion thresholds",
+          "Test-stage sign-off before Production promotion"
+        ],
+        "failureModes": [
+          "Quality checks run and 'pass' against an empty mirrored table because zero rows trivially satisfies a null-check",
+          "No runbook step for triggering replication, so testing is silently skipped for mirrored items"
+        ]
       }
     },
     {
@@ -83,17 +150,40 @@
       "classification": "warning",
       "layers": ["security", "governance"],
       "evidence": [
-        { "sourceKey": "bradcoles-fabric-private-links", "note": "At the workspace level, Fabric SQL Database, Deployment Pipelines, shortcut transforms, and the Power Platform Dataflow Connector are all unsupported when public access is blocked on the workspace — a design-level constraint, unlikely to be resolved by minor product updates." },
-        { "sourceKey": "bradcoles-fabric-private-links", "note": "Private links are a viable architectural choice only for pure cloud-to-cloud workloads on F SKUs with no dependency on on-premises sources, Deployment Pipelines, or Fabric SQL Database, and where Power BI feature limitations are acceptable." }
+        {
+          "sourceKey": "bradcoles-fabric-private-links",
+          "note": "At the workspace level, Fabric SQL Database, Deployment Pipelines, shortcut transforms, and the Power Platform Dataflow Connector are all unsupported when public access is blocked on the workspace — a design-level constraint, unlikely to be resolved by minor product updates."
+        },
+        {
+          "sourceKey": "bradcoles-fabric-private-links",
+          "note": "Private links are a viable architectural choice only for pure cloud-to-cloud workloads on F SKUs with no dependency on on-premises sources, Deployment Pipelines, or Fabric SQL Database, and where Power BI feature limitations are acceptable."
+        }
       ],
       "tags": ["Security", "PrivateLink", "BlockPublicAccess", "FabricSQLDatabase"],
       "drill": {
-        "inputs": ["Proposed workspace public-access setting", "Tenant-level private link decision", "List of items the delivery chain depends on (Deployment Pipelines, Fabric SQL Database, shortcuts)"],
-        "processing": ["Check whether the workspace or tenant depends on Deployment Pipelines or Fabric SQL Database before restricting public access", "Confirm on-premises gateway dependency is absent before enabling tenant-level private links", "Document the accepted Power BI feature trade-offs if private links are enabled"],
-        "outputs": ["A network-security posture that keeps the delivery chain functional, or an explicit documented decision to lose Deployment Pipelines"],
+        "inputs": [
+          "Proposed workspace public-access setting",
+          "Tenant-level private link decision",
+          "List of items the delivery chain depends on (Deployment Pipelines, Fabric SQL Database, shortcuts)"
+        ],
+        "processing": [
+          "Check whether the workspace or tenant depends on Deployment Pipelines or Fabric SQL Database before restricting public access",
+          "Confirm on-premises gateway dependency is absent before enabling tenant-level private links",
+          "Document the accepted Power BI feature trade-offs if private links are enabled"
+        ],
+        "outputs": [
+          "A network-security posture that keeps the delivery chain functional, or an explicit documented decision to lose Deployment Pipelines"
+        ],
         "example": "A team that needs Deployment Pipelines to promote a Fabric SQL Database item cannot also block public access on that workspace — the two requirements are mutually exclusive by design.",
-        "controls": ["Workspace public-access toggle", "Tenant-level private link toggle", "Documented exception process for teams that must choose isolation over Deployment Pipelines"],
-        "failureModes": ["Security team enables Block Public Access tenant-wide without checking Deployment Pipelines usage, breaking every team's release process at once", "On-premises gateways silently stop registering after tenant-level private links are enabled, since no supported configuration lets both coexist"]
+        "controls": [
+          "Workspace public-access toggle",
+          "Tenant-level private link toggle",
+          "Documented exception process for teams that must choose isolation over Deployment Pipelines"
+        ],
+        "failureModes": [
+          "Security team enables Block Public Access tenant-wide without checking Deployment Pipelines usage, breaking every team's release process at once",
+          "On-premises gateways silently stop registering after tenant-level private links are enabled, since no supported configuration lets both coexist"
+        ]
       }
     },
     {
@@ -105,33 +195,120 @@
       "classification": "fact",
       "layers": ["observability", "governance"],
       "evidence": [
-        { "sourceKey": "fabric-blog-item-recovery", "note": "Tenant admins can configure a retention window of up to 90 days for Item Recovery and can adjust that window at any time; deleted items can be restored via the Workspace Recycle bin or REST API within that window." }
+        {
+          "sourceKey": "fabric-blog-item-recovery",
+          "note": "Tenant admins can configure a retention window of up to 90 days for Item Recovery and can adjust that window at any time; deleted items can be restored via the Workspace Recycle bin or REST API within that window."
+        }
       ],
       "tags": ["ItemRecovery", "OperationalReadiness", "Monitoring", "Recovery"],
       "drill": {
-        "inputs": ["Promoted, tested, and security-reviewed Production items", "Configured Item Recovery retention window", "Monitoring and alerting coverage for the release"],
-        "processing": ["Confirm the tenant's Item Recovery retention window meets the release's recovery objective", "Verify monitoring and alerting are wired to the newly promoted items", "Sign off the release as operationally accepted"],
-        "outputs": ["An accepted release with a confirmed recovery window and monitoring coverage", "Operational runbook entry for the release"],
+        "inputs": [
+          "Promoted, tested, and security-reviewed Production items",
+          "Configured Item Recovery retention window",
+          "Monitoring and alerting coverage for the release"
+        ],
+        "processing": [
+          "Confirm the tenant's Item Recovery retention window meets the release's recovery objective",
+          "Verify monitoring and alerting are wired to the newly promoted items",
+          "Sign off the release as operationally accepted"
+        ],
+        "outputs": [
+          "An accepted release with a confirmed recovery window and monitoring coverage",
+          "Operational runbook entry for the release"
+        ],
         "example": "A release owner confirms the tenant's 30-day Item Recovery window covers the team's recovery point objective before accepting a Production promotion, and verifies a failed-run alert is wired to the on-call channel.",
-        "controls": ["Tenant Item Recovery retention window setting", "Alert routing configuration", "Release acceptance checklist"],
-        "failureModes": ["A team assumes indefinite recovery and only discovers the retention window after the recovery point has already expired", "Release accepted with no monitoring wired up, so the first sign of failure is a user complaint"]
+        "controls": [
+          "Tenant Item Recovery retention window setting",
+          "Alert routing configuration",
+          "Release acceptance checklist"
+        ],
+        "failureModes": [
+          "A team assumes indefinite recovery and only discovers the retention window after the recovery point has already expired",
+          "Release accepted with no monitoring wired up, so the first sign of failure is a user complaint"
+        ]
       },
-      "drillTarget": { "kind": "capability", "slug": "fabric-platform", "label": "Open Fabric Platform capability" }
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "fabric-platform",
+        "label": "Open Fabric Platform capability"
+      }
     }
   ],
   "edges": [
-    { "id": "edge-1", "from": "environments", "to": "deployment-pipelines", "label": "assigns Dev/Test/Production stages for promotion", "layer": "orchestration", "kind": "flow" },
-    { "id": "edge-2", "from": "deployment-pipelines", "to": "testing", "label": "promotes items with stage-specific variables", "layer": "orchestration", "kind": "flow" },
-    { "id": "edge-3", "from": "testing", "to": "security", "label": "quality-passed items proceed to access review", "layer": "data", "kind": "flow" },
-    { "id": "edge-4", "from": "security", "to": "operational-readiness", "label": "access-reviewed release proceeds to acceptance", "layer": "security", "kind": "flow" },
-    { "id": "edge-5", "from": "security", "to": "deployment-pipelines", "label": "Block Public Access / tenant private links disable Deployment Pipelines", "layer": "security", "kind": "branch" },
-    { "id": "edge-feedback", "from": "operational-readiness", "to": "environments", "label": "failed acceptance sends the release back to Dev", "layer": "observability", "kind": "feedback" }
+    {
+      "id": "edge-1",
+      "from": "environments",
+      "to": "deployment-pipelines",
+      "label": "assigns Dev/Test/Production stages for promotion",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "edge-2",
+      "from": "deployment-pipelines",
+      "to": "testing",
+      "label": "promotes items with stage-specific variables",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "edge-3",
+      "from": "testing",
+      "to": "security",
+      "label": "quality-passed items proceed to access review",
+      "layer": "data",
+      "kind": "flow"
+    },
+    {
+      "id": "edge-4",
+      "from": "security",
+      "to": "operational-readiness",
+      "label": "access-reviewed release proceeds to acceptance",
+      "layer": "security",
+      "kind": "flow"
+    },
+    {
+      "id": "edge-5",
+      "from": "security",
+      "to": "deployment-pipelines",
+      "label": "Block Public Access / tenant private links disable Deployment Pipelines",
+      "layer": "security",
+      "kind": "branch"
+    },
+    {
+      "id": "edge-feedback",
+      "from": "operational-readiness",
+      "to": "environments",
+      "label": "failed acceptance sends the release back to Dev",
+      "layer": "observability",
+      "kind": "feedback"
+    }
   ],
   "walkthrough": [
-    { "nodeId": "environments", "title": "1. Stage the environments", "explanation": "Provision Dev, Test, and Production workspaces that a deployment pipeline can promote items across." },
-    { "nodeId": "deployment-pipelines", "title": "2. Promote through CI/CD", "explanation": "Deployment Pipelines promotes items, Variable Libraries swap environment-specific configuration, and a pull-request gate protects Production." },
-    { "nodeId": "testing", "title": "3. Test the promoted release", "explanation": "Validate data quality — and manually trigger replication on any promoted mirrored item, since promotion alone leaves it empty." },
-    { "nodeId": "security", "title": "4. Apply security controls", "explanation": "Workspace Block Public Access and tenant-level private links are real trade-offs that can disable Deployment Pipelines and Fabric SQL Database outright." },
-    { "nodeId": "operational-readiness", "title": "5. Confirm operational readiness", "explanation": "Accept the release only once the Item Recovery retention window and monitoring evidence are confirmed." }
+    {
+      "nodeId": "environments",
+      "title": "1. Stage the environments",
+      "explanation": "Provision Dev, Test, and Production workspaces that a deployment pipeline can promote items across."
+    },
+    {
+      "nodeId": "deployment-pipelines",
+      "title": "2. Promote through CI/CD",
+      "explanation": "Deployment Pipelines promotes items, Variable Libraries swap environment-specific configuration, and a pull-request gate protects Production."
+    },
+    {
+      "nodeId": "testing",
+      "title": "3. Test the promoted release",
+      "explanation": "Validate data quality — and manually trigger replication on any promoted mirrored item, since promotion alone leaves it empty."
+    },
+    {
+      "nodeId": "security",
+      "title": "4. Apply security controls",
+      "explanation": "Workspace Block Public Access and tenant-level private links are real trade-offs that can disable Deployment Pipelines and Fabric SQL Database outright."
+    },
+    {
+      "nodeId": "operational-readiness",
+      "title": "5. Confirm operational readiness",
+      "explanation": "Accept the release only once the Item Recovery retention window and monitoring evidence are confirmed."
+    }
   ]
 }

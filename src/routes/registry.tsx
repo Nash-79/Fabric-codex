@@ -114,8 +114,7 @@ function RegistryPage() {
     navigate({ search: { ...claimSearch, capability } });
   const setDepth = (value: number | "all") =>
     navigate({ search: { ...claimSearch, depth: value } });
-  const setTier = (value: number | "all") =>
-    navigate({ search: { ...claimSearch, tier: value } });
+  const setTier = (value: number | "all") => navigate({ search: { ...claimSearch, tier: value } });
   const setClaimQuery = (value: string) =>
     navigate({ search: { ...claimSearch, q: value || undefined } });
 

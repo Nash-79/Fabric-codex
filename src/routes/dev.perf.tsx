@@ -41,9 +41,7 @@ function PerfPage() {
 
   const lcp = samples.find((s) => s.name === "LCP");
   const cls = samples.find((s) => s.name === "CLS");
-  const inpMax = samples
-    .filter((s) => s.name === "INP")
-    .reduce((m, s) => Math.max(m, s.ms), 0);
+  const inpMax = samples.filter((s) => s.name === "INP").reduce((m, s) => Math.max(m, s.ms), 0);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -82,12 +80,13 @@ function PerfPage() {
 
         <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <MetricCard label="Samples" value={String(samples.length)} />
-          <MetricCard
-            label="Avg route load"
-            value={routeAvg !== null ? `${routeAvg} ms` : "—"}
-          />
+          <MetricCard label="Avg route load" value={routeAvg !== null ? `${routeAvg} ms` : "—"} />
           <MetricCard label="LCP" value={lcp ? `${lcp.ms} ms` : "—"} hint={rateLCP(lcp?.ms)} />
-          <MetricCard label="Max INP" value={inpMax ? `${inpMax} ms` : "—"} hint={rateINP(inpMax)} />
+          <MetricCard
+            label="Max INP"
+            value={inpMax ? `${inpMax} ms` : "—"}
+            hint={rateINP(inpMax)}
+          />
         </section>
 
         {cls && (
@@ -137,16 +136,24 @@ function PerfPage() {
         </section>
 
         <p className="mt-6 text-xs text-muted-foreground">
-          To run Lighthouse locally: <span className="font-mono">npx lighthouse https://…/ --view</span>{" "}
-          against Preview or Production. This panel complements Lighthouse with per-session real
-          user data.
+          To run Lighthouse locally:{" "}
+          <span className="font-mono">npx lighthouse https://…/ --view</span> against Preview or
+          Production. This panel complements Lighthouse with per-session real user data.
         </p>
       </main>
     </div>
   );
 }
 
-function MetricCard({ label, value, hint }: { label: string; value: string; hint?: string | null }) {
+function MetricCard({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string | null;
+}) {
   return (
     <div className="rounded-lg border border-border bg-card/60 p-3">
       <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
