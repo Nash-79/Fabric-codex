@@ -50,6 +50,8 @@ docs/data-model.md  How claim versioning and supersede work — read before touc
 docs/extending.md   Extension points: content, capabilities, theme tokens, views, agents
 docs/knowledge-gaps.md  The gap-tracking model: truth/ledger/view layers, the two markers,
                     what CI fails vs warns on — the inventory itself is `node scripts/gaps.mjs`
+docs/dependencies.md  Credits, the watched-dependency freshness check, and the local
+                    test-then-commit upgrade gate (no Dependabot/Renovate)
 ```
 
 ## Build-time authoring vs run-time serving (the operating model)
@@ -74,6 +76,14 @@ When a watcher shows **blocked** in Settings → Watchers (some publishers, e.g.
 `node scripts/poll-watchers.mjs` locally: it polls those feeds from the laptop with an honest
 client identity — no header spoofing, no challenge solving — and appends new posts to
 `content/queue.md` for the usual review + `/ingest-batch` flow. No DB writes.
+
+**Feed parsing is Feedsmith-backed and lives in exactly one place: `src/lib/feed-parse.ts`.**
+Never hand-roll a regex feed parser — that module replaced four drifting copies of one. It must
+keep returning `[]` (never throwing) for non-feed input, because the watcher discovery ladder
+parses HTML pages speculatively and relies on an empty result to fall through. `scripts/
+poll-watchers.mjs` imports that same `.ts` module directly via Node's native type stripping
+(needs Node >= 22.18), so there is no second copy to keep in sync. Sitemaps are not feeds and
+keep their own regex parser.
 
 ```
 agent reads source ─▶ writes content/sources/<slug>.json  (claims + tags + image refs)

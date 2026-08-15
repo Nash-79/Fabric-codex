@@ -1400,49 +1400,6 @@ export const pollSourceWatchers = createServerFn({ method: "POST" })
 // so it can use supabaseAdmin — local agents/scripts can't reach the sealed DB.
 // This replaces the legacy /poll-rss-feeds agent that needed a local FastAPI + psql.
 
-type RssEntry = { link: string; title: string; guid: string; published: string };
-
-function decodeXmlEntities(value: string): string {
-  return value
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#0?39;|&apos;/g, "'")
-    .replace(/&amp;/g, "&")
-    .trim();
-}
-
-function tagText(block: string, tag: string): string {
-  const m = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
-  return m ? decodeXmlEntities(m[1]) : "";
-}
-
-// Atom links are attributes (<link href="..."/>), RSS links are element text.
-function entryLink(block: string): string {
-  const text = tagText(block, "link");
-  if (text) return text;
-  const href = block.match(/<link[^>]*\bhref=["']([^"']+)["'][^>]*\/?>/i);
-  return href ? decodeXmlEntities(href[1]) : "";
-}
-
-function parseFeed(xml: string): RssEntry[] {
-  const entries: RssEntry[] = [];
-  // RSS <item> and Atom <entry>, in document order.
-  const blocks = xml.match(/<(item|entry)\b[\s\S]*?<\/(item|entry)>/gi) ?? [];
-  for (const block of blocks) {
-    const link = entryLink(block);
-    const guid = tagText(block, "guid") || tagText(block, "id") || link;
-    const title = tagText(block, "title");
-    const published =
-      tagText(block, "pubDate") || tagText(block, "published") || tagText(block, "updated");
-    if (link || guid) entries.push({ link: link || guid, title, guid: guid || link, published });
-  }
-  return entries;
-}
-
-const FIRST_POLL_CAP = 25;
-
 export const pollRssFeeds = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: { feedId?: string } | undefined) => d ?? {})

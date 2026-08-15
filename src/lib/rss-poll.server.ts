@@ -1,3 +1,5 @@
+import { parseWebFeed } from "./feed-parse";
+
 type SupabaseAdmin = any;
 
 export type RssPollResult = {
@@ -29,41 +31,17 @@ type RssEntry = { link: string; title: string; guid: string; published: string }
 export const FIRST_POLL_CAP = 25;
 export const FABRIC_ROADMAP_API_URL = "https://www.fabric-gps.com/api/releases";
 
-function decodeXmlEntities(value: string): string {
-  return value
-    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#0?39;|&apos;/g, "'")
-    .replace(/&amp;/g, "&")
-    .trim();
-}
-
-function tagText(block: string, tag: string): string {
-  const m = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, "i"));
-  return m ? decodeXmlEntities(m[1]) : "";
-}
-
-function entryLink(block: string): string {
-  const text = tagText(block, "link");
-  if (text) return text;
-  const href = block.match(/<link[^>]*\bhref=["']([^"']+)["'][^>]*\/?>/i);
-  return href ? decodeXmlEntities(href[1]) : "";
-}
-
+/**
+ * Legacy shape kept for `pollRssFeedsCore`'s last-seen-GUID cursor. Parsing
+ * itself is shared with the watcher path via ./feed-parse (Feedsmith-backed).
+ */
 export function parseFeed(xml: string): RssEntry[] {
-  const entries: RssEntry[] = [];
-  const blocks = xml.match(/<(item|entry)\b[\s\S]*?<\/(item|entry)>/gi) ?? [];
-  for (const block of blocks) {
-    const link = entryLink(block);
-    const guid = tagText(block, "guid") || tagText(block, "id") || link;
-    const title = tagText(block, "title");
-    const published =
-      tagText(block, "pubDate") || tagText(block, "published") || tagText(block, "updated");
-    if (link || guid) entries.push({ link: link || guid, title, guid: guid || link, published });
-  }
-  return entries;
+  return parseWebFeed(xml).map((entry) => ({
+    link: entry.url,
+    title: entry.title,
+    guid: entry.stableId || entry.url,
+    published: entry.modified,
+  }));
 }
 
 export async function pollRssFeedsCore(

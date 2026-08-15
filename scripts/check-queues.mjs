@@ -2,6 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { collectInternalsGaps } from "./lib/internals-gaps.mjs";
+import { collectDepUpdates, upgradeCommand } from "./lib/dep-updates.mjs";
 
 const args = new Set(process.argv.slice(2));
 const brief = args.has("--brief");
@@ -91,9 +92,17 @@ function textReport(digest) {
       `Internals gaps: ${gaps.placeholders} placeholder(s), ${gaps.untracked} untracked, ${gaps.stale} stale ledger line(s)${drift ? " — run node scripts/gaps.mjs" : ""}`,
     );
   };
+  const depsLine = () => {
+    if (!digest.deps || (!digest.deps.updates && !digest.deps.held)) return;
+    const parts = [];
+    if (digest.deps.updates) parts.push(`${digest.deps.updates} update(s) available`);
+    if (digest.deps.held) parts.push(`${digest.deps.held} held <24h`);
+    lines.push(`Dependencies: ${parts.join(", ")} — run node scripts/check-deps.mjs`);
+  };
   if (digest.error) {
     lines.push(`Queue check unavailable: ${digest.error}`);
     internalsGapLine();
+    depsLine();
     return `${lines.join("\n")}\n`;
   }
   lines.push(
@@ -112,6 +121,7 @@ function textReport(digest) {
     lines.push(`Ideas: ${digest.ideas.pending} pending, ${digest.ideas.approved} approved`);
   }
   internalsGapLine();
+  depsLine();
   if (digest.next.length) {
     lines.push("Next actions:");
     for (const action of digest.next.slice(0, brief ? 4 : 8)) {
@@ -138,6 +148,7 @@ async function main() {
     claims: { pending: 0 },
     feedback: { new: 0 },
     ideas: { pending: 0, approved: 0 },
+    deps: { updates: 0, held: 0 },
     next: [],
     error: "",
   };
@@ -151,6 +162,15 @@ async function main() {
     };
   } catch {
     // Local-file gap scan is best-effort; the digest still reports the rest.
+  }
+
+  try {
+    const deps = await collectDepUpdates();
+    digest.deps = { updates: deps.updates, held: deps.held };
+    for (const pkg of deps.packages.filter((p) => p.state === "update"))
+      digest.next.push(upgradeCommand(pkg));
+  } catch {
+    // A registry outage must never degrade the queue digest.
   }
 
   if (!url || !key) {

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
+import { parseWebFeed } from "./feed-parse";
 
 type SupabaseAdmin = any;
 export type WatcherMode = "auto" | "rss" | "sitemap" | "listing" | "page";
@@ -189,6 +190,8 @@ export function detectAntiBot(
     return { trigger: `HTTP ${status} access policy`, suggestedUrl };
   return null;
 }
+// Feed parsing lives in ./feed-parse (Feedsmith-backed). These local helpers
+// remain for the sitemap and HTML paths below, which are not feeds.
 function decode(value: string): string {
   return (
     value
@@ -218,36 +221,7 @@ function tag(block: string, name: string): string {
   return decode(block.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "i"))?.[1] ?? "");
 }
 
-export function parseWebFeed(body: string): Candidate[] {
-  if (/^\s*\{/.test(body)) {
-    try {
-      const json = JSON.parse(body);
-      if (Array.isArray(json.items))
-        return json.items
-          .map((x: any) => ({
-            url: x.url || x.external_url || x.id,
-            stableId: x.id,
-            title: x.title || "",
-            modified: x.date_modified || x.date_published,
-          }))
-          .filter((x: Candidate) => x.url);
-    } catch {
-      return [];
-    }
-  }
-  return (body.match(/<(?:item|entry)\b[\s\S]*?<\/(?:item|entry)>/gi) ?? [])
-    .map((block) => {
-      const href = block.match(/<link[^>]*\bhref=["']([^"']+)["']/i)?.[1];
-      const url = tag(block, "link") || decode(href ?? "");
-      return {
-        url: url || tag(block, "id") || tag(block, "guid"),
-        stableId: tag(block, "guid") || tag(block, "id") || url,
-        title: tag(block, "title"),
-        modified: tag(block, "updated") || tag(block, "published") || tag(block, "pubDate"),
-      };
-    })
-    .filter((x) => x.url);
-}
+export { parseWebFeed };
 
 export function parseSitemap(body: string): { urls: Candidate[]; sitemaps: string[] } {
   const blocks = body.match(/<url\b[\s\S]*?<\/url>/gi) ?? [];

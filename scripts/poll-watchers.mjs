@@ -8,12 +8,19 @@
 // routes new posts into content/queue.md, the documented offline ingestion queue.
 // It never writes to Supabase; git review + /ingest-batch remain the human gate.
 //
+// Requires Node >= 22.18 — it imports src/lib/feed-parse.ts directly, relying on
+// Node's native TypeScript type stripping, so there is one feed parser, not two.
+//
 // Usage:
 //   node scripts/poll-watchers.mjs             # poll active watchers the server is failing on
 //   node scripts/poll-watchers.mjs --all       # poll every active watcher
 //   node scripts/poll-watchers.mjs --dry-run   # report without touching content/queue.md
 
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+// Imported directly from the TypeScript source via Node's native type stripping
+// (unflagged since Node 22.18) so this script shares one parser with the app
+// rather than keeping a second copy. Requires Node >= 22.18.
+import { parseWebFeed } from "../src/lib/feed-parse.ts";
 
 const args = new Set(process.argv.slice(2));
 const pollAll = args.has("--all");
@@ -79,40 +86,13 @@ function decode(value) {
     .trim();
 }
 
-function tag(block, name) {
-  return decode(block.match(new RegExp(`<${name}[^>]*>([\\s\\S]*?)</${name}>`, "i"))?.[1] ?? "");
-}
-
-// Mirrors parseWebFeed in src/lib/source-watcher.server.ts (kept dependency-free here).
-function parseWebFeed(body) {
-  if (/^\s*\{/.test(body)) {
-    try {
-      const json = JSON.parse(body);
-      if (Array.isArray(json.items))
-        return json.items
-          .map((x) => ({ url: x.url || x.external_url || x.id, title: x.title || "" }))
-          .filter((x) => x.url);
-    } catch {
-      return [];
-    }
-    return [];
-  }
-  return (body.match(/<(?:item|entry)\b[\s\S]*?<\/(?:item|entry)>/gi) ?? [])
-    .map((block) => {
-      const href = block.match(/<link[^>]*\bhref=["']([^"']+)["']/i)?.[1];
-      const url = tag(block, "link") || decode(href ?? "");
-      return { url: url || tag(block, "id") || tag(block, "guid"), title: tag(block, "title") };
-    })
-    .filter((x) => x.url);
-}
-
 function parseSitemap(body) {
   const urls = [...body.matchAll(/<url\b[\s\S]*?<loc>([\s\S]*?)<\/loc>[\s\S]*?<\/url>/gi)].map(
-    (m) => ({ url: decodeXmlEntities(m[1]), title: "" }),
+    (m) => ({ url: decode(m[1]), title: "" }),
   );
   const sitemaps = [
     ...body.matchAll(/<sitemap\b[\s\S]*?<loc>([\s\S]*?)<\/loc>[\s\S]*?<\/sitemap>/gi),
-  ].map((m) => decodeXmlEntities(m[1]));
+  ].map((m) => decode(m[1]));
   return { urls, sitemaps };
 }
 
@@ -133,7 +113,7 @@ function listingLinks(body, base, watcher) {
   return [...body.matchAll(/<a\b[^>]*\bhref=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi)]
     .map((m) => ({
       url: canonicalizeUrl(m[1], base),
-      title: decodeXmlEntities(m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")),
+      title: decode(m[2].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ")),
     }))
     .filter(
       (item) => item.url && inScope(item.url, watcher) && !seen.has(item.url) && seen.add(item.url),

@@ -14,7 +14,7 @@ describe("source watcher parsing", () => {
   it("parses RSS and Atom entries", () => {
     expect(
       parseWebFeed(
-        `<rss><item><title>A</title><link>https://example.com/a</link><guid>1</guid></item></rss>`,
+        `<rss version="2.0"><channel><item><title>A</title><link>https://example.com/a</link><guid>1</guid></item></channel></rss>`,
       )[0],
     ).toMatchObject({ title: "A", url: "https://example.com/a", stableId: "1" });
     expect(
@@ -27,7 +27,10 @@ describe("source watcher parsing", () => {
   it("parses JSON Feed, sitemap URLs, and sitemap indexes", () => {
     expect(
       parseWebFeed(
-        JSON.stringify({ items: [{ id: "x", url: "https://example.com/x", title: "X" }] }),
+        JSON.stringify({
+          version: "https://jsonfeed.org/version/1.1",
+          items: [{ id: "x", url: "https://example.com/x", title: "X" }],
+        }),
       ),
     ).toHaveLength(1);
     expect(
@@ -130,7 +133,7 @@ describe("source watcher parsing", () => {
       expect(url).toBe("https://example.com/retained.xml");
       expect(new Headers(init?.headers).get("if-none-match")).toBe('"feed-v1"');
       return new Response(
-        `<rss><item><title>Retained</title><link>https://example.com/article</link></item></rss>`,
+        `<rss version="2.0"><channel><item><title>Retained</title><link>https://example.com/article</link></item></channel></rss>`,
         { headers: { "content-type": "application/rss+xml", etag: '"feed-v2"' } },
       );
     });
