@@ -1,206 +1,321 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 760" width="1120" height="760" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="medallion-lakehouse-architecture-title medallion-lakehouse-architecture-desc" data-diagram-id="medallion-lakehouse-architecture">
-  <title id="medallion-lakehouse-architecture-title">Medallion Lakehouse: Bronze, Silver, Gold on One OneLake</title>
-  <desc id="medallion-lakehouse-architecture-desc">An internals diagram: source systems land via pipeline copy, Dataflow Gen2, or a shortcut into a bronze Delta table in the lakehouse&apos;s managed Tables area. Spark reads bronze and writes a cleansed, conformed silver Delta table, then Spark aggregates silver into business-ready gold Delta tables shaped for consumption. Gold is exposed two ways: the auto-provisioned SQL analytics endpoint for read-only T-SQL, and Direct Lake for Power BI semantic models that read the Delta files directly with no import. A warning node flags that endpoint-level SQL permissions do not apply to the same data read through Spark or OneLake directly, so securing gold requires both the write and read paths.</desc>
-  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
-       Medallion lakehouse architecture: bronze/silver/gold Delta zones in one OneLake,
-       ingestion engines on the left, Spark promoting between zones, serving on the right.
-       Palette: #063D3B #0d5c53 #1a7a6e #2da896 #EAF7F2 · bronze #b87333 · silver #9aa4ad · gold #d4a017 -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 840" width="1200" height="840" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="medallion-title medallion-desc" data-diagram-id="medallion-lakehouse-architecture">
+  <title id="medallion-title">Medallion Lakehouse on Microsoft Fabric: Bronze, Silver, Gold on One OneLake</title>
+  <desc id="medallion-desc">An architectural infographic tracing data from external ingestion routes into Bronze raw Delta landing in OneLake, through Spark cleansing and conforming to Silver, Spark aggregation into Gold star schemas, and dual read-only serving via SQL Analytics Endpoint and Direct Lake for Power BI, backed by a Delta transaction log and multi-layer security.</desc>
+
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#f0faf8"/><stop offset="100%" stop-color="#e2f5f1"/>
+    <!-- Backgrounds & Gradients -->
+    <linearGradient id="medBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F4FAF8"/>
+      <stop offset="100%" stop-color="#E8F4F0"/>
     </linearGradient>
-    <linearGradient id="oneLake" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#1a7a6e"/><stop offset="100%" stop-color="#0d5c53"/>
+
+    <linearGradient id="medHeader" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#063D3B"/>
+      <stop offset="50%" stop-color="#0E6961"/>
+      <stop offset="100%" stop-color="#2AAC94"/>
     </linearGradient>
-    <linearGradient id="bronze" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#c07d3e"/><stop offset="100%" stop-color="#9c5f28"/>
+
+    <linearGradient id="bronzeGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#C07D3E"/>
+      <stop offset="100%" stop-color="#935520"/>
     </linearGradient>
-    <linearGradient id="silver" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#aeb8c2"/><stop offset="100%" stop-color="#8b95a0"/>
+
+    <linearGradient id="silverGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#94A3B8"/>
+      <stop offset="100%" stop-color="#64748B"/>
     </linearGradient>
-    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e2b533"/><stop offset="100%" stop-color="#c08e0e"/>
+
+    <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#EAB308"/>
+      <stop offset="100%" stop-color="#CA8A04"/>
     </linearGradient>
-    <filter id="sh" x="-4%" y="-4%" width="108%" height="116%">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#00000022"/>
+
+    <linearGradient id="oneLakeContainer" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0B5E50"/>
+      <stop offset="100%" stop-color="#043831"/>
+    </linearGradient>
+
+    <!-- Filters -->
+    <filter id="medShadow" x="-4%" y="-4%" width="108%" height="114%">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#063D3B" flood-opacity="0.1"/>
     </filter>
-    <marker id="arT" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#1a7a6e"/></marker>
-    <marker id="arG" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#777"/></marker>
-    <marker id="arGold" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L0,6 L8,3 z" fill="#c08e0e"/></marker>
+
+    <!-- Markers -->
+    <marker id="arrTeal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 1 L9 5 L0 9 z" fill="#0D9488"/>
+    </marker>
+    <marker id="arrGold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 1 L9 5 L0 9 z" fill="#CA8A04"/>
+    </marker>
+    <marker id="arrSpark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 1 L9 5 L0 9 z" fill="#2DD4BF"/>
+    </marker>
+    <marker id="arrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 1 L9 5 L0 9 z" fill="#DC2626"/>
+    </marker>
   </defs>
 
-  <rect width="1120" height="760" fill="url(#bg)"/>
+  <!-- Background -->
+  <rect width="1200" height="840" rx="14" fill="url(#medBg)" stroke="#C2DFD7" stroke-width="1.5"/>
 
-  <!-- Title -->
-  <text x="560" y="34" text-anchor="middle" font-size="19" font-weight="700" fill="#0d3d35">Medallion Lakehouse on Microsoft Fabric</text>
+  <!-- Top Hero Header -->
+  <rect x="0" y="0" width="1200" height="68" rx="14" fill="url(#medHeader)"/>
+  <rect x="0" y="54" width="1200" height="14" fill="#063D3B" fill-opacity="0.3"/>
+  <text x="36" y="32" font-size="20" font-weight="700" fill="#FFFFFF">Medallion Lakehouse Architecture on Microsoft Fabric</text>
+  <text x="36" y="52" font-size="12" fill="#D1FAE5">Bronze, Silver &amp; Gold in One OneLake · Multi-engine processing with zero data duplication · Direct Lake and T-SQL serving</text>
+  <rect x="1030" y="16" width="134" height="34" rx="8" fill="#FFFFFF" fill-opacity="0.15" stroke="#FFFFFF" stroke-opacity="0.3"/>
+  <text x="1097" y="38" text-anchor="middle" font-size="11" font-weight="700" fill="#FFFFFF">MEDALLION PIPELINE</text>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       COLUMN 1: INGESTION ROUTES (LEFT)
+       ═════════════════════════════════════════════════════════════════ -->
   <g data-node-id="source-ingestion" role="group" tabindex="0" aria-label="Source ingestion (pipeline / Dataflow / shortcut)">
-    <title data-node-tooltip="true">Source ingestion (pipeline / Dataflow / shortcut) — Data enters the lakehouse through pipeline copy, Dataflow Gen2, or a OneLake shortcut.</title>
-    <rect x="350.0" y="30.0" width="420" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="560" y="53" text-anchor="middle" font-size="11.5" fill="#3a6b63">Bronze → Silver → Gold as layered Delta tables in one OneLake · Spark promotes between zones · read paths never copy data</text>
+    <title data-node-tooltip="true">Source ingestion (pipeline / Dataflow / shortcut) — Data enters the lakehouse through pipeline copy, Dataflow Gen2, Spark jobs, or OneLake shortcuts.</title>
+    <rect x="36" y="86" width="200" height="490" rx="12" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.5" filter="url(#medShadow)"/>
+    
+    <rect x="48" y="98" width="176" height="22" rx="6" fill="#0F766E"/>
+    <text x="136" y="113" text-anchor="middle" font-size="10.5" font-weight="750" fill="#FFFFFF">INGESTION ROUTES</text>
+
+    <!-- 1. Pipeline Copy -->
+    <rect x="48" y="132" width="176" height="74" rx="8" fill="#F0FDFA" stroke="#5EEAD4"/>
+    <text x="58" y="152" font-size="11.5" font-weight="700" fill="#115E59">Pipeline Copy Activity</text>
+    <text x="58" y="168" font-size="10" fill="#134E4A">High-throughput bulk &amp;</text>
+    <text x="58" y="182" font-size="10" fill="#134E4A">scheduled CDC landing.</text>
+    <rect x="58" y="190" width="74" height="10" rx="3" fill="#CCFBF1"/>
+    <text x="62" y="198" font-size="8" font-weight="700" fill="#0F766E">HIGH VOLUME</text>
+
+    <!-- 2. Dataflow Gen2 -->
+    <rect x="48" y="218" width="176" height="74" rx="8" fill="#F0FDFA" stroke="#5EEAD4"/>
+    <text x="58" y="238" font-size="11.5" font-weight="700" fill="#115E59">Dataflow Gen2</text>
+    <text x="58" y="254" font-size="10" fill="#134E4A">Low-code visual shaping</text>
+    <text x="58" y="268" font-size="10" fill="#134E4A">with Power Query M.</text>
+    <rect x="58" y="276" width="70" height="10" rx="3" fill="#CCFBF1"/>
+    <text x="62" y="284" font-size="8" font-weight="700" fill="#0F766E">LOW CODE</text>
+
+    <!-- 3. Spark Code -->
+    <rect x="48" y="304" width="176" height="74" rx="8" fill="#F0FDFA" stroke="#5EEAD4"/>
+    <text x="58" y="324" font-size="11.5" font-weight="700" fill="#115E59">Spark Notebook / Job</text>
+    <text x="58" y="340" font-size="10" fill="#134E4A">Code-first PySpark &amp;</text>
+    <text x="58" y="354" font-size="10" fill="#134E4A">Delta table streaming.</text>
+    <rect x="58" y="362" width="70" height="10" rx="3" fill="#CCFBF1"/>
+    <text x="62" y="370" font-size="8" font-weight="700" fill="#0F766E">CODE FIRST</text>
+
+    <!-- 4. OneLake Shortcut -->
+    <rect x="48" y="390" width="176" height="74" rx="8" fill="#ECFDF5" stroke="#34D399"/>
+    <text x="58" y="410" font-size="11.5" font-weight="700" fill="#065F46">OneLake Shortcut</text>
+    <text x="58" y="426" font-size="10" fill="#064E3B">Zero-copy link to ADLS,</text>
+    <text x="58" y="440" font-size="10" fill="#064E3B">S3, or another lakehouse.</text>
+    <rect x="58" y="448" width="74" height="10" rx="3" fill="#D1FAE5"/>
+    <text x="62" y="456" font-size="8" font-weight="700" fill="#047857">ZERO COPY</text>
+
+    <text x="136" y="562" text-anchor="middle" font-size="10" font-weight="600" fill="#0F766E">All routes land in OneLake</text>
   </g>
 
-  <!-- ═══ INGESTION (left) ═══ -->
-  <text x="92" y="90" text-anchor="middle" font-size="11" font-weight="700" fill="#0d3d35" letter-spacing="1">INGESTION → BRONZE</text>
-  <g font-size="10.5">
-    <rect x="22" y="104" width="140" height="40" rx="6" fill="#2da896" filter="url(#sh)"/>
-    <text x="92" y="123" text-anchor="middle" fill="#fff" font-weight="600">Pipeline Copy activity</text>
-    <text x="92" y="137" text-anchor="middle" font-size="9" fill="#d0f0ec">bulk / high-volume recurring</text>
+  <!-- Connectors from Ingestion into Bronze -->
+  <path d="M 236 169 Q 256 169 270 200" fill="none" stroke="#0D9488" stroke-width="2" marker-end="url(#arrTeal)"/>
+  <path d="M 236 255 L 270 255" fill="none" stroke="#0D9488" stroke-width="2" marker-end="url(#arrTeal)"/>
+  <path d="M 236 341 Q 256 341 270 310" fill="none" stroke="#0D9488" stroke-width="2" marker-end="url(#arrTeal)"/>
+  <path d="M 236 427 Q 260 427 270 365" fill="none" stroke="#059669" stroke-width="2" stroke-dasharray="5 3" marker-end="url(#arrTeal)"/>
 
-    <rect x="22" y="152" width="140" height="40" rx="6" fill="#2da896" filter="url(#sh)"/>
-    <text x="92" y="171" text-anchor="middle" fill="#fff" font-weight="600">Dataflow Gen2</text>
-    <text x="92" y="185" text-anchor="middle" font-size="9" fill="#d0f0ec">low-code shaping (ETL)</text>
+  <!-- ═════════════════════════════════════════════════════════════════
+       COLUMN 2: ONELAKE LAKEHOUSE CORE (BRONZE ➔ SILVER ➔ GOLD)
+       ═════════════════════════════════════════════════════════════════ -->
+  <rect x="264" y="86" width="600" height="490" rx="14" fill="url(#oneLakeContainer)" filter="url(#medShadow)"/>
 
-    <rect x="22" y="200" width="140" height="40" rx="6" fill="#2da896" filter="url(#sh)"/>
-    <text x="92" y="219" text-anchor="middle" fill="#fff" font-weight="600">Spark notebook / job</text>
-    <text x="92" y="233" text-anchor="middle" font-size="9" fill="#d0f0ec">code-first ELT push-down</text>
+  <!-- OneLake Ribbon Banner -->
+  <rect x="264" y="86" width="600" height="34" rx="14" fill="#064E3B"/>
+  <text x="564" y="108" text-anchor="middle" font-size="12" font-weight="750" fill="#5EEAD4" letter-spacing="1.5">ONELAKE MANAGED LAKEHOUSE (/TABLES DELTA ZONE)</text>
 
-    <rect x="22" y="248" width="140" height="40" rx="6" fill="#0d5c53" filter="url(#sh)"/>
-    <text x="92" y="267" text-anchor="middle" fill="#fff" font-weight="600">OneLake shortcut</text>
-    <text x="92" y="281" text-anchor="middle" font-size="9" fill="#a8ede6">zero-copy, no ingestion</text>
-  </g>
-
-  <!-- arrows into bronze -->
-  <line x1="164" y1="124" x2="238" y2="180" stroke="#1a7a6e" stroke-width="1.5" marker-end="url(#arT)"/>
-  <line x1="164" y1="172" x2="238" y2="185" stroke="#1a7a6e" stroke-width="1.5" marker-end="url(#arT)"/>
-  <line x1="164" y1="220" x2="238" y2="195" stroke="#1a7a6e" stroke-width="1.5" marker-end="url(#arT)"/>
-  <line x1="164" y1="268" x2="238" y2="205" stroke="#0d5c53" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arT)"/>
-
-  <!-- ═══ ONELAKE BAND (centre) ═══ -->
-  <rect x="230" y="100" width="590" height="470" rx="16" fill="url(#oneLake)" filter="url(#sh)"/>
-  <text x="525" y="126" text-anchor="middle" font-size="13" font-weight="700" fill="#a8ede6" letter-spacing="1">ONELAKE · single logical lake · open Delta-Parquet · one physical copy</text>
+  <!-- 1. BRONZE ZONE -->
   <g data-node-id="bronze" role="group" tabindex="0" aria-label="Bronze: raw Delta landing (Tables area)">
-    <title data-node-tooltip="true">Bronze: raw Delta landing (Tables area) — Raw data auto-registers as a Delta table in the lakehouse&apos;s managed Tables area.</title>
-    <rect x="315.0" y="120.0" width="420" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="525" y="143" text-anchor="middle" font-size="9.5" fill="#7dd8d0">every zone = Delta tables in the managed /tables area · ACID · schema enforcement · time travel</text>
+    <title data-node-tooltip="true">Bronze: raw Delta landing (Tables area) — Raw data auto-registers as a Delta table in the lakehouse's managed Tables area.</title>
+    <rect x="280" y="130" width="168" height="310" rx="10" fill="url(#bronzeGrad)" stroke="#FDBA74" stroke-width="1.5"/>
+    <rect x="290" y="140" width="148" height="24" rx="5" fill="#000000" fill-opacity="0.25"/>
+    <text x="364" y="156" text-anchor="middle" font-size="12.5" font-weight="800" fill="#FFFFFF">① BRONZE</text>
+    <text x="364" y="174" text-anchor="middle" font-size="10" font-weight="600" fill="#FFEDD5">Raw &amp; Faithful Copy</text>
+
+    <!-- Cards within Bronze -->
+    <rect x="290" y="184" width="148" height="52" rx="5" fill="#FFFFFF" fill-opacity="0.15"/>
+    <text x="300" y="202" font-size="10" font-weight="700" fill="#FFFFFF">Auto-Registration:</text>
+    <text x="300" y="216" font-size="9" fill="#FFEDD5">Auto Delta metadata</text>
+    <text x="300" y="228" font-size="9" fill="#FFEDD5">extraction; no DDL.</text>
+
+    <rect x="290" y="244" width="148" height="66" rx="5" fill="#FFFFFF" fill-opacity="0.15"/>
+    <text x="300" y="262" font-size="10" font-weight="700" fill="#FFFFFF">Write Knobs:</text>
+    <text x="300" y="276" font-size="9" fill="#FFEDD5">V-Order OFF (churny)</text>
+    <text x="300" y="288" font-size="9" fill="#FFEDD5">Optimized Write ON</text>
+    <text x="300" y="300" font-size="9" fill="#FFEDD5">Auto Compaction</text>
+
+    <rect x="290" y="318" width="148" height="42" rx="5" fill="#FFFFFF" fill-opacity="0.15"/>
+    <text x="300" y="336" font-size="10" font-weight="700" fill="#FFFFFF">Guarantee:</text>
+    <text x="300" y="350" font-size="9" fill="#FFEDD5">Full replayability</text>
+
+    <text x="364" y="426" text-anchor="middle" font-size="9" font-style="italic" fill="#FFEDD5">Append / Merge writes</text>
   </g>
 
-  <!-- BRONZE zone -->
-  <rect x="248" y="158" width="176" height="392" rx="12" fill="url(#bronze)" filter="url(#sh)"/>
-  <text x="336" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">BRONZE</text>
-  <text x="336" y="198" text-anchor="middle" font-size="9.5" fill="#f2e0cf">raw landing · faithful copy</text>
-  <rect x="262" y="212" width="148" height="26" rx="5" fill="#ffffff26"/><text x="336" y="229" text-anchor="middle" font-size="9.5" fill="#fff">Files area (any format)</text>
-  <rect x="262" y="244" width="148" height="26" rx="5" fill="#ffffff26"/><text x="336" y="261" text-anchor="middle" font-size="9.5" fill="#fff">lightly-typed Delta</text>
-  <rect x="262" y="286" width="148" height="70" rx="6" fill="#00000022"/>
-  <text x="336" y="305" text-anchor="middle" font-size="9" fill="#ffe8d0" font-weight="600">Spark write knobs</text>
-  <text x="336" y="321" text-anchor="middle" font-size="8.8" fill="#ffe8d0">V-Order OFF (write-heavy)</text>
-  <text x="336" y="335" text-anchor="middle" font-size="8.8" fill="#ffe8d0">Optimized Write on</text>
-  <text x="336" y="349" text-anchor="middle" font-size="8.8" fill="#ffe8d0">Auto Compaction</text>
-  <text x="336" y="382" text-anchor="middle" font-size="8.5" fill="#f2e0cf" font-style="italic">completeness · replayability</text>
-
-  <!-- SILVER zone -->
-  <rect x="437" y="158" width="176" height="392" rx="12" fill="url(#silver)" filter="url(#sh)"/>
-  <text x="525" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#2b3138">SILVER</text>
-  <text x="525" y="198" text-anchor="middle" font-size="9.5" fill="#3d444c">cleansed · conformed</text>
-  <rect x="451" y="212" width="148" height="26" rx="5" fill="#ffffff44"/><text x="525" y="229" text-anchor="middle" font-size="9.5" fill="#2b3138">de-dup · type enforce</text>
-  <rect x="451" y="244" width="148" height="26" rx="5" fill="#ffffff44"/><text x="525" y="261" text-anchor="middle" font-size="9.5" fill="#2b3138">joins · validation</text>
-  <rect x="451" y="286" width="148" height="70" rx="6" fill="#2b313818"/>
-  <text x="525" y="305" text-anchor="middle" font-size="9" fill="#2b3138" font-weight="600">Spark write knobs</text>
-  <text x="525" y="321" text-anchor="middle" font-size="8.8" fill="#2b3138">V-Order OFF (still churny)</text>
-  <text x="525" y="335" text-anchor="middle" font-size="8.8" fill="#2b3138">Optimized Write + compact</text>
-  <text x="525" y="349" text-anchor="middle" font-size="8.8" fill="#2b3138">low-cardinality partitions</text>
+  <!-- Spark Promotion Conduit 1: Bronze -> Silver -->
   <g data-node-id="spark-silver" role="group" tabindex="0" aria-label="Spark: cleanse &amp; conform to silver">
     <title data-node-tooltip="true">Spark: cleanse &amp; conform to silver — Spark de-duplicates, types, and joins bronze into validated, query-ready silver Delta tables.</title>
-    <rect x="454.0" y="359.0" width="142" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="525" y="382" text-anchor="middle" font-size="8.5" fill="#3d444c" font-style="italic">query-ready Delta tables</text>
+    <path d="M 448 285 L 476 285" fill="none" stroke="#2DD4BF" stroke-width="3" marker-end="url(#arrSpark)"/>
+    <rect x="444" y="244" width="36" height="34" rx="4" fill="#042F2C" stroke="#2DD4BF"/>
+    <text x="462" y="258" text-anchor="middle" font-size="8.5" font-weight="750" fill="#5EEAD4">SPARK</text>
+    <text x="462" y="270" text-anchor="middle" font-size="7.5" fill="#CCFBF1">CLEANSE</text>
   </g>
 
-  <!-- GOLD zone -->
-  <rect x="626" y="158" width="176" height="392" rx="12" fill="url(#gold)" filter="url(#sh)"/>
-  <text x="714" y="182" text-anchor="middle" font-size="13" font-weight="700" fill="#3d2c00">GOLD</text>
+  <!-- 2. SILVER ZONE -->
+  <g transform="translate(480, 0)">
+    <rect x="0" y="130" width="168" height="310" rx="10" fill="url(#silverGrad)" stroke="#CBD5E1" stroke-width="1.5"/>
+    <rect x="10" y="140" width="148" height="24" rx="5" fill="#000000" fill-opacity="0.25"/>
+    <text x="84" y="156" text-anchor="middle" font-size="12.5" font-weight="800" fill="#FFFFFF">② SILVER</text>
+    <text x="84" y="174" text-anchor="middle" font-size="10" font-weight="600" fill="#F1F5F9">Cleansed &amp; Conformed</text>
+
+    <!-- Cards within Silver -->
+    <rect x="10" y="184" width="148" height="52" rx="5" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="20" y="202" font-size="10" font-weight="700" fill="#0F172A">Quality Rules:</text>
+    <text x="20" y="216" font-size="9" fill="#1E293B">De-duplication</text>
+    <text x="20" y="228" font-size="9" fill="#1E293B">Type &amp; schema enforce</text>
+
+    <rect x="10" y="244" width="148" height="66" rx="5" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="20" y="262" font-size="10" font-weight="700" fill="#0F172A">Conforming:</text>
+    <text x="20" y="276" font-size="9" fill="#1E293B">Standardized formats</text>
+    <text x="20" y="288" font-size="9" fill="#1E293B">Business keys joined</text>
+    <text x="20" y="300" font-size="9" fill="#1E293B">Delta ACID commits</text>
+
+    <rect x="10" y="318" width="148" height="42" rx="5" fill="#FFFFFF" fill-opacity="0.2"/>
+    <text x="20" y="336" font-size="10" font-weight="700" fill="#0F172A">State:</text>
+    <text x="20" y="350" font-size="9" fill="#1E293B">Query-ready validated</text>
+
+    <text x="84" y="426" text-anchor="middle" font-size="9" font-style="italic" fill="#F1F5F9">Single source of truth</text>
+  </g>
+
+  <!-- Spark Promotion Conduit 2: Silver -> Gold -->
   <g data-node-id="spark-gold" role="group" tabindex="0" aria-label="Spark: aggregate to gold">
     <title data-node-tooltip="true">Spark: aggregate to gold — Spark aggregates silver into curated, business-ready gold Delta tables.</title>
-    <rect x="641.5" y="175.0" width="145" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="714" y="198" text-anchor="middle" font-size="9.5" fill="#4d3900">business-ready serving</text>
+    <path d="M 648 285 L 676 285" fill="none" stroke="#2DD4BF" stroke-width="3" marker-end="url(#arrSpark)"/>
+    <rect x="644" y="244" width="36" height="34" rx="4" fill="#042F2C" stroke="#2DD4BF"/>
+    <text x="662" y="258" text-anchor="middle" font-size="8.5" font-weight="750" fill="#5EEAD4">SPARK</text>
+    <text x="662" y="270" text-anchor="middle" font-size="7.5" fill="#CCFBF1">MODEL</text>
   </g>
-  <rect x="640" y="212" width="148" height="26" rx="5" fill="#ffffff3a"/><text x="714" y="229" text-anchor="middle" font-size="9.5" fill="#3d2c00">star schema · aggregates</text>
-  <rect x="640" y="244" width="148" height="26" rx="5" fill="#ffffff3a"/><text x="714" y="261" text-anchor="middle" font-size="9.5" fill="#3d2c00">managed /tables Delta</text>
-  <rect x="640" y="286" width="148" height="70" rx="6" fill="#3d2c0018"/>
-  <text x="714" y="305" text-anchor="middle" font-size="9" fill="#3d2c00" font-weight="600">Spark write knobs</text>
-  <text x="714" y="321" text-anchor="middle" font-size="8.8" fill="#3d2c00">V-Order ON (read-heavy)</text>
-  <text x="714" y="335" text-anchor="middle" font-size="8.8" fill="#3d2c00">~1 GB files (Direct Lake)</text>
-  <text x="714" y="349" text-anchor="middle" font-size="8.8" fill="#3d2c00">scheduled OPTIMIZE</text>
-  <text x="714" y="382" text-anchor="middle" font-size="8.5" fill="#4d3900" font-style="italic">fast, curated consumption</text>
 
-  <!-- promote arrows between zones -->
-  <line x1="424" y1="410" x2="437" y2="410" stroke="#063D3B" stroke-width="2.4" marker-end="url(#arT)"/>
-  <text x="430" y="402" text-anchor="middle" font-size="8" fill="#eafff9">Spark</text>
-  <line x1="613" y1="410" x2="626" y2="410" stroke="#063D3B" stroke-width="2.4" marker-end="url(#arT)"/>
-  <text x="619" y="402" text-anchor="middle" font-size="8" fill="#eafff9">Spark</text>
+  <!-- 3. GOLD ZONE -->
+  <g transform="translate(680, 0)">
+    <rect x="0" y="130" width="168" height="310" rx="10" fill="url(#goldGrad)" stroke="#FEF08A" stroke-width="1.5"/>
+    <rect x="10" y="140" width="148" height="24" rx="5" fill="#000000" fill-opacity="0.25"/>
+    <text x="84" y="156" text-anchor="middle" font-size="12.5" font-weight="800" fill="#FFFFFF">③ GOLD</text>
+    <text x="84" y="174" text-anchor="middle" font-size="10" font-weight="600" fill="#FEFCE8">Curated Serving</text>
 
-  <!-- transaction-log note band -->
-  <rect x="248" y="428" width="554" height="112" rx="10" fill="#00000026"/>
-  <text x="525" y="448" text-anchor="middle" font-size="10" font-weight="700" fill="#a8ede6">Under every table: _delta_log (ACID) — the log, not a directory listing, is the source of truth</text>
-  <text x="525" y="465" text-anchor="middle" font-size="9" fill="#c8f0ea">optimistic-concurrency commits · checkpoint every 10 commits · min/max stats drive data skipping</text>
-  <text x="525" y="482" text-anchor="middle" font-size="9" fill="#c8f0ea">one copy read by T-SQL, Spark, and Analysis Services — no per-engine duplication</text>
-  <rect x="300" y="495" width="180" height="34" rx="6" fill="#0d5c5399"/><text x="390" y="516" text-anchor="middle" font-size="9.5" fill="#fff">Native Execution Engine (NEE)</text>
-  <rect x="500" y="495" width="200" height="34" rx="6" fill="#0d5c5399"/><text x="600" y="516" text-anchor="middle" font-size="9.5" fill="#fff">Managed Spark (starter / custom pools)</text>
+    <!-- Cards within Gold -->
+    <rect x="10" y="184" width="148" height="52" rx="5" fill="#FFFFFF" fill-opacity="0.25"/>
+    <text x="20" y="202" font-size="10" font-weight="700" fill="#713F12">Star Schema:</text>
+    <text x="20" y="216" font-size="9" fill="#713F12">Dimensions &amp; facts</text>
+    <text x="20" y="228" font-size="9" fill="#713F12">Pre-calculated aggregates</text>
 
-  <!-- ═══ SERVING (right) ═══ -->
-  <text x="960" y="90" text-anchor="middle" font-size="11" font-weight="700" fill="#0d3d35" letter-spacing="1">SERVING GOLD (read-only)</text>
+    <rect x="10" y="244" width="148" height="66" rx="5" fill="#FFFFFF" fill-opacity="0.25"/>
+    <text x="20" y="262" font-size="10" font-weight="700" fill="#713F12">Write Knobs:</text>
+    <text x="20" y="276" font-size="9" font-weight="700" fill="#713F12">V-Order ON (Read-heavy)</text>
+    <text x="20" y="288" font-size="9" fill="#713F12">~1 GB BinSize target</text>
+    <text x="20" y="300" font-size="9" fill="#713F12">Scheduled OPTIMIZE</text>
 
-  <rect x="838" y="180" width="256" height="80" rx="10" fill="#3ba898" filter="url(#sh)"/>
-  <text x="966" y="204" text-anchor="middle" font-size="12" font-weight="700" fill="#fff">SQL analytics endpoint</text>
+    <rect x="10" y="318" width="148" height="42" rx="5" fill="#FFFFFF" fill-opacity="0.25"/>
+    <text x="20" y="336" font-size="10" font-weight="700" fill="#713F12">Must land in /Tables</text>
+    <text x="20" y="350" font-size="9" fill="#713F12">to be endpoint-visible</text>
+
+    <text x="84" y="426" text-anchor="middle" font-size="9" font-style="italic" fill="#FEFCE8">Fast business consumption</text>
+  </g>
+
+  <!-- Delta Transaction Log Bar (Bottom of Center Box) -->
+  <rect x="280" y="456" width="568" height="106" rx="8" fill="#032621" stroke="#0D9488" stroke-width="1"/>
+  <text x="564" y="476" text-anchor="middle" font-size="11" font-weight="750" fill="#5EEAD4">DELTA LAKE ACID LOG FOUNDATION (_delta_log/)</text>
+  <text x="564" y="494" text-anchor="middle" font-size="9.5" fill="#CCFBF1">Single source of truth via commit JSONs · Optimistic concurrency · Checkpoint every 10 commits</text>
+  <text x="564" y="508" text-anchor="middle" font-size="9.5" fill="#CCFBF1">Zero data movement between Bronze, Silver, and Gold — all metadata-tracked commits inside OneLake</text>
+  
+  <rect x="296" y="520" width="260" height="28" rx="5" fill="#064E3B"/>
+  <text x="426" y="538" text-anchor="middle" font-size="9.5" font-weight="600" fill="#99F6E4">Managed Spark / Native Engine (NEE)</text>
+
+  <rect x="572" y="520" width="260" height="28" rx="5" fill="#064E3B"/>
+  <text x="702" y="538" text-anchor="middle" font-size="9.5" font-weight="600" fill="#99F6E4">OneLake Security &amp; Tenant Policies</text>
+
+  <!-- ═════════════════════════════════════════════════════════════════
+       COLUMN 3: SERVING LAYER (RIGHT)
+       ═════════════════════════════════════════════════════════════════ -->
+  <!-- Conduit from Gold to Serving -->
+  <path d="M 848 230 Q 870 230 882 200" fill="none" stroke="#CA8A04" stroke-width="2.5" marker-end="url(#arrGold)"/>
+  <path d="M 848 335 Q 870 335 882 360" fill="none" stroke="#CA8A04" stroke-width="2.5" marker-end="url(#arrGold)"/>
+
+  <!-- 1. SQL Analytics Endpoint Node -->
   <g data-node-id="sql-endpoint" role="group" tabindex="0" aria-label="SQL analytics endpoint (read-only T-SQL)">
     <title data-node-tooltip="true">SQL analytics endpoint (read-only T-SQL) — Auto-provisioned at lakehouse creation; exposes gold Delta tables to read-only T-SQL.</title>
-    <rect x="866.5" y="198.0" width="199" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="966" y="221" text-anchor="middle" font-size="9" fill="#c8f0ea">auto-provisioned · read-only T-SQL</text>
-  </g>
-  <text x="966" y="235" text-anchor="middle" font-size="9" fill="#c8f0ea">same engine as Warehouse</text>
-  <text x="966" y="249" text-anchor="middle" font-size="9" fill="#c8f0ea">metadata syncs from _delta_log</text>
+    <rect x="888" y="86" width="276" height="236" rx="12" fill="#FFFFFF" stroke="#38BDF8" stroke-width="1.5" filter="url(#medShadow)"/>
+    <rect x="900" y="98" width="252" height="22" rx="6" fill="#0284C7"/>
+    <text x="1026" y="113" text-anchor="middle" font-size="10.5" font-weight="750" fill="#FFFFFF">④ SERVING: T-SQL ENDPOINT</text>
 
-  <rect x="838" y="272" width="256" height="80" rx="10" fill="#f2c811" filter="url(#sh)"/>
-  <text x="966" y="296" text-anchor="middle" font-size="12" font-weight="700" fill="#3d2c00">Direct Lake (Power BI)</text>
+    <text x="904" y="142" font-size="13.5" font-weight="700" fill="#0369A1">SQL Analytics Endpoint</text>
+    <text x="904" y="160" font-size="11" fill="#0C4A6E">Auto-provisioned at lakehouse creation.</text>
+    <text x="904" y="176" font-size="11" fill="#0C4A6E">Strictly read-only T-SQL query surface.</text>
+
+    <rect x="904" y="190" width="244" height="66" rx="6" fill="#F0F9FF" stroke="#BAE6FD"/>
+    <text x="914" y="208" font-size="10" font-weight="700" fill="#0369A1">Key Characteristics:</text>
+    <text x="914" y="222" font-size="9" fill="#0284C7">Shares query engine with Warehouse</text>
+    <text x="914" y="234" font-size="9" fill="#0284C7">Auto-syncs metadata from _delta_log</text>
+    <text x="914" y="246" font-size="9" fill="#0284C7">Supports T-SQL views, functions &amp; procs</text>
+
+    <rect x="904" y="266" width="244" height="42" rx="6" fill="#EFF6FF"/>
+    <text x="914" y="284" font-size="9.5" font-weight="750" fill="#1E40AF">Audience: T-SQL Analysts &amp; BI</text>
+    <text x="914" y="298" font-size="9" fill="#1D4ED8">Zero setup · zero data copy</text>
+  </g>
+
+  <!-- 2. Direct Lake Serving Node -->
   <g data-node-id="direct-lake-serving" role="group" tabindex="0" aria-label="Direct Lake (Power BI semantic model)">
     <title data-node-tooltip="true">Direct Lake (Power BI semantic model) — Power BI reads gold Delta files straight from OneLake, lazily, with no import or refresh.</title>
-    <rect x="869.0" y="290.0" width="194" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="966" y="313" text-anchor="middle" font-size="9" fill="#4d3900">reads Delta straight from OneLake</text>
+    <rect x="888" y="340" width="276" height="236" rx="12" fill="#FFFFFF" stroke="#F59E0B" stroke-width="1.5" filter="url(#medShadow)"/>
+    <rect x="900" y="352" width="252" height="22" rx="6" fill="#D97706"/>
+    <text x="1026" y="367" text-anchor="middle" font-size="10.5" font-weight="750" fill="#FFFFFF">④ SERVING: DIRECT LAKE</text>
+
+    <text x="904" y="396" font-size="13.5" font-weight="700" fill="#92400E">Power BI Direct Lake Mode</text>
+    <text x="904" y="414" font-size="11" fill="#78350F">Semantic model reads OneLake directly.</text>
+    <text x="904" y="430" font-size="11" fill="#78350F">Import-speed analytics without data copy.</text>
+
+    <rect x="904" y="444" width="244" height="66" rx="6" fill="#FFFBEB" stroke="#FDE68A"/>
+    <text x="914" y="462" font-size="10" font-weight="700" fill="#92400E">Key Characteristics:</text>
+    <text x="914" y="476" font-size="9" fill="#B45309">Lazy column loading into memory</text>
+    <text x="914" y="488" font-size="9" fill="#B45309">Framing metadata-only refresh</text>
+    <text x="914" y="500" font-size="9" fill="#B45309">No scheduled dataset refresh needed</text>
+
+    <rect x="904" y="520" width="244" height="42" rx="6" fill="#FEF3C7"/>
+    <text x="914" y="538" font-size="9.5" font-weight="750" fill="#92400E">Audience: Power BI Dashboards</text>
+    <text x="914" y="552" font-size="9" fill="#B45309">Sub-second visuals over billions of rows</text>
   </g>
-  <text x="966" y="327" text-anchor="middle" font-size="9" fill="#4d3900">import-mode speed, no copy</text>
-  <text x="966" y="341" text-anchor="middle" font-size="9" fill="#4d3900">lazy column load · framing</text>
 
-  <rect x="838" y="364" width="256" height="60" rx="10" fill="#e8ecff" stroke="#5b6af0" stroke-width="1.4" filter="url(#sh)"/>
-  <text x="966" y="386" text-anchor="middle" font-size="11" font-weight="700" fill="#3f4ed6">Alt: surface Gold via Warehouse</text>
-  <text x="966" y="402" text-anchor="middle" font-size="9" fill="#5b6af0">T-SQL-first teams needing multi-table</text>
-  <text x="966" y="415" text-anchor="middle" font-size="9" fill="#5b6af0">transactions / full DML on served data</text>
+  <!-- ═════════════════════════════════════════════════════════════════
+       ZONE 4: GOVERNANCE & DUAL-PATH SECURITY TRAP (BOTTOM)
+       ═════════════════════════════════════════════════════════════════ -->
+  <g data-node-id="endpoint-security-warning" role="group" tabindex="0" aria-label="Trap: endpoint permissions don't cover Spark/OneLake reads">
+    <title data-node-tooltip="true">Trap: endpoint permissions don't cover Spark/OneLake reads — SQL-endpoint GRANT/DENY only applies through that endpoint; Spark and OneLake reads bypass it.</title>
+    <rect x="36" y="594" width="1128" height="186" rx="12" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.8" filter="url(#medShadow)"/>
+    
+    <rect x="52" y="608" width="220" height="24" rx="6" fill="#DC2626"/>
+    <text x="162" y="624" text-anchor="middle" font-size="11" font-weight="750" fill="#FFFFFF">CRITICAL SECURITY TRAP</text>
+    
+    <text x="52" y="654" font-size="14" font-weight="700" fill="#991B1B">SQL Endpoint GRANT/DENY Does NOT Secure Spark or OneLake Direct Reads</text>
+    
+    <!-- Split comparison: The Trap vs The Remedy -->
+    <rect x="52" y="668" width="530" height="98" rx="8" fill="#FFFFFF" stroke="#FCA5A5"/>
+    <circle cx="68" cy="688" r="8" fill="#DC2626"/>
+    <text x="68" y="692" text-anchor="middle" font-size="10" font-weight="750" fill="#FFFFFF">✕</text>
+    <text x="84" y="690" font-size="11.5" font-weight="700" fill="#B91C1C">The Failure Mode (Securing Only SQL Path):</text>
+    <text x="68" y="710" font-size="10.5" fill="#7F1D1D">Applying Table/Column/Row-Level Security (RLS) only at the SQL Endpoint</text>
+    <text x="68" y="726" font-size="10.5" fill="#7F1D1D">leaves the underlying Delta files accessible via Spark notebooks or OneLake</text>
+    <text x="68" y="742" font-size="10.5" fill="#7F1D1D">APIs. Users with workspace Contributor roles bypass all SQL filters completely.</text>
 
-  <!-- gold -> serving arrows -->
-  <line x1="802" y1="230" x2="836" y2="216" stroke="#c08e0e" stroke-width="1.8" marker-end="url(#arGold)"/>
-  <line x1="802" y1="300" x2="836" y2="308" stroke="#c08e0e" stroke-width="1.8" marker-end="url(#arGold)"/>
-  <line x1="802" y1="360" x2="836" y2="388" stroke="#777" stroke-width="1.4" stroke-dasharray="5,3" marker-end="url(#arG)"/>
-
-  <!-- ═══ GOVERNANCE strip ═══ -->
-  <rect x="838" y="440" width="256" height="122" rx="10" fill="#fff3cd" stroke="#c8a200" stroke-width="1.2"/>
-  <text x="966" y="461" text-anchor="middle" font-size="10.5" font-weight="700" fill="#6b5400">Governance — secure two paths</text>
-  <g data-node-id="endpoint-security-warning" role="group" tabindex="0" aria-label="Trap: endpoint permissions don&apos;t cover Spark/OneLake reads">
-    <title data-node-tooltip="true">Trap: endpoint permissions don&apos;t cover Spark/OneLake reads — SQL-endpoint GRANT/DENY only applies through that endpoint; Spark and OneLake reads bypass it.</title>
-    <rect x="866.0" y="456.0" width="200" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="966" y="479" text-anchor="middle" font-size="8.8" fill="#6b5400">SQL endpoint GRANT/DENY guards only</text>
+    <rect x="600" y="668" width="548" height="98" rx="8" fill="#F0FDF4" stroke="#86EFAC"/>
+    <circle cx="616" cy="688" r="8" fill="#16A34A"/>
+    <text x="616" y="692" text-anchor="middle" font-size="10" font-weight="750" fill="#FFFFFF">✓</text>
+    <text x="632" y="690" font-size="11.5" font-weight="700" fill="#15803D">The Governed Remedy (Secure Both Paths):</text>
+    <text x="616" y="710" font-size="10.5" fill="#14532D">1. Secure the Write / Storage Path: Use OneLake security roles and workspace</text>
+    <text x="616" y="726" font-size="10.5" fill="#14532D">   Viewer roles to lock down raw underlying file system access.</text>
+    <text x="616" y="742" font-size="10.5" fill="#14532D">2. Secure the Read Path: Apply T-SQL granular permissions for SQL consumers.</text>
   </g>
-  <text x="966" y="491" text-anchor="middle" font-size="8.8" fill="#6b5400">the T-SQL path; Spark + OneLake bypass it.</text>
-  <text x="966" y="507" text-anchor="middle" font-size="8.8" fill="#6b5400">OneLake security roles constrain Viewers,</text>
-  <text x="966" y="519" text-anchor="middle" font-size="8.8" fill="#6b5400">not workspace Admin/Member/Contributor.</text>
-  <text x="966" y="536" text-anchor="middle" font-size="8.8" fill="#6b5400">Tenant policies auto-cover all OneLake data.</text>
-  <text x="966" y="552" text-anchor="middle" font-size="8.8" fill="#6b5400" font-weight="600">Secure WRITE (Spark) ≠ secure READ (endpoint)</text>
 
-  <!-- ═══ ANTI-PATTERN banner ═══ -->
-  <rect x="230" y="592" width="864" height="52" rx="10" fill="#fdecea" stroke="#e57373" stroke-width="1.3"/>
-  <text x="662" y="613" text-anchor="middle" font-size="11" font-weight="700" fill="#c62828">Anti-pattern: "gold-in-name-only"</text>
-  <text x="662" y="631" text-anchor="middle" font-size="9.5" fill="#8a2b2b">Parquet files are immutable, so every update/delete adds files. An un-compacted gold layer accumulates small files that slow the very queries it exists to speed up — schedule OPTIMIZE/compaction.</text>
-
-  <!-- ═══ LEGEND ═══ -->
-  <rect x="22" y="308" width="180" height="230" rx="8" fill="#fff" stroke="#2da896" stroke-width="1" opacity="0.96"/>
-  <text x="112" y="328" text-anchor="middle" font-size="10" font-weight="700" fill="#0d5c53">Legend</text>
-  <rect x="32" y="336" width="14" height="10" rx="2" fill="url(#bronze)"/><text x="53" y="345" font-size="9" fill="#333">Bronze — raw landing</text>
-  <rect x="32" y="352" width="14" height="10" rx="2" fill="url(#silver)"/><text x="53" y="361" font-size="9" fill="#333">Silver — cleansed</text>
-  <rect x="32" y="368" width="14" height="10" rx="2" fill="url(#gold)"/><text x="53" y="377" font-size="9" fill="#333">Gold — serving</text>
-  <rect x="32" y="384" width="14" height="10" rx="2" fill="url(#oneLake)"/><text x="53" y="393" font-size="9" fill="#333">OneLake / Delta store</text>
-  <rect x="32" y="400" width="14" height="10" rx="2" fill="#2da896"/><text x="53" y="409" font-size="9" fill="#333">Ingestion / Spark engine</text>
-  <line x1="32" y1="422" x2="46" y2="422" stroke="#1a7a6e" stroke-width="2.4"/><text x="53" y="425" font-size="9" fill="#333">Spark write / promote</text>
-  <line x1="32" y1="438" x2="46" y2="438" stroke="#0d5c53" stroke-width="1.5" stroke-dasharray="5,3"/><text x="53" y="441" font-size="9" fill="#333">Zero-copy shortcut</text>
-  <line x1="32" y1="454" x2="46" y2="454" stroke="#c08e0e" stroke-width="1.8"/><text x="53" y="457" font-size="9" fill="#333">Gold serving read</text>
-  <rect x="32" y="466" width="14" height="10" rx="2" fill="#fff3cd" stroke="#c8a200"/><text x="53" y="475" font-size="9" fill="#333">Governance note</text>
-  <rect x="32" y="482" width="14" height="10" rx="2" fill="#fdecea" stroke="#e57373"/><text x="53" y="491" font-size="9" fill="#333">Anti-pattern</text>
-  <text x="112" y="512" text-anchor="middle" font-size="8" fill="#8A8886">Fabric Atlas — original</text>
-  <text x="112" y="524" text-anchor="middle" font-size="8" fill="#8A8886">diagram, July 2026.</text>
-  <text x="112" y="534" text-anchor="middle" font-size="8" fill="#8A8886">Not a Microsoft asset.</text>
+  <!-- Footer Provenance Note -->
+  <text x="40" y="808" font-size="9.5" fill="#0F766E">Fabric Atlas — Original Medallion Architecture Diagram, August 2026. Sourced from Microsoft Learn: Lakehouse Overview &amp; SQL Analytics Endpoint Architecture.</text>
 </svg>

@@ -1,0 +1,260 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 960" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="nee-ansi-title nee-ansi-desc" data-diagram-id="ansi-nee-tradeoff-runtime-2">
+  <title id="nee-ansi-title">ANSI mode versus native execution on Runtime 2.0</title>
+  <desc id="nee-ansi-desc">A decision flowchart detailing the collision between Spark 4.x default ANSI mode and Native Execution Engine fallback on Fabric Runtime 2.0, providing guidance on choosing between correctness and vectorized speed per workload.</desc>
+
+  <defs>
+    <!-- Header Gradient -->
+    <linearGradient id="nea-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0B5E50"/>
+      <stop offset="50%" stop-color="#0F766E"/>
+      <stop offset="100%" stop-color="#0E4A68"/>
+    </linearGradient>
+
+    <!-- Card Gradients -->
+    <linearGradient id="nea-teal-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F0FDFA"/>
+      <stop offset="100%" stop-color="#CCFBF1"/>
+    </linearGradient>
+    <linearGradient id="nea-blue-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#EFF6FF"/>
+      <stop offset="100%" stop-color="#DBEAFE"/>
+    </linearGradient>
+    <linearGradient id="nea-purple-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FAF5FF"/>
+      <stop offset="100%" stop-color="#F3E8FF"/>
+    </linearGradient>
+
+    <!-- Drop Shadow -->
+    <filter id="nea-shadow" x="-3%" y="-4%" width="106%" height="110%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="nea-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0D9488"/>
+    </marker>
+    <marker id="nea-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="nea-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7E22CE"/>
+    </marker>
+    <marker id="nea-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
+    </marker>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="1200" height="960" fill="#FFFFFF"/>
+
+  <!-- ========================================================================= -->
+  <!-- TOP BANNER (HERO TITLE)                                                   -->
+  <!-- ========================================================================= -->
+  <rect width="1200" height="64" fill="url(#nea-head)"/>
+  
+  <g data-official-icon="microsoft" data-icon-name="spark_32">
+    <g transform="translate(36, 16) scale(0.9)">
+      <rect width="36" height="36" rx="6" fill="#FFFFFF" fill-opacity="0.15"/>
+      <path d="M18 8 L22 16 L30 18 L24 24 L26 32 L18 28 L10 32 L12 24 L6 18 L14 16 Z" fill="#2DD4BF"/>
+    </g>
+  </g>
+
+  <text x="80" y="34" font-size="20" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">ANSI Mode vs Native Execution Engine (NEE) on Runtime 2.0</text>
+  <text x="80" y="52" font-size="11" fill="#CCFBF1">The Runtime 2.0 Collision · Correctness vs C++ Vectorized Speed · Per-Workload Environment Governance · Plan Verification</text>
+
+  <!-- ========================================================================= -->
+  <!-- ROW 1: THE RUNTIME COLLISION (NODES 1 & 2)                                -->
+  <!-- ========================================================================= -->
+  
+  <!-- Node 1: default -->
+  <g data-node-id="default" role="group" tabindex="0" aria-label="Spark 4.x enables ANSI by default">
+    <title data-node-tooltip="true">Spark 4.x enables ANSI by default — Spark 4.x enables ANSI mode by default, raising errors where 3.5 returned NULL.</title>
+    <rect x="24" y="78" width="560" height="236" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6" filter="url(#nea-shadow)"/>
+    <rect x="36" y="90" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="50" y="109" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">1</text>
+    <text x="74" y="100" font-size="11" font-weight="800" fill="#0F766E">Spark 4.x (Runtime 2.0) ANSI Mode Default</text>
+    <text x="74" y="114" font-size="8.5" fill="#64748B">Strict SQL standard semantics enabled out of the box in Apache Spark 4.1</text>
+
+    <!-- ANSI Behavior Grid -->
+    <g transform="translate(36, 126)">
+      <rect x="0" y="0" width="260" height="42" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+      <text x="10" y="16" font-size="8.5" font-weight="800" fill="#0F766E">Spark 3.5 (Legacy Mode)</text>
+      <text x="10" y="30" font-size="8" fill="#115E59">Bad casts / 0-div return silent NULLs</text>
+
+      <rect x="276" y="0" width="260" height="42" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+      <text x="286" y="16" font-size="8.5" font-weight="800" fill="#1D4ED8">Spark 4.1 (Runtime 2.0 Default)</text>
+      <text x="286" y="30" font-size="8" fill="#1E40AF">Raises loud runtime exceptions</text>
+    </g>
+
+    <text x="36" y="188" font-size="8.5" fill="#115E59">• `spark.sql.ansi.enabled = true` is the default property on Fabric Runtime 2.0</text>
+    <text x="36" y="202" font-size="8.5" fill="#115E59">• Prevents silent data corruption in mission-critical dimensional models &amp; accounting data</text>
+
+    <rect x="36" y="214" width="536" height="86" rx="4" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="46" y="230" font-size="8" font-weight="700" fill="#0F766E">Runtime 2.0 Migration Impact:</text>
+    <text x="46" y="244" font-size="8" fill="#475569">• Upgrading legacy Spark 3.4/3.5 notebooks to Runtime 2.0 triggers job failures</text>
+    <text x="46" y="258" font-size="8" fill="#475569">on dirty source data that previously evaluated to NULL without failing the batch run.</text>
+    <text x="46" y="272" font-size="8" font-weight="700" fill="#15803D">Forces intentional data quality validation during ingestion.</text>
+  </g>
+
+  <!-- Flow Connector: 1 -> 2 (The Collision) -->
+  <line x1="584" y1="196" x2="604" y2="196" stroke="#D97706" stroke-width="2" marker-end="url(#nea-arr-amber)"/>
+
+  <!-- Node 2: limitation -->
+  <g data-node-id="limitation" role="group" tabindex="0" aria-label="NEE falls back under ANSI">
+    <title data-node-tooltip="true">NEE falls back under ANSI — The native execution engine falls back to JVM Spark whenever ANSI mode is on.</title>
+    <rect x="604" y="78" width="572" height="236" rx="8" fill="#FFFBEB" stroke="#FDE047" stroke-width="1.6" filter="url(#nea-shadow)"/>
+    <rect x="616" y="90" width="28" height="28" rx="6" fill="#FEF3C7"/><text x="630" y="109" text-anchor="middle" font-size="14" font-weight="900" fill="#D97706">2</text>
+    <text x="654" y="100" font-size="11" font-weight="800" fill="#854D0E">The Collision: NEE Falls Back to JVM Under ANSI</text>
+    <text x="654" y="114" font-size="8.5" fill="#713F12">The Native Execution Engine (C++ Velox) does NOT execute under ANSI mode</text>
+
+    <!-- Collision Warning Box -->
+    <rect x="616" y="126" width="548" height="74" rx="4" fill="#FFFFFF" stroke="#FDE047"/>
+    <text x="628" y="144" font-size="9" font-weight="800" fill="#854D0E">The Silent Fallback Mechanism:</text>
+    <text x="628" y="158" font-size="8.5" fill="#713F12">• When `spark.sql.ansi.enabled=true`, the Native Execution Engine (NEE) cannot run</text>
+    <text x="628" y="172" font-size="8.5" fill="#713F12">• Spark transparently falls back to standard Java Virtual Machine (JVM) execution</text>
+    <text x="628" y="186" font-size="8.5" font-weight="700" fill="#B45309">Trap: Portal Acceleration tab shows NEE = ON, but 100% of operators execute on JVM!</text>
+
+    <rect x="616" y="206" width="548" height="94" rx="4" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="626" y="222" font-size="8" font-weight="700" fill="#991B1B">Architectural Implication on Runtime 2.0:</text>
+    <text x="626" y="236" font-size="8" fill="#B91C1C">• Untouched Runtime 2.0 environments get zero C++ Velox vectorized performance boost.</text>
+    <text x="626" y="250" font-size="8" fill="#B91C1C">• Teams benchmark native performance and wonder why queries show no speedup.</text>
+    <text x="626" y="264" font-size="8" font-weight="700" fill="#DC2626">Architects MUST choose between ANSI correctness and NEE vectorized speed!</text>
+  </g>
+
+  <!-- Connectors from Collision to 2 Strategic Paths -->
+  <path d="M 304,314 L 304,338" fill="none" stroke="#0D9488" stroke-width="2" marker-end="url(#nea-arr-teal)"/>
+  <path d="M 890,314 L 890,338" fill="none" stroke="#2563EB" stroke-width="2" marker-end="url(#nea-arr-blue)"/>
+
+  <!-- ========================================================================= -->
+  <!-- ROW 2: THE TWO DEFENSIBLE ARCHITECTURAL PATHS (NODES 3 & 4)               -->
+  <!-- ========================================================================= -->
+  
+  <!-- Path A: keepansi -->
+  <g data-node-id="keepansi" role="group" tabindex="0" aria-label="Keep ANSI — choose correctness">
+    <title data-node-tooltip="true">Keep ANSI — choose correctness — Keeping ANSI prioritizes correctness guarantees over native execution speed.</title>
+    <rect x="24" y="340" width="560" height="260" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6" filter="url(#nea-shadow)"/>
+    <rect x="24" y="340" width="560" height="30" rx="8" fill="#0F766E"/>
+    <text x="304" y="360" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">STRATEGY A: KEEP ANSI (CHOOSE CORRECTNESS)</text>
+
+    <rect x="36" y="380" width="536" height="74" rx="6" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="48" y="398" font-size="10" font-weight="800" fill="#0F766E">Prioritize Strict Data Integrity &amp; Strict Schemas</text>
+    <text x="48" y="414" font-size="8.5" fill="#115E59">• `spark.sql.ansi.enabled = true` (Accept JVM execution trade-off)</text>
+    <text x="48" y="428" font-size="8.5" fill="#115E59">• Invalid data fails fast with precise error diagnostics and row context</text>
+    <text x="48" y="442" font-size="8.5" fill="#115E59">• Zero silent NULL values entering downstream gold analytics tables</text>
+
+    <rect x="36" y="460" width="536" height="126" rx="4" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="46" y="476" font-size="8.5" font-weight="700" fill="#334155">Ideal Workload Classes &amp; Operational Rules:</text>
+    <text x="46" y="492" font-size="8" fill="#475569">✓ <tspan font-weight="700">Silver Ingestion &amp; Conforming Pipelines:</tspan> Enforce data quality contracts</text>
+    <text x="46" y="506" font-size="8" fill="#475569">✓ <tspan font-weight="700">Financial &amp; Compliance Data:</tspan> Audit correctness outweighs compute speed</text>
+    <text x="46" y="520" font-size="8" fill="#475569">✓ <tspan font-weight="700">Structured Streaming:</tspan> Streaming already runs on JVM regardless of NEE</text>
+    <text x="46" y="534" font-size="8" font-weight="700" fill="#0F766E">Sizing Guidance: Size capacity nodes based on JVM Spark benchmarks.</text>
+    <text x="46" y="548" font-size="8" fill="#475569">Do not budget capacity units assuming native C++ speedups on these tables.</text>
+  </g>
+
+  <!-- Path B: dropansi -->
+  <g data-node-id="dropansi" role="group" tabindex="0" aria-label="Disable ANSI — choose native speed">
+    <title data-node-tooltip="true">Disable ANSI — choose native speed — Disabling ANSI regains native execution for scan-heavy conformed workloads.</title>
+    <rect x="604" y="340" width="572" height="260" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="1.6" filter="url(#nea-shadow)"/>
+    <rect x="604" y="340" width="572" height="30" rx="8" fill="#1D4ED8"/>
+    <text x="890" y="360" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">STRATEGY B: DISABLE ANSI (CHOOSE NATIVE VECTORIZED SPEED)</text>
+
+    <rect x="616" y="380" width="548" height="74" rx="6" fill="#EFF6FF" stroke="#93C5FD"/>
+    <text x="628" y="398" font-size="10" font-weight="800" fill="#1D4ED8">Unleash Native Execution Engine (C++ Velox)</text>
+    <text x="628" y="414" font-size="8.5" fill="#1E3A8A">• `spark.sql.ansi.enabled = false` (Unlocks full NEE hardware acceleration)</text>
+    <text x="628" y="428" font-size="8.5" fill="#1E3A8A">• 2x–5x faster scan, filter, join, and aggregation execution speed</text>
+    <text x="628" y="442" font-size="8.5" fill="#1E3A8A">• Dramatically reduces Capacity Unit (CU) consumption for big data workloads</text>
+
+    <rect x="616" y="460" width="548" height="126" rx="4" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="626" y="476" font-size="8.5" font-weight="700" fill="#334155">Ideal Workload Classes &amp; Defensive Coding:</text>
+    <text x="626" y="492" font-size="8" fill="#475569">✓ <tspan font-weight="700">Gold Aggregations &amp; Marts:</tspan> High-volume scans over already-conformed Silver data</text>
+    <text x="626" y="506" font-size="8" fill="#475569">✓ <tspan font-weight="700">Feature Engineering &amp; ML Training:</tspan> Massive iterative tabular scans</text>
+    <text x="626" y="520" font-size="8" fill="#475569">✓ <tspan font-weight="700">Defensive Casting:</tspan> Use explicit `try_cast()` and `try_divide()` functions</text>
+    <text x="626" y="534" font-size="8" font-weight="700" fill="#1D4ED8">Safety Standard: Only disable ANSI over validated, pre-cleansed datasets!</text>
+    <text x="626" y="548" font-size="8" fill="#475569">Avoid disabling ANSI on raw external file landings prone to dirty type anomalies.</text>
+  </g>
+
+  <!-- Flow Connector: Row 2 -> Row 3 -->
+  <path d="M 600,600 L 600,620" fill="none" stroke="#0D9488" stroke-width="2.5" marker-end="url(#nea-arr-teal)"/>
+
+  <!-- ========================================================================= -->
+  <!-- ROW 3: WORKLOAD SEGREGATION, ENVIRONMENT GOVERNANCE & PROOF (5, 6, 7)     -->
+  <!-- ========================================================================= -->
+  <g transform="translate(24, 624)">
+    <!-- Node 5: perworkload -->
+    <g data-node-id="perworkload" role="group" tabindex="0" aria-label="Decide per workload class">
+      <title data-node-tooltip="true">Decide per workload class — The choice belongs to the workload class, not to a single global setting.</title>
+      <rect x="0" y="0" width="368" height="286" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6" filter="url(#nea-shadow)"/>
+      <rect x="12" y="12" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="26" y="31" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">3</text>
+      <text x="50" y="22" font-size="10.5" font-weight="800" fill="#0F766E">3. Decide Per Workload Class</text>
+      <text x="50" y="36" font-size="8.5" fill="#64748B">Segment by data pipeline tier</text>
+
+      <text x="12" y="58" font-size="8.5" fill="#115E59">The ANSI vs NEE decision is NOT global:</text>
+
+      <rect x="12" y="70" width="344" height="66" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+      <text x="22" y="88" font-size="8.5" font-weight="800" fill="#0F766E">Silver Ingestion Tier:</text>
+      <text x="22" y="104" font-size="8" fill="#115E59">• Set `spark.sql.ansi.enabled = true`</text>
+      <text x="22" y="118" font-size="8" fill="#115E59">• Catch dirty records at the gate</text>
+
+      <rect x="12" y="144" width="344" height="66" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+      <text x="22" y="162" font-size="8.5" font-weight="800" fill="#1D4ED8">Gold Analytics Tier:</text>
+      <text x="22" y="178" font-size="8" fill="#1E3A8A">• Set `spark.sql.ansi.enabled = false`</text>
+      <text x="22" y="192" font-size="8" fill="#1E3A8A">• Run at maximum C++ NEE vectorization</text>
+
+      <text x="12" y="230" font-size="8" font-weight="700" fill="#0F766E">Architectural Principle:</text>
+      <text x="12" y="244" font-size="8" fill="#475569">A single tenant-wide default is always wrong for one</text>
+      <text x="12" y="258" font-size="8" fill="#475569">of the two workload classes. Separate them explicitly!</text>
+    </g>
+
+    <!-- Node 6: record -->
+    <g data-node-id="record" role="group" tabindex="0" aria-label="Record it in the Environment">
+      <title data-node-tooltip="true">Record it in the Environment — Recording the decision in the Environment makes it visible and reviewable.</title>
+      <rect x="392" y="0" width="368" height="286" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6" filter="url(#nea-shadow)"/>
+      <rect x="404" y="12" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="418" y="31" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">4</text>
+      <text x="442" y="22" font-size="10.5" font-weight="800" fill="#0F766E">4. Record in Custom Environment</text>
+      <text x="442" y="36" font-size="8.5" fill="#64748B">Centralized Spark property governance</text>
+
+      <text x="404" y="58" font-size="8.5" fill="#115E59">Store configuration in Fabric Environments:</text>
+
+      <rect x="404" y="70" width="344" height="140" rx="4" fill="#F8FAFC" stroke="#E2E8F0"/>
+      <text x="414" y="88" font-size="8.5" font-weight="800" fill="#334155">Environment Spark Properties:</text>
+      <text x="414" y="106" font-size="8" font-family="Consolas, monospace" fill="#0F766E">spark.native.enabled true</text>
+      <text x="414" y="122" font-size="8" font-family="Consolas, monospace" fill="#0F766E">spark.sql.ansi.enabled false</text>
+      <text x="414" y="138" font-size="8" font-family="Consolas, monospace" fill="#64748B"># Runtime 2.0 (Apache Spark 4.1)</text>
+      <text x="414" y="156" font-size="8" fill="#475569">• Attach Environment to Workspace or Notebook</text>
+      <text x="414" y="172" font-size="8" fill="#475569">• Promoted via CI/CD Deployment Pipelines</text>
+      <text x="414" y="188" font-size="8" font-weight="700" fill="#15803D">100% version-controlled &amp; auditable</text>
+
+      <rect x="404" y="218" width="344" height="56" rx="4" fill="#FEF2F2" stroke="#FCA5A5"/>
+      <text x="414" y="234" font-size="8" font-weight="700" fill="#991B1B">Anti-Pattern:</text>
+      <text x="414" y="248" font-size="8" fill="#B91C1C">Never set ANSI mode ad-hoc inside notebook cell #1.</text>
+      <text x="414" y="262" font-size="8" fill="#B91C1C">Ad-hoc settings cause silent configuration drift!</text>
+    </g>
+
+    <!-- Node 7: prove -->
+    <g data-node-id="prove" role="group" tabindex="0" aria-label="Then prove it in the plan">
+      <title data-node-tooltip="true">Then prove it in the plan — Plan suffixes confirm which path actually executed.</title>
+      <rect x="784" y="0" width="368" height="286" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6" filter="url(#nea-shadow)"/>
+      <rect x="796" y="12" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="810" y="31" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">5</text>
+      <text x="834" y="22" font-size="10.5" font-weight="800" fill="#0F766E">5. Prove Execution in Physical Plan</text>
+      <text x="834" y="36" font-size="8.5" fill="#64748B">Validate native operators via df.explain()</text>
+
+      <text x="796" y="58" font-size="8.5" fill="#115E59">Confirm what actually executed on hardware:</text>
+
+      <rect x="796" y="70" width="344" height="140" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+      <text x="806" y="88" font-size="8.5" font-weight="800" fill="#0F766E">Physical Plan Operator Signatures:</text>
+      <text x="806" y="106" font-size="8" font-family="Consolas, monospace" fill="#15803D">✓ FilterTransformer (C++ Native)</text>
+      <text x="806" y="122" font-size="8" font-family="Consolas, monospace" fill="#15803D">✓ ProjectTransformer (C++ Native)</text>
+      <text x="806" y="138" font-size="8" font-family="Consolas, monospace" fill="#15803D">✓ HashAggregateTransformer (Native)</text>
+      <text x="806" y="156" font-size="8" font-family="Consolas, monospace" fill="#DC2626">✗ FilterExec / ProjectExec (JVM Fallback)</text>
+      <text x="806" y="174" font-size="8" fill="#115E59">• Look for `*Transformer` suffixes in query plan</text>
+      <text x="806" y="190" font-size="8" font-weight="700" fill="#0F766E">Presence of Transformer confirms C++ execution</text>
+
+      <rect x="796" y="218" width="344" height="56" rx="4" fill="#F8FAFC" stroke="#E2E8F0"/>
+      <text x="806" y="234" font-size="8" font-weight="700" fill="#334155">Inspection Command:</text>
+      <text x="806" y="248" font-size="8" font-family="Consolas, monospace" fill="#1D4ED8">df.explain(mode="formatted")</text>
+      <text x="806" y="262" font-size="8" fill="#475569">Check Spark Advisor UI for fallback diagnostics.</text>
+    </g>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1170" y="944" text-anchor="end" font-size="9" fill="#94A3B8">Fabric Atlas — Original Infographic, August 2026. Grounded in Microsoft Fabric Native Execution Engine Specs.</text>
+</svg>

@@ -1,229 +1,271 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 800" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="capacity-sku-decision-title capacity-sku-decision-desc" data-diagram-id="capacity-sku-decision">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="capacity-sku-decision-title capacity-sku-decision-desc" data-diagram-id="capacity-sku-decision">
   <title id="capacity-sku-decision-title">Fabric Capacity Sizing: Scale Up, Autoscale Spark, or Split Workloads?</title>
-  <desc id="capacity-sku-decision-desc">A decision tree that starts by asking which workload is driving contention on a capacity. A bursty, unpredictable Spark workload branches toward enabling Autoscale Billing for Spark, which moves that workload to pay-as-you-go and out of the shared CU pool. A workload that&apos;s merely CU-hungry but predictable branches toward evaluating a SKU increase, checked against the Spark vCore and Direct Lake memory ceilings that scale with SKU size, and the F64 licensing threshold. A workload that is fine on CUs but needs isolation from another workload&apos;s throttling risk branches toward splitting across capacities, since throttling is enforced per capacity, not per tenant. A warning node covers the trap of assuming Autoscale Billing still gets bursting and smoothing protection.</desc>
-  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
-       Grounded in capacity claims: F SKU ladder/CU doubling, F64 licensing threshold,
-       Spark vCore = CU x 2 x 3 burst ceiling, Direct Lake memory bound, Autoscale Billing
-       for Spark exception, capacity-level throttling isolation, shared capacity default. -->
+  <desc id="capacity-sku-decision-desc">A decision infographic for Fabric capacity sizing: evaluate root cause of CU contention, then choose between scaling up the F-SKU ladder, enabling Autoscale Billing for Spark, or splitting workloads across capacities for throttling isolation.</desc>
+
   <defs>
-    <linearGradient id="hdrGrad2" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#0B3D5E"/>
-      <stop offset="0.6" stop-color="#12588C"/>
-      <stop offset="1" stop-color="#2A8FD4"/>
+    <!-- Header Gradient -->
+    <linearGradient id="csd-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0E4A68"/>
+      <stop offset="0.5" stop-color="#086375"/>
+      <stop offset="1" stop-color="#0B4F6C"/>
     </linearGradient>
-    <marker id="arrB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#5A6672"/>
+
+    <!-- Lane Gradients -->
+    <linearGradient id="csd-green-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F0FDF4"/>
+      <stop offset="1" stop-color="#DCFCE7"/>
+    </linearGradient>
+    <linearGradient id="csd-amber-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFBEB"/>
+      <stop offset="1" stop-color="#FEF3C7"/>
+    </linearGradient>
+    <linearGradient id="csd-blue-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EFF6FF"/>
+      <stop offset="1" stop-color="#DBEAFE"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="csd-shadow" x="-3%" y="-4%" width="106%" height="110%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="csd-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#15803D"/>
     </marker>
-    <marker id="arrGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#1E8E5A"/>
+    <marker id="csd-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
     </marker>
-    <marker id="arrAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#C17E00"/>
+    <marker id="csd-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
     </marker>
-    <marker id="arrBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#12588C"/>
+    <marker id="csd-arr-dark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0F172A"/>
     </marker>
   </defs>
 
-  <rect width="1180" height="800" fill="#FFFFFF"/>
+  <!-- Background -->
+  <rect width="1200" height="900" fill="#FFFFFF"/>
 
-  <!-- Header -->
-  <rect x="0" y="0" width="1180" height="58" fill="url(#hdrGrad2)"/>
-  <text x="28" y="25" font-size="17" font-weight="700" fill="#FFFFFF">Fabric Capacity Sizing — Scale-Up vs Autoscale vs Split Decision Tree</text>
+  <!-- ========================================================================= -->
+  <!-- TOP BANNER (HERO TITLE)                                                   -->
+  <!-- ========================================================================= -->
+  <rect width="1200" height="64" fill="url(#csd-head)"/>
+  
+  <g data-official-icon="microsoft" data-icon-name="capacity_item_32">
+    <g transform="translate(36, 16) scale(0.9)">
+      <rect width="36" height="36" rx="6" fill="#FFFFFF" fill-opacity="0.15"/>
+      <circle cx="18" cy="18" r="12" fill="#38BDF8"/>
+      <path d="M18 10 L26 24 L10 24 Z" fill="#FFFFFF"/>
+    </g>
+  </g>
+
+  <text x="80" y="34" font-size="20" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">Fabric Capacity Sizing — Scale-Up vs Autoscale vs Split</text>
+  <text x="80" y="52" font-size="11" fill="#CCFBF1">Decision framework for Capacity Unit (CU) exhaustion, bursty workloads, and SLA isolation</text>
+
+  <!-- ========================================================================= -->
+  <!-- ROOT QUESTION CARD (Node 1: contention-question)                          -->
+  <!-- ========================================================================= -->
+  <g data-node-id="contention-question" role="group" tabindex="0" aria-label="What's driving capacity contention?">
+    <title data-node-tooltip="true">What's driving capacity contention? — Root question: identify which workload shape is causing throttling before picking a remedy.</title>
+    <rect x="360" y="80" width="480" height="64" rx="10" fill="#0F172A" stroke="#334155" stroke-width="1.5" filter="url(#csd-shadow)"/>
+    <text x="600" y="104" text-anchor="middle" font-size="13.5" font-weight="800" fill="#FFFFFF">A capacity is showing sustained CU pressure / throttling</text>
+    <text x="600" y="126" text-anchor="middle" font-size="11.5" font-weight="700" fill="#38BDF8">What is the actual workload shape driving contention?</text>
+  </g>
+
+  <!-- Decision Branch Connectors (Above Label Boxes, Zero Overlap) -->
+  <line x1="600" y1="144" x2="600" y2="154" stroke="#0F172A" stroke-width="2"/>
+  <line x1="210" y1="154" x2="990" y2="154" stroke="#0F172A" stroke-width="2"/>
+  <line x1="210" y1="154" x2="210" y2="164" stroke="#0F172A" stroke-width="2" marker-end="url(#csd-arr-dark)"/>
+  <line x1="600" y1="154" x2="600" y2="164" stroke="#0F172A" stroke-width="2" marker-end="url(#csd-arr-dark)"/>
+  <line x1="990" y1="154" x2="990" y2="164" stroke="#0F172A" stroke-width="2" marker-end="url(#csd-arr-dark)"/>
+
+  <!-- Decision Labels -->
+  <rect x="100" y="166" width="220" height="22" rx="4" fill="#E2E8F0" stroke="#CBD5E1"/>
+  <text x="210" y="181" text-anchor="middle" font-size="9" font-weight="700" fill="#334155">Steady / Baseline CU Growth</text>
+
+  <rect x="490" y="166" width="220" height="22" rx="4" fill="#E2E8F0" stroke="#CBD5E1"/>
+  <text x="600" y="181" text-anchor="middle" font-size="9" font-weight="700" fill="#334155">Spiky / Unpredictable Spark Load</text>
+
+  <rect x="870" y="166" width="240" height="22" rx="4" fill="#E2E8F0" stroke="#CBD5E1"/>
+  <text x="990" y="181" text-anchor="middle" font-size="9" font-weight="700" fill="#334155">One Workload Starves Others (SLA Risk)</text>
+
+  <!-- ========================================================================= -->
+  <!-- LANE A: SCALE UP THE SKU (Node 2: sku-scale-branch)                       -->
+  <!-- ========================================================================= -->
   <g data-node-id="sku-scale-branch" role="group" tabindex="0" aria-label="Evaluate a SKU increase">
     <title data-node-tooltip="true">Evaluate a SKU increase — For predictable but genuinely CU-constrained load, move up the doubling F-SKU ladder.</title>
-    <rect x="16.0" y="28.1" width="480.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="28" y="44" font-size="11" fill="#D6EBFB">When to raise the SKU, when to enable autoscale, and when to isolate workloads on a separate capacity</text>
+    <rect x="36" y="198" width="350" height="468" rx="10" fill="url(#csd-green-bg)" stroke="#16A34A" stroke-width="1.6" filter="url(#csd-shadow)"/>
+    <rect x="36" y="198" width="350" height="34" rx="10" fill="#15803D"/>
+    <text x="211" y="220" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">LANE A · SCALE UP THE SKU</text>
+
+    <!-- Trigger Box -->
+    <rect x="52" y="244" width="318" height="96" rx="6" fill="#FFFFFF" stroke="#86EFAC"/>
+    <text x="66" y="264" font-size="10.5" font-weight="800" fill="#15803D">When to Use:</text>
+    <text x="66" y="282" font-size="9" fill="#166534">• Sustained future-usage across ALL workloads</text>
+    <text x="66" y="298" font-size="9" fill="#166534">• Consistent Stage 1/2 throttling thresholds</text>
+    <text x="66" y="314" font-size="9" fill="#166534">• Predictable aggregate growth across teams</text>
+    <text x="66" y="330" font-size="8.5" font-weight="700" fill="#15803D">SKU = CU Count: Each step doubles compute capacity</text>
+
+    <!-- Connector -->
+    <line x1="211" y1="342" x2="211" y2="356" stroke="#16A34A" stroke-width="1.8" marker-end="url(#csd-arr-green)"/>
+
+    <!-- SKU Ladder Card -->
+    <rect x="52" y="360" width="318" height="286" rx="6" fill="#FFFFFF" stroke="#86EFAC"/>
+    <text x="66" y="380" font-size="11" font-weight="800" fill="#15803D">F-SKU Doubling Ladder &amp; Benefits</text>
+    
+    <g transform="translate(66, 394)">
+      <rect width="70" height="22" rx="3" fill="#DCFCE7"/><text x="35" y="15" text-anchor="middle" font-size="8.5" font-weight="800" fill="#15803D">F2 ➔ F32</text>
+      <text x="80" y="15" font-size="8.5" fill="#166534">Dev/Test &amp; Departmental</text>
+    </g>
+    <g transform="translate(66, 422)">
+      <rect width="70" height="22" rx="3" fill="#FEF08A" stroke="#CA8A04"/><text x="35" y="15" text-anchor="middle" font-size="8.5" font-weight="800" fill="#854D0E">F64</text>
+      <text x="80" y="15" font-size="8.5" font-weight="700" fill="#854D0E">Free-viewer license threshold</text>
+    </g>
+    <g transform="translate(66, 450)">
+      <rect width="70" height="22" rx="3" fill="#DCFCE7"/><text x="35" y="15" text-anchor="middle" font-size="8.5" font-weight="800" fill="#15803D">F128 ➔ F2048</text>
+      <text x="80" y="15" font-size="8.5" fill="#166534">Enterprise Scale Data Mesh</text>
+    </g>
+
+    <text x="66" y="494" font-size="10" font-weight="800" fill="#15803D">Downstream Multiplier Effects:</text>
+    <text x="66" y="512" font-size="8.5" fill="#166534">• <tspan font-weight="700">Spark vCore Ceiling:</tspan> CU × 2 × 3 burst cap</text>
+    <text x="66" y="528" font-size="8.5" fill="#166534">  F64 (384 vCores) ➔ F128 (768 vCores)</text>
+    <text x="66" y="546" font-size="8.5" fill="#166534">• <tspan font-weight="700">Direct Lake RAM Limit:</tspan> Memory cap rises</text>
+    <text x="66" y="562" font-size="8.5" fill="#166534">  Prevents cold paging &amp; DirectQuery fallbacks</text>
+    <text x="66" y="580" font-size="8.5" fill="#166534">• <tspan font-weight="700">Smoothing Buffer:</tspan> Larger headroom absorbing</text>
+    <text x="66" y="594" font-size="8.5" fill="#166534">  transient 24h background ETL spikes</text>
+    <text x="66" y="626" font-size="8" font-weight="700" fill="#15803D">✓ Instant SKU scaling via Azure Portal with zero downtime</text>
   </g>
 
-  <!-- ═══════════ ROOT QUESTION ═══════════ -->
-  <rect x="430" y="76" width="320" height="46" rx="8" fill="#12325A"/>
-  <text x="590" y="96" text-anchor="middle" font-size="12" font-weight="700" fill="#FFFFFF">A capacity is showing sustained pressure —</text>
-  <text x="590" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#FFFFFF">what's the root cause?</text>
-
-  <!-- three branches down -->
-  <line x1="590" y1="122" x2="590" y2="140" stroke="#5A6672" stroke-width="1.4"/>
-  <line x1="230" y1="140" x2="950" y2="140" stroke="#5A6672" stroke-width="1.4"/>
-  <line x1="230" y1="140" x2="230" y2="158" stroke="#5A6672" stroke-width="1.4" marker-end="url(#arrB)"/>
-  <line x1="590" y1="140" x2="590" y2="158" stroke="#5A6672" stroke-width="1.4" marker-end="url(#arrB)"/>
-  <line x1="950" y1="140" x2="950" y2="158" stroke="#5A6672" stroke-width="1.4" marker-end="url(#arrB)"/>
-
-  <!-- Branch labels -->
-  <text x="230" y="153" text-anchor="middle" font-size="9.5" font-weight="600" fill="#5A6672">steady baseline growth</text>
-  <text x="590" y="153" text-anchor="middle" font-size="9.5" font-weight="600" fill="#5A6672">spiky / unpredictable Spark load</text>
-  <text x="950" y="153" text-anchor="middle" font-size="9.5" font-weight="600" fill="#5A6672">one workload starves others</text>
-
-  <!-- ═══════════ LANE 1: SCALE UP SKU ═══════════ -->
-  <rect x="40" y="166" width="380" height="20" rx="4" fill="#1E8E5A"/>
-  <text x="230" y="180" text-anchor="middle" font-size="10.5" font-weight="700" fill="#FFFFFF">LANE A — SCALE UP THE SKU</text>
-
-  <rect x="40" y="194" width="380" height="90" rx="8" fill="#EAF6EF" stroke="#8FCBA8"/>
-  <text x="56" y="212" font-size="10.5" font-weight="600" fill="#0F5C36">Use when: sustained future-usage consumption</text>
-  <text x="56" y="226" font-size="10.5" font-weight="600" fill="#0F5C36">is trending past Stage 0/1 thresholds routinely,</text>
-  <text x="56" y="240" font-size="10.5" font-weight="600" fill="#0F5C36">across most workloads on the capacity — not one</text>
-  <text x="56" y="254" font-size="10.5" font-weight="600" fill="#0F5C36">bursty job.</text>
-  <text x="56" y="272" font-size="9.5" fill="#1F4A38">SKU number = CU count; each step doubles compute (F64→F128 = 2x CUs).</text>
-
-  <line x1="230" y1="284" x2="230" y2="300" stroke="#1E8E5A" stroke-width="1.4" marker-end="url(#arrGreen)"/>
-
-  <rect x="40" y="300" width="380" height="112" rx="8" fill="#FFFFFF" stroke="#8FCBA8"/>
-  <text x="56" y="318" font-size="10.5" font-weight="700" fill="#0F5C36">Ripple effects of raising the SKU:</text>
-  <text x="56" y="335" font-size="9.5" fill="#33413A">• Spark vCore ceiling rises: CU × 2 × 3 burst.</text>
-  <text x="56" y="349" font-size="9.5" fill="#33413A">  F64→F128 raises the vCore cap 384 → 768.</text>
-  <g data-node-id="sizing-checklist" role="group" tabindex="0" aria-label="Sizing checklist: three ceilings">
-    <title data-node-tooltip="true">Sizing checklist: three ceilings — Check the Spark vCore ceiling, Direct Lake memory ceiling, and F64 licensing threshold before finalizing a SKU.</title>
-    <rect x="44.0" y="352.2" width="277.5" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="56" y="366" font-size="9.5" fill="#33413A">• Direct Lake model memory ceiling rises too —</text>
-  </g>
-  <text x="56" y="380" font-size="9.5" fill="#33413A">  fewer cold-read fallbacks on large models.</text>
-  <text x="56" y="397" font-size="9.5" fill="#33413A">• Crossing F64 also flips the free-license viewer</text>
-  <text x="56" y="411" font-size="9.5" fill="#c17e00" font-weight="600">  threshold — a licensing side-effect, not just compute.</text>
-
-  <!-- Watch out box lane A -->
-  <rect x="40" y="422" width="380" height="46" rx="6" fill="#FFF8EC" stroke="#E8C070"/>
-  <text x="56" y="438" font-size="9.5" font-weight="700" fill="#7A4A00">Watch out:</text>
-  <text x="56" y="452" font-size="9" fill="#5C3A00">Doubling is binary — no "F96" between F64 and F128.</text>
-  <text x="56" y="463" font-size="9" fill="#5C3A00">Cost doubles even if you only needed 20% more headroom.</text>
-
-  <!-- ═══════════ LANE 2: AUTOSCALE / EXCEPTIONS ═══════════ -->
-  <rect x="400" y="166" width="380" height="20" rx="4" fill="#C17E00"/>
-  <text x="590" y="180" text-anchor="middle" font-size="10.5" font-weight="700" fill="#FFFFFF">LANE B — AUTOSCALE / SMOOTHING EXCEPTIONS</text>
-
-  <rect x="400" y="194" width="380" height="90" rx="8" fill="#FFF8EC" stroke="#E8C070"/>
-  <text x="416" y="212" font-size="10.5" font-weight="600" fill="#7A4A00">Use when: the pressure is a specific, spiky Spark</text>
-  <text x="416" y="226" font-size="10.5" font-weight="600" fill="#7A4A00">workload competing with steady interactive traffic</text>
-  <text x="416" y="240" font-size="10.5" font-weight="600" fill="#7A4A00">for the same fixed CU pool — not an overall capacity</text>
-  <text x="416" y="254" font-size="10.5" font-weight="600" fill="#7A4A00">shortfall.</text>
+  <!-- ========================================================================= -->
+  <!-- LANE B: AUTOSCALE SPARK (Nodes 3 & 4: autoscale-spark-branch & warning)   -->
+  <!-- ========================================================================= -->
   <g data-node-id="autoscale-spark-branch" role="group" tabindex="0" aria-label="Enable Autoscale Billing for Spark">
     <title data-node-tooltip="true">Enable Autoscale Billing for Spark — Move bursty, unpredictable Spark usage to pay-as-you-go, outside the shared smoothed CU pool.</title>
-    <rect x="404.0" y="258.2" width="459.3" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="416" y="272" font-size="9.5" fill="#5C3A00">Enable Autoscale Billing for Spark: pay-as-you-go, decoupled from the SKU pool.</text>
+    <rect x="424" y="198" width="352" height="286" rx="10" fill="url(#csd-amber-bg)" stroke="#D97706" stroke-width="1.6" filter="url(#csd-shadow)"/>
+    <rect x="424" y="198" width="352" height="34" rx="10" fill="#D97706"/>
+    <text x="600" y="220" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">LANE B · AUTOSCALE SPARK</text>
+
+    <!-- Trigger Box -->
+    <rect x="440" y="244" width="320" height="96" rx="6" fill="#FFFFFF" stroke="#FDE68A"/>
+    <text x="454" y="264" font-size="10.5" font-weight="800" fill="#B45309">When to Use:</text>
+    <text x="454" y="282" font-size="9" fill="#92400E">• Spark notebooks / ad-hoc jobs spike unpredictably</text>
+    <text x="454" y="298" font-size="9" fill="#92400E">• Capacity is otherwise right-sized for reports</text>
+    <text x="454" y="314" font-size="9" fill="#92400E">• Want pay-as-you-go isolation for burst compute</text>
+    <text x="454" y="330" font-size="8.5" font-weight="700" fill="#B45309">Isolates Spark from shared smoothed CU consumption pool</text>
+
+    <line x1="600" y1="342" x2="600" y2="356" stroke="#D97706" stroke-width="1.8" marker-end="url(#csd-arr-amber)"/>
+
+    <!-- How it works box -->
+    <rect x="440" y="360" width="320" height="112" rx="6" fill="#FFFFFF" stroke="#FDE68A"/>
+    <text x="454" y="380" font-size="11" font-weight="800" fill="#B45309">Autoscale Billing Mechanics</text>
+    <text x="454" y="398" font-size="9" fill="#92400E">• Spark usage switches to Azure PAYG billing</text>
+    <text x="454" y="414" font-size="9" fill="#92400E">• Stops drawing from capacity's fixed CU quota</text>
+    <text x="454" y="430" font-size="9" fill="#92400E">• Spark jobs spin up dynamic nodes on-demand</text>
+    <text x="454" y="446" font-size="9" fill="#92400E">• Power BI reports / Warehouse remain 100% protected</text>
+    <text x="454" y="462" font-size="8.5" font-weight="700" fill="#B45309">Protects capacity SLA without permanent SKU cost hike</text>
   </g>
 
-  <line x1="590" y1="284" x2="590" y2="300" stroke="#C17E00" stroke-width="1.4" marker-end="url(#arrAmber)"/>
-
-  <rect x="400" y="300" width="380" height="112" rx="8" fill="#FFFFFF" stroke="#E8C070"/>
-  <text x="416" y="318" font-size="10.5" font-weight="700" fill="#7A4A00">What changes under Autoscale Billing:</text>
-  <text x="416" y="335" font-size="9.5" fill="#33413A">• Bursting and smoothing NO LONGER apply to Spark —</text>
-  <text x="416" y="349" font-size="9.5" fill="#33413A">  it moves fully to pay-as-you-go billing.</text>
-  <text x="416" y="366" font-size="9.5" fill="#33413A">• Spark usage stops competing with the interactive</text>
-  <text x="416" y="380" font-size="9.5" fill="#33413A">  CU pool that reports/warehouse queries depend on.</text>
-  <text x="416" y="397" font-size="9.5" fill="#33413A">• Non-Spark workloads keep standard bursting +</text>
-  <text x="416" y="411" font-size="9.5" fill="#33413A">  smoothing on the base SKU, unaffected.</text>
-
-  <rect x="400" y="422" width="380" height="46" rx="6" fill="#FDECEA" stroke="#E0A0A0"/>
-  <text x="416" y="438" font-size="9.5" font-weight="700" fill="#7A0000">Watch out:</text>
-  <text x="416" y="452" font-size="9" fill="#5C0000">Teams expecting the standard smoothing safety net for</text>
-  <text x="416" y="463" font-size="9" fill="#5C0000">Spark are surprised by open-ended PAYG billing.</text>
-
-  <!-- ═══════════ LANE 3: SPLIT ACROSS CAPACITIES ═══════════ -->
-  <rect x="760" y="166" width="380" height="20" rx="4" fill="#12588C"/>
-  <text x="950" y="180" text-anchor="middle" font-size="10.5" font-weight="700" fill="#FFFFFF">LANE C — SPLIT ACROSS CAPACITIES</text>
-
-  <rect x="760" y="194" width="380" height="90" rx="8" fill="#EAF3FB" stroke="#8FBFE0"/>
-  <text x="776" y="212" font-size="10.5" font-weight="600" fill="#0B3D5E">Use when: a noisy or experimental workload on a</text>
-  <text x="776" y="226" font-size="10.5" font-weight="600" fill="#0B3D5E">shared capacity is throttling or delaying an unrelated,</text>
-  <text x="776" y="240" font-size="10.5" font-weight="600" fill="#0B3D5E">SLA-bound workload — raising the SKU would just give</text>
-  <text x="776" y="254" font-size="10.5" font-weight="600" fill="#0B3D5E">both workloads more rope.</text>
-  <g data-node-id="throttling-boundary" role="group" tabindex="0" aria-label="Per-capacity throttling boundary">
-    <title data-node-tooltip="true">Per-capacity throttling boundary — The four-stage throttling ladder (overage, delay, rejection, hard rejection) applies independently to each capacity.</title>
-    <rect x="764.0" y="258.2" width="404.2" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="776" y="272" font-size="9.5" fill="#1B4A6B">Throttling is enforced per-capacity, not per-tenant — real isolation.</text>
+  <!-- Autoscale Warning (Node 4: autoscale-smoothing-warning) -->
+  <g data-node-id="autoscale-smoothing-warning" role="group" tabindex="0" aria-label="Trap: Autoscale Spark drops bursting and smoothing">
+    <title data-node-tooltip="true">Trap: Autoscale Spark drops bursting and smoothing — When enabled, Spark usage switches to pay-as-you-go and stops drawing from the smoothed CU pool.</title>
+    <rect x="424" y="496" width="352" height="170" rx="10" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.6" filter="url(#csd-shadow)"/>
+    <rect x="432" y="504" width="130" height="20" rx="4" fill="#DC2626"/>
+    <text x="497" y="518" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">CRITICAL TRAP</text>
+    <text x="432" y="542" font-size="10.5" font-weight="800" fill="#991B1B">Bypasses Bursting &amp; Smoothing</text>
+    <text x="432" y="560" font-size="8.5" fill="#B91C1C">• Autoscale Billing Spark does NOT smooth over 24h.</text>
+    <text x="432" y="574" font-size="8.5" fill="#B91C1C">• Billed immediately per second of PAYG execution.</text>
+    <text x="432" y="590" font-size="8.5" fill="#B91C1C">• Can lead to unexpected Azure invoice charges</text>
+    <text x="432" y="604" font-size="8.5" fill="#B91C1C">  if run on runaway unoptimized queries.</text>
+    <text x="432" y="628" font-size="8.5" font-weight="700" fill="#15803D">Remedy: Set max vCore autoscale limits on Spark pool.</text>
+    <text x="432" y="646" font-size="8" fill="#475569">Tracked in capacity governance policies.</text>
   </g>
 
-  <line x1="950" y1="284" x2="950" y2="300" stroke="#12588C" stroke-width="1.4" marker-end="url(#arrBlue)"/>
+  <!-- ========================================================================= -->
+  <!-- LANE C: SPLIT CAPACITIES & BOUNDARY (Nodes 5 & 6)                         -->
+  <!-- ========================================================================= -->
+  <g data-node-id="split-capacity-branch" role="group" tabindex="0" aria-label="Split across separate capacities">
+    <title data-node-tooltip="true">Split across separate capacities — When one workload's throttling threatens another's SLA, separate them since throttling is enforced per capacity.</title>
+    <rect x="814" y="198" width="350" height="260" rx="10" fill="url(#csd-blue-bg)" stroke="#2563EB" stroke-width="1.6" filter="url(#csd-shadow)"/>
+    <rect x="814" y="198" width="350" height="34" rx="10" fill="#2563EB"/>
+    <text x="989" y="220" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">LANE C · SPLIT CAPACITIES</text>
 
-  <rect x="760" y="300" width="380" height="112" rx="8" fill="#FFFFFF" stroke="#8FBFE0"/>
-  <text x="776" y="318" font-size="10.5" font-weight="700" fill="#0B3D5E">How the split plays out:</text>
-  <text x="776" y="335" font-size="9.5" fill="#33413A">• Provision a second F-SKU capacity; reassign the</text>
-  <text x="776" y="349" font-size="9.5" fill="#33413A">  noisy workspace to it (workspaces can move anytime).</text>
-  <text x="776" y="366" font-size="9.5" fill="#33413A">• A saturated capacity only affects workspaces</text>
-  <text x="776" y="380" font-size="9.5" fill="#33413A">  assigned to it — the other capacity is untouched.</text>
-  <text x="776" y="397" font-size="9.5" fill="#33413A">• New workspaces default to the tenant's shared</text>
-  <text x="776" y="411" font-size="9.5" fill="#33413A">  capacity until explicitly reassigned to an F SKU.</text>
+    <!-- Trigger Box -->
+    <rect x="830" y="244" width="318" height="96" rx="6" fill="#FFFFFF" stroke="#93C5FD"/>
+    <text x="844" y="264" font-size="10.5" font-weight="800" fill="#1E40AF">When to Use:</text>
+    <text x="844" y="282" font-size="9" fill="#1E3A8A">• ETL throttling risks breaking Executive BI dashboards</text>
+    <text x="844" y="298" font-size="9" fill="#1E3A8A">• Multi-department chargeback &amp; cost governance</text>
+    <text x="844" y="314" font-size="9" fill="#1E3A8A">• Production SLAs require 100% hard isolation</text>
+    <text x="844" y="330" font-size="8.5" font-weight="700" fill="#1E40AF">Fabric throttling is strictly PER-CAPACITY, never per-tenant</text>
 
-  <rect x="760" y="422" width="380" height="46" rx="6" fill="#FFF8EC" stroke="#E8C070"/>
-  <text x="776" y="438" font-size="9.5" font-weight="700" fill="#7A4A00">Watch out:</text>
-  <text x="776" y="452" font-size="9" fill="#5C3A00">Compound throttling protects fan-out chains within ONE</text>
-  <text x="776" y="463" font-size="9" fill="#5C3A00">capacity, but a chain crossing two capacities is evaluated on each.</text>
+    <line x1="989" y1="342" x2="989" y2="356" stroke="#2563EB" stroke-width="1.8" marker-end="url(#csd-arr-blue)"/>
 
-  <!-- ═══════════ CONVERGENCE — SIZING GATE ═══════════ -->
-  <line x1="230" y1="468" x2="230" y2="486" stroke="#5A6672" stroke-width="1.2"/>
-  <line x1="590" y1="468" x2="590" y2="486" stroke="#5A6672" stroke-width="1.2"/>
-  <line x1="950" y1="468" x2="950" y2="486" stroke="#5A6672" stroke-width="1.2"/>
-  <line x1="230" y1="486" x2="950" y2="486" stroke="#5A6672" stroke-width="1.2"/>
-  <line x1="590" y1="486" x2="590" y2="502" stroke="#5A6672" stroke-width="1.4" marker-end="url(#arrB)"/>
+    <!-- Split Topology Card -->
+    <rect x="830" y="360" width="318" height="88" rx="6" fill="#FFFFFF" stroke="#93C5FD"/>
+    <text x="844" y="380" font-size="10.5" font-weight="800" fill="#1E40AF">Workload Split Architecture</text>
+    
+    <rect x="840" y="390" width="140" height="48" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+    <text x="910" y="408" text-anchor="middle" font-size="9" font-weight="800" fill="#1E40AF">Capacity 1: BI (F64)</text>
+    <text x="910" y="424" text-anchor="middle" font-size="8" fill="#1E3A8A">Protected SLA Uptime</text>
 
-  <text x="590" y="522" text-anchor="middle" font-size="11" font-weight="700" fill="#12325A">Before committing: sizing checklist (applies to any lane)</text>
-
-  <!-- 4-column sizing checklist -->
-  <rect x="40" y="536" width="270" height="130" rx="8" fill="#F5F7FA" stroke="#D6DEE6"/>
-  <text x="56" y="554" font-size="10" font-weight="700" fill="#12325A">1. SKU → CU → Spark vCores</text>
-  <text x="56" y="570" font-size="9" fill="#33413A">Each CU = 2 Spark vCores × 3x burst.</text>
-  <text x="56" y="583" font-size="9" fill="#33413A">F64 = 384 burst vCores / 128 sustained.</text>
-  <text x="56" y="600" font-size="9" fill="#33413A">A custom Spark pool is capped at this</text>
-  <text x="56" y="613" font-size="9" fill="#33413A">ceiling — raising the SKU is the only way</text>
-  <text x="56" y="626" font-size="9" fill="#33413A">to raise a pinned Spark pool's max size.</text>
-  <text x="56" y="646" font-size="8.5" fill="#5A6672" font-style="italic">Check: is Spark pool sizing the real</text>
-  <text x="56" y="657" font-size="8.5" fill="#5A6672" font-style="italic">constraint, not general CU pressure?</text>
-
-  <rect x="326" y="536" width="270" height="130" rx="8" fill="#F5F7FA" stroke="#D6DEE6"/>
-  <text x="342" y="554" font-size="10" font-weight="700" fill="#12325A">2. Direct Lake memory bound</text>
-  <text x="342" y="570" font-size="9" fill="#33413A">SKU sets the max resident column</text>
-  <text x="342" y="583" font-size="9" fill="#33413A">data per Direct Lake model.</text>
-  <text x="342" y="600" font-size="9" fill="#33413A">Undersized SKU → more cold-read</text>
-  <text x="342" y="613" font-size="9" fill="#33413A">fallbacks to OneLake, higher query</text>
-  <text x="342" y="626" font-size="9" fill="#33413A">latency on large semantic models.</text>
-  <text x="342" y="646" font-size="8.5" fill="#5A6672" font-style="italic">Check: are large Direct Lake models</text>
-  <text x="342" y="657" font-size="8.5" fill="#5A6672" font-style="italic">falling back to DirectQuery often?</text>
-
-  <rect x="612" y="536" width="270" height="130" rx="8" fill="#F5F7FA" stroke="#D6DEE6"/>
-  <text x="628" y="554" font-size="10" font-weight="700" fill="#12325A">3. F64 licensing threshold</text>
-  <text x="628" y="570" font-size="9" fill="#33413A">F64+ lets free-license viewers read</text>
-  <text x="628" y="583" font-size="9" fill="#33413A">content via workspace viewer role.</text>
-  <text x="628" y="600" font-size="9" fill="#33413A">Below F64, every viewer needs Pro</text>
-  <text x="628" y="613" font-size="9" fill="#33413A">or PPU — a licensing cost, not a</text>
-  <text x="628" y="626" font-size="9" fill="#33413A">compute one.</text>
-  <text x="628" y="646" font-size="8.5" fill="#5A6672" font-style="italic">Check: does scaling cross F64 and</text>
-  <text x="628" y="657" font-size="8.5" fill="#5A6672" font-style="italic">change the licensing model tenant-wide?</text>
-
-  <rect x="898" y="536" width="242" height="130" rx="8" fill="#F5F7FA" stroke="#D6DEE6"/>
-  <text x="914" y="554" font-size="10" font-weight="700" fill="#12325A">4. Workload isolation</text>
-  <text x="914" y="570" font-size="9" fill="#33413A">Background ops (warehouse) get</text>
-  <text x="914" y="583" font-size="9" fill="#33413A">24h smoothing; interactive ops get</text>
-  <text x="914" y="600" font-size="9" fill="#33413A">5–64 min. Mixed SLA workloads on</text>
-  <text x="914" y="613" font-size="9" fill="#33413A">one capacity compete asymmetrically.</text>
-  <text x="914" y="646" font-size="8.5" fill="#5A6672" font-style="italic">Check: would isolating the workload</text>
-  <text x="914" y="657" font-size="8.5" fill="#5A6672" font-style="italic">solve it cheaper than scaling up?</text>
-
-  <!-- ═══════════ LEGEND ═══════════ -->
-  <rect x="40" y="682" width="1100" height="96" rx="8" fill="#F3F2F1" stroke="#DDE3E9"/>
-  <text x="56" y="700" font-size="10.5" font-weight="700" fill="#12325A">Legend</text>
-
-  <rect x="56" y="710" width="14" height="14" rx="3" fill="#1E8E5A"/>
-  <text x="76" y="721" font-size="9.5" fill="#33413A">Lane A — vertical scale (raise SKU): affects all workloads, doubles cost per step</text>
-
-  <rect x="56" y="730" width="14" height="14" rx="3" fill="#C17E00"/>
-  <g data-node-id="autoscale-smoothing-warning" role="group" tabindex="0" aria-label="Trap: Autoscale Billing drops smoothing protection">
-    <title data-node-tooltip="true">Trap: Autoscale Billing drops smoothing protection — Bursting and smoothing stop applying once Autoscale Billing for Spark is enabled — a real billing-behavior surprise.</title>
-    <rect x="64.0" y="727.2" width="475.8" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="76" y="741" font-size="9.5" fill="#33413A">Lane B — autoscale exception: decouples Spark billing, does not raise the base SKU</text>
+    <rect x="996" y="390" width="140" height="48" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="1066" y="408" text-anchor="middle" font-size="9" font-weight="800" fill="#0F766E">Capacity 2: ETL (F32)</text>
+    <text x="1066" y="424" text-anchor="middle" font-size="8" fill="#115E59">Heavy Batch &amp; Spark</text>
   </g>
 
-  <rect x="440" y="710" width="14" height="14" rx="3" fill="#12588C"/>
-  <g data-node-id="split-capacity-branch" role="group" tabindex="0" aria-label="Split workloads across capacities">
-    <title data-node-tooltip="true">Split workloads across capacities — Isolate a bursty or risky workload onto its own capacity so its throttling never reaches another workload&apos;s SLA.</title>
-    <rect x="448.0" y="707.2" width="448.3" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="460" y="721" font-size="9.5" fill="#33413A">Lane C — horizontal split: isolates a workload onto its own capacity boundary</text>
+  <!-- Throttling Boundary Node (Node 6: throttling-boundary) -->
+  <g data-node-id="throttling-boundary" role="group" tabindex="0" aria-label="Why splitting works: per-capacity throttling boundary">
+    <title data-node-tooltip="true">Why splitting works: per-capacity throttling boundary — Throttling is enforced per capacity, not per tenant, so an isolated capacity's saturation never touches a different capacity's budget.</title>
+    <rect x="814" y="470" width="350" height="196" rx="10" fill="#F8FAFC" stroke="#64748B" stroke-width="1.6" filter="url(#csd-shadow)"/>
+    <rect x="814" y="470" width="350" height="30" rx="10" fill="#475569"/>
+    <text x="989" y="490" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">PER-CAPACITY THROTTLING ISOLATION</text>
+
+    <rect x="830" y="512" width="318" height="142" rx="6" fill="#FFFFFF" stroke="#CBD5E1"/>
+    <text x="844" y="532" font-size="10" font-weight="800" fill="#334155">OneLake Shortcuts &amp; Blast Radius:</text>
+    <text x="844" y="550" font-size="8.5" fill="#475569">• <tspan font-weight="700">Zero Data Duplication:</tspan> Both capacities query same</text>
+    <text x="844" y="564" font-size="8.5" fill="#475569">  OneLake tables via Shortcuts with zero cross-tenant lag</text>
+    <text x="844" y="582" font-size="8.5" fill="#475569">• <tspan font-weight="700">Hard Isolation:</tspan> Heavy batch overages on Cap 2</text>
+    <text x="844" y="596" font-size="8.5" fill="#475569">  NEVER cause interactive delays on Cap 1</text>
+    <text x="844" y="618" font-size="8" font-weight="700" fill="#0F766E">✓ Independent scaling, pause/resume, and cost allocation</text>
+    <text x="844" y="636" font-size="8" fill="#64748B">Sourced from Fabric Entra Tenancy &amp; Capacity Isolation.</text>
   </g>
 
-  <text x="440" y="741" font-size="9.5" fill="#5A6672">All three levers are non-exclusive — large tenants typically combine them per workload.</text>
+  <!-- ========================================================================= -->
+  <!-- BOTTOM SIZING CHECKLIST (Node 7: sizing-checklist)                        -->
+  <!-- ========================================================================= -->
+  <g data-node-id="sizing-checklist" role="group" tabindex="0" aria-label="Sizing checklist: three ceilings">
+    <title data-node-tooltip="true">Sizing checklist: three ceilings — Check the Spark vCore ceiling, Direct Lake memory ceiling, and F64 licensing threshold before finalizing a SKU.</title>
+    <rect x="36" y="684" width="1128" height="166" rx="10" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.4" filter="url(#csd-shadow)"/>
+    <rect x="36" y="684" width="1128" height="30" rx="10" fill="#334155"/>
+    <text x="600" y="704" text-anchor="middle" font-size="11.5" font-weight="800" fill="#FFFFFF" letter-spacing="0.8px">FINAL SIZING CHECKLIST · 3 HARD ARCHITECTURAL CEILINGS</text>
 
-  <g data-node-id="contention-question" role="group" tabindex="0" aria-label="What&apos;s driving capacity contention?">
-    <title data-node-tooltip="true">What&apos;s driving capacity contention? — Root question: identify which workload shape is causing throttling before picking a remedy.</title>
-    <rect x="44.0" y="749.0" width="480.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="56" y="762" font-size="9" fill="#5A6672">Distinct from the throttling/smoothing diagram: this tree answers "which lever do I pull," not "how does enforcement stage."</text>
+    <!-- Checklist 1 -->
+    <g transform="translate(56, 724)">
+      <circle cx="16" cy="16" r="14" fill="#DCFCE7" stroke="#16A34A"/><text x="16" y="21" text-anchor="middle" font-size="11" font-weight="800" fill="#15803D">1</text>
+      <text x="38" y="16" font-size="11" font-weight="800" fill="#15803D">Spark vCore Burst Limit</text>
+      <text x="38" y="32" font-size="8.5" fill="#166534">Max vCores = CU × 2 × 3 (e.g. F64 = 384 vCores, F128 = 768 vCores).</text>
+      <text x="38" y="46" font-size="8.5" fill="#166534">Jobs requiring more cores must use autoscale pool or larger SKU.</text>
+    </g>
+
+    <!-- Checklist 2 -->
+    <g transform="translate(436, 724)">
+      <circle cx="16" cy="16" r="14" fill="#EFF6FF" stroke="#2563EB"/><text x="16" y="21" text-anchor="middle" font-size="11" font-weight="800" fill="#1E40AF">2</text>
+      <text x="38" y="16" font-size="11" font-weight="800" fill="#1E40AF">Direct Lake Memory Cap</text>
+      <text x="38" y="32" font-size="8.5" fill="#1E3A8A">Resident model columns cannot exceed capacity SKU RAM quota.</text>
+      <text x="38" y="46" font-size="8.5" fill="#1E3A8A">Breaching cap causes cold-read DirectQuery fallbacks.</text>
+    </g>
+
+    <!-- Checklist 3 -->
+    <g transform="translate(816, 724)">
+      <circle cx="16" cy="16" r="14" fill="#FEF3C7" stroke="#D97706"/><text x="16" y="21" text-anchor="middle" font-size="11" font-weight="800" fill="#B45309">3</text>
+      <text x="38" y="16" font-size="11" font-weight="800" fill="#B45309">F64 Free-Viewer Threshold</text>
+      <text x="38" y="32" font-size="8.5" fill="#92400E">Broad viewing with free Fabric licenses requires F64 or larger.</text>
+      <text x="38" y="46" font-size="8.5" fill="#92400E">SKUs &lt; F64 require Pro/PPU licenses for every report viewer.</text>
+    </g>
+
+    <text x="600" y="834" text-anchor="middle" font-size="9" font-weight="700" fill="#475569">Fabric Atlas — Original Decision Infographic, August 2026. Grounded in Microsoft Fabric Capacity Architecture.</text>
   </g>
 
-  <text x="1156" y="792" text-anchor="end" font-size="9" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset.</text>
+  <!-- Footer Provenance Note -->
+  <text x="1160" y="880" text-anchor="end" font-size="8.5" fill="#94A3B8">Fabric Atlas Governance &amp; Capacity Specifications</text>
 </svg>

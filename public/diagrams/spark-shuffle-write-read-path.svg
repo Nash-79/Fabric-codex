@@ -1,0 +1,264 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 960" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-shuffle-write-read-path-title spark-shuffle-write-read-path-desc" data-diagram-id="spark-shuffle-write-read-path">
+  <title id="spark-shuffle-write-read-path-title">Spark shuffle internals: the write path, the read path, and why it pins executors</title>
+  <desc id="spark-shuffle-write-read-path-desc">Spark shuffle internals in Microsoft Fabric: Wide transformation stage cuts, Map-side data and index file writes to local disk, driver MapOutputTracker cataloging, reduce-side parallel block fetching, executor pinning, FetchFailedException recompute, and the three mitigation strategies.</desc>
+
+  <defs>
+    <!-- Header Gradient -->
+    <linearGradient id="shf-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4A2170"/>
+      <stop offset="0.5" stop-color="#7C3AAD"/>
+      <stop offset="1" stop-color="#9333EA"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="shf-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#4A2170" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="shf-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
+    </marker>
+    <marker id="shf-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="shf-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+
+    <!-- Official Microsoft Notebook Item Icon Gradients -->
+    <linearGradient id="shf-nb-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="shf-nb-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="shf-nb-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="shf-nb-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+  </defs>
+
+  <!-- Canvas Base -->
+  <rect width="1200" height="960" fill="#FAF5FF"/>
+
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#shf-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#shf-nb-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#shf-nb-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#shf-nb-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#shf-nb-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#shf-nb-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#shf-nb-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Spark Shuffle Internals — Write Path, Read Path &amp; Executor Pinning</text>
+  <text x="40" y="64" font-size="12" fill="#E9D8FD">Stage boundaries ➔ Map data/index disk writes ➔ MapOutputTracker ➔ Parallel reduce fetches ➔ The 3 scale-down solutions</text>
+
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D8FD"/>
+    <circle cx="20" cy="15" r="5" fill="#7C3AAD"/><text x="32" y="19" fill="#4C1D95" font-weight="600">Lane 1: Map-Side Write Path</text>
+    <circle cx="250" cy="15" r="5" fill="#2563EB"/><text x="262" y="19" fill="#1E40AF" font-weight="600">Lane 2: Reduce Fetch &amp; Pinning</text>
+    <circle cx="500" cy="15" r="5" fill="#059669"/><text x="512" y="19" fill="#065F46" font-weight="600">Lane 3: The 3 Scale-Down Solutions</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 1: MAP-SIDE WRITE PATH (WIDE ➔ MAPWRITE ➔ DISK ➔ TRACKER)           -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="240" rx="14" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
+  <rect x="56" y="156" width="370" height="20" rx="10" fill="#EDE9FE"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#4C1D95" letter-spacing="1px">LANE 1: MAP-SIDE SHUFFLE WRITE &amp; METADATA REGISTRATION</text>
+
+  <!-- Node: wide -->
+  <g data-node-id="wide" role="group" tabindex="0" aria-label="Wide transformation">
+    <title data-node-tooltip="true">Wide transformation — A wide transformation forces redistribution and starts a new stage.</title>
+    <rect x="56" y="184" width="245" height="186" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#shf-shadow)"/>
+    <rect x="68" y="194" width="90" height="16" rx="8" fill="#EDE9FE"/><text x="113" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">EXCHANGE CUT</text>
+    <text x="68" y="228" font-size="13" font-weight="700" fill="#4C1D95">1 · Wide Operation</text>
+    <text x="68" y="250" font-size="9.5" fill="#5B21B6">• groupBy, join, distinct, repartition</text>
+    <text x="68" y="268" font-size="9.5" fill="#5B21B6">• Output partition depends on every</text>
+    <text x="68" y="282" font-size="9.5" fill="#5B21B6">  input partition (all-to-all shuffle)</text>
+    <text x="68" y="302" font-size="9.5" fill="#5B21B6">• DAGScheduler cuts a new stage</text>
+    <text x="68" y="322" font-size="8.5" fill="#7C3AAD">Config: <tspan font-family="monospace">spark.sql.shuffle.partitions</tspan></text>
+    <rect x="236" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="262" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Connector: wide -> mapwrite -->
+  <path d="M 301 277 H 345" stroke="#7C3AAD" stroke-width="2.2" fill="none" marker-end="url(#shf-arr-purple)"/>
+
+  <!-- Node: mapwrite -->
+  <g data-node-id="mapwrite" role="group" tabindex="0" aria-label="Map task writes its output">
+    <title data-node-tooltip="true">Map task writes its output — Each map task writes one data file and one index file of partition offsets.</title>
+    <rect x="345" y="184" width="250" height="186" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#shf-shadow)"/>
+    <rect x="357" y="194" width="100" height="16" rx="8" fill="#EDE9FE"/><text x="407" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">MAP TASK EMIT</text>
+    <text x="357" y="228" font-size="13" font-weight="700" fill="#4C1D95">2 · Shuffle Writer</text>
+    <text x="357" y="250" font-size="9.5" fill="#5B21B6">• Emits <tspan font-weight="700">1 Data File</tspan> per task containing</text>
+    <text x="357" y="264" font-size="9.5" fill="#5B21B6">  records sorted by target partition</text>
+    <text x="357" y="284" font-size="9.5" fill="#5B21B6">• Emits <tspan font-weight="700">1 Index File</tspan> per task holding</text>
+    <text x="357" y="298" font-size="9.5" fill="#5B21B6">  exact byte offsets for every bucket</text>
+    <text x="357" y="322" font-size="8.5" fill="#7C3AAD">Single sequential write per task</text>
+    <rect x="530" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="556" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Connector: mapwrite -> disk -->
+  <path d="M 595 277 H 639" stroke="#7C3AAD" stroke-width="2.2" fill="none" marker-end="url(#shf-arr-purple)"/>
+
+  <!-- Node: disk -->
+  <g data-node-id="disk" role="group" tabindex="0" aria-label="…to executor-local disk">
+    <title data-node-tooltip="true">…to executor-local disk — Shuffle output is written once to executor-local disk with no replica.</title>
+    <rect x="639" y="184" width="250" height="186" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#shf-shadow)"/>
+    <rect x="651" y="194" width="100" height="16" rx="8" fill="#EDE9FE"/><text x="701" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">LOCAL STORAGE</text>
+    <text x="651" y="228" font-size="13" font-weight="700" fill="#4C1D95">3 · Executor NVMe Disk</text>
+    <text x="651" y="250" font-size="9.5" fill="#5B21B6">• Data lands on local executor disk</text>
+    <text x="651" y="268" font-size="9.5" fill="#5B21B6">• <tspan font-weight="700" fill="#991B1B">No Replication:</tspan> Stored only on the</text>
+    <text x="651" y="282" font-size="9.5" fill="#5B21B6">  specific VM node that generated it</text>
+    <text x="651" y="302" font-size="9.5" fill="#5B21B6">• Executor becomes an active file server</text>
+    <text x="651" y="322" font-size="8.5" fill="#7C3AAD">Root of dynamic scale-down pinning</text>
+    <rect x="824" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="850" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Connector: disk -> tracker -->
+  <path d="M 889 277 H 933" stroke="#7C3AAD" stroke-width="2.2" fill="none" marker-end="url(#shf-arr-purple)"/>
+
+  <!-- Node: tracker -->
+  <g data-node-id="tracker" role="group" tabindex="0" aria-label="MapOutputTracker">
+    <title data-node-tooltip="true">MapOutputTracker — The driver's MapOutputTracker maps shuffle partitions to block locations.</title>
+    <rect x="933" y="184" width="211" height="186" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#shf-shadow)"/>
+    <rect x="945" y="194" width="100" height="16" rx="8" fill="#EDE9FE"/><text x="995" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">DRIVER CATALOG</text>
+    <text x="945" y="228" font-size="13" font-weight="700" fill="#4C1D95">4 · MapOutputTracker</text>
+    <text x="945" y="250" font-size="9.5" fill="#5B21B6">• Driver holds location catalog:</text>
+    <text x="945" y="266" font-size="9" fill="#5B21B6">  (shuffleId, partId) ➔ BlockMgr</text>
+    <text x="945" y="286" font-size="9.5" fill="#5B21B6">• Reducers query driver to find</text>
+    <text x="945" y="300" font-size="9.5" fill="#5B21B6">  target executor IP addresses</text>
+    <text x="945" y="322" font-size="8.5" fill="#7C3AAD">Driver-resident memory</text>
+    <rect x="1079" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="1105" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 2: REDUCE FETCH, PINNING & RECOMPUTE (FETCH ➔ PINNED ➔ RECOMPUTE)   -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="400" width="1120" height="236" rx="14" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.4"/>
+  <rect x="56" y="410" width="370" height="20" rx="10" fill="#DBEAFE"/>
+  <text x="66" y="424" font-size="10.5" font-weight="700" fill="#1E40AF" letter-spacing="1px">LANE 2: REDUCE-SIDE FETCH, PINNING &amp; THE RECOMPUTE CASCADE</text>
+
+  <!-- Node: fetch -->
+  <g data-node-id="fetch" role="group" tabindex="0" aria-label="Reduce task fetches blocks">
+    <title data-node-tooltip="true">Reduce task fetches blocks — Reduce tasks fetch their blocks in parallel from every producing executor.</title>
+    <rect x="56" y="438" width="345" height="182" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.6" filter="url(#shf-shadow)"/>
+    <rect x="68" y="448" width="100" height="16" rx="8" fill="#DBEAFE"/><text x="118" y="459" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">BLOCK FETCH</text>
+    <text x="68" y="482" font-size="13" font-weight="700" fill="#1E3A8A">5 · Reduce Task Fetches</text>
+    <text x="68" y="504" font-size="9.5" fill="#1E40AF">• <tspan font-family="monospace">BlockStoreShuffleReader</tspan> queries driver</text>
+    <text x="68" y="522" font-size="9.5" fill="#1E40AF">• Fetches block partition slices in parallel</text>
+    <text x="68" y="536" font-size="9.5" fill="#1E40AF">  across all producing peer executors</text>
+    <text x="68" y="556" font-size="9.5" fill="#1E40AF">• Buffers in memory; spills if limit exceeded</text>
+    <text x="68" y="576" font-size="9.5" fill="#1E40AF">• Feeds reduce sort/aggregation pipeline</text>
+    <rect x="336" y="448" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="362" y="458" text-anchor="middle" font-size="8" font-weight="700" fill="#1D4ED8">FACT</text>
+  </g>
+
+  <!-- Connector: fetch -> pinned -->
+  <path d="M 401 529 H 441" stroke="#2563EB" stroke-width="2.2" fill="none" marker-end="url(#shf-arr-blue)"/>
+
+  <!-- Node: pinned -->
+  <g data-node-id="pinned" role="group" tabindex="0" aria-label="So the producer cannot be released">
+    <title data-node-tooltip="true">So the producer cannot be released — An executor holding unread shuffle output cannot be safely released.</title>
+    <rect x="441" y="438" width="345" height="182" rx="10" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.6" filter="url(#shf-shadow)"/>
+    <rect x="453" y="448" width="120" height="16" rx="8" fill="#FEF3C7"/><text x="513" y="459" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B45309">EXECUTOR PINNED</text>
+    <text x="453" y="482" font-size="13" font-weight="700" fill="#78350F">6 · Producer Cannot Exit</text>
+    <text x="453" y="504" font-size="9.5" fill="#92400E">• <tspan font-weight="700">Idle ≠ Safe to Remove:</tspan> 0 tasks does not</text>
+    <text x="453" y="518" font-size="9.5" fill="#92400E">  mean node can scale down</text>
+    <text x="453" y="538" font-size="9.5" fill="#92400E">• Later stages still need its local shuffle files</text>
+    <text x="453" y="556" font-size="9.5" fill="#92400E">• Releasing node destroys only copy of data</text>
+    <text x="453" y="576" font-size="9.5" fill="#92400E">• You pay for idle compute to protect data</text>
+    <rect x="721" y="448" width="52" height="14" rx="7" fill="#FEF3C7"/><text x="747" y="458" text-anchor="middle" font-size="8" font-weight="700" fill="#B45309">FACT</text>
+  </g>
+
+  <!-- Connector: pinned -> recompute -->
+  <path d="M 786 529 H 826" stroke="#DC2626" stroke-width="2.2" fill="none" marker-end="url(#shf-arr-red)"/>
+
+  <!-- Node: recompute -->
+  <g data-node-id="recompute" role="group" tabindex="0" aria-label="Remove it anyway → stage recompute">
+    <title data-node-tooltip="true">Remove it anyway → stage recompute — A failed fetch recomputes the entire owning stage, not one partition.</title>
+    <rect x="826" y="438" width="318" height="182" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.8" filter="url(#shf-shadow)"/>
+    <rect x="838" y="448" width="110" height="16" rx="8" fill="#FEE2E2"/><text x="893" y="459" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">CASCADE RISK</text>
+    <text x="838" y="482" font-size="13" font-weight="700" fill="#991B1B">7 · Stage Recompute</text>
+    <text x="838" y="504" font-size="9.5" fill="#7F1D1D">• Node termination causes fetch failure</text>
+    <text x="838" y="522" font-size="9.5" fill="#7F1D1D">• Throws <tspan font-family="monospace">FetchFailedException</tspan></text>
+    <text x="838" y="540" font-size="9.5" fill="#7F1D1D">• DAGScheduler re-runs <tspan font-weight="700">ENTIRE</tspan> stage</text>
+    <text x="838" y="558" font-size="9.5" fill="#7F1D1D">  (not just missing partition slice!)</text>
+    <text x="838" y="576" font-size="9.5" fill="#7F1D1D">• Causes severe job retry storms</text>
+    <rect x="1079" y="448" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="1105" y="458" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">WARNING</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 3: THE 3 WAYS TO BREAK THE COUPLING (PROBLEM, TRACKING, SVC, DECOMM) -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="650" width="1120" height="240" rx="14" fill="#FFFFFF" stroke="#A7F3D0" stroke-width="1.4"/>
+  <rect x="56" y="660" width="390" height="20" rx="10" fill="#D1FAE5"/>
+  <text x="66" y="674" font-size="10.5" font-weight="700" fill="#065F46" letter-spacing="1px">LANE 3: THE THREE ARCHITECTURAL SOLUTIONS TO BREAK THE COUPLING</text>
+
+  <!-- Node: problem -->
+  <g data-node-id="problem" role="group" tabindex="0" aria-label="The bond to break">
+    <title data-node-tooltip="true">The bond to break — Shuffle output living and dying with its executor is the bond to break.</title>
+    <rect x="56" y="688" width="250" height="186" rx="10" fill="#FFF1F2" stroke="#FDA4AF" stroke-width="1.6" filter="url(#shf-shadow)"/>
+    <rect x="68" y="698" width="90" height="16" rx="8" fill="#FFE4E6"/><text x="113" y="709" text-anchor="middle" font-size="8.5" font-weight="700" fill="#BE123C">THE PROBLEM</text>
+    <text x="68" y="732" font-size="13" font-weight="700" fill="#881337">The Bond to Break</text>
+    <text x="68" y="754" font-size="9.5" fill="#9F1239">• Shuffle output lifecycle is</text>
+    <text x="68" y="768" font-size="9.5" fill="#9F1239">  tied 1:1 to executor lifetime</text>
+    <text x="68" y="788" font-size="9.5" fill="#9F1239">• Scale-down is either blocked</text>
+    <text x="68" y="802" font-size="9.5" fill="#9F1239">  (paying for idle compute) or</text>
+    <text x="68" y="816" font-size="9.5" fill="#9F1239">  unsafe (risking recompute)</text>
+    <rect x="241" y="698" width="52" height="14" rx="7" fill="#FFE4E6"/><text x="267" y="708" text-anchor="middle" font-size="8" font-weight="700" fill="#BE123C">FACT</text>
+  </g>
+
+  <!-- Connector: problem -> tracking -->
+  <path d="M 306 781 H 340" stroke="#059669" stroke-width="2.2" fill="none" marker-end="url(#shf-arr-green)"/>
+
+  <!-- Node: tracking -->
+  <g data-node-id="tracking" role="group" tabindex="0" aria-label="Shuffle tracking">
+    <title data-node-tooltip="true">Shuffle tracking — Shuffle tracking keeps executors holding needed shuffle data alive.</title>
+    <rect x="340" y="688" width="250" height="186" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.6" filter="url(#shf-shadow)"/>
+    <rect x="352" y="698" width="110" height="16" rx="8" fill="#D1FAE5"/><text x="407" y="709" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">APPROACH 1</text>
+    <text x="352" y="732" font-size="13" font-weight="700" fill="#064E3B">Shuffle Tracking</text>
+    <text x="352" y="754" font-size="9.5" fill="#065F46">• Keeps executor alive while its</text>
+    <text x="352" y="768" font-size="9.5" fill="#065F46">  shuffle files remain unread</text>
+    <text x="352" y="788" font-size="9.5" fill="#065F46">• <tspan font-family="monospace">shuffleTracking.enabled</tspan></text>
+    <text x="352" y="808" font-size="9.5" fill="#065F46">• <tspan font-weight="700">Verdict:</tspan> Solves correctness,</text>
+    <text x="352" y="822" font-size="9.5" fill="#065F46">  but still pays for idle nodes</text>
+    <rect x="525" y="698" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="551" y="708" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- Connector: tracking -> service -->
+  <path d="M 590 781 H 624" stroke="#059669" stroke-width="2.2" fill="none" marker-end="url(#shf-arr-green)"/>
+
+  <!-- Node: service -->
+  <g data-node-id="service" role="group" tabindex="0" aria-label="External shuffle service">
+    <title data-node-tooltip="true">External shuffle service — An external shuffle service serves shuffle files beyond the executor's lifetime.</title>
+    <rect x="624" y="688" width="250" height="186" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.6" filter="url(#shf-shadow)"/>
+    <rect x="636" y="698" width="110" height="16" rx="8" fill="#D1FAE5"/><text x="691" y="709" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">APPROACH 2</text>
+    <text x="636" y="732" font-size="13" font-weight="700" fill="#064E3B">External Shuffle Service</text>
+    <text x="636" y="754" font-size="9.5" fill="#065F46">• Node daemon outside executor</text>
+    <text x="636" y="768" font-size="9.5" fill="#065F46">  serves shuffle blocks to peers</text>
+    <text x="636" y="788" font-size="9.5" fill="#065F46">• Shuffle outlives executor JVM</text>
+    <text x="636" y="808" font-size="9.5" fill="#065F46">• <tspan font-weight="700">Verdict:</tspan> Node VM must remain</text>
+    <text x="636" y="822" font-size="9.5" fill="#065F46">  running; complex daemon setup</text>
+    <rect x="809" y="698" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="835" y="708" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- Connector: service -> decommission -->
+  <path d="M 874 781 H 908" stroke="#059669" stroke-width="2.2" fill="none" marker-end="url(#shf-arr-green)"/>
+
+  <!-- Node: decommission -->
+  <g data-node-id="decommission" role="group" tabindex="0" aria-label="Graceful decommissioning">
+    <title data-node-tooltip="true">Graceful decommissioning — Graceful decommissioning migrates blocks to a peer before the executor exits.</title>
+    <rect x="908" y="688" width="236" height="186" rx="10" fill="#ECFDF5" stroke="#34D399" stroke-width="1.8" filter="url(#shf-shadow)"/>
+    <rect x="920" y="698" width="130" height="16" rx="8" fill="#D1FAE5"/><text x="985" y="709" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">FABRIC SCALEDOWN</text>
+    <text x="920" y="732" font-size="13" font-weight="700" fill="#064E3B">Decommissioning</text>
+    <text x="920" y="754" font-size="9.5" fill="#065F46">• Migrates blocks to peer executor</text>
+    <text x="920" y="768" font-size="9.5" fill="#065F46">  <tspan font-weight="700">before</tspan> the source node exits</text>
+    <text x="920" y="788" font-size="9.5" fill="#065F46">• Core of <tspan font-weight="700">Efficient Scaledown</tspan></text>
+    <text x="920" y="808" font-size="9.5" fill="#065F46">• <tspan font-weight="700">Verdict:</tspan> True zero-waste</text>
+    <text x="920" y="822" font-size="9.5" fill="#065F46">  scale-down with 0 recomputes</text>
+    <rect x="1079" y="698" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="1105" y="708" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="930" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Apache Spark Architecture &amp; Microsoft Fabric Efficient Scaledown docs.</text>
+</svg>

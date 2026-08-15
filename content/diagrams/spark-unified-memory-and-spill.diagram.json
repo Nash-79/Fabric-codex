@@ -1,0 +1,466 @@
+{
+  "id": "spark-unified-memory-and-spill",
+  "title": "Spark unified memory management and where spill comes from",
+  "purpose": "Spark unified memory management. Executor heap layout; Execution memory; Storage memory; The borrowing rule; Spill and the storageFraction trap.",
+  "accessibleSummary": "Spark unified memory management. Executor heap layout; Execution memory; Storage memory; The borrowing rule; Spill and the storageFraction trap.",
+  "longDescription": "Spark unified memory management. Executor heap layout; Execution memory; Storage memory; The borrowing rule; Spill and the storageFraction trap.",
+  "type": "internals",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-unified-memory-and-spill.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "reserved",
+      "label": "Reserved — 300 MiB, fixed",
+      "summary": "A fixed 300 MiB is reserved before any memory fraction is applied.",
+      "detail": "A fixed 300 MiB is reserved before any memory fraction is applied.",
+      "whyItMatters": "A fixed 300 MiB is reserved before any memory fraction is applied.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-memory-tuning",
+          "note": "A fixed 300 MiB is reserved outside the unified region."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Executor JVM heap"
+        ],
+        "processing": [
+          "Subtract the fixed reservation"
+        ],
+        "outputs": [
+          "Usable heap for the fraction calculation"
+        ],
+        "example": "A 16 GB heap yields roughly 15.7 GB before spark.memory.fraction applies.",
+        "controls": [
+          "Not configurable"
+        ],
+        "failureModes": [
+          "Very small executors lose a disproportionate share of heap to the fixed reservation."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "unified",
+      "label": "Unified pool — fraction 0.6",
+      "summary": "spark.memory.fraction sizes the shared execution and storage pool at 0.6 of the usable heap.",
+      "detail": "spark.memory.fraction sizes the shared execution and storage pool at 0.6 of the usable heap.",
+      "whyItMatters": "spark.memory.fraction sizes the shared execution and storage pool at 0.6 of the usable heap.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-memory-tuning",
+          "note": "spark.memory.fraction defaults to 0.6 of the heap minus 300 MiB, with the remaining 40% left as headroom."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Usable heap"
+        ],
+        "processing": [
+          "Apply spark.memory.fraction"
+        ],
+        "outputs": [
+          "Shared execution and storage pool"
+        ],
+        "example": "On a 16 GB heap the shared pool is roughly 9.4 GB.",
+        "controls": [
+          "spark.memory.fraction"
+        ],
+        "failureModes": [
+          "Raising the fraction to gain working memory removes the safety headroom against large records."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "user",
+      "label": "User memory — the remaining 40%",
+      "summary": "The remaining heap holds user data structures and guards against oversized records.",
+      "detail": "The remaining heap holds user data structures and guards against oversized records.",
+      "whyItMatters": "The remaining heap holds user data structures and guards against oversized records.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-memory-tuning",
+          "note": "The 40% outside the unified region holds user data structures, internal metadata and OOM headroom."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Usable heap"
+        ],
+        "processing": [
+          "Hold user allocations outside the managed pool"
+        ],
+        "outputs": [
+          "Space for user structures and metadata"
+        ],
+        "example": "Objects allocated inside a Python UDF or RDD closure live here, not in the managed pool.",
+        "controls": [
+          "Code-level allocation behaviour"
+        ],
+        "failureModes": [
+          "Allocating large per-row structures in user code exhausts this region and OOMs the executor."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "execution",
+      "label": "Execution memory",
+      "summary": "Execution memory serves shuffles, joins, sorts and aggregations and may evict storage.",
+      "detail": "Execution memory serves shuffles, joins, sorts and aggregations and may evict storage.",
+      "whyItMatters": "Execution memory serves shuffles, joins, sorts and aggregations and may evict storage.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-memory-tuning",
+          "note": "Execution memory serves shuffles, joins, sorts and aggregations and may evict storage."
+        },
+        {
+          "sourceKey": "spark-memory-tuning",
+          "note": "Storage cannot evict execution because of implementation complexity."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Shared pool capacity"
+        ],
+        "processing": [
+          "Allocate working memory for sorts, joins and aggregations"
+        ],
+        "outputs": [
+          "In-memory computation, or spill when exhausted"
+        ],
+        "example": "A sort-merge join builds sort buffers here and spills when the partition exceeds what it can hold.",
+        "controls": [
+          "Partition sizing",
+          "spark.sql.adaptive.advisoryPartitionSizeInBytes"
+        ],
+        "failureModes": [
+          "Oversized partitions exhaust execution memory and force disk spill."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "storage",
+      "label": "Storage memory",
+      "summary": "Storage memory holds cached and broadcast blocks and can never evict execution.",
+      "detail": "Storage memory holds cached and broadcast blocks and can never evict execution.",
+      "whyItMatters": "Storage memory holds cached and broadcast blocks and can never evict execution.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-memory-tuning",
+          "note": "Storage memory holds cached blocks and broadcast variables and may use the whole pool when execution is idle."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Cached DataFrames",
+          "Broadcast variables"
+        ],
+        "processing": [
+          "Hold blocks in memory"
+        ],
+        "outputs": [
+          "Cached blocks available for reuse"
+        ],
+        "example": "A dimension broadcast to every executor occupies storage memory on all of them.",
+        "controls": [
+          "cache() and unpersist() discipline"
+        ],
+        "failureModes": [
+          "Caching a DataFrame used only once competes with execution for no benefit."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "floor",
+      "label": "storageFraction is an eviction floor",
+      "summary": "storageFraction sets the storage floor execution may not reclaim, not a fixed partition.",
+      "detail": "storageFraction sets the storage floor execution may not reclaim, not a fixed partition.",
+      "whyItMatters": "storageFraction sets the storage floor execution may not reclaim, not a fixed partition.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-memory-tuning",
+          "note": "spark.memory.storageFraction defaults to 0.5 and sets the storage region immune to eviction, not a hard partition."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Shared pool"
+        ],
+        "processing": [
+          "Set the non-evictable storage floor"
+        ],
+        "outputs": [
+          "Guaranteed minimum cache space"
+        ],
+        "example": "At the default, roughly half the shared pool is protected from eviction once storage has claimed it.",
+        "controls": [
+          "spark.memory.storageFraction"
+        ],
+        "failureModes": [
+          "Treating the floor as a reservation leads to raising it and starving execution."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "spill",
+      "label": "Raising storageFraction causes spill",
+      "summary": "Raising the storage floor starves execution and produces the spill it was meant to avoid.",
+      "detail": "Raising the storage floor starves execution and produces the spill it was meant to avoid.",
+      "whyItMatters": "Raising the storage floor starves execution and produces the spill it was meant to avoid.",
+      "classification": "warning",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-memory-tuning",
+          "note": "Raising the storage floor to protect a cache commonly causes the spill it was meant to prevent."
+        },
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "The unified model already lets execution and storage borrow, so raising storage to help caching starves execution."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Reduced execution headroom"
+        ],
+        "processing": [
+          "Overflow sort and join buffers to disk"
+        ],
+        "outputs": [
+          "Spill bytes written and re-read"
+        ],
+        "example": "Stage metrics show non-zero Spill (memory) and Spill (disk) columns after a storageFraction increase.",
+        "controls": [
+          "Revert the fraction",
+          "Reduce partition size instead"
+        ],
+        "failureModes": [
+          "Every spilled byte is written once and read back, so runtime grows without any data growth."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "overhead",
+      "label": "Overhead is separate from the heap",
+      "summary": "Executor memory overhead is requested on top of the heap and is session-start scope.",
+      "detail": "Executor memory overhead is requested on top of the heap and is session-start scope.",
+      "whyItMatters": "Executor memory overhead is requested on top of the heap and is session-start scope.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-memory-tuning",
+          "note": "Memory outside the managed pool covers JVM internals and native allocation."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Requested executor memory"
+        ],
+        "processing": [
+          "Request additional overhead alongside the heap"
+        ],
+        "outputs": [
+          "Space for JVM internals, PySpark workers and off-heap allocation"
+        ],
+        "example": "PySpark worker processes and native engine buffers live in overhead rather than the JVM heap.",
+        "controls": [
+          "Executor memory overhead setting",
+          "Session-start scope only"
+        ],
+        "failureModes": [
+          "Undersized overhead OOMs an executor in a way that looks like a data problem but is not."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "reserved",
+      "to": "unified",
+      "label": "Subtracted before the fraction applies",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e2",
+      "from": "unified",
+      "to": "execution",
+      "label": "Pool is shared with execution",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e3",
+      "from": "unified",
+      "to": "storage",
+      "label": "Pool is shared with storage",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e4",
+      "from": "unified",
+      "to": "user",
+      "label": "Remaining heap is user memory",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e5",
+      "from": "storage",
+      "to": "floor",
+      "label": "Floor bounds what execution may evict",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e6",
+      "from": "floor",
+      "to": "spill",
+      "label": "Raising the floor starves execution",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e7",
+      "from": "execution",
+      "to": "spill",
+      "label": "Exhausted execution memory spills to disk",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e8",
+      "from": "unified",
+      "to": "overhead",
+      "label": "Overhead is requested outside the heap",
+      "layer": "compute",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "reserved",
+      "title": "1. Reserved — 300 MiB, fixed",
+      "explanation": "A fixed 300 MiB is reserved before any memory fraction is applied."
+    },
+    {
+      "nodeId": "unified",
+      "title": "2. Unified pool — fraction 0.6",
+      "explanation": "spark.memory.fraction sizes the shared execution and storage pool at 0.6 of the usable heap."
+    },
+    {
+      "nodeId": "user",
+      "title": "3. User memory — the remaining 40%",
+      "explanation": "The remaining heap holds user data structures and guards against oversized records."
+    },
+    {
+      "nodeId": "execution",
+      "title": "4. Execution memory",
+      "explanation": "Execution memory serves shuffles, joins, sorts and aggregations and may evict storage."
+    },
+    {
+      "nodeId": "storage",
+      "title": "5. Storage memory",
+      "explanation": "Storage memory holds cached and broadcast blocks and can never evict execution."
+    },
+    {
+      "nodeId": "floor",
+      "title": "6. storageFraction is an eviction floor",
+      "explanation": "storageFraction sets the storage floor execution may not reclaim, not a fixed partition."
+    },
+    {
+      "nodeId": "spill",
+      "title": "7. Raising storageFraction causes spill",
+      "explanation": "Raising the storage floor starves execution and produces the spill it was meant to avoid."
+    },
+    {
+      "nodeId": "overhead",
+      "title": "8. Overhead is separate from the heap",
+      "explanation": "Executor memory overhead is requested on top of the heap and is session-start scope."
+    }
+  ]
+}

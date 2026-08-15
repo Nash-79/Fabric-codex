@@ -1,0 +1,420 @@
+{
+  "id": "nee-vs-jvm-division-of-labour",
+  "title": "Native Execution Engine and JVM Spark: how they divide one query",
+  "purpose": "Native and JVM execution compared. Shared responsibilities; What only the JVM path does; What the native path changes; Cost of mixing; How they work together in one plan.",
+  "accessibleSummary": "Native and JVM execution compared. Shared responsibilities; What only the JVM path does; What the native path changes; Cost of mixing; How they work together in one plan.",
+  "longDescription": "Native and JVM execution compared. Shared responsibilities; What only the JVM path does; What the native path changes; Cost of mixing; How they work together in one plan.",
+  "type": "model",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/nee-vs-jvm-division-of-labour.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "shared",
+      "label": "Planning, scheduling and memory",
+      "summary": "Planning, scheduling, shuffle and memory management are identical on both paths.",
+      "detail": "Planning, scheduling, shuffle and memory management are identical on both paths.",
+      "whyItMatters": "Planning, scheduling, shuffle and memory management are identical on both paths.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "NEE preserves existing query optimizer behaviours including adaptive query execution and predicate pushdown."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A DataFrame or SQL query"
+        ],
+        "processing": [
+          "Optimize, schedule and manage memory identically"
+        ],
+        "outputs": [
+          "One physical plan and one task graph"
+        ],
+        "example": "AQE coalesces post-shuffle partitions the same way whether or not the engine is enabled.",
+        "controls": [
+          "Standard Spark and AQE configuration"
+        ],
+        "failureModes": [
+          "Assuming native execution removes the need to tune partitions or fix skew."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "storage",
+      "label": "Storage and correctness contracts",
+      "summary": "Both paths read and write the same OneLake Delta tables with the same semantics.",
+      "detail": "Both paths read and write the same OneLake Delta tables with the same semantics.",
+      "whyItMatters": "Both paths read and write the same OneLake Delta tables with the same semantics.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-runtime-versions",
+          "note": "The native execution engine supports Parquet and Delta formats across the Spark APIs."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Delta tables in OneLake"
+        ],
+        "processing": [
+          "Read and write through the same Delta protocol"
+        ],
+        "outputs": [
+          "Identical table state either way"
+        ],
+        "example": "A table written with the engine on is indistinguishable to any other Fabric engine.",
+        "controls": [
+          "Delta table properties"
+        ],
+        "failureModes": [
+          "Expecting a storage-level change; the difference is execution only."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "jvmway",
+      "label": "JVM / Tungsten path",
+      "summary": "The JVM path executes row-at-a-time with whole-stage codegen and covers every operator.",
+      "detail": "The JVM path executes row-at-a-time with whole-stage codegen and covers every operator.",
+      "whyItMatters": "The JVM path executes row-at-a-time with whole-stage codegen and covers every operator.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "CODEGEN mode prints the generated code, confirming whole-stage fusion on the JVM path."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Physical plan operators"
+        ],
+        "processing": [
+          "Fuse operators into generated Java",
+          "Execute row-at-a-time over Tungsten rows"
+        ],
+        "outputs": [
+          "Row-based results"
+        ],
+        "example": "A filter and projection compile into a single loop marked with a *(1) prefix.",
+        "controls": [
+          "Whole-stage codegen settings"
+        ],
+        "failureModes": [
+          "A Python UDF breaks fusion and returns the stage to interpreted evaluation."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "neeway",
+      "label": "Native / Velox path",
+      "summary": "The native path executes columnar batches with vectorized C++ but covers only supported operators.",
+      "detail": "The native path executes columnar batches with vectorized C++ but covers only supported operators.",
+      "whyItMatters": "The native path executes columnar batches with vectorized C++ but covers only supported operators.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "Velox performs vectorized SIMD columnar execution of the Substrait plan Gluten produces."
+        },
+        {
+          "sourceKey": "fabric-spark-runtime-versions",
+          "note": "Supported operators are offloaded to a vectorized C++ path providing columnar SIMD-accelerated processing."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Substrait plan",
+          "Columnar batches"
+        ],
+        "processing": [
+          "Execute vectorized C++ kernels"
+        ],
+        "outputs": [
+          "Columnar result batches"
+        ],
+        "example": "An aggregation over one column runs as a vectorized pass rather than per-row evaluation.",
+        "controls": [
+          "spark.native.enabled"
+        ],
+        "failureModes": [
+          "Coverage is partial and changes per release, so support cannot be assumed."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "divergence",
+      "label": "Known correctness divergences",
+      "summary": "A small set of documented behaviours differ between Velox and vanilla Spark.",
+      "detail": "A small set of documented behaviours differ between Velox and vanilla Spark.",
+      "whyItMatters": "A small set of documented behaviours differ between Velox and vanilla Spark.",
+      "classification": "warning",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "NEE casting from DECIMAL to FLOAT diverges from vanilla Spark, which round-trips through a string conversion."
+        },
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "round() can return different results because Velox uses the C++ standard library implementation."
+        },
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "collect_list and collect_set use ARRAY as the intermediate aggregation type under NEE rather than BINARY."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Expressions with implementation-defined behaviour"
+        ],
+        "processing": [
+          "Execute under Velox semantics"
+        ],
+        "outputs": [
+          "Results that may differ from vanilla Spark in specific cases"
+        ],
+        "example": "A DECIMAL-to-FLOAT cast can produce a different value than the same query on the JVM path.",
+        "controls": [
+          "Regression-test critical numeric and ordering logic across both paths"
+        ],
+        "failureModes": [
+          "Silent numeric drift in financial calculations if parity is assumed rather than tested."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "mix",
+      "label": "One plan, per-operator routing",
+      "summary": "A single query routinely runs partly native and partly JVM, paying a conversion at each boundary.",
+      "detail": "A single query routinely runs partly native and partly JVM, paying a conversion at each boundary.",
+      "whyItMatters": "A single query routinely runs partly native and partly JVM, paying a conversion at each boundary.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "A plan that falls back mid-flight can be slower than running with NEE off entirely, because conversion overhead is paid without sustained native execution."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A plan with both supported and unsupported operators"
+        ],
+        "processing": [
+          "Route each operator to its path",
+          "Convert at each boundary"
+        ],
+        "outputs": [
+          "A mixed-execution query"
+        ],
+        "example": "Repeated VeloxColumnarToRowExec nodes reveal a plan alternating between paths.",
+        "controls": [
+          "Restructure the query to group native work together"
+        ],
+        "failureModes": [
+          "Many small native islands cost more in conversion than the vectorization saves."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "choose",
+      "label": "Choosing deliberately",
+      "summary": "Native execution suits compute-bound work; ANSI mode forces a per-workload decision on Runtime 2.0.",
+      "detail": "Native execution suits compute-bound work; ANSI mode forces a per-workload decision on Runtime 2.0.",
+      "whyItMatters": "Native execution suits compute-bound work; ANSI mode forces a per-workload decision on Runtime 2.0.",
+      "classification": "pattern",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "The ANSI-versus-native trade-off on Runtime 2.0 is a per-workload decision recorded in the Environment."
+        },
+        {
+          "sourceKey": "fabric-spark-runtime-versions",
+          "note": "Native execution is toggled per application with spark.native.enabled."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Workload profile",
+          "Runtime version"
+        ],
+        "processing": [
+          "Decide native versus ANSI per workload class"
+        ],
+        "outputs": [
+          "A recorded, deliberate configuration"
+        ],
+        "example": "A data-quality-critical silver pipeline keeps ANSI on; a scan-heavy gold aggregation prefers native speed.",
+        "controls": [
+          "Environment Spark properties"
+        ],
+        "failureModes": [
+          "A global decision applied to every workload gets one of the two classes wrong."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "shared",
+      "to": "jvmway",
+      "label": "Same plan feeds the JVM path",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e2",
+      "from": "shared",
+      "to": "neeway",
+      "label": "Same plan feeds the native path",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e3",
+      "from": "storage",
+      "to": "mix",
+      "label": "Both paths write the same tables",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e4",
+      "from": "jvmway",
+      "to": "mix",
+      "label": "JVM operators interleave with native ones",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e5",
+      "from": "neeway",
+      "to": "mix",
+      "label": "Native operators interleave with JVM ones",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e6",
+      "from": "neeway",
+      "to": "divergence",
+      "label": "Different implementation, different edge cases",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e7",
+      "from": "mix",
+      "to": "choose",
+      "label": "Conversion cost informs the workload decision",
+      "layer": "compute",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "shared",
+      "title": "1. Planning, scheduling and memory",
+      "explanation": "Planning, scheduling, shuffle and memory management are identical on both paths."
+    },
+    {
+      "nodeId": "storage",
+      "title": "2. Storage and correctness contracts",
+      "explanation": "Both paths read and write the same OneLake Delta tables with the same semantics."
+    },
+    {
+      "nodeId": "jvmway",
+      "title": "3. JVM / Tungsten path",
+      "explanation": "The JVM path executes row-at-a-time with whole-stage codegen and covers every operator."
+    },
+    {
+      "nodeId": "neeway",
+      "title": "4. Native / Velox path",
+      "explanation": "The native path executes columnar batches with vectorized C++ but covers only supported operators."
+    },
+    {
+      "nodeId": "divergence",
+      "title": "5. Known correctness divergences",
+      "explanation": "A small set of documented behaviours differ between Velox and vanilla Spark."
+    },
+    {
+      "nodeId": "mix",
+      "title": "6. One plan, per-operator routing",
+      "explanation": "A single query routinely runs partly native and partly JVM, paying a conversion at each boundary."
+    },
+    {
+      "nodeId": "choose",
+      "title": "7. Choosing deliberately",
+      "explanation": "Native execution suits compute-bound work; ANSI mode forces a per-workload decision on Runtime 2.0."
+    }
+  ]
+}

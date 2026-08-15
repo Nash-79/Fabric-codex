@@ -1,0 +1,416 @@
+{
+  "id": "fabric-spark-vs-python-engine-choice",
+  "title": "Choosing between a Spark session and a Python notebook in Fabric",
+  "purpose": "Engine choice between Spark and Python notebooks. Working data size heuristic; Python notebook path; Small Spark session path; Scaled Spark pool path; Overrides that beat size; Maintenance consequence.",
+  "accessibleSummary": "Engine choice between Spark and Python notebooks. Working data size heuristic; Python notebook path; Small Spark session path; Scaled Spark pool path; Overrides that beat size; Maintenance consequence.",
+  "longDescription": "Engine choice between Spark and Python notebooks. Working data size heuristic; Python notebook path; Small Spark session path; Scaled Spark pool path; Overrides that beat size; Maintenance consequence.",
+  "type": "decision",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/fabric-spark-vs-python-engine-choice.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "small",
+      "label": "Under roughly 5–10 GB",
+      "summary": "Under roughly 5-10 GB a single-node Python notebook is usually the cheaper answer.",
+      "detail": "Under roughly 5-10 GB a single-node Python notebook is usually the cheaper answer.",
+      "whyItMatters": "Under roughly 5-10 GB a single-node Python notebook is usually the cheaper answer.",
+      "classification": "pattern",
+      "layers": [
+        "compute",
+        "data"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Under roughly 5-10 GB of working data a single-node Python notebook with Polars, DuckDB or delta-rs is usually the cheaper answer."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Working data under roughly 5-10 GB"
+        ],
+        "processing": [
+          "Run single-node with a vectorized engine"
+        ],
+        "outputs": [
+          "Results at a fraction of the capacity cost"
+        ],
+        "example": "A daily reference-data refresh runs in a Python notebook in seconds rather than starting a Spark cluster.",
+        "controls": [
+          "Notebook type selection"
+        ],
+        "failureModes": [
+          "The threshold is a heuristic; a memory-hungry transform can exceed a single node well below it."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "medium",
+      "label": "Roughly 10–100 GB",
+      "summary": "Between roughly 10 and 100 GB a small Spark session fits without wide-cluster shuffles.",
+      "detail": "Between roughly 10 and 100 GB a small Spark session fits without wide-cluster shuffles.",
+      "whyItMatters": "Between roughly 10 and 100 GB a small Spark session fits without wide-cluster shuffles.",
+      "classification": "pattern",
+      "layers": [
+        "compute",
+        "data"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Roughly 10-100 GB suits a small Spark session."
+        },
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "Fabric Spark pools offer selectable node sizes for the workload."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Working data roughly 10-100 GB"
+        ],
+        "processing": [
+          "Run a small Spark session with native execution enabled"
+        ],
+        "outputs": [
+          "Distributed processing without a wide cluster"
+        ],
+        "example": "A silver conform job runs on two or three Medium nodes rather than a large pool.",
+        "controls": [
+          "Pool node size and count",
+          "spark.native.enabled"
+        ],
+        "failureModes": [
+          "Over-provisioning at this size wastes capacity units without reducing runtime."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "large",
+      "label": "Beyond roughly 100 GB with joins",
+      "summary": "Beyond roughly 100 GB with real joins, a scaled Spark pool is warranted.",
+      "detail": "Beyond roughly 100 GB with real joins, a scaled Spark pool is warranted.",
+      "whyItMatters": "Beyond roughly 100 GB with real joins, a scaled Spark pool is warranted.",
+      "classification": "pattern",
+      "layers": [
+        "compute",
+        "data"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Beyond roughly 100 GB with real joins and shuffles a scaled Spark pool is warranted."
+        },
+        {
+          "sourceKey": "fabric-blog-spark-efficient-scaledown",
+          "note": "Efficient Scaledown decouples shuffle data from executor lifetime so nodes can be released."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Large working sets with joins and shuffles"
+        ],
+        "processing": [
+          "Size the pool from shuffle volume",
+          "Enable Efficient Scaledown"
+        ],
+        "outputs": [
+          "Distributed execution with prompt scale-down"
+        ],
+        "example": "A gold aggregation over a multi-terabyte silver table sizes its pool from shuffle volume, not input size.",
+        "controls": [
+          "Pool autoscale bounds",
+          "Efficient Scaledown properties"
+        ],
+        "failureModes": [
+          "Sizing from input volume rather than shuffle volume under-provisions the expensive stage."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "vorder",
+      "label": "Gold writes for Direct Lake",
+      "summary": "Gold writes for Direct Lake belong in Spark because delta-rs cannot apply V-Order.",
+      "detail": "Gold writes for Direct Lake belong in Spark because delta-rs cannot apply V-Order.",
+      "whyItMatters": "Gold writes for Direct Lake belong in Spark because delta-rs cannot apply V-Order.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "data"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Writes destined for Direct Lake gold should go through Spark because delta-rs cannot apply V-Order."
+        },
+        {
+          "sourceKey": "delta-optimization-and-v-order",
+          "note": "V-Order is a write-time optimization that improves read performance for Direct Lake and the SQL endpoint."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A gold table serving Direct Lake or the SQL endpoint"
+        ],
+        "processing": [
+          "Write from Spark so V-Order applies"
+        ],
+        "outputs": [
+          "A read-optimized gold table"
+        ],
+        "example": "A small gold aggregate is still written from Spark so Direct Lake reads stay fast.",
+        "controls": [
+          "Write path engine choice",
+          "V-Order table property"
+        ],
+        "failureModes": [
+          "A Python-written gold table loses V-Order and degrades Direct Lake read performance."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "shuffle",
+      "label": "Genuinely distributed shuffles",
+      "summary": "Genuinely distributed shuffles are Spark territory regardless of input size.",
+      "detail": "Genuinely distributed shuffles are Spark territory regardless of input size.",
+      "whyItMatters": "Genuinely distributed shuffles are Spark territory regardless of input size.",
+      "classification": "pattern",
+      "layers": [
+        "compute",
+        "data"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Anything needing a genuinely distributed shuffle is Spark territory regardless of input size."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Large joins or global sorts"
+        ],
+        "processing": [
+          "Redistribute data across executors"
+        ],
+        "outputs": [
+          "Correctly joined or sorted output"
+        ],
+        "example": "A join between two large fact tables cannot be done single-node whatever the file sizes suggest.",
+        "controls": [
+          "Query shape"
+        ],
+        "failureModes": [
+          "Attempting a distributed join single-node exhausts memory rather than running slowly."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "cost",
+      "label": "Why this is the expensive mistake",
+      "summary": "Using a multi-node Spark session for single-node work is the most expensive common mistake.",
+      "detail": "Using a multi-node Spark session for single-node work is the most expensive common mistake.",
+      "whyItMatters": "Using a multi-node Spark session for single-node work is the most expensive common mistake.",
+      "classification": "warning",
+      "layers": [
+        "compute",
+        "data"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "The most expensive Fabric Spark mistake is running a multi-node Spark session for work a single small node could do."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "An over-provisioned workload"
+        ],
+        "processing": [
+          "Compare capacity cost against the work actually required"
+        ],
+        "outputs": [
+          "Identified over-provisioning"
+        ],
+        "example": "A dozen small daily jobs each starting a Spark pool consume far more capacity than the work justifies.",
+        "controls": [
+          "Engine choice per entity in a metadata-driven framework"
+        ],
+        "failureModes": [
+          "The cost is invisible per job and only obvious in aggregate capacity consumption."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "maint",
+      "label": "Python-written tables need more maintenance",
+      "summary": "Tables written from the Python kernel receive no auto-compaction and need more maintenance.",
+      "detail": "Tables written from the Python kernel receive no auto-compaction and need more maintenance.",
+      "whyItMatters": "Tables written from the Python kernel receive no auto-compaction and need more maintenance.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "data"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Tables written from the Python kernel get no auto-compaction and VACUUM never runs automatically, so they need more maintenance, not less."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Tables written from the Python kernel"
+        ],
+        "processing": [
+          "Schedule explicit compaction and vacuum"
+        ],
+        "outputs": [
+          "Maintained tables"
+        ],
+        "example": "A Python-written bronze table accumulates small files until an explicit OPTIMIZE runs.",
+        "controls": [
+          "Scheduled maintenance notebooks",
+          "Delta table properties"
+        ],
+        "failureModes": [
+          "Choosing Python for cost and skipping maintenance trades compute saving for scan cost later."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "small",
+      "to": "medium",
+      "label": "Growing working set moves up a band",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e2",
+      "from": "medium",
+      "to": "large",
+      "label": "Shuffle volume moves up a band",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e3",
+      "from": "vorder",
+      "to": "medium",
+      "label": "Direct Lake gold writes force Spark",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e4",
+      "from": "shuffle",
+      "to": "large",
+      "label": "Distributed joins force a scaled pool",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e5",
+      "from": "small",
+      "to": "cost",
+      "label": "Right-sizing avoids the expensive mistake",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e6",
+      "from": "small",
+      "to": "maint",
+      "label": "Python-kernel writes carry a maintenance cost",
+      "layer": "compute",
+      "kind": "branch"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "small",
+      "title": "1. Under roughly 5–10 GB",
+      "explanation": "Under roughly 5-10 GB a single-node Python notebook is usually the cheaper answer."
+    },
+    {
+      "nodeId": "medium",
+      "title": "2. Roughly 10–100 GB",
+      "explanation": "Between roughly 10 and 100 GB a small Spark session fits without wide-cluster shuffles."
+    },
+    {
+      "nodeId": "large",
+      "title": "3. Beyond roughly 100 GB with joins",
+      "explanation": "Beyond roughly 100 GB with real joins, a scaled Spark pool is warranted."
+    },
+    {
+      "nodeId": "vorder",
+      "title": "4. Gold writes for Direct Lake",
+      "explanation": "Gold writes for Direct Lake belong in Spark because delta-rs cannot apply V-Order."
+    },
+    {
+      "nodeId": "shuffle",
+      "title": "5. Genuinely distributed shuffles",
+      "explanation": "Genuinely distributed shuffles are Spark territory regardless of input size."
+    },
+    {
+      "nodeId": "cost",
+      "title": "6. Why this is the expensive mistake",
+      "explanation": "Using a multi-node Spark session for single-node work is the most expensive common mistake."
+    },
+    {
+      "nodeId": "maint",
+      "title": "7. Python-written tables need more maintenance",
+      "explanation": "Tables written from the Python kernel receive no auto-compaction and need more maintenance."
+    }
+  ]
+}

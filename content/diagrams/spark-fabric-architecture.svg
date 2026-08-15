@@ -1,237 +1,201 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 920" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-fabric-architecture-title spark-fabric-architecture-desc" data-diagram-id="spark-fabric-architecture">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 880" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-fabric-architecture-title spark-fabric-architecture-desc" data-diagram-id="spark-fabric-architecture">
   <title id="spark-fabric-architecture-title">Fabric Spark session architecture</title>
-  <desc id="spark-fabric-architecture-desc">Fabric Spark session architecture. Notebook or job definition; Capacity vCore envelope; Starter or custom pool; Driver and executors; Native and JVM execution; OneLake Delta I/O; Session lifecycle risk.</desc>
-  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
-       Angle: how a Spark session comes to exist in Fabric — capacity vCore budget, starter vs
-       custom pool choice, session cold/warm/high-concurrency startup paths, entry points
-       (notebook/job), and the lakehouse/OneLake IO path. Distinct from spark-engineering.svg
-       (broad write-path + notebook-vs-pipeline overview) and spark-autoscale-internals.svg
-       (autoscale/dynamic-allocation scaling loop under load) — this diagram does not repeat
-       the autoscale decision loop or Optimized Write internals.
-       Grounded in spark capability claims (capability_id=spark):
-         "Fabric runs Data Engineering... starter pools... custom Spark pools..." (starter vs custom)
-         "Each Fabric capacity unit grants two Spark vCores... F64 SKU... 384 Spark vCores" (capacity->vCores)
-         "Starter pool sessions typically begin in 5 to 10 seconds... on-demand provisioning... 2 to 5 minutes" (cold/warm start)
-         "Environment library publishing mode... Quick... Full... Full + custom live pool... ~5 seconds" (session personalization)
-         "Workspaces using Tenant Private Links or Managed VNets cannot use starter pools at all" (VNet blocks starter pools)
-         148b5151 (managed VNet: 3-5 min cold start, blocks regional migration)
-         "Spark billing in Fabric covers only the period a notebook or job session is actively running" (billing = active only)
-         "Custom pool node sizes range from Small... to XX-Large" (node sizing)
-         "A Fabric Spark pool instance consists of one head node plus workers... Livy, YARN RM, ZooKeeper..." (topology)
-         "Sessions expire after 20 minutes by default... unused pool deallocated 2 minutes after..." (session expiry) -->
+  <desc id="spark-fabric-architecture-desc">Fabric Spark session architecture: How notebooks and job definitions acquire managed Spark compute through starter or custom pools, run driver and executor work against OneLake, and expose lifecycle and monitoring signals.</desc>
 
   <defs>
-    <linearGradient id="hdrA" x1="0" y1="0" x2="1" y2="0">
+    <!-- Header Gradient -->
+    <linearGradient id="sfa-head" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#0B4A6F"/>
       <stop offset="0.5" stop-color="#146A9C"/>
-      <stop offset="1" stop-color="#2E93CC"/>
+      <stop offset="1" stop-color="#0284C7"/>
     </linearGradient>
-    <linearGradient id="capGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0B4A6F"/>
-      <stop offset="1" stop-color="#146A9C"/>
+
+    <!-- Substrate Gradients -->
+    <linearGradient id="sfa-onelake" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#083344"/>
+      <stop offset="0.5" stop-color="#0E7490"/>
+      <stop offset="1" stop-color="#06B6D4"/>
     </linearGradient>
-    <linearGradient id="starterGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#E8F6EE"/>
-      <stop offset="1" stop-color="#C3EBD4"/>
-    </linearGradient>
-    <linearGradient id="customGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FDF3E4"/>
-      <stop offset="1" stop-color="#F9DFB0"/>
-    </linearGradient>
-    <linearGradient id="lakeGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#0B4A6F"/>
-      <stop offset="1" stop-color="#08344F"/>
-    </linearGradient>
-    <marker id="arrBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#146A9C"/>
+
+    <!-- Drop Shadows -->
+    <filter id="sfa-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0B4A6F" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="sfa-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0284C7"/>
     </marker>
-    <marker id="arrGreen2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#1E8E5A"/>
+    <marker id="sfa-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
     </marker>
-    <marker id="arrAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#C97A0F"/>
+    <marker id="sfa-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
     </marker>
-    <marker id="arrDarkA" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#0B4A6F"/>
-    </marker>
+
+    <!-- Official Microsoft Notebook Item Icon Gradients -->
+    <linearGradient id="sfa-nb-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="sfa-nb-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="sfa-nb-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="sfa-nb-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+
+    <!-- Official Microsoft OneLake Icon -->
+    <linearGradient id="sfa-ol-a" x1="16" x2="16" y1="2" y2="30" gradientUnits="userSpaceOnUse"><stop stop-color="#0078D4"/><stop offset="1" stop-color="#004C87"/></linearGradient>
   </defs>
 
-  <rect x="0" y="0" width="1180" height="900" fill="#FFFFFF"/>
+  <!-- Canvas Base -->
+  <rect width="1200" height="880" fill="#F0F9FF"/>
 
-  <!-- Header -->
-  <rect x="0" y="0" width="1180" height="66" fill="url(#hdrA)"/>
-  <text x="30" y="30" fill="#FFFFFF" font-size="21" font-weight="700">How a Spark Session Runs in Microsoft Fabric</text>
-  <text x="30" y="50" fill="#DCEEFA" font-size="12.5">Capacity budget → pool choice → session startup path → entry points → lakehouse I/O over OneLake</text>
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#sfa-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#sfa-nb-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#sfa-nb-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#sfa-nb-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#sfa-nb-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#sfa-nb-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#sfa-nb-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Fabric Spark Session Architecture &amp; Lifecycle</text>
+  <text x="40" y="64" font-size="12" fill="#BAE6FD">Capacity envelope ➔ Starter/Custom pools ➔ Head/Worker topology ➔ Native/JVM routing ➔ OneLake Delta I/O</text>
 
-  <!-- ============ ROW 1: CAPACITY ============ -->
-  <rect x="30" y="86" width="1120" height="94" rx="10" fill="url(#capGrad)"/>
-  <text x="50" y="110" fill="#FFFFFF" font-size="14" font-weight="700">1. Fabric Capacity — the Spark vCore budget</text>
-  <text x="50" y="130" fill="#DCEEFA" font-size="12">Each capacity unit (CU) grants 2 Spark vCores, plus a 3x burst multiplier on top</text>
-  <text x="50" y="148" fill="#DCEEFA" font-size="12">Example: F64 SKU = 64 CU x 2 x 3 = 384 Spark vCores — this ceiling caps how large a custom pool can be sized</text>
-  <rect x="760" y="102" width="360" height="62" rx="8" fill="#08344F" stroke="#2E93CC" stroke-width="1"/>
-  <text x="780" y="122" fill="#8FD1F0" font-size="11" font-weight="700">F64 EXAMPLE</text>
-  <text x="780" y="142" fill="#FFFFFF" font-size="13" font-weight="700">64 CU  x  2  x  3 burst  =  384 Spark vCores</text>
-  <text x="780" y="158" fill="#B9DFF2" font-size="10.5">Billing covers active session time only — idle pre-warm, acquisition, and</text>
-
-  <!-- Connector down -->
-  <line x1="590" y1="180" x2="590" y2="205" stroke="#0B4A6F" stroke-width="2.5" marker-end="url(#arrDarkA)"/>
-
-  <!-- ============ ROW 2: POOL CHOICE ============ -->
-  <text x="50" y="222" fill="#0B4A6F" font-size="14" font-weight="700">2. Pool choice — determines the startup path</text>
-
-  <!-- Starter pool panel -->
-  <rect x="30" y="232" width="540" height="230" rx="10" fill="url(#starterGrad)" stroke="#1E8E5A" stroke-width="1.5"/>
-  <text x="50" y="256" fill="#0F5C39" font-size="14" font-weight="700">Starter pool (default)</text>
-  <text x="50" y="274" fill="#1E6B45" font-size="11.5">Pre-provisioned, always-on Medium-node clusters</text>
-
-  <rect x="50" y="286" width="500" height="46" rx="6" fill="#FFFFFF" stroke="#1E8E5A" stroke-width="1"/>
-  <text x="66" y="304" fill="#0F5C39" font-size="12" font-weight="700">Warm session start: 5–10 seconds</text>
-  <text x="66" y="320" fill="#3A7A57" font-size="10.5">Medium-node cluster already running; hand-off is near-instant</text>
-
-  <rect x="50" y="338" width="500" height="46" rx="6" fill="#FCECEC" stroke="#B22222" stroke-width="1"/>
-  <text x="66" y="356" fill="#7A1414" font-size="12" font-weight="700">Falls to on-demand: 2–5 minutes</text>
-  <text x="66" y="372" fill="#8A3A3A" font-size="10.5">Trigger: any non-Medium node size, or a custom compute config</text>
-
-  <rect x="50" y="390" width="500" height="56" rx="6" fill="#FCECEC" stroke="#B22222" stroke-width="1"/>
-  <text x="66" y="408" fill="#7A1414" font-size="12" font-weight="700">Unavailable entirely on Tenant Private Link / Managed VNet</text>
-  <text x="66" y="424" fill="#8A3A3A" font-size="10.5">Forces on-demand provisioning (2–5 min); Managed VNet alone widens</text>
-  <text x="66" y="438" fill="#8A3A3A" font-size="10.5">this to 3–5 min and blocks workspace regional migration afterward</text>
-
-  <!-- Custom pool panel -->
-  <rect x="600" y="232" width="550" height="230" rx="10" fill="url(#customGrad)" stroke="#C97A0F" stroke-width="1.5"/>
-  <text x="620" y="256" fill="#7A4A0A" font-size="14" font-weight="700">Custom pool (admin-tuned)</text>
-  <text x="620" y="274" fill="#8F5A14" font-size="11.5">Sized by node size, min/max nodes, autoscale settings</text>
-
-  <rect x="620" y="286" width="510" height="46" rx="6" fill="#FFFFFF" stroke="#C97A0F" stroke-width="1"/>
-  <text x="636" y="304" fill="#7A4A0A" font-size="12" font-weight="700">Cold session start: ~3 minutes</text>
-  <text x="636" y="320" fill="#8F5A14" font-size="10.5">Nodes are acquired from Azure on demand — not pre-warmed</text>
-
-  <rect x="620" y="338" width="510" height="30" rx="6" fill="#FFFFFF" stroke="#C97A0F" stroke-width="1"/>
-  <text x="636" y="358" fill="#7A4A0A" font-size="8.5" font-weight="700">Node sizes: Small (4/32GB) → Medium (8/64) → Large (16/128) → X-Large (32/256) → XX-Large (64/512)</text>
-
-  <rect x="620" y="374" width="510" height="72" rx="6" fill="#FFFFFF" stroke="#C97A0F" stroke-width="1"/>
-  <text x="636" y="392" fill="#7A4A0A" font-size="12" font-weight="700">Library personalization adds on top of cluster start</text>
-  <text x="636" y="408" fill="#8F5A14" font-size="10.5">Quick mode: +30s–5min (install at session start)</text>
-  <text x="636" y="422" fill="#8F5A14" font-size="10.5">Full mode: +1–3min (deploy environment snapshot)</text>
-  <text x="636" y="436" fill="#1E6B45" font-size="10.5" font-weight="700">Full mode + custom live pool: ~5s (snapshot pre-baked on hydrated nodes)</text>
-
-  <!-- Connector down -->
-  <line x1="590" y1="462" x2="590" y2="486" stroke="#0B4A6F" stroke-width="2.5" marker-end="url(#arrDarkA)"/>
-
-  <!-- ============ ROW 3: SESSION TOPOLOGY ============ -->
-  <text x="50" y="504" fill="#0B4A6F" font-size="14" font-weight="700">3. Session topology once a pool is chosen</text>
-  <rect x="30" y="514" width="1120" height="120" rx="10" fill="#F2F8FC" stroke="#146A9C" stroke-width="1.2"/>
-
-  <!-- head node -->
-  <rect x="50" y="530" width="230" height="88" rx="8" fill="#FFFFFF" stroke="#146A9C" stroke-width="1.5"/>
-  <text x="165" y="548" fill="#0B4A6F" font-size="12.5" font-weight="700" text-anchor="middle">Head node</text>
-  <text x="165" y="565" fill="#2E5E7C" font-size="10.5" text-anchor="middle">Livy · YARN Resource Manager</text>
-  <text x="165" y="579" fill="#2E5E7C" font-size="10.5" text-anchor="middle">ZooKeeper · Spark driver</text>
-  <text x="165" y="600" fill="#5A7C8C" font-size="9.5" text-anchor="middle">1 node dedicated — not an executor</text>
-
-  <line x1="280" y1="574" x2="320" y2="574" stroke="#146A9C" stroke-width="2" marker-end="url(#arrBlue)"/>
-
-  <!-- worker nodes -->
-  <rect x="320" y="530" width="330" height="88" rx="8" fill="#FFFFFF" stroke="#146A9C" stroke-width="1.5"/>
-  <text x="485" y="548" fill="#0B4A6F" font-size="12.5" font-weight="700" text-anchor="middle">Worker nodes (1:1 with executors)</text>
-  <text x="485" y="565" fill="#2E5E7C" font-size="10.5" text-anchor="middle">Each node: Node Agent + YARN Node Manager</text>
-  <text x="485" y="579" fill="#2E5E7C" font-size="10.5" text-anchor="middle">+ one Spark Executor service</text>
-  <text x="485" y="600" fill="#5A7C8C" font-size="9.5" text-anchor="middle">Single-node pool: driver + executor split one node 50/50</text>
-
-  <!-- session lifecycle -->
-  <rect x="670" y="530" width="460" height="88" rx="8" fill="#FFFFFF" stroke="#146A9C" stroke-width="1.5"/>
-  <text x="900" y="548" fill="#0B4A6F" font-size="12.5" font-weight="700" text-anchor="middle">Session lifecycle</text>
-  <text x="900" y="566" fill="#2E5E7C" font-size="10.5" text-anchor="middle">Idle timeout: 20 min default (configurable)</text>
-  <text x="900" y="581" fill="#2E5E7C" font-size="10.5" text-anchor="middle">Pool deallocated 2 min after session expiry</text>
-  <text x="900" y="602" fill="#1E6B45" font-size="10.5" font-weight="700" text-anchor="middle">Billed window = active execution only (no idle/acquisition/teardown charge)</text>
-
-  <!-- High-concurrency note -->
-  <rect x="30" y="644" width="1120" height="46" rx="8" fill="#EAF3FA" stroke="#2E93CC" stroke-width="1"/>
-  <text x="50" y="664" fill="#0B4A6F" font-size="11.5" font-weight="700">High-concurrency sessions:</text>
-  <text x="260" y="664" fill="#2E5E7C" font-size="11.5">multiple notebooks share one running Spark session/pool instead of each cold-starting its own —</text>
-  <text x="50" y="680" fill="#2E5E7C" font-size="11.5">reduces the number of 5–10s (starter) or ~3min (custom) cold starts paid across a batch of concurrent notebook users.</text>
-
-  <!-- Connector down -->
-  <line x1="590" y1="690" x2="590" y2="712" stroke="#0B4A6F" stroke-width="2.5" marker-end="url(#arrDarkA)"/>
-
-  <!-- ============ ROW 4: ENTRY POINTS + IO ============ -->
-  <text x="50" y="730" fill="#0B4A6F" font-size="14" font-weight="700">4. Entry points and the OneLake I/O path</text>
-
-  <!-- Entry points -->
-  <rect x="30" y="740" width="330" height="130" rx="10" fill="#FFFFFF" stroke="#146A9C" stroke-width="1.5"/>
-  <text x="195" y="762" fill="#0B4A6F" font-size="12.5" font-weight="700" text-anchor="middle">Entry points</text>
-  <rect x="48" y="774" width="294" height="40" rx="6" fill="#EAF3FA"/>
-  <text x="195" y="792" fill="#0B4A6F" font-size="11.5" font-weight="700" text-anchor="middle">Interactive notebook</text>
-  <text x="195" y="806" fill="#2E5E7C" font-size="10" text-anchor="middle">attaches to starter or custom pool session</text>
-  <rect x="48" y="820" width="294" height="40" rx="6" fill="#EAF3FA"/>
-  <text x="195" y="838" fill="#0B4A6F" font-size="11.5" font-weight="700" text-anchor="middle">Spark job definition (batch)</text>
-  <text x="195" y="852" fill="#2E5E7C" font-size="10" text-anchor="middle">submitted via Livy on the head node</text>
-
-  <line x1="360" y1="805" x2="410" y2="805" stroke="#146A9C" stroke-width="2" marker-end="url(#arrBlue)"/>
-
-  <!-- Driver/executors mini -->
-  <rect x="410" y="740" width="270" height="130" rx="10" fill="#FFFFFF" stroke="#146A9C" stroke-width="1.5"/>
-  <text x="545" y="762" fill="#0B4A6F" font-size="12.5" font-weight="700" text-anchor="middle">Runs across driver + executors</text>
-  <text x="545" y="782" fill="#2E5E7C" font-size="10.5" text-anchor="middle">(DAG scheduling, stages, tasks —</text>
-  <text x="545" y="796" fill="#2E5E7C" font-size="10.5" text-anchor="middle">see spark-job-execution-internals</text>
-  <text x="545" y="810" fill="#2E5E7C" font-size="10.5" text-anchor="middle">for that breakdown)</text>
-  <rect x="428" y="822" width="234" height="34" rx="6" fill="#F2F8FC"/>
-  <text x="545" y="843" fill="#0B4A6F" font-size="10.5" text-anchor="middle" font-weight="700">Dynamic allocation claims executors from the pool</text>
-
-  <line x1="680" y1="805" x2="730" y2="805" stroke="#146A9C" stroke-width="2" marker-end="url(#arrBlue)"/>
-
-  <!-- OneLake -->
-  <rect x="730" y="740" width="420" height="130" rx="10" fill="url(#lakeGrad)"/>
-  <text x="940" y="762" fill="#FFFFFF" font-size="12.5" font-weight="700" text-anchor="middle">Lakehouse I/O over OneLake</text>
-  <rect x="748" y="774" width="384" height="40" rx="6" fill="#0F5A7D"/>
-  <text x="940" y="792" fill="#FFFFFF" font-size="11" font-weight="700" text-anchor="middle">Reads: Delta tables, optionally Z-ordered / Liquid-Clustered</text>
-  <text x="940" y="806" fill="#B9DFF2" font-size="9.5" text-anchor="middle">layout choices here affect downstream native-engine acceleration</text>
-  <rect x="748" y="820" width="384" height="40" rx="6" fill="#0F5A7D"/>
-  <text x="940" y="838" fill="#FFFFFF" font-size="11" font-weight="700" text-anchor="middle">Writes: shuffle-then-write file consolidation (Optimized Write)</text>
-  <text x="940" y="852" fill="#B9DFF2" font-size="9.5" text-anchor="middle">tuned by BinSize; see spark-engineering.svg for write-path detail</text>
-
-  <!-- Legend -->
-  <rect x="30" y="882" width="1120" height="1" fill="#DCE6EE"/>
-  <text x="30" y="0" opacity="0"/>
-  <g transform="translate(30,886)">
-    <rect x="0" y="4" width="14" height="14" rx="3" fill="#C3EBD4" stroke="#1E8E5A"/>
-    <text x="20" y="15" fill="#3A5A63" font-size="10.5">Starter pool path</text>
-    <rect x="150" y="4" width="14" height="14" rx="3" fill="#F9DFB0" stroke="#C97A0F"/>
-    <text x="170" y="15" fill="#3A5A63" font-size="10.5">Custom pool path</text>
-    <rect x="300" y="4" width="14" height="14" rx="3" fill="#FCECEC" stroke="#B22222"/>
-    <text x="320" y="15" fill="#3A5A63" font-size="10.5">Slower / restricted path</text>
-    <rect x="480" y="4" width="14" height="14" rx="3" fill="#0B4A6F"/>
-    <text x="500" y="15" fill="#3A5A63" font-size="10.5">OneLake / storage</text>
-    <text x="650" y="15" fill="#7A8A94" font-size="9.5">Source: Microsoft Learn — Apache Spark compute for Fabric (tier 1)</text>
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#BAE6FD"/>
+    <circle cx="20" cy="15" r="5" fill="#0284C7"/><text x="32" y="19" fill="#0369A1" font-weight="600">Capacity &amp; Admission</text>
+    <circle cx="220" cy="15" r="5" fill="#059669"/><text x="232" y="19" fill="#065F46" font-weight="600">Starter Pool (5–10s)</text>
+    <circle cx="410" cy="15" r="5" fill="#D97706"/><text x="422" y="19" fill="#92400E" font-weight="600">Custom Pool (2–5m)</text>
+    <circle cx="610" cy="15" r="5" fill="#7C3AED"/><text x="622" y="19" fill="#5B21B6" font-weight="600">Head/Worker Execution</text>
+    <circle cx="830" cy="15" r="5" fill="#0E7490"/><text x="842" y="19" fill="#0E7490" font-weight="600">OneLake Delta I/O</text>
+    <text x="1100" y="19" text-anchor="end" fill="#64748B">Fabric Atlas Original</text>
   </g>
 
-  <!-- Full-region keyboard and pointer targets; metadata comes from the evidence sidecar. -->
+  <!-- ========================================================================= -->
+  <!-- LAYER 1: ENTRYPOINTS & CAPACITY ENVELOPE                                  -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="142" rx="14" fill="#FFFFFF" stroke="#BAE6FD" stroke-width="1.4"/>
+  <rect x="56" y="156" width="370" height="20" rx="10" fill="#E0F2FE"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#0369A1" letter-spacing="1px">STAGE 1: AUTHORING &amp; CAPACITY vCORE BUDGET</text>
+
+  <!-- Node: step-1 -->
   <g data-node-id="step-1" role="group" tabindex="0" aria-label="Notebook or job definition">
     <title data-node-tooltip="true">Notebook or job definition — Interactive notebooks and scheduled job definitions submit Spark applications.</title>
-    <rect x="48.0" y="820.0" width="294.0" height="40.0" rx="6.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="56" y="184" width="510" height="92" rx="10" fill="#F0F9FF" stroke="#7DD3FC" stroke-width="1.5" filter="url(#sfa-shadow)"/>
+    <rect x="70" y="196" width="90" height="16" rx="8" fill="#E0F2FE"/><text x="115" y="207" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0284C7">ENTRY POINT</text>
+    <text x="170" y="209" font-size="13" font-weight="700" fill="#0369A1">Notebook or Spark Job Definition</text>
+    <text x="70" y="232" font-size="10" fill="#075985">• Interactive cells vs packaged <tspan font-family="monospace">main(argv)</tspan> batch definitions</text>
+    <text x="70" y="250" font-size="10" fill="#075985">• Environment attachment sets libraries &amp; pool binding</text>
+    <rect x="500" y="196" width="52" height="14" rx="7" fill="#E0F2FE"/><text x="526" y="206" text-anchor="middle" font-size="8" font-weight="700" fill="#0284C7">FACT</text>
   </g>
+
+  <!-- Node: step-2 -->
   <g data-node-id="step-2" role="group" tabindex="0" aria-label="Capacity vCore envelope">
     <title data-node-tooltip="true">Capacity vCore envelope — The assigned Fabric capacity bounds Spark compute available to its workspaces.</title>
-    <rect x="30.0" y="86.0" width="1120.0" height="94.0" rx="10.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="630" y="184" width="510" height="92" rx="10" fill="#0C4A6E" stroke="#0284C7" stroke-width="1.5" filter="url(#sfa-shadow)"/>
+    <rect x="644" y="196" width="100" height="16" rx="8" fill="#0369A1"/><text x="694" y="207" text-anchor="middle" font-size="8.5" font-weight="700" fill="#E0F2FE">CAPACITY LIMIT</text>
+    <text x="754" y="209" font-size="13" font-weight="700" fill="#FFFFFF">Capacity vCore Envelope</text>
+    <text x="644" y="232" font-size="10" fill="#BAE6FD">• 1 CU = 2 Spark vCores + 3x burst multiplier (F64 = 384 vCores)</text>
+    <text x="644" y="250" font-size="10" fill="#BAE6FD">• Shared boundary capping concurrent workspace sessions</text>
+    <rect x="1074" y="196" width="52" height="14" rx="7" fill="#0369A1"/><text x="1100" y="206" text-anchor="middle" font-size="8" font-weight="700" fill="#E0F2FE">FACT</text>
   </g>
+
+  <!-- Connector: step-1 -> step-2 -->
+  <path d="M 566 230 H 630" stroke="#0284C7" stroke-width="2.2" fill="none" marker-end="url(#sfa-arr-blue)"/>
+
+  <!-- ========================================================================= -->
+  <!-- LAYER 2: POOL STARTUP PATHWAYS & LIFECYCLE RISK                           -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="302" width="1120" height="186" rx="14" fill="#FFFFFF" stroke="#BAE6FD" stroke-width="1.4"/>
+  <rect x="56" y="312" width="370" height="20" rx="10" fill="#E0F2FE"/>
+  <text x="66" y="326" font-size="10.5" font-weight="700" fill="#0369A1" letter-spacing="1px">STAGE 2: POOL ACQUISITION &amp; LIFECYCLE RISKS</text>
+
+  <!-- Node: step-3 -->
   <g data-node-id="step-3" role="group" tabindex="0" aria-label="Starter or custom pool">
     <title data-node-tooltip="true">Starter or custom pool — Starter pools favor preconfigured fast acquisition; custom pools expose node and scale controls.</title>
-    <rect x="48.0" y="774.0" width="294.0" height="40.0" rx="6.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="56" y="340" width="510" height="136" rx="10" fill="#F0FDF4" stroke="#86EFAC" stroke-width="1.6" filter="url(#sfa-shadow)"/>
+    <rect x="70" y="352" width="90" height="16" rx="8" fill="#DCFCE7"/><text x="115" y="363" text-anchor="middle" font-size="8.5" font-weight="700" fill="#15803D">ACQUISITION</text>
+    <text x="170" y="365" font-size="13" font-weight="700" fill="#166534">Starter vs Custom Pools</text>
+    <text x="70" y="388" font-size="10" fill="#15803D">• Starter Pool: 5–10s attach on pre-warmed Medium fleet (8 vC/64 GB)</text>
+    <text x="70" y="406" font-size="10" fill="#15803D">• Falls to 2–5m on-demand if non-Medium or customized</text>
+    <text x="70" y="424" font-size="10" fill="#15803D">• Custom Live Pool: ~5s attach with snapshot pre-baked on warm nodes</text>
+    <text x="70" y="442" font-size="10" fill="#15803D">• Managed VNet / Private Links disable starter pools (forces 3–5m on-demand)</text>
+    <rect x="500" y="352" width="52" height="14" rx="7" fill="#DCFCE7"/><text x="526" y="362" text-anchor="middle" font-size="8" font-weight="700" fill="#15803D">FACT</text>
   </g>
-  <g data-node-id="step-4" role="group" tabindex="0" aria-label="Driver and executors">
-    <title data-node-tooltip="true">Driver and executors — A pool has a head node hosting the driver and worker nodes hosting executors.</title>
-    <rect x="410.0" y="740.0" width="270.0" height="130.0" rx="10.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
-  </g>
-  <g data-node-id="step-5" role="group" tabindex="0" aria-label="Native and JVM execution">
-    <title data-node-tooltip="true">Native and JVM execution — Supported SQL operators can run through the native engine while unsupported segments fall back to JVM Spark.</title>
-    <rect x="748.0" y="774.0" width="384.0" height="40.0" rx="6.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
-  </g>
-  <g data-node-id="step-6" role="group" tabindex="0" aria-label="OneLake Delta I/O">
-    <title data-node-tooltip="true">OneLake Delta I/O — Spark reads and writes lakehouse Delta tables in OneLake.</title>
-    <rect x="730.0" y="740.0" width="420.0" height="130.0" rx="10.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
-  </g>
+
+  <!-- Node: step-7 -->
   <g data-node-id="step-7" role="group" tabindex="0" aria-label="Session lifecycle risk">
     <title data-node-tooltip="true">Session lifecycle risk — Idle expiry and deallocation end the session; startup and library personalization affect schedules.</title>
-    <rect x="670.0" y="530.0" width="460.0" height="88.0" rx="8.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="630" y="340" width="510" height="136" rx="10" fill="#FFFBEB" stroke="#FCD34D" stroke-width="1.6" filter="url(#sfa-shadow)"/>
+    <rect x="644" y="352" width="90" height="16" rx="8" fill="#FEF3C7"/><text x="689" y="363" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B45309">LIFECYCLE</text>
+    <text x="744" y="365" font-size="13" font-weight="700" fill="#78350F">Session Lifecycle &amp; Billing Window</text>
+    <text x="644" y="388" font-size="10" fill="#92400E">• 20 min idle timeout deallocates session; pool released +2 min later</text>
+    <text x="644" y="406" font-size="10" fill="#92400E">• Billing meters active execution time only (pre-warm/acquisition free)</text>
+    <text x="644" y="424" font-size="10" fill="#92400E">• Library Quick mode (+30s–5m) vs Full snapshot mode (+1–3m)</text>
+    <text x="644" y="442" font-size="10" fill="#92400E">• Sizing schedulers must budget for cold-start buffers</text>
+    <rect x="1074" y="352" width="60" height="14" rx="7" fill="#FEF3C7"/><text x="1104" y="362" text-anchor="middle" font-size="8" font-weight="700" fill="#B45309">WARNING</text>
   </g>
+
+  <!-- Connector: step-3 -> step-7 -->
+  <path d="M 566 408 H 630" stroke="#D97706" stroke-width="2.2" fill="none" marker-end="url(#sfa-arr-warn)"/>
+
+  <!-- ========================================================================= -->
+  <!-- LAYER 3: TOPOLOGY & NATIVE/JVM EXECUTION                                  -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="502" width="1120" height="186" rx="14" fill="#FFFFFF" stroke="#BAE6FD" stroke-width="1.4"/>
+  <rect x="56" y="512" width="370" height="20" rx="10" fill="#E0F2FE"/>
+  <text x="66" y="526" font-size="10.5" font-weight="700" fill="#0369A1" letter-spacing="1px">STAGE 3: CLUSTER EXECUTION TOPOLOGY</text>
+
+  <!-- Node: step-4 -->
+  <g data-node-id="step-4" role="group" tabindex="0" aria-label="Driver and executors">
+    <title data-node-tooltip="true">Driver and executors — A pool has a head node hosting the driver and worker nodes hosting executors.</title>
+    <rect x="56" y="540" width="510" height="136" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#sfa-shadow)"/>
+    <rect x="70" y="552" width="80" height="16" rx="8" fill="#EDE9FE"/><text x="110" y="563" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">TOPOLOGY</text>
+    <text x="160" y="565" font-size="13" font-weight="700" fill="#4C1D95">Driver &amp; Executor Topology</text>
+    <text x="70" y="588" font-size="10" fill="#5B21B6">• Head node hosts Livy, YARN Resource Manager, ZooKeeper, Spark Driver</text>
+    <text x="70" y="606" font-size="10" fill="#5B21B6">• Worker nodes: 1:1 executor per worker with Node Agent &amp; YARN NM</text>
+    <text x="70" y="624" font-size="10" fill="#5B21B6">• Single-node pool exception: 1 node splits Driver + Executor (50/50)</text>
+    <text x="70" y="642" font-size="10" fill="#5B21B6">• Dynamic Allocation adjusts worker count between configured min/max</text>
+    <rect x="500" y="552" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="526" y="562" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Node: step-5 -->
+  <g data-node-id="step-5" role="group" tabindex="0" aria-label="Native and JVM execution">
+    <title data-node-tooltip="true">Native and JVM execution — Supported SQL operators can run through the native engine while unsupported segments fall back to JVM Spark.</title>
+    <rect x="630" y="540" width="510" height="136" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.6" filter="url(#sfa-shadow)"/>
+    <rect x="644" y="552" width="90" height="16" rx="8" fill="#D1FAE5"/><text x="689" y="563" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">EXECUTION</text>
+    <text x="744" y="565" font-size="13" font-weight="700" fill="#064E3B">Native (Velox) &amp; JVM Tungsten Execution</text>
+    <text x="644" y="588" font-size="10" fill="#065F46">• Gluten translates supported physical plan operators into Substrait</text>
+    <text x="644" y="606" font-size="10" fill="#065F46">• Velox executes SIMD-vectorized C++ kernels over columnar batches</text>
+    <text x="644" y="624" font-size="10" fill="#065F46">• Unsupported operators fall back to standard JVM Spark safely</text>
+    <text x="644" y="642" font-size="10" fill="#065F46">• Spark Advisor surfaces real-time fallback alerts directly in notebook cells</text>
+    <rect x="1074" y="552" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="1100" y="562" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- Connector: step-4 -> step-5 -->
+  <path d="M 566 608 H 630" stroke="#059669" stroke-width="2.2" fill="none" marker-end="url(#sfa-arr-green)"/>
+
+  <!-- ========================================================================= -->
+  <!-- LAYER 4: ONELAKE STORAGE PERSISTENCE                                      -->
+  <!-- ========================================================================= -->
+  <!-- Node: step-6 -->
+  <g data-node-id="step-6" role="group" tabindex="0" aria-label="OneLake Delta I/O">
+    <title data-node-tooltip="true">OneLake Delta I/O — Spark reads and writes lakehouse Delta tables in OneLake.</title>
+    <rect x="40" y="702" width="1120" height="136" rx="14" fill="url(#sfa-onelake)" stroke="#0E7490" stroke-width="1.8" filter="url(#sfa-shadow)"/>
+    <g data-official-icon="microsoft" data-icon-name="one_lake_32_color">
+      <g transform="translate(60,720) scale(1.1)">
+        <path fill="#FFFFFF" d="M16 2a14 14 0 1 0 14 14A14 14 0 0 0 16 2zm0 25.6A11.6 11.6 0 1 1 27.6 16 11.6 11.6 0 0 1 16 27.6z"/>
+        <path fill="#FFFFFF" d="M16 7a9 9 0 1 0 9 9 9 9 0 0 0-9-9zm0 16.2A7.2 7.2 0 1 1 23.2 16 7.2 7.2 0 0 1 16 23.2z"/>
+      </g>
+    </g>
+    <text x="106" y="738" font-size="15" font-weight="700" fill="#FFFFFF">4 · OneLake Delta Lake I/O &amp; Layout Optimization</text>
+    <text x="60" y="768" font-size="10.5" fill="#CFFAFE">• Reads &amp; writes versioned Delta tables with ACID transaction log (<tspan font-family="monospace">_delta_log/*.json</tspan>)</text>
+    <text x="60" y="788" font-size="10.5" fill="#CFFAFE">• Write optimizations: Optimized Write (repartitioning ~256MB), V-Order Parquet sorting, Auto Compaction (<tspan font-family="monospace">auto: true</tspan>)</text>
+    <text x="60" y="808" font-size="10.5" fill="#CFFAFE">• Downstream zero-copy serving across SQL Analytics Endpoint, Synapse Warehouse &amp; Power BI Direct Lake</text>
+    <rect x="1074" y="722" width="52" height="14" rx="7" fill="#083344"/><text x="1100" y="732" text-anchor="middle" font-size="8" font-weight="700" fill="#A5F3FC">FACT</text>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="862" text-anchor="end" font-size="9.5" fill="#64748B">Fabric Atlas — Original Diagram, August 2026. Sourced from Microsoft Learn: Apache Spark in Microsoft Fabric &amp; Compute Pools.</text>
 </svg>

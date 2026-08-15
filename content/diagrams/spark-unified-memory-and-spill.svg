@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 920" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-unified-memory-and-spill-title spark-unified-memory-and-spill-desc" data-diagram-id="spark-unified-memory-and-spill">
+  <title id="spark-unified-memory-and-spill-title">Spark unified memory management and where spill comes from</title>
+  <desc id="spark-unified-memory-and-spill-desc">Spark unified memory management in Microsoft Fabric: Executor JVM heap layout, Reserved 300 MiB, Unified 60% pool, User 40% headroom, Execution vs Storage asymmetric borrowing, storageFraction eviction floor, spill anti-patterns, and off-heap overhead memory.</desc>
+
+  <defs>
+    <!-- Header Gradient -->
+    <linearGradient id="mem-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4A2170"/>
+      <stop offset="0.5" stop-color="#7C3AAD"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="mem-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#4A2170" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="mem-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
+    </marker>
+    <marker id="mem-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="mem-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
+    </marker>
+
+    <!-- Official Microsoft Notebook Item Icon Gradients -->
+    <linearGradient id="mem-nb-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="mem-nb-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="mem-nb-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="mem-nb-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+  </defs>
+
+  <!-- Canvas Base -->
+  <rect width="1200" height="920" fill="#FAF5FF"/>
+
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#mem-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#mem-nb-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#mem-nb-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#mem-nb-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#mem-nb-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#mem-nb-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#mem-nb-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Unified Memory Management &amp; Where Spill Comes From</text>
+  <text x="40" y="64" font-size="12" fill="#E9D8FD">Heap layout (Reserved + 60% Unified + 40% User) ➔ Execution vs Storage borrowing ➔ The storageFraction spill trap</text>
+
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D8FD"/>
+    <circle cx="20" cy="15" r="5" fill="#7C3AAD"/><text x="32" y="19" fill="#4C1D95" font-weight="600">Lane 1: JVM Heap Layout</text>
+    <circle cx="250" cy="15" r="5" fill="#2563EB"/><text x="262" y="19" fill="#1E40AF" font-weight="600">Lane 2: Asymmetric Borrowing</text>
+    <circle cx="500" cy="15" r="5" fill="#DC2626"/><text x="512" y="19" fill="#991B1B" font-weight="600">Lane 3: Spill Trap &amp; Off-Heap Overhead</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 1: JVM HEAP PARTITIONING (RESERVED ➔ UNIFIED ➔ USER)                 -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="230" rx="14" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
+  <rect x="56" y="156" width="370" height="20" rx="10" fill="#EDE9FE"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#4C1D95" letter-spacing="1px">LANE 1: EXECUTOR JVM HEAP PARTITIONING</text>
+
+  <!-- Node: reserved -->
+  <g data-node-id="reserved" role="group" tabindex="0" aria-label="Reserved — 300 MiB, fixed">
+    <title data-node-tooltip="true">Reserved — 300 MiB, fixed — A fixed 300 MiB is reserved before any memory fraction is applied.</title>
+    <rect x="56" y="184" width="320" height="176" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6" filter="url(#mem-shadow)"/>
+    <rect x="68" y="194" width="90" height="16" rx="8" fill="#F1F5F9"/><text x="113" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">HARD-CODED</text>
+    <text x="68" y="228" font-size="13" font-weight="700" fill="#1E293B">1 · Reserved — 300 MiB</text>
+    <text x="68" y="250" font-size="9.5" fill="#475569">• Fixed 300 MiB subtracted before any</text>
+    <text x="68" y="264" font-size="9.5" fill="#475569">  fraction or pool sizing calculation</text>
+    <text x="68" y="284" font-size="9.5" fill="#475569">• Holds Spark internal system objects</text>
+    <text x="68" y="304" font-size="9.5" fill="#475569">• Non-configurable; not user-accessible</text>
+    <text x="68" y="324" font-size="8.5" fill="#64748B">Usable Heap = <tspan font-family="monospace">Heap − 300 MiB</tspan></text>
+    <rect x="310" y="194" width="52" height="14" rx="7" fill="#F1F5F9"/><text x="336" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#475569">FACT</text>
+  </g>
+
+  <!-- Node: unified -->
+  <g data-node-id="unified" role="group" tabindex="0" aria-label="Unified pool — fraction 0.6">
+    <title data-node-tooltip="true">Unified pool — fraction 0.6 — spark.memory.fraction sizes the shared execution and storage pool at 0.6 of the usable heap.</title>
+    <rect x="396" y="184" width="370" height="176" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#mem-shadow)"/>
+    <rect x="408" y="194" width="110" height="16" rx="8" fill="#EDE9FE"/><text x="463" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">SHARED POOL (0.6)</text>
+    <text x="408" y="228" font-size="13" font-weight="700" fill="#4C1D95">2 · Unified Pool — Fraction 0.6</text>
+    <text x="408" y="250" font-size="9.5" fill="#5B21B6">• Sized by <tspan font-family="monospace">spark.memory.fraction</tspan> (defaults to 0.6)</text>
+    <text x="408" y="268" font-size="9.5" fill="#5B21B6">• Shared dynamically between Execution and Storage</text>
+    <text x="408" y="286" font-size="9.5" fill="#5B21B6">• On 16 GB heap: pool is approx 9.42 GB</text>
+    <!-- Visual Bar Representation -->
+    <rect x="408" y="306" width="346" height="16" rx="3" fill="#EDE9FE"/>
+    <rect x="408" y="306" width="208" height="16" rx="3" fill="#7C3AAD"/>
+    <text x="512" y="318" text-anchor="middle" font-size="8.5" font-weight="700" fill="#FFFFFF">Unified Managed Pool (60%)</text>
+    <text x="695" y="318" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">User (40%)</text>
+    <rect x="700" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="726" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Node: user -->
+  <g data-node-id="user" role="group" tabindex="0" aria-label="User memory — the remaining 40%">
+    <title data-node-tooltip="true">User memory — the remaining 40% — The remaining heap holds user data structures and guards against oversized records.</title>
+    <rect x="786" y="184" width="358" height="176" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6" filter="url(#mem-shadow)"/>
+    <rect x="798" y="194" width="110" height="16" rx="8" fill="#F1F5F9"/><text x="853" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">USER HEADROOM</text>
+    <text x="798" y="228" font-size="13" font-weight="700" fill="#1E293B">3 · User Memory — Remaining 40%</text>
+    <text x="798" y="250" font-size="9.5" fill="#475569">• Holds user data structures, UDF closures, metadata</text>
+    <text x="798" y="268" font-size="9.5" fill="#475569">• Deliberate buffer safeguarding against skewed records</text>
+    <text x="798" y="286" font-size="9.5" fill="#475569">• Never managed by Spark's unified memory manager</text>
+    <text x="798" y="306" font-size="9.5" fill="#475569">• Large in-memory Python/Scala objects live here</text>
+    <text x="798" y="324" font-size="8.5" fill="#64748B">Exhaustion causes instant JVM OutOfMemoryError</text>
+    <rect x="1078" y="194" width="52" height="14" rx="7" fill="#F1F5F9"/><text x="1104" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#475569">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 2: ASYMMETRIC BORROWING (EXECUTION ➔ STORAGE ➔ FLOOR)                -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="392" width="1120" height="246" rx="14" fill="#FFFFFF" stroke="#BFDBFE" stroke-width="1.4"/>
+  <rect x="56" y="402" width="370" height="20" rx="10" fill="#DBEAFE"/>
+  <text x="66" y="416" font-size="10.5" font-weight="700" fill="#1E40AF" letter-spacing="1px">LANE 2: THE SHARED POOL — ASYMMETRIC BORROWING &amp; EVICTION</text>
+
+  <!-- Node: execution -->
+  <g data-node-id="execution" role="group" tabindex="0" aria-label="Execution memory">
+    <title data-node-tooltip="true">Execution memory — Execution memory serves shuffles, joins, sorts and aggregations and may evict storage.</title>
+    <rect x="56" y="430" width="350" height="192" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.6" filter="url(#mem-shadow)"/>
+    <rect x="68" y="440" width="120" height="16" rx="8" fill="#DBEAFE"/><text x="128" y="451" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">WORKING MEMORY</text>
+    <text x="68" y="474" font-size="13" font-weight="700" fill="#1E3A8A">4 · Execution Memory</text>
+    <text x="68" y="496" font-size="9.5" fill="#1E40AF">• Shuffles, hash joins, sorts, aggregations</text>
+    <text x="68" y="514" font-size="9.5" fill="#1E40AF">• Short-lived working memory during task run</text>
+    <text x="68" y="534" font-size="9.5" fill="#1E40AF">• <tspan font-weight="700" fill="#1D4ED8">Power to Evict:</tspan> Execution <tspan font-weight="700">CAN</tspan> evict cached</text>
+    <text x="68" y="548" font-size="9.5" fill="#1E40AF">  storage blocks down to the eviction floor</text>
+    <text x="68" y="568" font-size="9.5" fill="#1E40AF">• Borrows 100% of storage pool when cache is idle</text>
+    <rect x="340" y="440" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="366" y="450" text-anchor="middle" font-size="8" font-weight="700" fill="#1D4ED8">FACT</text>
+  </g>
+
+  <!-- Node: storage -->
+  <g data-node-id="storage" role="group" tabindex="0" aria-label="Storage memory">
+    <title data-node-tooltip="true">Storage memory — Storage memory holds cached and broadcast blocks and can never evict execution.</title>
+    <rect x="426" y="430" width="350" height="192" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.6" filter="url(#mem-shadow)"/>
+    <rect x="438" y="440" width="110" height="16" rx="8" fill="#D1FAE5"/><text x="493" y="451" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">CACHE &amp; BROADCAST</text>
+    <text x="438" y="474" font-size="13" font-weight="700" fill="#064E3B">5 · Storage Memory</text>
+    <text x="438" y="496" font-size="9.5" fill="#065F46">• Cached DataFrames (<tspan font-family="monospace">df.cache()</tspan>) &amp; broadcasts</text>
+    <text x="438" y="514" font-size="9.5" fill="#065F46">• May borrow full pool if execution has no tasks</text>
+    <text x="438" y="534" font-size="9.5" fill="#065F46">• <tspan font-weight="700" fill="#B91C1C">Cannot Evict Execution:</tspan> Storage <tspan font-weight="700">CANNOT</tspan></text>
+    <text x="438" y="548" font-size="9.5" fill="#065F46">  evict running task execution memory!</text>
+    <text x="438" y="568" font-size="9.5" fill="#065F46">• Evicted cache blocks drop to disk or vanish</text>
+    <rect x="710" y="440" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="736" y="450" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- Node: floor -->
+  <g data-node-id="floor" role="group" tabindex="0" aria-label="storageFraction is an eviction floor">
+    <title data-node-tooltip="true">storageFraction is an eviction floor — storageFraction sets the storage floor execution may not reclaim, not a fixed partition.</title>
+    <rect x="796" y="430" width="348" height="192" rx="10" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.6" filter="url(#mem-shadow)"/>
+    <rect x="808" y="440" width="120" height="16" rx="8" fill="#FEF3C7"/><text x="868" y="451" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B45309">EVICTION FLOOR (0.5)</text>
+    <text x="808" y="474" font-size="13" font-weight="700" fill="#78350F">6 · storageFraction Floor</text>
+    <text x="808" y="496" font-size="9.5" fill="#92400E">• Sized by <tspan font-family="monospace">spark.memory.storageFraction</tspan> (0.5)</text>
+    <text x="808" y="514" font-size="9.5" fill="#92400E">• <tspan font-weight="700">Not a Reservation:</tspan> It does not reserve 50%</text>
+    <text x="808" y="528" font-size="9.5" fill="#92400E">  for cache upfront</text>
+    <text x="808" y="548" font-size="9.5" fill="#92400E">• It sets the <tspan font-weight="700">immune boundary</tspan> below which</text>
+    <text x="808" y="562" font-size="9.5" fill="#92400E">  execution is forbidden to evict cached data</text>
+    <rect x="1078" y="440" width="52" height="14" rx="7" fill="#FEF3C7"/><text x="1104" y="450" text-anchor="middle" font-size="8" font-weight="700" fill="#B45309">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 3: SPILL TRAP & OFF-HEAP OVERHEAD (SPILL ➔ OVERHEAD)                 -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="654" width="1120" height="206" rx="14" fill="#FFFFFF" stroke="#FCA5A5" stroke-width="1.4"/>
+  <rect x="56" y="664" width="410" height="20" rx="10" fill="#FEE2E2"/>
+  <text x="66" y="678" font-size="10.5" font-weight="700" fill="#991B1B" letter-spacing="1px">LANE 3: THE SPILL TRAP &amp; OFF-HEAP EXECUTOR OVERHEAD</text>
+
+  <!-- Node: spill -->
+  <g data-node-id="spill" role="group" tabindex="0" aria-label="Raising storageFraction causes spill">
+    <title data-node-tooltip="true">Raising storageFraction causes spill — Raising the storage floor starves execution and produces the spill it was meant to avoid.</title>
+    <rect x="56" y="692" width="530" height="152" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.8" filter="url(#mem-shadow)"/>
+    <rect x="68" y="702" width="90" height="16" rx="8" fill="#FEE2E2"/><text x="113" y="713" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">CRITICAL TRAP</text>
+    <text x="68" y="736" font-size="13" font-weight="700" fill="#991B1B">7 · Raising storageFraction Causes Spill</text>
+    <text x="68" y="758" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Anti-Pattern:</tspan> Raising storageFraction to protect a cache starves execution memory</text>
+    <text x="68" y="776" font-size="9.5" fill="#7F1D1D">• Sorts &amp; joins can no longer borrow memory and are forced to spill to local disk</text>
+    <text x="68" y="794" font-size="9.5" fill="#7F1D1D">• Every spilled byte is written once &amp; read back, triggering severe I/O degradation</text>
+    <text x="68" y="812" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Heuristic:</tspan> Leave fractions at defaults; reduce partition sizes instead</text>
+    <rect x="520" y="702" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="546" y="712" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">WARNING</text>
+  </g>
+
+  <!-- Node: overhead -->
+  <g data-node-id="overhead" role="group" tabindex="0" aria-label="Overhead is separate from the heap">
+    <title data-node-tooltip="true">Overhead is separate from the heap — Executor memory overhead is requested on top of the heap and is session-start scope.</title>
+    <rect x="606" y="692" width="538" height="152" rx="10" fill="#F8FAFC" stroke="#94A3B8" stroke-width="1.6" filter="url(#mem-shadow)"/>
+    <rect x="618" y="702" width="130" height="16" rx="8" fill="#F1F5F9"/><text x="683" y="713" text-anchor="middle" font-size="8.5" font-weight="700" fill="#334155">OFF-HEAP &amp; NATIVE</text>
+    <text x="618" y="736" font-size="13" font-weight="700" fill="#0F172A">8 · Overhead is Separate from the Heap</text>
+    <text x="618" y="758" font-size="9.5" fill="#334155">• <tspan font-family="monospace">spark.executor.memoryOverhead</tspan> is allocated <tspan font-weight="700">outside</tspan> the JVM heap</text>
+    <text x="618" y="776" font-size="9.5" fill="#334155">• Powers JVM native internal buffers, PySpark C-extension workers</text>
+    <text x="618" y="794" font-size="9.5" fill="#334155">• <tspan font-weight="700">Native Velox Engine:</tspan> Vectorized off-heap C++ allocations execute in overhead</text>
+    <text x="618" y="812" font-size="9.5" fill="#334155">• Configurable only at pool / environment startup scope (never per-cell)</text>
+    <rect x="1078" y="702" width="52" height="14" rx="7" fill="#F1F5F9"/><text x="1104" y="712" text-anchor="middle" font-size="8" font-weight="700" fill="#334155">FACT</text>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="890" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Apache Spark Memory Management &amp; Fabric Spark Toolkit Internals.</text>
+</svg>

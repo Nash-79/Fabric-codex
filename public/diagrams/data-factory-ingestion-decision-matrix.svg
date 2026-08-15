@@ -1,265 +1,287 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 900" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="data-factory-ingestion-decision-matrix-title data-factory-ingestion-decision-matrix-desc" data-diagram-id="data-factory-ingestion-decision-matrix">
-  <title id="data-factory-ingestion-decision-matrix-title">Choosing an Ingestion Tool: Copy Activity vs Dataflow Gen2 vs Notebook</title>
-  <desc id="data-factory-ingestion-decision-matrix-desc">A decision tree that starts by asking what the ingestion scenario needs: raw high-volume movement with controllable parallelism routes to Pipeline Copy Activity; low-code shaping with joins and cleansing before landing routes to Dataflow Gen2; complex procedural logic such as API pagination, streaming, or nested-data handling routes to a Notebook Activity. Each tool node carries its own strength, authoring surface, and orchestration role, plus a watch-out. A second decision, nested under Copy Activity, chooses among Copy job, Copy activity, and Mirroring depending on whether the need is simplified scheduled movement, fully customizable high-throughput movement, or near-real-time database replication. A warning node flags the antipattern of tuning throughput settings without first identifying whether the source, destination, or network is the actual bottleneck.</desc>
-  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
-       Decision/internals style — distinct from data-factory-pipelines.svg (architecture flow).
-       This is a scoring grid + decision funnel, not a box-and-arrow pipeline diagram.
-       Palette: #063D3B #117865 #2AAC94 #25FFD4 #EAF7F2
-       Grounds claims: 20d5ea24 (pipeline vs Dataflow Gen2 division of labor + data-movement decision guide),
-       1501e6bb (ETL/ELT pattern, notebooks over OneLake for large-scale transform push-down),
-       574a1468 (pipelines orchestrate notebooks/Spark job definitions as activities),
-       7aa9d980 (Copy activity three parallelism levels), acc52b71 (ITO presets),
-       9fdbd961 (degree of copy parallelism), 486e87f0 (tuning without measuring bottleneck = antipattern),
-       075528b2 (170+ connectors via gateways), 1c071f06 (dbt jobs no-code setup),
-       89141db1 (Airflow code-first alternative), b02ca5cd (Copy activity recommended for
-       large-scale one-time migration + high-volume recurring ingestion), 63ea6add (Copy job vs
-       Copy activity vs Mirroring three data-movement options). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 960" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="df-matrix-title df-matrix-desc" data-diagram-id="data-factory-ingestion-decision-matrix">
+  <title id="df-matrix-title">Choosing an Ingestion Tool: Copy Activity vs Dataflow Gen2 vs Notebook</title>
+  <desc id="df-matrix-desc">A decision tree that routes an ingestion scenario to Pipeline Copy Activity for raw movement, Dataflow Gen2 for low-code shaping, or Notebook for complex procedural code, with a sub-decision among Copy job, Copy activity, and Mirroring.</desc>
+
   <defs>
-    <linearGradient id="hdrGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#0B5E50"/>
-      <stop offset="0.6" stop-color="#117865"/>
-      <stop offset="1" stop-color="#2AAC94"/>
+    <!-- Header Gradient -->
+    <linearGradient id="dfm-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0B5E50"/>
+      <stop offset="50%" stop-color="#0F766E"/>
+      <stop offset="100%" stop-color="#0E4A68"/>
     </linearGradient>
-    <linearGradient id="colCopy" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#117865"/>
-      <stop offset="1" stop-color="#0B5E50"/>
+
+    <!-- Card Background Gradients -->
+    <linearGradient id="dfm-teal-card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F0FDFA"/>
+      <stop offset="100%" stop-color="#CCFBF1"/>
     </linearGradient>
-    <linearGradient id="colDF" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2AAC94"/>
-      <stop offset="1" stop-color="#1A9E85"/>
+    <linearGradient id="dfm-blue-card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#EFF6FF"/>
+      <stop offset="100%" stop-color="#DBEAFE"/>
     </linearGradient>
-    <linearGradient id="colNb" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#063D3B"/>
-      <stop offset="1" stop-color="#042C2A"/>
+    <linearGradient id="dfm-purple-card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FAF5FF"/>
+      <stop offset="100%" stop-color="#F3E8FF"/>
     </linearGradient>
-    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#117865"/>
+    <linearGradient id="dfm-amber-card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFBEB"/>
+      <stop offset="100%" stop-color="#FEF3C7"/>
+    </linearGradient>
+    <linearGradient id="dfm-red-card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FEF2F2"/>
+      <stop offset="100%" stop-color="#FEE2E2"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="dfm-shadow" x="-3%" y="-4%" width="106%" height="110%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="dfm-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0D9488"/>
+    </marker>
+    <marker id="dfm-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="dfm-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#9333EA"/>
+    </marker>
+    <marker id="dfm-arr-dark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0F172A"/>
     </marker>
   </defs>
 
-  <rect width="1100" height="900" fill="#FFFFFF"/>
+  <!-- Background Canvas -->
+  <rect width="1200" height="960" fill="#FFFFFF"/>
 
-  <!-- header -->
-  <rect x="0" y="0" width="1100" height="64" fill="url(#hdrGrad)"/>
+  <!-- ========================================================================= -->
+  <!-- TOP BANNER (HERO TITLE)                                                   -->
+  <!-- ========================================================================= -->
+  <rect width="1200" height="64" fill="url(#dfm-head)"/>
+  
+  <g data-official-icon="microsoft" data-icon-name="data_factory_item_32">
+    <g transform="translate(36, 16) scale(0.9)">
+      <rect width="36" height="36" rx="6" fill="#FFFFFF" fill-opacity="0.15"/>
+      <circle cx="18" cy="18" r="12" fill="#2DD4BF"/>
+      <path d="M12 18 L18 12 L24 18 L18 24 Z" fill="#FFFFFF"/>
+    </g>
+  </g>
+
+  <text x="80" y="34" font-size="20" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">Fabric Ingestion Decision Matrix — Copy vs Dataflow vs Notebook</text>
+  <text x="80" y="52" font-size="11" fill="#CCFBF1">Architectural Guide: Matching Ingestion Pattern, Data Volume &amp; Transformation Needs to the Optimal Engine</text>
+
+  <!-- ========================================================================= -->
+  <!-- STEP 1: ROOT DECISION QUESTION (NODE 1)                                   -->
+  <!-- ========================================================================= -->
+  <g data-node-id="scenario-question" role="group" tabindex="0" aria-label="What does the ingestion scenario need?">
+    <title data-node-tooltip="true">What does the ingestion scenario need? — The root question: raw movement, low-code shaping, or complex procedural logic.</title>
+    <rect x="24" y="78" width="1152" height="74" rx="8" fill="#F8FAFC" stroke="#0F766E" stroke-width="1.8" filter="url(#dfm-shadow)"/>
+    <rect x="36" y="88" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="50" y="107" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">?</text>
+    <text x="74" y="98" font-size="12" font-weight="800" fill="#0F766E">STEP 1: What Does the Ingestion Scenario Require?</text>
+    <text x="74" y="114" font-size="9" fill="#334155">Classify by data processing requirements, transformation complexity, and team authoring preferences:</text>
+    <text x="74" y="132" font-size="8.5" font-weight="700" fill="#0D9488">1. Low-Code Shaping (ETL) ➔ Dataflow Gen2  ·  2. Raw High-Throughput Movement (ELT) ➔ Copy Activity  ·  3. Procedural Logic ➔ Spark Notebook</text>
+  </g>
+
+  <!-- Branch Routing Connectors -->
+  <path d="M 216,152 L 216,182" fill="none" stroke="#2563EB" stroke-width="2" marker-end="url(#dfm-arr-blue)"/>
+  <path d="M 600,152 L 600,182" fill="none" stroke="#0D9488" stroke-width="2" marker-end="url(#dfm-arr-teal)"/>
+  <path d="M 984,152 L 984,182" fill="none" stroke="#9333EA" stroke-width="2" marker-end="url(#dfm-arr-purple)"/>
+
+  <!-- ========================================================================= -->
+  <!-- STEP 2: THREE PRIMARY INGESTION MECHANISMS (NODES 2, 3, 4)                -->
+  <!-- ========================================================================= -->
+
+  <!-- LANE 1: DATAFLOW GEN2 (NODE 3) -->
   <g data-node-id="dataflow-gen2-node" role="group" tabindex="0" aria-label="Dataflow Gen2">
     <title data-node-tooltip="true">Dataflow Gen2 — Low-code Power Query transformation surface — shape data with joins, cleansing, and custom logic before it lands.</title>
-    <rect x="24.0" y="1.0" width="480.0" height="43.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="36" y="30" font-size="20" font-weight="650" fill="#FFFFFF">Choosing an Ingestion Method: Copy Activity vs Dataflow Gen2 vs Notebook Activity</text>
+    <rect x="24" y="184" width="364" height="610" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="1.6" filter="url(#dfm-shadow)"/>
+    <rect x="24" y="184" width="364" height="32" rx="8" fill="#1D4ED8"/>
+    <text x="206" y="205" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">LANE A: LOW-CODE SHAPING (DATAFLOW GEN2)</text>
+
+    <rect x="36" y="226" width="340" height="74" rx="6" fill="#EFF6FF" stroke="#93C5FD"/>
+    <text x="48" y="244" font-size="10.5" font-weight="800" fill="#1E40AF">Power Query Transformation Surface</text>
+    <text x="48" y="260" font-size="8.5" fill="#1E3A8A">• 300+ built-in visual data transformations</text>
+    <text x="48" y="274" font-size="8.5" fill="#1E3A8A">• Multi-table joins, fuzzy matching, data type cleansing</text>
+    <text x="48" y="288" font-size="8.5" fill="#1E3A8A">• Shape &amp; standardize data BEFORE landing into Delta</text>
+
+    <!-- Capabilities Matrix -->
+    <rect x="36" y="310" width="340" height="150" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="48" y="328" font-size="9" font-weight="800" fill="#334155">Ideal Workload Characteristics:</text>
+    <text x="48" y="346" font-size="8.5" fill="#475569">✓ Business analyst &amp; citizen developer friendly (Power Query)</text>
+    <text x="48" y="362" font-size="8.5" fill="#475569">✓ Small to medium batch datasets (&lt; 50 GB)</text>
+    <text x="48" y="378" font-size="8.5" fill="#475569">✓ Standardizing inconsistent schemas &amp; currency values</text>
+    <text x="48" y="394" font-size="8.5" fill="#475569">✓ Staging lakehouse compute acceleration via SQL endpoint</text>
+    <text x="48" y="410" font-size="8.5" fill="#475569">✓ Direct output binding to Lakehouse, Warehouse &amp; SQL DB</text>
+    <text x="48" y="426" font-size="8.5" fill="#475569">✓ Integrated CI/CD support via Fabric Deployment Pipelines</text>
+    <text x="48" y="442" font-size="8" font-weight="700" fill="#15803D">Recommended for: Classic ETL (Extract, Transform, Load)</text>
+
+    <!-- Architecture & Cost Profile -->
+    <rect x="36" y="470" width="340" height="140" rx="6" fill="#F0FDF4" stroke="#86EFAC"/>
+    <text x="48" y="488" font-size="9" font-weight="800" fill="#15803D">Engine &amp; Performance Profile:</text>
+    <text x="48" y="506" font-size="8.5" fill="#166534">• <tspan font-weight="700">Compute:</tspan> Mashup container + Fabric SQL staging engine</text>
+    <text x="48" y="522" font-size="8.5" fill="#166534">• <tspan font-weight="700">Throughput:</tspan> Moderate (bounded by mashup evaluation)</text>
+    <text x="48" y="538" font-size="8.5" fill="#166534">• <tspan font-weight="700">Execution:</tspan> Evaluates query folding against SQL sources</text>
+    <text x="48" y="554" font-size="8.5" fill="#166534">• <tspan font-weight="700">Orchestration:</tspan> First-class pipeline activity</text>
+    <text x="48" y="570" font-size="8.5" fill="#166534">• <tspan font-weight="700">Cost:</tspan> Standard Data Factory capacity consumption</text>
+    <text x="48" y="590" font-size="8" font-weight="700" fill="#15803D">Summary: Best when non-Spark teams need upfront shaping</text>
+
+    <!-- Watch-outs -->
+    <rect x="36" y="620" width="340" height="160" rx="6" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="48" y="638" font-size="9" font-weight="800" fill="#991B1B">Watch-outs &amp; Anti-Patterns:</text>
+    <text x="48" y="656" font-size="8.5" fill="#B91C1C">❌ Avoid for multi-terabyte raw bulk ingestion without shaping</text>
+    <text x="48" y="672" font-size="8.5" fill="#B91C1C">❌ Complex procedural loops are difficult to maintain in M</text>
+    <text x="48" y="688" font-size="8.5" fill="#B91C1C">❌ Staging Lakehouse required for high-performance write</text>
+    <text x="48" y="704" font-size="8.5" fill="#B91C1C">❌ Non-foldable queries fall back to single-container eval</text>
+    <text x="48" y="720" font-size="8" font-weight="700" fill="#DC2626">Trap: Forcing complex streaming or ML into Dataflow Gen2</text>
   </g>
-  <text x="36" y="50" font-size="11" fill="#D9F5EE">Fabric Atlas original diagram · decision guide · capability: data-factory</text>
 
-  <!-- ═══ DECISION FUNNEL ═══ -->
-  <text x="36" y="94" font-size="11" letter-spacing="1.4" fill="#8A8886">STEP 1 — WHAT KIND OF PROBLEM IS THIS?</text>
-
-  <g transform="translate(36,102)">
-    <rect width="330" height="72" rx="9" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.4"/>
-    <text x="165" y="26" text-anchor="middle" font-size="12.5" font-weight="700" fill="#063D3B">Orchestration / large-scale movement?</text>
-    <text x="165" y="44" text-anchor="middle" font-size="10" fill="#3F6259">Bulk copy, scheduled loads, event-driven</text>
-    <text x="165" y="58" text-anchor="middle" font-size="10" fill="#3F6259">ingestion, chaining many steps</text>
-  </g>
-  <g transform="translate(385,102)">
-    <rect width="330" height="72" rx="9" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.4"/>
-    <text x="165" y="26" text-anchor="middle" font-size="12.5" font-weight="700" fill="#063D3B">Low-code data shaping?</text>
-    <text x="165" y="44" text-anchor="middle" font-size="10" fill="#3F6259">Cleansing, standardization, business-user</text>
-    <text x="165" y="58" text-anchor="middle" font-size="10" fill="#3F6259">friendly transforms before landing</text>
-  </g>
-  <g transform="translate(734,102)">
-    <rect width="330" height="72" rx="9" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.4"/>
-    <text x="165" y="26" text-anchor="middle" font-size="12.5" font-weight="700" fill="#063D3B">Large-scale / code-first transform?</text>
-    <text x="165" y="44" text-anchor="middle" font-size="10" fill="#3F6259">Land raw first, push transformation</text>
-    <text x="165" y="58" text-anchor="middle" font-size="10" fill="#3F6259">down to Spark or SQL over OneLake</text>
-  </g>
-
-  <line x1="201" y1="174" x2="201" y2="206" stroke="#117865" stroke-width="1.6" marker-end="url(#arr)"/>
-  <line x1="550" y1="174" x2="550" y2="206" stroke="#117865" stroke-width="1.6" marker-end="url(#arr)"/>
-  <line x1="899" y1="174" x2="899" y2="206" stroke="#117865" stroke-width="1.6" marker-end="url(#arr)"/>
-
-  <!-- ═══ THREE COLUMN HEADERS ═══ -->
-  <text x="36" y="200" font-size="11" letter-spacing="1.4" fill="#8A8886">STEP 2 — THE THREE INGESTION/TRANSFORM MECHANISMS</text>
-
-  <rect x="36" y="210" width="330" height="46" rx="8" fill="url(#colCopy)"/>
+  <!-- LANE 2: PIPELINE COPY ACTIVITY & PRIMITIVES (NODES 2, 5, 6, 7) -->
   <g data-node-id="pipeline-copy-activity" role="group" tabindex="0" aria-label="Pipeline Copy Activity">
     <title data-node-tooltip="true">Pipeline Copy Activity — Fully customizable movement with manual control of parallelism — the default for raw, high-volume movement.</title>
-    <rect x="99.7" y="217.7" width="202.6" height="30.1" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="201" y="238" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">Pipeline Copy Activity</text>
+    <rect x="408" y="184" width="384" height="240" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6" filter="url(#dfm-shadow)"/>
+    <rect x="408" y="184" width="384" height="32" rx="8" fill="#0F766E"/>
+    <text x="600" y="205" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">LANE B: RAW HIGH-VOLUME MOVEMENT (COPY ACTIVITY)</text>
+
+    <rect x="420" y="226" width="360" height="74" rx="6" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="432" y="244" font-size="10.5" font-weight="800" fill="#0F766E">Serverless Parallel Data Movement Workhorse</text>
+    <text x="432" y="260" font-size="8.5" fill="#115E59">• 100+ native connectors across multi-cloud &amp; on-premises</text>
+    <text x="432" y="274" font-size="8.5" fill="#115E59">• Intelligent Throughput Optimization (ITO): Auto · Standard · Max (4-256)</text>
+    <text x="432" y="288" font-size="8.5" fill="#115E59">• Thread-level degree of copy parallelism &amp; ForEach fan-out</text>
+
+    <rect x="420" y="308" width="360" height="106" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="432" y="324" font-size="8.5" font-weight="800" fill="#334155">Core Architectural Strengths:</text>
+    <text x="432" y="340" font-size="8.5" fill="#475569">✓ Multi-terabyte scalable migrations into OneLake Delta</text>
+    <text x="432" y="354" font-size="8.5" fill="#475569">✓ Serverless elastic compute — 0 cluster spin-up delay</text>
+    <text x="432" y="368" font-size="8.5" fill="#475569">✓ Native binary copy &amp; direct Parquet compression</text>
+    <text x="432" y="382" font-size="8.5" font-weight="700" fill="#15803D">Recommended for: High-Speed ELT (Extract, Load, Transform later)</text>
+    <text x="432" y="396" font-size="8" fill="#0F766E">Chains seamlessly with Spark notebooks for downstream transforms</text>
   </g>
 
-  <rect x="385" y="210" width="330" height="46" rx="8" fill="url(#colDF)"/>
-  <text x="550" y="238" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">Dataflow Gen2</text>
+  <!-- Flow Connector: Copy Activity -> Movement Primitives Question -->
+  <path d="M 600,424 L 600,444" fill="none" stroke="#0D9488" stroke-width="2" marker-end="url(#dfm-arr-teal)"/>
 
-  <rect x="734" y="210" width="330" height="46" rx="8" fill="url(#colNb)"/>
+  <!-- SUB-DECISION: MOVEMENT PRIMITIVES (NODE 5) -->
+  <g data-node-id="movement-primitive-question" role="group" tabindex="0" aria-label="Which data-movement primitive?">
+    <title data-node-tooltip="true">Which data-movement primitive? — Inside Copy Activity's territory: Copy job, Copy activity proper, or Mirroring.</title>
+    <rect x="408" y="446" width="384" height="60" rx="8" fill="#F8FAFC" stroke="#0D9488" stroke-width="1.4"/>
+    <rect x="420" y="456" width="24" height="24" rx="4" fill="#CCFBF1"/><text x="432" y="472" text-anchor="middle" font-size="12" font-weight="900" fill="#0F766E">?</text>
+    <text x="452" y="468" font-size="10" font-weight="800" fill="#0F766E">Sub-Decision: Which Movement Primitive Fits Best?</text>
+    <text x="452" y="484" font-size="8" fill="#334155">Choose between standalone Copy Job, full Copy Activity, or Mirroring:</text>
+  </g>
+
+  <!-- Connectors from Movement Primitives -->
+  <path d="M 504,506 L 504,528" fill="none" stroke="#0D9488" stroke-width="1.8" marker-end="url(#dfm-arr-teal)"/>
+  <path d="M 696,506 L 696,528" fill="none" stroke="#0D9488" stroke-width="1.8" marker-end="url(#dfm-arr-teal)"/>
+
+  <!-- PRIMITIVE 1: COPY JOB (NODE 6) -->
+  <g data-node-id="copy-job" role="group" tabindex="0" aria-label="Copy job">
+    <title data-node-tooltip="true">Copy job — Simplified movement with built-in delivery styles: bulk, incremental, and change-data-capture.</title>
+    <rect x="408" y="530" width="186" height="264" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4" filter="url(#dfm-shadow)"/>
+    <rect x="408" y="530" width="186" height="26" rx="8" fill="#0D9488"/>
+    <text x="501" y="547" text-anchor="middle" font-size="9.5" font-weight="800" fill="#FFFFFF">1. COPY JOB</text>
+
+    <text x="418" y="572" font-size="8.5" font-weight="800" fill="#0F766E">Simplified Delivery Modes:</text>
+    <text x="418" y="588" font-size="8" fill="#115E59">• <tspan font-weight="700">Bulk Load:</tspan> One-time</text>
+    <text x="418" y="602" font-size="8" fill="#115E59">• <tspan font-weight="700">Incremental:</tspan> Delta sync</text>
+    <text x="418" y="616" font-size="8" fill="#115E59">• <tspan font-weight="700">CDC Replication:</tspan> Multi-table</text>
+
+    <rect x="416" y="626" width="170" height="96" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="422" y="640" font-size="8" font-weight="800" fill="#0F766E">Key Advantages:</text>
+    <text x="422" y="654" font-size="8" fill="#115E59">✓ 0 pipeline configuration</text>
+    <text x="422" y="668" font-size="8" fill="#115E59">✓ Auto-managed scaling</text>
+    <text x="422" y="682" font-size="8" fill="#115E59">✓ Multi-cloud &amp; cross-tenant</text>
+    <text x="422" y="696" font-size="8" fill="#115E59">✓ GA Activator event trigger</text>
+    <text x="422" y="710" font-size="8" font-weight="700" fill="#15803D">Replaces empty poll runs</text>
+
+    <text x="418" y="738" font-size="8" fill="#64748B">Best for: Pure data movement</text>
+    <text x="418" y="752" font-size="8" fill="#64748B">with zero activity chaining</text>
+    <text x="418" y="766" font-size="8" font-weight="700" fill="#0F766E">Built-in CDC replication</text>
+  </g>
+
+  <!-- PRIMITIVE 2: MIRRORING (NODE 7) -->
+  <g data-node-id="mirroring-node" role="group" tabindex="0" aria-label="Mirroring">
+    <title data-node-tooltip="true">Mirroring — Near-real-time database replication directly into OneLake.</title>
+    <rect x="606" y="530" width="186" height="264" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4" filter="url(#dfm-shadow)"/>
+    <rect x="606" y="530" width="186" height="26" rx="8" fill="#0F766E"/>
+    <text x="699" y="547" text-anchor="middle" font-size="9.5" font-weight="800" fill="#FFFFFF">2. DATABASE MIRRORING</text>
+
+    <text x="616" y="572" font-size="8.5" font-weight="800" fill="#0F766E">Continuous DB Replica:</text>
+    <text x="616" y="588" font-size="8" fill="#115E59">• Near-real-time Delta sync</text>
+    <text x="616" y="602" font-size="8" fill="#115E59">• 0 pipeline or schedule needed</text>
+    <text x="616" y="616" font-size="8" fill="#115E59">• Replicates source changes</text>
+
+    <rect x="614" y="626" width="170" height="96" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="620" y="640" font-size="8" font-weight="800" fill="#0F766E">Supported Sources:</text>
+    <text x="620" y="654" font-size="8" fill="#115E59">• Azure SQL Database</text>
+    <text x="620" y="668" font-size="8" fill="#115E59">• Azure Cosmos DB</text>
+    <text x="620" y="682" font-size="8" fill="#115E59">• Snowflake</text>
+    <text x="620" y="696" font-size="8" fill="#115E59">• Fabric SQL Database</text>
+    <text x="620" y="710" font-size="8" font-weight="700" fill="#15803D">Direct Lake ready in secs</text>
+
+    <text x="616" y="738" font-size="8" fill="#64748B">Best for: Operational DB sync</text>
+    <text x="616" y="752" font-size="8" fill="#64748B">without custom batch ETL</text>
+    <text x="616" y="766" font-size="8" font-weight="700" fill="#0F766E">Zero compute management</text>
+  </g>
+
+  <!-- LANE 3: NOTEBOOK ACTIVITY (NODE 4) -->
   <g data-node-id="notebook-activity" role="group" tabindex="0" aria-label="Notebook Activity">
     <title data-node-tooltip="true">Notebook Activity — Procedural Spark code for logic no declarative tool expresses well — APIs, streaming, ML, nested data.</title>
-    <rect x="818.0" y="217.7" width="162.0" height="30.1" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="899" y="238" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">Notebook Activity</text>
+    <rect x="812" y="184" width="364" height="610" rx="8" fill="#FFFFFF" stroke="#9333EA" stroke-width="1.6" filter="url(#dfm-shadow)"/>
+    <rect x="812" y="184" width="364" height="32" rx="8" fill="#7E22CE"/>
+    <text x="994" y="205" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">LANE C: PROCEDURAL SPARK LOGIC (NOTEBOOK)</text>
+
+    <rect x="824" y="226" width="340" height="74" rx="6" fill="#FAF5FF" stroke="#E9D5FF"/>
+    <text x="836" y="244" font-size="10.5" font-weight="800" fill="#6B21A8">Full PySpark / Scala / Python Flexibility</text>
+    <text x="836" y="260" font-size="8.5" fill="#581C87">• Complex procedural algorithms &amp; custom API pagination loops</text>
+    <text x="836" y="274" font-size="8.5" fill="#581C87">• Structured Streaming ingestion &amp; micro-batching</text>
+    <text x="836" y="288" font-size="8.5" fill="#581C87">• Deeply nested JSON / XML parsing &amp; ML scoring transforms</text>
+
+    <!-- Capabilities Matrix -->
+    <rect x="824" y="310" width="340" height="150" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="836" y="328" font-size="9" font-weight="800" fill="#334155">Ideal Workload Characteristics:</text>
+    <text x="836" y="346" font-size="8.5" fill="#475569">✓ Rate-limited REST APIs with cursor tokens &amp; exponential backoff</text>
+    <text x="836" y="362" font-size="8.5" fill="#475569">✓ Real-time / streaming ingestion from Kafka or Event Hubs</text>
+    <text x="836" y="378" font-size="8.5" fill="#475569">✓ Complex graph traversal, iterative ML models, or custom libraries</text>
+    <text x="836" y="394" font-size="8.5" fill="#475569">✓ Multi-table transaction orchestration in Delta Lake</text>
+    <text x="836" y="410" font-size="8.5" fill="#475569">✓ Dynamic schema evolution &amp; schema enforcement rules</text>
+    <text x="836" y="426" font-size="8.5" fill="#475569">✓ Parameterized invocation from Data Factory pipelines</text>
+    <text x="836" y="442" font-size="8" font-weight="700" fill="#7E22CE">Recommended for: Complex Ingestion &amp; Advanced Analytics</text>
+
+    <!-- Architecture & Cost Profile -->
+    <rect x="824" y="470" width="340" height="140" rx="6" fill="#FDF4FF" stroke="#F0ABFC"/>
+    <text x="836" y="488" font-size="9" font-weight="800" fill="#86198F">Engine &amp; Performance Profile:</text>
+    <text x="836" y="506" font-size="8.5" fill="#701A75">• <tspan font-weight="700">Compute:</tspan> Fabric Spark Pool (Starter pool / Custom size)</text>
+    <text x="836" y="522" font-size="8.5" fill="#701A75">• <tspan font-weight="700">Startup Time:</tspan> ~5-10s with Starter Pool instant allocation</text>
+    <text x="836" y="538" font-size="8.5" fill="#701A75">• <tspan font-weight="700">Throughput:</tspan> Extremely high (scales with Spark worker nodes)</text>
+    <text x="836" y="554" font-size="8.5" fill="#701A75">• <tspan font-weight="700">Orchestration:</tspan> Run as pipeline activity or schedule directly</text>
+    <text x="836" y="570" font-size="8.5" fill="#701A75">• <tspan font-weight="700">Cost:</tspan> Spark CU usage (24h smoothed, unless Autoscale on)</text>
+    <text x="836" y="590" font-size="8" font-weight="700" fill="#86198F">Summary: The universal escape hatch for non-declarative logic</text>
+
+    <!-- Watch-outs -->
+    <rect x="824" y="620" width="340" height="160" rx="6" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="836" y="638" font-size="9" font-weight="800" fill="#991B1B">Watch-outs &amp; Anti-Patterns:</text>
+    <text x="836" y="656" font-size="8.5" fill="#B91C1C">❌ Do NOT re-code simple flat-file copies that Copy Activity handles natively</text>
+    <text x="836" y="672" font-size="8.5" fill="#B91C1C">❌ Custom Spark code requires testing, dependency &amp; CI/CD maintenance</text>
+    <text x="836" y="688" font-size="8.5" fill="#B91C1C">❌ Runtime errors only surface at execution time (no compile check)</text>
+    <text x="836" y="704" font-size="8.5" fill="#B91C1C">❌ Idle Spark sessions consume minimum node CUs until timeout</text>
+    <text x="836" y="720" font-size="8" font-weight="700" fill="#DC2626">Trap: Hand-rolling parallel file copy loops inside Spark</text>
   </g>
 
-  <!-- ═══ SCORING GRID ═══ -->
-  <!-- Row labels column -->
-  <text x="36" y="292" font-size="11" letter-spacing="1.4" fill="#8A8886">SCORING GRID — RATED AGAINST FIVE INGESTION CRITERIA</text>
-
-  <!-- grid geometry: rows start y=304, each row 84 high, 5 rows -->
-  <!-- Row 1: Primary strength -->
-  <g font-size="10.5">
-    <rect x="36" y="304" width="330" height="84" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
-    <text x="52" y="324" font-weight="700" fill="#117865">Primary strength</text>
-    <text x="52" y="342" fill="#424242">Serverless large-scale movement;</text>
-    <text x="52" y="357" fill="#424242">recommended for one-time migrations</text>
-    <text x="52" y="372" fill="#424242">and high-volume recurring ingestion.</text>
-
-    <rect x="385" y="304" width="330" height="84" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
-    <text x="401" y="324" font-weight="700" fill="#117865">Primary strength</text>
-    <g data-node-id="scenario-question" role="group" tabindex="0" aria-label="What does the ingestion scenario need?">
-    <title data-node-tooltip="true">What does the ingestion scenario need? — The root question: raw movement, low-code shaping, or complex procedural logic.</title>
-    <rect x="389.0" y="324.6" width="239.8" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="401" y="342" fill="#424242">Low-code shaping: cleansing and</text>
-  </g>
-    <text x="401" y="357" fill="#424242">standardizing data up front, when</text>
-    <text x="401" y="372" fill="#424242">quality matters before it lands.</text>
-
-    <rect x="734" y="304" width="330" height="84" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
-    <text x="750" y="324" font-weight="700" fill="#117865">Primary strength</text>
-    <text x="750" y="342" fill="#424242">Code-first, large cloud-scale transforms</text>
-    <text x="750" y="357" fill="#424242">once raw data has landed in OneLake</text>
-    <text x="750" y="372" fill="#424242">(ELT push-down pattern).</text>
-  </g>
-
-  <!-- Row 2: Parallelism model -->
-  <g font-size="10.5">
-    <rect x="36" y="396" width="330" height="84" rx="7" fill="#FFFFFF" stroke="#E1DFDD"/>
-    <text x="52" y="416" font-weight="700" fill="#117865">Parallelism control</text>
-    <text x="52" y="434" fill="#424242">Three levers: ForEach fan-out,</text>
-    <text x="52" y="449" fill="#424242">Intelligent Throughput Optimization</text>
-    <text x="52" y="464" fill="#424242">(Auto/Standard/Balanced/Max/4-256), and</text>
-    <text x="52" y="476" fill="#424242">degree-of-parallelism thread cap.</text>
-
-    <rect x="385" y="396" width="330" height="84" rx="7" fill="#FFFFFF" stroke="#E1DFDD"/>
-    <text x="401" y="416" font-weight="700" fill="#117865">Parallelism control</text>
-    <text x="401" y="434" fill="#424242">Managed by the Dataflow Gen2 compute</text>
-    <text x="401" y="449" fill="#424242">engine, not exposed as manual thread</text>
-    <text x="401" y="464" fill="#424242">or throughput tuning knobs to the</text>
-    <text x="401" y="476" fill="#424242">author.</text>
-
-    <rect x="734" y="396" width="330" height="84" rx="7" fill="#FFFFFF" stroke="#E1DFDD"/>
-    <text x="750" y="416" font-weight="700" fill="#117865">Parallelism control</text>
-    <text x="750" y="434" fill="#424242">Spark-native: driver/executor scale-out,</text>
-    <text x="750" y="449" fill="#424242">partitioning, and pool sizing — full</text>
-    <text x="750" y="464" fill="#424242">programmatic control over the compute</text>
-    <text x="750" y="476" fill="#424242">layer.</text>
-  </g>
-
-  <!-- Row 3: Authoring surface -->
-  <g font-size="10.5">
-    <rect x="36" y="488" width="330" height="84" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
-    <text x="52" y="508" font-weight="700" fill="#117865">Authoring surface</text>
-    <text x="52" y="526" fill="#424242">Low-code visual designer; code-first</text>
-    <text x="52" y="541" fill="#424242">alternative via Apache Airflow Python</text>
-    <text x="52" y="556" fill="#424242">DAGs for orchestration logic.</text>
-
-    <rect x="385" y="488" width="330" height="84" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
-    <text x="401" y="508" font-weight="700" fill="#117865">Authoring surface</text>
-    <text x="401" y="526" fill="#424242">Power Query, entirely low-code —</text>
-    <text x="401" y="541" fill="#424242">business-analyst friendly; no notebook</text>
-    <text x="401" y="556" fill="#424242">or SQL scripting required.</text>
-
-    <rect x="734" y="488" width="330" height="84" rx="7" fill="#F7FDF9" stroke="#9AD2C5"/>
-    <text x="750" y="508" font-weight="700" fill="#117865">Authoring surface</text>
-    <text x="750" y="526" fill="#424242">Code-first (PySpark/Scala/SQL); also</text>
-    <text x="750" y="541" fill="#424242">reachable as dbt jobs for no-code SQL</text>
-    <text x="750" y="556" fill="#424242">model transforms against the warehouse.</text>
-  </g>
-
-  <!-- Row 4: Orchestration role -->
-  <g font-size="10.5">
-    <rect x="36" y="580" width="330" height="84" rx="7" fill="#FFFFFF" stroke="#E1DFDD"/>
-    <text x="52" y="600" font-weight="700" fill="#117865">Orchestration role</text>
-    <text x="52" y="618" fill="#424242">IS the orchestration layer: chains</text>
-    <text x="52" y="633" fill="#424242">notebooks, Spark job definitions, and</text>
-    <text x="52" y="648" fill="#424242">dataflows together via a pipeline.</text>
-
-    <rect x="385" y="580" width="330" height="84" rx="7" fill="#FFFFFF" stroke="#E1DFDD"/>
-    <text x="401" y="600" font-weight="700" fill="#117865">Orchestration role</text>
-    <text x="401" y="618" fill="#424242">A single activity INSIDE a pipeline —</text>
-    <text x="401" y="633" fill="#424242">runs as one orchestrated step, does not</text>
-    <text x="401" y="648" fill="#424242">itself orchestrate other tasks.</text>
-
-    <rect x="734" y="580" width="330" height="84" rx="7" fill="#FFFFFF" stroke="#E1DFDD"/>
-    <text x="750" y="600" font-weight="700" fill="#117865">Orchestration role</text>
-    <text x="750" y="618" fill="#424242">Also a single activity inside a pipeline —</text>
-    <text x="750" y="633" fill="#424242">pipelines invoke notebooks alongside</text>
-    <text x="750" y="648" fill="#424242">Copy, dbt jobs, and stored procs.</text>
-  </g>
-
-  <!-- Row 5: Watch-out -->
-  <g font-size="10.5">
-    <rect x="36" y="672" width="330" height="84" rx="7" fill="#FDF3F2" stroke="#F1B0A8"/>
-    <text x="52" y="692" font-weight="700" fill="#C50F1F">Watch-out</text>
-    <g data-node-id="bottleneck-warning" role="group" tabindex="0" aria-label="Trap: tuning throughput without finding the bottleneck">
+  <!-- ========================================================================= -->
+  <!-- BOTTOM SECTION: CRITICAL ARCHITECTURAL WARNING (NODE 8)                   -->
+  <!-- ========================================================================= -->
+  <g data-node-id="bottleneck-warning" role="group" tabindex="0" aria-label="Trap: tuning throughput without finding the bottleneck">
     <title data-node-tooltip="true">Trap: tuning throughput without finding the bottleneck — Raising ITO or parallelism cannot exceed the source, destination, or network ceiling.</title>
-    <rect x="40.0" y="692.6" width="288.5" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="52" y="710" fill="#7A2E27">Tuning ITO / parallelism without first</text>
-  </g>
-    <text x="52" y="725" fill="#7A2E27">measuring the real bottleneck (source</text>
-    <text x="52" y="740" fill="#7A2E27">IOPS, network, destination) wastes effort.</text>
-
-    <rect x="385" y="672" width="330" height="84" rx="7" fill="#FDF3F2" stroke="#F1B0A8"/>
-    <text x="401" y="692" font-weight="700" fill="#C50F1F">Watch-out</text>
-    <text x="401" y="710" fill="#7A2E27">Not built for orchestrating multi-step,</text>
-    <text x="401" y="725" fill="#7A2E27">multi-system workflows — pair it with a</text>
-    <text x="401" y="740" fill="#7A2E27">pipeline when broader chaining is needed.</text>
-
-    <rect x="734" y="672" width="330" height="84" rx="7" fill="#FDF3F2" stroke="#F1B0A8"/>
-    <text x="750" y="692" font-weight="700" fill="#C50F1F">Watch-out</text>
-    <text x="750" y="710" fill="#7A2E27">Requires code fluency (PySpark/SQL);</text>
-    <text x="750" y="725" fill="#7A2E27">not the low-code path — steeper ramp for</text>
-    <text x="750" y="740" fill="#7A2E27">business-analyst authors.</text>
+    <rect x="24" y="808" width="1152" height="106" rx="8" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#dfm-shadow)"/>
+    <rect x="36" y="818" width="130" height="20" rx="4" fill="#DC2626"/>
+    <text x="101" y="832" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">CRITICAL TRAP</text>
+    <text x="36" y="856" font-size="11" font-weight="800" fill="#991B1B">Tuning Compute Settings (ITO / Spark / Parallelism) Without Profiling the External Ceiling</text>
+    <text x="36" y="874" font-size="8.5" fill="#B91C1C">• Total Achievable Throughput = <tspan font-weight="700">min(Source IOPS/Bandwidth, Destination Write Speed, Network Throughput)</tspan>.</text>
+    <text x="36" y="888" font-size="8.5" fill="#B91C1C">• Setting ITO to Maximum (256) or scaling Spark nodes against a throttled source database only inflates capacity cost with 0 throughput gain.</text>
+    <text x="36" y="904" font-size="8.5" font-weight="700" fill="#15803D">Remedy: Always inspect Source Read Time vs Transfer Time in Fabric Monitor Hub before adjusting compute parallelism.</text>
   </g>
 
-  <!-- row divider lines for readability -->
-  <line x1="36" y1="392" x2="1064" y2="392" stroke="#F3F2F1" stroke-width="1"/>
-  <line x1="36" y1="484" x2="1064" y2="484" stroke="#F3F2F1" stroke-width="1"/>
-  <line x1="36" y1="576" x2="1064" y2="576" stroke="#F3F2F1" stroke-width="1"/>
-  <line x1="36" y1="668" x2="1064" y2="668" stroke="#F3F2F1" stroke-width="1"/>
-
-  <!-- ═══ FOOTER: DECISION GUIDE + LEGEND ═══ -->
-  <g data-node-id="movement-primitive-question" role="group" tabindex="0" aria-label="Which data-movement primitive?">
-    <title data-node-tooltip="true">Which data-movement primitive? — Inside Copy Activity&apos;s territory: Copy job, Copy activity proper, or Mirroring.</title>
-    <rect x="24.0" y="776.0" width="387.7" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="36" y="792" font-size="11" letter-spacing="1.4" fill="#8A8886">BEYOND COPY: THREE DATA-MOVEMENT OPTIONS INSIDE PIPELINES</text>
-  </g>
-
-  <rect x="36" y="800" width="1028" height="66" rx="9" fill="#EAF7F2" stroke="#9AD2C5"/>
-  <g font-size="10.5" fill="#424242">
-    <g data-node-id="copy-job" role="group" tabindex="0" aria-label="Copy job">
-    <title data-node-tooltip="true">Copy job — Simplified movement with built-in delivery styles: bulk, incremental, and change-data-capture.</title>
-    <rect x="44.0" y="804.6" width="96.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="56" y="822" font-weight="700" fill="#063D3B">Copy job</text>
-  </g>
-    <text x="56" y="838">Simplified movement:</text>
-    <text x="56" y="852">bulk, incremental, CDC</text>
-
-    <text x="296" y="822" font-weight="700" fill="#063D3B">Copy activity</text>
-    <text x="296" y="838">Fully customizable movement,</text>
-    <text x="296" y="852">manual parallelism control</text>
-
-    <g data-node-id="mirroring-node" role="group" tabindex="0" aria-label="Mirroring">
-    <title data-node-tooltip="true">Mirroring — Near-real-time database replication directly into OneLake.</title>
-    <rect x="564.0" y="804.6" width="96.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="576" y="822" font-weight="700" fill="#063D3B">Mirroring</text>
-  </g>
-    <text x="576" y="838">Near-real-time database</text>
-    <text x="576" y="852">replication into OneLake</text>
-
-    <text x="836" y="822" font-weight="700" fill="#063D3B">Guidance</text>
-    <text x="836" y="838">Consult Microsoft's data-</text>
-    <text x="836" y="852">movement decision guide</text>
-  </g>
-
-  <!-- legend -->
-  <rect x="36" y="878" width="14" height="14" rx="3" fill="#F7FDF9" stroke="#9AD2C5"/>
-  <text x="56" y="890" font-size="10" fill="#616161">strength / capability</text>
-  <rect x="220" y="878" width="14" height="14" rx="3" fill="#FDF3F2" stroke="#F1B0A8"/>
-  <text x="240" y="890" font-size="10" fill="#616161">limitation / anti-pattern</text>
-
-  <text x="1064" y="890" text-anchor="end" font-size="9.5" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset.</text>
+  <!-- Footer Provenance Note -->
+  <text x="1170" y="944" text-anchor="end" font-size="9" fill="#94A3B8">Fabric Atlas — Original Infographic, August 2026. Grounded in Microsoft Fabric Data Factory &amp; Spark Architecture Specs.</text>
 </svg>

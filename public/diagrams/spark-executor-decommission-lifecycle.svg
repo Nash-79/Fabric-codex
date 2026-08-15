@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 880" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-executor-decommission-lifecycle-title spark-executor-decommission-lifecycle-desc" data-diagram-id="spark-executor-decommission-lifecycle">
+  <title id="spark-executor-decommission-lifecycle-title">Executor decommissioning: the lifecycle that makes scale-down safe</title>
+  <desc id="spark-executor-decommission-lifecycle-desc">Executor decommissioning lifecycle in Apache Spark and Microsoft Fabric: 5-step graceful decommission sequence (Mark, Drain tasks, Migrate shuffle blocks, Update block tracker, Safe exit) vs the ungraceful failure cascade (FetchFailedException and stage recomputes).</desc>
+
+  <defs>
+    <!-- Header Gradient -->
+    <linearGradient id="dec-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4A2170"/>
+      <stop offset="0.5" stop-color="#7C3AAD"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="dec-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#4A2170" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="dec-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
+    </marker>
+    <marker id="dec-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="dec-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
+    </marker>
+
+    <!-- Official Microsoft Notebook Item Icon Gradients -->
+    <linearGradient id="dec-nb-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="dec-nb-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="dec-nb-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="dec-nb-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+  </defs>
+
+  <!-- Canvas Base -->
+  <rect width="1200" height="880" fill="#FAF5FF"/>
+
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#dec-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#dec-nb-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#dec-nb-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#dec-nb-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#dec-nb-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#dec-nb-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#dec-nb-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Executor Decommissioning — The 5-Step Safe Scale-Down Lifecycle</text>
+  <text x="40" y="64" font-size="12" fill="#E9D8FD">Flag executor ➔ Drain tasks ➔ Migrate shuffle blocks ➔ Re-point MapOutputTracker ➔ Terminate safely vs Stage Recomputes</text>
+
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D8FD"/>
+    <circle cx="20" cy="15" r="5" fill="#7C3AAD"/><text x="32" y="19" fill="#4C1D95" font-weight="600">The 5-Step Graceful Decommission Sequence</text>
+    <circle cx="420" cy="15" r="5" fill="#DC2626"/><text x="432" y="19" fill="#991B1B" font-weight="600">The Ungraceful Scale-Down Failure Cascade</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 1: THE 5-STEP SAFE SEQUENCE                                          -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="420" rx="14" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
+  <rect x="56" y="156" width="430" height="20" rx="10" fill="#EDE9FE"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#4C1D95" letter-spacing="1px">THE SAFE PATH: PRESERVE STATE BEFORE RELEASING COMPUTE</text>
+
+  <!-- Step 1: mark -->
+  <g data-node-id="mark" role="group" tabindex="0" aria-label="1. Mark for decommission">
+    <title data-node-tooltip="true">1. Mark for decommission — The executor is flagged for removal rather than terminated immediately.</title>
+    <rect x="56" y="184" width="330" height="166" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#dec-shadow)"/>
+    <rect x="68" y="194" width="100" height="16" rx="8" fill="#EDE9FE"/><text x="118" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">STEP 1 · SIGNAL</text>
+    <text x="68" y="228" font-size="13" font-weight="700" fill="#4C1D95">1 · Mark for Decommission</text>
+    <text x="68" y="250" font-size="9.5" fill="#5B21B6">• Autoscale determines pool can shrink</text>
+    <text x="68" y="268" font-size="9.5" fill="#5B21B6">• Executor is flagged in memory, not killed</text>
+    <text x="68" y="286" font-size="9.5" fill="#5B21B6">• Driver marks status as <tspan font-family="monospace">Decommissioning</tspan></text>
+    <text x="68" y="306" font-size="8.5" fill="#6D28D9">Controlled by <tspan font-family="monospace">spark.decommission.enabled</tspan></text>
+    <rect x="320" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="346" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Connector 1 -> 2 -->
+  <path d="M 386 267 H 442" stroke="#7C3AAD" stroke-width="2.2" fill="none" marker-end="url(#dec-arr-purple)"/>
+
+  <!-- Step 2: drain -->
+  <g data-node-id="drain" role="group" tabindex="0" aria-label="2. Stop scheduling new tasks">
+    <title data-node-tooltip="true">2. Stop scheduling new tasks — No new tasks are scheduled while running work finishes.</title>
+    <rect x="442" y="184" width="330" height="166" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#dec-shadow)"/>
+    <rect x="454" y="194" width="110" height="16" rx="8" fill="#EDE9FE"/><text x="509" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">STEP 2 · DRAIN</text>
+    <text x="454" y="228" font-size="13" font-weight="700" fill="#4C1D95">2 · Stop Task Scheduling</text>
+    <text x="454" y="250" font-size="9.5" fill="#5B21B6">• DAGScheduler excludes node from new tasks</text>
+    <text x="454" y="268" font-size="9.5" fill="#5B21B6">• Active in-flight tasks are allowed to finish</text>
+    <text x="454" y="286" font-size="9.5" fill="#5B21B6">• Node stops accumulating new state</text>
+    <text x="454" y="306" font-size="8.5" fill="#6D28D9">Prevents task cancellation cascades</text>
+    <rect x="706" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="732" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Connector 2 -> 3 -->
+  <path d="M 772 267 H 828" stroke="#7C3AAD" stroke-width="2.2" fill="none" marker-end="url(#dec-arr-purple)"/>
+
+  <!-- Step 3: migrate -->
+  <g data-node-id="migrate" role="group" tabindex="0" aria-label="3. Migrate shuffle blocks">
+    <title data-node-tooltip="true">3. Migrate shuffle blocks — Shuffle blocks are copied to a peer executor or to fallback storage.</title>
+    <rect x="828" y="184" width="332" height="166" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#dec-shadow)"/>
+    <rect x="840" y="194" width="120" height="16" rx="8" fill="#EDE9FE"/><text x="900" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">STEP 3 · EVACUATE</text>
+    <text x="840" y="228" font-size="13" font-weight="700" fill="#4C1D95">3 · Migrate Shuffle Blocks</text>
+    <text x="840" y="250" font-size="9.5" fill="#5B21B6">• Copies shuffle data to peer node disk or Blob</text>
+    <text x="840" y="268" font-size="9.5" fill="#5B21B6">• Most network-intensive stage of decommissioning</text>
+    <text x="840" y="286" font-size="9.5" fill="#5B21B6">• <tspan font-family="monospace">spark.storage.decommission.shuffleBlocks.enabled</tspan></text>
+    <text x="840" y="306" font-size="8.5" fill="#6D28D9">Decouples shuffle data from node hardware</text>
+    <rect x="1094" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="1120" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Step 4: update -->
+  <g data-node-id="update" role="group" tabindex="0" aria-label="4. Update block locations">
+    <title data-node-tooltip="true">4. Update block locations — Block location metadata is re-pointed to the blocks' new home.</title>
+    <rect x="56" y="378" width="516" height="166" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.6" filter="url(#dec-shadow)"/>
+    <rect x="68" y="388" width="130" height="16" rx="8" fill="#D1FAE5"/><text x="133" y="399" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">STEP 4 · RE-CATALOG</text>
+    <text x="68" y="422" font-size="13" font-weight="700" fill="#064E3B">4 · Update Driver Block Locations</text>
+    <text x="68" y="444" font-size="9.5" fill="#065F46">• Driver's authoritative <tspan font-family="monospace">MapOutputTracker</tspan> is re-pointed to new block locations</text>
+    <text x="68" y="462" font-size="9.5" fill="#065F46">• Downstream reduce stages read seamlessly from peer node or remote storage</text>
+    <text x="68" y="480" font-size="9.5" fill="#065F46">• Zero stale endpoints queried during reduce phase block fetch</text>
+    <rect x="506" y="388" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="532" y="398" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- Connector 4 -> 5 -->
+  <path d="M 572 461 H 628" stroke="#059669" stroke-width="2.2" fill="none" marker-end="url(#dec-arr-green)"/>
+
+  <!-- Step 5: exit -->
+  <g data-node-id="exit" role="group" tabindex="0" aria-label="5. Executor exits safely">
+    <title data-node-tooltip="true">5. Executor exits safely — The executor terminates only once every block has a new home.</title>
+    <rect x="628" y="378" width="532" height="166" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.6" filter="url(#dec-shadow)"/>
+    <rect x="640" y="388" width="130" height="16" rx="8" fill="#D1FAE5"/><text x="705" y="399" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">STEP 5 · SAFE EXIT</text>
+    <text x="640" y="422" font-size="13" font-weight="700" fill="#064E3B">5 · Executor Exits Safely (Compute Reclaimed)</text>
+    <text x="640" y="444" font-size="9.5" fill="#065F46">• Node terminates only after all block relocations are confirmed by driver</text>
+    <text x="640" y="462" font-size="9.5" fill="#065F46">• VM/container compute core hours and billing cease immediately</text>
+    <text x="640" y="480" font-size="9.5" fill="#065F46">• 100% data integrity preserved across the entire cluster lifecycle</text>
+    <rect x="1094" y="388" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="1120" y="398" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 2: THE UNGRACEFUL SCALE-DOWN FAILURE CASCADE (UNSAFE)               -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="584" width="1120" height="236" rx="14" fill="#FFFFFF" stroke="#FCA5A5" stroke-width="1.4"/>
+  <rect x="56" y="594" width="450" height="20" rx="10" fill="#FEE2E2"/>
+  <text x="66" y="608" font-size="10.5" font-weight="700" fill="#991B1B" letter-spacing="1px">THE UNGRACEFUL FAILURE CASCADE: WHAT HAPPENS WITHOUT DECOMMISSIONING</text>
+
+  <!-- Node: unsafe -->
+  <g data-node-id="unsafe" role="group" tabindex="0" aria-label="Without decommissioning">
+    <title data-node-tooltip="true">Without decommissioning — Skipping decommissioning loses the blocks and forces a full stage recompute.</title>
+    <rect x="56" y="624" width="1088" height="178" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.8" filter="url(#dec-shadow)"/>
+    <rect x="68" y="634" width="110" height="16" rx="8" fill="#FEE2E2"/><text x="123" y="645" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">CRITICAL TRAP</text>
+    <text x="68" y="668" font-size="14" font-weight="700" fill="#991B1B">6 · Without Decommissioning — The Stage Recompute Cascade</text>
+    <text x="68" y="690" font-size="10" fill="#7F1D1D">• <tspan font-weight="700">Immediate Data Loss:</tspan> Node is killed abruptly; shuffle partition files on local NVMe disk vanish instantly</text>
+    <text x="68" y="708" font-size="10" fill="#7F1D1D">• <tspan font-weight="700">Fetch Failed Exception:</tspan> Downstream reduce tasks hit missing block errors (<tspan font-family="monospace">FetchFailedException: Connection refused</tspan>)</text>
+    <text x="68" y="726" font-size="10" fill="#7F1D1D">• <tspan font-weight="700">Stage Invalidation:</tspan> DAGScheduler cancels current stage and marks parent Map Stage as completely invalid</text>
+    <text x="68" y="744" font-size="10" fill="#7F1D1D">• <tspan font-weight="700">Disastrous Recompute Cost:</tspan> The entire 20-minute map stage re-executes, consuming far more capacity than scale-down saved</text>
+    <rect x="1078" y="634" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="1104" y="644" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">WARNING</text>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="850" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Apache Spark Job Scheduling &amp; Fabric Efficient Scaledown Documentation.</text>
+</svg>

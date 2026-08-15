@@ -11,36 +11,22 @@ don't average these.
 
 ## Axes
 
-1. **Composition** — does the layout read top-to-bottom or left-to-right in a single coherent
-   direction, or does the eye have to hunt?
-2. **Label size** — are all text labels legible at 390px width specifically (the narrowest width
-   `validate-diagram-layout.mjs` already audits for overlap/overflow — a diagram can pass that
-   check and still fail this _subjective_ legibility axis).
-3. **Alignment** — do nodes/edges look grid-aligned, or hand-placed/drifting? (Distinct from
-   `validate-diagrams.mjs`'s "geometry is derived, not authored" rule — this axis is about the
-   _result_ looking aligned, not just about not hand-authoring x/y.)
-4. **Color-meaning consistency** — does color map consistently to classification/layer across the
-   whole diagram, not one scheme in one corner and a different one elsewhere?
-5. **Contrast** — sufficient text/background and line/background contrast in both light and dark
-   mode.
-6. **Edge clarity** — are edges/arrows traceable without crossing ambiguity; do labelled edges
-   avoid overlapping other elements?
-7. **Density** — is the diagram trying to show too much in too little space? (A proxy for: will
-   this diagram survive being embedded at `standard` inline width, not just `wide`/`full-bleed`.)
-8. **Small-screen readability** — a holistic pass at 390px width: does this diagram _communicate_,
-   not just technically pass the layout script's overlap/overflow checks?
-9. **Evidence-mapping clarity** — for `fact`-classified nodes, is it visually obvious which region
-   the cited evidence belongs to? (A visual judgment, not a JSON-level check.)
+1. **Composition & Flow** — does the diagram feature a clear, flow-driven visual direction (pipelines, decision forks, state ladders, layered stacks) rather than a static grid of tiled text boxes? Does the eye naturally follow the architectural journey?
+2. **Visual Metaphors & Iconography** — does the artwork leverage appropriate visual metaphors (e.g. stage conduits, memory thermometers, cutaway execution layers, outcome badges) and official Microsoft Fabric icons where relevant?
+3. **Information Budget & Hierarchy** — do cards feature strong headline/badge hierarchy with concise takeaways (max 2-3 lines of text) rather than walls of 9px prose? Are deep details properly delegated to the semantic sidecar?
+4. **Label size & Legibility** — are all text labels legible at 390px width specifically (the narrowest width audited for overlap/overflow)?
+5. **Alignment & Spacing** — do nodes/edges look harmoniously aligned with intentional breathing room, avoiding cluttered wireframe boxes?
+6. **Color-meaning consistency** — does color map consistently to domain classification and layer across the entire diagram (e.g. OneLake teal, Spark purple, Warehouse blue, Power BI gold, Warnings red)?
+7. **Contrast** — sufficient text/background and line/background contrast in both light and dark mode.
+8. **Edge & Conduit clarity** — are data pipelines, decision branches, and fallback paths prominently styled, traceable without crossing ambiguity, and clearly labelled?
+9. **Density & Layout Hint** — does the diagram fit its canvas cleanly, with complex infographics properly opting into `layoutHint: "wide"` or `"full-bleed"`?
+10. **Evidence-mapping clarity** — for `fact`-classified nodes, is it visually obvious which region the cited evidence belongs to?
 
 ## Process
 
 1. Run `npm run validate:diagrams && npm run validate:diagram-layout` first — a diagram that fails
    either automated check needs a structural fix before a rubric pass is even meaningful.
-2. Score all 9 axes pass/fail against the rendered SVG (at 390px width per axes 2/8, and in both
-   themes per axis 5).
-3. Any axis fail → diagram fails the rubric → flag for re-authoring.
-4. Scoring the full 80-diagram catalog and re-authoring failures is content work, not part of this
-   phase's code deliverable — deferred to a later catalog-migration phase. This phase's
-   deliverable is the rubric itself plus a small pilot pass (recommended: 3-5 diagrams, including
-   `direct-lake-internals` as the reference example used throughout Phase 5's planning) to prove
-   the rubric produces sensible, actionable pass/fail calls.
+2. Score all 10 axes pass/fail against the rendered SVG (at 390px width per axes 4/8, and in both
+   themes per axis 7).
+3. Any axis fail (including failing the "not a tiled text grid" rule) → diagram fails the rubric → flag for re-authoring.
+

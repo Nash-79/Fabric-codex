@@ -1,0 +1,73 @@
+{
+  "url": "https://spark.apache.org/docs/latest/sql-performance-tuning.html",
+  "title": "Performance Tuning - Spark SQL (Apache Spark documentation)",
+  "tier": 3,
+  "tags": [
+    "ApacheSpark",
+    "SparkSQL",
+    "AQE",
+    "AdaptiveQueryExecution",
+    "Shuffle",
+    "Joins",
+    "Partitioning",
+    "Performance"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "Adaptive Query Execution re-plans a query while it runs, using statistics collected from stages that have already completed rather than the pre-execution estimates Catalyst planned with; it has been enabled by default since Apache Spark 3.2.0 under spark.sql.adaptive.enabled.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["AQE", "AdaptiveQueryExecution", "Catalyst"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "AQE's post-shuffle coalescing (spark.sql.adaptive.coalescePartitions.enabled, default true) merges undersized post-shuffle partitions at runtime toward the target set by spark.sql.adaptive.advisoryPartitionSizeInBytes, whose Apache Spark default is 64 MB; this is what makes hand-tuning a per-query shuffle partition count largely obsolete.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["AQE", "Shuffle", "Partitioning"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "spark.sql.shuffle.partitions defaults to 200 and sets the number of partitions produced by a shuffle; with AQE coalescing enabled it behaves as an initial upper bound that AQE merges downward, not as the final partition count.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["Shuffle", "Partitioning", "AQE"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "AQE converts a planned sort-merge join into a broadcast hash join when runtime statistics show one side is actually smaller than the adaptive broadcast threshold, avoiding the sort of both sides and reading shuffle files locally to save network traffic — a decision made from measured sizes rather than the pre-execution estimate.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["AQE", "Joins", "BroadcastJoin"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "AQE skew join handling (spark.sql.adaptive.skewJoin.enabled, default true) splits skewed shuffle partitions in a sort-merge join into roughly evenly sized sub-partitions and replicates the matching side so each split still finds its rows; a partition is treated as skewed when it exceeds both spark.sql.adaptive.skewJoin.skewedPartitionFactor (default 5.0) times the median and spark.sql.adaptive.skewJoin.skewedPartitionThresholdInBytes (default 256 MB).",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["AQE", "DataSkew", "Joins"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "spark.sql.autoBroadcastJoinThreshold defaults to 10485760 bytes (10 MB) and sets the estimated table size below which Spark will broadcast one side of a join to every executor instead of shuffling both sides.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["BroadcastJoin", "Joins"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "spark.sql.files.maxPartitionBytes defaults to 134217728 bytes (128 MB) and controls the partition size Spark produces when reading files; it is a read-side setting that AQE's post-shuffle coalescing does not adjust.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["Partitioning", "FileFormats"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "spark.sql.files.openCostInBytes defaults to 4194304 bytes (4 MB) and models the fixed cost of opening a file, which lets Spark pack several small files into one read partition rather than launching one task per tiny file; it compensates at read time but does not remove the underlying small-files problem in storage.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["Partitioning", "SmallFiles", "FileFormats"]
+    }
+  ]
+}

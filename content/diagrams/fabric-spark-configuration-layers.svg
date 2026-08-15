@@ -1,0 +1,178 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 920" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="fabric-spark-configuration-layers-title fabric-spark-configuration-layers-desc" data-diagram-id="fabric-spark-configuration-layers">
+  <title id="fabric-spark-configuration-layers-title">Where a Fabric Spark setting actually lives: the five configuration layers</title>
+  <desc id="fabric-spark-configuration-layers-desc">Fabric Spark configuration hierarchy: Capacity SKU ceilings, Workspace settings, Environment items, Notebook %%configure magic, Running session spark.conf.set, precedence rules, and silent drop failure modes.</desc>
+
+  <defs>
+    <!-- Header Gradient -->
+    <linearGradient id="cfg-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4A2170"/>
+      <stop offset="0.5" stop-color="#7C3AAD"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="cfg-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#4A2170" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="cfg-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
+    </marker>
+    <marker id="cfg-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="cfg-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
+    </marker>
+
+    <!-- Official Microsoft Notebook Item Icon Gradients -->
+    <linearGradient id="cfg-nb-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="cfg-nb-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="cfg-nb-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="cfg-nb-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+  </defs>
+
+  <!-- Canvas Base -->
+  <rect width="1200" height="920" fill="#FAF5FF"/>
+
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#cfg-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#cfg-nb-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#cfg-nb-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#cfg-nb-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#cfg-nb-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#cfg-nb-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#cfg-nb-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">The Five Configuration Layers of Fabric Spark</text>
+  <text x="40" y="64" font-size="12" fill="#E9D8FD">Capacity SKU ➔ Workspace defaults ➔ Environment item ➔ Notebook %%configure ➔ Running session spark.conf.set</text>
+
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D8FD"/>
+    <circle cx="20" cy="15" r="5" fill="#475569"/><text x="32" y="19" fill="#334155" font-weight="600">Platform Admin Layers</text>
+    <circle cx="250" cy="15" r="5" fill="#7C3AAD"/><text x="262" y="19" fill="#4C1D95" font-weight="600">Developer &amp; Session Layers</text>
+    <circle cx="530" cy="15" r="5" fill="#DC2626"/><text x="542" y="19" fill="#991B1B" font-weight="600">Precedence Rules &amp; Silent Drop Traps</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 1: PLATFORM ADMIN LAYERS (CAPACITY ➔ WORKSPACE)                      -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="186" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+  <rect x="56" y="156" width="390" height="20" rx="10" fill="#F1F5F9"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#334155" letter-spacing="1px">STAGE 1: PLATFORM ADMINISTRATIVE LAYERS</text>
+
+  <!-- Layer 1: capacity -->
+  <g data-node-id="capacity" role="group" tabindex="0" aria-label="1. Capacity">
+    <title data-node-tooltip="true">1. Capacity — The capacity SKU and its switches bound every workspace beneath it.</title>
+    <rect x="56" y="184" width="520" height="132" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6" filter="url(#cfg-shadow)"/>
+    <rect x="68" y="194" width="100" height="16" rx="8" fill="#F1F5F9"/><text x="118" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">HARD CEILING</text>
+    <text x="68" y="228" font-size="13" font-weight="700" fill="#1E293B">1 · Capacity Layer (F-SKU)</text>
+    <text x="68" y="250" font-size="9.5" fill="#475569">• Maps 2 Spark vCores per Capacity Unit (e.g. F64 = 128 base vCores)</text>
+    <text x="68" y="268" font-size="9.5" fill="#475569">• Governs bursting headroom, autoscale capacity, and smoothing boundaries</text>
+    <text x="68" y="286" font-size="9.5" fill="#475569">• Sets hard ceiling for all pools across all workspaces in the tenant capacity</text>
+    <rect x="510" y="194" width="52" height="14" rx="7" fill="#F1F5F9"/><text x="536" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#475569">FACT</text>
+  </g>
+
+  <!-- Layer 2: workspace -->
+  <g data-node-id="workspace" role="group" tabindex="0" aria-label="2. Workspace Spark settings">
+    <title data-node-tooltip="true">2. Workspace Spark settings — Workspace Spark settings own the default pool and the runtime version.</title>
+    <rect x="606" y="184" width="538" height="132" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6" filter="url(#cfg-shadow)"/>
+    <rect x="618" y="194" width="130" height="16" rx="8" fill="#F1F5F9"/><text x="683" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">WORKSPACE SCOPE</text>
+    <text x="618" y="228" font-size="13" font-weight="700" fill="#1E293B">2 · Workspace Spark Settings</text>
+    <text x="618" y="250" font-size="9.5" fill="#475569">• Sets default pool (Starter Pool Medium vs Custom Pool) &amp; node sizes</text>
+    <text x="618" y="268" font-size="9.5" fill="#475569">• Selects default Fabric Spark Runtime (e.g. Runtime 1.3 or Runtime 2.0)</text>
+    <text x="618" y="286" font-size="9.5" fill="#475569">• Governs permission for notebooks to customize item-level compute</text>
+    <rect x="1078" y="194" width="52" height="14" rx="7" fill="#F1F5F9"/><text x="1104" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#475569">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 2: DEVELOPER & SESSION LAYERS (ENVIRONMENT ➔ SESSION ➔ RUNNING)      -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="348" width="1120" height="260" rx="14" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
+  <rect x="56" y="358" width="410" height="20" rx="10" fill="#EDE9FE"/>
+  <text x="66" y="372" font-size="10.5" font-weight="700" fill="#4C1D95" letter-spacing="1px">STAGE 2: DEVELOPER, ENVIRONMENT &amp; SESSION LAYERS</text>
+
+  <!-- Layer 3: environment -->
+  <g data-node-id="environment" role="group" tabindex="0" aria-label="3. Environment item">
+    <title data-node-tooltip="true">3. Environment item — The Environment item is the right home for team-wide Spark properties and libraries.</title>
+    <rect x="56" y="386" width="350" height="206" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#cfg-shadow)"/>
+    <rect x="68" y="396" width="130" height="16" rx="8" fill="#EDE9FE"/><text x="133" y="407" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">TEAM-WIDE ITEM</text>
+    <text x="68" y="430" font-size="13" font-weight="700" fill="#4C1D95">3 · Environment Item</text>
+    <text x="68" y="452" font-size="9.5" fill="#5B21B6">• Best home for team properties</text>
+    <text x="68" y="470" font-size="9.5" fill="#5B21B6">• Native Execution Engine toggle</text>
+    <text x="68" y="488" font-size="9.5" fill="#5B21B6">• Custom PyPI &amp; Jar libraries</text>
+    <text x="68" y="506" font-size="9.5" fill="#5B21B6">• Spark properties &amp; runtime override</text>
+    <text x="68" y="526" font-size="8.5" fill="#6D28D9">Must be published before attaching</text>
+    <rect x="340" y="396" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="366" y="406" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Layer 4: session -->
+  <g data-node-id="session" role="group" tabindex="0" aria-label="4. Notebook or job session">
+    <title data-node-tooltip="true">4. Notebook or job session — A %%configure cell sets session-start scope before the session exists.</title>
+    <rect x="426" y="386" width="350" height="206" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#cfg-shadow)"/>
+    <rect x="438" y="396" width="130" height="16" rx="8" fill="#EDE9FE"/><text x="503" y="407" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">SESSION-START CELL</text>
+    <text x="438" y="430" font-size="13" font-weight="700" fill="#4C1D95">4 · %%configure Magic</text>
+    <text x="438" y="452" font-size="9.5" fill="#5B21B6">• Must run in cell 1 before session starts</text>
+    <text x="438" y="470" font-size="9.5" fill="#5B21B6">• Sets executor memory &amp; driver size</text>
+    <text x="438" y="488" font-size="9.5" fill="#5B21B6">• Overrides Environment properties</text>
+    <text x="438" y="506" font-size="9.5" fill="#5B21B6">• Sets off-heap memoryOverhead</text>
+    <text x="438" y="526" font-size="8.5" fill="#6D28D9">Ignored if session already initialized</text>
+    <rect x="710" y="396" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="736" y="406" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Layer 5: running -->
+  <g data-node-id="running" role="group" tabindex="0" aria-label="5. Running session">
+    <title data-node-tooltip="true">5. Running session — spark.conf.set reaches only runtime-mutable keys on a live session.</title>
+    <rect x="796" y="386" width="348" height="206" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.6" filter="url(#cfg-shadow)"/>
+    <rect x="808" y="396" width="130" height="16" rx="8" fill="#DBEAFE"/><text x="873" y="407" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">LIVE SESSION CODE</text>
+    <text x="808" y="430" font-size="13" font-weight="700" fill="#1E3A8A">5 · spark.conf.set( )</text>
+    <text x="808" y="452" font-size="9.5" fill="#1E40AF">• Reaches <tspan font-weight="700">runtime-mutable keys only</tspan></text>
+    <text x="808" y="470" font-size="9.5" fill="#1E40AF">• Adaptive settings (AQE enabled, sizes)</text>
+    <text x="808" y="488" font-size="9.5" fill="#1E40AF">• <tspan font-family="monospace">autoBroadcastJoinThreshold</tspan></text>
+    <text x="808" y="506" font-size="9.5" fill="#1E40AF">• Shuffle partition counts</text>
+    <text x="808" y="526" font-size="8.5" fill="#1D4ED8">Cannot alter executor memory/cores</text>
+    <rect x="1078" y="396" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="1104" y="406" text-anchor="middle" font-size="8" font-weight="700" fill="#1D4ED8">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 3: PRECEDENCE RULES & SILENT DROP TRAPS (PRECEDENCE ➔ TOOLATE)       -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="624" width="1120" height="236" rx="14" fill="#FFFFFF" stroke="#FCA5A5" stroke-width="1.4"/>
+  <rect x="56" y="634" width="450" height="20" rx="10" fill="#FEE2E2"/>
+  <text x="66" y="648" font-size="10.5" font-weight="700" fill="#991B1B" letter-spacing="1px">STAGE 3: THE TWO CAUSES OF 'MY SETTING DID NOT APPLY'</text>
+
+  <!-- Precedence: precedence -->
+  <g data-node-id="precedence" role="group" tabindex="0" aria-label="A lower layer overrode it">
+    <title data-node-tooltip="true">A lower layer overrode it — Precedence flows downward, so a lower layer can override a higher one.</title>
+    <rect x="56" y="662" width="520" height="182" rx="10" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.6" filter="url(#cfg-shadow)"/>
+    <rect x="68" y="672" width="130" height="16" rx="8" fill="#FEF3C7"/><text x="133" y="683" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B45309">DOWNWARD FLOW</text>
+    <text x="68" y="706" font-size="13" font-weight="700" fill="#78350F">6 · Precedence: A Lower Layer Overrode It</text>
+    <text x="68" y="728" font-size="9.5" fill="#92400E">• Precedence flows <tspan font-weight="700">DOWNWARD</tspan>: Running Session &gt; Notebook Cell &gt; Environment &gt; Workspace</text>
+    <text x="68" y="746" font-size="9.5" fill="#92400E">• A notebook %%configure cell overrides the Environment property it contradicts</text>
+    <text x="68" y="764" font-size="9.5" fill="#92400E">• An inline <tspan font-family="monospace">spark.conf.set</tspan> overrides workspace defaults</text>
+    <text x="68" y="782" font-size="9.5" fill="#92400E">• <tspan font-weight="700">Diagnosis:</tspan> Check lower layers first when an administrative setting seems ignored</text>
+    <rect x="510" y="672" width="52" height="14" rx="7" fill="#FEF3C7"/><text x="536" y="682" text-anchor="middle" font-size="8" font-weight="700" fill="#B45309">FACT</text>
+  </g>
+
+  <!-- Trap: toolate -->
+  <g data-node-id="toolate" role="group" tabindex="0" aria-label="It was set too late to matter">
+    <title data-node-tooltip="true">It was set too late to matter — Configuration applied after the session exists is silently dropped.</title>
+    <rect x="606" y="662" width="538" height="182" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.8" filter="url(#cfg-shadow)"/>
+    <rect x="618" y="672" width="130" height="16" rx="8" fill="#FEE2E2"/><text x="683" y="683" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">SILENT DROP TRAP</text>
+    <text x="618" y="706" font-size="13" font-weight="700" fill="#991B1B">7 · Trap: It Was Set Too Late to Matter</text>
+    <text x="618" y="728" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">The Pre-Warm Trap:</tspan> In Fabric, the Spark session is already active before Cell 1 runs</text>
+    <text x="618" y="746" font-size="9.5" fill="#7F1D1D">• <tspan font-family="monospace">SparkSession.builder.config("spark.executor.memory", "16g").getOrCreate()</tspan> returns the</text>
+    <text x="618" y="760" font-size="9.5" fill="#7F1D1D">  existing session and <tspan font-weight="700">silently drops every configuration argument with 0 errors!</tspan></text>
+    <text x="618" y="780" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Remediation:</tspan> Move session-start properties to <tspan font-family="monospace">%%configure</tspan> or the Environment item</text>
+    <rect x="1078" y="672" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="1104" y="682" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">WARNING</text>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="890" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Microsoft Fabric Spark Runtime &amp; Starter Pool Governance Documentation.</text>
+</svg>

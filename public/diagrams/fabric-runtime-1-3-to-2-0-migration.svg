@@ -1,0 +1,212 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 940" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="fabric-runtime-1-3-to-2-0-migration-title fabric-runtime-1-3-to-2-0-migration-desc" data-diagram-id="fabric-runtime-1-3-to-2-0-migration">
+  <title id="fabric-runtime-1-3-to-2-0-migration-title">Runtime 1.3 to Runtime 2.0: what actually breaks</title>
+  <desc id="fabric-runtime-1-3-to-2-0-migration-desc">Fabric Spark runtime migration from 1.3 to 2.0: 6 simultaneous component version moves, GA production vs Preview pilot stance, 4 breakage classes (Python libraries, JVM JARs, ANSI SQL default, Delta 4.x protocol), and post-migration validation with zero-downtime rollback.</desc>
+
+  <defs>
+    <!-- Header Gradient -->
+    <linearGradient id="mig-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4A2170"/>
+      <stop offset="0.5" stop-color="#7C3AAD"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="mig-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#4A2170" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="mig-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
+    </marker>
+    <marker id="mig-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="mig-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
+    </marker>
+
+    <!-- Official Microsoft Notebook Item Icon Gradients -->
+    <linearGradient id="mig-nb-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="mig-nb-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="mig-nb-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="mig-nb-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+  </defs>
+
+  <!-- Canvas Base -->
+  <rect width="1200" height="940" fill="#FAF5FF"/>
+
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#mig-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#mig-nb-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#mig-nb-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#mig-nb-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#mig-nb-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#mig-nb-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#mig-nb-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Runtime 1.3 to Runtime 2.0: What Actually Breaks</text>
+  <text x="40" y="64" font-size="12" fill="#E9D8FD">Six simultaneous component moves ➔ 4 critical breakage classes ➔ Pre-flight testing &amp; zero-downtime rollback</text>
+
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D8FD"/>
+    <circle cx="20" cy="15" r="5" fill="#475569"/><text x="32" y="19" fill="#334155" font-weight="600">Version Matrix &amp; GA Stance</text>
+    <circle cx="270" cy="15" r="5" fill="#DC2626"/><text x="282" y="19" fill="#991B1B" font-weight="600">The 4 Breakage Classes</text>
+    <circle cx="530" cy="15" r="5" fill="#059669"/><text x="542" y="19" fill="#065F46" font-weight="600">Post-Migration Validation &amp; Rollback</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 1: VERSION MATRIX & PRODUCTION STANCE (VERSIONS ➔ STANCE)            -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="196" rx="14" fill="#FFFFFF" stroke="#CBD5E1" stroke-width="1.4"/>
+  <rect x="56" y="156" width="410" height="20" rx="10" fill="#F1F5F9"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#334155" letter-spacing="1px">STAGE 1: SIX COMPONENT LAYERS MOVE SIMULTANEOUSLY</text>
+
+  <!-- Node: versions -->
+  <g data-node-id="versions" role="group" tabindex="0" aria-label="Component versions move together">
+    <title data-node-tooltip="true">Component versions move together — Six component layers move at once between Runtime 1.3 and Runtime 2.0.</title>
+    <rect x="56" y="184" width="530" height="142" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6" filter="url(#mig-shadow)"/>
+    <rect x="68" y="194" width="130" height="16" rx="8" fill="#F1F5F9"/><text x="133" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">SIMULTANEOUS MOVES</text>
+    <text x="68" y="228" font-size="13" font-weight="700" fill="#1E293B">1 · Component Versions Move Together</text>
+    <text x="68" y="250" font-size="9.5" fill="#475569">• <tspan font-weight="700">Spark:</tspan> 3.5.5 ➔ 4.1  ·  <tspan font-weight="700">Delta Lake:</tspan> 3.2 ➔ 4.2  ·  <tspan font-weight="700">Python:</tspan> 3.11 ➔ 3.13</text>
+    <text x="68" y="268" font-size="9.5" fill="#475569">• <tspan font-weight="700">Java:</tspan> 11 ➔ 21  ·  <tspan font-weight="700">Scala:</tspan> 2.12.17 ➔ 2.13.16  ·  <tspan font-weight="700">OS:</tspan> Mariner 2.0 ➔ 3.0</text>
+    <text x="68" y="286" font-size="9.5" fill="#475569">• Not a simple patch bump; every layer is an independent breaking surface</text>
+    <rect x="520" y="194" width="52" height="14" rx="7" fill="#F1F5F9"/><text x="546" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#475569">FACT</text>
+  </g>
+
+  <!-- Node: stance -->
+  <g data-node-id="stance" role="group" tabindex="0" aria-label="Production stays on GA">
+    <title data-node-tooltip="true">Production stays on GA — Microsoft's guidance is production on GA, with Runtime 2.0 piloted separately.</title>
+    <rect x="606" y="184" width="538" height="142" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6" filter="url(#mig-shadow)"/>
+    <rect x="618" y="194" width="130" height="16" rx="8" fill="#F1F5F9"/><text x="683" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">GOVERNANCE STANCE</text>
+    <text x="618" y="228" font-size="13" font-weight="700" fill="#1E293B">2 · Production Stays on GA (Runtime 1.3)</text>
+    <text x="618" y="250" font-size="9.5" fill="#475569">• Microsoft official guidance: Keep production workloads on GA release (Runtime 1.3)</text>
+    <text x="618" y="268" font-size="9.5" fill="#475569">• Runtime 2.0 is Public Preview — pilot only in dedicated test/sandbox workspaces</text>
+    <text x="618" y="286" font-size="9.5" fill="#475569">• Never switch production workspaces directly to preview runtimes</text>
+    <rect x="1078" y="194" width="52" height="14" rx="7" fill="#F1F5F9"/><text x="1104" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#475569">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 2: THE 4 BREAKAGE CLASSES (LIBS ➔ JARS ➔ ANSI ➔ PROTOCOL)            -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="358" width="1120" height="346" rx="14" fill="#FFFFFF" stroke="#FCA5A5" stroke-width="1.4"/>
+  <rect x="56" y="368" width="410" height="20" rx="10" fill="#FEE2E2"/>
+  <text x="66" y="382" font-size="10.5" font-weight="700" fill="#991B1B" letter-spacing="1px">STAGE 2: THE FOUR BREAKAGE CLASSES &amp; PRE-FLIGHT CHECKS</text>
+
+  <!-- Breakage 1: libs -->
+  <g data-node-id="libs" role="group" tabindex="0" aria-label="Libraries must be re-published">
+    <title data-node-tooltip="true">Libraries must be re-published — The Python version jump requires libraries to be re-added and published.</title>
+    <rect x="56" y="398" width="260" height="290" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#mig-shadow)"/>
+    <rect x="68" y="408" width="110" height="16" rx="8" fill="#FEE2E2"/><text x="123" y="419" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">PYTHON 3.13</text>
+    <text x="68" y="444" font-size="13" font-weight="700" fill="#991B1B">3 · Re-Publish Libraries</text>
+    <text x="68" y="466" font-size="9.5" fill="#7F1D1D">• Python 3.11 ➔ 3.13 invalidates</text>
+    <text x="68" y="480" font-size="9.5" fill="#7F1D1D">  compiled C-extension wheels</text>
+    <text x="68" y="500" font-size="9.5" fill="#7F1D1D">• All Environment custom packages</text>
+    <text x="68" y="514" font-size="9.5" fill="#7F1D1D">  must be re-added &amp; published</text>
+    <text x="68" y="534" font-size="9.5" fill="#7F1D1D">• A single dependency conflict</text>
+    <text x="68" y="548" font-size="9.5" fill="#7F1D1D">  fails the entire build</text>
+    <rect x="68" y="574" width="236" height="100" rx="6" fill="#FFFFFF" stroke="#FECACA"/>
+    <text x="76" y="592" font-size="9.5" font-weight="700" fill="#991B1B">Pre-Flight Test:</text>
+    <text x="76" y="610" font-size="9" fill="#7F1D1D">1. Export library YAML list</text>
+    <text x="76" y="626" font-size="9" fill="#7F1D1D">2. Test pip install on 3.13</text>
+    <text x="76" y="642" font-size="9" fill="#7F1D1D">3. Publish pilot Environment</text>
+    <rect x="250" y="408" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="276" y="418" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">FACT</text>
+  </g>
+
+  <!-- Breakage 2: jars -->
+  <g data-node-id="jars" role="group" tabindex="0" aria-label="JVM artifacts need recompiling">
+    <title data-node-tooltip="true">JVM artifacts need recompiling — Scala and Java version changes require custom JARs to be recompiled.</title>
+    <rect x="332" y="398" width="260" height="290" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#mig-shadow)"/>
+    <rect x="344" y="408" width="120" height="16" rx="8" fill="#FEE2E2"/><text x="404" y="419" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">JAVA 21 / SCALA 2.13</text>
+    <text x="344" y="444" font-size="13" font-weight="700" fill="#991B1B">4 · Recompile JVM JARs</text>
+    <text x="344" y="466" font-size="9.5" fill="#7F1D1D">• Scala 2.12 ➔ 2.13 is binary</text>
+    <text x="344" y="480" font-size="9.5" fill="#7F1D1D">  incompatible</text>
+    <text x="344" y="500" font-size="9.5" fill="#7F1D1D">• Java 11 ➔ 21 bytecode shift</text>
+    <text x="344" y="514" font-size="9.5" fill="#7F1D1D">  breaks legacy classloaders</text>
+    <text x="344" y="534" font-size="9.5" fill="#7F1D1D">• Custom connectors fail to load</text>
+    <text x="344" y="548" font-size="9.5" fill="#7F1D1D">  at notebook session startup</text>
+    <rect x="344" y="574" width="236" height="100" rx="6" fill="#FFFFFF" stroke="#FECACA"/>
+    <text x="352" y="592" font-size="9.5" font-weight="700" fill="#991B1B">Pre-Flight Test:</text>
+    <text x="352" y="610" font-size="9" fill="#7F1D1D">1. Rebuild JARs with sbt/maven</text>
+    <text x="352" y="626" font-size="9" fill="#7F1D1D">2. Target Scala 2.13 &amp; JDK 21</text>
+    <text x="352" y="642" font-size="9" fill="#7F1D1D">3. Test in isolated Environment</text>
+    <rect x="526" y="408" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="552" y="418" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">FACT</text>
+  </g>
+
+  <!-- Breakage 3: ansi -->
+  <g data-node-id="ansi" role="group" tabindex="0" aria-label="ANSI mode flips on">
+    <title data-node-tooltip="true">ANSI mode flips on — Spark 4.x enables ANSI mode by default, turning silent NULLs into runtime errors.</title>
+    <rect x="608" y="398" width="260" height="290" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#mig-shadow)"/>
+    <rect x="620" y="408" width="120" height="16" rx="8" fill="#FEE2E2"/><text x="680" y="419" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">SPARK 4.X DEFAULT</text>
+    <text x="620" y="444" font-size="13" font-weight="700" fill="#991B1B">5 · ANSI Mode Flips ON</text>
+    <text x="620" y="466" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Dominant Breakage Cause:</tspan></text>
+    <text x="620" y="480" font-size="9.5" fill="#7F1D1D">  ANSI SQL is ON by default in 4.x</text>
+    <text x="620" y="500" font-size="9.5" fill="#7F1D1D">• Divide-by-zero &amp; overflow throw</text>
+    <text x="620" y="514" font-size="9.5" fill="#7F1D1D">  exceptions instead of returning NULL</text>
+    <text x="620" y="534" font-size="9.5" fill="#7F1D1D">• Forces Native Engine to JVM fallback</text>
+    <rect x="620" y="574" width="236" height="100" rx="6" fill="#FFFFFF" stroke="#FECACA"/>
+    <text x="628" y="592" font-size="9.5" font-weight="700" fill="#991B1B">Pre-Flight Test:</text>
+    <text x="628" y="610" font-size="9" fill="#7F1D1D">1. Set spark.sql.ansi=true in 1.3</text>
+    <text x="628" y="626" font-size="9" fill="#7F1D1D">2. Run test suites before switch</text>
+    <text x="628" y="642" font-size="9" fill="#7F1D1D">3. Adopt try_cast / try_divide</text>
+    <rect x="802" y="408" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="828" y="418" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">FACT</text>
+  </g>
+
+  <!-- Breakage 4: protocol -->
+  <g data-node-id="protocol" role="group" tabindex="0" aria-label="Delta protocol interoperability">
+    <title data-node-tooltip="true">Delta protocol interoperability — Delta 4.x-only features raise the table protocol irreversibly and can break other readers.</title>
+    <rect x="884" y="398" width="260" height="290" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#mig-shadow)"/>
+    <rect x="896" y="408" width="130" height="16" rx="8" fill="#FEE2E2"/><text x="961" y="419" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">DELTA 4.2 INTEROP</text>
+    <text x="896" y="444" font-size="13" font-weight="700" fill="#991B1B">6 · Delta Protocol Interop</text>
+    <text x="896" y="466" font-size="9.5" fill="#7F1D1D">• Enabling Delta 4.x features raises</text>
+    <text x="896" y="480" font-size="9.5" fill="#7F1D1D">  table protocol <tspan font-weight="700">irreversibly</tspan></text>
+    <text x="896" y="500" font-size="9.5" fill="#7F1D1D">• Upgraded protocol blocks SQL</text>
+    <text x="896" y="514" font-size="9.5" fill="#7F1D1D">  endpoints, Power BI Direct Lake</text>
+    <text x="896" y="534" font-size="9.5" fill="#7F1D1D">• Cannot be downgraded back to 1.3</text>
+    <rect x="896" y="574" width="236" height="100" rx="6" fill="#FFFFFF" stroke="#FECACA"/>
+    <text x="904" y="592" font-size="9.5" font-weight="700" fill="#991B1B">Pre-Flight Test:</text>
+    <text x="904" y="610" font-size="9" fill="#7F1D1D">1. Check reader engine versions</text>
+    <text x="904" y="626" font-size="9" fill="#7F1D1D">2. Test SQL analytics endpoint</text>
+    <text x="904" y="642" font-size="9" fill="#7F1D1D">3. Gate delta.upgradeTableProtocol</text>
+    <rect x="1078" y="408" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="1104" y="418" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 3: VALIDATION & ROLLBACK (VERIFY ➔ ROLLBACK)                          -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="718" width="1120" height="172" rx="14" fill="#FFFFFF" stroke="#86EFAC" stroke-width="1.4"/>
+  <rect x="56" y="728" width="410" height="20" rx="10" fill="#DCFCE7"/>
+  <text x="66" y="742" font-size="10.5" font-weight="700" fill="#166534" letter-spacing="1px">STAGE 3: POST-MIGRATION VALIDATION &amp; ZERO-RISK ROLLBACK</text>
+
+  <!-- Validation: verify -->
+  <g data-node-id="verify" role="group" tabindex="0" aria-label="Verify native execution afterwards">
+    <title data-node-tooltip="true">Verify native execution afterwards — Native execution must be verified after migrating because ANSI forces fallback.</title>
+    <rect x="56" y="756" width="520" height="120" rx="10" fill="#F0FDF4" stroke="#86EFAC" stroke-width="1.6" filter="url(#mig-shadow)"/>
+    <rect x="68" y="766" width="120" height="16" rx="8" fill="#DCFCE7"/><text x="128" y="777" text-anchor="middle" font-size="8.5" font-weight="700" fill="#15803D">VALIDATION PASS</text>
+    <text x="68" y="800" font-size="13" font-weight="700" fill="#14532D">7 · Verify Native Execution Post-Migration</text>
+    <text x="68" y="822" font-size="9.5" fill="#166534">• <tspan font-weight="700">The Silent Fallback Trap:</tspan> ANSI on 2.0 silently forces native operators back to JVM</text>
+    <text x="68" y="840" font-size="9.5" fill="#166534">• Inspect <tspan font-family="monospace">df.explain()</tspan> to verify <tspan font-family="monospace">NativeScan</tspan> and <tspan font-family="monospace">NativeProject</tspan> are active in the final plan</text>
+    <text x="68" y="858" font-size="9.5" fill="#166534">• Review Spark Advisor alerts for fallback warnings</text>
+    <rect x="510" y="766" width="52" height="14" rx="7" fill="#DCFCE7"/><text x="536" y="776" text-anchor="middle" font-size="8" font-weight="700" fill="#15803D">FACT</text>
+  </g>
+
+  <!-- Rollback: rollback -->
+  <g data-node-id="rollback" role="group" tabindex="0" aria-label="Rollback is a config change">
+    <title data-node-tooltip="true">Rollback is a config change — Runtime is an Environment-level setting, so rollback is a configuration change.</title>
+    <rect x="606" y="756" width="538" height="120" rx="10" fill="#F0FDF4" stroke="#86EFAC" stroke-width="1.6" filter="url(#mig-shadow)"/>
+    <rect x="618" y="766" width="130" height="16" rx="8" fill="#DCFCE7"/><text x="683" y="777" text-anchor="middle" font-size="8.5" font-weight="700" fill="#15803D">ROLLBACK SAFETY</text>
+    <text x="618" y="800" font-size="13" font-weight="700" fill="#14532D">8 · Rollback is a Simple Configuration Change</text>
+    <text x="618" y="822" font-size="9.5" fill="#166534">• Runtime version is bound at Environment level, not hardcoded in notebook logic</text>
+    <text x="618" y="840" font-size="9.5" fill="#166534">• Keep the Runtime 1.3 Environment intact — reverting takes 1 click, 0 rebuild time</text>
+    <text x="618" y="858" font-size="9.5" fill="#166534">• Provides immediate escape hatch if unexpected production regressions occur</text>
+    <rect x="1078" y="766" width="52" height="14" rx="7" fill="#DCFCE7"/><text x="1104" y="776" text-anchor="middle" font-size="8" font-weight="700" fill="#15803D">FACT</text>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="910" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Microsoft Fabric Spark Runtime Release Channels &amp; Migration Runbook.</text>
+</svg>

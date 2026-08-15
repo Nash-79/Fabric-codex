@@ -1,218 +1,200 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 920" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-job-execution-internals-title spark-job-execution-internals-desc" data-diagram-id="spark-job-execution-internals">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 880" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-job-execution-internals-title spark-job-execution-internals-desc" data-diagram-id="spark-job-execution-internals">
   <title id="spark-job-execution-internals-title">Spark job execution internals</title>
-  <desc id="spark-job-execution-internals-desc">Spark job execution internals. Driver builds the plan; Stages schedule tasks; Native operator route; JVM fallback route; Inspect fallback and failures.</desc>
-  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
-       Angle: job execution internals — driver builds a DAG of stages/tasks, tasks run on
-       executors, and per-operator the physical plan is routed either to the Native Execution
-       Engine (Velox + Gluten, vectorized columnar C++) or falls back to standard JVM row-based
-       Spark execution. Distinct from spark-engineering.svg (broad architecture/write-path
-       overview) and spark-autoscale-internals.svg (autoscale/dynamic-allocation scaling loop) —
-       this diagram does not repeat pool sizing or scaling mechanics.
-       Grounded in spark capability claims (capability_id=spark):
-         9e9fee3f (NEE = Velox (Meta, C++ vectorized exec) + Apache Gluten (Intel, JVM->native offload middle layer))
-         Gluten intercepts optimized physical plan -> Substrait plan; Velox executes vectorized/SIMD columnar C++
-         "When NEE encounters an operator... it doesn't support... falls back to standard JVM Spark" (per-operator fallback)
-         "NEE preserves... AQE, cost-based rewrites, column pruning, predicate pushdown" (optimizer still applies)
-         "structured streaming, ANSI SQL mode, JSON/XML... not accelerated... UDFs and complex types now supported natively... CSV now vectorized native" (coverage)
-         4ef7e26a (verify native path: *Transformer/*NativeFileScan/*VeloxColumnarToRowExec suffixes; Gluten tab green=native, blue=JVM fallback)
-         5f3c6015 (benchmarks: vectorized UDFs up to 5.76x, complex UDFs 1.08-2.5x, TPC-DS end-to-end up to 2.35x; workload-dependent, no added cost)
-         "A Fabric Spark pool instance consists of one head node... Livy, YARN RM, ZooKeeper, Spark driver..." (driver placement)
-         27f20012 (1:1 node:executor ratio) -->
+  <desc id="spark-job-execution-internals-desc">Spark job execution internals: Driver planning, stage and task scheduling, per-operator routing across Native Velox and JVM fallback engines, and observability diagnostics.</desc>
 
   <defs>
-    <linearGradient id="hdrB" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#5B2A86"/>
-      <stop offset="0.5" stop-color="#7C3AAD"/>
-      <stop offset="1" stop-color="#0B5E50"/>
-    </linearGradient>
-    <linearGradient id="driverGrad" x1="0" y1="0" x2="0" y2="1">
+    <!-- Header Gradient -->
+    <linearGradient id="sje-head" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#3B1A5C"/>
-      <stop offset="1" stop-color="#5B2A86"/>
+      <stop offset="0.5" stop-color="#5B2A86"/>
+      <stop offset="1" stop-color="#047857"/>
     </linearGradient>
-    <linearGradient id="nativeGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#E8F6EE"/>
-      <stop offset="1" stop-color="#B9E8CE"/>
+
+    <!-- Substrate Gradients -->
+    <linearGradient id="sje-driver" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#2E1065"/>
+      <stop offset="0.5" stop-color="#4C1D95"/>
+      <stop offset="1" stop-color="#5B21B6"/>
     </linearGradient>
-    <linearGradient id="jvmGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#EAF0FB"/>
-      <stop offset="1" stop-color="#C6D6F5"/>
-    </linearGradient>
-    <marker id="arrPurp" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+
+    <!-- Drop Shadows -->
+    <filter id="sje-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#3B1A5C" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="sje-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
     </marker>
-    <marker id="arrGreen3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#1E8E5A"/>
+    <marker id="sje-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
     </marker>
-    <marker id="arrBlue2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#3A5AB8"/>
+    <marker id="sje-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
     </marker>
-    <marker id="arrDarkB" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#3B1A5C"/>
+    <marker id="sje-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
     </marker>
+
+    <!-- Official Microsoft Notebook Item Icon Gradients -->
+    <linearGradient id="sje-nb-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="sje-nb-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="sje-nb-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="sje-nb-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
   </defs>
 
-  <rect x="0" y="0" width="1180" height="920" fill="#FFFFFF"/>
+  <!-- Canvas Base -->
+  <rect width="1200" height="880" fill="#FAF5FF"/>
 
-  <!-- Header -->
-  <rect x="0" y="0" width="1180" height="66" fill="url(#hdrB)"/>
-  <text x="30" y="30" fill="#FFFFFF" font-size="21" font-weight="700">Spark Job Execution Internals in Fabric: DAG, Stages, and the Native Execution Engine</text>
-  <text x="30" y="50" fill="#E9DCF5" font-size="12.5">Driver planning → stage/task scheduling on executors → per-operator native (Velox+Gluten) vs JVM fallback</text>
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#sje-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#sje-nb-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#sje-nb-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#sje-nb-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#sje-nb-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#sje-nb-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#sje-nb-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Fabric Spark Job Execution Internals</text>
+  <text x="40" y="64" font-size="12" fill="#E9D8FD">Driver planning ➔ Stage/task scheduling ➔ Native Velox vs JVM Tungsten routing ➔ Observability &amp; diagnostics</text>
 
-  <!-- ============ ROW 1: DRIVER / DAG ============ -->
-  <rect x="30" y="86" width="1120" height="150" rx="10" fill="url(#driverGrad)"/>
-  <text x="50" y="110" fill="#FFFFFF" font-size="14" font-weight="700">1. Driver (on the head node) builds the DAG</text>
-  <text x="50" y="128" fill="#E9DCF5" font-size="11.5">Head node hosts Livy, YARN Resource Manager, ZooKeeper, and the Spark driver — the driver is not an executor</text>
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D8FD"/>
+    <circle cx="20" cy="15" r="5" fill="#7C3AAD"/><text x="32" y="19" fill="#4C1D95" font-weight="600">Driver Catalyst Planning</text>
+    <circle cx="230" cy="15" r="5" fill="#6366F1"/><text x="242" y="19" fill="#3730A3" font-weight="600">Stage &amp; Task Scheduling</text>
+    <circle cx="450" cy="15" r="5" fill="#059669"/><text x="462" y="19" fill="#065F46" font-weight="600">Native Velox SIMD Route</text>
+    <circle cx="680" cy="15" r="5" fill="#2563EB"/><text x="692" y="19" fill="#1E40AF" font-weight="600">JVM Tungsten Fallback</text>
+    <circle cx="890" cy="15" r="5" fill="#D97706"/><text x="902" y="19" fill="#92400E" font-weight="600">Observability &amp; Advisor</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
+  </g>
 
-  <rect x="50" y="140" width="220" height="80" rx="8" fill="#FFFFFF"/>
-  <text x="160" y="162" fill="#3B1A5C" font-size="12" font-weight="700" text-anchor="middle">Logical plan</text>
-  <text x="160" y="178" fill="#5A4070" font-size="10" text-anchor="middle">Catalyst optimizer applies</text>
-  <text x="160" y="192" fill="#5A4070" font-size="10" text-anchor="middle">AQE, cost-based rewrites,</text>
-  <text x="160" y="206" fill="#5A4070" font-size="10" text-anchor="middle">column pruning, pushdown</text>
+  <!-- ========================================================================= -->
+  <!-- ZONE 1: DRIVER PLANNING & STAGE SCHEDULING                                -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="154" rx="14" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
+  <rect x="56" y="156" width="370" height="20" rx="10" fill="#EDE9FE"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#4C1D95" letter-spacing="1px">STAGE 1: DRIVER DAG PLANNING &amp; TASK SCHEDULING</text>
 
-  <line x1="270" y1="180" x2="310" y2="180" stroke="#E9DCF5" stroke-width="2.5" marker-end="url(#arrPurp)"/>
-
-  <rect x="310" y="140" width="220" height="80" rx="8" fill="#FFFFFF"/>
-  <text x="420" y="162" fill="#3B1A5C" font-size="12" font-weight="700" text-anchor="middle">Optimized physical plan</text>
-  <text x="420" y="178" fill="#5A4070" font-size="10" text-anchor="middle">Same optimizer output regardless</text>
-  <text x="420" y="192" fill="#5A4070" font-size="10" text-anchor="middle">of native/JVM routing decided</text>
-  <text x="420" y="206" fill="#5A4070" font-size="10" text-anchor="middle">next — optimization is unchanged</text>
-
-  <line x1="530" y1="180" x2="570" y2="180" stroke="#E9DCF5" stroke-width="2.5" marker-end="url(#arrPurp)"/>
-
-  <rect x="570" y="140" width="220" height="80" rx="8" fill="#FFFFFF"/>
-  <text x="680" y="162" fill="#3B1A5C" font-size="12" font-weight="700" text-anchor="middle">DAG of stages</text>
-  <text x="680" y="178" fill="#5A4070" font-size="10" text-anchor="middle">Split at shuffle boundaries</text>
-  <text x="680" y="192" fill="#5A4070" font-size="10" text-anchor="middle">into stages, each stage split</text>
-  <text x="680" y="206" fill="#5A4070" font-size="10" text-anchor="middle">into per-partition tasks</text>
-
-  <line x1="790" y1="180" x2="830" y2="180" stroke="#E9DCF5" stroke-width="2.5" marker-end="url(#arrPurp)"/>
-
-  <rect x="830" y="140" width="300" height="80" rx="8" fill="#2A1345" stroke="#A65BD6" stroke-width="1.5"/>
-  <text x="980" y="162" fill="#FFFFFF" font-size="12" font-weight="700" text-anchor="middle">Per-operator routing decision</text>
-  <text x="980" y="180" fill="#E9DCF5" font-size="10.5" text-anchor="middle">Each operator is independently checked:</text>
-  <text x="980" y="196" fill="#B9E8CE" font-size="10.5" font-weight="700" text-anchor="middle">supported by NEE?  →  native path</text>
-  <text x="980" y="210" fill="#C6D6F5" font-size="10.5" font-weight="700" text-anchor="middle">unsupported?  →  JVM fallback</text>
-
-  <!-- Connector down, split into two -->
-  <line x1="980" y1="220" x2="980" y2="256" stroke="#3B1A5C" stroke-width="2.5"/>
-  <line x1="980" y1="256" x2="330" y2="256" stroke="#3B1A5C" stroke-width="2.5"/>
-  <line x1="330" y1="256" x2="330" y2="278" stroke="#3B1A5C" stroke-width="2.5" marker-end="url(#arrDarkB)"/>
-  <line x1="980" y1="256" x2="830" y2="256" stroke="#3B1A5C" stroke-width="0"/>
-  <line x1="980" y1="220" x2="980" y2="278" stroke="#3B1A5C" stroke-width="2.5" marker-end="url(#arrDarkB)"/>
-
-  <!-- ============ ROW 2: TWO EXECUTION PATHS ============ -->
-  <text x="50" y="272" fill="#0B5E50" font-size="14" font-weight="700">2. Task execution splits per-operator across two paths</text>
-
-  <!-- Native path panel -->
-  <rect x="30" y="290" width="540" height="330" rx="10" fill="url(#nativeGrad)" stroke="#1E8E5A" stroke-width="1.5"/>
-  <text x="50" y="314" fill="#0F5C39" font-size="14" font-weight="700">Native Execution Engine path</text>
-  <text x="50" y="332" fill="#1E6B45" font-size="11">Velox (Meta, C++ vectorized exec) + Apache Gluten (Intel, offload layer)</text>
-
-  <rect x="50" y="344" width="500" height="58" rx="6" fill="#FFFFFF" stroke="#1E8E5A" stroke-width="1"/>
-  <text x="66" y="362" fill="#0F5C39" font-size="11.5" font-weight="700">Gluten converts the plan to Substrait</text>
-  <text x="66" y="378" fill="#3A7A57" font-size="10">Intercepts the optimized physical plan and translates the</text>
-  <text x="66" y="391" fill="#3A7A57" font-size="10">supported portion into a Substrait intermediate representation</text>
-
-  <rect x="50" y="410" width="500" height="58" rx="6" fill="#FFFFFF" stroke="#1E8E5A" stroke-width="1"/>
-  <text x="66" y="428" fill="#0F5C39" font-size="11.5" font-weight="700">Velox executes vectorized, columnar C++</text>
-  <text x="66" y="444" fill="#3A7A57" font-size="10">SIMD-accelerated, off-heap columnar execution replaces the</text>
-  <text x="66" y="457" fill="#3A7A57" font-size="10">JVM row-based operator implementation for that segment</text>
-
-  <rect x="50" y="476" width="500" height="66" rx="6" fill="#FFFFFF" stroke="#1E8E5A" stroke-width="1"/>
-  <text x="66" y="494" fill="#0F5C39" font-size="11.5" font-weight="700">Accelerated today</text>
-  <text x="66" y="510" fill="#3A7A57" font-size="10">Python/Scala UDFs, complex types (arrays/maps/structs), CSV</text>
-  <text x="66" y="524" fill="#3A7A57" font-size="10">(now vectorized native), Delta reads with Z-order / Liquid</text>
-  <text x="66" y="537" fill="#3A7A57" font-size="10">Clustering layout, parallel Delta snapshot loading</text>
-
-  <rect x="50" y="550" width="500" height="54" rx="6" fill="#DFF5EA" stroke="#1E8E5A" stroke-width="1"/>
-  <text x="66" y="568" fill="#0F5C39" font-size="11.5" font-weight="700">Measured payoff (workload-dependent)</text>
-  <text x="66" y="584" fill="#1E6B45" font-size="10.5">Vectorized UDFs up to 5.76x faster, complex UDFs 1.08-2.5x,</text>
-  <text x="66" y="597" fill="#1E6B45" font-size="10.5">TPC-DS end-to-end up to 2.35x — no added cost over Spark billing</text>
-
-  <!-- JVM fallback panel -->
-  <rect x="600" y="290" width="550" height="330" rx="10" fill="url(#jvmGrad)" stroke="#3A5AB8" stroke-width="1.5"/>
-  <text x="620" y="314" fill="#20326E" font-size="14" font-weight="700">JVM Spark fallback path</text>
-  <text x="620" y="332" fill="#33468C" font-size="11">Standard row-based execution — always correct, not accelerated</text>
-
-  <rect x="620" y="344" width="510" height="58" rx="6" fill="#FFFFFF" stroke="#3A5AB8" stroke-width="1"/>
-  <text x="636" y="362" fill="#20326E" font-size="11.5" font-weight="700">Automatic, silent, per-operator fallback</text>
-  <text x="636" y="378" fill="#33468C" font-size="10">Any operator, expression, data type, or feature NEE doesn't</text>
-  <text x="636" y="391" fill="#33468C" font-size="10">support runs on JVM Spark instead — the job still completes correctly</text>
-
-  <rect x="620" y="410" width="510" height="58" rx="6" fill="#FFFFFF" stroke="#3A5AB8" stroke-width="1"/>
-  <text x="636" y="428" fill="#20326E" font-size="11.5" font-weight="700">Always JVM today (never accelerated)</text>
-  <text x="636" y="444" fill="#33468C" font-size="10">Structured streaming, ANSI SQL mode, JSON/XML source formats —</text>
-  <text x="636" y="457" fill="#33468C" font-size="10">documented as not accelerated as of the current NEE release</text>
-
-  <rect x="620" y="476" width="510" height="90" rx="6" fill="#FCECEC" stroke="#B22222" stroke-width="1"/>
-  <text x="636" y="494" fill="#7A1414" font-size="11.5" font-weight="700">Correctness quirks — not bit-for-bit identical</text>
-  <text x="636" y="510" fill="#8A3A3A" font-size="10">DECIMAL→FLOAT casts diverge (string round-trip vs int128_t cast);</text>
-  <text x="636" y="523" fill="#8A3A3A" font-size="10">round() uses std::round, not Spark's logic; collect_list/collect_set</text>
-  <text x="636" y="536" fill="#8A3A3A" font-size="10">intermediate type is ARRAY not BINARY under NEE; mapKeyDedupPolicy</text>
-  <text x="636" y="549" fill="#8A3A3A" font-size="10">=EXCEPTION is not enforced natively (silently keys on last-seen value)</text>
-
-  <rect x="620" y="576" width="510" height="30" rx="6" fill="#E8E0F5"/>
-  <text x="875" y="596" fill="#3B1A5C" font-size="10.5" font-weight="700" text-anchor="middle">Test precision-sensitive pipelines before trusting NEE output equals vanilla Spark</text>
-
-  <!-- Merge arrows down to executors -->
-  <line x1="300" y1="620" x2="300" y2="650" stroke="#1E8E5A" stroke-width="2.5" marker-end="url(#arrGreen3)"/>
-  <line x1="875" y1="620" x2="875" y2="650" stroke="#3A5AB8" stroke-width="2.5" marker-end="url(#arrBlue2)"/>
-
-  <!-- ============ ROW 3: EXECUTORS ============ -->
-  <text x="50" y="644" fill="#0B5E50" font-size="14" font-weight="700">3. Tasks execute on executors (1:1 with worker nodes)</text>
-  <rect x="30" y="654" width="1120" height="110" rx="10" fill="#F5F2FA" stroke="#7C3AAD" stroke-width="1.2"/>
-
-  <rect x="50" y="670" width="330" height="78" rx="8" fill="#FFFFFF" stroke="#1E8E5A" stroke-width="1.5"/>
-  <text x="215" y="690" fill="#0F5C39" font-size="12" font-weight="700" text-anchor="middle">Executor — native task</text>
-  <text x="215" y="708" fill="#3A7A57" font-size="10.5" text-anchor="middle">Columnar batches, off-heap memory,</text>
-  <text x="215" y="722" fill="#3A7A57" font-size="10.5" text-anchor="middle">SIMD vectorized C++ operators</text>
-  <text x="215" y="738" fill="#5A7C8C" font-size="9.5" text-anchor="middle">Look for *Transformer / *NativeFileScan suffixes</text>
-
-  <rect x="410" y="670" width="330" height="78" rx="8" fill="#FFFFFF" stroke="#3A5AB8" stroke-width="1.5"/>
-  <text x="575" y="690" fill="#20326E" font-size="12" font-weight="700" text-anchor="middle">Executor — JVM task</text>
-  <text x="575" y="708" fill="#33468C" font-size="10.5" text-anchor="middle">Row-based iteration, on-heap JVM</text>
-  <text x="575" y="722" fill="#33468C" font-size="10.5" text-anchor="middle">objects, standard Catalyst codegen</text>
-  <text x="575" y="738" fill="#5A7C8C" font-size="9.5" text-anchor="middle">Look for *VeloxColumnarToRowExec at the boundary</text>
-
-  <rect x="770" y="670" width="360" height="78" rx="8" fill="#FFFFFF" stroke="#7C3AAD" stroke-width="1.5"/>
-  <text x="950" y="690" fill="#3B1A5C" font-size="12" font-weight="700" text-anchor="middle">Verifying what actually ran</text>
-  <text x="950" y="708" fill="#5A4070" font-size="10.5" text-anchor="middle">Spark UI / df.explain() operator-name suffixes,</text>
-  <text x="950" y="722" fill="#5A4070" font-size="10.5" text-anchor="middle">or the Gluten SQL/DataFrame tab's execution graph —</text>
-  <text x="950" y="738" fill="#5A4070" font-size="10.5" text-anchor="middle">green nodes = native, light blue nodes = JVM fallback</text>
-
-  <!-- Legend -->
-  <rect x="30" y="784" width="1120" height="1" fill="#E4DAF0"/>
-  <rect x="30" y="798" width="1120" height="100" rx="8" fill="#FAF8FD" stroke="#E4DAF0" stroke-width="1"/>
-  <text x="50" y="820" fill="#3B1A5C" font-size="12" font-weight="700">Legend</text>
-  <rect x="50" y="830" width="14" height="14" rx="3" fill="#B9E8CE" stroke="#1E8E5A"/>
-  <text x="70" y="841" fill="#3A5A63" font-size="10.5">Native Execution Engine (Velox + Gluten, vectorized columnar)</text>
-  <rect x="480" y="830" width="14" height="14" rx="3" fill="#C6D6F5" stroke="#3A5AB8"/>
-  <text x="500" y="841" fill="#3A5A63" font-size="10.5">Standard JVM Spark (row-based)</text>
-  <rect x="770" y="830" width="14" height="14" rx="3" fill="#FCECEC" stroke="#B22222"/>
-  <text x="790" y="841" fill="#3A5A63" font-size="10.5">Documented correctness divergence</text>
-  <rect x="50" y="854" width="14" height="14" rx="3" fill="#2A1345"/>
-  <text x="70" y="865" fill="#3A5A63" font-size="10.5">Driver-side plan / routing decision (per operator, not per query)</text>
-  <text x="50" y="884" fill="#7A8A94" font-size="9.5">Source: Microsoft Learn — Native execution engine for Fabric Data Engineering (tier 1); Apache Spark compute for Fabric (tier 1)</text>
-
-  <!-- Full-region keyboard and pointer targets; metadata comes from the evidence sidecar. -->
+  <!-- Node: step-1 -->
   <g data-node-id="step-1" role="group" tabindex="0" aria-label="Driver builds the plan">
     <title data-node-tooltip="true">Driver builds the plan — The Spark driver analyzes transformations and produces an optimized physical plan.</title>
-    <rect x="6.0" y="845.5" width="354.9" height="34.0" rx="6.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="56" y="186" width="510" height="100" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#sje-shadow)"/>
+    <rect x="70" y="198" width="90" height="16" rx="8" fill="#EDE9FE"/><text x="115" y="209" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">DRIVER HEAD</text>
+    <text x="170" y="211" font-size="13" font-weight="700" fill="#4C1D95">1 · Driver Builds Physical Plan</text>
+    <text x="70" y="234" font-size="10" fill="#5B21B6">• Catalyst optimizer: AQE, predicate pushdown, column pruning</text>
+    <text x="70" y="252" font-size="10" fill="#5B21B6">• Physical plan generated identically regardless of downstream engine</text>
+    <text x="70" y="270" font-size="10" fill="#5B21B6">• Head node coordinates Livy, YARN RM, ZooKeeper, and Driver DAG</text>
+    <rect x="500" y="198" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="526" y="208" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
   </g>
+
+  <!-- Node: step-2 -->
   <g data-node-id="step-2" role="group" tabindex="0" aria-label="Stages schedule tasks">
     <title data-node-tooltip="true">Stages schedule tasks — Each stage expands into tasks over input partitions and available executors.</title>
-    <rect x="570.0" y="140.0" width="220.0" height="80.0" rx="8.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="630" y="186" width="510" height="100" rx="10" fill="#EEF2FF" stroke="#A5B4FC" stroke-width="1.6" filter="url(#sje-shadow)"/>
+    <rect x="644" y="198" width="90" height="16" rx="8" fill="#E0E7FF"/><text x="689" y="209" text-anchor="middle" font-size="8.5" font-weight="700" fill="#4338CA">STAGE DAG</text>
+    <text x="744" y="211" font-size="13" font-weight="700" fill="#312E81">2 · Stages Schedule Partition Tasks</text>
+    <text x="644" y="234" font-size="10" fill="#3730A3">• Plan split at Shuffle Exchange boundaries into discrete stages</text>
+    <text x="644" y="252" font-size="10" fill="#3730A3">• Tasks distributed across worker nodes (fixed 1:1 executor per worker)</text>
+    <text x="644" y="270" font-size="10" fill="#3730A3">• Dynamic allocation adds/removes worker executors based on queue</text>
+    <rect x="1074" y="198" width="52" height="14" rx="7" fill="#E0E7FF"/><text x="1100" y="208" text-anchor="middle" font-size="8" font-weight="700" fill="#4338CA">FACT</text>
   </g>
+
+  <!-- Connector: step-1 -> step-2 -->
+  <path d="M 566 236 H 630" stroke="#7C3AAD" stroke-width="2.2" fill="none" marker-end="url(#sje-arr-purple)"/>
+
+  <!-- ========================================================================= -->
+  <!-- ZONE 2: DUAL EXECUTION ROUTING (VELOX NATIVE vs JVM FALLBACK)             -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="316" width="1120" height="280" rx="14" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
+  <rect x="56" y="326" width="220" height="20" rx="10" fill="#EDE9FE"/>
+  <text x="66" y="340" font-size="9.5" font-weight="700" fill="#4C1D95" letter-spacing="0.8px">STAGE 2: OPERATOR ROUTING</text>
+
+  <!-- Node: step-3 -->
   <g data-node-id="step-3" role="group" tabindex="0" aria-label="Native operator route">
     <title data-node-tooltip="true">Native operator route — Gluten converts supported plan portions to Substrait and Velox executes vectorized C++ operators.</title>
-    <rect x="6.0" y="55.0" width="377.6" height="34.0" rx="6.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="56" y="356" width="510" height="224" rx="10" fill="#ECFDF5" stroke="#34D399" stroke-width="1.8" filter="url(#sje-shadow)"/>
+    <rect x="70" y="368" width="110" height="16" rx="8" fill="#D1FAE5"/><text x="125" y="379" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">NATIVE VELOX ROUTE</text>
+    <text x="190" y="381" font-size="13" font-weight="700" fill="#064E3B">3 · Native SIMD C++ Execution</text>
+    <text x="70" y="406" font-size="10" fill="#065F46">• Gluten converts supported physical plan nodes to Substrait IR</text>
+    <text x="70" y="424" font-size="10" fill="#065F46">• Velox executes SIMD vectorized C++ kernels in off-heap memory</text>
+    <text x="70" y="442" font-size="10" fill="#065F46">• Operators: HashJoin, Project, Filter, Aggregate, FileScan (*Native*)</text>
+    <text x="70" y="460" font-size="10" fill="#065F46">• Accelerated: Python/Scala UDFs, complex types, CSV native scan</text>
+    <text x="70" y="478" font-size="10" fill="#065F46">• Parquet columnar batches processed with zero JVM deserialization</text>
+    <rect x="70" y="498" width="480" height="66" rx="6" fill="#FFFFFF" stroke="#86EFAC"/>
+    <text x="80" y="516" font-size="9.5" font-weight="700" fill="#047857">Performance Benchmarks (Grounded):</text>
+    <text x="80" y="534" font-size="9" fill="#065F46">Vectorized UDFs up to 5.76x faster; Complex UDFs 1.08–2.5x; TPC-DS end-to-end</text>
+    <text x="80" y="550" font-size="9" fill="#065F46">up to 2.35x. Zero added licensing or SKU surcharge over base capacity.</text>
+    <rect x="500" y="368" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="526" y="378" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
   </g>
+
+  <!-- Node: step-4 -->
   <g data-node-id="step-4" role="group" tabindex="0" aria-label="JVM fallback route">
     <title data-node-tooltip="true">JVM fallback route — Unsupported operators or features automatically execute with standard JVM Spark.</title>
-    <rect x="830.0" y="140.0" width="300.0" height="80.0" rx="8.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="630" y="356" width="510" height="224" rx="10" fill="#EFF6FF" stroke="#60A5FA" stroke-width="1.8" filter="url(#sje-shadow)"/>
+    <rect x="644" y="368" width="110" height="16" rx="8" fill="#DBEAFE"/><text x="699" y="379" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">JVM TUNGSTEN ROUTE</text>
+    <text x="764" y="381" font-size="13" font-weight="700" fill="#1E3A8A">4 · Standard JVM Fallback</text>
+    <text x="644" y="406" font-size="10" fill="#1E40AF">• Unsupported operators execute safely via JVM Tungsten row engine</text>
+    <text x="644" y="424" font-size="10" fill="#1E40AF">• Automatic per-operator fallback ensures 100% Spark SQL correctness</text>
+    <text x="644" y="442" font-size="10" fill="#1E40AF">• Current JVM exclusions: Structured Streaming, ANSI SQL mode, JSON/XML</text>
+    <text x="644" y="460" font-size="10" fill="#1E40AF">• Columnar-to-Row (C2R) / R2C transitions added at engine boundaries</text>
+    <text x="644" y="478" font-size="10" fill="#1E40AF">• Repeated transitions around unsupported UDFs erode acceleration</text>
+    <rect x="644" y="498" width="480" height="66" rx="6" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="654" y="516" font-size="9.5" font-weight="700" fill="#991B1B">Behavioral Nuance Warnings:</text>
+    <text x="654" y="534" font-size="9" fill="#7F1D1D">DECIMAL→FLOAT casts diverge (string vs int128_t); <tspan font-family="monospace">round()</tspan> uses std::round;</text>
+    <text x="654" y="550" font-size="9" fill="#7F1D1D"><tspan font-family="monospace">collect_list</tspan>/<tspan font-family="monospace">collect_set</tspan> null ordering differences vs standard JVM.</text>
+    <rect x="1074" y="368" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="1100" y="378" text-anchor="middle" font-size="8" font-weight="700" fill="#1D4ED8">FACT</text>
   </g>
+
+  <!-- Connectors from Zone 1 to Zone 2 -->
+  <path d="M 885 286 V 320 H 311 V 356" stroke="#059669" stroke-width="2" fill="none" marker-end="url(#sje-arr-green)"/>
+  <path d="M 885 286 V 356" stroke="#2563EB" stroke-width="2" fill="none" marker-end="url(#sje-arr-blue)"/>
+
+  <!-- ========================================================================= -->
+  <!-- ZONE 3: OBSERVABILITY & DIAGNOSTICS                                       -->
+  <!-- ========================================================================= -->
+  <!-- Node: step-5 -->
   <g data-node-id="step-5" role="group" tabindex="0" aria-label="Inspect fallback and failures">
     <title data-node-tooltip="true">Inspect fallback and failures — Spark UI, explain output, and execution telemetry reveal native operators, fallback, skew, and failed tasks.</title>
-    <rect x="6.0" y="55.0" width="377.6" height="34.0" rx="6.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="40" y="612" width="1120" height="206" rx="14" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.8" filter="url(#sje-shadow)"/>
+    <rect x="56" y="624" width="130" height="18" rx="9" fill="#FEF3C7"/><text x="121" y="637" text-anchor="middle" font-size="9" font-weight="700" fill="#B45309">DIAGNOSTICS &amp; UI</text>
+    <text x="196" y="639" font-size="14" font-weight="700" fill="#78350F">5 · Inspect Fallback, Skew, and Failure Root Cause</text>
+
+    <!-- 3 Diagnostic pillars -->
+    <rect x="56" y="654" width="340" height="148" rx="8" fill="#FFFFFF" stroke="#FDE68A"/>
+    <text x="70" y="674" font-size="11" font-weight="700" fill="#92400E">1. Spark Advisor &amp; Notebook</text>
+    <text x="70" y="694" font-size="9.5" fill="#78350F">• Real-time inline advice in notebook cells</text>
+    <text x="70" y="710" font-size="9.5" fill="#78350F">• Alerts on unsupported fallback operators</text>
+    <text x="70" y="726" font-size="9.5" fill="#78350F">• Flags excessive C2R transitions</text>
+    <text x="70" y="742" font-size="9.5" fill="#78350F">• Proposes join strategy &amp; skew fixes</text>
+    <text x="70" y="774" font-size="8.5" font-weight="600" fill="#B45309">Immediate feedback loop</text>
+
+    <rect x="416" y="654" width="340" height="148" rx="8" fill="#FFFFFF" stroke="#FDE68A"/>
+    <text x="430" y="674" font-size="11" font-weight="700" fill="#92400E">2. Spark UI &amp; Gluten Plan Tab</text>
+    <text x="430" y="694" font-size="9.5" fill="#78350F">• Physical plan node suffixes:</text>
+    <text x="430" y="710" font-size="9" font-family="monospace" fill="#047857">*Transformer, *NativeFileScan</text>
+    <text x="430" y="726" font-size="9" font-family="monospace" fill="#1D4ED8">VeloxColumnarToRowExec</text>
+    <text x="430" y="744" font-size="9.5" fill="#78350F">• Gluten Tab: Green = Native, Blue = Fallback</text>
+    <text x="430" y="774" font-size="8.5" font-weight="600" fill="#B45309">Visual plan audit</text>
+
+    <rect x="776" y="654" width="364" height="148" rx="8" fill="#FFFFFF" stroke="#FDE68A"/>
+    <text x="790" y="674" font-size="11" font-weight="700" fill="#92400E">3. Monitoring &amp; Failure Triage</text>
+    <text x="790" y="694" font-size="9.5" fill="#78350F">• Detects partition skew dominating stages</text>
+    <text x="790" y="710" font-size="9.5" fill="#78350F">• Differentiates OOM vs Timeout vs Driver limit</text>
+    <text x="790" y="726" font-size="9.5" fill="#78350F">• Tracks Executor Decommission &amp; Shuffle</text>
+    <text x="790" y="742" font-size="9.5" fill="#78350F">• Re-optimize configuration &amp; query rewrite</text>
+    <text x="790" y="774" font-size="8.5" font-weight="600" fill="#B45309">Production resilience</text>
+
+    <rect x="1074" y="626" width="60" height="14" rx="7" fill="#FEF3C7"/><text x="1104" y="636" text-anchor="middle" font-size="8" font-weight="700" fill="#B45309">WARNING</text>
   </g>
+
+  <!-- Connectors into Zone 3 -->
+  <path d="M 311 580 V 612" stroke="#059669" stroke-width="2" fill="none" marker-end="url(#sje-arr-green)"/>
+  <path d="M 885 580 V 612" stroke="#2563EB" stroke-width="2" fill="none" marker-end="url(#sje-arr-blue)"/>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="862" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Microsoft Learn: Apache Spark in Microsoft Fabric &amp; Native Execution Engine.</text>
 </svg>

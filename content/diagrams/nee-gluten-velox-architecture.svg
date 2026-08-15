@@ -1,0 +1,209 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="nee-gluten-velox-architecture-title nee-gluten-velox-architecture-desc" data-diagram-id="nee-gluten-velox-architecture">
+  <title id="nee-gluten-velox-architecture-title">Native Execution Engine architecture: Gluten, Velox, and where they sit</title>
+  <desc id="nee-gluten-velox-architecture-desc">Native Execution Engine architecture in Microsoft Fabric. Catalyst physical planning is preserved; Gluten translates physical operators to Substrait plans; Meta Velox executes SIMD-vectorized C++ kernels over columnar batches; unsupported operators fall back to JVM Tungsten across a ColumnarToRow boundary.</desc>
+
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="nee-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3B1A5C"/>
+      <stop offset="0.6" stop-color="#5B2A86"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="nee-native-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#047857"/>
+      <stop offset="1" stop-color="#10B981"/>
+    </linearGradient>
+    <linearGradient id="nee-jvm-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1E40AF"/>
+      <stop offset="1" stop-color="#3B82F6"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="nee-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#2A1240" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="nee-arr-plan" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AED"/>
+    </marker>
+    <marker id="nee-arr-native" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="nee-arr-jvm" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="nee-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
+    </marker>
+    <!-- Official Microsoft Notebook Item Icon Gradients -->
+    <linearGradient id="nb-ic-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="nb-ic-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="nb-ic-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="nb-ic-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+  </defs>
+
+  <!-- Canvas Base -->
+  <rect width="1200" height="700" fill="#FBF9FE"/>
+
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#nee-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#nb-ic-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#nb-ic-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#nb-ic-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#nb-ic-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#nb-ic-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#nb-ic-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Native Execution Engine Architecture — Gluten, Velox &amp; Plan Handoff</text>
+  <text x="40" y="64" font-size="12" fill="#E9D8FD">Catalyst physical planning preserved · Gluten Substrait translation · Velox C++ SIMD vectorization · JVM Tungsten fallback</text>
+
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D8FD"/>
+    <circle cx="20" cy="15" r="5" fill="#7C3AED"/><text x="32" y="19" fill="#3B1A5C" font-weight="600">Catalyst Planning Layer</text>
+    <circle cx="200" cy="15" r="5" fill="#059669"/><text x="212" y="19" fill="#064E3B" font-weight="600">Native Velox Vector Path (C++)</text>
+    <circle cx="430" cy="15" r="5" fill="#2563EB"/><text x="442" y="19" fill="#1E3A8A" font-weight="600">Standard JVM Fallback Path</text>
+    <circle cx="640" cy="15" r="5" fill="#D97706"/><text x="652" y="19" fill="#92400E" font-weight="600">Conversion Boundary (Costly)</text>
+    <line x1="830" y1="15" x2="865" y2="15" stroke="#7C3AED" stroke-width="2.2" marker-end="url(#nee-arr-plan)"/><text x="872" y="19" fill="#3B1A5C">Plan Handoff</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original Diagram</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LAYER 1: PLANNING & ACTIVATION (Catalyst Optimizer & Toggle)              -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="148" width="1120" height="136" rx="14" fill="#FAF5FF" stroke="#DDD6FE" stroke-width="1.4"/>
+  <rect x="56" y="158" width="370" height="20" rx="10" fill="#EDE9FE"/>
+  <text x="66" y="172" font-size="10.5" font-weight="700" fill="#4C1D95" letter-spacing="1px">STAGE 1: PLAN GENERATION &amp; PATH SELECTION</text>
+
+  <!-- Node: catalyst -->
+  <g data-node-id="catalyst" role="group" tabindex="0" aria-label="Catalyst produces the physical plan">
+    <title data-node-tooltip="true">Catalyst produces the physical plan — Catalyst's optimizer behaviour is fully preserved under native execution.</title>
+    <rect x="56" y="186" width="510" height="84" rx="10" fill="#FFFFFF" stroke="#C4B5FD" stroke-width="1.5" filter="url(#nee-shadow)"/>
+    <rect x="70" y="198" width="80" height="16" rx="8" fill="#EDE9FE"/><text x="110" y="209" text-anchor="middle" font-size="8.5" font-weight="700" fill="#5B21B6">OPTIMIZER</text>
+    <text x="160" y="211" font-size="13" font-weight="700" fill="#3B1A5C">Catalyst Produces Physical Plan</text>
+    <text x="70" y="234" font-size="10" fill="#5B21B6">• AQE, cost-based rewrites, column pruning &amp; predicate pushdown preserved</text>
+    <text x="70" y="252" font-size="10" fill="#5B21B6">• Identical plan generated regardless of native execution toggle</text>
+    <rect x="500" y="196" width="52" height="15" rx="7.5" fill="#DDD6FE"/><text x="526" y="207" text-anchor="middle" font-size="8.5" font-weight="700" fill="#4C1D95">FACT</text>
+  </g>
+
+  <!-- Node: toggle -->
+  <g data-node-id="toggle" role="group" tabindex="0" aria-label="spark.native.enabled selects the path">
+    <title data-node-tooltip="true">spark.native.enabled selects the path — spark.native.enabled selects the native path per application on both runtimes.</title>
+    <rect x="630" y="186" width="510" height="84" rx="10" fill="#FFFFFF" stroke="#C4B5FD" stroke-width="1.5" filter="url(#nee-shadow)"/>
+    <rect x="644" y="198" width="68" height="16" rx="8" fill="#EDE9FE"/><text x="678" y="209" text-anchor="middle" font-size="8.5" font-weight="700" fill="#5B21B6">CONFIG</text>
+    <text x="722" y="211" font-size="13" font-weight="700" fill="#3B1A5C"><tspan font-family="monospace">spark.native.enabled</tspan> Activation</text>
+    <text x="644" y="234" font-size="10" fill="#5B21B6">• Toggled per environment or session (<tspan font-family="monospace">spark.native.enabled = true</tspan>)</text>
+    <text x="644" y="252" font-size="10" fill="#5B21B6">• Available on Runtime 1.3 (Spark 3.5) &amp; Runtime 2.0 (Spark 4.1) on Delta</text>
+    <rect x="1074" y="196" width="52" height="15" rx="7.5" fill="#DDD6FE"/><text x="1100" y="207" text-anchor="middle" font-size="8.5" font-weight="700" fill="#4C1D95">FACT</text>
+  </g>
+
+  <!-- Connector: Catalyst -> Toggle -->
+  <path d="M 566 228 H 630" stroke="#7C3AED" stroke-width="2.2" fill="none" marker-end="url(#nee-arr-plan)"/>
+
+  <!-- ========================================================================= -->
+  <!-- LAYER 2: NATIVE EXECUTION PATH (Gluten ➔ Velox ➔ Vector Gains)             -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="298" width="1120" height="174" rx="14" fill="#ECFDF5" stroke="#A7F3D0" stroke-width="1.4"/>
+  <rect x="56" y="308" width="380" height="20" rx="10" fill="#D1FAE5"/>
+  <text x="66" y="322" font-size="10.5" font-weight="700" fill="#065F46" letter-spacing="1px">STAGE 2A: ACCELERATED NATIVE VECTOR DATA PLANE (C++)</text>
+
+  <!-- Node: gluten -->
+  <g data-node-id="gluten" role="group" tabindex="0" aria-label="Gluten translates the plan">
+    <title data-node-tooltip="true">Gluten translates the plan — Gluten converts supported parts of the physical plan into a Substrait plan.</title>
+    <rect x="56" y="336" width="340" height="120" rx="10" fill="#FFFFFF" stroke="#6EE7B7" stroke-width="1.6" filter="url(#nee-shadow)"/>
+    <rect x="70" y="348" width="80" height="16" rx="8" fill="#D1FAE5"/><text x="110" y="359" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">MIDDLEWARE</text>
+    <text x="160" y="361" font-size="13" font-weight="700" fill="#064E3B">Apache Gluten</text>
+    <text x="70" y="384" font-size="10" fill="#065F46">• Intercepts Spark physical query plan</text>
+    <text x="70" y="402" font-size="10" fill="#065F46">• Converts supported operators into Substrait</text>
+    <text x="70" y="420" font-size="10" fill="#065F46">• Bridge layer, not execution engine</text>
+    <rect x="70" y="432" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="96" y="442" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- Connector: Gluten -> Velox -->
+  <path d="M 396 406 H 438" stroke="#059669" stroke-width="2.2" fill="none" marker-end="url(#nee-arr-native)"/>
+  <rect x="390" y="388" width="54" height="15" rx="7.5" fill="#D1FAE5"/>
+  <text x="417" y="399" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">SUBSTRAIT</text>
+
+  <!-- Node: velox -->
+  <g data-node-id="velox" role="group" tabindex="0" aria-label="Velox executes it vectorized">
+    <title data-node-tooltip="true">Velox executes it vectorized — Velox executes the translated plan as vectorized columnar C++ operators.</title>
+    <rect x="442" y="336" width="340" height="120" rx="10" fill="#FFFFFF" stroke="#059669" stroke-width="2" filter="url(#nee-shadow)"/>
+    <rect x="456" y="348" width="90" height="16" rx="8" fill="#D1FAE5"/><text x="501" y="359" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">C++ ENGINE</text>
+    <text x="554" y="361" font-size="13" font-weight="700" fill="#064E3B">Meta Velox C++</text>
+    <text x="456" y="384" font-size="10" fill="#065F46">• SIMD-vectorized columnar execution</text>
+    <text x="456" y="402" font-size="10" fill="#065F46">• Operates over columnar batches (no row object)</text>
+    <text x="456" y="420" font-size="10" fill="#065F46">• Zero JVM GC overhead &amp; zero JIT warm-up</text>
+    <rect x="456" y="432" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="482" y="442" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- Connector: Velox -> Gain -->
+  <path d="M 782 396 H 824" stroke="#059669" stroke-width="2.2" fill="none" marker-end="url(#nee-arr-native)"/>
+
+  <!-- Node: gain -->
+  <g data-node-id="gain" role="group" tabindex="0" aria-label="Measured gain, workload dependent">
+    <title data-node-tooltip="true">Measured gain, workload dependent — Microsoft's TPC-DS benchmark reports up to six times open-source Spark performance.</title>
+    <rect x="828" y="336" width="312" height="120" rx="10" fill="#FFFFFF" stroke="#6EE7B7" stroke-width="1.6" filter="url(#nee-shadow)"/>
+    <rect x="842" y="348" width="90" height="16" rx="8" fill="#D1FAE5"/><text x="887" y="359" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">BENCHMARK</text>
+    <text x="940" y="361" font-size="13" font-weight="700" fill="#064E3B">Vectorized Speedup</text>
+    <text x="842" y="384" font-size="10" fill="#065F46">• Vectorized Python/Scala UDFs up to 5.76x</text>
+    <text x="842" y="402" font-size="10" fill="#065F46">• Complex types &amp; TPC-DS runs up to 2.35x</text>
+    <text x="842" y="420" font-size="10" fill="#065F46">• Compute-bound ETL benefits most</text>
+    <rect x="842" y="432" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="868" y="442" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LAYER 3: JVM FALLBACK & CONVERSION BOUNDARY                               -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="486" width="1120" height="166" rx="14" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="1.4"/>
+  <rect x="56" y="496" width="410" height="20" rx="10" fill="#DBEAFE"/>
+  <text x="66" y="510" font-size="10.5" font-weight="700" fill="#1E40AF" letter-spacing="1px">STAGE 2B: JVM TUNGSTEN FALLBACK &amp; BOUNDARY CONVERSION</text>
+
+  <!-- Node: jvm -->
+  <g data-node-id="jvm" role="group" tabindex="0" aria-label="JVM / Tungsten executes the rest">
+    <title data-node-tooltip="true">JVM / Tungsten executes the rest — Unsupported operators fall back to standard JVM Spark automatically.</title>
+    <rect x="56" y="524" width="340" height="114" rx="10" fill="#FFFFFF" stroke="#93C5FD" stroke-width="1.6" filter="url(#nee-shadow)"/>
+    <rect x="70" y="536" width="80" height="16" rx="8" fill="#DBEAFE"/><text x="110" y="547" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">FALLBACK</text>
+    <text x="160" y="549" font-size="13" font-weight="700" fill="#1E3A8A">JVM Tungsten Path</text>
+    <text x="70" y="572" font-size="10" fill="#1E40AF">• Unsupported operators/types execute on JVM</text>
+    <text x="70" y="590" font-size="10" fill="#1E40AF">• ANSI mode, XML/JSON, streaming fallback</text>
+    <text x="70" y="608" font-size="10" fill="#1E40AF">• Job succeeds safely without error</text>
+    <rect x="70" y="618" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="96" y="628" text-anchor="middle" font-size="8" font-weight="700" fill="#1D4ED8">FACT</text>
+  </g>
+
+  <!-- Connector: JVM -> Boundary -->
+  <path d="M 396 581 H 438" stroke="#2563EB" stroke-width="2.2" fill="none" marker-end="url(#nee-arr-jvm)"/>
+
+  <!-- Node: boundary -->
+  <g data-node-id="boundary" role="group" tabindex="0" aria-label="Every boundary costs a conversion">
+    <title data-node-tooltip="true">Every boundary costs a conversion — Each native-to-JVM crossing inserts a columnar-to-row conversion cost.</title>
+    <rect x="442" y="524" width="340" height="114" rx="10" fill="#FFFFFF" stroke="#F59E0B" stroke-width="1.8" filter="url(#nee-shadow)"/>
+    <rect x="456" y="536" width="90" height="16" rx="8" fill="#FEF3C7"/><text x="501" y="547" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B45309">COST TRAP</text>
+    <text x="554" y="549" font-size="13" font-weight="700" fill="#78350F">Conversion Boundary</text>
+    <text x="456" y="572" font-size="10" fill="#92400E">• <tspan font-family="monospace">VeloxColumnarToRowExec</tspan> inserted</text>
+    <text x="456" y="590" font-size="10" fill="#92400E">• Cross-engine serialization adds latency</text>
+    <text x="456" y="608" font-size="10" fill="#92400E">• Frequent fallback can be slower than pure JVM</text>
+    <rect x="456" y="618" width="52" height="14" rx="7" fill="#FEF3C7"/><text x="482" y="628" text-anchor="middle" font-size="8" font-weight="700" fill="#B45309">FACT</text>
+  </g>
+
+  <!-- Connector: Boundary -> Verify -->
+  <path d="M 782 581 H 824" stroke="#D97706" stroke-width="2.2" fill="none" marker-end="url(#nee-arr-warn)"/>
+
+  <!-- Node: verify -->
+  <g data-node-id="verify" role="group" tabindex="0" aria-label="So verification is not optional">
+    <title data-node-tooltip="true">So verification is not optional — Plan suffixes, the Spark Advisor and the Diagnostics pane confirm what really ran natively.</title>
+    <rect x="828" y="524" width="312" height="114" rx="10" fill="#FFFFFF" stroke="#F59E0B" stroke-width="1.8" filter="url(#nee-shadow)"/>
+    <rect x="842" y="536" width="90" height="16" rx="8" fill="#FEF3C7"/><text x="887" y="547" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B45309">VALIDATION</text>
+    <text x="940" y="549" font-size="13" font-weight="700" fill="#78350F">Plan Verification</text>
+    <text x="842" y="572" font-size="10" fill="#92400E">• Check <tspan font-family="monospace">*Transformer</tspan> plan suffix</text>
+    <text x="842" y="590" font-size="10" fill="#92400E">• Spark Advisor posts inline fallback alerts</text>
+    <text x="842" y="608" font-size="10" fill="#92400E">• Gluten tab graph: Green (Native) / Blue (JVM)</text>
+    <rect x="842" y="618" width="52" height="14" rx="7" fill="#FEF3C7"/><text x="868" y="628" text-anchor="middle" font-size="8" font-weight="700" fill="#B45309">FACT</text>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="682" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Microsoft Learn: Native Execution Engine for Fabric Spark.</text>
+</svg>

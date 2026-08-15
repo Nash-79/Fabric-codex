@@ -1,0 +1,199 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 920" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-aqe-reoptimization-loop-title spark-aqe-reoptimization-loop-desc" data-diagram-id="spark-aqe-reoptimization-loop">
+  <title id="spark-aqe-reoptimization-loop-title">Adaptive Query Execution: the runtime re-optimization loop</title>
+  <desc id="spark-aqe-reoptimization-loop-desc">Adaptive Query Execution loop in Microsoft Fabric Spark: Static estimate-based planning, Materializing stages up to shuffle boundaries, Collecting real shuffle statistics, Partition coalescing, Dynamic broadcast join conversion, Skew partition splitting, and operational limitations.</desc>
+
+  <defs>
+    <!-- Header Gradient -->
+    <linearGradient id="aqe-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4A2170"/>
+      <stop offset="0.5" stop-color="#7C3AAD"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="aqe-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#4A2170" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="aqe-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
+    </marker>
+    <marker id="aqe-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="aqe-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
+    </marker>
+
+    <!-- Official Microsoft Notebook Item Icon Gradients -->
+    <linearGradient id="aqe-nb-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="aqe-nb-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="aqe-nb-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="aqe-nb-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+  </defs>
+
+  <!-- Canvas Base -->
+  <rect width="1200" height="920" fill="#FAF5FF"/>
+
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#aqe-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#aqe-nb-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#aqe-nb-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#aqe-nb-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#aqe-nb-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#aqe-nb-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#aqe-nb-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Adaptive Query Execution (AQE) — The Runtime Re-Optimization Loop</text>
+  <text x="40" y="64" font-size="12" fill="#E9D8FD">Static initial plan ➔ Execute up to exchange ➔ Collect real shuffle stats ➔ Coalesce, convert join, split skew ➔ Re-plan remaining stages</text>
+
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D8FD"/>
+    <circle cx="20" cy="15" r="5" fill="#7C3AAD"/><text x="32" y="19" fill="#4C1D95" font-weight="600">Lane 1: Runtime Feedback Loop</text>
+    <circle cx="250" cy="15" r="5" fill="#059669"/><text x="262" y="19" fill="#065F46" font-weight="600">Lane 2: The 3 Adaptive Corrections</text>
+    <circle cx="530" cy="15" r="5" fill="#D97706"/><text x="542" y="19" fill="#92400E" font-weight="600">Lane 3: Operational Guardrails &amp; Anti-Patterns</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 1: THE FEEDBACK LOOP (STATIC ➔ EXECUTE ➔ STATS)                     -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="230" rx="14" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
+  <rect x="56" y="156" width="370" height="20" rx="10" fill="#EDE9FE"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#4C1D95" letter-spacing="1px">LANE 1: THE RUNTIME RE-OPTIMIZATION FEEDBACK LOOP</text>
+
+  <!-- Node: static -->
+  <g data-node-id="static" role="group" tabindex="0" aria-label="Static plan built from estimates">
+    <title data-node-tooltip="true">Static plan built from estimates — Catalyst commits to a plan using pre-execution estimates that may be badly wrong.</title>
+    <rect x="56" y="184" width="330" height="176" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#aqe-shadow)"/>
+    <rect x="68" y="194" width="100" height="16" rx="8" fill="#EDE9FE"/><text x="118" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">INITIAL GUESS</text>
+    <text x="68" y="228" font-size="13" font-weight="700" fill="#4C1D95">1 · Static Plan from Estimates</text>
+    <text x="68" y="250" font-size="9.5" fill="#5B21B6">• Catalyst plans join strategies &amp; partitions</text>
+    <text x="68" y="264" font-size="9.5" fill="#5B21B6">  before any query task executes</text>
+    <text x="68" y="284" font-size="9.5" fill="#5B21B6">• Uses catalog table statistics and guesses</text>
+    <text x="68" y="304" font-size="9.5" fill="#5B21B6">• Filter selectivity cannot be known in advance</text>
+    <text x="68" y="324" font-size="8.5" fill="#6D28D9">Risk: Commits query to expensive sort-merge joins</text>
+    <rect x="320" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="346" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Connector: static -> execute -->
+  <path d="M 386 272 H 442" stroke="#7C3AAD" stroke-width="2.2" fill="none" marker-end="url(#aqe-arr-purple)"/>
+
+  <!-- Node: execute -->
+  <g data-node-id="execute" role="group" tabindex="0" aria-label="Execute materializable stages">
+    <title data-node-tooltip="true">Execute materializable stages — AQE runs the stages it can and pauses at the shuffle boundary.</title>
+    <rect x="442" y="184" width="330" height="176" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#aqe-shadow)"/>
+    <rect x="454" y="194" width="110" height="16" rx="8" fill="#EDE9FE"/><text x="509" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">STAGE EXECUTION</text>
+    <text x="454" y="228" font-size="13" font-weight="700" fill="#4C1D95">2 · Execute Up to Exchange</text>
+    <text x="454" y="250" font-size="9.5" fill="#5B21B6">• Materializes all leaf stages that can run</text>
+    <text x="454" y="268" font-size="9.5" fill="#5B21B6">• <tspan font-weight="700">Pauses at Shuffle Boundary:</tspan> Does not</text>
+    <text x="454" y="282" font-size="9.5" fill="#5B21B6">  commit downstream stages yet</text>
+    <text x="454" y="302" font-size="9.5" fill="#5B21B6">• Controlled via <tspan font-family="monospace">spark.sql.adaptive.enabled</tspan></text>
+    <text x="454" y="324" font-size="8.5" fill="#6D28D9">Default: True in all modern Fabric Runtimes</text>
+    <rect x="706" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="732" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Connector: execute -> stats -->
+  <path d="M 772 272 H 828" stroke="#7C3AAD" stroke-width="2.2" fill="none" marker-end="url(#aqe-arr-purple)"/>
+
+  <!-- Node: stats -->
+  <g data-node-id="stats" role="group" tabindex="0" aria-label="Collect real shuffle statistics">
+    <title data-node-tooltip="true">Collect real shuffle statistics — Real partition sizes from completed stages replace the original estimates.</title>
+    <rect x="828" y="184" width="332" height="176" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#aqe-shadow)"/>
+    <rect x="840" y="194" width="110" height="16" rx="8" fill="#EDE9FE"/><text x="895" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">METRIC FEEDBACK</text>
+    <text x="840" y="228" font-size="13" font-weight="700" fill="#4C1D95">3 · Collect Real Statistics</text>
+    <text x="840" y="250" font-size="9.5" fill="#5B21B6">• Replaces guesses with actual byte sizes</text>
+    <text x="840" y="268" font-size="9.5" fill="#5B21B6">• Measures precise post-filter row counts</text>
+    <text x="840" y="286" font-size="9.5" fill="#5B21B6">• Identifies exact data distribution per key</text>
+    <text x="840" y="306" font-size="9.5" fill="#5B21B6">• Triggers re-optimization pass on remainder</text>
+    <rect x="1094" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="1120" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 2: THE 3 ADAPTIVE CORRECTIONS (COALESCE ➔ BROADCAST ➔ SKEW)          -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="392" width="1120" height="246" rx="14" fill="#FFFFFF" stroke="#A7F3D0" stroke-width="1.4"/>
+  <rect x="56" y="402" width="370" height="20" rx="10" fill="#D1FAE5"/>
+  <text x="66" y="416" font-size="10.5" font-weight="700" fill="#065F46" letter-spacing="1px">LANE 2: THE THREE RUNTIME PLAN CORRECTIONS</text>
+
+  <!-- Node: coalesce -->
+  <g data-node-id="coalesce" role="group" tabindex="0" aria-label="Coalesce post-shuffle partitions">
+    <title data-node-tooltip="true">Coalesce post-shuffle partitions — Undersized post-shuffle partitions merge toward the advisory target size.</title>
+    <rect x="56" y="430" width="350" height="192" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.6" filter="url(#aqe-shadow)"/>
+    <rect x="68" y="440" width="130" height="16" rx="8" fill="#D1FAE5"/><text x="133" y="451" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">PARTITION MERGE</text>
+    <text x="68" y="474" font-size="13" font-weight="700" fill="#064E3B">4 · Coalesce Partitions</text>
+    <text x="68" y="496" font-size="9.5" fill="#065F46">• Merges small partitions toward target size</text>
+    <text x="68" y="514" font-size="9.5" fill="#065F46">• Target: <tspan font-family="monospace">advisoryPartitionSizeInBytes</tspan> (64MB)</text>
+    <text x="68" y="534" font-size="9.5" fill="#065F46">• Eliminates thousands of sub-second tasks</text>
+    <text x="68" y="554" font-size="9.5" fill="#065F46">• E.g. 200 initial ➔ merges into ~25 optimal tasks</text>
+    <text x="68" y="574" font-size="8.5" fill="#047857">Makes manual partition guessing obsolete</text>
+    <rect x="340" y="440" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="366" y="450" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- Node: broadcast -->
+  <g data-node-id="broadcast" role="group" tabindex="0" aria-label="Convert sort-merge to broadcast">
+    <title data-node-tooltip="true">Convert sort-merge to broadcast — A sort-merge join converts to broadcast when measured sizes justify it.</title>
+    <rect x="426" y="430" width="350" height="192" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.6" filter="url(#aqe-shadow)"/>
+    <rect x="438" y="440" width="130" height="16" rx="8" fill="#D1FAE5"/><text x="503" y="451" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">JOIN CONVERSION</text>
+    <text x="438" y="474" font-size="13" font-weight="700" fill="#064E3B">5 · Convert to Broadcast</text>
+    <text x="438" y="496" font-size="9.5" fill="#065F46">• Converts planned SortMergeJoin to BroadcastJoin</text>
+    <text x="438" y="514" font-size="9.5" fill="#065F46">• Threshold: <tspan font-family="monospace">autoBroadcastJoinThreshold</tspan> (10MB)</text>
+    <text x="438" y="534" font-size="9.5" fill="#065F46">• Triggered when a filtered side lands &lt; 10MB</text>
+    <text x="438" y="554" font-size="9.5" fill="#065F46">• Completely eliminates 2 sorts and 2 shuffles</text>
+    <text x="438" y="574" font-size="8.5" fill="#047857">Drastically cuts cluster I/O &amp; runtime</text>
+    <rect x="710" y="440" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="736" y="450" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- Node: skew -->
+  <g data-node-id="skew" role="group" tabindex="0" aria-label="Split skewed partitions">
+    <title data-node-tooltip="true">Split skewed partitions — Oversized partitions are split and the matching side replicated.</title>
+    <rect x="796" y="430" width="348" height="192" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.6" filter="url(#aqe-shadow)"/>
+    <rect x="808" y="440" width="110" height="16" rx="8" fill="#D1FAE5"/><text x="863" y="451" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">SKEW MITIGATION</text>
+    <text x="808" y="474" font-size="13" font-weight="700" fill="#064E3B">6 · Split Skewed Partitions</text>
+    <text x="808" y="496" font-size="9.5" fill="#065F46">• Splits partitions exceeding skew criteria:</text>
+    <text x="808" y="514" font-size="9.5" fill="#065F46">  &gt; 5.0x median size AND &gt; 256MB threshold</text>
+    <text x="808" y="534" font-size="9.5" fill="#065F46">• Replicates matching join side to each sub-task</text>
+    <text x="808" y="554" font-size="9.5" fill="#065F46">• Prevents single-node long-tail stragglers</text>
+    <text x="808" y="574" font-size="8.5" fill="#047857"><tspan font-family="monospace">spark.sql.adaptive.skewJoin.enabled</tspan></text>
+    <rect x="1078" y="440" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="1104" y="450" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 3: OPERATIONAL GUARDRAILS & ANTI-PATTERNS (LIMITS ➔ DEFEAT)          -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="654" width="1120" height="206" rx="14" fill="#FFFFFF" stroke="#FDE68A" stroke-width="1.4"/>
+  <rect x="56" y="664" width="410" height="20" rx="10" fill="#FEF3C7"/>
+  <text x="66" y="678" font-size="10.5" font-weight="700" fill="#92400E" letter-spacing="1px">LANE 3: OPERATIONAL BOUNDARIES &amp; ANTI-PATTERNS</text>
+
+  <!-- Node: limits -->
+  <g data-node-id="limits" role="group" tabindex="0" aria-label="AQE needs a shuffle to act on">
+    <title data-node-tooltip="true">AQE needs a shuffle to act on — AQE only engages where a shuffle exists, and does not fix aggregation skew.</title>
+    <rect x="56" y="692" width="530" height="152" rx="10" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.6" filter="url(#aqe-shadow)"/>
+    <rect x="68" y="702" width="110" height="16" rx="8" fill="#FEF3C7"/><text x="123" y="713" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B45309">BOUNDARY LIMIT</text>
+    <text x="68" y="736" font-size="13" font-weight="700" fill="#78350F">7 · AQE Needs a Shuffle to Act On</text>
+    <text x="68" y="758" font-size="9.5" fill="#92400E">• <tspan font-weight="700">Exchange Dependency:</tspan> Queries with purely narrow transformations have no exchanges</text>
+    <text x="68" y="776" font-size="9.5" fill="#92400E">• Without an exchange barrier, AQE has no measurement point to re-optimize</text>
+    <text x="68" y="794" font-size="9.5" fill="#92400E">• <tspan font-weight="700">Aggregation Skew:</tspan> AQE fixes join skew only; groupBy aggregation skew requires salting</text>
+    <rect x="520" y="702" width="52" height="14" rx="7" fill="#FEF3C7"/><text x="546" y="712" text-anchor="middle" font-size="8" font-weight="700" fill="#B45309">FACT</text>
+  </g>
+
+  <!-- Node: defeat -->
+  <g data-node-id="defeat" role="group" tabindex="0" aria-label="Hard-coded settings defeat it">
+    <title data-node-tooltip="true">Hard-coded settings defeat it — Hard-coded partition counts override the runtime measurement AQE performs.</title>
+    <rect x="606" y="692" width="538" height="152" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.8" filter="url(#aqe-shadow)"/>
+    <rect x="618" y="702" width="100" height="16" rx="8" fill="#FEE2E2"/><text x="668" y="713" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">CRITICAL TRAP</text>
+    <text x="618" y="736" font-size="13" font-weight="700" fill="#991B1B">8 · Hard-Coded Settings Defeat AQE</text>
+    <text x="618" y="758" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Anti-Pattern:</tspan> Pasting <tspan font-family="monospace">df.repartition(N)</tspan> or setting explicit shuffle partition overrides</text>
+    <text x="618" y="776" font-size="9.5" fill="#7F1D1D">• Manual overrides lock the planner and disable AQE's automated dynamic coalescing</text>
+    <text x="618" y="794" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Best Practice:</tspan> Let AQE measure real output sizes automatically across all stages</text>
+    <rect x="1078" y="702" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="1104" y="712" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">WARNING</text>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="890" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Apache Spark SQL Performance Tuning &amp; Fabric Spark Toolkit Internals.</text>
+</svg>

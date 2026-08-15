@@ -1,295 +1,266 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1120 970" width="1120" height="970" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="dataflow-gen2-decision-internals-title dataflow-gen2-decision-internals-desc" data-diagram-id="dataflow-gen2-decision-internals">
-  <title id="dataflow-gen2-decision-internals-title">Choose Dataflow Gen2, Copy, or Code</title>
-  <desc id="dataflow-gen2-decision-internals-desc">A branching decision asks whether work is low-code shaping, primarily data movement, or code-intensive engineering. The branches select Dataflow Gen2, Pipeline Copy, or Notebook and SQL tools. The Dataflow path shows managed staging and destination writes, with a warning not to depend on internal staging items.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 940" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="df2-dec-title df2-dec-desc" data-diagram-id="dataflow-gen2-decision-internals">
+  <title id="df2-dec-title">Choose Dataflow Gen2, Copy, or Code</title>
+  <desc id="df2-dec-desc">A decision and internals diagram showing when to choose Dataflow Gen2 vs Pipeline Copy vs Spark Notebooks, drilling into Dataflow Gen2's managed SQL staging engine and the critical rule not to build dependencies on internal staging artifacts.</desc>
+
   <defs>
-    <linearGradient id="bgGrad2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0f1a1c"/>
-      <stop offset="100%" stop-color="#0a1414"/>
+    <!-- Header Gradient -->
+    <linearGradient id="df2d-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0B5E50"/>
+      <stop offset="50%" stop-color="#0F766E"/>
+      <stop offset="100%" stop-color="#0E4A68"/>
     </linearGradient>
-    <linearGradient id="headerGrad2" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stop-color="#0b7b6b"/>
-      <stop offset="100%" stop-color="#13a085"/>
+
+    <!-- Card Gradients -->
+    <linearGradient id="df2d-teal-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F0FDFA"/>
+      <stop offset="100%" stop-color="#CCFBF1"/>
     </linearGradient>
-    <linearGradient id="decisionGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#f5b940"/>
-      <stop offset="100%" stop-color="#d99a1e"/>
+    <linearGradient id="df2d-blue-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#EFF6FF"/>
+      <stop offset="100%" stop-color="#DBEAFE"/>
     </linearGradient>
-    <linearGradient id="dfGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#13a085"/>
-      <stop offset="100%" stop-color="#0b7b6b"/>
+    <linearGradient id="df2d-purple-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FAF5FF"/>
+      <stop offset="100%" stop-color="#F3E8FF"/>
     </linearGradient>
-    <linearGradient id="pipeGrad2" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#3d8bd4"/>
-      <stop offset="100%" stop-color="#2a679e"/>
-    </linearGradient>
-    <linearGradient id="nbGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#b45cc4"/>
-      <stop offset="100%" stop-color="#8a3d9c"/>
-    </linearGradient>
-    <linearGradient id="internalsGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#16292a"/>
-      <stop offset="100%" stop-color="#101f20"/>
-    </linearGradient>
-    <filter id="shadow2" x="-4%" y="-4%" width="108%" height="112%">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.4"/>
+
+    <!-- Drop Shadow -->
+    <filter id="df2d-shadow" x="-3%" y="-4%" width="106%" height="110%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
     </filter>
-    <marker id="arrowY" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto">
-      <polygon points="0 0, 8 3.5, 0 7" fill="#f5b940"/>
+
+    <!-- Arrow Markers -->
+    <marker id="df2d-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0D9488"/>
     </marker>
-    <marker id="arrowTeal" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto">
-      <polygon points="0 0, 8 3.5, 0 7" fill="#13a085"/>
+    <marker id="df2d-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
     </marker>
-    <marker id="arrowGrey" markerWidth="8" markerHeight="8" refX="7" refY="3.5" orient="auto">
-      <polygon points="0 0, 8 3.5, 0 7" fill="#7fa39c"/>
+    <marker id="df2d-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7E22CE"/>
     </marker>
   </defs>
 
-  <rect width="1120" height="970" fill="url(#bgGrad2)" rx="12"/>
+  <!-- Background Canvas -->
+  <rect width="1200" height="940" fill="#FFFFFF"/>
 
-  <!-- Title bar -->
-  <rect x="0" y="0" width="1120" height="56" fill="url(#headerGrad2)" rx="12"/>
-  <rect x="0" y="44" width="1120" height="12" fill="url(#headerGrad2)"/>
-  <text x="30" y="35" font-size="19" font-weight="700" fill="white">Choosing Dataflow Gen2 vs. Pipelines vs. Notebooks — Decision &amp; Internals</text>
-  <text x="1090" y="35" font-size="11" fill="#c9f0e6" text-anchor="end">Fabric Data Factory · declarative transformation landscape</text>
+  <!-- ========================================================================= -->
+  <!-- TOP BANNER (HERO TITLE)                                                   -->
+  <!-- ========================================================================= -->
+  <rect width="1200" height="64" fill="url(#df2d-head)"/>
+  
+  <g data-official-icon="microsoft" data-icon-name="dataflow_gen2_32">
+    <g transform="translate(36, 16) scale(0.9)">
+      <rect width="36" height="36" rx="6" fill="#FFFFFF" fill-opacity="0.15"/>
+      <circle cx="18" cy="18" r="10" fill="#2DD4BF"/>
+      <path d="M12 18 L16 14 L24 22" fill="none" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
+    </g>
+  </g>
 
-  <!-- ═══════════════════ ZONE 1: DECISION TREE ═══════════════════ -->
-  <text x="30" y="82" font-size="12" fill="#f5b940" font-weight="700" letter-spacing="0.5">ZONE 1 — WHICH TOOL FOR THIS TRANSFORMATION?</text>
+  <text x="80" y="34" font-size="20" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">Transformation Decision &amp; Dataflow Gen2 Staging Internals</text>
+  <text x="80" y="52" font-size="11" fill="#CCFBF1">Tool Selection Framework · Low-Code vs Movement vs Code · Managed SQL Staging Engine · Staging Governance</text>
 
-  <!-- Root question -->
-  <rect x="430" y="94" width="260" height="46" rx="10" fill="url(#decisionGrad)" filter="url(#shadow2)"/>
-  <text x="560" y="114" font-size="11.5" fill="#231a02" text-anchor="middle" font-weight="700">Does the data need shaping</text>
-  <text x="560" y="129" font-size="11.5" fill="#231a02" text-anchor="middle" font-weight="700">before it lands? (ETL vs. EL)</text>
-
-  <!-- branch: No -> raw copy -->
-  <line x1="480" y1="140" x2="270" y2="180" stroke="#7fa39c" stroke-width="1.6" marker-end="url(#arrowGrey)"/>
-  <text x="345" y="163" font-size="10" fill="#7fa39c" font-style="italic">no — move as-is</text>
-
-  <!-- branch: Yes -> low-code question -->
-  <line x1="640" y1="140" x2="850" y2="180" stroke="#f5b940" stroke-width="1.6" marker-end="url(#arrowY)"/>
-  <text x="760" y="163" font-size="10" fill="#f5b940" font-style="italic">yes — transform first</text>
-
-  <!-- Left leaf: Pipeline Copy Activity -->
-  <rect x="120" y="188" width="300" height="98" rx="10" fill="url(#pipeGrad2)" filter="url(#shadow2)"/>
-  <text x="270" y="210" font-size="13" fill="white" text-anchor="middle" font-weight="700">Pipeline Copy Activity</text>
-  <text x="270" y="228" font-size="9.5" fill="#dcecfa" text-anchor="middle">High-throughput EL (extract-load), minimal</text>
-  <text x="270" y="240" font-size="9.5" fill="#dcecfa" text-anchor="middle">or no transformation en route</text>
-  <rect x="136" y="250" width="268" height="26" rx="6" fill="rgba(255,255,255,0.14)"/>
-  <text x="270" y="267" font-size="9" fill="white" text-anchor="middle">Fabric Data Factory's other primary ingestion path</text>
-
-  <!-- Right question: low-code vs SQL-model -->
-  <rect x="710" y="188" width="280" height="52" rx="10" fill="url(#decisionGrad)" filter="url(#shadow2)"/>
-  <text x="850" y="209" font-size="11.5" fill="#231a02" text-anchor="middle" font-weight="700">Author graphically (low-code) or as</text>
-  <text x="850" y="224" font-size="11.5" fill="#231a02" text-anchor="middle" font-weight="700">SQL models / procedural code?</text>
-
-  <line x1="770" y1="240" x2="600" y2="300" stroke="#f5b940" stroke-width="1.6" marker-end="url(#arrowY)"/>
-  <text x="660" y="278" font-size="10" fill="#f5b940" font-style="italic">graphical, no-code</text>
-
-  <line x1="930" y1="240" x2="1000" y2="300" stroke="#f5b940" stroke-width="1.6" marker-end="url(#arrowY)"/>
-  <text x="965" y="278" font-size="10" fill="#f5b940" font-style="italic" text-anchor="middle">code / SQL</text>
-
-  <!-- Dataflow Gen2 leaf -->
-  <rect x="440" y="300" width="320" height="132" rx="10" fill="url(#dfGrad)" filter="url(#shadow2)"/>
-  <text x="600" y="323" font-size="14" fill="white" text-anchor="middle" font-weight="700">Dataflow Gen2</text>
-  <text x="600" y="340" font-size="9.5" fill="#d0f5ee" text-anchor="middle">Power Query engine · 300+ transformations</text>
-  <text x="600" y="352" font-size="9.5" fill="#d0f5ee" text-anchor="middle">joins · aggregations · cleansing · custom logic</text>
-  <rect x="456" y="360" width="288" height="60" rx="6" fill="rgba(255,255,255,0.14)"/>
-  <text x="600" y="376" font-size="9" fill="white" text-anchor="middle" font-weight="600">Best for: citizen data engineers, hundreds</text>
-  <text x="600" y="388" font-size="9" fill="white" text-anchor="middle" font-weight="600">of source connectors, classic ETL shaping</text>
-  <text x="600" y="402" font-size="8.5" fill="#c5ede4" text-anchor="middle" font-style="italic">Not a fit for: heavy iterative logic, ML</text>
-  <text x="600" y="413" font-size="8.5" fill="#c5ede4" text-anchor="middle" font-style="italic">scoring, streaming, deeply nested data</text>
-
-  <!-- Notebook / code-first branch box (contains sub split) -->
-  <rect x="800" y="300" width="300" height="132" rx="10" fill="url(#nbGrad)" filter="url(#shadow2)"/>
-  <text x="950" y="323" font-size="13" fill="white" text-anchor="middle" font-weight="700">Notebook (Spark) or SQL-model tools</text>
-  <text x="950" y="340" font-size="9" fill="#f0dcf4" text-anchor="middle">procedural / declarative-SQL code path</text>
-  <rect x="812" y="348" width="132" height="72" rx="6" fill="rgba(255,255,255,0.14)"/>
-  <text x="878" y="363" font-size="9" fill="white" text-anchor="middle" font-weight="700">Spark Notebook</text>
-  <text x="878" y="376" font-size="8" fill="#f0dcf4" text-anchor="middle">complex iteration,</text>
-  <text x="878" y="387" font-size="8" fill="#f0dcf4" text-anchor="middle">ML inference,</text>
-  <text x="878" y="398" font-size="8" fill="#f0dcf4" text-anchor="middle">nested / streaming data</text>
-  <rect x="956" y="348" width="132" height="72" rx="6" fill="rgba(255,255,255,0.14)"/>
-  <text x="1022" y="363" font-size="9" fill="white" text-anchor="middle" font-weight="700">dbt / SQLMesh</text>
-  <text x="1022" y="376" font-size="8" fill="#f0dcf4" text-anchor="middle">SQL-model teams;</text>
-  <text x="1022" y="387" font-size="8" fill="#f0dcf4" text-anchor="middle">see Zone 3 for</text>
-  <text x="1022" y="398" font-size="8" fill="#f0dcf4" text-anchor="middle">declarative depth</text>
-
-  <!-- connectors from Copy Activity forward to pipeline (dashed, showing it can still feed a dataflow) -->
-  <line x1="420" y1="237" x2="440" y2="360" stroke="#7fa39c" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#arrowGrey)" opacity="0.7"/>
-  <text x="392" y="300" font-size="8.5" fill="#7fa39c" font-style="italic" transform="rotate(58,392,300)">can still feed a Gen2 dataflow downstream</text>
-
-  <!-- ═══════════════════ ZONE 2: FAST-COPY / STAGING INTERNALS ═══════════════════ -->
-  <line x1="30" y1="452" x2="1090" y2="452" stroke="#1d3a3a" stroke-width="1.5"/>
-  <text x="30" y="476" font-size="12" fill="#f5b940" font-weight="700" letter-spacing="0.5">ZONE 2 — WHAT HAPPENS INSIDE A GEN2 RUN (STAGING &amp; SCALE-OUT INTERNALS)</text>
-
-  <rect x="30" y="488" width="700" height="230" rx="12" fill="url(#internalsGrad)" stroke="#0d9e87" stroke-width="1.4" filter="url(#shadow2)"/>
-
-  <!-- step 1: mashup engine -->
-  <rect x="52" y="512" width="140" height="70" rx="8" fill="#0b7b6b"/>
-  <text x="122" y="534" font-size="10" fill="white" text-anchor="middle" font-weight="700">1. Mashup Engine</text>
-  <text x="122" y="548" font-size="8.5" fill="#c5ede4" text-anchor="middle">Power Query M</text>
-  <text x="122" y="559" font-size="8.5" fill="#c5ede4" text-anchor="middle">evaluates each</text>
-  <text x="122" y="570" font-size="8.5" fill="#c5ede4" text-anchor="middle">Applied Step</text>
-
-  <line x1="192" y1="547" x2="222" y2="547" stroke="#13a085" stroke-width="1.8" marker-end="url(#arrowTeal)"/>
-
-  <!-- step 2: staging lakehouse -->
-  <rect x="222" y="512" width="150" height="70" rx="8" fill="#0d9e87"/>
-  <text x="297" y="530" font-size="10" fill="white" text-anchor="middle" font-weight="700">2. DataflowsStaging-</text>
-  <text x="297" y="543" font-size="10" fill="white" text-anchor="middle" font-weight="700">Lakehouse (system)</text>
-  <text x="297" y="558" font-size="8.5" fill="#d0f5ee" text-anchor="middle">materializes intermediate</text>
-  <text x="297" y="569" font-size="8.5" fill="#d0f5ee" text-anchor="middle">query results as Delta</text>
-
-  <line x1="372" y1="547" x2="402" y2="547" stroke="#13a085" stroke-width="1.8" marker-end="url(#arrowTeal)"/>
-
-  <!-- step 3: staging warehouse / fabric sql compute -->
-  <rect x="402" y="512" width="150" height="70" rx="8" fill="#0b7b6b"/>
-  <text x="477" y="530" font-size="10" fill="white" text-anchor="middle" font-weight="700">3. DataflowsStaging-</text>
-  <text x="477" y="543" font-size="10" fill="white" text-anchor="middle" font-weight="700">Warehouse (system)</text>
-  <text x="477" y="558" font-size="8.5" fill="#c5ede4" text-anchor="middle">Fabric SQL compute engine</text>
-  <text x="477" y="569" font-size="8.5" fill="#c5ede4" text-anchor="middle">runs scale-out query plan</text>
-
-  <line x1="552" y1="547" x2="582" y2="547" stroke="#13a085" stroke-width="1.8" marker-end="url(#arrowTeal)"/>
-
-  <!-- step 4: destination write -->
-  <rect x="582" y="512" width="130" height="70" rx="8" fill="#13a085"/>
-  <text x="647" y="534" font-size="10" fill="white" text-anchor="middle" font-weight="700">4. Destination</text>
-  <text x="647" y="547" font-size="10" fill="white" text-anchor="middle" font-weight="700">Write</text>
-  <text x="647" y="561" font-size="8.5" fill="#e8fbf6" text-anchor="middle">final table / file per</text>
-  <text x="647" y="572" font-size="8.5" fill="#e8fbf6" text-anchor="middle">query's own config</text>
-
-  <!-- annotation callouts -->
-  <rect x="52" y="596" width="660" height="30" rx="6" fill="rgba(245,185,64,0.12)" stroke="#f5b940" stroke-width="1" stroke-dasharray="3,2"/>
-  <text x="382" y="615" font-size="9.5" fill="#f5b940" text-anchor="middle">These two staging items are auto-provisioned per workspace and are NOT meant for direct user interaction — treat as read-only infrastructure</text>
-
-  <rect x="52" y="634" width="320" height="66" rx="6" fill="rgba(19,160,133,0.1)" stroke="#13a085" stroke-width="1"/>
-  <text x="212" y="650" font-size="9.5" fill="#a9ecdd" text-anchor="middle" font-weight="700">Why this beats mashup-only execution</text>
-  <text x="212" y="664" font-size="8.5" fill="#c5ede4" text-anchor="middle">Pure Power Query (Excel/Power BI style) runs</text>
-  <text x="212" y="676" font-size="8.5" fill="#c5ede4" text-anchor="middle">single-threaded in-memory. Gen2 offloads the</text>
-  <text x="212" y="688" font-size="8.5" fill="#c5ede4" text-anchor="middle">heavy lift to warehouse-scale SQL compute.</text>
-
-  <rect x="392" y="634" width="320" height="66" rx="6" fill="rgba(19,160,133,0.1)" stroke="#13a085" stroke-width="1"/>
-  <text x="552" y="650" font-size="9.5" fill="#a9ecdd" text-anchor="middle" font-weight="700">Governance implication</text>
-  <text x="552" y="664" font-size="8.5" fill="#c5ede4" text-anchor="middle">Staging items appear in workspace listings and</text>
-  <text x="552" y="676" font-size="8.5" fill="#c5ede4" text-anchor="middle">consume capacity — account for them in access</text>
-  <text x="552" y="688" font-size="8.5" fill="#c5ede4" text-anchor="middle">reviews and capacity monitoring.</text>
-
-  <!-- Pipeline invocation side note within zone 2 -->
-  <rect x="750" y="488" width="340" height="230" rx="12" fill="url(#internalsGrad)" stroke="#3d8bd4" stroke-width="1.4" filter="url(#shadow2)"/>
-  <text x="920" y="510" font-size="10.5" fill="#7fb4ea" font-weight="700" text-anchor="middle">Orchestration hook: invoked as a pipeline activity</text>
-
-  <rect x="766" y="522" width="140" height="46" rx="7" fill="#2a679e"/>
-  <text x="836" y="540" font-size="9.5" fill="white" text-anchor="middle" font-weight="600">Copy Activity</text>
-  <text x="836" y="553" font-size="8.5" fill="#dcecfa" text-anchor="middle">lands raw data</text>
-
-  <line x1="906" y1="545" x2="932" y2="545" stroke="#3d8bd4" stroke-width="1.6" marker-end="url(#arrowTeal)"/>
-
-  <rect x="932" y="522" width="142" height="46" rx="7" fill="#0d9e87"/>
-  <text x="1003" y="540" font-size="9.5" fill="white" text-anchor="middle" font-weight="700">Dataflow Gen2 activity</text>
-  <text x="1003" y="553" font-size="8.5" fill="#d0f5ee" text-anchor="middle">runs Zone 2 steps 1-4</text>
-
-  <line x1="1003" y1="568" x2="1003" y2="592" stroke="#3d8bd4" stroke-width="1.6" marker-end="url(#arrowTeal)"/>
-
-  <rect x="850" y="592" width="220" height="40" rx="7" fill="#2a679e"/>
-  <text x="960" y="611" font-size="9.5" fill="white" text-anchor="middle" font-weight="600">Retry / monitoring / dependency chain</text>
-  <text x="960" y="624" font-size="8" fill="#dcecfa" text-anchor="middle">provided by the pipeline, not the dataflow itself</text>
-
-  <rect x="766" y="644" width="306" height="58" rx="6" fill="rgba(61,139,212,0.1)" stroke="#3d8bd4" stroke-width="1"/>
-  <text x="919" y="660" font-size="8.5" fill="#bcd9f5" text-anchor="middle">Gen2 can also run standalone on a schedule, but</text>
-  <text x="919" y="672" font-size="8.5" fill="#bcd9f5" text-anchor="middle">wrapping it in a pipeline activity is the recommended</text>
-  <text x="919" y="684" font-size="8.5" fill="#bcd9f5" text-anchor="middle">pattern for multi-step ingestion chains.</text>
-
-  <!-- ═══════════════════ ZONE 3: DECLARATIVE LANDSCAPE COMPARISON ═══════════════════ -->
-  <line x1="30" y1="734" x2="1090" y2="734" stroke="#1d3a3a" stroke-width="1.5"/>
-  <text x="30" y="758" font-size="12" fill="#f5b940" font-weight="700" letter-spacing="0.5">ZONE 3 — DATAFLOW GEN2'S PLACE IN THE DECLARATIVE TRANSFORMATION SPECTRUM</text>
-
-  <rect x="30" y="770" width="1060" height="110" rx="10" fill="#101f20" stroke="#0d9e87" stroke-width="1"/>
-
-  <!-- spectrum axis -->
-  <line x1="70" y1="850" x2="1050" y2="850" stroke="#3a5a58" stroke-width="2"/>
-  <text x="70" y="868" font-size="8.5" fill="#7fa39c">imperative, low abstraction</text>
-  <text x="1050" y="868" font-size="8.5" fill="#7fa39c" text-anchor="end">declarative plan-and-apply</text>
-
-  <!-- Notebook marker -->
-  <circle cx="170" cy="850" r="7" fill="#b45cc4"/>
-  <rect x="105" y="790" width="130" height="46" rx="6" fill="rgba(180,92,196,0.15)" stroke="#b45cc4" stroke-width="1"/>
-  <text x="170" y="804" font-size="9" fill="#e0b8ea" text-anchor="middle" font-weight="700">Spark Notebook</text>
-  <text x="170" y="816" font-size="8" fill="#e0b8ea" text-anchor="middle">fully procedural code;</text>
-  <text x="170" y="827" font-size="8" fill="#e0b8ea" text-anchor="middle">author controls every step</text>
-
-  <!-- Dataflow Gen2 marker -->
-  <circle cx="400" cy="850" r="8" fill="#13a085" stroke="#f5b940" stroke-width="2"/>
-  <rect x="325" y="790" width="150" height="46" rx="6" fill="rgba(19,160,133,0.18)" stroke="#13a085" stroke-width="1.4"/>
-  <text x="400" y="804" font-size="9" fill="#a9ecdd" text-anchor="middle" font-weight="700">Dataflow Gen2 (here)</text>
-  <text x="400" y="816" font-size="8" fill="#a9ecdd" text-anchor="middle">graphical declarative UI over</text>
-  <text x="400" y="827" font-size="8" fill="#a9ecdd" text-anchor="middle">an imperative Power Query run</text>
-
-  <!-- dbt marker -->
-  <circle cx="660" cy="850" r="7" fill="#f5b940"/>
-  <rect x="595" y="790" width="130" height="46" rx="6" fill="rgba(245,185,64,0.15)" stroke="#f5b940" stroke-width="1"/>
-  <text x="660" y="804" font-size="9" fill="#f6dca0" text-anchor="middle" font-weight="700">dbt (interface-level)</text>
-  <text x="660" y="816" font-size="8" fill="#f6dca0" text-anchor="middle">compiles SQL models to a plan,</text>
-  <text x="660" y="827" font-size="8" fill="#f6dca0" text-anchor="middle">still issues imperative mutations</text>
-
-  <!-- SQLMesh marker -->
-  <circle cx="920" cy="850" r="7" fill="#f5b940"/>
-  <rect x="850" y="790" width="150" height="46" rx="6" fill="rgba(245,185,64,0.15)" stroke="#f5b940" stroke-width="1"/>
-  <text x="925" y="804" font-size="9" fill="#f6dca0" text-anchor="middle" font-weight="700">SQLMesh (execution-level)</text>
-  <text x="925" y="816" font-size="8" fill="#f6dca0" text-anchor="middle">plan-and-apply shows exact</text>
-  <text x="925" y="827" font-size="8" fill="#f6dca0" text-anchor="middle">changes; isolated virtual-env tests</text>
-
-  <!-- connecting lines from boxes to axis dots -->
-  <line x1="170" y1="836" x2="170" y2="843" stroke="#b45cc4" stroke-width="1.4"/>
-  <line x1="400" y1="836" x2="400" y2="842" stroke="#13a085" stroke-width="1.4"/>
-  <line x1="660" y1="836" x2="660" y2="843" stroke="#f5b940" stroke-width="1.4"/>
-  <line x1="920" y1="836" x2="920" y2="843" stroke="#f5b940" stroke-width="1.4"/>
-
-  <!-- ═══════════════════ LEGEND ═══════════════════ -->
-  <rect x="30" y="898" width="1060" height="56" rx="10" fill="rgba(255,255,255,0.03)" stroke="#1d3a3a" stroke-width="1"/>
-  <text x="48" y="917" font-size="9.5" fill="#9fc9c1" font-weight="700">LEGEND</text>
-
-  <rect x="110" y="908" width="14" height="14" rx="3" fill="url(#decisionGrad)"/>
-  <text x="130" y="919" font-size="9" fill="#cfe9e3">Decision point</text>
-
-  <rect x="240" y="908" width="14" height="14" rx="3" fill="url(#dfGrad)"/>
-  <text x="260" y="919" font-size="9" fill="#cfe9e3">Dataflow Gen2</text>
-
-  <rect x="380" y="908" width="14" height="14" rx="3" fill="url(#pipeGrad2)"/>
-  <text x="400" y="919" font-size="9" fill="#cfe9e3">Pipeline / Copy Activity</text>
-
-  <rect x="560" y="908" width="14" height="14" rx="3" fill="url(#nbGrad)"/>
-  <text x="580" y="919" font-size="9" fill="#cfe9e3">Notebook / code-first tools</text>
-
-  <line x1="760" y1="915" x2="788" y2="915" stroke="#f5b940" stroke-width="2" marker-end="url(#arrowY)"/>
-  <text x="796" y="919" font-size="9" fill="#cfe9e3">Decision branch</text>
-
-  <line x1="920" y1="915" x2="948" y2="915" stroke="#13a085" stroke-width="2" marker-end="url(#arrowTeal)"/>
-  <text x="956" y="919" font-size="9" fill="#cfe9e3">Data / execution flow</text>
-
-  <text x="48" y="940" font-size="8.5" fill="#6f9891" font-style="italic">Grounded in Fabric Data Factory Dataflow Gen2 documentation, Data Factory overview, Fabric terminology, and the declarative-transformation-tooling comparison (dbt / SQLMesh).</text>
-
-  <!-- Full-region keyboard and pointer targets; metadata comes from the evidence sidecar. -->
+  <!-- ========================================================================= -->
+  <!-- SECTION 1: ROOT DECISION CRITERIA (NODE 1)                                -->
+  <!-- ========================================================================= -->
   <g data-node-id="step-1" role="group" tabindex="0" aria-label="What is the dominant need?">
     <title data-node-tooltip="true">What is the dominant need? — Choose by transformation complexity and ownership rather than by connector availability alone.</title>
-    <rect x="430.0" y="94.0" width="260.0" height="46.0" rx="10.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="24" y="78" width="1152" height="82" rx="8" fill="#F8FAFC" stroke="#0D9488" stroke-width="1.6" filter="url(#df2d-shadow)"/>
+    <rect x="36" y="90" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="50" y="109" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">?</text>
+    <text x="74" y="99" font-size="11" font-weight="800" fill="#0F766E">Root Decision: What is the Dominant Ingestion &amp; Transformation Responsibility?</text>
+    <text x="74" y="113" font-size="8.5" fill="#475569">Evaluate by transformation complexity, data scale, developer skill profile, and execution engine requirements:</text>
+
+    <!-- 3 Path Pills -->
+    <g transform="translate(74, 122)">
+      <rect x="0" y="0" width="340" height="26" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+      <text x="10" y="17" font-size="8" font-weight="700" fill="#1D4ED8">A. Visual cleansing &amp; low-code shaping ➔ Dataflow Gen2</text>
+
+      <rect x="360" y="0" width="340" height="26" rx="4" fill="#FAF5FF" stroke="#E9D5FF"/>
+      <text x="370" y="17" font-size="8" font-weight="700" fill="#7E22CE">B. High-throughput movement with minimal shaping ➔ Pipeline Copy</text>
+
+      <rect x="720" y="0" width="340" height="26" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+      <text x="730" y="17" font-size="8" font-weight="700" fill="#0F766E">C. Complex algorithms, ML, or declarative SQL models ➔ Notebooks / dbt</text>
+    </g>
   </g>
+
+  <!-- Connectors from Root Decision to 3 Lanes -->
+  <path d="M 210,160 L 210,184" fill="none" stroke="#2563EB" stroke-width="2" marker-end="url(#df2d-arr-blue)"/>
+  <path d="M 600,160 L 600,184" fill="none" stroke="#7E22CE" stroke-width="2" marker-end="url(#df2d-arr-purple)"/>
+  <path d="M 990,160 L 990,184" fill="none" stroke="#0D9488" stroke-width="2" marker-end="url(#df2d-arr-teal)"/>
+
+  <!-- ========================================================================= -->
+  <!-- SECTION 2: THE 3 TRANSFORMATION SURFACES (NODES 2, 3, 4)                  -->
+  <!-- ========================================================================= -->
+
+  <!-- LANE 1: DATAFLOW GEN2 (NODE 2) -->
   <g data-node-id="step-2" role="group" tabindex="0" aria-label="Dataflow Gen2">
     <title data-node-tooltip="true">Dataflow Gen2 — Use Power Query for visual, low-code shaping with configured destinations.</title>
-    <rect x="440.0" y="300.0" width="320.0" height="132.0" rx="10.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="24" y="184" width="368" height="420" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="1.6" filter="url(#df2d-shadow)"/>
+    <rect x="24" y="184" width="368" height="30" rx="8" fill="#1D4ED8"/>
+    <text x="208" y="204" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">1. DATAFLOW GEN2 (LOW-CODE SHAPING)</text>
+
+    <rect x="36" y="224" width="344" height="66" rx="6" fill="#EFF6FF" stroke="#93C5FD"/>
+    <text x="48" y="242" font-size="10" font-weight="800" fill="#1D4ED8">Visual Power Query M Shaping</text>
+    <text x="48" y="258" font-size="8.5" fill="#1E3A8A">• 300+ graphical transforms for business analysts</text>
+    <text x="48" y="272" font-size="8.5" fill="#1E3A8A">• Cleanses, pivots, enriches, and standardizes feeds</text>
+
+    <rect x="36" y="298" width="344" height="106" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="48" y="316" font-size="8.5" font-weight="800" fill="#334155">Ideal Scenarios &amp; Strengths:</text>
+    <text x="48" y="332" font-size="8.5" fill="#475569">✓ Business analysts standardizing customer/sales extracts</text>
+    <text x="48" y="346" font-size="8.5" fill="#475569">✓ Ingesting diverse spreadsheets, CSVs, and Web APIs</text>
+    <text x="48" y="360" font-size="8.5" fill="#475569">✓ Automatic multi-destination publishing (Lakehouse Delta)</text>
+    <text x="48" y="374" font-size="8.5" font-weight="700" fill="#15803D">✓ SQL-backed scale-out staging accelerates execution</text>
+    <text x="48" y="388" font-size="8" fill="#1D4ED8">Integrated query folding diagnosis and profiling</text>
+
+    <rect x="36" y="412" width="344" height="106" rx="6" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="48" y="430" font-size="8.5" font-weight="800" fill="#991B1B">Watch-outs &amp; Anti-Patterns:</text>
+    <text x="48" y="446" font-size="8" fill="#B91C1C">❌ Avoid for multi-terabyte raw bulk ingestion without shaping</text>
+    <text x="48" y="460" font-size="8" fill="#B91C1C">❌ Complex recursive procedural loops are difficult to maintain in M</text>
+    <text x="48" y="474" font-size="8" fill="#B91C1C">❌ Non-folding queries evaluate on single-container compute</text>
+    <text x="48" y="488" font-size="8" font-weight="700" fill="#DC2626">Trap: Forcing complex streaming or ML into Dataflow Gen2</text>
+    <text x="48" y="502" font-size="8" fill="#7F1D1D">Use Spark Notebooks for ML and Eventstream for real-time.</text>
+
+    <rect x="36" y="526" width="344" height="66" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+    <text x="48" y="544" font-size="8" font-weight="700" fill="#1D4ED8">Best Match:</text>
+    <text x="48" y="558" font-size="8" fill="#1E3A8A">Citizen data engineering, visual data preparation, and small-to-</text>
+    <text x="48" y="572" font-size="8" fill="#1E3A8A">medium tabular enrichment before landing in Lakehouses.</text>
   </g>
+
+  <!-- LANE 2: PIPELINE COPY (NODE 3) -->
   <g data-node-id="step-3" role="group" tabindex="0" aria-label="Pipeline Copy">
     <title data-node-tooltip="true">Pipeline Copy — Use Copy for orchestrated movement with limited transformation.</title>
-    <rect x="120.0" y="188.0" width="300.0" height="98.0" rx="10.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="416" y="184" width="368" height="420" rx="8" fill="#FFFFFF" stroke="#7E22CE" stroke-width="1.6" filter="url(#df2d-shadow)"/>
+    <rect x="416" y="184" width="368" height="30" rx="8" fill="#6B21A8"/>
+    <text x="600" y="204" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">2. PIPELINE COPY ACTIVITY (MOVEMENT)</text>
+
+    <rect x="428" y="224" width="344" height="66" rx="6" fill="#FAF5FF" stroke="#E9D5FF"/>
+    <text x="440" y="242" font-size="10" font-weight="800" fill="#7E22CE">Serverless High-Speed ELT Movement</text>
+    <text x="440" y="258" font-size="8.5" fill="#581C87">• 100+ native connectors across multi-cloud &amp; on-prem</text>
+    <text x="440" y="272" font-size="8.5" fill="#581C87">• Intelligent Throughput Optimization (ITO: 4–256)</text>
+
+    <rect x="428" y="298" width="344" height="106" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="440" y="316" font-size="8.5" font-weight="800" fill="#334155">Ideal Scenarios &amp; Strengths:</text>
+    <text x="440" y="332" font-size="8.5" fill="#475569">✓ High-volume multi-terabyte raw landing into OneLake</text>
+    <text x="440" y="346" font-size="8.5" fill="#475569">✓ Zero cluster spin-up time (instant elastic execution)</text>
+    <text x="440" y="360" font-size="8.5" fill="#475569">✓ ForEach fan-out across hundreds of relational tables</text>
+    <text x="440" y="374" font-size="8.5" font-weight="700" fill="#15803D">✓ Orchestrates multi-step dependencies &amp; failure alerts</text>
+    <text x="440" y="388" font-size="8" fill="#7E22CE">Fast binary file copy and Parquet compression</text>
+
+    <rect x="428" y="412" width="344" height="106" rx="6" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="440" y="430" font-size="8.5" font-weight="800" fill="#991B1B">Watch-outs &amp; Anti-Patterns:</text>
+    <text x="440" y="446" font-size="8" fill="#B91C1C">❌ Cannot perform complex multi-table joins in flight</text>
+    <text x="440" y="460" font-size="8" fill="#B91C1C">❌ Mapping transformations are limited to column renames/types</text>
+    <text x="440" y="474" font-size="8" fill="#B91C1C">❌ Non-idempotent copy retries can cause duplicate rows</text>
+    <text x="440" y="488" font-size="8" font-weight="700" fill="#DC2626">Trap: Authoring pipelines when Mirroring already supports DB</text>
+    <text x="440" y="502" font-size="8" fill="#7F1D1D">Check Mirroring source catalog first to eliminate custom ETL.</text>
+
+    <rect x="428" y="526" width="344" height="66" rx="4" fill="#FAF5FF" stroke="#E9D5FF"/>
+    <text x="440" y="544" font-size="8" font-weight="700" fill="#7E22CE">Best Match:</text>
+    <text x="440" y="558" font-size="8" fill="#581C87">Raw bulk data ingestion (ELT), large file migrations, and</text>
+    <text x="440" y="572" font-size="8" fill="#581C87">scheduled multi-table extraction pipelines into OneLake Bronze.</text>
   </g>
+
+  <!-- LANE 3: NOTEBOOK OR SQL MODEL (NODE 4) -->
   <g data-node-id="step-4" role="group" tabindex="0" aria-label="Notebook or SQL model">
     <title data-node-tooltip="true">Notebook or SQL model — Use code or SQL-declarative tools for complex, testable, engine-native transformation.</title>
-    <rect x="800.0" y="300.0" width="300.0" height="132.0" rx="10.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="808" y="184" width="368" height="420" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6" filter="url(#df2d-shadow)"/>
+    <rect x="808" y="184" width="368" height="30" rx="8" fill="#0F766E"/>
+    <text x="992" y="204" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">3. NOTEBOOKS &amp; SQL MODELS (CODE-FIRST)</text>
+
+    <rect x="820" y="224" width="344" height="66" rx="6" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="832" y="242" font-size="10" font-weight="800" fill="#0F766E">Code-First &amp; Declarative Engineering</text>
+    <text x="832" y="258" font-size="8.5" fill="#115E59">• Full PySpark, Scala, SQL &amp; dbt transformation power</text>
+    <text x="832" y="272" font-size="8.5" fill="#115E59">• Engine-native distributed execution in Spark / Polaris</text>
+
+    <rect x="820" y="298" width="344" height="106" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="832" y="316" font-size="8.5" font-weight="800" fill="#334155">Ideal Scenarios &amp; Strengths:</text>
+    <text x="832" y="332" font-size="8.5" fill="#475569">✓ Complex algorithmic logic, graph parsing, nested JSON</text>
+    <text x="832" y="346" font-size="8.5" fill="#475569">✓ Machine learning feature engineering &amp; MLflow tracking</text>
+    <text x="832" y="360" font-size="8.5" fill="#475569">✓ Declarative SQL modeling with dbt and version-controlled CI/CD</text>
+    <text x="832" y="374" font-size="8.5" font-weight="700" fill="#15803D">✓ Unit testing, modular Python packages &amp; Git integration</text>
+    <text x="832" y="388" font-size="8" fill="#0F766E">Optimized Native Execution Engine (NEE) query speed</text>
+
+    <rect x="820" y="412" width="344" height="106" rx="6" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="832" y="430" font-size="8.5" font-weight="800" fill="#991B1B">Watch-outs &amp; Anti-Patterns:</text>
+    <text x="832" y="446" font-size="8" fill="#B91C1C">❌ Spark cluster spin-up cold start overhead (~15-45s)</text>
+    <text x="832" y="460" font-size="8" fill="#B91C1C">❌ Requires professional data engineering / software skillset</text>
+    <text x="832" y="474" font-size="8" fill="#B91C1C">❌ Heavy custom maintenance overhead for simple table copy</text>
+    <text x="832" y="488" font-size="8" font-weight="700" fill="#DC2626">Trap: Hand-coding Python scripts for basic database copy</text>
+    <text x="832" y="502" font-size="8" fill="#7F1D1D">Use Copy Activity for simple movement; reserve code for logic.</text>
+
+    <rect x="820" y="526" width="344" height="66" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="832" y="544" font-size="8" font-weight="700" fill="#0F766E">Best Match:</text>
+    <text x="832" y="558" font-size="8" fill="#115E59">Advanced Silver-to-Gold curation, custom ML pipelines, nested</text>
+    <text x="832" y="572" font-size="8" fill="#115E59">data flattening, and enterprise software engineering workflows.</text>
   </g>
-  <g data-node-id="step-5" role="group" tabindex="0" aria-label="Managed Gen2 staging">
-    <title data-node-tooltip="true">Managed Gen2 staging — Dataflow Gen2 may use internal lakehouse and warehouse staging for SQL scale-out.</title>
-    <rect x="6.0" y="455.0" width="358.4" height="34.0" rx="6.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+
+  <!-- Flow Connector: Dataflow Gen2 -> Staging Internals -->
+  <path d="M 210,604 L 210,628" fill="none" stroke="#2563EB" stroke-width="2.5" marker-end="url(#df2d-arr-blue)"/>
+
+  <!-- ========================================================================= -->
+  <!-- SECTION 3: DATAFLOW GEN2 STAGING INTERNALS & TRAPS (NODES 5 & 6)          -->
+  <!-- ========================================================================= -->
+  <g transform="translate(24, 634)">
+    <!-- Node 5: step-5 -->
+    <g data-node-id="step-5" role="group" tabindex="0" aria-label="Managed Gen2 staging">
+      <title data-node-tooltip="true">Managed Gen2 staging — Dataflow Gen2 may use internal lakehouse and warehouse staging for SQL scale-out.</title>
+      <rect x="0" y="0" width="560" height="260" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="1.6" filter="url(#df2d-shadow)"/>
+      <rect x="12" y="12" width="28" height="28" rx="6" fill="#DBEAFE"/><text x="26" y="31" text-anchor="middle" font-size="14" font-weight="900" fill="#1D4ED8">5</text>
+      <text x="50" y="22" font-size="11" font-weight="800" fill="#1D4ED8">Dataflow Gen2 Managed SQL Staging Engine</text>
+      <text x="50" y="36" font-size="8.5" fill="#64748B">Internal Fabric SQL Warehouse compute backing scale-out transformations</text>
+
+      <!-- Staging Mechanics Grid -->
+      <g transform="translate(12, 48)">
+        <rect x="0" y="0" width="260" height="74" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+        <text x="10" y="16" font-size="8.5" font-weight="800" fill="#1D4ED8">1. Staging Lakehouse &amp; Warehouse</text>
+        <text x="10" y="30" font-size="8" fill="#1E3A8A">• Auto-provisioned in workspace</text>
+        <text x="10" y="44" font-size="8" fill="#1E3A8A">• Stages intermediate tables in Delta format</text>
+        <text x="10" y="58" font-size="8" fill="#1E3A8A">• Acts as high-speed scratch storage</text>
+
+        <rect x="276" y="0" width="260" height="74" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+        <text x="286" y="16" font-size="8.5" font-weight="800" fill="#0F766E">2. Distributed T-SQL Execution</text>
+        <text x="286" y="30" font-size="8" fill="#115E59">• Merges, joins &amp; group-bys push down to SQL</text>
+        <text x="286" y="44" font-size="8" fill="#115E59">• 10x faster than single-threaded Mashup eval</text>
+        <text x="286" y="58" font-size="8" fill="#115E59">• Output streams directly to destination</text>
+      </g>
+
+      <rect x="12" y="132" width="536" height="114" rx="4" fill="#F8FAFC" stroke="#E2E8F0"/>
+      <text x="22" y="150" font-size="8.5" font-weight="700" fill="#334155">How Staging Operates During a Run:</text>
+      <text x="22" y="166" font-size="8" fill="#475569">1. Mashup engine reads source data and stages it directly into `DataflowsStagingLakehouse`.</text>
+      <text x="22" y="180" font-size="8" fill="#475569">2. `DataflowsStagingWarehouse` queries the staged tables using distributed T-SQL query folding.</text>
+      <text x="22" y="194" font-size="8" fill="#475569">3. Prepared rows are committed into user's configured destination (Lakehouse Delta / Warehouse).</text>
+      <text x="22" y="208" font-size="8" fill="#475569">4. Temporary staging partitions are automatically cleaned up at the end of the refresh cycle.</text>
+      <text x="22" y="222" font-size="8" font-weight="700" fill="#2563EB">Result: Scalable enterprise Power Query execution powered by Fabric capacity.</text>
+    </g>
+
+    <!-- Connector: Node 5 -> Node 6 -->
+    <line x1="560" y1="130" x2="580" y2="130" stroke="#DC2626" stroke-width="2" marker-end="url(#df2d-arr-purple)"/>
+
+    <!-- Node 6: step-6 -->
+    <g data-node-id="step-6" role="group" tabindex="0" aria-label="Do not own staging internals">
+      <title data-node-tooltip="true">Do not own staging internals — Depending on or editing DataflowsStaging items creates an unsupported operational coupling.</title>
+      <rect x="580" y="0" width="572" height="260" rx="8" fill="#FFFBEB" stroke="#FDE047" stroke-width="1.6" filter="url(#df2d-shadow)"/>
+      <rect x="592" y="12" width="130" height="20" rx="4" fill="#D97706"/>
+      <text x="657" y="26" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">CRITICAL GOVERNANCE WARNING</text>
+      <text x="592" y="48" font-size="11" font-weight="800" fill="#854D0E">Do NOT Own or Depend on Staging Internals</text>
+      <text x="592" y="62" font-size="8.5" fill="#713F12">System staging artifacts are private runtime implementation details</text>
+
+      <!-- 3 Governance Rules -->
+      <rect x="592" y="74" width="548" height="74" rx="4" fill="#FEF2F2" stroke="#FCA5A5"/>
+      <text x="604" y="92" font-size="8.5" font-weight="800" fill="#991B1B">Strict Architectural Prohibitions:</text>
+      <text x="604" y="106" font-size="8" fill="#B91C1C">❌ <tspan font-weight="700">NEVER</tspan> query `DataflowsStagingLakehouse` or `DataflowsStagingWarehouse` in reports.</text>
+      <text x="604" y="120" font-size="8" fill="#B91C1C">❌ <tspan font-weight="700">NEVER</tspan> alter permissions, schemas, or delete internal staging artifacts manually.</text>
+      <text x="604" y="134" font-size="8" fill="#B91C1C">❌ <tspan font-weight="700">NEVER</tspan> create downstream Semantic Models or Spark jobs reading staging tables.</text>
+
+      <rect x="592" y="156" width="548" height="90" rx="4" fill="#FFFFFF" stroke="#FDE047"/>
+      <text x="602" y="172" font-size="8" font-weight="700" fill="#854D0E">Why This Matters &amp; Failure Mode:</text>
+      <text x="602" y="186" font-size="8" fill="#713F12">Fabric periodically recreates, renames, and drops staging tables during service updates</text>
+      <text x="602" y="200" font-size="8" fill="#713F12">and schema evolutions. Any external dependency built on staging will silently break!</text>
+      <text x="602" y="214" font-size="8" font-weight="700" fill="#0F766E">Golden Contract: Always point reports and downstream workloads exclusively</text>
+      <text x="602" y="228" font-size="8" fill="#115E59">to the user-configured destination Lakehouse, Warehouse, or Database table.</text>
+    </g>
   </g>
-  <g data-node-id="step-6" role="group" tabindex="0" aria-label="Do not own staging internals">
-    <title data-node-tooltip="true">Do not own staging internals — Depending on or editing DataflowsStaging items creates an unsupported operational coupling.</title>
-    <rect x="6.0" y="455.0" width="358.4" height="34.0" rx="6.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
-  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1170" y="924" text-anchor="end" font-size="9" fill="#94A3B8">Fabric Atlas — Original Infographic, August 2026. Grounded in Microsoft Fabric Dataflow Gen2 Internals Specs.</text>
 </svg>

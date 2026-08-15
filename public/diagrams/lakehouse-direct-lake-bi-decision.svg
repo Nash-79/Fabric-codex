@@ -1,204 +1,233 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 900" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="lakehouse-direct-lake-bi-decision-title lakehouse-direct-lake-bi-decision-desc" data-diagram-id="lakehouse-direct-lake-bi-decision">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 980" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="lakehouse-direct-lake-bi-decision-title lakehouse-direct-lake-bi-decision-desc" data-diagram-id="lakehouse-direct-lake-bi-decision">
   <title id="lakehouse-direct-lake-bi-decision-title">Storage-mode and capacity-sizing decisions for Fabric BI serving</title>
-  <desc id="lakehouse-direct-lake-bi-decision-desc">An original decision diagram for serving Power BI from a Fabric lakehouse. The first branch chooses a storage mode: Import copies and refreshes data on a schedule; DirectQuery forwards every visual to the source live; Direct Lake reads Delta columns straight from OneLake, pairing import-like speed with DirectQuery-like freshness and no copy — the recommended default here. A second branch then sizes the capacity for a Direct Lake model: whether the model's resident column footprint fits under the chosen SKU's memory bound, and whether broad free-license report viewing forces F64 or larger regardless of load. A closing panel lists the implementation guardrails: keep tables V-Ordered with ~1 GB files and low-cardinality partitions, prefer append/merge over overwrite, keep vacuum retention longer than the framing cadence, and confirm Block Public Internet Access is off before rollout.</desc>
-  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
-       Palette matches the house teal/green family used across content/diagrams/fabric-platform-overview.svg.
-       Official Microsoft Fabric item/product icons are vendored under content/diagrams/icons/microsoft/,
-       used unchanged per docs/official-icon-policy.md, each paired with a product/item name label. -->
+  <desc id="lakehouse-direct-lake-bi-decision-desc">Storage-mode selection (Import vs DirectQuery vs Direct Lake on OneLake), capacity memory-bound sizing, free-license viewer reach threshold (F64+), and operational implementation guardrails.</desc>
+
   <defs>
-    <linearGradient id="ldd-head" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#063D3B"/>
-      <stop offset="1" stop-color="#0B5E50"/>
+    <!-- Header Gradient -->
+    <linearGradient id="bi-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0F766E"/>
+      <stop offset="0.5" stop-color="#0D9488"/>
+      <stop offset="1" stop-color="#2563EB"/>
     </linearGradient>
-    <marker id="ldd-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94"/>
+
+    <!-- Drop Shadows -->
+    <filter id="bi-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0F766E" flood-opacity="0.09"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="bi-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0D9488"/>
     </marker>
-    <marker id="ldd-arrDark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#0E6961"/>
+    <marker id="bi-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
     </marker>
-    <marker id="ldd-arrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#B42318"/>
+    <marker id="bi-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
     </marker>
-    <linearGradient id="ldd-ic-sm-a" x1="10.222" x2="13.511" y1="3" y2="29.311" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
-    <linearGradient id="ldd-ic-sm-c" x1="11.396" x2="14.897" y1="3" y2="29.256" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
-    <linearGradient id="ldd-ic-sm-d" x1="8" x2="16.989" y1="11" y2="25.382" gradientUnits="userSpaceOnUse"><stop stop-color="#7751B8"/><stop offset="1" stop-color="#5A409C"/></linearGradient>
-    <radialGradient id="ldd-ic-sm-b" cx="0" cy="0" r="1" gradientTransform="matrix(13.7222 20.58336 -17.81255 11.875 11.306 9.771)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+
+    <!-- Official Microsoft Semantic Model Icon Gradients -->
+    <linearGradient id="bi-ic-sm-a" x1="10.222" x2="13.511" y1="3" y2="29.311" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="bi-ic-sm-c" x1="11.396" x2="14.897" y1="3" y2="29.256" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <linearGradient id="bi-ic-sm-d" x1="8" x2="16.989" y1="11" y2="25.382" gradientUnits="userSpaceOnUse"><stop stop-color="#7751B8"/><stop offset="1" stop-color="#5A409C"/></linearGradient>
+    <radialGradient id="bi-ic-sm-b" cx="0" cy="0" r="1" gradientTransform="matrix(13.7222 20.58336 -17.81255 11.875 11.306 9.771)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
   </defs>
 
-  <rect width="1180" height="900" fill="#FFFFFF"/>
+  <!-- Canvas Base -->
+  <rect width="1200" height="980" fill="#F0FDFA"/>
 
-  <!-- Header -->
-  <rect width="1180" height="86" fill="url(#ldd-head)"/>
-  <text x="36" y="36" font-size="20" font-weight="650" fill="#FFFFFF">Storage-mode &amp; capacity-sizing decisions for Fabric BI serving</text>
-  <text x="36" y="60" font-size="12.5" fill="#D9F5EE">Import vs DirectQuery vs Direct Lake · does the model fit the SKU memory bound · does report reach force F64+ · implementation guardrails</text>
-
-  <!-- Legend -->
-  <g transform="translate(36,100)" font-size="10.5">
-    <rect width="1108" height="30" rx="8" fill="#F3F2F1" stroke="#E1DFDD"/>
-    <circle cx="18" cy="15" r="5" fill="#2AAC94"/><text x="30" y="19" fill="#3F6259">decision</text>
-    <circle cx="108" cy="15" r="5" fill="#117865"/><text x="120" y="19" fill="#3F6259">recommended default</text>
-    <circle cx="268" cy="15" r="5" fill="#8A8886"/><text x="280" y="19" fill="#3F6259">alternative / conditional</text>
-    <circle cx="440" cy="15" r="5" fill="#B42318"/><text x="452" y="19" fill="#7A241A">warning / trap</text>
-    <line x1="560" y1="15" x2="595" y2="15" stroke="#2AAC94" stroke-width="2" marker-end="url(#ldd-arr)"/><text x="602" y="19" fill="#3F6259">yes / route</text>
-    <text x="1090" y="19" text-anchor="end" fill="#8A8886">Fabric Atlas original diagram, July 2026</text>
-  </g>
-
-  <!-- Decision 1: storage mode -->
-  <text x="36" y="160" font-size="11" letter-spacing="1.5" fill="#8A8886">DECISION 1 — STORAGE MODE FOR A LAKEHOUSE-BACKED SEMANTIC MODEL</text>
-  <g data-node-id="storage-mode-decision" tabindex="0" aria-label="Decision: which semantic-model storage mode">
-    <title data-node-tooltip="true">Storage-mode decision — Import, DirectQuery, and Direct Lake differ by whether data is copied and whether queries hit the source live.</title>
-    <path d="M420 176 L560 214 L420 252 L280 214 Z" fill="#DFF5EE" stroke="#2AAC94" stroke-width="1.8"/>
-    <text x="420" y="210" text-anchor="middle" font-size="12" font-weight="650" fill="#063D3B">Copy the data,</text>
-    <text x="420" y="226" text-anchor="middle" font-size="12" font-weight="650" fill="#063D3B">or read it in place?</text>
-  </g>
-
-  <!-- Import branch -->
-  <path d="M320 240 L160 300" stroke="#8A8886" stroke-width="1.8" fill="none" marker-end="url(#ldd-arr)"/>
-  <text x="210" y="268" font-size="9.5" fill="#8A8886">copy + schedule</text>
-  <g data-node-id="import-mode" tabindex="0" aria-label="Import mode alternative">
-    <title data-node-tooltip="true">Import — fast in-memory queries but stale between refreshes; the whole model must be memory-resident to answer queries.</title>
-    <rect x="56" y="300" width="248" height="132" rx="12" fill="#F3F2F1" stroke="#C8C6C4" stroke-width="1.6"/>
-    <text x="72" y="326" font-size="12.5" font-weight="650" fill="#3A3A3A">Import</text>
-    <text x="72" y="346" font-size="9.5" fill="#5A5A5A">Copies data into a compressed in-memory</text>
-    <text x="72" y="360" font-size="9.5" fill="#5A5A5A">cache; whole model loads before answering.</text>
-    <text x="72" y="378" font-size="9.5" fill="#5A5A5A">Fast, but stale between scheduled refreshes,</text>
-    <text x="72" y="392" font-size="9.5" fill="#5A5A5A">and every refresh recopies the dataset.</text>
-    <text x="72" y="412" font-size="9" fill="#7A4A16">Default 1 GB cap; large format lifts it to SKU memory.</text>
-    <rect x="72" y="416" width="90" height="14" rx="7" fill="#EDEBE9"/><text x="117" y="427" text-anchor="middle" font-size="8" fill="#5A5A5A">alternative</text>
-  </g>
-
-  <!-- DirectQuery branch -->
-  <path d="M420 254 L420 300" stroke="#8A8886" stroke-width="1.8" fill="none" marker-end="url(#ldd-arr)"/>
-  <text x="428" y="284" font-size="9.5" fill="#8A8886">forward live</text>
-  <g data-node-id="directquery-mode" tabindex="0" aria-label="DirectQuery mode alternative">
-    <title data-node-tooltip="true">DirectQuery — always fresh because every visual issues a live source query, but each render pays a round trip and is typically slower.</title>
-    <rect x="308" y="300" width="248" height="132" rx="12" fill="#F3F2F1" stroke="#C8C6C4" stroke-width="1.6"/>
-    <text x="324" y="326" font-size="12.5" font-weight="650" fill="#3A3A3A">DirectQuery</text>
-    <text x="324" y="346" font-size="9.5" fill="#5A5A5A">Forwards every visual as a live query to</text>
-    <text x="324" y="360" font-size="9.5" fill="#5A5A5A">the source, so results are always current.</text>
-    <text x="324" y="378" font-size="9.5" fill="#5A5A5A">No copy, but a round trip per render —</text>
-    <text x="324" y="392" font-size="9.5" fill="#5A5A5A">typically slower than in-memory queries.</text>
-    <text x="324" y="412" font-size="9" fill="#5A5A5A">Fits when data must be to-the-second live.</text>
-    <rect x="324" y="416" width="90" height="14" rx="7" fill="#EDEBE9"/><text x="369" y="427" text-anchor="middle" font-size="8" fill="#5A5A5A">alternative</text>
-  </g>
-
-  <!-- Direct Lake branch (recommended) -->
-  <path d="M520 240 L700 300" stroke="#2AAC94" stroke-width="2.2" fill="none" marker-end="url(#ldd-arr)"/>
-  <text x="628" y="266" font-size="9.5" fill="#0B5E50">read in place</text>
-  <g data-node-id="direct-lake-mode" tabindex="0" aria-label="Direct Lake mode — recommended default">
-    <title data-node-tooltip="true">Direct Lake on OneLake — reads Delta columns straight from OneLake, pairing import-like speed with DirectQuery-like freshness and no copy or refresh job.</title>
-    <rect x="600" y="300" width="290" height="132" rx="12" fill="#DFF5EE" stroke="#117865" stroke-width="2"/>
-    <g data-official-icon="microsoft" data-icon-name="semantic_model_32_item">
-      <g transform="translate(614,312) scale(0.8)">
-        <path fill="url(#ldd-ic-sm-a)" d="M3 6.5A3.5 3.5 0 0 1 6.5 3h19A3.5 3.5 0 0 1 29 6.5v19a3.5 3.5 0 0 1-3.5 3.5h-19A3.5 3.5 0 0 1 3 25.5z"/>
-        <path fill="url(#ldd-ic-sm-b)" fill-opacity=".2" d="M3 6.5A3.5 3.5 0 0 1 6.5 3h19A3.5 3.5 0 0 1 29 6.5v19a3.5 3.5 0 0 1-3.5 3.5h-19A3.5 3.5 0 0 1 3 25.5z"/>
-        <path fill="url(#ldd-ic-sm-c)" fill-rule="evenodd" d="M25.5 4h-19A2.5 2.5 0 0 0 4 6.5v19A2.5 2.5 0 0 0 6.5 28h19a2.5 2.5 0 0 0 2.5-2.5v-19A2.5 2.5 0 0 0 25.5 4m-19-1A3.5 3.5 0 0 0 3 6.5v19A3.5 3.5 0 0 0 6.5 29h19a3.5 3.5 0 0 0 3.5-3.5v-19A3.5 3.5 0 0 0 25.5 3z" clip-rule="evenodd"/>
-        <path fill="url(#ldd-ic-sm-d)" d="M9.75 14.5a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
-        <path fill="url(#ldd-ic-sm-d)" d="M16 14.5a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
-        <path fill="url(#ldd-ic-sm-d)" d="M11.5 19.25a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0"/>
-        <path fill="url(#ldd-ic-sm-d)" d="M16 21a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
-        <path fill="url(#ldd-ic-sm-d)" d="M24 12.75a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0"/>
-      </g>
-      <text x="646" y="330" font-size="10" font-weight="700" fill="#063D3B">Semantic model</text>
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#bi-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="semantic_model_32_item">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#bi-ic-sm-a)" d="M3 6.5A3.5 3.5 0 0 1 6.5 3h19A3.5 3.5 0 0 1 29 6.5v19a3.5 3.5 0 0 1-3.5 3.5h-19A3.5 3.5 0 0 1 3 25.5z"/>
+      <path fill="url(#bi-ic-sm-b)" fill-opacity=".2" d="M3 6.5A3.5 3.5 0 0 1 6.5 3h19A3.5 3.5 0 0 1 29 6.5v19a3.5 3.5 0 0 1-3.5 3.5h-19A3.5 3.5 0 0 1 3 25.5z"/>
+      <path fill="url(#bi-ic-sm-c)" fill-rule="evenodd" d="M25.5 4h-19A2.5 2.5 0 0 0 4 6.5v19A2.5 2.5 0 0 0 6.5 28h19a2.5 2.5 0 0 0 2.5-2.5v-19A2.5 2.5 0 0 0 25.5 4m-19-1A3.5 3.5 0 0 0 3 6.5v19A3.5 3.5 0 0 0 6.5 29h19a3.5 3.5 0 0 0 3.5-3.5v-19A3.5 3.5 0 0 0 25.5 3z" clip-rule="evenodd"/>
+      <path fill="url(#bi-ic-sm-d)" d="M9.75 14.5a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
+      <path fill="url(#bi-ic-sm-d)" d="M16 14.5a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
+      <path fill="url(#bi-ic-sm-d)" d="M11.5 19.25a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0"/>
+      <path fill="url(#bi-ic-sm-d)" d="M16 21a1.75 1.75 0 1 0 0-3.5 1.75 1.75 0 0 0 0 3.5"/>
+      <path fill="url(#bi-ic-sm-d)" d="M24 12.75a1.75 1.75 0 1 1-3.5 0 1.75 1.75 0 0 1 3.5 0"/>
     </g>
-    <text x="614" y="356" font-size="12.5" font-weight="650" fill="#063D3B">Direct Lake on OneLake ★ default</text>
-    <text x="614" y="374" font-size="9.5" fill="#0B5E50">Reads Delta columns straight from OneLake —</text>
-    <text x="614" y="388" font-size="9.5" fill="#0B5E50">import-like speed, DirectQuery-like freshness,</text>
-    <text x="614" y="402" font-size="9.5" fill="#0B5E50">no copy and no refresh job to orchestrate.</text>
-    <text x="614" y="418" font-size="9" fill="#0B5E50">Never falls back; skips SQL-endpoint coupling.</text>
-    <rect x="800" y="408" width="80" height="16" rx="8" fill="#C7ECE0"/><text x="840" y="419" text-anchor="middle" font-size="8.5" fill="#063D3B">recommended</text>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Storage-Mode &amp; Capacity-Sizing Decisions for Fabric BI Serving</text>
+  <text x="40" y="64" font-size="12" fill="#CCFBF1">Storage Mode Selection ➔ Capacity Memory Sizing ➔ F64 Licensing Threshold ➔ Operational Guardrails</text>
+
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#CCFBF1"/>
+    <circle cx="20" cy="15" r="5" fill="#0D9488"/><text x="32" y="19" fill="#134E4A" font-weight="600">Storage Mode Selection</text>
+    <circle cx="310" cy="15" r="5" fill="#2563EB"/><text x="322" y="19" fill="#1E3A8A" font-weight="600">Capacity Memory &amp; Licensing Floors</text>
+    <circle cx="680" cy="15" r="5" fill="#DC2626"/><text x="692" y="19" fill="#991B1B" font-weight="600">Cold-Read Risk &amp; Guardrails</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
   </g>
 
-  <!-- Composite note -->
-  <g data-node-id="composite-note" tabindex="0" aria-label="Composite model option for oversized fact tables">
+  <!-- ========================================================================= -->
+  <!-- LANE 1: STORAGE MODE SELECTION (NODES 1 TO 5)                             -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="274" rx="14" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.4"/>
+  <rect x="56" y="156" width="480" height="20" rx="10" fill="#F0FDFA"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#0F766E" letter-spacing="1px">STAGE 1: STORAGE MODE SELECTION FOR LAKEHOUSE-BACKED REPORTING</text>
+
+  <!-- Node 1: storage-mode-decision -->
+  <g data-node-id="storage-mode-decision" role="group" tabindex="0" aria-label="Copy the data, or read it in place?">
+    <title data-node-tooltip="true">Storage-mode decision — Import, DirectQuery, and Direct Lake differ by whether data is copied and whether queries hit the source live.</title>
+    <rect x="56" y="184" width="220" height="220" rx="10" fill="#F0FDFA" stroke="#5EEAD4" stroke-width="1.6" filter="url(#bi-shadow)"/>
+    <rect x="68" y="194" width="110" height="16" rx="8" fill="#CCFBF1"/><text x="123" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">DECISION 1</text>
+    <text x="68" y="228" font-size="12.5" font-weight="700" fill="#134E4A">1 · Storage Mode Fork</text>
+    <text x="68" y="250" font-size="9.5" fill="#115E59">• Copy data to memory?</text>
+    <text x="68" y="268" font-size="9.5" fill="#115E59">• Live query to source?</text>
+    <text x="68" y="286" font-size="9.5" fill="#115E59">• Read Delta in-place?</text>
+    <text x="68" y="310" font-size="8.5" font-weight="700" fill="#0F766E">Governs refresh SLA,</text>
+    <text x="68" y="324" font-size="8.5" font-weight="700" fill="#0F766E">freshness, and latency</text>
+    <rect x="210" y="194" width="52" height="14" rx="7" fill="#CCFBF1"/><text x="236" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">FACT</text>
+  </g>
+
+  <!-- Node 2: import-mode -->
+  <g data-node-id="import-mode" role="group" tabindex="0" aria-label="Import">
+    <title data-node-tooltip="true">Import — fast in-memory queries but stale between refreshes; the whole model must be memory-resident to answer queries.</title>
+    <rect x="290" y="184" width="200" height="220" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6" filter="url(#bi-shadow)"/>
+    <rect x="302" y="194" width="90" height="16" rx="8" fill="#F1F5F9"/><text x="347" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">ALTERNATIVE</text>
+    <text x="302" y="228" font-size="12.5" font-weight="700" fill="#1E293B">2 · Import Mode</text>
+    <text x="302" y="250" font-size="9.5" fill="#475569">• Full copy to VertiPaq</text>
+    <text x="302" y="268" font-size="9.5" fill="#475569">• Requires refresh job</text>
+    <text x="302" y="286" font-size="9.5" fill="#475569">• Stale between batches</text>
+    <text x="302" y="310" font-size="8.5" font-weight="700" fill="#475569">Fastest raw DAX scan</text>
+    <text x="302" y="324" font-size="8.5" font-weight="700" fill="#475569">but duplicates data</text>
+    <rect x="424" y="194" width="52" height="14" rx="7" fill="#F1F5F9"/><text x="450" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">FACT</text>
+  </g>
+
+  <!-- Node 3: directquery-mode -->
+  <g data-node-id="directquery-mode" role="group" tabindex="0" aria-label="DirectQuery">
+    <title data-node-tooltip="true">DirectQuery — always fresh because every visual issues a live source query, but each render pays a round trip and is typically slower.</title>
+    <rect x="504" y="184" width="200" height="220" rx="10" fill="#F8FAFC" stroke="#CBD5E1" stroke-width="1.6" filter="url(#bi-shadow)"/>
+    <rect x="516" y="194" width="90" height="16" rx="8" fill="#F1F5F9"/><text x="561" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">ALTERNATIVE</text>
+    <text x="516" y="228" font-size="12.5" font-weight="700" fill="#1E293B">3 · DirectQuery</text>
+    <text x="516" y="250" font-size="9.5" fill="#475569">• Live forward to SQL</text>
+    <text x="516" y="268" font-size="9.5" fill="#475569">• 0 data copy / duplication</text>
+    <text x="516" y="286" font-size="9.5" fill="#475569">• High query latency</text>
+    <text x="516" y="310" font-size="8.5" font-weight="700" fill="#475569">Fits strict real-time</text>
+    <text x="516" y="324" font-size="8.5" font-weight="700" fill="#475569">operational monitors</text>
+    <rect x="638" y="194" width="52" height="14" rx="7" fill="#F1F5F9"/><text x="664" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">FACT</text>
+  </g>
+
+  <!-- Node 4: direct-lake-mode -->
+  <g data-node-id="direct-lake-mode" role="group" tabindex="0" aria-label="Direct Lake on OneLake (recommended default)">
+    <title data-node-tooltip="true">Direct Lake on OneLake — reads Delta columns straight from OneLake, pairing import-like speed with DirectQuery-like freshness and no copy or refresh job.</title>
+    <rect x="718" y="184" width="240" height="220" rx="10" fill="#F0FDFA" stroke="#0D9488" stroke-width="2" filter="url(#bi-shadow)"/>
+    <rect x="730" y="194" width="130" height="16" rx="8" fill="#CCFBF1"/><text x="795" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">RECOMMENDED DEFAULT</text>
+    <text x="730" y="228" font-size="12.5" font-weight="700" fill="#0F766E">4 · Direct Lake on OneLake</text>
+    <text x="730" y="250" font-size="9.5" fill="#115E59">• Reads Delta Parquet straight from OneLake</text>
+    <text x="730" y="268" font-size="9.5" fill="#115E59">• Import-speed DAX + DirectQuery freshness</text>
+    <text x="730" y="286" font-size="9.5" fill="#115E59">• Zero data copy, zero scheduled refresh jobs</text>
+    <text x="730" y="310" font-size="8.5" font-weight="700" fill="#0F766E">Skips SQL endpoint coupling; never falls back</text>
+    <rect x="892" y="194" width="52" height="14" rx="7" fill="#CCFBF1"/><text x="918" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">FACT</text>
+  </g>
+
+  <!-- Node 5: composite-note -->
+  <g data-node-id="composite-note" role="group" tabindex="0" aria-label="If one fact is huge: composite">
     <title data-node-tooltip="true">Composite option — Direct Lake on OneLake supports composite models, so a very large fact stays Direct Lake while dimensions use Import or DirectQuery.</title>
-    <rect x="918" y="300" width="196" height="132" rx="12" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.4"/>
-    <text x="934" y="324" font-size="11" font-weight="650" fill="#063D3B">If one fact is huge</text>
-    <text x="934" y="344" font-size="9.5" fill="#3F6259">Direct Lake on OneLake</text>
-    <text x="934" y="358" font-size="9.5" fill="#3F6259">supports composite models:</text>
-    <text x="934" y="374" font-size="9.5" fill="#3F6259">keep the big fact in Direct</text>
-    <text x="934" y="388" font-size="9.5" fill="#3F6259">Lake, put dimensions in</text>
-    <text x="934" y="402" font-size="9.5" fill="#3F6259">Import or DirectQuery.</text>
-    <rect x="934" y="410" width="60" height="14" rx="7" fill="#DFF5EE"/><text x="964" y="421" text-anchor="middle" font-size="8" fill="#0B5E50">pattern</text>
+    <rect x="972" y="184" width="172" height="220" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.6" filter="url(#bi-shadow)"/>
+    <rect x="984" y="194" width="90" height="16" rx="8" fill="#DBEAFE"/><text x="1029" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">COMPOSITE</text>
+    <text x="984" y="228" font-size="12" font-weight="700" fill="#1E3A8A">5 · Huge Fact</text>
+    <text x="984" y="250" font-size="9.5" fill="#1E40AF">• Fact: Direct Lake</text>
+    <text x="984" y="268" font-size="9.5" fill="#1E40AF">• Dims: Import / DQ</text>
+    <text x="984" y="286" font-size="9.5" fill="#1E40AF">• Best of both worlds</text>
+    <text x="984" y="310" font-size="8.5" font-weight="700" fill="#1D4ED8">Avoids refresh on</text>
+    <text x="984" y="324" font-size="8.5" font-weight="700" fill="#1D4ED8">billion-row facts</text>
+    <rect x="1078" y="194" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="1104" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">PATTERN</text>
   </g>
-  <path d="M890 366 H916" stroke="#2AAC94" stroke-width="1.6" fill="none" marker-end="url(#ldd-arr)"/>
 
-  <!-- Decision 2: capacity sizing -->
-  <text x="36" y="474" font-size="11" letter-spacing="1.5" fill="#8A8886">DECISION 2 — SIZE THE CAPACITY FOR THE DIRECT LAKE MODEL</text>
-  <path d="M745 432 V456 H420 V470" stroke="#117865" stroke-width="2" fill="none" marker-end="url(#ldd-arrDark)"/>
+  <!-- ========================================================================= -->
+  <!-- LANE 2: CAPACITY SIZING & LICENSING (NODES 6 TO 9)                         -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="434" width="1120" height="274" rx="14" fill="#FFFFFF" stroke="#93C5FD" stroke-width="1.4"/>
+  <rect x="56" y="444" width="480" height="20" rx="10" fill="#DBEAFE"/>
+  <text x="66" y="458" font-size="10.5" font-weight="700" fill="#1E40AF" letter-spacing="1px">STAGE 2: CAPACITY MEMORY BOUNDS &amp; LICENSING REACH THRESHOLDS</text>
 
-  <!-- 2a memory fit decision -->
-  <g data-node-id="memory-fit-decision" tabindex="0" aria-label="Decision: does resident footprint fit the SKU memory bound">
+  <!-- Node 6: memory-fit-decision -->
+  <g data-node-id="memory-fit-decision" role="group" tabindex="0" aria-label="Resident columns fit under SKU memory?">
     <title data-node-tooltip="true">Memory-fit decision — the SKU sets the per-model memory bound; estimate resident column footprint (VertiPaq DMVs) against it.</title>
-    <path d="M420 480 L570 522 L420 564 L270 522 Z" fill="#DFF5EE" stroke="#2AAC94" stroke-width="1.8"/>
-    <text x="420" y="516" text-anchor="middle" font-size="11.5" font-weight="650" fill="#063D3B">Resident columns fit</text>
-    <text x="420" y="532" text-anchor="middle" font-size="11.5" font-weight="650" fill="#063D3B">under SKU memory?</text>
+    <rect x="56" y="472" width="220" height="220" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.6" filter="url(#bi-shadow)"/>
+    <rect x="68" y="482" width="110" height="16" rx="8" fill="#DBEAFE"/><text x="123" y="493" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">DECISION 2A</text>
+    <text x="68" y="516" font-size="12.5" font-weight="700" fill="#1E3A8A">6 · Memory Fit Gate</text>
+    <text x="68" y="538" font-size="9.5" fill="#1E40AF">• SKU sets memory cap</text>
+    <text x="68" y="556" font-size="9.5" fill="#1E40AF">• Sum VertiPaq DMVs:</text>
+    <text x="68" y="574" font-size="8.5" font-family="monospace" fill="#1E40AF">DICTIONARY + USED_SIZE</text>
+    <text x="68" y="598" font-size="8.5" font-weight="700" fill="#1D4ED8">Compare footprint to</text>
+    <text x="68" y="612" font-size="8.5" font-weight="700" fill="#1D4ED8">chosen Fabric F-SKU</text>
+    <rect x="210" y="482" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="236" y="492" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">FACT</text>
   </g>
 
-  <!-- fit yes -->
-  <path d="M420 566 L200 620" stroke="#2AAC94" stroke-width="2" fill="none" marker-end="url(#ldd-arr)"/>
-  <text x="278" y="596" font-size="9.5" fill="#0B5E50">yes</text>
-  <g data-node-id="fit-yes" tabindex="0" aria-label="Footprint fits — warm queries">
+  <!-- Node 7: fit-yes -->
+  <g data-node-id="fit-yes" role="group" tabindex="0" aria-label="Warm-path serving">
     <title data-node-tooltip="true">Fits — hot columns stay resident and queries run at import-like latency; size for sustained load, letting smoothing absorb spikes.</title>
-    <rect x="56" y="620" width="288" height="120" rx="12" fill="#DFF5EE" stroke="#117865" stroke-width="1.7"/>
-    <text x="72" y="646" font-size="12" font-weight="650" fill="#063D3B">Warm-path serving</text>
-    <text x="72" y="666" font-size="9.5" fill="#0B5E50">Hot columns stay resident → import-like latency.</text>
-    <text x="72" y="682" font-size="9.5" fill="#0B5E50">Size for average sustained load; bursting and</text>
-    <text x="72" y="696" font-size="9.5" fill="#0B5E50">smoothing (5–64 min for interactive) absorb spikes.</text>
-    <text x="72" y="714" font-size="9.5" fill="#0B5E50">Estimate footprint from VertiPaq storage DMVs.</text>
-    <rect x="72" y="720" width="60" height="14" rx="7" fill="#C7ECE0"/><text x="102" y="731" text-anchor="middle" font-size="8" fill="#063D3B">fact</text>
+    <rect x="290" y="472" width="260" height="220" rx="10" fill="#F0FDFA" stroke="#5EEAD4" stroke-width="1.6" filter="url(#bi-shadow)"/>
+    <rect x="302" y="482" width="90" height="16" rx="8" fill="#CCFBF1"/><text x="347" y="493" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">WARM PATH</text>
+    <text x="302" y="516" font-size="12.5" font-weight="700" fill="#134E4A">7 · Warm-Path Serving</text>
+    <text x="302" y="538" font-size="9.5" fill="#115E59">• Hot columns remain in memory</text>
+    <text x="302" y="556" font-size="9.5" fill="#115E59">• Import-like sub-second latency</text>
+    <text x="302" y="574" font-size="9.5" fill="#115E59">• Bursting + smoothing absorbs spikes</text>
+    <text x="302" y="598" font-size="8.5" font-weight="700" fill="#0F766E">Size for average sustained load</text>
+    <rect x="484" y="482" width="52" height="14" rx="7" fill="#CCFBF1"/><text x="510" y="492" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">FACT</text>
   </g>
 
-  <!-- fit no -->
-  <path d="M420 566 L470 620" stroke="#B42318" stroke-width="2" fill="none" marker-end="url(#ldd-arrRed)"/>
-  <text x="452" y="600" font-size="9.5" fill="#B42318">no</text>
-  <g data-node-id="fit-no" tabindex="0" aria-label="Footprint over the bound — cold reads">
+  <!-- Node 8: fit-no -->
+  <g data-node-id="fit-no" role="group" tabindex="0" aria-label="Cold-read risk at peak">
     <title data-node-tooltip="true">Over the bound — columns fall back to on-demand cold reads from OneLake at peak; step the SKU up, trim the model, or split workloads.</title>
-    <rect x="360" y="620" width="300" height="120" rx="12" fill="#FDE9E7" stroke="#E4A199" stroke-width="1.6"/>
-    <text x="376" y="646" font-size="12" font-weight="650" fill="#7A241A">Cold-read risk at peak</text>
-    <text x="376" y="666" font-size="9.5" fill="#8A4238">Footprint over the bound → on-demand cold reads</text>
-    <text x="376" y="680" font-size="9.5" fill="#8A4238">from OneLake at peak (degradation, not an error).</text>
-    <text x="376" y="698" font-size="9.5" fill="#8A4238">Remedies: step the F-SKU up (each step doubles</text>
-    <text x="376" y="712" font-size="9.5" fill="#8A4238">memory), trim/aggregate the model, or isolate</text>
-    <text x="376" y="726" font-size="9.5" fill="#8A4238">heavy workloads onto a separate capacity.</text>
-    <rect x="588" y="620" width="64" height="16" rx="8" fill="#F8D3CE"/><text x="620" y="631" text-anchor="middle" font-size="8.5" fill="#7A241A">warning</text>
+    <rect x="564" y="472" width="260" height="220" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#bi-shadow)"/>
+    <rect x="576" y="482" width="90" height="16" rx="8" fill="#FEE2E2"/><text x="621" y="493" text-anchor="middle" font-size="8.5" font-weight="700" fill="#DC2626">COLD READS</text>
+    <text x="576" y="516" font-size="12.5" font-weight="700" fill="#991B1B">8 · Cold-Read Risk</text>
+    <text x="576" y="538" font-size="9.5" fill="#B91C1C">• Non-resident columns load on demand</text>
+    <text x="576" y="556" font-size="9.5" fill="#B91C1C">• Noticeable query latency spikes</text>
+    <text x="576" y="574" font-size="9.5" fill="#B91C1C">• Remedy: Step up F-SKU or trim model</text>
+    <text x="576" y="598" font-size="8.5" font-weight="700" fill="#DC2626">Capacity throttling is workspace-isolated</text>
+    <rect x="758" y="482" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="784" y="492" text-anchor="middle" font-size="8.5" font-weight="700" fill="#DC2626">WARNING</text>
   </g>
 
-  <!-- 2b reach decision -->
-  <g data-node-id="reach-decision" tabindex="0" aria-label="Decision: does broad free-license viewing force F64+">
+  <!-- Node 9: reach-decision & reach-outcome -->
+  <g data-node-id="reach-decision" role="group" tabindex="0" aria-label="Broad free-license report viewing?">
     <title data-node-tooltip="true">Report-reach decision — F64+ lets free-license users view reports; below F64 every viewer needs a paid Pro/PPU seat.</title>
-    <path d="M900 480 L1050 522 L900 564 L750 522 Z" fill="#DFF5EE" stroke="#2AAC94" stroke-width="1.8"/>
-    <text x="900" y="516" text-anchor="middle" font-size="11.5" font-weight="650" fill="#063D3B">Broad free-license</text>
-    <text x="900" y="532" text-anchor="middle" font-size="11.5" font-weight="650" fill="#063D3B">report viewing?</text>
+    <rect x="838" y="472" width="140" height="220" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.6" filter="url(#bi-shadow)"/>
+    <rect x="850" y="482" width="80" height="16" rx="8" fill="#DBEAFE"/><text x="890" y="493" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">DECISION 2B</text>
+    <text x="850" y="516" font-size="12" font-weight="700" fill="#1E3A8A">9 · Reach Fork</text>
+    <text x="850" y="538" font-size="9.5" fill="#1E40AF">• Free users?</text>
+    <text x="850" y="556" font-size="9.5" fill="#1E40AF">• Broad audience?</text>
+    <text x="850" y="574" font-size="9.5" fill="#1E40AF">• Paid Pro seats?</text>
+    <text x="850" y="598" font-size="8.5" font-weight="700" fill="#1D4ED8">Licensing economics</text>
+    <rect x="912" y="482" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="938" y="492" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">FACT</text>
   </g>
-  <path d="M745 522 H748" stroke="#2AAC94" stroke-width="1.6" fill="none" marker-end="url(#ldd-arr)"/>
-  <g data-node-id="reach-outcome" tabindex="0" aria-label="F64 licensing floor for broad consumption">
+
+  <g data-node-id="reach-outcome" role="group" tabindex="0" aria-label="F64 as a licensing floor, not a load floor">
     <title data-node-tooltip="true">F64 floor — broad viewer reach forces F64 or larger regardless of compute load, so licensing can set the SKU, not throughput.</title>
-    <rect x="750" y="620" width="364" height="120" rx="12" fill="#EAF7F2" stroke="#9AD2C5" stroke-width="1.6"/>
-    <text x="766" y="646" font-size="12" font-weight="650" fill="#063D3B">F64 can be a licensing floor, not a load floor</text>
-    <text x="766" y="666" font-size="9.5" fill="#3F6259">Yes → F64+ so viewers on a free license consume via</text>
-    <text x="766" y="680" font-size="9.5" fill="#3F6259">a workspace viewer role. Broad BI reach forces F64+</text>
-    <text x="766" y="694" font-size="9.5" fill="#3F6259">even if the model would fit a smaller SKU on memory.</text>
-    <text x="766" y="712" font-size="9.5" fill="#3F6259">No / small audience → a smaller F-SKU with paid seats</text>
-    <text x="766" y="726" font-size="9.5" fill="#3F6259">may be cheaper; take the larger of the two SKU floors.</text>
-    <rect x="1040" y="620" width="60" height="16" rx="8" fill="#DFF5EE"/><text x="1070" y="631" text-anchor="middle" font-size="8.5" fill="#0B5E50">fact</text>
+    <rect x="992" y="472" width="152" height="220" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.6" filter="url(#bi-shadow)"/>
+    <rect x="1004" y="482" width="70" height="16" rx="8" fill="#DBEAFE"/><text x="1039" y="493" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">F64 FLOOR</text>
+    <text x="1004" y="516" font-size="12" font-weight="700" fill="#1E3A8A">10 · F64 Floor</text>
+    <text x="1004" y="538" font-size="9.5" fill="#1E40AF">• F64+ unlocks</text>
+    <text x="1004" y="552" font-size="9.5" fill="#1E40AF">free viewer roles</text>
+    <text x="1004" y="570" font-size="9.5" fill="#1E40AF">• Final SKU =</text>
+    <text x="1004" y="586" font-size="9.5" fill="#1E40AF">Max(Memory, Reach)</text>
+    <text x="1004" y="608" font-size="8.5" font-weight="700" fill="#1D4ED8">Licensing is binding</text>
+    <rect x="1080" y="482" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="1106" y="492" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">FACT</text>
   </g>
 
-  <!-- Guardrail band -->
-  <rect x="36" y="762" width="1108" height="112" rx="14" fill="#F3FBF9" stroke="#9AD2C5" stroke-width="1.5"/>
-  <g data-node-id="implementation-guardrails" tabindex="0" aria-label="Implementation guardrails checklist">
+  <!-- ========================================================================= -->
+  <!-- LANE 3: OPERATIONAL GUARDRAILS (NODE 10)                                  -->
+  <!-- ========================================================================= -->
+  <g data-node-id="implementation-guardrails" role="group" tabindex="0" aria-label="Implementation guardrails">
     <title data-node-tooltip="true">Guardrails — write-side layout, mutation pattern, vacuum window, OneSecurity check, and the Block Public Internet Access go/no-go.</title>
-    <text x="56" y="786" font-size="12.5" font-weight="650" fill="#063D3B">Implementation guardrails — verify before rollout</text>
-    <text x="56" y="808" font-size="9.5" fill="#3F6259">• Write V-Ordered Delta with a ~1 GB Optimized Write target and low-cardinality partitions (&lt;100–200 distinct) so column loads stay cheap.</text>
-    <text x="56" y="824" font-size="9.5" fill="#3F6259">• Prefer append/merge over Overwrite — Overwrite wipes commit history and forces a full cold-state reload on the next query.</text>
-    <text x="56" y="840" font-size="9.5" fill="#3F6259">• Keep vacuum retention longer than the framing cadence, or a vacuum can delete the Parquet files the framed model is pinned to and queries fail.</text>
-    <text x="56" y="856" font-size="9.5" fill="#3F6259">• Keep a single table under 10,000 Parquet files (framing fails past that). Confirm Block Public Internet Access is OFF and check OneSecurity before go-live.</text>
-    <rect x="1042" y="770" width="86" height="16" rx="8" fill="#DFF5EE"/><text x="1085" y="781" text-anchor="middle" font-size="8.5" fill="#0B5E50">checklist</text>
+    <rect x="40" y="722" width="1120" height="216" rx="14" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.4" filter="url(#bi-shadow)"/>
+    <rect x="56" y="732" width="410" height="20" rx="10" fill="#F0FDFA"/>
+    <text x="66" y="746" font-size="10.5" font-weight="700" fill="#0F766E" letter-spacing="1px">STAGE 3: OPERATIONAL IMPLEMENTATION GUARDRAILS</text>
+    <text x="56" y="776" font-size="13" font-weight="700" fill="#134E4A">11 · Mandatory Production Implementation Guardrails</text>
+    <text x="56" y="798" font-size="9.5" fill="#115E59">• <tspan font-weight="700">V-Order &amp; File Sizing:</tspan> Write V-Ordered Delta with a ~1 GB Optimized Write target and low-cardinality partitions (&lt;100–200 distinct)</text>
+    <text x="56" y="816" font-size="9.5" fill="#115E59">• <tspan font-weight="700">Append/Merge over Overwrite:</tspan> Loading with Overwrite wipes commit history, forcing a full cold reload of all column segments</text>
+    <text x="56" y="834" font-size="9.5" fill="#115E59">• <tspan font-weight="700">Vacuum Retention Window:</tspan> Keep vacuum retention strictly longer than framing cadence (e.g. 7+ days vs daily framing)</text>
+    <text x="56" y="852" font-size="9.5" fill="#115E59">• <tspan font-weight="700">Table File Count Ceiling:</tspan> Keep individual Delta tables under 10,000 Parquet files (framing fails past this ceiling)</text>
+    <text x="56" y="870" font-size="9.5" fill="#115E59">• <tspan font-weight="700">Network Setting:</tspan> Ensure tenant "Block Public Internet Access" is OFF; Direct Lake routes through public storage endpoints</text>
+    <rect x="1078" y="732" width="64" height="16" rx="8" fill="#CCFBF1"/><text x="1110" y="744" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">CHECKLIST</text>
   </g>
 
-  <line x1="200" y1="740" x2="200" y2="762" stroke="#2AAC94" stroke-width="1.4" marker-end="url(#ldd-arr)"/>
-  <line x1="510" y1="740" x2="510" y2="762" stroke="#B42318" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#ldd-arrRed)"/>
-  <line x1="930" y1="740" x2="930" y2="762" stroke="#2AAC94" stroke-width="1.4" marker-end="url(#ldd-arr)"/>
-
-  <text x="1144" y="890" text-anchor="end" font-size="9.5" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset; item icons vendored under Microsoft's Fabric icon terms.</text>
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="958" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Microsoft Fabric Direct Lake &amp; Capacity Optimization.</text>
 </svg>

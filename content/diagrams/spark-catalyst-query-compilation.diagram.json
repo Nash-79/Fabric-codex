@@ -1,0 +1,366 @@
+{
+  "id": "spark-catalyst-query-compilation",
+  "title": "Catalyst query compilation in Fabric Spark",
+  "purpose": "Catalyst query compilation. Parsed logical plan; Analyzed logical plan; Optimized logical plan; Physical plan; Whole-stage code generation.",
+  "accessibleSummary": "Catalyst query compilation. Parsed logical plan; Analyzed logical plan; Optimized logical plan; Physical plan; Whole-stage code generation.",
+  "longDescription": "Catalyst query compilation. Parsed logical plan; Analyzed logical plan; Optimized logical plan; Physical plan; Whole-stage code generation.",
+  "type": "internals",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-catalyst-query-compilation.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "parsed",
+      "label": "1. Parsed logical plan",
+      "summary": "The query becomes an unresolved operator tree; names are not yet checked.",
+      "detail": "The query becomes an unresolved operator tree; names are not yet checked.",
+      "whyItMatters": "The query becomes an unresolved operator tree; names are not yet checked.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "EXPLAIN EXTENDED prints the parsed logical plan with names still unresolved."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "DataFrame API calls or SQL text"
+        ],
+        "processing": [
+          "Parse into an operator tree"
+        ],
+        "outputs": [
+          "Unresolved logical plan"
+        ],
+        "example": "orders.filter(amount > 100).join(customers, \"cust_id\") parses to a tree whose relations are still the strings 'orders' and 'customers'.",
+        "controls": [
+          "df.explain(\"extended\")"
+        ],
+        "failureModes": [
+          "A syntax error stops the query here, before any catalog lookup."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "analyzed",
+      "label": "2. Analyzed logical plan",
+      "summary": "Catalog resolution binds relations and columns to real schemas and types.",
+      "detail": "Catalog resolution binds relations and columns to real schemas and types.",
+      "whyItMatters": "Catalog resolution binds relations and columns to real schemas and types.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "The analyzed plan binds relations and attributes to real typed objects."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Unresolved logical plan",
+          "Catalog metadata"
+        ],
+        "processing": [
+          "Resolve relations and columns",
+          "Assign types"
+        ],
+        "outputs": [
+          "Analyzed logical plan"
+        ],
+        "example": "'orders' resolves to a Delta relation with typed columns order_id, cust_id and amount.",
+        "controls": [
+          "Catalog / lakehouse metadata"
+        ],
+        "failureModes": [
+          "A misspelled column raises AnalysisException before optimization runs."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "optimized",
+      "label": "3. Optimized logical plan",
+      "summary": "Rule-based rewrites including predicate pushdown and column pruning.",
+      "detail": "Rule-based rewrites including predicate pushdown and column pruning.",
+      "whyItMatters": "Rule-based rewrites including predicate pushdown and column pruning.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "The optimized logical plan is produced by rule-based rewrites after analysis."
+        },
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "Predicate pushdown and column pruning reduce what the scan reads."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Analyzed logical plan"
+        ],
+        "processing": [
+          "Apply rewrite rules",
+          "Push predicates toward the scan",
+          "Prune unused columns"
+        ],
+        "outputs": [
+          "Optimized logical plan"
+        ],
+        "example": "A filter on amount is pushed into the Parquet reader and unused columns never leave storage — visible as PushedFilters and a narrowed ReadSchema.",
+        "controls": [
+          "Rule set is fixed",
+          "Predicate must not wrap the column in a cast or UDF"
+        ],
+        "failureModes": [
+          "PushedFilters:[] means pushdown failed and the scan reads everything."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "physical",
+      "label": "4. Physical plan",
+      "summary": "Candidate physical plans are costed and one algorithm is chosen.",
+      "detail": "Candidate physical plans are costed and one algorithm is chosen.",
+      "whyItMatters": "Candidate physical plans are costed and one algorithm is chosen.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "COST mode prints the statistics that explain why the optimizer chose a join strategy."
+        },
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "autoBroadcastJoinThreshold defaults to 10 MB and governs the broadcast decision."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Optimized logical plan",
+          "Size and row-count statistics"
+        ],
+        "processing": [
+          "Enumerate candidate physical plans",
+          "Cost and select one"
+        ],
+        "outputs": [
+          "Physical plan"
+        ],
+        "example": "A join whose smaller side is estimated under 10 MB is planned as BroadcastHashJoin rather than SortMergeJoin.",
+        "controls": [
+          "spark.sql.autoBroadcastJoinThreshold",
+          "Table statistics"
+        ],
+        "failureModes": [
+          "A stale or absent statistic produces a sort-merge join where a broadcast would have been far cheaper."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "codegen",
+      "label": "5. Whole-stage code generation",
+      "summary": "Operators are fused into one generated Java function per stage.",
+      "detail": "Operators are fused into one generated Java function per stage.",
+      "whyItMatters": "Operators are fused into one generated Java function per stage.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "CODEGEN mode prints the generated code alongside the physical plan."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Physical plan"
+        ],
+        "processing": [
+          "Fuse adjacent operators",
+          "Emit and compile Java per stage"
+        ],
+        "outputs": [
+          "Compiled stage function"
+        ],
+        "example": "A filter and a projection compile into one loop with no virtual call between them, shown as a *(1) prefix in the plan.",
+        "controls": [
+          "df.explain(\"codegen\")"
+        ],
+        "failureModes": [
+          "A Python UDF in the middle of a stage breaks fusion and the *(n) prefixes disappear."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "nee",
+      "label": "Native path branches after this",
+      "summary": "Native execution engages after planning and preserves optimizer behaviour.",
+      "detail": "Native execution engages after planning and preserves optimizer behaviour.",
+      "whyItMatters": "Native execution engages after planning and preserves optimizer behaviour.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "NEE preserves adaptive query execution, cost-based rewrites, column pruning and predicate pushdown."
+        },
+        {
+          "sourceKey": "fabric-spark-runtime-versions",
+          "note": "Native execution is toggled per application with spark.native.enabled."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Physical plan"
+        ],
+        "processing": [
+          "Gluten converts supported operators",
+          "Velox executes them vectorized"
+        ],
+        "outputs": [
+          "Native or JVM execution per operator"
+        ],
+        "example": "A scan and aggregation offload to Velox while an unsupported window function stays on the JVM.",
+        "controls": [
+          "spark.native.enabled"
+        ],
+        "failureModes": [
+          "An unsupported expression drops the whole enclosing operator back to the JVM."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "parsed",
+      "to": "analyzed",
+      "label": "Catalog resolution binds names to schemas",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e2",
+      "from": "analyzed",
+      "to": "optimized",
+      "label": "Rule-based rewrites run on the resolved tree",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e3",
+      "from": "optimized",
+      "to": "physical",
+      "label": "Cost model selects concrete algorithms",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e4",
+      "from": "physical",
+      "to": "codegen",
+      "label": "Stage operators fuse into generated Java",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e5",
+      "from": "physical",
+      "to": "nee",
+      "label": "Supported operators route to the native path",
+      "layer": "compute",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "parsed",
+      "title": "1. 1. Parsed logical plan",
+      "explanation": "The query becomes an unresolved operator tree; names are not yet checked."
+    },
+    {
+      "nodeId": "analyzed",
+      "title": "2. 2. Analyzed logical plan",
+      "explanation": "Catalog resolution binds relations and columns to real schemas and types."
+    },
+    {
+      "nodeId": "optimized",
+      "title": "3. 3. Optimized logical plan",
+      "explanation": "Rule-based rewrites including predicate pushdown and column pruning."
+    },
+    {
+      "nodeId": "physical",
+      "title": "4. 4. Physical plan",
+      "explanation": "Candidate physical plans are costed and one algorithm is chosen."
+    },
+    {
+      "nodeId": "codegen",
+      "title": "5. 5. Whole-stage code generation",
+      "explanation": "Operators are fused into one generated Java function per stage."
+    },
+    {
+      "nodeId": "nee",
+      "title": "6. Native path branches after this",
+      "explanation": "Native execution engages after planning and preserves optimizer behaviour."
+    }
+  ]
+}

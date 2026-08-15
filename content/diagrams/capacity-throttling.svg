@@ -1,212 +1,273 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 680" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="capacity-throttling-title capacity-throttling-desc" data-diagram-id="capacity-throttling">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 940" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="capacity-throttling-title capacity-throttling-desc" data-diagram-id="capacity-throttling">
   <title id="capacity-throttling-title">How Fabric Capacity Smoothing and Throttling Actually Work</title>
-  <desc id="capacity-throttling-desc">A flow diagram: an operation is submitted and classified as interactive or background, then allowed to burst above its SKU&apos;s steady-state CU rate so it finishes quickly. The bursted cost is smoothed by spreading it across future 30-second timepoints — 5 to 64 minutes for interactive operations, 24 hours for background ones. If accumulated future usage stays under 10 minutes, nothing is throttled. Beyond that, usage escalates through three progressively worse stages: delayed interactive operations, then rejected interactive operations, then rejected background operations too, with carryforward CUs draining only when idle capacity exists at later timepoints. A warning node covers Autoscale Billing for Spark bypassing bursting and smoothing entirely, and a second warning covers Block Public Internet Access breaking Direct Lake regardless of throttling state.</desc>
-  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-06.
-       Grounded in capacity claims: smoothing windows, 4 throttling thresholds,
-       carryforward/burndown, interactive vs background classification. -->
+  <desc id="capacity-throttling-desc">A flow diagram tracing CU cost from submission through interactive vs background classification, bursting above SKU provision, 30-second timepoint smoothing (5-64m interactive, 24h background), and the progressive four-stage throttling ladder: overage protection, 20s delay, interactive rejection, and background rejection with carryforward burndown.</desc>
+
   <defs>
-    <linearGradient id="hdrGrad" x1="0" y1="0" x2="1" y2="0">
+    <!-- Header Gradient -->
+    <linearGradient id="ct-head" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#0B5E50"/>
-      <stop offset="0.6" stop-color="#117865"/>
-      <stop offset="1" stop-color="#2AAC94"/>
+      <stop offset="0.5" stop-color="#117865"/>
+      <stop offset="1" stop-color="#0E4A68"/>
     </linearGradient>
-    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94"/>
+
+    <!-- Panel Gradients -->
+    <linearGradient id="ct-flow-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F0FDF4"/>
+      <stop offset="1" stop-color="#E0F2FE"/>
+    </linearGradient>
+    <linearGradient id="ct-ladder-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F8FAFC"/>
+      <stop offset="1" stop-color="#F1F5F9"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="ct-shadow" x="-3%" y="-4%" width="106%" height="110%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="ct-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0D9488"/>
     </marker>
-    <marker id="arrDark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#063D3B"/>
+    <marker id="ct-arr-dark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0F172A"/>
+    </marker>
+    <marker id="ct-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
     </marker>
   </defs>
 
   <!-- Background -->
-  <rect width="1100" height="680" fill="#FFFFFF"/>
+  <rect width="1200" height="940" fill="#FFFFFF"/>
 
-  <!-- Header band -->
-  <rect x="0" y="0" width="1100" height="56" fill="url(#hdrGrad)"/>
-  <g data-node-id="autoscale-spark-warning" role="group" tabindex="0" aria-label="Autoscale Billing for Spark bypasses this entirely">
-    <title data-node-tooltip="true">Autoscale Billing for Spark bypasses this entirely — When enabled, Spark drops bursting and smoothing for flat pay-as-you-go metering.</title>
-    <rect x="16.0" y="-0.6" width="480.0" height="36.5" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="28" y="24" font-size="17" font-weight="700" fill="#FFFFFF">Fabric Capacity — Bursting, Smoothing &amp; Throttling</text>
-  </g>
-  <text x="28" y="43" font-size="11" fill="#D9F5EE">How CU consumption is spread over time and the four progressive enforcement stages</text>
-
-  <!-- ═══════════════════════════════════════════════
-       LEFT COLUMN — CU timeline / smoothing concept
-  ════════════════════════════════════════════════ -->
-  <g data-node-id="smoothing" role="group" tabindex="0" aria-label="Smoothing (30-second timepoints)">
-    <title data-node-tooltip="true">Smoothing (30-second timepoints) — Bursted CU cost is spread across future timepoints instead of charged all at once.</title>
-    <rect x="16.0" y="70.0" width="445.1" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="28" y="86" font-size="11" letter-spacing="1.2" fill="#8A8886">SMOOTHING WINDOW — CU COST SPREAD OVER TIME (30-second timepoints)</text>
+  <!-- ========================================================================= -->
+  <!-- TOP BANNER (HERO TITLE)                                                   -->
+  <!-- ========================================================================= -->
+  <rect width="1200" height="64" fill="url(#ct-head)"/>
+  
+  <g data-official-icon="microsoft" data-icon-name="capacity_item_32">
+    <g transform="translate(36, 16) scale(0.9)">
+      <rect width="36" height="36" rx="6" fill="#FFFFFF" fill-opacity="0.15"/>
+      <circle cx="18" cy="18" r="12" fill="#2DD4BF"/>
+      <path d="M18 10 L26 24 L10 24 Z" fill="#FFFFFF"/>
+    </g>
   </g>
 
-  <!-- Timeline chart background -->
-  <rect x="28" y="94" width="490" height="190" rx="8" fill="#F7FAF9" stroke="#C8E8E0"/>
+  <text x="80" y="34" font-size="20" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">Fabric Capacity — Bursting, Smoothing &amp; Throttling Ladder</text>
+  <text x="80" y="52" font-size="11" fill="#CCFBF1">How CU consumption is spread over 30-second timepoints and enforced across 4 progressive stages</text>
 
-  <!-- Chart axes -->
-  <line x1="60" y1="104" x2="60" y2="264" stroke="#8A8886" stroke-width="1"/>
-  <line x1="60" y1="264" x2="498" y2="264" stroke="#8A8886" stroke-width="1"/>
-  <text x="57" y="108" text-anchor="end" font-size="9" fill="#8A8886">CU</text>
-  <text x="500" y="268" font-size="9" fill="#8A8886">time →</text>
+  <!-- ========================================================================= -->
+  <!-- LEFT COLUMN: OPERATION LIFECYCLE & SMOOTHING (NODES 1..4)                 -->
+  <!-- ========================================================================= -->
+  <rect x="24" y="80" width="560" height="670" rx="10" fill="url(#ct-flow-bg)" stroke="#99F6E4" stroke-width="1.6" filter="url(#ct-shadow)"/>
+  <rect x="24" y="80" width="560" height="34" rx="10" fill="#0F766E"/>
+  <text x="304" y="102" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">PHASE 1: OPERATION SUBMISSION, BURSTING &amp; SMOOTHING</text>
 
-  <!-- Capacity baseline (SKU provision) -->
-  <line x1="60" y1="200" x2="498" y2="200" stroke="#117865" stroke-width="1.4" stroke-dasharray="6 3"/>
-  <text x="63" y="197" font-size="9" font-weight="600" fill="#117865">SKU provision</text>
-
-  <!-- Burst spike (operation uses more than SKU allows) -->
-  <rect x="90" y="142" width="36" height="58" fill="#2AAC94" opacity="0.85" rx="3"/>
-  <text x="108" y="136" text-anchor="middle" font-size="9" font-weight="600" fill="#063D3B">burst</text>
-
-  <!-- Smoothed cost (spread forward) — lighter bars -->
-  <rect x="136" y="192" width="18" height="8" fill="#9AD2C5" rx="2"/>
-  <rect x="160" y="192" width="18" height="8" fill="#9AD2C5" rx="2"/>
-  <rect x="184" y="192" width="18" height="8" fill="#9AD2C5" rx="2"/>
-  <rect x="208" y="192" width="18" height="8" fill="#9AD2C5" rx="2"/>
-  <rect x="232" y="192" width="18" height="8" fill="#9AD2C5" rx="2"/>
-  <rect x="256" y="192" width="18" height="8" fill="#9AD2C5" rx="2"/>
-  <rect x="280" y="192" width="18" height="8" fill="#9AD2C5" rx="2"/>
-  <rect x="304" y="192" width="18" height="8" fill="#9AD2C5" rx="2"/>
-  <rect x="328" y="192" width="18" height="8" fill="#9AD2C5" rx="2"/>
-  <rect x="352" y="192" width="18" height="8" fill="#B8DDD5" rx="2"/>
-  <rect x="376" y="192" width="18" height="8" fill="#B8DDD5" rx="2"/>
-  <rect x="400" y="192" width="18" height="8" fill="#B8DDD5" rx="2"/>
-
-  <!-- Smoothing bracket annotation -->
-  <line x1="136" y1="178" x2="418" y2="178" stroke="#2AAC94" stroke-width="1.2" marker-end="url(#arr)" marker-start="url(#arr)"/>
-  <text x="277" y="175" text-anchor="middle" font-size="9" fill="#117865">cost spread across future timepoints</text>
-
-  <!-- Interactive: 5–64 min label -->
-  <text x="108" y="280" text-anchor="middle" font-size="9" fill="#424242">Interactive ops:</text>
-  <text x="108" y="291" text-anchor="middle" font-size="9" fill="#424242">smoothed 5 – 64 min</text>
-
-  <!-- Background: 24-hr label -->
-  <text x="350" y="280" text-anchor="middle" font-size="9" fill="#424242">Background ops:</text>
-  <text x="350" y="291" text-anchor="middle" font-size="9" fill="#424242">smoothed over 24 h (2,880 timepoints)</text>
-
-  <!-- ═══════════════════════════════════════════════
-       RIGHT COLUMN — Four throttling stages
-  ════════════════════════════════════════════════ -->
-  <text x="545" y="86" font-size="11" letter-spacing="1.2" fill="#8A8886">FOUR THROTTLING STAGES (future-capacity consumed)</text>
-
-  <!-- Stage 0 — green -->
-  <rect x="545" y="94" width="520" height="66" rx="8" fill="#EAF7F2" stroke="#9AD2C5"/>
-  <rect x="545" y="94" width="8" height="66" rx="4" fill="#2AAC94"/>
-  <g data-node-id="stage-none" role="group" tabindex="0" aria-label="No throttling">
-    <title data-node-tooltip="true">No throttling — Under the 10-minute overage window: operations proceed normally with no visible impact.</title>
-    <rect x="554.0" y="99.2" width="197.4" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="566" y="118" font-size="13" font-weight="700" fill="#063D3B">Stage 0 — No throttling</text>
-  </g>
-  <text x="566" y="136" font-size="11" fill="#424242">Future usage &lt; 10 minutes of SKU provision</text>
-  <g data-node-id="overage-check" role="group" tabindex="0" aria-label="Overage-protection check (10-minute window)">
-    <title data-node-tooltip="true">Overage-protection check (10-minute window) — The decision point: is accumulated future usage under or over the 10-minute threshold?</title>
-    <rect x="554.0" y="136.5" width="372.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="566" y="151" font-size="10" fill="#3F6259">Overage protection window — all operations proceed normally.</text>
-  </g>
-
-  <!-- Stage 1 — amber -->
-  <rect x="545" y="170" width="520" height="66" rx="8" fill="#FFF8EC" stroke="#F0C070"/>
-  <rect x="545" y="170" width="8" height="66" rx="4" fill="#E8A020"/>
-  <text x="566" y="194" font-size="13" font-weight="700" fill="#5C3A00">Stage 1 — Interactive delay</text>
-  <text x="566" y="212" font-size="11" fill="#424242">Future usage 10 min → 60 min of SKU provision</text>
-  <g data-node-id="stage-delay" role="group" tabindex="0" aria-label="Stage 2: interactive delay">
-    <title data-node-tooltip="true">Stage 2: interactive delay — Between 10 minutes and further thresholds: new interactive operations are delayed, not rejected.</title>
-    <rect x="554.0" y="212.5" width="383.6" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="566" y="227" font-size="10" fill="#7A4A00">New interactive operations incur a 20-second submission delay.</text>
-  </g>
-
-  <!-- Stage 2 — orange-red -->
-  <rect x="545" y="246" width="520" height="66" rx="8" fill="#FFF1ED" stroke="#F0A080"/>
-  <rect x="545" y="246" width="8" height="66" rx="4" fill="#D45000"/>
-  <text x="566" y="270" font-size="13" font-weight="700" fill="#5C1A00">Stage 2 — Interactive rejection</text>
-  <text x="566" y="288" font-size="11" fill="#424242">Future usage 60 min → 24 hours of SKU provision</text>
-  <g data-node-id="stage-reject-all" role="group" tabindex="0" aria-label="Stage 4: background rejection too">
-    <title data-node-tooltip="true">Stage 4: background rejection too — Worst stage: background operations are rejected as well, in addition to interactive ones.</title>
-    <rect x="554.0" y="288.5" width="470.6" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="566" y="303" font-size="10" fill="#7A2800">Interactive ops rejected (CapacityLimitExceeded). Background may still start.</text>
-  </g>
-
-  <!-- Stage 3 — red -->
-  <rect x="545" y="322" width="520" height="66" rx="8" fill="#FDECEA" stroke="#E07070"/>
-  <rect x="545" y="322" width="8" height="66" rx="4" fill="#B71C1C"/>
-  <text x="566" y="346" font-size="13" font-weight="700" fill="#5C0000">Stage 3 — Full rejection</text>
-  <text x="566" y="364" font-size="11" fill="#424242">Future usage &gt; 24 hours of SKU provision</text>
-  <g data-node-id="stage-reject-interactive" role="group" tabindex="0" aria-label="Stage 3: interactive rejection">
-    <title data-node-tooltip="true">Stage 3: interactive rejection — Further past threshold: new interactive requests are rejected with CapacityLimitExceeded.</title>
-    <rect x="554.0" y="364.5" width="470.6" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="566" y="379" font-size="10" fill="#7A0000">All new requests (interactive + background) rejected. In-flight ops complete.</text>
-  </g>
-
-  <!-- Stage progression arrow -->
-  <line x1="534" y1="127" x2="534" y2="375" stroke="#8A8886" stroke-width="1.2" marker-end="url(#arrDark)"/>
-  <text x="530" y="253" text-anchor="middle" font-size="9" fill="#8A8886" transform="rotate(-90 530 253)">increasing future-capacity consumed →</text>
-
-  <!-- ═══════════════════════════════════════════════
-       BOTTOM SECTION — Carryforward / Burndown
-  ════════════════════════════════════════════════ -->
-  <text x="28" y="318" font-size="11" letter-spacing="1.2" fill="#8A8886">CARRYFORWARD BALANCE &amp; BURNDOWN</text>
-
-  <rect x="28" y="326" width="490" height="160" rx="8" fill="#F7FAF9" stroke="#C8E8E0"/>
-
-  <!-- Chart axes -->
-  <line x1="60" y1="336" x2="60" y2="466" stroke="#8A8886" stroke-width="1"/>
-  <line x1="60" y1="466" x2="498" y2="466" stroke="#8A8886" stroke-width="1"/>
-  <text x="57" y="340" text-anchor="end" font-size="9" fill="#8A8886">CU</text>
-  <text x="500" y="470" font-size="9" fill="#8A8886">time →</text>
-
-  <!-- Overage protection ceiling line -->
-  <line x1="60" y1="390" x2="498" y2="390" stroke="#2AAC94" stroke-width="1.2" stroke-dasharray="5 3"/>
-  <text x="63" y="387" font-size="9" fill="#117865">10-min overage ceiling</text>
-
-  <!-- Carryforward accumulation -->
-  <polyline points="90,466 150,390 200,370 240,355 280,370 320,390 360,410 410,440 460,460 490,466"
-            fill="none" stroke="#D45000" stroke-width="2"/>
-  <!-- Burndown shading -->
-  <polygon points="200,370 240,355 280,370 320,390 360,410 410,440 460,460 490,466 490,466 200,466"
-           fill="#FFE4D6" opacity="0.5"/>
-
-  <!-- Throttle zone label -->
-  <rect x="165" y="342" width="280" height="18" rx="3" fill="#FFF1ED" stroke="#F0A080"/>
-  <text x="305" y="355" text-anchor="middle" font-size="9" fill="#D45000">carryforward exceeds ceiling — throttling active</text>
-
-  <!-- Burndown label -->
-  <text x="380" y="455" text-anchor="middle" font-size="9" fill="#117865">idle timepoints burn down balance</text>
-
-  <!-- Key -->
-  <rect x="28" y="498" width="490" height="52" rx="6" fill="#EAF7F2" stroke="#9AD2C5"/>
-  <text x="44" y="514" font-size="10" font-weight="600" fill="#063D3B">Key notes:</text>
-  <g data-node-id="private-link-warning" role="group" tabindex="0" aria-label="Block Public Internet Access breaks Direct Lake regardless">
-    <title data-node-tooltip="true">Block Public Internet Access breaks Direct Lake regardless — A network-isolation setting, not throttling, that silently forces Direct Lake off public endpoints.</title>
-    <rect x="32.0" y="515.5" width="480.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="44" y="530" font-size="10" fill="#424242">  Throttling is per-capacity (not per-tenant). In-flight ops always run to completion.</text>
-  </g>
-  <text x="44" y="545" font-size="10" fill="#424242">  Compound throttling: a chained request is throttled at most once per capacity in the chain.</text>
-
-  <!-- Workload exceptions box -->
-  <rect x="28" y="560" width="490" height="78" rx="6" fill="#F3F2F1" stroke="#E1DFDD"/>
-  <text x="44" y="577" font-size="10" font-weight="600" fill="#063D3B">Workload-specific exceptions:</text>
-  <text x="44" y="594" font-size="10" fill="#424242">  Eventstreams — reduces allocated CUs rather than delaying/rejecting new streams.</text>
-  <text x="44" y="609" font-size="10" fill="#424242">  Real-Time Intelligence — skips Stage 1 delay; starts throttling at Stage 2 (60-min).</text>
-  <g data-node-id="classify" role="group" tabindex="0" aria-label="Classify: interactive vs background">
-    <title data-node-tooltip="true">Classify: interactive vs background — Fabric classifies the operation before it runs, which sets its smoothing window.</title>
-    <rect x="32.0" y="609.5" width="476.4" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="44" y="624" font-size="10" fill="#424242">  Warehouse ops — classified background; benefits from 24-hour smoothing window.</text>
-  </g>
-
-  <!-- SKU quick reference box -->
-  <rect x="545" y="402" width="520" height="100" rx="8" fill="#EAF7F2" stroke="#9AD2C5"/>
-  <text x="561" y="420" font-size="11" font-weight="700" fill="#063D3B">SKU Quick Reference (F SKUs, F2 – F2048)</text>
+  <!-- Node 1: op-submit -->
   <g data-node-id="op-submit" role="group" tabindex="0" aria-label="Operation submitted to capacity">
     <title data-node-tooltip="true">Operation submitted to capacity — Every workload draws Capacity Units from one dedicated resource pool.</title>
-    <rect x="549.0" y="423.5" width="453.2" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="561" y="438" font-size="10" fill="#424242">SKU number = capacity units (e.g. F64 = 64 CU). Each step doubles compute.</text>
-  </g>
-  <text x="561" y="454" font-size="10" fill="#424242">Each CU grants 2 Spark vCores × 3 burst multiplier (e.g. F64 = 384 Spark vCores).</text>
-  <text x="561" y="470" font-size="10" fill="#424242">F64+ threshold: free-license users can view Power BI content (workspace viewer role).</text>
-  <g data-node-id="bursting" role="group" tabindex="0" aria-label="Bursting">
-    <title data-node-tooltip="true">Bursting — The operation is allowed to consume more CUs than steady-state SKU size allows, to finish quickly.</title>
-    <rect x="549.0" y="471.5" width="480.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="561" y="486" font-size="10" fill="#424242">Autoscale Billing for Spark disables bursting/smoothing — pay-as-you-go mode only.</text>
+    <rect x="44" y="126" width="520" height="74" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4"/>
+    <rect x="56" y="138" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="70" y="157" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">1</text>
+    <text x="96" y="148" font-size="11" font-weight="800" fill="#0F766E">Operation Submitted to Capacity Pool</text>
+    <text x="96" y="164" font-size="8.5" fill="#115E59">• Interactive DAX visual, notebook execution, pipeline ETL, or warehouse query</text>
+    <text x="96" y="178" font-size="8.5" fill="#115E59">• Sourced against the workspace's assigned F-SKU capacity unit (CU) quota</text>
   </g>
 
-  <!-- Footnote -->
-  <text x="1072" y="668" text-anchor="end" font-size="9" fill="#8A8886">Fabric Atlas — original diagram, June 2026. Not a Microsoft asset.</text>
+  <line x1="304" y1="200" x2="304" y2="216" stroke="#0D9488" stroke-width="2" marker-end="url(#ct-arr-teal)"/>
+
+  <!-- Node 2: classify -->
+  <g data-node-id="classify" role="group" tabindex="0" aria-label="Classify: interactive vs background">
+    <title data-node-tooltip="true">Classify: interactive vs background — Fabric classifies the operation before it runs, which sets its smoothing window.</title>
+    <rect x="44" y="218" width="520" height="96" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4"/>
+    <rect x="56" y="230" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="70" y="249" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">2</text>
+    <text x="96" y="240" font-size="11" font-weight="800" fill="#0F766E">Classification: Interactive vs Background</text>
+    
+    <rect x="96" y="252" width="210" height="48" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="106" y="268" font-size="9" font-weight="800" fill="#0F766E">Interactive (Short Window)</text>
+    <text x="106" y="284" font-size="8" fill="#115E59">Smoothed over 5 to 64 minutes</text>
+
+    <rect x="320" y="252" width="230" height="48" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+    <text x="330" y="268" font-size="9" font-weight="800" fill="#1E40AF">Background (Long Window)</text>
+    <text x="330" y="284" font-size="8" fill="#1E3A8A">Always smoothed over full 24 hours</text>
+  </g>
+
+  <line x1="304" y1="314" x2="304" y2="330" stroke="#0D9488" stroke-width="2" marker-end="url(#ct-arr-teal)"/>
+
+  <!-- Node 3: bursting -->
+  <g data-node-id="bursting" role="group" tabindex="0" aria-label="Bursting">
+    <title data-node-tooltip="true">Bursting — The operation is allowed to consume more CUs than steady-state SKU size allows, to finish quickly.</title>
+    <rect x="44" y="332" width="520" height="84" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4"/>
+    <rect x="56" y="344" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="70" y="363" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">3</text>
+    <text x="96" y="354" font-size="11" font-weight="800" fill="#0F766E">Bursting: Temporary Elastic CU Acceleration</text>
+    <text x="96" y="372" font-size="8.5" fill="#115E59">• Jobs exceed provisioned SKU rate without stalling, finishing at maximum speed</text>
+    <text x="96" y="386" font-size="8.5" fill="#115E59">• 0 execution penalty in the moment — burst cost is deferred to smoothing</text>
+    <text x="96" y="402" font-size="8" font-weight="700" fill="#0F766E">Spark burst multiplier grants up to 3x steady-state vCores (CU × 2 × 3)</text>
+  </g>
+
+  <line x1="304" y1="416" x2="304" y2="432" stroke="#0D9488" stroke-width="2" marker-end="url(#ct-arr-teal)"/>
+
+  <!-- Node 4: smoothing -->
+  <g data-node-id="smoothing" role="group" tabindex="0" aria-label="Smoothing (30-second timepoints)">
+    <title data-node-tooltip="true">Smoothing (30-second timepoints) — Bursted CU cost is spread across future timepoints instead of charged all at once.</title>
+    <rect x="44" y="434" width="520" height="300" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4"/>
+    <rect x="56" y="446" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="70" y="465" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">4</text>
+    <text x="96" y="456" font-size="11" font-weight="800" fill="#0F766E">Smoothing Accounting (30-Second Timepoints)</text>
+    <text x="96" y="472" font-size="8.5" fill="#115E59">• 2,880 discrete 30s timepoints per 24h rolling ledger</text>
+    <text x="96" y="486" font-size="8.5" fill="#115E59">• Spreads large spikes across future timepoints to prevent instantaneous throttle</text>
+
+    <!-- Smoothing Visual Chart -->
+    <g transform="translate(60, 500)">
+      <rect width="480" height="150" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+      <!-- Baseline SKU limit -->
+      <line x1="30" y1="90" x2="460" y2="90" stroke="#0D9488" stroke-width="1.5" stroke-dasharray="6,4"/>
+      <text x="460" y="84" text-anchor="end" font-size="8" font-weight="800" fill="#0F766E">Provisioned SKU Baseline</text>
+      
+      <!-- Burst Spike -->
+      <rect x="60" y="30" width="40" height="60" rx="3" fill="#EF4444" opacity="0.85"/>
+      <text x="80" y="24" text-anchor="middle" font-size="8" font-weight="800" fill="#DC2626">BURST</text>
+
+      <!-- Smoothed Bars across future timepoints -->
+      <rect x="120" y="70" width="16" height="20" rx="2" fill="#2DD4BF"/>
+      <rect x="142" y="70" width="16" height="20" rx="2" fill="#2DD4BF"/>
+      <rect x="164" y="70" width="16" height="20" rx="2" fill="#2DD4BF"/>
+      <rect x="186" y="70" width="16" height="20" rx="2" fill="#2DD4BF"/>
+      <rect x="208" y="70" width="16" height="20" rx="2" fill="#2DD4BF"/>
+      <rect x="230" y="70" width="16" height="20" rx="2" fill="#2DD4BF"/>
+      <rect x="252" y="70" width="16" height="20" rx="2" fill="#2DD4BF"/>
+      <rect x="274" y="70" width="16" height="20" rx="2" fill="#2DD4BF"/>
+      <rect x="296" y="70" width="16" height="20" rx="2" fill="#2DD4BF"/>
+      <rect x="318" y="70" width="16" height="20" rx="2" fill="#2DD4BF"/>
+
+      <line x1="120" y1="56" x2="334" y2="56" stroke="#0D9488" stroke-width="1.2" marker-end="url(#ct-arr-teal)"/>
+      <text x="227" y="50" text-anchor="middle" font-size="8" font-weight="700" fill="#0F766E">Cost smoothed forward across 30s slices</text>
+
+      <!-- Chart Axes -->
+      <line x1="30" y1="20" x2="30" y2="130" stroke="#94A3B8" stroke-width="1"/>
+      <line x1="30" y1="130" x2="460" y2="130" stroke="#94A3B8" stroke-width="1"/>
+      <text x="26" y="16" text-anchor="end" font-size="8" fill="#64748B">CU</text>
+      <text x="455" y="142" text-anchor="end" font-size="8" fill="#64748B">Time (30s) ➔</text>
+    </g>
+
+    <text x="60" y="718" font-size="8" font-weight="700" fill="#0F766E">✓ Accumulated smoothed cost forms the Future Usage balance checked in Phase 2</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- RIGHT COLUMN: THE 4-STAGE THROTTLING LADDER (NODES 5..10)                 -->
+  <!-- ========================================================================= -->
+  <rect x="604" y="80" width="572" height="670" rx="10" fill="url(#ct-ladder-bg)" stroke="#CBD5E1" stroke-width="1.6" filter="url(#ct-shadow)"/>
+  <rect x="604" y="80" width="572" height="34" rx="10" fill="#0F172A"/>
+  <text x="890" y="102" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">PHASE 2: THE FOUR-STAGE PROGRESSIVE THROTTLING LADDER</text>
+
+  <!-- Node 5: overage-check -->
+  <g data-node-id="overage-check" role="group" tabindex="0" aria-label="Overage-protection check (10-minute window)">
+    <title data-node-tooltip="true">Overage-protection check (10-minute window) — The decision point: is accumulated future usage under or over the 10-minute threshold?</title>
+    <rect x="624" y="126" width="532" height="54" rx="8" fill="#FFFFFF" stroke="#334155" stroke-width="1.4"/>
+    <text x="640" y="146" font-size="11" font-weight="800" fill="#0F172A">Overage-Protection Check (Future Usage Balance)</text>
+    <text x="640" y="164" font-size="8.5" fill="#475569">Evaluates accumulated future CU debt: &lt;10m (Normal) vs &gt;10m (Escalating Enforcement)</text>
+  </g>
+
+  <line x1="890" y1="180" x2="890" y2="194" stroke="#0F172A" stroke-width="1.8" marker-end="url(#ct-arr-dark)"/>
+
+  <!-- Node 6: stage-none -->
+  <g data-node-id="stage-none" role="group" tabindex="0" aria-label="No throttling">
+    <title data-node-tooltip="true">No throttling — Under the 10-minute overage window: operations proceed normally with no visible impact.</title>
+    <rect x="624" y="196" width="532" height="66" rx="8" fill="#F0FDF4" stroke="#22C55E" stroke-width="1.4"/>
+    <rect x="636" y="206" width="84" height="20" rx="4" fill="#15803D"/>
+    <text x="678" y="220" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">STAGE 1</text>
+    <text x="730" y="220" font-size="10.5" font-weight="800" fill="#15803D">No Throttling (Overage Protection Zone)</text>
+    <text x="636" y="244" font-size="8.5" fill="#166534">• Future usage consumed: <tspan font-weight="700">&lt; 10 minutes</tspan> of SKU provision.</text>
+    <text x="636" y="256" font-size="8.5" fill="#166534">• All interactive &amp; background operations execute with 0 delay and 0 rejection.</text>
+  </g>
+
+  <line x1="890" y1="262" x2="890" y2="274" stroke="#D97706" stroke-width="1.8" marker-end="url(#ct-arr-dark)"/>
+
+  <!-- Node 7: stage-delay -->
+  <g data-node-id="stage-delay" role="group" tabindex="0" aria-label="Stage 2: interactive delay">
+    <title data-node-tooltip="true">Stage 2: interactive delay — Between 10 minutes and further thresholds: new interactive operations are delayed, not rejected.</title>
+    <rect x="624" y="276" width="532" height="74" rx="8" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.4"/>
+    <rect x="636" y="286" width="84" height="20" rx="4" fill="#D97706"/>
+    <text x="678" y="300" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">STAGE 2</text>
+    <text x="730" y="300" font-size="10.5" font-weight="800" fill="#B45309">Interactive Delay (20-Second Penalty)</text>
+    <text x="636" y="324" font-size="8.5" fill="#92400E">• Future usage consumed: <tspan font-weight="700">10 to 60 minutes</tspan>.</text>
+    <text x="636" y="338" font-size="8.5" fill="#92400E">• New interactive requests delayed by 20s. Background operations unaffected.</text>
+  </g>
+
+  <line x1="890" y1="350" x2="890" y2="362" stroke="#EA580C" stroke-width="1.8" marker-end="url(#ct-arr-dark)"/>
+
+  <!-- Node 8: stage-reject-interactive -->
+  <g data-node-id="stage-reject-interactive" role="group" tabindex="0" aria-label="Stage 3: interactive rejection">
+    <title data-node-tooltip="true">Stage 3: interactive rejection — Further past threshold: new interactive requests are rejected with CapacityLimitExceeded.</title>
+    <rect x="624" y="364" width="532" height="78" rx="8" fill="#FFF7ED" stroke="#EA580C" stroke-width="1.4"/>
+    <rect x="636" y="374" width="84" height="20" rx="4" fill="#EA580C"/>
+    <text x="678" y="388" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">STAGE 3</text>
+    <text x="730" y="388" font-size="10.5" font-weight="800" fill="#C2410C">Interactive Rejection (CapacityLimitExceeded)</text>
+    <text x="636" y="412" font-size="8.5" fill="#9A3412">• Future usage consumed: <tspan font-weight="700">60 minutes to 24 hours</tspan>.</text>
+    <text x="636" y="426" font-size="8.5" fill="#9A3412">• New interactive requests rejected outright. In-flight queries run to completion.</text>
+  </g>
+
+  <line x1="890" y1="442" x2="890" y2="454" stroke="#DC2626" stroke-width="1.8" marker-end="url(#ct-arr-red)"/>
+
+  <!-- Node 9: stage-reject-all -->
+  <g data-node-id="stage-reject-all" role="group" tabindex="0" aria-label="Stage 4: background rejection too">
+    <title data-node-tooltip="true">Stage 4: background rejection too — Worst stage: background operations are rejected as well, in addition to interactive ones.</title>
+    <rect x="624" y="456" width="532" height="82" rx="8" fill="#FEF2F2" stroke="#DC2626" stroke-width="1.6"/>
+    <rect x="636" y="466" width="84" height="20" rx="4" fill="#DC2626"/>
+    <text x="678" y="480" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">STAGE 4</text>
+    <text x="730" y="480" font-size="10.5" font-weight="800" fill="#991B1B">Full Capacity Lockout (Background Rejection Too)</text>
+    <text x="636" y="504" font-size="8.5" fill="#B91C1C">• Future usage consumed: <tspan font-weight="700">&gt; 24 hours</tspan>.</text>
+    <text x="636" y="518" font-size="8.5" fill="#B91C1C">• Both interactive AND background jobs rejected. Hard capacity exhaustion.</text>
+    <text x="636" y="530" font-size="8" font-weight="700" fill="#991B1B">Surfaces error code 24801 / CapacityLimitExceeded to all callers</text>
+  </g>
+
+  <line x1="890" y1="538" x2="890" y2="552" stroke="#0D9488" stroke-width="1.8" marker-end="url(#ct-arr-teal)"/>
+
+  <!-- Node 10: carryforward-burndown -->
+  <g data-node-id="carryforward-burndown" role="group" tabindex="0" aria-label="Burndown and carryforward drain">
+    <title data-node-tooltip="true">Burndown and carryforward drain — Carryforward CUs recorded during throttling drain only at timepoints with idle capacity.</title>
+    <rect x="624" y="554" width="532" height="180" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4"/>
+    <text x="640" y="574" font-size="11" font-weight="800" fill="#0F766E">Carryforward Balance Burndown Mechanics</text>
+    <text x="640" y="592" font-size="8.5" fill="#115E59">• Throttling state is a running variable tracking accumulated future CU debt.</text>
+    <text x="640" y="606" font-size="8.5" fill="#115E59">• At each future 30s slice, unconsumed capacity burns down carryforward debt.</text>
+    <text x="640" y="620" font-size="8.5" fill="#115E59">• Capacity stays throttled until carryforward balance drains completely to zero.</text>
+
+    <!-- Compound Throttling Protection Note -->
+    <rect x="640" y="632" width="500" height="48" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="650" y="648" font-size="8.5" font-weight="700" fill="#0F766E">Compound Call Protection:</text>
+    <text x="650" y="664" font-size="8" fill="#115E59">Fan-out requests (Report ➔ Semantic Model ➔ OneLake) throttled at most ONCE per capacity.</text>
+
+    <text x="640" y="700" font-size="8" font-weight="700" fill="#0F766E">✓ In-flight operations always allowed to finish regardless of throttling stage</text>
+    <text x="640" y="718" font-size="8" fill="#64748B">Sourced from Microsoft Fabric Capacity Throttling &amp; Smoothing Architecture.</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- BOTTOM SECTION: CRITICAL TRAPS & WARNINGS (NODES 11 & 12)                 -->
+  <!-- ========================================================================= -->
+  <g transform="translate(24, 764)">
+    <!-- Node 11: autoscale-spark-warning -->
+    <g data-node-id="autoscale-spark-warning" role="group" tabindex="0" aria-label="Autoscale Billing for Spark bypasses this entirely">
+      <title data-node-tooltip="true">Autoscale Billing for Spark bypasses this entirely — When enabled, Spark drops bursting and smoothing for flat pay-as-you-go metering.</title>
+      <rect x="0" y="0" width="560" height="110" rx="8" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.4" filter="url(#ct-shadow)"/>
+      <rect x="12" y="10" width="130" height="20" rx="4" fill="#DC2626"/>
+      <text x="77" y="24" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">CRITICAL TRAP 1</text>
+      <text x="12" y="48" font-size="10.5" font-weight="800" fill="#991B1B">Autoscale Spark Bypasses Smoothing Entirely</text>
+      <text x="12" y="66" font-size="8.5" fill="#B91C1C">• Autoscale Billing moves Spark to Azure pay-as-you-go metering.</text>
+      <text x="12" y="80" font-size="8.5" fill="#B91C1C">• Drops 24h background smoothing protection; billed immediately per second.</text>
+      <text x="12" y="96" font-size="8" font-weight="700" fill="#15803D">Remedy: Size standard Spark pool before toggling autoscale billing.</text>
+    </g>
+
+    <!-- Node 12: private-link-warning -->
+    <g data-node-id="private-link-warning" role="group" tabindex="0" aria-label="Private links and Direct Lake compatibility">
+      <title data-node-tooltip="true">Private links and Direct Lake compatibility — Block Public Internet Access breaks Direct Lake regardless of throttling state, and private link propagation takes up to 24h.</title>
+      <rect x="580" y="0" width="572" height="110" rx="8" fill="#FFFBEB" stroke="#FDE047" stroke-width="1.4" filter="url(#ct-shadow)"/>
+      <rect x="592" y="10" width="130" height="20" rx="4" fill="#D97706"/>
+      <text x="657" y="24" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">CRITICAL TRAP 2</text>
+      <text x="592" y="48" font-size="10.5" font-weight="800" fill="#854D0E">Network Setting Breaks Direct Lake Independent of CU</text>
+      <text x="592" y="66" font-size="8.5" fill="#713F12">• Enabling "Block Public Internet Access" permanently severs Direct Lake models.</text>
+      <text x="592" y="80" font-size="8.5" fill="#713F12">• Adding a new capacity with private links requires up to 24h for DNS sync.</text>
+      <text x="592" y="96" font-size="8" font-weight="700" fill="#854D0E">Remedy: Verify tenant network routing rules before capacity rollout.</text>
+    </g>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1170" y="920" text-anchor="end" font-size="9" fill="#94A3B8">Fabric Atlas — Original Infographic, August 2026. Grounded in Microsoft Fabric Capacity Architecture &amp; Throttling Specs.</text>
 </svg>

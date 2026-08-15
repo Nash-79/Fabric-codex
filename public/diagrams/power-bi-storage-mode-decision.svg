@@ -1,276 +1,268 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 960" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="power-bi-storage-mode-decision-title power-bi-storage-mode-decision-desc" data-diagram-id="power-bi-storage-mode-decision">
-  <title id="power-bi-storage-mode-decision-title">Choosing a Power BI Semantic Model Storage Mode</title>
-  <desc id="power-bi-storage-mode-decision-desc">A decision tree. The root question asks what a table needs: a full copy loaded into memory routes to Import; always-current source-of-truth queries route to DirectQuery; and OneLake Delta data with no refresh routes to Direct Lake. Direct Lake then branches again into Direct Lake on OneLake, the default for most models, versus Direct Lake on SQL, needed only for SQL-endpoint security under delegated identity or when DirectQuery fallback is required. A warning node describes a real trap: basing a Direct Lake on SQL table on a SQL view forces every query against it into DirectQuery fallback without changing the model&apos;s displayed mode.</desc>
-  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-07.
-       Decision-tree / internals style, distinct from power-bi-consumption.svg (wide multi-lane
-       architecture flow, teal gradients) and semantic-model-storage-modes.svg (card comparison +
-       memory internals, capability_id "semantic-model"). This diagram is a top-down branching
-       decision tree with a tradeoff scorecard and a gotcha panel, blue/amber/violet palette.
-       Grounded in power-bi claims: Direct Lake definition & speed/freshness pairing (dlDef),
-       pre-Direct-Lake Import/DirectQuery tradeoff (preDL), lazy on-demand load caching (readPath),
-       OneLake page (dlOneLakePage), two flavors + selection criteria (flavorSplit, flavorPick),
-       creation defaults by identity mode (flavorDefault), DirectQuery-fallback-only-on-SQL and
-       never-fallback-on-OneLake (fallbackScope), Block Public Internet Access incompatibility
-       (networkBlock), framing/point-in-time freshness (framing), and V-Order/BinSize write-side
-       levers (vorder, binsize) carried over from Direct Lake internals claims already cited in
-       the power-bi article body. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 960" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="pbsm-title pbsm-desc" data-diagram-id="power-bi-storage-mode-decision">
+  <title id="pbsm-title">Choosing a Power BI Semantic Model Storage Mode</title>
+  <desc id="pbsm-desc">A decision tree diagram for selecting between Import, DirectQuery, and Direct Lake storage modes per table, detailing the Direct Lake flavor choice and the silent SQL view fallback trap.</desc>
+
   <defs>
-    <linearGradient id="hdrGrad2" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#1E2A5E"/>
-      <stop offset="0.55" stop-color="#2E4593"/>
-      <stop offset="1" stop-color="#5B6FCF"/>
+    <!-- Header Gradient -->
+    <linearGradient id="pbsm-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0B5E50"/>
+      <stop offset="50%" stop-color="#0F766E"/>
+      <stop offset="100%" stop-color="#0E4A68"/>
     </linearGradient>
-    <linearGradient id="importFill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#3E6FB8"/>
-      <stop offset="1" stop-color="#284A7D"/>
+
+    <!-- Card Gradients -->
+    <linearGradient id="pbsm-teal-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F0FDFA"/>
+      <stop offset="100%" stop-color="#CCFBF1"/>
     </linearGradient>
-    <linearGradient id="dqFill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#B7791F"/>
-      <stop offset="1" stop-color="#8A5A00"/>
+    <linearGradient id="pbsm-blue-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#EFF6FF"/>
+      <stop offset="100%" stop-color="#DBEAFE"/>
     </linearGradient>
-    <linearGradient id="dlFill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#7A4FC2"/>
-      <stop offset="1" stop-color="#4E2F8A"/>
+    <linearGradient id="pbsm-purple-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FAF5FF"/>
+      <stop offset="100%" stop-color="#F3E8FF"/>
     </linearGradient>
-    <marker id="dArrBlue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#2E4593"/>
+
+    <!-- Drop Shadow -->
+    <filter id="pbsm-shadow" x="-3%" y="-4%" width="106%" height="110%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="pbsm-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0D9488"/>
     </marker>
-    <marker id="dArrPurple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#7A4FC2"/>
+    <marker id="pbsm-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
     </marker>
-    <marker id="dArrGold" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#B7791F"/>
-    </marker>
-    <marker id="dArrGray" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#797775"/>
-    </marker>
-    <marker id="dArrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#C22E3D"/>
+    <marker id="pbsm-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7E22CE"/>
     </marker>
   </defs>
 
-  <rect width="1180" height="960" fill="#FFFFFF"/>
+  <!-- Background Canvas -->
+  <rect width="1200" height="960" fill="#FFFFFF"/>
 
-  <!-- ═══ HEADER ═══ -->
-  <rect x="0" y="0" width="1180" height="66" fill="url(#hdrGrad2)"/>
-  <text x="36" y="30" font-size="21" font-weight="650" fill="#FFFFFF">Choosing a Power BI Storage Mode: Import vs DirectQuery vs Direct Lake</text>
-  <text x="36" y="50" font-size="11.5" fill="#C7D2F5">A decision tree — start at freshness need, branch on data location and scale, land on the tradeoff that matches your report</text>
+  <!-- ========================================================================= -->
+  <!-- TOP BANNER (HERO TITLE)                                                   -->
+  <!-- ========================================================================= -->
+  <rect width="1200" height="64" fill="url(#pbsm-head)"/>
+  
+  <g data-official-icon="microsoft" data-icon-name="power_bi_report_32">
+    <g transform="translate(36, 16) scale(0.9)">
+      <rect width="36" height="36" rx="6" fill="#FFFFFF" fill-opacity="0.15"/>
+      <rect x="8" y="18" width="5" height="12" rx="1" fill="#FDE047"/>
+      <rect x="15" y="12" width="5" height="18" rx="1" fill="#FDE047"/>
+      <rect x="22" y="8" width="5" height="22" rx="1" fill="#FDE047"/>
+    </g>
+  </g>
 
-  <!-- ═══════════════════════════════════════════════
-       ROOT QUESTION
-  ═══════════════════════════════════════════════ -->
-  <rect x="420" y="86" width="340" height="58" rx="10" fill="#1E2A5E"/>
-  <text x="590" y="110" text-anchor="middle" font-size="12.5" font-weight="650" fill="#FFFFFF">How fresh must the report data be,</text>
-  <text x="590" y="128" text-anchor="middle" font-size="12.5" font-weight="650" fill="#FFFFFF">and where does the source data live?</text>
+  <text x="80" y="34" font-size="20" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">Choosing a Power BI Semantic Model Storage Mode</text>
+  <text x="80" y="52" font-size="11" fill="#CCFBF1">Per-Table Selection Framework · Import vs DirectQuery vs Direct Lake · OneLake vs SQL Flavor · Fallback Traps</text>
 
-  <!-- three branch lines down to gate row -->
-  <line x1="500" y1="144" x2="270" y2="182" stroke="#2E4593" stroke-width="2" marker-end="url(#dArrBlue)"/>
-  <line x1="590" y1="144" x2="590" y2="182" stroke="#B7791F" stroke-width="2" marker-end="url(#dArrGold)"/>
-  <line x1="680" y1="144" x2="930" y2="182" stroke="#7A4FC2" stroke-width="2" marker-end="url(#dArrPurple)"/>
-
-  <text x="330" y="168" font-size="9.5" fill="#2E4593">stale-tolerant, needs speed</text>
-  <text x="605" y="168" font-size="9.5" fill="#8A5A00">must always be current</text>
-  <text x="810" y="168" font-size="9.5" fill="#6B4A94">large Fabric lakehouse/warehouse, near-current OK</text>
-
-  <!-- ═══════════════════════════════════════════════
-       THREE GATE / LEAF CARDS  (y 188–360)
-  ═══════════════════════════════════════════════ -->
-  <text x="36" y="182" font-size="10.5" letter-spacing="1.4" fill="#8A8886">STORAGE MODE — RESOLVED CHOICE</text>
-
-  <!-- IMPORT -->
-  <rect x="66" y="190" width="332" height="172" rx="10" fill="#EAF1FA" stroke="#3E6FB8" stroke-width="1.5"/>
-  <rect x="66" y="190" width="332" height="32" rx="10" fill="url(#importFill)"/>
-  <rect x="66" y="208" width="332" height="14" fill="url(#importFill)"/>
-  <text x="232" y="212" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">IMPORT MODE</text>
-
-  <text x="84" y="242" font-size="10.3" font-weight="600" fill="#1B3A63">Mechanism</text>
-  <text x="84" y="257" font-size="9.8" fill="#2C4E77">Data copied into the model's in-memory</text>
-  <text x="84" y="270" font-size="9.8" fill="#2C4E77">VertiPaq cache — fast, but a snapshot.</text>
-
-  <text x="84" y="291" font-size="10.3" font-weight="600" fill="#1B3A63">Refresh cadence</text>
-  <text x="84" y="306" font-size="9.8" fill="#2C4E77">Scheduled or on-demand refresh</text>
-  <text x="84" y="319" font-size="9.8" fill="#2C4E77">required to see new source rows.</text>
-
-  <rect x="84" y="330" width="130" height="18" rx="4" fill="#3E6FB822"/>
-  <text x="149" y="343" text-anchor="middle" font-size="8.6" font-weight="600" fill="#1B3A63">Best: small/stable data</text>
-  <rect x="222" y="330" width="158" height="18" rx="4" fill="#3E6FB822"/>
-  <text x="301" y="343" text-anchor="middle" font-size="8.6" font-weight="600" fill="#1B3A63">Risk: stale between refreshes</text>
-
-  <!-- DIRECTQUERY -->
-  <rect x="422" y="190" width="332" height="172" rx="10" fill="#FCF3E3" stroke="#B7791F" stroke-width="1.5"/>
-  <rect x="422" y="190" width="332" height="32" rx="10" fill="url(#dqFill)"/>
-  <rect x="422" y="208" width="332" height="14" fill="url(#dqFill)"/>
-  <text x="588" y="212" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">DIRECTQUERY MODE</text>
-
-  <text x="440" y="242" font-size="10.3" font-weight="600" fill="#6B4700">Mechanism</text>
-  <text x="440" y="257" font-size="9.8" fill="#8A5A00">Every visual fires a live query against</text>
-  <text x="440" y="270" font-size="9.8" fill="#8A5A00">the source — no copy, always current.</text>
-
-  <text x="440" y="291" font-size="10.3" font-weight="600" fill="#6B4700">Refresh cadence</text>
-  <text x="440" y="306" font-size="9.8" fill="#8A5A00">None needed for freshness — but query</text>
-  <text x="440" y="319" font-size="9.8" fill="#8A5A00">latency lands on every report interaction.</text>
-
-  <rect x="440" y="330" width="140" height="18" rx="4" fill="#B7791F22"/>
-  <text x="510" y="343" text-anchor="middle" font-size="8.6" font-weight="600" fill="#6B4700">Best: source must be live</text>
-  <rect x="588" y="330" width="148" height="18" rx="4" fill="#B7791F22"/>
-  <text x="662" y="343" text-anchor="middle" font-size="8.6" font-weight="600" fill="#6B4700">Risk: slow on complex visuals</text>
-
-  <!-- DIRECT LAKE -->
-  <rect x="778" y="190" width="336" height="172" rx="10" fill="#F0E9FA" stroke="#7A4FC2" stroke-width="2"/>
-  <rect x="778" y="190" width="336" height="32" rx="10" fill="url(#dlFill)"/>
-  <rect x="778" y="208" width="336" height="14" fill="url(#dlFill)"/>
-  <text x="946" y="212" text-anchor="middle" font-size="13" font-weight="700" fill="#FFFFFF">DIRECT LAKE MODE</text>
-  <rect x="1050" y="194" width="56" height="14" rx="7" fill="#25FFD4"/>
-  <text x="1078" y="204" text-anchor="middle" font-size="7.5" font-weight="700" fill="#1E2A5E">Fabric-native</text>
-
-  <text x="796" y="242" font-size="10.3" font-weight="600" fill="#3E2569">Mechanism</text>
-  <text x="796" y="257" font-size="9.8" fill="#4E3384">Reads Delta tables straight from OneLake —</text>
-  <text x="796" y="270" font-size="9.8" fill="#4E3384">avoids both import copy and per-query SQL.</text>
-
-  <text x="796" y="291" font-size="10.3" font-weight="600" fill="#3E2569">Refresh cadence</text>
-  <text x="796" y="306" font-size="9.8" fill="#4E3384">Framing (metadata-only rebind) replaces</text>
-  <text x="796" y="319" font-size="9.8" fill="#4E3384">refresh — reflects the last successful frame.</text>
-
-  <rect x="796" y="330" width="200" height="18" rx="4" fill="#7A4FC222"/>
-  <text x="896" y="343" text-anchor="middle" font-size="8.6" font-weight="600" fill="#3E2569">Pairs import-mode speed with DirectQuery-like freshness</text>
-
-  <!-- ═══════════════════════════════════════════════
-       DIRECT LAKE SUB-DECISION (only Direct Lake branches further)
-  ═══════════════════════════════════════════════ -->
-  <line x1="946" y1="362" x2="946" y2="392" stroke="#7A4FC2" stroke-width="2" marker-end="url(#dArrPurple)"/>
-  <text x="960" y="382" font-size="9" fill="#6B4A94">chose Direct Lake — which flavor?</text>
-
-  <text x="36" y="400" font-size="10.5" letter-spacing="1.4" fill="#8A8886">SUB-DECISION — DIRECT LAKE ON ONELAKE vs DIRECT LAKE ON SQL</text>
-  <rect x="66" y="408" width="1048" height="222" rx="10" fill="#FAF8FE" stroke="#D9C7F0"/>
-
-  <!-- gate diamond-ish node -->
-  <rect x="86" y="426" width="230" height="80" rx="8" fill="#3B2A5A"/>
-  <text x="201" y="450" text-anchor="middle" font-size="11" font-weight="650" fill="#FFFFFF">How is the SQL analytics</text>
-  <text x="201" y="466" text-anchor="middle" font-size="11" font-weight="650" fill="#FFFFFF">endpoint identity configured?</text>
-  <text x="201" y="486" text-anchor="middle" font-size="8.5" fill="#EAD9FF">Desktop &amp; service default to</text>
-  <text x="201" y="498" text-anchor="middle" font-size="8.5" fill="#EAD9FF">OneLake; the endpoint page offers both</text>
-
-  <!-- branch to OneLake flavor -->
-  <line x1="316" y1="446" x2="356" y2="432" stroke="#1A7F5A" stroke-width="2" marker-end="url(#dArrGold)"/>
-  <text x="322" y="428" font-size="8.3" fill="#1A7F5A">user identity mode</text>
-  <rect x="356" y="418" width="366" height="94" rx="8" fill="#E9F7EF" stroke="#1A7F5A"/>
-  <text x="539" y="438" text-anchor="middle" font-size="11.3" font-weight="650" fill="#0F5C3F">Direct Lake on OneLake</text>
-  <text x="539" y="455" text-anchor="middle" font-size="8.9" fill="#1A7F5A">OneLake security · richer modeling features ·</text>
-  <text x="539" y="468" text-anchor="middle" font-size="8.9" fill="#1A7F5A">faster query performance · no SQL endpoint coupling</text>
-  <text x="539" y="486" text-anchor="middle" font-size="9.6" font-weight="700" fill="#0F5C3F">→ NEVER falls back to DirectQuery</text>
-  <text x="539" y="502" text-anchor="middle" font-size="8.3" fill="#1A7F5A">This is the mode Desktop and the service create by default</text>
-
-  <!-- branch to SQL flavor -->
-  <line x1="316" y1="486" x2="356" y2="530" stroke="#B7791F" stroke-width="2" marker-end="url(#dArrGold)"/>
-  <text x="322" y="524" font-size="8.3" fill="#B7791F">delegated identity, or endpoint</text>
-  <text x="322" y="535" font-size="8.3" fill="#B7791F">security / fallback required</text>
-  <rect x="356" y="520" width="366" height="94" rx="8" fill="#FCF3E3" stroke="#B7791F"/>
-  <text x="539" y="540" text-anchor="middle" font-size="11.3" font-weight="650" fill="#8A5A00">Direct Lake on SQL</text>
-  <text x="539" y="557" text-anchor="middle" font-size="8.9" fill="#8A5A00">Needed when SQL analytics endpoint security</text>
-  <text x="539" y="570" text-anchor="middle" font-size="8.9" fill="#8A5A00">rules apply under delegated identity, or when</text>
-  <text x="539" y="583" text-anchor="middle" font-size="8.9" fill="#8A5A00">DirectQuery fallback is required</text>
-  <text x="539" y="601" text-anchor="middle" font-size="9.6" font-weight="700" fill="#8A5A00">→ CAN fall back to DirectQuery (3 triggers →)</text>
-
-  <!-- fallback triggers box -->
-  <rect x="742" y="418" width="372" height="196" rx="8" fill="#FFFFFF" stroke="#B7791F" stroke-width="1.2"/>
-  <text x="758" y="438" font-size="10.3" font-weight="650" fill="#8A5A00">DirectQuery fallback triggers (SQL flavor only)</text>
-  <text x="758" y="458" font-size="9.3" fill="#6B4700">1. Query targets a SQL analytics endpoint view</text>
-  <text x="758" y="476" font-size="9.3" fill="#6B4700">2. Queried table has SQL-endpoint row-level security</text>
-  <text x="758" y="494" font-size="9.3" fill="#6B4700">3. The Delta table exceeds a capacity guardrail</text>
-  <line x1="758" y1="504" x2="1098" y2="504" stroke="#E8C9A8"/>
-  <text x="758" y="522" font-size="9.3" fill="#6B4700">Governed by the model's <tspan font-weight="650">DirectLakeBehavior</tspan> property</text>
-  <text x="758" y="538" font-size="9.3" fill="#6B4700">(no effect on Direct Lake on OneLake models)</text>
-  <text x="758" y="558" font-size="9.3" font-weight="650" fill="#C22E3D">On fallback: reads the SQL endpoint directly —</text>
-  <text x="758" y="574" font-size="9.3" fill="#9C2430">escapes framing point-in-time, returns latest data,</text>
-  <text x="758" y="590" font-size="9.3" fill="#9C2430">typically slower than a resident Direct Lake read</text>
-  <text x="758" y="608" font-size="8.3" fill="#797775">Antipattern: SQL view as a Direct Lake on SQL base table forces every query into fallback</text>
-
-  <!-- ═══════════════════════════════════════════════
-       TRADEOFF SCORECARD
-  ═══════════════════════════════════════════════ -->
-  <text x="36" y="654" font-size="10.5" letter-spacing="1.4" fill="#8A8886">TRADEOFF SCORECARD — WHAT EACH MODE OPTIMIZES FOR</text>
-  <rect x="66" y="662" width="1048" height="130" rx="10" fill="#F7F7FB" stroke="#DDD9E8"/>
-
-  <!-- axis labels -->
-  <text x="86" y="686" font-size="9.7" font-weight="650" fill="#3A3A3A">Dimension</text>
-  <text x="330" y="686" font-size="9.7" font-weight="650" fill="#1B3A63">Import</text>
-  <text x="590" y="686" font-size="9.7" font-weight="650" fill="#6B4700">DirectQuery</text>
-  <text x="880" y="686" font-size="9.7" font-weight="650" fill="#3E2569">Direct Lake</text>
-  <line x1="86" y1="694" x2="1094" y2="694" stroke="#DDD9E8"/>
-
-  <text x="86" y="714" font-size="9.3" fill="#3A3A3A">Query speed</text>
-  <text x="290" y="714" font-size="9.3" fill="#2C4E77">Fastest (in-memory)</text>
-  <text x="590" y="714" font-size="9.3" fill="#8A5A00">Slowest (source round-trip)</text>
-  <text x="850" y="714" font-size="9.3" fill="#4E3384">Import-like once warm</text>
-
-  <text x="86" y="735" font-size="9.3" fill="#3A3A3A">Data freshness</text>
-  <text x="290" y="735" font-size="9.3" fill="#2C4E77">Stale until next refresh</text>
-  <text x="590" y="735" font-size="9.3" fill="#8A5A00">Always current</text>
-  <text x="850" y="735" font-size="9.3" fill="#4E3384">Current as of last frame</text>
-
-  <text x="86" y="756" font-size="9.3" fill="#3A3A3A">Storage footprint</text>
-  <text x="290" y="756" font-size="9.3" fill="#2C4E77">Full copy in VertiPaq</text>
-  <text x="590" y="756" font-size="9.3" fill="#8A5A00">None — reads source live</text>
-  <text x="850" y="756" font-size="9.3" fill="#4E3384">No copy — lazy column load from OneLake</text>
-
-  <text x="86" y="777" font-size="9.3" fill="#3A3A3A">Operational lever</text>
-  <text x="290" y="777" font-size="9.3" fill="#2C4E77">Scheduled/on-demand refresh</text>
-  <text x="590" y="777" font-size="9.3" fill="#8A5A00">Source query performance tuning</text>
-  <text x="850" y="777" font-size="9.3" fill="#4E3384">Framing cadence (auto or manual)</text>
-
-  <!-- ═══════════════════════════════════════════════
-       GOTCHAS / GUARDRAILS PANEL
-  ═══════════════════════════════════════════════ -->
-  <text x="36" y="816" font-size="10.5" letter-spacing="1.4" fill="#8A8886">GUARDRAILS — WHAT BREAKS THE CHOICE</text>
-  <rect x="66" y="824" width="1048" height="106" rx="10" fill="#FDECEC" stroke="#C22E3D" stroke-width="1.2"/>
-
-  <rect x="84" y="838" width="330" height="78" rx="7" fill="#FFFFFF" stroke="#C22E3D"/>
-  <text x="100" y="856" font-size="9.8" font-weight="650" fill="#9C2430">Block Public Internet Access</text>
-  <text x="100" y="872" font-size="9" fill="#7A1F2A">Direct Lake connections fail when this tenant</text>
-  <text x="100" y="885" font-size="9" fill="#7A1F2A">setting is active — Direct Lake must route</text>
-  <text x="100" y="898" font-size="9" fill="#7A1F2A">through public endpoints, so it is incompatible</text>
-  <text x="100" y="909" font-size="9" fill="#7A1F2A">with the strictest network isolation posture.</text>
-
-  <rect x="426" y="838" width="330" height="78" rx="7" fill="#FFFFFF" stroke="#C22E3D"/>
-  <text x="442" y="856" font-size="9.8" font-weight="650" fill="#9C2430">Framing is a point-in-time snapshot</text>
-  <text x="442" y="872" font-size="9" fill="#7A1F2A">Queries reflect the last successful frame, not</text>
-  <text x="442" y="885" font-size="9" fill="#7A1F2A">the live table. Mid-ETL writes stay invisible</text>
-  <text x="442" y="898" font-size="9" fill="#7A1F2A">until the next frame — disable automatic</text>
-  <text x="442" y="909" font-size="9" fill="#7A1F2A">updates and frame deliberately during loads.</text>
-
-  <rect x="768" y="838" width="330" height="78" rx="7" fill="#FFFFFF" stroke="#C22E3D"/>
-  <text x="784" y="856" font-size="9.8" font-weight="650" fill="#9C2430">Write-side levers still matter</text>
-  <text x="784" y="872" font-size="9" fill="#7A1F2A">V-Order and a ~1 GB BinSize target speed</text>
-  <text x="784" y="885" font-size="9" fill="#7A1F2A">Direct Lake transcoding; low-cardinality</text>
-  <text x="784" y="898" font-size="9" fill="#7A1F2A">partitioning avoids the many-small-segments</text>
-  <text x="784" y="909" font-size="9" fill="#7A1F2A">penalty that slows first-touch queries.</text>
-
-  <!-- footer -->
-  <text x="1144" y="944" text-anchor="end" font-size="9.5" fill="#8A8886">Fabric Atlas — original diagram, July 2026. Not a Microsoft asset; distinct layout/palette from power-bi-consumption.svg and semantic-model-storage-modes.svg.</text>
-
-  <!-- Full-region keyboard and pointer targets; metadata comes from the evidence sidecar. -->
+  <!-- ========================================================================= -->
+  <!-- SECTION 1: ROOT DECISION (NODE 1)                                         -->
+  <!-- ========================================================================= -->
   <g data-node-id="mode-question" role="group" tabindex="0" aria-label="What does this table need?">
     <title data-node-tooltip="true">What does this table need? — Root question: pick a storage mode per table from freshness need and data location.</title>
-    <rect x="6.0" y="55.0" width="377.6" height="34.0" rx="6.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="24" y="78" width="1152" height="82" rx="8" fill="#F8FAFC" stroke="#0D9488" stroke-width="1.6" filter="url(#pbsm-shadow)"/>
+    <rect x="36" y="90" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="50" y="109" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">?</text>
+    <text x="74" y="99" font-size="11" font-weight="800" fill="#0F766E">Root Decision: What Does Each Table in the Model Require?</text>
+    <text x="74" y="113" font-size="8.5" fill="#475569">Evaluate by freshness requirements, data residency (OneLake Delta vs external), volume, and DAX calculation complexity:</text>
+
+    <!-- 3 Routing Options -->
+    <g transform="translate(74, 122)">
+      <rect x="0" y="0" width="340" height="26" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+      <text x="10" y="17" font-size="8" font-weight="700" fill="#1D4ED8">A. Periodic snapshot acceptable, needs fast DAX ➔ Import</text>
+
+      <rect x="360" y="0" width="340" height="26" rx="4" fill="#FAF5FF" stroke="#E9D5FF"/>
+      <text x="370" y="17" font-size="8" font-weight="700" fill="#7E22CE">B. Source must stay live / strict data compliance ➔ DirectQuery</text>
+
+      <rect x="720" y="0" width="340" height="26" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+      <text x="730" y="17" font-size="8" font-weight="700" fill="#0F766E">C. Data lives in OneLake Delta, zero refresh wanted ➔ Direct Lake</text>
+    </g>
   </g>
+
+  <!-- Connectors: Root -> 3 Lanes -->
+  <path d="M 210,160 L 210,184" fill="none" stroke="#2563EB" stroke-width="2" marker-end="url(#pbsm-arr-blue)"/>
+  <path d="M 600,160 L 600,184" fill="none" stroke="#7E22CE" stroke-width="2" marker-end="url(#pbsm-arr-purple)"/>
+  <path d="M 990,160 L 990,184" fill="none" stroke="#0D9488" stroke-width="2" marker-end="url(#pbsm-arr-teal)"/>
+
+  <!-- ========================================================================= -->
+  <!-- SECTION 2: THE THREE PRIMARY STORAGE MODES (NODES 2, 3, 4)                -->
+  <!-- ========================================================================= -->
+
+  <!-- LANE 1: IMPORT (NODE 2) -->
   <g data-node-id="import-mode" role="group" tabindex="0" aria-label="Import">
     <title data-node-tooltip="true">Import — Data copied into an in-memory VertiPaq model; needs a refresh schedule to stay current.</title>
-    <rect x="66.0" y="190.0" width="332.0" height="32.0" rx="10.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="24" y="184" width="368" height="420" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="1.6" filter="url(#pbsm-shadow)"/>
+    <rect x="24" y="184" width="368" height="30" rx="8" fill="#1D4ED8"/>
+    <text x="208" y="204" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">1. IMPORT (MANAGED VERTIPAQ COPY)</text>
+
+    <rect x="36" y="224" width="344" height="66" rx="6" fill="#EFF6FF" stroke="#93C5FD"/>
+    <text x="48" y="242" font-size="10" font-weight="800" fill="#1D4ED8">In-Memory Columnar VertiPaq</text>
+    <text x="48" y="258" font-size="8.5" fill="#1E3A8A">• Highest query throughput &amp; sub-second visual rendering</text>
+    <text x="48" y="272" font-size="8.5" fill="#1E3A8A">• 100% full DAX, time intelligence, and M expression support</text>
+
+    <rect x="36" y="298" width="344" height="106" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="48" y="316" font-size="8.5" font-weight="800" fill="#334155">Operational Profile &amp; Rules:</text>
+    <text x="48" y="332" font-size="8.5" fill="#475569">✓ <tspan font-weight="700">Freshness:</tspan> Point-in-time snapshot refreshed on cadence</text>
+    <text x="48" y="346" font-size="8.5" fill="#475569">✓ <tspan font-weight="700">Size Limits:</tspan> 1 GB default (expanded via Large Format)</text>
+    <text x="48" y="360" font-size="8.5" fill="#475569">✓ <tspan font-weight="700">Desktop Limit:</tspan> 10 GB fixed PBIX upload ceiling</text>
+    <text x="48" y="374" font-size="8.5" font-weight="700" fill="#15803D">✓ XMLA write tooling supported under Large Format</text>
+    <text x="48" y="388" font-size="8" fill="#1D4ED8">Standard: Best for complex dimensions &amp; small-to-mid facts</text>
+
+    <rect x="36" y="412" width="344" height="106" rx="6" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="48" y="430" font-size="8.5" font-weight="800" fill="#991B1B">Watch-outs &amp; Refresh Bottlenecks:</text>
+    <text x="48" y="446" font-size="8" fill="#B91C1C">❌ Data duplication into VertiPaq storage</text>
+    <text x="48" y="460" font-size="8" fill="#B91C1C">❌ Multi-hour refresh runtimes on massive transaction tables</text>
+    <text x="48" y="474" font-size="8" fill="#B91C1C">❌ OOM risk if refresh memory approaches 50% capacity SKU</text>
+    <text x="48" y="488" font-size="8" font-weight="700" fill="#DC2626">Trap: Authoring full Import models for billion-row lake facts</text>
+    <text x="48" y="502" font-size="8" fill="#7F1D1D">Use Direct Lake on OneLake to eliminate refresh entirely.</text>
+
+    <rect x="36" y="526" width="344" height="66" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+    <text x="48" y="544" font-size="8" font-weight="700" fill="#1D4ED8">Decision Fit:</text>
+    <text x="48" y="558" font-size="8" fill="#1E3A8A">Complex dimension tables with heavy Power Query cleansing,</text>
+    <text x="48" y="572" font-size="8" fill="#1E3A8A">small-to-medium facts (&lt;100M rows), and executive dashboards.</text>
   </g>
+
+  <!-- LANE 2: DIRECTQUERY (NODE 3) -->
   <g data-node-id="directquery-mode" role="group" tabindex="0" aria-label="DirectQuery">
     <title data-node-tooltip="true">DirectQuery — Every query forwards to the source, so results always reflect current data — at a latency cost.</title>
-    <rect x="422.0" y="190.0" width="332.0" height="32.0" rx="10.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="416" y="184" width="368" height="420" rx="8" fill="#FFFFFF" stroke="#7E22CE" stroke-width="1.6" filter="url(#pbsm-shadow)"/>
+    <rect x="416" y="184" width="368" height="30" rx="8" fill="#6B21A8"/>
+    <text x="600" y="204" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">2. DIRECTQUERY (LIVE SOURCE PUSHDOWN)</text>
+
+    <rect x="428" y="224" width="344" height="66" rx="6" fill="#FAF5FF" stroke="#E9D5FF"/>
+    <text x="440" y="242" font-size="10" font-weight="800" fill="#7E22CE">Zero Model Data Cache</text>
+    <text x="440" y="258" font-size="8.5" fill="#581C87">• Translates DAX into SQL on every visual interaction</text>
+    <text x="440" y="272" font-size="8.5" fill="#581C87">• Always 100% current source of truth with zero delay</text>
+
+    <rect x="428" y="298" width="344" height="106" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="440" y="316" font-size="8.5" font-weight="800" fill="#334155">Operational Profile &amp; Rules:</text>
+    <text x="440" y="332" font-size="8.5" fill="#475569">✓ <tspan font-weight="700">Freshness:</tspan> Real-time (sub-second source updates reflect live)</text>
+    <text x="440" y="346" font-size="8.5" fill="#475569">✓ <tspan font-weight="700">Security:</tspan> Inherits source RLS and database permissions</text>
+    <text x="440" y="360" font-size="8.5" fill="#475569">✓ <tspan font-weight="700">Gateway:</tspan> Heavy gateway utilization for on-prem DBs</text>
+    <text x="440" y="374" font-size="8.5" font-weight="700" fill="#15803D">✓ Zero scheduled refresh operations to monitor</text>
+    <text x="440" y="388" font-size="8" fill="#7E22CE">Standard: Best for high-frequency operational telemetry</text>
+
+    <rect x="428" y="412" width="344" height="106" rx="6" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="440" y="430" font-size="8.5" font-weight="800" fill="#991B1B">Watch-outs &amp; Performance Penalties:</text>
+    <text x="440" y="446" font-size="8" fill="#B91C1C">❌ Visual load times limited by source database responsiveness</text>
+    <text x="440" y="460" font-size="8" fill="#B91C1C">❌ Complex DAX formulas fail to fold into single SQL queries</text>
+    <text x="440" y="474" font-size="8" fill="#B91C1C">❌ Concurrent report users generate heavy load on source DB</text>
+    <text x="440" y="488" font-size="8" font-weight="700" fill="#DC2626">Trap: Underestimating Gateway capacity on busy dashboards</text>
+    <text x="440" y="502" font-size="8" fill="#7F1D1D">Configure aggregation tables to buffer high-frequency scans.</text>
+
+    <rect x="428" y="526" width="344" height="66" rx="4" fill="#FAF5FF" stroke="#E9D5FF"/>
+    <text x="440" y="544" font-size="8" font-weight="700" fill="#7E22CE">Decision Fit:</text>
+    <text x="440" y="558" font-size="8" fill="#581C87">Live transactional feeds requiring sub-minute freshness,</text>
+    <text x="440" y="572" font-size="8" fill="#581C87">strict data residency mandates, or systems with source RLS.</text>
   </g>
+
+  <!-- LANE 3: DIRECT LAKE (NODE 4) -->
   <g data-node-id="direct-lake-mode" role="group" tabindex="0" aria-label="Direct Lake">
     <title data-node-tooltip="true">Direct Lake — Reads Delta tables in OneLake directly, on demand, with no import copy and no refresh schedule.</title>
-    <rect x="742.0" y="418.0" width="372.0" height="196.0" rx="8.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+    <rect x="808" y="184" width="368" height="420" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6" filter="url(#pbsm-shadow)"/>
+    <rect x="808" y="184" width="368" height="30" rx="8" fill="#0F766E"/>
+    <text x="992" y="204" text-anchor="middle" font-size="11" font-weight="800" fill="#FFFFFF">3. DIRECT LAKE (ONELAKE ZERO-COPY)</text>
+
+    <rect x="820" y="224" width="344" height="66" rx="6" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="832" y="242" font-size="10" font-weight="800" fill="#0F766E">Direct Delta Lake Parquet Reads</text>
+    <text x="832" y="258" font-size="8.5" fill="#115E59">• Queries Delta tables in OneLake directly with 0 data copy</text>
+    <text x="832" y="272" font-size="8.5" fill="#115E59">• Lazy on-demand column loading on first query touch</text>
+
+    <rect x="820" y="298" width="344" height="106" rx="6" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="832" y="316" font-size="8.5" font-weight="800" fill="#334155">Operational Profile &amp; Rules:</text>
+    <text x="832" y="332" font-size="8.5" fill="#475569">✓ <tspan font-weight="700">Freshness:</tspan> Current as of framing (metadata rebind in seconds)</text>
+    <text x="832" y="346" font-size="8.5" fill="#475569">✓ <tspan font-weight="700">Throughput:</tspan> VertiPaq-like speed once columns reside in RAM</text>
+    <text x="832" y="360" font-size="8.5" fill="#475569">✓ <tspan font-weight="700">Composite Support:</tspan> Mixes Direct Lake facts with Import dims</text>
+    <text x="832" y="374" font-size="8.5" font-weight="700" fill="#15803D">✓ Zero data duplication or import refresh runtime overhead</text>
+    <text x="832" y="388" font-size="8" fill="#0F766E">Standard: Default mode for all Microsoft Fabric Lakehouses</text>
+
+    <rect x="820" y="412" width="344" height="106" rx="6" fill="#FFFBEB" stroke="#FDE047"/>
+    <text x="832" y="430" font-size="8.5" font-weight="800" fill="#854D0E">Flavor Sub-Decision Required:</text>
+    <text x="832" y="446" font-size="8" fill="#713F12">• Direct Lake forks into TWO distinct runtime flavors:</text>
+    <text x="832" y="460" font-size="8" fill="#713F12">  1. <tspan font-weight="700">Direct Lake on OneLake</tspan> (ADLS native connector, 0 fallback)</text>
+    <text x="832" y="474" font-size="8" fill="#713F12">  2. <tspan font-weight="700">Direct Lake on SQL</tspan> (SQL Analytics Endpoint mediated)</text>
+    <text x="832" y="488" font-size="8" font-weight="700" fill="#B45309">Trap: Direct Lake on SQL can silently fall back to DirectQuery!</text>
+    <text x="832" y="502" font-size="8" fill="#713F12">See Flavor Resolution below before publishing model.</text>
+
+    <rect x="820" y="526" width="344" height="66" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="832" y="544" font-size="8" font-weight="700" fill="#0F766E">Decision Fit:</text>
+    <text x="832" y="558" font-size="8" fill="#115E59">Multi-million and billion-row Lakehouse / Warehouse Gold</text>
+    <text x="832" y="572" font-size="8" fill="#115E59">Delta tables requiring high-speed enterprise analytical BI.</text>
   </g>
-  <g data-node-id="flavor-question" role="group" tabindex="0" aria-label="Which Direct Lake flavor?">
-    <title data-node-tooltip="true">Which Direct Lake flavor? — Sub-decision: Direct Lake on OneLake (default) vs Direct Lake on SQL (security/fallback needs).</title>
-    <rect x="882.8" y="364.0" width="154.4" height="34.0" rx="6.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
+
+  <!-- Flow Connector: Direct Lake -> Flavor Decision -->
+  <path d="M 992,604 L 992,628" fill="none" stroke="#0D9488" stroke-width="2.5" marker-end="url(#pbsm-arr-teal)"/>
+
+  <!-- ========================================================================= -->
+  <!-- SECTION 3: DIRECT LAKE FLAVORS & FALLBACK TRAP (NODES 5 & 6)              -->
+  <!-- ========================================================================= -->
+  <g transform="translate(24, 634)">
+    <!-- Node 5: flavor-question -->
+    <g data-node-id="flavor-question" role="group" tabindex="0" aria-label="Which Direct Lake flavor?">
+      <title data-node-tooltip="true">Which Direct Lake flavor? — Sub-decision: Direct Lake on OneLake (default) vs Direct Lake on SQL (security/fallback needs).</title>
+      <rect x="0" y="0" width="560" height="260" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6" filter="url(#pbsm-shadow)"/>
+      <rect x="12" y="12" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="26" y="31" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">5</text>
+      <text x="50" y="22" font-size="11" font-weight="800" fill="#0F766E">Direct Lake Flavor Resolution: OneLake vs SQL Endpoint</text>
+      <text x="50" y="36" font-size="8.5" fill="#64748B">Choose the runtime connector based on security model &amp; fallback requirements</text>
+
+      <!-- 2 Flavors Comparison Grid -->
+      <g transform="translate(12, 48)">
+        <rect x="0" y="0" width="260" height="96" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+        <text x="10" y="16" font-size="8.5" font-weight="800" fill="#0F766E">Direct Lake on OneLake (Default)</text>
+        <text x="10" y="30" font-size="8" fill="#115E59">• Uses ADLS storage connector</text>
+        <text x="10" y="44" font-size="8" fill="#115E59">• Direct OneLake RBAC security checks</text>
+        <text x="10" y="58" font-size="8" fill="#115E59">• Created by default in Desktop &amp; Service</text>
+        <text x="10" y="72" font-size="8" font-weight="700" fill="#15803D">✓ STRUCTURALLY CANNOT FALL BACK</text>
+        <text x="10" y="86" font-size="8" fill="#115E59">Fastest query path with 0 SQL check latency.</text>
+
+        <rect x="276" y="0" width="260" height="96" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+        <text x="286" y="16" font-size="8.5" font-weight="800" fill="#1D4ED8">Direct Lake on SQL Endpoint</text>
+        <text x="286" y="30" font-size="8" fill="#1E3A8A">• Uses SQL Server / SqlAnalytics connector</text>
+        <text x="286" y="44" font-size="8" fill="#1E3A8A">• Evaluates SQL RLS under delegated identity</text>
+        <text x="286" y="58" font-size="8" fill="#1E3A8A">• Created from SQL Analytics Endpoint page</text>
+        <text x="286" y="72" font-size="8" font-weight="700" fill="#B45309">⚠️ SUPPORTS TRANSPARENT DQ FALLBACK</text>
+        <text x="286" y="86" font-size="8" fill="#1E3A8A">Needed for SQL RLS / delegated identity.</text>
+      </g>
+
+      <rect x="12" y="152" width="536" height="94" rx="4" fill="#F8FAFC" stroke="#E2E8F0"/>
+      <text x="22" y="168" font-size="8" font-weight="700" fill="#0F766E">Selection Rule &amp; Best Practice:</text>
+      <text x="22" y="182" font-size="8" fill="#475569">• Default to <tspan font-weight="700">Direct Lake on OneLake</tspan> for maximum query performance and zero fallback risk.</text>
+      <text x="22" y="196" font-size="8" fill="#475569">• Use <tspan font-weight="700">Direct Lake on SQL</tspan> only when T-SQL Row-Level Security (RLS) under delegated identity is mandatory.</text>
+      <text x="22" y="210" font-size="8" fill="#475569">• Verify the connector in TMDL view (`AzureStorage` vs `SqlAnalytics`) to confirm model flavor.</text>
+    </g>
+
+    <!-- Connector: Node 5 -> Node 6 -->
+    <line x1="560" y1="130" x2="580" y2="130" stroke="#DC2626" stroke-width="2" marker-end="url(#pbsm-arr-purple)"/>
+
+    <!-- Node 6: fallback-trap -->
+    <g data-node-id="fallback-trap" role="group" tabindex="0" aria-label="Trap: SQL views force DirectQuery fallback">
+      <title data-node-tooltip="true">Trap: SQL views force DirectQuery fallback — A Direct Lake on SQL table built on a SQL view silently forces every query into DirectQuery fallback.</title>
+      <rect x="580" y="0" width="572" height="260" rx="8" fill="#FFFBEB" stroke="#FDE047" stroke-width="1.6" filter="url(#pbsm-shadow)"/>
+      <rect x="592" y="12" width="130" height="20" rx="4" fill="#DC2626"/>
+      <text x="657" y="26" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">CRITICAL MODELING TRAP</text>
+      <text x="592" y="48" font-size="11" font-weight="800" fill="#991B1B">SQL Views Silently Force DirectQuery Fallback</text>
+      <text x="592" y="62" font-size="8.5" fill="#713F12">Tables built on SQL views bypass Direct Lake storage entirely</text>
+
+      <rect x="592" y="74" width="548" height="74" rx="4" fill="#FEF2F2" stroke="#FCA5A5"/>
+      <text x="604" y="92" font-size="8.5" font-weight="800" fill="#991B1B">The Silent Performance Regression Mechanism:</text>
+      <text x="604" y="106" font-size="8" fill="#B91C1C">• Direct Lake cannot transcode virtual SQL views into OneLake Parquet memory pages.</text>
+      <text x="604" y="120" font-size="8" fill="#B91C1C">• Every report visual touching a view-based table falls back to live DirectQuery execution!</text>
+      <text x="604" y="134" font-size="8" font-weight="700" fill="#DC2626">The model still reports 'Direct Lake' in the Power BI Portal UI!</text>
+
+      <rect x="592" y="156" width="548" height="90" rx="4" fill="#FFFFFF" stroke="#FDE047"/>
+      <text x="602" y="172" font-size="8" font-weight="700" fill="#854D0E">Architectural Fix &amp; Design Rule:</text>
+      <text x="602" y="186" font-size="8" fill="#713F12">• <tspan font-weight="700">Fix:</tspan> Base Direct Lake model tables strictly on BASE DELTA TABLES, never SQL views.</text>
+      <text x="602" y="200" font-size="8" fill="#713F12">• Push view transformation logic upstream into materialized Gold Delta tables using Spark/SQL.</text>
+      <text x="602" y="214" font-size="8" font-weight="700" fill="#0F766E">Golden Standard: Direct Lake = Direct Delta Base Table Reads!</text>
+      <text x="602" y="228" font-size="8" fill="#115E59">Never scale capacity SKUs to fix slowness caused by an accidental view fallback.</text>
+    </g>
   </g>
-  <g data-node-id="fallback-trap" role="group" tabindex="0" aria-label="Trap: SQL views force DirectQuery fallback">
-    <title data-node-tooltip="true">Trap: SQL views force DirectQuery fallback — A Direct Lake on SQL table built on a SQL view silently forces every query into DirectQuery fallback.</title>
-    <rect x="66.0" y="408.0" width="1048.0" height="222.0" rx="10.0" fill="#FFFFFF" fill-opacity="0.001" stroke="none"/>
-  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1170" y="944" text-anchor="end" font-size="9" fill="#94A3B8">Fabric Atlas — Original Infographic, August 2026. Grounded in Microsoft Power BI &amp; Direct Lake Internals Specs.</text>
 </svg>

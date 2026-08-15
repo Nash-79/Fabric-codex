@@ -1,382 +1,199 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900" font-family="Segoe UI, Arial, sans-serif" role="img" aria-labelledby="investment-medallion-architecture-title investment-medallion-architecture-desc" data-diagram-id="investment-medallion-architecture">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 980" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="investment-medallion-architecture-title investment-medallion-architecture-desc" data-diagram-id="investment-medallion-architecture">
   <title id="investment-medallion-architecture-title">Investment Analytics Medallion: Three Ingestion Paths to Direct Lake</title>
-  <desc id="investment-medallion-architecture-desc">An architecture diagram with three ingestion paths on the left — file Copy, database Mirroring, and API pulls — all landing in one lakehouse that holds both bronze and silver schemas. A dbt project, orchestrated by Airflow inside Data Factory, reads silver and builds a star schema in a Fabric Warehouse as gold. Power BI reads gold through Direct Lake with no refresh. Two side rails run underneath: a SQL database control plane recording every run, and an Eventhouse capturing high-volume operational telemetry. A warning node calls out the blast-radius cost of merging bronze and silver into one lakehouse.</desc>
-  <!-- Fabric Atlas — ORIGINAL diagram, not a Microsoft asset. Investment analytics medallion
-       on Microsoft Fabric (v2, corrected shape): three ingestion paths (Data Factory Copy for
-       flat files, Mirroring with no pipeline for the operational DB, Data Factory REST/API
-       pipeline for market data + risk engine) converge into ONE lakehouse (lh_analytics) that
-       hosts both bronze and silver zones; PySpark conforms bronze->silver; dbt (dbt-fabric)
-       orchestrated by an Apache Airflow job in Data Factory builds wh_gold (Fabric Warehouse);
-       Direct Lake/Power BI consumes gold. Bottom rails: Azure Functions (external) -> eh_ops
-       (Eventhouse/KQL) for granular telemetry; sqldb_meta (Fabric SQL database) for pipeline
-       control tables + run audit, separate lane from telemetry.
-       Grounded in: lakehouse-overview.json, warehouse-overview.json, eventhouse-overview.json,
-       data-factory-overview.json, sql-database-fabric-overview.json, mirroring-overview.json,
-       dbt-fabric-warehouse.json, onelake-shortcuts.json. -->
+  <desc id="investment-medallion-architecture-desc">An architecture diagram with three ingestion paths on the left — file Copy, database Mirroring, and API pulls — landing in one lakehouse (bronze+silver), dbt-built warehouse gold, Direct Lake serving to Power BI, and control plane/telemetry rails.</desc>
+
   <defs>
-    <linearGradient id="srcGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#5b6b7c"/><stop offset="100%" stop-color="#3f4c5a"/>
+    <!-- Header Gradient -->
+    <linearGradient id="ima-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0F766E"/>
+      <stop offset="0.5" stop-color="#0D9488"/>
+      <stop offset="1" stop-color="#2563EB"/>
     </linearGradient>
-    <linearGradient id="dfGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#1f8fd6"/><stop offset="100%" stop-color="#1568a3"/>
-    </linearGradient>
-    <linearGradient id="mirGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0f9e78"/><stop offset="100%" stop-color="#0b7a5c"/>
-    </linearGradient>
-    <linearGradient id="bronzeGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#b06a3a"/><stop offset="100%" stop-color="#8a4f26"/>
-    </linearGradient>
-    <linearGradient id="silverGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#8a97a3"/><stop offset="100%" stop-color="#65727e"/>
-    </linearGradient>
-    <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#d9a916"/><stop offset="100%" stop-color="#b3860c"/>
-    </linearGradient>
-    <linearGradient id="dbtGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#ff7a3d"/><stop offset="100%" stop-color="#e35d1f"/>
-    </linearGradient>
-    <linearGradient id="pbiGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#e2b419"/><stop offset="100%" stop-color="#c99a0b"/>
-    </linearGradient>
-    <linearGradient id="opsGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#6d4dd6"/><stop offset="100%" stop-color="#4e34a8"/>
-    </linearGradient>
-    <linearGradient id="metaGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#0f8f6b"/><stop offset="100%" stop-color="#0b6e52"/>
-    </linearGradient>
-    <linearGradient id="azFuncGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#7c8894"/><stop offset="100%" stop-color="#59636e"/>
-    </linearGradient>
-    <linearGradient id="lakehouseGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fbfaf7"/><stop offset="100%" stop-color="#f2ede2"/>
-    </linearGradient>
-    <filter id="soft" x="-6%" y="-6%" width="112%" height="118%">
-      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#1a2330" flood-opacity="0.22"/>
+
+    <!-- Drop Shadows -->
+    <filter id="ima-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0F766E" flood-opacity="0.09"/>
     </filter>
-    <marker id="arrowBlue" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto">
-      <polygon points="0 0, 8 4, 0 8" fill="#1568a3"/>
+
+    <!-- Arrow Markers -->
+    <marker id="ima-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0D9488"/>
     </marker>
-    <marker id="arrowGreen" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto">
-      <polygon points="0 0, 8 4, 0 8" fill="#0b7a5c"/>
+    <marker id="ima-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
     </marker>
-    <marker id="arrowGrey" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto">
-      <polygon points="0 0, 8 4, 0 8" fill="#65727e"/>
+    <marker id="ima-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
     </marker>
-    <marker id="arrowGold" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto">
-      <polygon points="0 0, 8 4, 0 8" fill="#b3860c"/>
-    </marker>
-    <marker id="arrowOrange" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto">
-      <polygon points="0 0, 8 4, 0 8" fill="#e35d1f"/>
-    </marker>
-    <marker id="arrowPurple" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto">
-      <polygon points="0 0, 8 4, 0 8" fill="#4e34a8"/>
-    </marker>
-    <marker id="arrowSlate" markerWidth="9" markerHeight="9" refX="7.5" refY="4" orient="auto">
-      <polygon points="0 0, 8 4, 0 8" fill="#59636e"/>
-    </marker>
+
+    <!-- Official Microsoft Lakehouse Icon Gradients -->
+    <linearGradient id="ima-icon-a" x1="3.25" x2="19.75" y1="4.5" y2="28" gradientUnits="userSpaceOnUse"><stop stop-color="#22C55E"/><stop offset="1" stop-color="#059669"/></linearGradient>
+    <linearGradient id="ima-icon-b" x1="16.5" x2="28.5" y1="6" y2="26" gradientUnits="userSpaceOnUse"><stop stop-color="#38BDF8"/><stop offset="1" stop-color="#0284C7"/></linearGradient>
   </defs>
 
-  <rect width="1200" height="900" fill="#ffffff"/>
+  <!-- Canvas Base -->
+  <rect width="1200" height="980" fill="#F0FDFA"/>
 
-  <!-- Title -->
-  <rect x="0" y="0" width="1200" height="58" fill="#1b2430"/>
-  <text x="30" y="35" font-size="20" font-weight="700" fill="#ffffff">Investment Analytics Medallion on Microsoft Fabric</text>
-  <g data-node-id="blast-radius-warning" role="group" tabindex="0" aria-label="Blast-radius risk of merged bronze/silver">
-    <title data-node-tooltip="true">Blast-radius risk of merged bronze/silver — One shared Tables namespace means bronze and silver no longer have item-level isolation.</title>
-    <rect x="736.0" y="12.0" width="420" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="1170" y="35" font-size="11.5" fill="#b9c3cf" text-anchor="end">3 ingestion paths → one lakehouse (bronze+silver) → dbt-built Warehouse gold → Direct Lake</text>
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#ima-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="lakehouse_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#ima-icon-a)" d="M4 16.5L16 4l12 12.5v11a2.5 2.5 0 0 1-2.5 2.5h-19A2.5 2.5 0 0 1 4 27.5z"/>
+      <path fill="url(#ima-icon-b)" d="M16 11l9 9.5v7a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 7 27.5v-7z"/>
+      <path fill="#FFFFFF" opacity="0.8" d="M12 18h8v2h-8zm0 4h8v2h-8z"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Investment Analytics Medallion: 3 Ingestion Paths to Direct Lake</text>
+  <text x="40" y="64" font-size="12" fill="#CCFBF1">Tri-Path Ingestion (Copy, Mirroring, APIs) ➔ Lakehouse (Bronze/Silver) ➔ Warehouse Gold via dbt ➔ Direct Lake BI</text>
+
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#CCFBF1"/>
+    <circle cx="20" cy="15" r="5" fill="#0D9488"/><text x="32" y="19" fill="#134E4A" font-weight="600">Core Medallion Pipeline</text>
+    <circle cx="310" cy="15" r="5" fill="#2563EB"/><text x="322" y="19" fill="#1E3A8A" font-weight="600">Warehouse Gold &amp; Direct Lake</text>
+    <circle cx="680" cy="15" r="5" fill="#DC2626"/><text x="692" y="19" fill="#991B1B" font-weight="600">Blast-Radius Isolation Warning</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
   </g>
 
-  <!-- ================= MAIN FLOW LANE ================= -->
-  <text x="30" y="86" font-size="12.5" font-weight="700" fill="#3f4c5a" letter-spacing="0.4">MAIN DATA FLOW — LEFT TO RIGHT</text>
+  <!-- ========================================================================= -->
+  <!-- LANE 1: TRI-PATH INGESTION & MEDALLION CORE (NODES 1 TO 4)                -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="286" rx="14" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.4"/>
+  <rect x="56" y="156" width="410" height="20" rx="10" fill="#F0FDFA"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#0F766E" letter-spacing="1px">STAGE 1: TRI-MODAL INGESTION ➔ ONE LAKEHOUSE (BRONZE + SILVER)</text>
 
-  <!-- 1. Sources (3 distinct paths) -->
-  <text x="130" y="104" font-size="10.5" font-weight="700" fill="#3f4c5a" text-anchor="middle">SOURCES</text>
-  <rect x="20" y="112" width="220" height="270" rx="14" fill="#f4f6f8" stroke="#c7cfd7" stroke-width="1.5"/>
-
-  <!-- path 1: files -->
-  <rect x="34" y="126" width="192" height="66" rx="8" fill="url(#srcGrad)" filter="url(#soft)"/>
-  <text x="130" y="146" font-size="10.5" fill="#fff" text-anchor="middle" font-weight="700">Flat file exports</text>
-  <text x="130" y="159" font-size="9" fill="#dbe1e6" text-anchor="middle">Portfolio system CSV / Parquet</text>
-  <text x="130" y="172" font-size="8.5" fill="#dbe1e6" text-anchor="middle">drops (nightly batch, SFTP/blob)</text>
-  <text x="130" y="185" font-size="8" fill="#cfd8de" text-anchor="middle" font-style="italic">Path 1 · file landing</text>
-
-  <!-- path 2: mirroring source -->
-  <rect x="34" y="200" width="192" height="66" rx="8" fill="url(#srcGrad)" filter="url(#soft)"/>
-  <text x="130" y="220" font-size="10.5" fill="#fff" text-anchor="middle" font-weight="700">Portfolio / Transactions DB</text>
-  <text x="130" y="233" font-size="9" fill="#dbe1e6" text-anchor="middle">operational system of record</text>
-  <text x="130" y="246" font-size="8.5" fill="#dbe1e6" text-anchor="middle">(Azure SQL / SQL Server)</text>
-  <text x="130" y="259" font-size="8" fill="#cfd8de" text-anchor="middle" font-style="italic">Path 2 · mirrored source</text>
-
-  <!-- path 3: API sources -->
-  <rect x="34" y="274" width="192" height="66" rx="8" fill="url(#srcGrad)" filter="url(#soft)"/>
-  <text x="130" y="291" font-size="10.5" fill="#fff" text-anchor="middle" font-weight="700">Market data feed &amp;</text>
-  <text x="130" y="304" font-size="10.5" fill="#fff" text-anchor="middle" font-weight="700">Risk engine outputs</text>
-  <text x="130" y="317" font-size="8.5" fill="#dbe1e6" text-anchor="middle">prices, benchmarks, VaR — REST APIs</text>
-  <text x="130" y="330" font-size="8" fill="#cfd8de" text-anchor="middle" font-style="italic">Path 3 · API pull</text>
-
-  <!-- 2. Ingestion technologies (aligned per path) -->
-  <text x="356" y="104" font-size="10.5" font-weight="700" fill="#1568a3" text-anchor="middle">INGESTION</text>
-  <rect x="256" y="112" width="200" height="270" rx="14" fill="#eaf3fb" stroke="#9dc6e8" stroke-width="1.5"/>
-
-  <rect x="270" y="126" width="172" height="66" rx="8" fill="url(#dfGrad)" filter="url(#soft)"/>
-  <text x="356" y="146" font-size="10.2" fill="#fff" text-anchor="middle" font-weight="700">Data Factory</text>
-  <text x="356" y="159" font-size="9.8" fill="#fff" text-anchor="middle" font-weight="700">Copy activity</text>
-  <text x="356" y="173" font-size="8.4" fill="#dcecf9" text-anchor="middle">metadata-driven from</text>
-  <text x="356" y="184" font-size="8.4" fill="#dcecf9" text-anchor="middle" font-weight="700">sqldb_meta control tables ↓</text>
-
-  <rect x="270" y="200" width="172" height="66" rx="8" fill="url(#mirGrad)" filter="url(#soft)"/>
-  <text x="356" y="222" font-size="10.2" fill="#fff" text-anchor="middle" font-weight="700">Mirroring</text>
-  <text x="356" y="236" font-size="8.6" fill="#dcf3ea" text-anchor="middle">continuous replication —</text>
-  <text x="356" y="248" font-size="8.6" fill="#dcf3ea" text-anchor="middle" font-weight="700">no pipeline required</text>
-  <text x="356" y="260" font-size="8" fill="#c9ece0" text-anchor="middle">near-real-time Delta in OneLake</text>
-
-  <rect x="270" y="274" width="172" height="66" rx="8" fill="url(#dfGrad)" filter="url(#soft)" opacity="0.92"/>
-  <text x="356" y="294" font-size="10.2" fill="#fff" text-anchor="middle" font-weight="700">Data Factory</text>
-  <text x="356" y="307" font-size="9.8" fill="#fff" text-anchor="middle" font-weight="700">REST/API pipeline</text>
-  <text x="356" y="321" font-size="8.4" fill="#dcecf9" text-anchor="middle">scheduled calls to market data /</text>
-  <text x="356" y="332" font-size="8.4" fill="#dcecf9" text-anchor="middle">risk engine REST endpoints</text>
-
-  <!-- 3. ONE lakehouse: bronze + silver -->
-  <text x="700" y="104" font-size="10.5" font-weight="700" fill="#5a4a2e" text-anchor="middle">LH_ANALYTICS — ONE LAKEHOUSE, BOTH ZONES</text>
-  <rect x="486" y="112" width="428" height="270" rx="16" fill="url(#lakehouseGrad)" stroke="#c9b98f" stroke-width="2"/>
-  <text x="700" y="132" font-size="11.5" font-weight="700" fill="#5a4a2e" text-anchor="middle">lh_analytics (Lakehouse)</text>
-  <text x="700" y="146" font-size="8.6" fill="#7a6a44" text-anchor="middle">single Fabric item — bronze and silver are folders/schemas inside it, not separate lakehouses</text>
-
-  <!-- bronze zone -->
-  <rect x="500" y="156" width="196" height="212" rx="10" fill="url(#bronzeGrad)" filter="url(#soft)"/>
-  <text x="598" y="177" font-size="10.8" fill="#fff" text-anchor="middle" font-weight="700">BRONZE zone</text>
-  <text x="598" y="191" font-size="8.6" fill="#f6ddc9" text-anchor="middle">raw, append-only Delta</text>
-  <text x="598" y="205" font-size="8.6" fill="#f6ddc9" text-anchor="middle">one folder/schema per source</text>
-  <line x1="512" y1="214" x2="684" y2="214" stroke="#f6ddc9" stroke-width="1" opacity="0.5"/>
-  <text x="598" y="230" font-size="8.4" fill="#fff" text-anchor="middle">• files/ — from Copy activity</text>
-  <text x="598" y="244" font-size="8.4" fill="#fff" text-anchor="middle">• portfolio_mirror/ — shortcut</text>
-  <text x="598" y="256" font-size="8" fill="#f6ddc9" text-anchor="middle"> onto the mirrored DB replica</text>
-  <text x="598" y="270" font-size="8.4" fill="#fff" text-anchor="middle">• market_data/, risk/ — from</text>
-  <text x="598" y="282" font-size="8" fill="#f6ddc9" text-anchor="middle"> API pipeline</text>
-  <text x="598" y="305" font-size="8" fill="#f6ddc9" text-anchor="middle">no transformation —</text>
-  <text x="598" y="317" font-size="8" fill="#f6ddc9" text-anchor="middle">immutable audit trail</text>
-  <text x="598" y="340" font-size="7.6" fill="#ffe9d4" text-anchor="middle" font-weight="700">mirrored tables land here via a</text>
-  <text x="598" y="352" font-size="7.6" fill="#ffe9d4" text-anchor="middle" font-weight="700">OneLake shortcut — no data copy</text>
-
-  <!-- silver zone -->
-  <rect x="704" y="156" width="196" height="212" rx="10" fill="url(#silverGrad)" filter="url(#soft)"/>
-  <text x="802" y="177" font-size="10.8" fill="#fff" text-anchor="middle" font-weight="700">SILVER zone</text>
-  <text x="802" y="191" font-size="8.6" fill="#e5e9ec" text-anchor="middle">PySpark-conformed Delta</text>
-  <text x="802" y="205" font-size="8.6" fill="#e5e9ec" text-anchor="middle">validated, deduplicated</text>
-  <line x1="716" y1="214" x2="888" y2="214" stroke="#e5e9ec" stroke-width="1" opacity="0.5"/>
-  <text x="802" y="232" font-size="8.4" fill="#fff" text-anchor="middle">dedup, type-cast,</text>
-  <text x="802" y="245" font-size="8.4" fill="#fff" text-anchor="middle">conform to shared keys</text>
-  <text x="802" y="258" font-size="8.4" fill="#fff" text-anchor="middle">(instrument id, portfolio id,</text>
-  <text x="802" y="270" font-size="8.4" fill="#fff" text-anchor="middle">as-of date) across all 3 paths</text>
-  <text x="802" y="288" font-size="8" fill="#e5e9ec" text-anchor="middle">one PySpark notebook job reads</text>
-  <text x="802" y="300" font-size="8" fill="#e5e9ec" text-anchor="middle">every bronze folder (files, mirror</text>
-  <text x="802" y="312" font-size="8" fill="#e5e9ec" text-anchor="middle">shortcut, API) into common silver</text>
-  <text x="802" y="335" font-size="7.6" fill="#eef0f2" text-anchor="middle" font-weight="700">why: Spark-first cleansing,</text>
-  <text x="802" y="347" font-size="7.6" fill="#eef0f2" text-anchor="middle" font-weight="700">still Delta on OneLake</text>
-
-  <!-- internal arrow bronze -> silver -->
-  <path d="M698 262 L702 262" stroke="#3f4c5a" stroke-width="2.4" fill="none" marker-end="url(#arrowSlate)"/>
-  <text x="700" y="252" font-size="7.6" fill="#3f4c5a" text-anchor="middle" font-weight="700">PySpark</text>
-  <text x="700" y="273" font-size="7.6" fill="#3f4c5a" text-anchor="middle" font-weight="700">conform</text>
-
-  <!-- 4. Gold -->
-  <text x="1005" y="104" font-size="10.5" font-weight="700" fill="#8a6a08" text-anchor="middle">GOLD</text>
-  <rect x="924" y="112" width="150" height="270" rx="14" fill="#fbf4e0" stroke="#e6c65b" stroke-width="1.5"/>
-  <rect x="936" y="126" width="126" height="150" rx="8" fill="url(#goldGrad)" filter="url(#soft)"/>
-  <text x="999" y="149" font-size="10.5" fill="#fff" text-anchor="middle" font-weight="700">wh_gold</text>
-  <text x="999" y="163" font-size="8.8" fill="#fbeec4" text-anchor="middle">Fabric Warehouse</text>
-  <text x="999" y="182" font-size="8.6" fill="#fff" text-anchor="middle">T-SQL star schema</text>
-  <text x="999" y="195" font-size="8.6" fill="#fff" text-anchor="middle">built by dbt-fabric</text>
-  <text x="999" y="213" font-size="8" fill="#fbeec4" text-anchor="middle">dims + facts, tested,</text>
-  <text x="999" y="225" font-size="8" fill="#fbeec4" text-anchor="middle">incremental models</text>
-  <text x="999" y="237" font-size="8" fill="#fbeec4" text-anchor="middle">(see gold star-schema</text>
-  <text x="999" y="249" font-size="8" fill="#fbeec4" text-anchor="middle">diagram)</text>
-  <text x="999" y="266" font-size="7.6" fill="#fbeec4" text-anchor="middle" font-weight="700">multi-table ACID, T-SQL</text>
-
-  <rect x="936" y="284" width="126" height="26" rx="13" fill="url(#dbtGrad)" filter="url(#soft)"/>
-  <text x="999" y="301" font-size="9" fill="#fff" text-anchor="middle" font-weight="700">dbt-fabric adapter</text>
-
-  <rect x="936" y="316" width="126" height="52" rx="8" fill="#f3e6ae" stroke="#e9d27a" stroke-width="1.2"/>
-  <text x="999" y="334" font-size="8.4" fill="#5a4308" text-anchor="middle" font-weight="700">dbt run</text>
-  <text x="999" y="347" font-size="7.8" fill="#5a4308" text-anchor="middle">triggered by Airflow</text>
-  <text x="999" y="358" font-size="7.8" fill="#5a4308" text-anchor="middle">job in Data Factory ↓</text>
-
-  <!-- 5. Consumption -->
-  <text x="1120" y="104" font-size="10.5" font-weight="700" fill="#8a6a08" text-anchor="middle">CONSUME</text>
-  <rect x="1084" y="112" width="112" height="270" rx="14" fill="#fdf7df" stroke="#e9d27a" stroke-width="1.5"/>
-  <rect x="1094" y="126" width="92" height="80" rx="8" fill="url(#pbiGrad)" filter="url(#soft)"/>
-  <text x="1140" y="147" font-size="9.6" fill="#fff" text-anchor="middle" font-weight="700">Direct Lake</text>
-  <text x="1140" y="160" font-size="7.8" fill="#fff5da" text-anchor="middle">reads wh_gold</text>
-  <text x="1140" y="172" font-size="7.8" fill="#fff5da" text-anchor="middle">Delta straight from</text>
-  <text x="1140" y="184" font-size="7.8" fill="#fff5da" text-anchor="middle">OneLake — no import</text>
-  <text x="1140" y="196" font-size="7.4" fill="#fff5da" text-anchor="middle">no refresh lag</text>
-
-  <rect x="1094" y="214" width="92" height="70" rx="8" fill="#f3e6ae" stroke="#e9d27a" stroke-width="1.2"/>
-  <text x="1140" y="234" font-size="9.4" fill="#5a4308" text-anchor="middle" font-weight="700">Power BI</text>
-  <text x="1140" y="248" font-size="7.6" fill="#5a4308" text-anchor="middle">portfolio perf,</text>
-  <text x="1140" y="260" font-size="7.6" fill="#5a4308" text-anchor="middle">risk &amp; exposure</text>
-  <text x="1140" y="272" font-size="7.6" fill="#5a4308" text-anchor="middle">dashboards</text>
-
-  <!-- Flow arrows main lane: sources -> ingestion -->
-  <path d="M242 159 L254 159" stroke="#65727e" stroke-width="2.2" fill="none" marker-end="url(#arrowGrey)"/>
-  <path d="M242 233 L254 233" stroke="#65727e" stroke-width="2.2" fill="none" marker-end="url(#arrowGrey)"/>
-  <path d="M242 307 L254 307" stroke="#65727e" stroke-width="2.2" fill="none" marker-end="url(#arrowGrey)"/>
-
-  <!-- ingestion -> bronze (all converge into bronze zone) -->
-  <path d="M446 159 C468 159, 480 200, 500 220" stroke="#1568a3" stroke-width="2.2" fill="none" marker-end="url(#arrowBlue)"/>
-  <path d="M446 233 C468 233, 480 233, 498 233" stroke="#0b7a5c" stroke-width="2.4" fill="none" marker-end="url(#arrowGreen)"/>
-  <path d="M446 307 C468 307, 480 265, 500 245" stroke="#1568a3" stroke-width="2.2" fill="none" marker-end="url(#arrowBlue)"/>
-  <text x="472" y="150" font-size="7.6" fill="#1568a3" text-anchor="middle" font-weight="700">raw copy</text>
-  <text x="465" y="226" font-size="7.6" fill="#0b7a5c" text-anchor="middle" font-weight="700">shortcut</text>
-  <text x="472" y="298" font-size="7.6" fill="#1568a3" text-anchor="middle" font-weight="700">raw pull</text>
-
-  <!-- lakehouse -> gold -->
-  <path d="M916 247 L922 247" stroke="#3f4c5a" stroke-width="2.4" fill="none" marker-end="url(#arrowSlate)"/>
-  <text x="919" y="238" font-size="7.6" fill="#3f4c5a" text-anchor="middle" font-weight="700">dbt models</text>
-  <text x="919" y="260" font-size="7.6" fill="#3f4c5a" text-anchor="middle" font-weight="700">read silver</text>
-
-  <!-- gold -> consumption -->
-  <path d="M1064 165 L1082 165" stroke="#b3860c" stroke-width="2.4" fill="none" marker-end="url(#arrowGold)"/>
-  <text x="1073" y="156" font-size="7.6" fill="#b3860c" text-anchor="middle" font-weight="700">Direct Lake</text>
-
-  <!-- dbt/airflow orchestration arc from Data Factory ingestion box to gold's dbt-run badge -->
-  <path d="M356 342 C356 420, 999 420, 999 372" stroke="#e35d1f" stroke-width="2" fill="none" stroke-dasharray="5 4" marker-end="url(#arrowOrange)"/>
-  <text x="678" y="433" font-size="9" fill="#e35d1f" text-anchor="middle" font-weight="700">Apache Airflow job (in Data Factory) triggers dbt run → builds/tests wh_gold models</text>
-
-  <!-- ================= BOTTOM RAIL: TELEMETRY + METADATA ================= -->
-  <rect x="20" y="470" width="1160" height="270" rx="16" fill="#f7f5fc" stroke="#d7cdf0" stroke-width="1.5"/>
-  <g data-node-id="telemetry-eventhouse" role="group" tabindex="0" aria-label="eh_ops Eventhouse (operational telemetry)">
-    <title data-node-tooltip="true">eh_ops Eventhouse (operational telemetry) — High-volume, per-event telemetry from ingestion functions lands in an Eventhouse, not the control-plane database.</title>
-    <rect x="26.0" y="470.2" width="420" height="33" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="40" y="494" font-size="12.5" font-weight="700" fill="#4e34a8" letter-spacing="0.4">SIDE RAILS — TELEMETRY &amp; OPERATIONAL METADATA (separate lanes from the analytics data path above)</text>
-  </g>
-
-  <!-- Azure Functions (external) -->
-  <rect x="44" y="512" width="180" height="100" rx="10" fill="url(#azFuncGrad)" filter="url(#soft)" stroke="#3f4750" stroke-width="1.5" stroke-dasharray="4 3"/>
-  <text x="134" y="534" font-size="10.8" fill="#fff" text-anchor="middle" font-weight="700">Azure Functions</text>
-  <text x="134" y="549" font-size="8.6" fill="#e4e8eb" text-anchor="middle">(outside Fabric —</text>
-  <text x="134" y="561" font-size="8.6" fill="#e4e8eb" text-anchor="middle">external Azure service)</text>
-  <text x="134" y="579" font-size="8.4" fill="#e4e8eb" text-anchor="middle">pushes granular pipeline</text>
-  <text x="134" y="591" font-size="8.4" fill="#e4e8eb" text-anchor="middle">log / telemetry events</text>
-  <text x="134" y="603" font-size="8.4" fill="#e4e8eb" text-anchor="middle">on every run/activity</text>
-
-  <!-- Eventhouse -->
-  <rect x="256" y="512" width="220" height="170" rx="10" fill="url(#opsGrad)" filter="url(#soft)"/>
-  <text x="366" y="536" font-size="11.5" fill="#fff" text-anchor="middle" font-weight="700">eh_ops</text>
-  <text x="366" y="550" font-size="9" fill="#e2dbf7" text-anchor="middle">Eventhouse (KQL database)</text>
-  <text x="366" y="572" font-size="8.8" fill="#fff" text-anchor="middle">streaming ingest of granular</text>
-  <text x="366" y="584" font-size="8.8" fill="#fff" text-anchor="middle">events/logs from Azure Functions</text>
-  <text x="366" y="602" font-size="8.2" fill="#e2dbf7" text-anchor="middle">KQL queries for log analytics,</text>
-  <text x="366" y="614" font-size="8.2" fill="#e2dbf7" text-anchor="middle">anomaly detection, SLA tracking</text>
-  <text x="366" y="636" font-size="8" fill="#fff" text-anchor="middle" font-weight="700">why: built for high-volume,</text>
-  <text x="366" y="648" font-size="8" fill="#fff" text-anchor="middle" font-weight="700">time-series streaming telemetry</text>
-  <text x="366" y="668" font-size="7.6" fill="#e2dbf7" text-anchor="middle">optionally OneLake-available as Delta</text>
-
-  <!-- SQL DB meta -->
-  <rect x="496" y="512" width="240" height="170" rx="10" fill="url(#metaGrad)" filter="url(#soft)"/>
-  <text x="616" y="536" font-size="11.5" fill="#fff" text-anchor="middle" font-weight="700">sqldb_meta</text>
-  <text x="616" y="550" font-size="9" fill="#d9f0e6" text-anchor="middle">SQL database (Fabric)</text>
-  <text x="616" y="572" font-size="8.8" fill="#fff" text-anchor="middle">Control-table lane:</text>
-  <text x="616" y="584" font-size="8.6" fill="#fff" text-anchor="middle">entity registry, load type,</text>
-  <text x="616" y="596" font-size="8.6" fill="#fff" text-anchor="middle">watermarks, schedule config —</text>
-  <text x="616" y="608" font-size="8.6" fill="#fff" text-anchor="middle">drives Data Factory pipelines</text>
-  <text x="616" y="626" font-size="8.4" fill="#d9f0e6" text-anchor="middle">Audit lane (separate): pipeline</text>
-  <text x="616" y="638" font-size="8.4" fill="#d9f0e6" text-anchor="middle">run history + high-level telemetry</text>
-  <text x="616" y="658" font-size="8" fill="#fff" text-anchor="middle" font-weight="700">why: transactional OLTP store for</text>
-  <text x="616" y="670" font-size="8" fill="#fff" text-anchor="middle" font-weight="700">operational state, not raw events</text>
-
-  <!-- OneLake note from sqldb_meta -->
-  <rect x="756" y="512" width="200" height="170" rx="10" fill="#eef0f2" stroke="#b7c0c9" stroke-width="1.5"/>
-  <text x="856" y="534" font-size="10.4" font-weight="700" fill="#3f4c5a" text-anchor="middle">Also queryable via OneLake</text>
-  <text x="856" y="554" font-size="8.4" fill="#4b5765" text-anchor="middle">sqldb_meta auto-replicates to</text>
-  <text x="856" y="566" font-size="8.4" fill="#4b5765" text-anchor="middle">OneLake Delta (near-real-time),</text>
-  <text x="856" y="578" font-size="8.4" fill="#4b5765" text-anchor="middle">so ops dashboards can join run</text>
-  <text x="856" y="590" font-size="8.4" fill="#4b5765" text-anchor="middle">audit + control-table state via its</text>
-  <text x="856" y="602" font-size="8.4" fill="#4b5765" text-anchor="middle">SQL analytics endpoint — no</text>
-  <text x="856" y="614" font-size="8.4" fill="#4b5765" text-anchor="middle">separate export step</text>
-  <text x="856" y="636" font-size="7.8" fill="#3f4c5a" text-anchor="middle" font-weight="700">same OneLake substrate as</text>
-  <text x="856" y="648" font-size="7.8" fill="#3f4c5a" text-anchor="middle" font-weight="700">bronze/silver/gold Delta tables</text>
-
-  <!-- Ops dashboard -->
-  <rect x="976" y="512" width="204" height="170" rx="10" fill="#f3e6ae" stroke="#e9d27a" stroke-width="1.2"/>
-  <text x="1078" y="534" font-size="10.4" font-weight="700" fill="#5a4308" text-anchor="middle">Pipeline Ops Dashboard</text>
-  <text x="1078" y="556" font-size="8.4" fill="#5a4308" text-anchor="middle">Power BI / KQL queryset over</text>
-  <text x="1078" y="568" font-size="8.4" fill="#5a4308" text-anchor="middle">eh_ops (event-level) blended with</text>
-  <text x="1078" y="580" font-size="8.4" fill="#5a4308" text-anchor="middle">sqldb_meta (run-level audit)</text>
-  <text x="1078" y="598" font-size="8.2" fill="#5a4308" text-anchor="middle">used for SLA and freshness</text>
-  <text x="1078" y="610" font-size="8.2" fill="#5a4308" text-anchor="middle">monitoring of the medallion flow</text>
-  <text x="1078" y="632" font-size="7.8" fill="#5a4308" text-anchor="middle" font-weight="700">consumed by data engineering,</text>
-  <text x="1078" y="644" font-size="7.8" fill="#5a4308" text-anchor="middle" font-weight="700">not by investment analysts</text>
-
-  <!-- Rail arrows -->
-  <path d="M226 561 L254 561" stroke="#4e34a8" stroke-width="2.2" fill="none" marker-end="url(#arrowPurple)"/>
-  <path d="M478 594 L494 594" stroke="#0b6e52" stroke-width="2" fill="none" marker-end="url(#arrowGold)" opacity="0.7"/>
-  <path d="M738 590 L754 590" stroke="#0b6e52" stroke-width="2.2" fill="none" marker-end="url(#arrowGreen)"/>
-  <path d="M958 594 L974 594" stroke="#5a4308" stroke-width="2" fill="none" marker-end="url(#arrowGold)"/>
-  <path d="M366 512 L366 484" stroke="#4e34a8" stroke-width="1.6" fill="none" marker-end="url(#arrowPurple)" stroke-dasharray="3 3"/>
-  <text x="366" y="475" font-size="7.4" fill="#4e34a8" text-anchor="middle" font-weight="700">shared engine capacity, separate lane</text>
-
-  <!-- dashed link from Data Factory ingestion block down to sqldb_meta control-table + audit -->
-  <path d="M356 342 C356 400, 490 400, 590 510" stroke="#0b6e52" stroke-width="1.8" fill="none" stroke-dasharray="4 3" marker-end="url(#arrowGreen)" opacity="0.85"/>
-  <text x="410" y="463" font-size="8" fill="#0b6e52" font-weight="700">reads control tables · writes run audit + telemetry</text>
-
-  <path d="M134 340 C160 400, 150 460, 134 510" stroke="#59636e" stroke-width="1.8" fill="none" stroke-dasharray="4 3" marker-end="url(#arrowSlate)" opacity="0.7"/>
-  <text x="145" y="463" font-size="7.4" fill="#59636e" font-weight="700" text-anchor="middle">activity events</text>
-
-  <!-- Legend -->
-  <rect x="20" y="756" width="1160" height="128" rx="12" fill="#f4f6f8" stroke="#c7cfd7" stroke-width="1.2"/>
-  <text x="40" y="778" font-size="11.5" font-weight="700" fill="#3f4c5a">LEGEND — what handles each hop, and why</text>
-
-  <circle cx="46" cy="796" r="6" fill="url(#dfGrad)"/>
+  <!-- Node 1: file-copy-pipeline -->
   <g data-node-id="file-copy-pipeline" role="group" tabindex="0" aria-label="Data Factory Copy (custodian files)">
     <title data-node-tooltip="true">Data Factory Copy (custodian files) — A metadata-driven pipeline copies custodian/administrator files into bronze.</title>
-    <rect x="44.0" y="777.0" width="420" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="58" y="800" font-size="9" fill="#3f4c5a">Data Factory Copy activity = flat-file ingestion, metadata-driven from sqldb_meta control tables (entity list, watermark, schedule)</text>
+    <rect x="56" y="184" width="180" height="232" rx="10" fill="#F0FDFA" stroke="#5EEAD4" stroke-width="1.6" filter="url(#ima-shadow)"/>
+    <rect x="68" y="194" width="90" height="16" rx="8" fill="#CCFBF1"/><text x="113" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">PATH 1 · FILES</text>
+    <text x="68" y="228" font-size="12" font-weight="700" fill="#134E4A">1 · Custodian Files</text>
+    <text x="68" y="250" font-size="9" fill="#115E59">• Flat file positions</text>
+    <text x="68" y="266" font-size="9" fill="#115E59">• Nightly SFTP / blob</text>
+    <text x="68" y="282" font-size="9" fill="#115E59">• Pipeline Copy activity</text>
+    <text x="68" y="298" font-size="9" fill="#115E59">• Driven by metadata</text>
+    <text x="68" y="324" font-size="8.5" font-weight="700" fill="#0F766E">Lands in bronze_files/</text>
+    <rect x="174" y="194" width="50" height="14" rx="7" fill="#CCFBF1"/><text x="199" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">FACT</text>
   </g>
 
-  <circle cx="46" cy="814" r="6" fill="url(#mirGrad)"/>
+  <!-- Node 2: mirroring-portfolio-db -->
   <g data-node-id="mirroring-portfolio-db" role="group" tabindex="0" aria-label="Mirroring (portfolio/transactions DB)">
     <title data-node-tooltip="true">Mirroring (portfolio/transactions DB) — The operational portfolio/transactions database replicates continuously into OneLake, no pipeline required.</title>
-    <rect x="44.0" y="795.0" width="420" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="58" y="818" font-size="9" fill="#3f4c5a">Mirroring = continuous, near-real-time replica of the operational DB straight into OneLake Delta — no pipeline authored or run</text>
+    <rect x="248" y="184" width="180" height="232" rx="10" fill="#F0FDFA" stroke="#5EEAD4" stroke-width="1.6" filter="url(#ima-shadow)"/>
+    <rect x="260" y="194" width="100" height="16" rx="8" fill="#CCFBF1"/><text x="310" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">PATH 2 · MIRROR</text>
+    <text x="260" y="228" font-size="12" font-weight="700" fill="#134E4A">2 · Operational DB</text>
+    <text x="260" y="250" font-size="9" fill="#115E59">• Portfolio &amp; trade DB</text>
+    <text x="260" y="266" font-size="9" fill="#115E59">• Live CDC replication</text>
+    <text x="260" y="282" font-size="9" fill="#115E59">• Zero ETL pipeline</text>
+    <text x="260" y="298" font-size="9" fill="#115E59">• Near-real-time Delta</text>
+    <text x="260" y="324" font-size="8.5" font-weight="700" fill="#0F766E">Shortcut into bronze</text>
+    <rect x="366" y="194" width="50" height="14" rx="7" fill="#CCFBF1"/><text x="391" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">FACT</text>
   </g>
 
-  <circle cx="46" cy="832" r="6" fill="#1568a3"/>
+  <!-- Node 3: api-pull-pipeline -->
   <g data-node-id="api-pull-pipeline" role="group" tabindex="0" aria-label="Data Factory API pulls (market data, risk engine)">
     <title data-node-tooltip="true">Data Factory API pulls (market data, risk engine) — A second metadata-driven pipeline polls market-data and risk-engine REST APIs on a schedule.</title>
-    <rect x="44.0" y="813.0" width="420" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="58" y="836" font-size="9" fill="#3f4c5a">Data Factory REST/API pipeline = scheduled pulls from market data / risk engine HTTP endpoints, same control-table pattern</text>
+    <rect x="440" y="184" width="180" height="232" rx="10" fill="#F0FDFA" stroke="#5EEAD4" stroke-width="1.6" filter="url(#ima-shadow)"/>
+    <rect x="452" y="194" width="90" height="16" rx="8" fill="#CCFBF1"/><text x="497" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">PATH 3 · APIS</text>
+    <text x="452" y="228" font-size="12" font-weight="700" fill="#134E4A">3 · Market Data &amp; VaR</text>
+    <text x="452" y="250" font-size="9" fill="#115E59">• Pricing &amp; risk REST APIs</text>
+    <text x="452" y="266" font-size="9" fill="#115E59">• Scheduled HTTP poll</text>
+    <text x="452" y="282" font-size="9" fill="#115E59">• Token auth via linked svc</text>
+    <text x="452" y="298" font-size="9" fill="#115E59">• Pagination &amp; watermark</text>
+    <text x="452" y="324" font-size="8.5" font-weight="700" fill="#0F766E">Lands in bronze_api/</text>
+    <rect x="558" y="194" width="50" height="14" rx="7" fill="#CCFBF1"/><text x="583" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">FACT</text>
   </g>
 
-  <circle cx="46" cy="850" r="6" fill="url(#bronzeGrad)"/>
+  <!-- Node 4: lakehouse-bronze-silver -->
   <g data-node-id="lakehouse-bronze-silver" role="group" tabindex="0" aria-label="Lakehouse (bronze + silver schemas)">
     <title data-node-tooltip="true">Lakehouse (bronze + silver schemas) — One lakehouse holds both bronze and silver as schemas, all files and the mirrored replica landing here.</title>
-    <rect x="44.0" y="831.0" width="420" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="58" y="854" font-size="9" fill="#3f4c5a">lh_analytics = ONE lakehouse hosting both bronze (raw append-only Delta, per-source folders) and silver (PySpark-conformed) zones</text>
+    <rect x="632" y="184" width="512" height="232" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.8" filter="url(#ima-shadow)"/>
+    <rect x="644" y="194" width="130" height="16" rx="8" fill="#DBEAFE"/><text x="709" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">UNIFIED LAKEHOUSE</text>
+    <text x="644" y="228" font-size="13" font-weight="700" fill="#1E3A8A">4 · lh_analytics: Single Lakehouse for Bronze &amp; Silver</text>
+    <text x="644" y="252" font-size="9.5" fill="#1E40AF">• <tspan font-weight="700">Bronze Schemas:</tspan> Raw immutable files, mirrored DB shortcut, and API responses</text>
+    <text x="644" y="272" font-size="9.5" fill="#1E40AF">• <tspan font-weight="700">Spark Conforming Pass:</tspan> Deduplicates, standardizes keys (instrument, portfolio, date)</text>
+    <text x="644" y="292" font-size="9.5" fill="#1E40AF">• <tspan font-weight="700">Silver Schemas:</tspan> Cleaned, conformed Delta tables ready for dimensional modeling</text>
+    <text x="644" y="318" font-size="8.5" font-weight="700" fill="#1D4ED8">Single item simplifies metastore, endpoints, and security management</text>
+    <rect x="1080" y="194" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="1106" y="204" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">FACT</text>
   </g>
 
-  <circle cx="620" cy="796" r="6" fill="url(#goldGrad)"/>
+  <!-- ========================================================================= -->
+  <!-- LANE 2: WAREHOUSE GOLD & DIRECT LAKE SERVING (NODES 5 TO 7)               -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="446" width="1120" height="236" rx="14" fill="#FFFFFF" stroke="#93C5FD" stroke-width="1.4"/>
+  <rect x="56" y="456" width="410" height="20" rx="10" fill="#DBEAFE"/>
+  <text x="66" y="470" font-size="10.5" font-weight="700" fill="#1E40AF" letter-spacing="1px">STAGE 2: WAREHOUSE GOLD, DIRECT LAKE &amp; BLAST RADIUS GUARD</text>
+
+  <!-- Node 5: blast-radius-warning -->
+  <g data-node-id="blast-radius-warning" role="group" tabindex="0" aria-label="Blast-radius risk of merged bronze/silver">
+    <title data-node-tooltip="true">Blast-radius risk of merged bronze/silver — One shared Tables namespace means bronze and silver no longer have item-level isolation.</title>
+    <rect x="56" y="484" width="340" height="184" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#ima-shadow)"/>
+    <rect x="68" y="494" width="150" height="16" rx="8" fill="#FEE2E2"/><text x="143" y="505" text-anchor="middle" font-size="8.5" font-weight="700" fill="#DC2626">ISOLATION WARNING</text>
+    <text x="68" y="528" font-size="12" font-weight="700" fill="#991B1B">5 · Blast-Radius Risk of Merged Lakehouse</text>
+    <text x="68" y="550" font-size="9" fill="#B91C1C">• Merging Bronze &amp; Silver buys management simplicity</text>
+    <text x="68" y="566" font-size="9" fill="#B91C1C">• Trade-off: Tables area is one shared namespace</text>
+    <text x="68" y="582" font-size="9" fill="#B91C1C">• Runaway Bronze script can overwrite Silver</text>
+    <text x="68" y="608" font-size="8.5" font-weight="700" fill="#DC2626">Split into 2 lakehouses if access roles diverge</text>
+    <rect x="332" y="494" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="358" y="504" text-anchor="middle" font-size="8.5" font-weight="700" fill="#DC2626">WARNING</text>
+  </g>
+
+  <!-- Node 6: dbt-gold-build -->
   <g data-node-id="dbt-gold-build" role="group" tabindex="0" aria-label="dbt-built warehouse gold (Airflow orchestrated)">
     <title data-node-tooltip="true">dbt-built warehouse gold (Airflow orchestrated) — dbt, run by Airflow inside Data Factory, reads silver and builds a star schema in the warehouse.</title>
-    <rect x="618.0" y="777.0" width="420" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="632" y="800" font-size="9" fill="#3f4c5a">wh_gold = Fabric Warehouse star schema built by the dbt-fabric adapter, orchestrated by an Apache Airflow job inside Data Factory</text>
+    <rect x="408" y="484" width="410" height="184" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.6" filter="url(#ima-shadow)"/>
+    <rect x="420" y="494" width="130" height="16" rx="8" fill="#DBEAFE"/><text x="485" y="505" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">WAREHOUSE GOLD</text>
+    <text x="420" y="528" font-size="12" font-weight="700" fill="#1E3A8A">6 · dbt-Fabric Star Schema in wh_gold</text>
+    <text x="420" y="550" font-size="9" fill="#1E40AF">• Airflow DAG inside Data Factory triggers dbt build</text>
+    <text x="420" y="566" font-size="9" fill="#1E40AF">• Reads Silver Delta via 3-part SQL namespace</text>
+    <text x="420" y="582" font-size="9" fill="#1E40AF">• Builds Fact (Positions, VaR) &amp; Dim (Instrument SCD2)</text>
+    <text x="420" y="608" font-size="8.5" font-weight="700" fill="#1D4ED8">Multi-table ACID transactions &amp; T-SQL modeling surface</text>
+    <rect x="754" y="494" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="780" y="504" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">FACT</text>
   </g>
 
-  <circle cx="620" cy="814" r="6" fill="#c99a0b"/>
+  <!-- Node 7: direct-lake-power-bi -->
   <g data-node-id="direct-lake-power-bi" role="group" tabindex="0" aria-label="Power BI via Direct Lake">
-    <title data-node-tooltip="true">Power BI via Direct Lake — Power BI reads wh_gold&apos;s Delta tables straight from OneLake with no import refresh.</title>
-    <rect x="618.0" y="795.0" width="420" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="632" y="818" font-size="9" fill="#3f4c5a">Direct Lake / Power BI = reads wh_gold Delta straight from OneLake — no import model, no refresh lag for analysts</text>
+    <title data-node-tooltip="true">Power BI via Direct Lake — Power BI reads wh_gold's Delta tables straight from OneLake with no import refresh.</title>
+    <rect x="830" y="484" width="314" height="184" rx="10" fill="#F0FDFA" stroke="#5EEAD4" stroke-width="1.6" filter="url(#ima-shadow)"/>
+    <rect x="842" y="494" width="110" height="16" rx="8" fill="#CCFBF1"/><text x="897" y="505" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">BI SERVING</text>
+    <text x="842" y="528" font-size="12" font-weight="700" fill="#134E4A">7 · Power BI via Direct Lake</text>
+    <text x="842" y="550" font-size="9" fill="#115E59">• Reads Gold Delta straight from OneLake</text>
+    <text x="842" y="566" font-size="9" fill="#115E59">• Zero import cache; zero scheduled refresh lag</text>
+    <text x="842" y="582" font-size="9" fill="#115E59">• Instant visibility of completed dbt builds</text>
+    <text x="842" y="608" font-size="8.5" font-weight="700" fill="#0F766E">Sub-second interactive analytical reporting</text>
+    <rect x="1080" y="494" width="52" height="14" rx="7" fill="#CCFBF1"/><text x="1106" y="504" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">FACT</text>
   </g>
 
-  <circle cx="620" cy="832" r="6" fill="#4e34a8"/>
+  <!-- ========================================================================= -->
+  <!-- LANE 3: CONTROL PLANE & TELEMETRY RAILS (NODES 8 & 9)                     -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="696" width="1120" height="236" rx="14" fill="#FFFFFF" stroke="#99F6E4" stroke-width="1.4"/>
+  <rect x="56" y="706" width="410" height="20" rx="10" fill="#F0FDFA"/>
+  <text x="66" y="720" font-size="10.5" font-weight="700" fill="#0F766E" letter-spacing="1px">STAGE 3: CONTROL PLANE &amp; OPERATIONAL TELEMETRY RAILS</text>
+
+  <!-- Node 8: control-plane-sqldb -->
   <g data-node-id="control-plane-sqldb" role="group" tabindex="0" aria-label="sqldb_meta control plane">
     <title data-node-tooltip="true">sqldb_meta control plane — A Fabric SQL database records every pipeline and dbt run for cross-path audit.</title>
-    <rect x="618.0" y="813.0" width="420" height="32" rx="6" fill="#fff" fill-opacity="0.001" pointer-events="all"/>
-    <text x="632" y="836" font-size="9" fill="#3f4c5a">eh_ops (Eventhouse/KQL) = high-volume granular telemetry from Azure Functions; sqldb_meta = control tables + run-level audit (OLTP)</text>
+    <rect x="56" y="734" width="530" height="184" rx="10" fill="#F0FDFA" stroke="#5EEAD4" stroke-width="1.6" filter="url(#ima-shadow)"/>
+    <rect x="68" y="744" width="130" height="16" rx="8" fill="#CCFBF1"/><text x="133" y="755" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">METADATA ENGINE</text>
+    <text x="68" y="778" font-size="13" font-weight="700" fill="#134E4A">8 · sqldb_meta: Fabric SQL Database Control Plane</text>
+    <text x="68" y="802" font-size="9.5" fill="#115E59">• <tspan font-weight="700">Entity Registry:</tspan> Configures source endpoints, file paths, and watermark states</text>
+    <text x="68" y="822" font-size="9.5" fill="#115E59">• <tspan font-weight="700">Run Audit Trail:</tspan> Records start/completion time, rows loaded, and execution status</text>
+    <text x="68" y="842" font-size="9.5" fill="#115E59">• <tspan font-weight="700">Engine Type:</tspan> Transactional OLTP SQL Database for robust ACID control logic</text>
+    <rect x="522" y="744" width="52" height="14" rx="7" fill="#CCFBF1"/><text x="548" y="754" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0F766E">PATTERN</text>
   </g>
 
-  <circle cx="620" cy="850" r="6" fill="#59636e"/>
-  <text x="632" y="854" font-size="9" fill="#3f4c5a">Dashed border = external Azure service (Azure Functions), outside the Fabric workspace boundary</text>
+  <!-- Node 9: telemetry-eventhouse -->
+  <g data-node-id="telemetry-eventhouse" role="group" tabindex="0" aria-label="eh_ops Eventhouse (operational telemetry)">
+    <title data-node-tooltip="true">eh_ops Eventhouse (operational telemetry) — High-volume, per-event telemetry from ingestion functions lands in an Eventhouse, not the control-plane database.</title>
+    <rect x="598" y="734" width="546" height="184" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.6" filter="url(#ima-shadow)"/>
+    <rect x="610" y="744" width="130" height="16" rx="8" fill="#DBEAFE"/><text x="675" y="755" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">TELEMETRY SINK</text>
+    <text x="610" y="778" font-size="13" font-weight="700" fill="#1E3A8A">9 · eh_ops: Eventhouse Granular Operational Telemetry</text>
+    <text x="610" y="802" font-size="9.5" fill="#1E40AF">• <tspan font-weight="700">Granular Telemetry:</tspan> Absorbs high-volume API retries, network latency, and function logs</text>
+    <text x="610" y="822" font-size="9.5" fill="#1E40AF">• <tspan font-weight="700">KQL Real-Time Engine:</tspan> Time-series indexed storage prevents OLTP control plane bloat</text>
+    <text x="610" y="842" font-size="9.5" fill="#1E40AF">• <tspan font-weight="700">OneLake Mirroring:</tspan> Queryable alongside business Delta tables via cross-engine SQL</text>
+    <rect x="1080" y="744" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="1106" y="754" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">FACT</text>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="958" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Microsoft Fabric Investment Analytics Medallion Reference Pattern.</text>
 </svg>

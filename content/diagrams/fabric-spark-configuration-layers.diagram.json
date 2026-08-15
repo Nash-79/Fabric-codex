@@ -1,0 +1,418 @@
+{
+  "id": "fabric-spark-configuration-layers",
+  "title": "Where a Fabric Spark setting actually lives: the five configuration layers",
+  "purpose": "Fabric Spark configuration layers. Capacity layer; Workspace Spark settings; Environment item; Notebook session configure; Running session conf set; Why a setting does not stick.",
+  "accessibleSummary": "Fabric Spark configuration layers. Capacity layer; Workspace Spark settings; Environment item; Notebook session configure; Running session conf set; Why a setting does not stick.",
+  "longDescription": "Fabric Spark configuration layers. Capacity layer; Workspace Spark settings; Environment item; Notebook session configure; Running session conf set; Why a setting does not stick.",
+  "type": "model",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/fabric-spark-configuration-layers.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "capacity",
+      "label": "1. Capacity",
+      "summary": "The capacity SKU and its switches bound every workspace beneath it.",
+      "detail": "The capacity SKU and its switches bound every workspace beneath it.",
+      "whyItMatters": "The capacity SKU and its switches bound every workspace beneath it.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "governance"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-configure-starter-pools",
+          "note": "Capacity SKUs map to Spark vCores at two vCores per capacity unit and cap starter pool size."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Capacity SKU selection"
+        ],
+        "processing": [
+          "Bound available Spark vCores and pool maxima"
+        ],
+        "outputs": [
+          "A ceiling for every workspace on the capacity"
+        ],
+        "example": "An F64 capacity provides 128 Spark vCores of base compute.",
+        "controls": [
+          "SKU size",
+          "Job bursting",
+          "Surge protection"
+        ],
+        "failureModes": [
+          "A pool configured beyond the SKU ceiling cannot reach its stated maximum."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "workspace",
+      "label": "2. Workspace Spark settings",
+      "summary": "Workspace Spark settings own the default pool and the runtime version.",
+      "detail": "Workspace Spark settings own the default pool and the runtime version.",
+      "whyItMatters": "Workspace Spark settings own the default pool and the runtime version.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "governance"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-runtime-versions",
+          "note": "The runtime version is changed at Workspace Settings, Data Engineering/Science, Spark settings."
+        },
+        {
+          "sourceKey": "fabric-configure-starter-pools",
+          "note": "Starter pools use Medium nodes with autoscale and dynamic executor allocation enabled by default."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Workspace administration"
+        ],
+        "processing": [
+          "Select default pool and runtime version"
+        ],
+        "outputs": [
+          "Defaults inherited by items in the workspace"
+        ],
+        "example": "Switching the workspace runtime applies from the next session, not to a running one.",
+        "controls": [
+          "Default pool",
+          "Default runtime version"
+        ],
+        "failureModes": [
+          "Changing the runtime here silently drops settings incompatible with the target runtime."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "environment",
+      "label": "3. Environment item",
+      "summary": "The Environment item is the right home for team-wide Spark properties and libraries.",
+      "detail": "The Environment item is the right home for team-wide Spark properties and libraries.",
+      "whyItMatters": "The Environment item is the right home for team-wide Spark properties and libraries.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "governance"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-runtime-versions",
+          "note": "The Environment item carries a runtime override, Spark properties and libraries, and is published before use."
+        },
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "The Environment is the right home for team-wide session-start settings and the native execution toggle."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Team-wide configuration decisions"
+        ],
+        "processing": [
+          "Set Spark properties, libraries and compute overrides",
+          "Publish"
+        ],
+        "outputs": [
+          "Consistent configuration for every attached notebook"
+        ],
+        "example": "The native execution toggle and ANSI decision are recorded here rather than per notebook.",
+        "controls": [
+          "Spark properties",
+          "Acceleration tab",
+          "Custom libraries"
+        ],
+        "failureModes": [
+          "Libraries must be re-added and published after a runtime move, or jobs fail to import them."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "session",
+      "label": "4. Notebook or job session",
+      "summary": "A %%configure cell sets session-start scope before the session exists.",
+      "detail": "A %%configure cell sets session-start scope before the session exists.",
+      "whyItMatters": "A %%configure cell sets session-start scope before the session exists.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "governance"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Session-start settings belong in a %%configure cell or the Environment's Spark properties, not in code."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Notebook-specific compute requirements"
+        ],
+        "processing": [
+          "Apply session-start configuration before the session starts"
+        ],
+        "outputs": [
+          "A session with the requested shape"
+        ],
+        "example": "A memory-heavy notebook requests a larger executor shape for that run only.",
+        "controls": [
+          "%%configure",
+          "Workspace permission to customize compute"
+        ],
+        "failureModes": [
+          "If the workspace forbids item-level compute customization, the request is ignored."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "running",
+      "label": "5. Running session",
+      "summary": "spark.conf.set reaches only runtime-mutable keys on a live session.",
+      "detail": "spark.conf.set reaches only runtime-mutable keys on a live session.",
+      "whyItMatters": "spark.conf.set reaches only runtime-mutable keys on a live session.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "governance"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "Adaptive settings, shuffle partitions and the broadcast threshold are runtime-adjustable query settings."
+        },
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Only runtime-mutable keys can be set from code once a session exists."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A live Spark session"
+        ],
+        "processing": [
+          "Set runtime-mutable keys"
+        ],
+        "outputs": [
+          "Adjusted behaviour for subsequent queries"
+        ],
+        "example": "Raising the broadcast threshold for one known-small dimension mid-notebook.",
+        "controls": [
+          "spark.conf.set"
+        ],
+        "failureModes": [
+          "Setting executor memory here has no effect and produces no error."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "precedence",
+      "label": "A lower layer overrode it",
+      "summary": "Precedence flows downward, so a lower layer can override a higher one.",
+      "detail": "Precedence flows downward, so a lower layer can override a higher one.",
+      "whyItMatters": "Precedence flows downward, so a lower layer can override a higher one.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "governance"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Precedence flows downward and the debug rule is to check whether a lower layer is overriding the setting."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Conflicting settings across layers"
+        ],
+        "processing": [
+          "Resolve by layer precedence"
+        ],
+        "outputs": [
+          "The effective value actually in force"
+        ],
+        "example": "A notebook configure cell wins over the Environment property it contradicts.",
+        "controls": [
+          "Remove the lower-layer override"
+        ],
+        "failureModes": [
+          "A stray notebook setting silently overrides a carefully governed Environment default."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "toolate",
+      "label": "It was set too late to matter",
+      "summary": "Configuration applied after the session exists is silently dropped.",
+      "detail": "Configuration applied after the session exists is silently dropped.",
+      "whyItMatters": "Configuration applied after the session exists is silently dropped.",
+      "classification": "warning",
+      "layers": [
+        "compute",
+        "governance"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "In Fabric the session already exists before the first cell, so a SparkSession builder returns the existing session and drops every chained config."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Configuration applied in code after session start"
+        ],
+        "processing": [
+          "Silently ignore session-start keys"
+        ],
+        "outputs": [
+          "A job running with unintended settings"
+        ],
+        "example": "A builder chain setting executor memory has no effect and raises no error.",
+        "controls": [
+          "Move the setting to %%configure or the Environment"
+        ],
+        "failureModes": [
+          "The job is tuned on paper and untuned in reality, with nothing in the logs to say so."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "capacity",
+      "to": "workspace",
+      "label": "Capacity bounds workspace pool size",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e2",
+      "from": "workspace",
+      "to": "environment",
+      "label": "Workspace default is overridden per Environment",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e3",
+      "from": "environment",
+      "to": "session",
+      "label": "Session configure overrides Environment properties",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e4",
+      "from": "session",
+      "to": "running",
+      "label": "Runtime-mutable keys remain changeable",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e5",
+      "from": "session",
+      "to": "precedence",
+      "label": "Lower layers win on conflict",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e6",
+      "from": "running",
+      "to": "toolate",
+      "label": "Session-start keys are ignored here",
+      "layer": "compute",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "capacity",
+      "title": "1. 1. Capacity",
+      "explanation": "The capacity SKU and its switches bound every workspace beneath it."
+    },
+    {
+      "nodeId": "workspace",
+      "title": "2. 2. Workspace Spark settings",
+      "explanation": "Workspace Spark settings own the default pool and the runtime version."
+    },
+    {
+      "nodeId": "environment",
+      "title": "3. 3. Environment item",
+      "explanation": "The Environment item is the right home for team-wide Spark properties and libraries."
+    },
+    {
+      "nodeId": "session",
+      "title": "4. 4. Notebook or job session",
+      "explanation": "A %%configure cell sets session-start scope before the session exists."
+    },
+    {
+      "nodeId": "running",
+      "title": "5. 5. Running session",
+      "explanation": "spark.conf.set reaches only runtime-mutable keys on a live session."
+    },
+    {
+      "nodeId": "precedence",
+      "title": "6. A lower layer overrode it",
+      "explanation": "Precedence flows downward, so a lower layer can override a higher one."
+    },
+    {
+      "nodeId": "toolate",
+      "title": "7. It was set too late to matter",
+      "explanation": "Configuration applied after the session exists is silently dropped."
+    }
+  ]
+}

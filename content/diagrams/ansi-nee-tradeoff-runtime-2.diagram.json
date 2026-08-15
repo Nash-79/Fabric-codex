@@ -1,0 +1,414 @@
+{
+  "id": "ansi-nee-tradeoff-runtime-2",
+  "title": "ANSI mode versus native execution on Runtime 2.0",
+  "purpose": "ANSI and native execution trade-off. The collision; Keep ANSI for correctness; Disable ANSI for native speed; Decide per workload class; Record the decision in the Environment.",
+  "accessibleSummary": "ANSI and native execution trade-off. The collision; Keep ANSI for correctness; Disable ANSI for native speed; Decide per workload class; Record the decision in the Environment.",
+  "longDescription": "ANSI and native execution trade-off. The collision; Keep ANSI for correctness; Disable ANSI for native speed; Decide per workload class; Record the decision in the Environment.",
+  "type": "decision",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/ansi-nee-tradeoff-runtime-2.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "default",
+      "label": "Spark 4.x enables ANSI by default",
+      "summary": "Spark 4.x enables ANSI mode by default, raising errors where 3.5 returned NULL.",
+      "detail": "Spark 4.x enables ANSI mode by default, raising errors where 3.5 returned NULL.",
+      "whyItMatters": "Spark 4.x enables ANSI mode by default, raising errors where 3.5 returned NULL.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Spark 4.x turns ANSI on by default, so operations that returned NULL on Spark 3.5 now raise runtime exceptions."
+        },
+        {
+          "sourceKey": "fabric-spark-runtime-versions",
+          "note": "Runtime 2.0 carries Apache Spark 4.1."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Runtime 2.0 default configuration"
+        ],
+        "processing": [
+          "Apply ANSI SQL semantics"
+        ],
+        "outputs": [
+          "Errors instead of silent NULLs"
+        ],
+        "example": "A cast of a non-numeric string to INT raises rather than producing NULL.",
+        "controls": [
+          "spark.sql.ansi.enabled"
+        ],
+        "failureModes": [
+          "Logic that depended on silent NULLs fails loudly after the runtime move."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "limitation",
+      "label": "NEE falls back under ANSI",
+      "summary": "The native execution engine falls back to JVM Spark whenever ANSI mode is on.",
+      "detail": "The native execution engine falls back to JVM Spark whenever ANSI mode is on.",
+      "whyItMatters": "The native execution engine falls back to JVM Spark whenever ANSI mode is on.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "Structured streaming and ANSI SQL mode always execute on JVM Spark."
+        },
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "An untouched Runtime 2.0 environment with NEE enabled may be running almost entirely on the JVM."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "ANSI mode enabled",
+          "Native engine enabled"
+        ],
+        "processing": [
+          "Fall back to JVM execution"
+        ],
+        "outputs": [
+          "JVM execution despite the native toggle"
+        ],
+        "example": "Every operator runs on the JVM even though the Acceleration tab shows the engine as on.",
+        "controls": [
+          "spark.sql.ansi.enabled",
+          "spark.native.enabled"
+        ],
+        "failureModes": [
+          "The configuration looks correct while the acceleration it promises never occurs."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "keepansi",
+      "label": "Keep ANSI — choose correctness",
+      "summary": "Keeping ANSI prioritizes correctness guarantees over native execution speed.",
+      "detail": "Keeping ANSI prioritizes correctness guarantees over native execution speed.",
+      "whyItMatters": "Keeping ANSI prioritizes correctness guarantees over native execution speed.",
+      "classification": "pattern",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Data-quality-critical silver pipelines may prefer ANSI's correctness guarantees."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Workloads where silent NULLs are unacceptable"
+        ],
+        "processing": [
+          "Keep ANSI enabled",
+          "Size compute for JVM performance"
+        ],
+        "outputs": [
+          "Correctness guarantees with JVM execution"
+        ],
+        "example": "A conformed silver pipeline keeps ANSI so an invalid cast fails rather than quietly nulling a value.",
+        "controls": [
+          "Environment Spark properties"
+        ],
+        "failureModes": [
+          "Sizing this workload against native benchmarks over-promises throughput."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "dropansi",
+      "label": "Disable ANSI — choose native speed",
+      "summary": "Disabling ANSI regains native execution for scan-heavy conformed workloads.",
+      "detail": "Disabling ANSI regains native execution for scan-heavy conformed workloads.",
+      "whyItMatters": "Disabling ANSI regains native execution for scan-heavy conformed workloads.",
+      "classification": "pattern",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Scan-heavy gold aggregations may prefer native vectorized speed over ANSI guarantees."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Scan-heavy work over already-conformed data"
+        ],
+        "processing": [
+          "Disable ANSI",
+          "Guard specific conversions explicitly"
+        ],
+        "outputs": [
+          "Native vectorized execution"
+        ],
+        "example": "A gold aggregation over trusted silver tables regains native execution with targeted try_cast guards.",
+        "controls": [
+          "spark.sql.ansi.enabled",
+          "try_cast and try_divide"
+        ],
+        "failureModes": [
+          "Disabling ANSI on unconformed data reintroduces the silent NULLs it was protecting against."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "perworkload",
+      "label": "Decide per workload class",
+      "summary": "The choice belongs to the workload class, not to a single global setting.",
+      "detail": "The choice belongs to the workload class, not to a single global setting.",
+      "whyItMatters": "The choice belongs to the workload class, not to a single global setting.",
+      "classification": "pattern",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "The ANSI-versus-native trade-off is a per-workload decision rather than a global one."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Workload classification"
+        ],
+        "processing": [
+          "Decide per class and revisit as coverage improves"
+        ],
+        "outputs": [
+          "Differentiated configuration by workload"
+        ],
+        "example": "Silver and gold Environments carry deliberately different ANSI settings.",
+        "controls": [
+          "Workload segmentation by Environment"
+        ],
+        "failureModes": [
+          "One global setting is necessarily wrong for one of the two workload classes."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "record",
+      "label": "Record it in the Environment",
+      "summary": "Recording the decision in the Environment makes it visible and reviewable.",
+      "detail": "Recording the decision in the Environment makes it visible and reviewable.",
+      "whyItMatters": "Recording the decision in the Environment makes it visible and reviewable.",
+      "classification": "pattern",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "The choice belongs in the Environment's Spark properties rather than ad hoc in notebooks."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A decided trade-off"
+        ],
+        "processing": [
+          "Record it as an Environment Spark property"
+        ],
+        "outputs": [
+          "A governed, reviewable configuration"
+        ],
+        "example": "The ANSI decision is visible in the Environment rather than buried in one notebook's first cell.",
+        "controls": [
+          "Environment Spark properties"
+        ],
+        "failureModes": [
+          "Ad hoc notebook settings drift apart across a team and cannot be audited."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "prove",
+      "label": "Then prove it in the plan",
+      "summary": "Plan suffixes confirm which path actually executed.",
+      "detail": "Plan suffixes confirm which path actually executed.",
+      "whyItMatters": "Plan suffixes confirm which path actually executed.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "Native operators carry suffixes such as *Transformer, which confirm what actually executed natively."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A representative query"
+        ],
+        "processing": [
+          "Inspect the plan for native operator suffixes"
+        ],
+        "outputs": [
+          "Confirmed execution path"
+        ],
+        "example": "The absence of any native suffix confirms ANSI is forcing full JVM execution.",
+        "controls": [
+          "df.explain()",
+          "Spark Advisor"
+        ],
+        "failureModes": [
+          "Assuming the intended path is the actual path leaves the trade-off unresolved in practice."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "default",
+      "to": "limitation",
+      "label": "The default collides with the engine limitation",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e2",
+      "from": "limitation",
+      "to": "keepansi",
+      "label": "Accept JVM execution for correctness",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e3",
+      "from": "limitation",
+      "to": "dropansi",
+      "label": "Disable ANSI to regain native speed",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e4",
+      "from": "keepansi",
+      "to": "perworkload",
+      "label": "Applies to data-quality-critical classes",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e5",
+      "from": "dropansi",
+      "to": "perworkload",
+      "label": "Applies to scan-heavy conformed classes",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e6",
+      "from": "perworkload",
+      "to": "record",
+      "label": "The decision is recorded per Environment",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e7",
+      "from": "record",
+      "to": "prove",
+      "label": "Verify the resulting execution path",
+      "layer": "compute",
+      "kind": "branch"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "default",
+      "title": "1. Spark 4.x enables ANSI by default",
+      "explanation": "Spark 4.x enables ANSI mode by default, raising errors where 3.5 returned NULL."
+    },
+    {
+      "nodeId": "limitation",
+      "title": "2. NEE falls back under ANSI",
+      "explanation": "The native execution engine falls back to JVM Spark whenever ANSI mode is on."
+    },
+    {
+      "nodeId": "keepansi",
+      "title": "3. Keep ANSI — choose correctness",
+      "explanation": "Keeping ANSI prioritizes correctness guarantees over native execution speed."
+    },
+    {
+      "nodeId": "dropansi",
+      "title": "4. Disable ANSI — choose native speed",
+      "explanation": "Disabling ANSI regains native execution for scan-heavy conformed workloads."
+    },
+    {
+      "nodeId": "perworkload",
+      "title": "5. Decide per workload class",
+      "explanation": "The choice belongs to the workload class, not to a single global setting."
+    },
+    {
+      "nodeId": "record",
+      "title": "6. Record it in the Environment",
+      "explanation": "Recording the decision in the Environment makes it visible and reviewable."
+    },
+    {
+      "nodeId": "prove",
+      "title": "7. Then prove it in the plan",
+      "explanation": "Plan suffixes confirm which path actually executed."
+    }
+  ]
+}

@@ -329,6 +329,35 @@
       "drillTarget": { "kind": "capability", "slug": "capacity", "label": "Capacity" }
     },
     {
+      "id": "carryforward-burndown",
+      "label": "Burndown and carryforward drain",
+      "summary": "Carryforward CUs recorded during throttling drain only at timepoints with idle capacity.",
+      "detail": "When accumulated future usage exceeds the overage protection window, excess compute is recorded as carryforward CUs. At each future 30-second timepoint where the capacity is not fully utilized, unconsumed capacity is applied to burn down this carryforward balance until it reaches zero.",
+      "whyItMatters": "A capacity cannot recover from throttling until carryforward CUs are completely drained; simply stopping new queries is not enough if background jobs keep utilizing available timepoints.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Throttling", "CarryforwardCU", "Burndown"],
+      "evidence": [
+        {
+          "sourceKey": "capacity-throttling",
+          "note": "When accumulated future-capacity usage exceeds the overage protection window, the excess is recorded as carryforward CUs; each subsequent timepoint with idle capacity reduces this carryforward."
+        }
+      ],
+      "drill": {
+        "inputs": ["Carryforward CU balance accumulated from stages 2, 3, or 4"],
+        "processing": [
+          "Evaluate available idle CUs at each subsequent 30s timepoint",
+          "Deduct idle CUs from the carryforward ledger until balance reaches zero"
+        ],
+        "outputs": ["Recovery from throttled state back to normal Stage 1 operations"],
+        "example": "An overnight batch job generates 45 minutes of carryforward debt; during morning quiet hours, 50% idle capacity on each 30s timepoint drains the carryforward balance over the next 90 minutes.",
+        "controls": ["Pausing non-critical background jobs", "Scaling SKU size up to increase idle CU burndown rate"],
+        "failureModes": [
+          "Continuing to run back-to-back heavy jobs with zero idle timepoints, preventing carryforward from draining and extending throttling indefinitely"
+        ]
+      }
+    },
+    {
       "id": "autoscale-spark-warning",
       "label": "Autoscale Billing for Spark bypasses this entirely",
       "summary": "When enabled, Spark drops bursting and smoothing for flat pay-as-you-go metering.",
@@ -463,8 +492,16 @@
       "kind": "flow"
     },
     {
-      "id": "e-rejectall-drain",
+      "id": "e-rejectall-burndown",
       "from": "stage-reject-all",
+      "to": "carryforward-burndown",
+      "label": "excess recorded as carryforward",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-burndown-drain",
+      "from": "carryforward-burndown",
       "to": "overage-check",
       "label": "carryforward CUs drain at idle timepoints",
       "layer": "compute",
@@ -532,6 +569,11 @@
       "nodeId": "stage-reject-all",
       "title": "Worst case: nothing new can start",
       "explanation": "Background submissions are rejected too; recovery depends on carryforward CUs draining at future idle timepoints, not a manual reset."
+    },
+    {
+      "nodeId": "carryforward-burndown",
+      "title": "Burndown: excess debt drains at idle timepoints",
+      "explanation": "Accumulated carryforward CUs are reduced at each future 30-second timepoint with idle capacity until the balance drains to zero."
     },
     {
       "nodeId": "autoscale-spark-warning",

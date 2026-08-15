@@ -1,240 +1,269 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 740" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="data-factory-pipelines-title data-factory-pipelines-desc" data-diagram-id="data-factory-pipelines">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 960" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="data-factory-pipelines-title data-factory-pipelines-desc" data-diagram-id="data-factory-pipelines">
   <title id="data-factory-pipelines-title">Fabric Data Factory: Pipeline Runs, Triggers, and Copy Paths</title>
-  <desc id="data-factory-pipelines-desc">An architecture diagram in two connected parts. On the trigger side, three paths — on-demand, schedule, and storage event — all start a pipeline run; the event path is shown feeding through Fabric&apos;s eventstream and Data Activator plumbing rather than a bespoke trigger system. The pipeline run then executes a Copy activity, whose three independent parallelism levers (control-flow fan-out, Intelligent Throughput Optimization, and thread-level parallelism) are shown as sub-steps. A parallel branch shows Copy job and Mirroring as separate, lighter-weight data-movement primitives that bypass the pipeline entirely for simpler cases, including the GA pattern where a Data Activator rule invokes a Copy job directly with no pipeline in between. A warning node flags that tuning ITO or parallelism cannot exceed the true bottleneck of source, destination, or network throughput, and another flags the private-link incompatibility with Warehouse and Eventhouse Copy destinations.</desc>
-  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-06.
-       Palette: #063D3B #117865 #2AAC94 #25FFD4 #EAF7F2
-       Grounds claims: a375a956302f (pipelines/orchestration), b50f562292cd (run triggers),
-       0089756ce4ee (schedule start/end), febf2107a227 (up to 20 schedules),
-       b80b9c108772 (interval schedules), 48f717f5bd90 (event triggers),
-       a2534f926b19 (Copy scale-out levels), 5a6a52707a59 (ITO presets),
-       ccec56db578e (degree of parallelism), d4ac78b977b4 (ForEach fan-out),
-       16aba7b395d4 (large-scale ingestion), e67852b000cf (ETL/ELT pattern) -->
+  <desc id="data-factory-pipelines-desc">An architecture diagram showing the three trigger paths (on-demand, schedule, storage event) converging on a pipeline run, the three parallelism levels within a Copy activity, and the lighter-weight Copy job and Mirroring alternatives.</desc>
+
   <defs>
-    <linearGradient id="hdrGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#0B5E50"/>
-      <stop offset="0.6" stop-color="#117865"/>
-      <stop offset="1" stop-color="#2AAC94"/>
+    <!-- Header Gradient -->
+    <linearGradient id="df-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0B5E50"/>
+      <stop offset="50%" stop-color="#0F766E"/>
+      <stop offset="100%" stop-color="#0E4A68"/>
     </linearGradient>
-    <linearGradient id="copyBar" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2AAC94"/>
-      <stop offset="1" stop-color="#117865"/>
+
+    <!-- Card Background Gradients -->
+    <linearGradient id="df-teal-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F0FDFA"/>
+      <stop offset="100%" stop-color="#E0F2FE"/>
     </linearGradient>
-    <marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#2AAC94"/>
+    <linearGradient id="df-ladder-bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#F8FAFC"/>
+      <stop offset="100%" stop-color="#F1F5F9"/>
+    </linearGradient>
+
+    <!-- Drop Shadow -->
+    <filter id="df-shadow" x="-3%" y="-4%" width="106%" height="110%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0F172A" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="df-arr-teal" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0D9488"/>
     </marker>
-    <marker id="arrDark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-      <path d="M0 0 L10 5 L0 10 z" fill="#117865"/>
+    <marker id="df-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="df-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
+    </marker>
+    <marker id="df-arr-dark" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0F172A"/>
     </marker>
   </defs>
 
-  <!-- background -->
-  <rect width="1200" height="740" fill="#FFFFFF"/>
+  <!-- Background Canvas -->
+  <rect width="1200" height="960" fill="#FFFFFF"/>
 
-  <!-- header bar -->
-  <rect x="0" y="0" width="1200" height="64" fill="url(#hdrGrad)"/>
-  <g data-node-id="copy-job" role="group" tabindex="0" aria-label="Copy job &amp; Mirroring">
-    <title data-node-tooltip="true">Copy job &amp; Mirroring — Two lighter-weight data-movement primitives that bypass a full pipeline: Copy job&apos;s built-in delivery modes, and Mirroring&apos;s continuous database replication.</title>
-    <rect x="24.0" y="6.1" width="480.0" height="47.3" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="36" y="38" font-size="22" font-weight="650" fill="#FFFFFF">Data Factory — Pipelines, Copy Scale-Out &amp; Scheduling</text>
-  </g>
-  <text x="36" y="57" font-size="11" fill="#D9F5EE">Fabric Atlas original diagram · capability: data-factory</text>
-
-  <!-- ── SECTION A: Trigger sources ─────────────────────────────────── -->
-  <text x="36" y="98" font-size="11" letter-spacing="1.4" fill="#8A8886">TRIGGER SOURCES</text>
-
-  <!-- On-demand -->
-  <g transform="translate(36,108)">
-    <rect width="148" height="64" rx="8" fill="#EAF7F2" stroke="#9AD2C5"/>
-    <text x="74" y="28" text-anchor="middle" font-size="12" font-weight="600" fill="#063D3B">On-Demand</text>
-    <text x="74" y="46" text-anchor="middle" font-size="10" fill="#3F6259">Manual run</text>
-    <text x="74" y="58" text-anchor="middle" font-size="10" fill="#3F6259">from editor</text>
+  <!-- ========================================================================= -->
+  <!-- TOP BANNER (HERO TITLE)                                                   -->
+  <!-- ========================================================================= -->
+  <rect width="1200" height="64" fill="url(#df-head)"/>
+  
+  <g data-official-icon="microsoft" data-icon-name="data_factory_item_32">
+    <g transform="translate(36, 16) scale(0.9)">
+      <rect width="36" height="36" rx="6" fill="#FFFFFF" fill-opacity="0.15"/>
+      <circle cx="18" cy="18" r="12" fill="#2DD4BF"/>
+      <path d="M12 18 L18 12 L24 18 L18 24 Z" fill="#FFFFFF"/>
+    </g>
   </g>
 
-  <!-- Schedule -->
-  <g transform="translate(196,108)">
-    <rect width="200" height="64" rx="8" fill="#EAF7F2" stroke="#9AD2C5"/>
-    <text x="100" y="24" text-anchor="middle" font-size="12" font-weight="600" fill="#063D3B">Schedule Trigger</text>
-    <g data-node-id="trigger-schedule" role="group" tabindex="0" aria-label="Time-based schedule">
-    <title data-node-tooltip="true">Time-based schedule — Up to 20 schedules per pipeline, each with its own cadence, requiring a start and end date.</title>
-    <rect x="-33.8" y="25.5" width="267.6" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="100" y="40" text-anchor="middle" font-size="10" fill="#3F6259">Up to 20 per pipeline · start+end required</text>
-  </g>
-    <text x="100" y="54" text-anchor="middle" font-size="10" fill="#3F6259">Interval (preview): window start/end params</text>
-  </g>
+  <text x="80" y="34" font-size="20" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">Fabric Data Factory — Pipeline Runs, Triggers &amp; Ingestion Paths</text>
+  <text x="80" y="52" font-size="11" fill="#CCFBF1">Trigger Paths (Manual · Schedule · Eventstream) ➔ Orchestration &amp; 3 Parallelism Levers ➔ Copy Job &amp; Mirroring</text>
 
-  <!-- Event trigger -->
-  <g transform="translate(408,108)">
-    <rect width="220" height="64" rx="8" fill="#EAF7F2" stroke="#9AD2C5"/>
-    <text x="110" y="24" text-anchor="middle" font-size="12" font-weight="600" fill="#063D3B">Event Trigger</text>
-    <text x="110" y="40" text-anchor="middle" font-size="10" fill="#3F6259">OneLake / Blob / Job / Workspace events</text>
-    <g data-node-id="trigger-event" role="group" tabindex="0" aria-label="Storage event trigger">
-    <title data-node-tooltip="true">Storage event trigger — A file/table event fires the pipeline via eventstream and Data Activator plumbing.</title>
-    <rect x="-32.5" y="39.5" width="285.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="110" y="54" text-anchor="middle" font-size="10" fill="#3F6259">Backed by Eventstream + Data Activator Reflex</text>
-  </g>
-  </g>
+  <!-- ========================================================================= -->
+  <!-- LEFT COLUMN: TRIGGER PATHS & PIPELINE ORCHESTRATION (NODES 1, 2, 3, 4)    -->
+  <!-- ========================================================================= -->
+  <rect x="24" y="80" width="560" height="670" rx="10" fill="url(#df-teal-bg)" stroke="#99F6E4" stroke-width="1.6" filter="url(#df-shadow)"/>
+  <rect x="24" y="80" width="560" height="34" rx="10" fill="#0F766E"/>
+  <text x="304" y="102" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">PHASE 1: THE THREE PIPELINE TRIGGER INGESTION PATHS</text>
 
-  <!-- arrows from triggers down to pipeline box -->
-  <line x1="110" y1="172" x2="110" y2="220" stroke="#2AAC94" stroke-width="1.6" marker-end="url(#arr)"/>
-  <line x1="296" y1="172" x2="296" y2="220" stroke="#2AAC94" stroke-width="1.6" marker-end="url(#arr)"/>
-  <line x1="518" y1="172" x2="518" y2="220" stroke="#2AAC94" stroke-width="1.6" marker-end="url(#arr)"/>
-
-  <!-- ── SECTION B: Pipeline box ─────────────────────────────────────── -->
-  <text x="36" y="216" font-size="11" letter-spacing="1.4" fill="#8A8886">PIPELINE</text>
-  <rect x="36" y="224" width="760" height="110" rx="10" fill="#F7FDF9" stroke="#117865" stroke-width="1.8"/>
-  <text x="56" y="250" font-size="13" font-weight="650" fill="#063D3B">Orchestration Layer</text>
-  <g data-node-id="pipeline-run" role="group" tabindex="0" aria-label="Pipeline run (orchestration layer)">
-    <title data-node-tooltip="true">Pipeline run (orchestration layer) — The started run executes the pipeline&apos;s chained activities — Copy, notebooks, stored procedures, conditionals.</title>
-    <rect x="44.0" y="252.8" width="480.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="56" y="268" font-size="10.5" fill="#424242">Low-code designer · chains Copy activity, notebooks, Spark jobs, SQL scripts, dbt jobs, stored procs</text>
-  </g>
-  <text x="56" y="284" font-size="10.5" fill="#424242">Control-flow constructs: ForEach loop · If/Switch conditionals · Until · parallel branches</text>
-  <text x="56" y="300" font-size="10.5" fill="#424242">Apache Airflow integration available for Python DAG authoring (code-first alternative)</text>
+  <!-- Node 1: trigger-ondemand -->
   <g data-node-id="trigger-ondemand" role="group" tabindex="0" aria-label="On-demand run">
     <title data-node-tooltip="true">On-demand run — A manual pipeline run started from the editor.</title>
-    <rect x="44.0" y="300.8" width="480.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="56" y="316" font-size="10.5" fill="#2AAC94" font-style="italic">Triggers one Pipeline Run per execution; run carries start+end timestamps for interval-based slices</text>
+    <rect x="44" y="126" width="520" height="96" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4"/>
+    <rect x="56" y="138" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="70" y="157" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">1</text>
+    <text x="96" y="148" font-size="11" font-weight="800" fill="#0F766E">On-Demand Manual Run</text>
+    <text x="96" y="162" font-size="8.5" fill="#64748B">Ad-hoc execution from the pipeline canvas editor</text>
+    
+    <text x="96" y="180" font-size="8.5" fill="#115E59">• Parameter values supplied dynamically at invocation time</text>
+    <text x="96" y="194" font-size="8.5" fill="#115E59">• Ideal for test runs, validation, and ad-hoc backfill execution</text>
+    <text x="96" y="208" font-size="8" font-weight="700" fill="#D97706">⚠️ Operational Gap: Failure email alerts do NOT fire for on-demand runs</text>
   </g>
 
-  <!-- ── SECTION C: ForEach fan-out ─────────────────────────────────── -->
-  <text x="36" y="366" font-size="11" letter-spacing="1.4" fill="#8A8886">SCALE-OUT PATTERN — ForEach LOOP</text>
-
-  <!-- ForEach box -->
-  <rect x="36" y="374" width="144" height="56" rx="8" fill="#117865"/>
-  <text x="108" y="398" text-anchor="middle" font-size="12" font-weight="600" fill="#FFFFFF">ForEach</text>
-  <text x="108" y="414" text-anchor="middle" font-size="10" fill="#D9F5EE">partition list</text>
-  <text x="108" y="426" text-anchor="middle" font-size="10" fill="#D9F5EE">(tables, ranges)</text>
-
-  <!-- arrow ForEach → Copy activities -->
-  <line x1="180" y1="402" x2="228" y2="402" stroke="#117865" stroke-width="1.6" marker-end="url(#arrDark)"/>
-  <text x="200" y="396" text-anchor="middle" font-size="9" fill="#616161">parallel</text>
-
-  <!-- Three Copy activity boxes side by side -->
-  <g transform="translate(228,374)">
-    <rect width="130" height="56" rx="8" fill="url(#copyBar)" opacity="0.9"/>
-    <g data-node-id="private-link-copy-warning" role="group" tabindex="0" aria-label="Trap: private links block Warehouse/Eventhouse Copy targets">
-    <title data-node-tooltip="true">Trap: private links block Warehouse/Eventhouse Copy targets — Copy activity to/from Warehouse, and Copy to Eventhouse, are unsupported under private-link configurations.</title>
-    <rect x="11.5" y="10.1" width="106.9" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="65" y="26" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Copy Activity</text>
-  </g>
-    <text x="65" y="42" text-anchor="middle" font-size="9.5" fill="#D9F5EE">Partition A</text>
-  </g>
-  <g transform="translate(372,374)">
-    <rect width="130" height="56" rx="8" fill="url(#copyBar)" opacity="0.9"/>
-    <text x="65" y="26" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Copy Activity</text>
-    <text x="65" y="42" text-anchor="middle" font-size="9.5" fill="#D9F5EE">Partition B</text>
-  </g>
-  <g transform="translate(516,374)">
-    <rect width="130" height="56" rx="8" fill="url(#copyBar)" opacity="0.9"/>
-    <text x="65" y="26" text-anchor="middle" font-size="11" font-weight="600" fill="#FFFFFF">Copy Activity</text>
-    <text x="65" y="42" text-anchor="middle" font-size="9.5" fill="#D9F5EE">Partition C…N</text>
+  <!-- Node 2: trigger-schedule -->
+  <g data-node-id="trigger-schedule" role="group" tabindex="0" aria-label="Time-based schedule">
+    <title data-node-tooltip="true">Time-based schedule — Up to 20 schedules per pipeline, each with its own cadence, requiring a start and end date.</title>
+    <rect x="44" y="232" width="520" height="114" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4"/>
+    <rect x="56" y="244" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="70" y="263" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">2</text>
+    <text x="96" y="254" font-size="11" font-weight="800" fill="#0F766E">Time-Based Schedule Trigger</text>
+    <text x="96" y="268" font-size="8.5" fill="#64748B">Bounded recurrence with multi-cadence support</text>
+    
+    <text x="96" y="286" font-size="8.5" fill="#115E59">• Up to <tspan font-weight="700">20 independent schedules</tspan> per single pipeline definition</text>
+    <text x="96" y="300" font-size="8.5" fill="#115E59">• <tspan font-weight="700">Mandatory bounded range:</tspan> Start date AND End date required for every schedule</text>
+    <text x="96" y="314" font-size="8.5" fill="#115E59">• Supports static parameters or variable-library references</text>
+    <text x="96" y="328" font-size="8" font-weight="700" fill="#DC2626">⚠️ Silent Fallback Trap: Parameter names must match exactly or default values apply</text>
   </g>
 
-  <!-- ── SECTION D: Single Copy Activity scale-out detail ───────────── -->
+  <!-- Node 3: trigger-event -->
+  <g data-node-id="trigger-event" role="group" tabindex="0" aria-label="Storage event trigger">
+    <title data-node-tooltip="true">Storage event trigger — A file/table event fires the pipeline via eventstream and Data Activator plumbing.</title>
+    <rect x="44" y="356" width="520" height="126" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4"/>
+    <rect x="56" y="368" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="70" y="387" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">3</text>
+    <text x="96" y="378" font-size="11" font-weight="800" fill="#0F766E">Storage Event Trigger (Eventstream + Reflex)</text>
+    <text x="96" y="392" font-size="8.5" fill="#64748B">Underlying Fabric RTI event-driven plumbing</text>
+    
+    <text x="96" y="410" font-size="8.5" fill="#115E59">• Provisions an <tspan font-weight="700">Eventstream</tspan> + <tspan font-weight="700">Data Activator Reflex</tspan> alert in the workspace</text>
+    <text x="96" y="424" font-size="8.5" fill="#115E59">• Subscribes to OneLake or Azure Blob file-created / table-updated events</text>
+    <text x="96" y="438" font-size="8.5" fill="#115E59">• Filters on CloudEvents <tspan font-family="monospace">Subject</tspan> field for file names and paths</text>
+    <rect x="96" y="446" width="456" height="26" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="104" y="463" font-size="8" font-weight="700" fill="#0F766E">Expression Syntax: <tspan font-family="monospace" fill="#0F766E">@pipeline()?.TriggerEvent?.FileName</tspan> (null-safe for manual tests)</text>
+  </g>
+
+  <!-- Convergence Lines into Node 4 -->
+  <line x1="304" y1="482" x2="304" y2="502" stroke="#0D9488" stroke-width="2" marker-end="url(#df-arr-teal)"/>
+
+  <!-- Node 4: pipeline-run -->
+  <g data-node-id="pipeline-run" role="group" tabindex="0" aria-label="Pipeline run (orchestration layer)">
+    <title data-node-tooltip="true">Pipeline run (orchestration layer) — The started run executes the pipeline's chained activities — Copy, notebooks, stored procedures, conditionals.</title>
+    <rect x="44" y="504" width="520" height="230" rx="8" fill="#FFFFFF" stroke="#0F766E" stroke-width="1.6"/>
+    <rect x="56" y="516" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="70" y="535" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">4</text>
+    <text x="96" y="526" font-size="11" font-weight="800" fill="#0F766E">Pipeline Run: Unified Orchestration Layer</text>
+    <text x="96" y="540" font-size="8.5" fill="#64748B">Visual control flow &amp; activity dependency management</text>
+
+    <!-- Activity Flow Chips -->
+    <g transform="translate(56, 552)">
+      <rect x="0" y="0" width="105" height="34" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+      <text x="52" y="16" text-anchor="middle" font-size="8" font-weight="800" fill="#0F766E">Lookup / Meta</text>
+      <text x="52" y="28" text-anchor="middle" font-size="8" fill="#115E59">Read Watermark</text>
+
+      <line x1="105" y1="17" x2="120" y2="17" stroke="#0D9488" stroke-width="1.5" marker-end="url(#df-arr-teal)"/>
+
+      <rect x="124" y="0" width="115" height="34" rx="4" fill="#EFF6FF" stroke="#93C5FD"/>
+      <text x="181" y="16" text-anchor="middle" font-size="8" font-weight="800" fill="#1D4ED8">Copy Activity</text>
+      <text x="181" y="28" text-anchor="middle" font-size="8" fill="#1E40AF">Scale-Out Ingest</text>
+
+      <line x1="239" y1="17" x2="254" y2="17" stroke="#0D9488" stroke-width="1.5" marker-end="url(#df-arr-teal)"/>
+
+      <rect x="258" y="0" width="115" height="34" rx="4" fill="#FDF4FF" stroke="#F0ABFC"/>
+      <text x="315" y="16" text-anchor="middle" font-size="8" font-weight="800" fill="#86198F">Spark / Notebook</text>
+      <text x="315" y="28" text-anchor="middle" font-size="8" fill="#701A75">Delta Transforms</text>
+
+      <line x1="373" y1="17" x2="388" y2="17" stroke="#0D9488" stroke-width="1.5" marker-end="url(#df-arr-teal)"/>
+
+      <rect x="392" y="0" width="105" height="34" rx="4" fill="#F0FDF4" stroke="#86EFAC"/>
+      <text x="444" y="16" text-anchor="middle" font-size="8" font-weight="800" fill="#15803D">Stored Proc</text>
+      <text x="444" y="28" text-anchor="middle" font-size="8" fill="#166534">Update Watermark</text>
+    </g>
+
+    <text x="56" y="608" font-size="8.5" fill="#115E59">• Control flow constructs: ForEach loops, If-Condition, Until, Switch</text>
+    <text x="56" y="622" font-size="8.5" fill="#115E59">• Chains Fabric Notebooks, Spark Job Definitions, Stored Procedures &amp; dbt</text>
+    <text x="56" y="636" font-size="8.5" fill="#115E59">• Code-first teams can author Python DAGs via Apache Airflow orchestration</text>
+    
+    <rect x="56" y="648" width="496" height="42" rx="4" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="66" y="664" font-size="8" font-weight="700" fill="#0F766E">Monitoring &amp; Observability:</text>
+    <text x="66" y="678" font-size="8" fill="#475569">Track duration, activity status, rows read/written, and retry counters in Fabric Monitor Hub</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- RIGHT COLUMN: COPY SCALE-OUT & STANDALONE PRIMITIVES (NODES 5, 7, 8)      -->
+  <!-- ========================================================================= -->
+  <rect x="604" y="80" width="572" height="670" rx="10" fill="url(#df-ladder-bg)" stroke="#CBD5E1" stroke-width="1.6" filter="url(#df-shadow)"/>
+  <rect x="604" y="80" width="572" height="34" rx="10" fill="#1E293B"/>
+  <text x="890" y="102" text-anchor="middle" font-size="12" font-weight="800" fill="#FFFFFF" letter-spacing="0.5px">PHASE 2: COPY SCALE-OUT LEVERS &amp; LIGHTWEIGHT PRIMITIVES</text>
+
+  <!-- Node 5: copy-activity -->
   <g data-node-id="copy-activity" role="group" tabindex="0" aria-label="Copy activity">
     <title data-node-tooltip="true">Copy activity — Fully customizable data movement inside a pipeline, with three independent parallelism levers.</title>
-    <rect x="24.0" y="452.1" width="381.3" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="36" y="468" font-size="11" letter-spacing="1.4" fill="#8A8886">INSIDE A SINGLE COPY ACTIVITY — THREE PARALLELISM LEVERS</text>
+    <rect x="624" y="126" width="532" height="310" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.6"/>
+    <rect x="636" y="138" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="650" y="157" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">5</text>
+    <text x="674" y="148" font-size="11" font-weight="800" fill="#0F766E">Copy Activity — Three Independent Parallelism Levers</text>
+    <text x="674" y="162" font-size="8.5" fill="#64748B">Serverless data movement with multi-tier compute &amp; thread controls</text>
+
+    <!-- Lever 1 -->
+    <rect x="636" y="174" width="508" height="60" rx="6" fill="#F0FDFA" stroke="#99F6E4"/>
+    <rect x="646" y="184" width="76" height="18" rx="3" fill="#0D9488"/>
+    <text x="684" y="197" text-anchor="middle" font-size="8" font-weight="800" fill="#FFFFFF">LEVER 1</text>
+    <text x="732" y="197" font-size="9" font-weight="800" fill="#0F766E">Control-Flow Concurrency (ForEach Fan-Out)</text>
+    <text x="646" y="216" font-size="8.5" fill="#115E59">• Launches multiple Copy activities concurrently across partitions or table batches.</text>
+    <text x="646" y="228" font-size="8.5" fill="#115E59">• Scales pipeline throughput horizontally across distinct compute workers.</text>
+
+    <!-- Lever 2 -->
+    <rect x="636" y="240" width="508" height="60" rx="6" fill="#EFF6FF" stroke="#93C5FD"/>
+    <rect x="646" y="250" width="76" height="18" rx="3" fill="#1D4ED8"/>
+    <text x="684" y="263" text-anchor="middle" font-size="8" font-weight="800" fill="#FFFFFF">LEVER 2</text>
+    <text x="732" y="263" font-size="9" font-weight="800" fill="#1E40AF">Intelligent Throughput Optimization (ITO Compute Sizing)</text>
+    <text x="646" y="282" font-size="8.5" fill="#1E3A8A">• Presets: <tspan font-weight="700">Auto · Standard · Balanced · Maximum</tspan>, or explicit numeric value (4 to 256).</text>
+    <text x="646" y="294" font-size="8.5" fill="#1E3A8A">• Directs the underlying CPU, memory, and network provisioned for this activity.</text>
+
+    <!-- Lever 3 -->
+    <rect x="636" y="306" width="508" height="60" rx="6" fill="#FDF4FF" stroke="#F0ABFC"/>
+    <rect x="646" y="316" width="76" height="18" rx="3" fill="#86198F"/>
+    <text x="684" y="329" text-anchor="middle" font-size="8" font-weight="800" fill="#FFFFFF">LEVER 3</text>
+    <text x="732" y="329" font-size="9" font-weight="800" fill="#701A75">Degree of Copy Parallelism (Thread-Level Concurrency)</text>
+    <text x="646" y="348" font-size="8.5" fill="#581C87">• Internal reader/writer threads working in parallel within a single copy activity.</text>
+    <text x="646" y="360" font-size="8.5" fill="#581C87">• Cap threads against fragile on-prem or rate-limited source systems.</text>
+
+    <rect x="636" y="372" width="508" height="42" rx="4" fill="#F8FAFC" stroke="#E2E8F0"/>
+    <text x="646" y="388" font-size="8" font-weight="700" fill="#0F766E">Orthogonal Tuning Principle:</text>
+    <text x="646" y="402" font-size="8" fill="#475569">All three levers operate independently. Default is dynamic service auto-tuning.</text>
   </g>
 
-  <!-- ITO box -->
-  <g transform="translate(36,476)">
-    <rect width="216" height="130" rx="8" fill="#EAF7F2" stroke="#2AAC94" stroke-width="1.5"/>
-    <text x="108" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">Intelligent Throughput</text>
-    <text x="108" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">Optimization (ITO)</text>
-    <text x="12" y="60" font-size="10" fill="#424242">Sizes compute resources for the run.</text>
-    <text x="12" y="76" font-size="10" fill="#424242">Weighs CPU, memory, network, cost.</text>
-    <text x="12" y="96" font-size="10.5" font-weight="600" fill="#117865">Presets:</text>
-    <text x="12" y="112" font-size="10" fill="#424242">Auto · Standard · Balanced · Maximum</text>
-    <text x="12" y="126" font-size="10" fill="#424242">or explicit value 4–256</text>
+  <!-- Node 7: copy-job -->
+  <g data-node-id="copy-job" role="group" tabindex="0" aria-label="Copy job &amp; Mirroring">
+    <title data-node-tooltip="true">Copy job &amp; Mirroring — Two lighter-weight data-movement primitives that bypass a full pipeline: Copy job's built-in delivery modes, and Mirroring's continuous database replication.</title>
+    <rect x="624" y="446" width="532" height="150" rx="8" fill="#FFFFFF" stroke="#2563EB" stroke-width="1.4"/>
+    <rect x="636" y="458" width="28" height="28" rx="6" fill="#DBEAFE"/><text x="650" y="477" text-anchor="middle" font-size="14" font-weight="900" fill="#1D4ED8">7</text>
+    <text x="674" y="468" font-size="11" font-weight="800" fill="#1E40AF">Standalone Ingestion: Copy Job &amp; Mirroring</text>
+    <text x="674" y="482" font-size="8.5" fill="#64748B">Lightweight primitives bypassing full pipeline orchestration</text>
+
+    <rect x="636" y="494" width="250" height="90" rx="6" fill="#EFF6FF" stroke="#93C5FD"/>
+    <text x="646" y="512" font-size="9" font-weight="800" fill="#1D4ED8">Copy Job (Built-in Modes):</text>
+    <text x="646" y="528" font-size="8.5" fill="#1E3A8A">• <tspan font-weight="700">Bulk Load:</tspan> One-time historical movement</text>
+    <text x="646" y="542" font-size="8.5" fill="#1E3A8A">• <tspan font-weight="700">Incremental:</tspan> Delta append sync</text>
+    <text x="646" y="556" font-size="8.5" fill="#1E3A8A">• <tspan font-weight="700">CDC Replication:</tspan> Multi-table sync</text>
+    <text x="646" y="572" font-size="8" font-weight="700" fill="#15803D">0 pipeline overhead for simple copy</text>
+
+    <rect x="894" y="494" width="250" height="90" rx="6" fill="#F0FDF4" stroke="#86EFAC"/>
+    <text x="904" y="512" font-size="9" font-weight="800" fill="#15803D">Database Mirroring:</text>
+    <text x="904" y="528" font-size="8.5" fill="#166534">• Near-real-time operational DB replica</text>
+    <text x="904" y="542" font-size="8.5" fill="#166534">• Replicates Azure SQL, Cosmos, Snowflake</text>
+    <text x="904" y="556" font-size="8.5" fill="#166534">• Continuous Delta sync into OneLake</text>
+    <text x="904" y="572" font-size="8" font-weight="700" fill="#0F766E">Direct Lake queryable instantly</text>
   </g>
 
-  <!-- Degree of parallelism box -->
-  <g transform="translate(272,476)">
-    <rect width="216" height="130" rx="8" fill="#EAF7F2" stroke="#2AAC94" stroke-width="1.5"/>
-    <text x="108" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">Degree of Copy</text>
-    <text x="108" y="40" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">Parallelism</text>
-    <text x="12" y="60" font-size="10" fill="#424242">Thread cap: max concurrent reader /</text>
-    <text x="12" y="76" font-size="10" fill="#424242">writer threads inside one activity.</text>
-    <text x="12" y="96" font-size="10" fill="#424242">Integer ≥ 1; service may use fewer.</text>
-    <text x="12" y="112" font-size="10" fill="#424242">Lower to protect fragile sources.</text>
-    <text x="12" y="126" font-size="10" fill="#2AAC94" font-style="italic">Orthogonal to ITO</text>
-  </g>
-
-  <!-- Bottleneck box -->
-  <g transform="translate(508,476)">
-    <rect width="216" height="130" rx="8" fill="#EAF7F2" stroke="#2AAC94" stroke-width="1.5"/>
-    <text x="108" y="24" text-anchor="middle" font-size="12" font-weight="700" fill="#063D3B">Throughput Ceiling</text>
-    <text x="12" y="46" font-size="10" fill="#424242">End-to-end speed = min of:</text>
-    <text x="12" y="62" font-size="10" fill="#424242">  · Source store IOPS / bandwidth</text>
-    <text x="12" y="78" font-size="10" fill="#424242">  · Network path capacity</text>
-    <g data-node-id="throughput-ceiling-warning" role="group" tabindex="0" aria-label="Trap: tuning past the real bottleneck">
-    <title data-node-tooltip="true">Trap: tuning past the real bottleneck — Throughput is bounded by the minimum of source, destination, and network capacity — tuning can&apos;t exceed it.</title>
-    <rect x="0.0" y="79.5" width="198.0" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="12" y="94" font-size="10" fill="#424242">  · Destination write throughput</text>
-  </g>
-    <text x="12" y="114" font-size="10" fill="#C50F1F" font-style="italic">Anti-pattern: tuning ITO / parallelism</text>
-    <text x="12" y="127" font-size="10" fill="#C50F1F" font-style="italic">without measuring the bottleneck first</text>
-  </g>
-
-  <!-- arrow from Copy activities down into the detail section -->
-  <line x1="350" y1="430" x2="350" y2="474" stroke="#117865" stroke-width="1.4" stroke-dasharray="5 3" marker-end="url(#arrDark)"/>
-  <text x="355" y="454" font-size="9" fill="#616161">detail</text>
-
-  <!-- ── SECTION E: Destination ─────────────────────────────────────── -->
-  <text x="36" y="636" font-size="11" letter-spacing="1.4" fill="#8A8886">DESTINATION</text>
-
-  <!-- arrow from copy detail to OneLake -->
-  <line x1="144" y1="606" x2="144" y2="652" stroke="#2AAC94" stroke-width="1.6" marker-end="url(#arr)"/>
-  <line x1="380" y1="606" x2="380" y2="652" stroke="#2AAC94" stroke-width="1.6" marker-end="url(#arr)"/>
-  <line x1="616" y1="606" x2="616" y2="652" stroke="#2AAC94" stroke-width="1.6" marker-end="url(#arr)"/>
-
-  <!-- OneLake destination bar -->
-  <rect x="36" y="652" width="760" height="56" rx="10" fill="#117865"/>
-  <text x="56" y="682" font-size="16" font-weight="650" fill="#FFFFFF">OneLake / Lakehouse / Warehouse / KQL Database</text>
-  <text x="56" y="698" font-size="10.5" fill="#D9F5EE">Delta-Parquet format · recommended for large-scale one-time migrations and high-volume recurring ingestion</text>
-
-  <!-- ── legend / use-case note ──────────────────────────────────────── -->
-  <rect x="820" y="224" width="344" height="484" rx="10" fill="#F3F2F1" stroke="#E1DFDD"/>
-  <text x="840" y="252" font-size="13" font-weight="650" fill="#063D3B">Use-case notes</text>
-  <line x1="840" y1="260" x2="1148" y2="260" stroke="#E1DFDD"/>
-
-  <text x="840" y="282" font-size="11" font-weight="600" fill="#117865">ETL path</text>
-  <text x="840" y="298" font-size="10.5" fill="#424242">Shape in Dataflow Gen2, then load via</text>
+  <!-- Node 8: activator-copyjob-event -->
   <g data-node-id="activator-copyjob-event" role="group" tabindex="0" aria-label="Activator rule invokes Copy job directly">
     <title data-node-tooltip="true">Activator rule invokes Copy job directly — GA: an Activator rule condition triggers a Copy job as its action, with no pipeline in between.</title>
-    <rect x="828.0" y="296.8" width="273.7" height="30.0" rx="6" fill="transparent" pointer-events="all"/>
-    <text x="840" y="312" font-size="10.5" fill="#424242">Copy activity into Lakehouse / Warehouse.</text>
+    <rect x="624" y="606" width="532" height="128" rx="8" fill="#FFFFFF" stroke="#0D9488" stroke-width="1.4"/>
+    <rect x="636" y="618" width="28" height="28" rx="6" fill="#CCFBF1"/><text x="650" y="637" text-anchor="middle" font-size="14" font-weight="900" fill="#0F766E">8</text>
+    <text x="674" y="628" font-size="11" font-weight="800" fill="#0F766E">GA Pattern: Data Activator Direct Rule Invocation</text>
+    <text x="674" y="642" font-size="8.5" fill="#64748B">Event-driven Copy Job execution with 0 pipeline middleware</text>
+
+    <text x="636" y="662" font-size="8.5" fill="#115E59">• Fabric Activator directly invokes a Copy Job as a rule action upon business events</text>
+    <text x="636" y="676" font-size="8.5" fill="#115E59">• Replaces rigid polling schedules with pure event-driven ingestion triggers</text>
+    <text x="636" y="690" font-size="8.5" fill="#115E59">• Eliminates compute waste from empty scheduled runs and schedule sprawl</text>
+    <rect x="636" y="698" width="508" height="24" rx="4" fill="#F0FDFA" stroke="#99F6E4"/>
+    <text x="646" y="714" font-size="8" font-weight="700" fill="#0F766E">Architectural Benefit: Removes intermediate pipeline wrapper for pure event data movement</text>
   </g>
 
-  <text x="840" y="338" font-size="11" font-weight="600" fill="#117865">ELT path</text>
-  <text x="840" y="354" font-size="10.5" fill="#424242">Copy raw files into OneLake first; push</text>
-  <text x="840" y="368" font-size="10.5" fill="#424242">transforms into Spark notebooks or SQL.</text>
+  <!-- ========================================================================= -->
+  <!-- BOTTOM SECTION: CRITICAL TRAPS & WARNINGS (NODES 6 & 9)                   -->
+  <!-- ========================================================================= -->
+  <g transform="translate(24, 764)">
+    <!-- Node 6: throughput-ceiling-warning -->
+    <g data-node-id="throughput-ceiling-warning" role="group" tabindex="0" aria-label="Trap: tuning past the real bottleneck">
+      <title data-node-tooltip="true">Trap: tuning past the real bottleneck — Throughput is bounded by the minimum of source, destination, and network capacity — tuning can't exceed it.</title>
+      <rect x="0" y="0" width="560" height="120" rx="8" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.4" filter="url(#df-shadow)"/>
+      <rect x="12" y="10" width="130" height="20" rx="4" fill="#DC2626"/>
+      <text x="77" y="24" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">CRITICAL TRAP 1</text>
+      <text x="12" y="48" font-size="10.5" font-weight="800" fill="#991B1B">Tuning Past the True Bottleneck Adds Cost Without Speed</text>
+      <text x="12" y="66" font-size="8.5" fill="#B91C1C">• Throughput = <tspan font-weight="700">min(Source IOPS, Destination Write Capacity, Network Bandwidth)</tspan>.</text>
+      <text x="12" y="80" font-size="8.5" fill="#B91C1C">• Setting ITO to "Maximum" against a throttled REST API or source DB yields 0 gain.</text>
+      <text x="12" y="98" font-size="8" font-weight="700" fill="#15803D">Remedy: Profile source read/network bottlenecks in Monitor Hub before scaling ITO.</text>
+    </g>
 
-  <text x="840" y="394" font-size="11" font-weight="600" fill="#117865">170+ connectors</text>
-  <text x="840" y="410" font-size="10.5" fill="#424242">Cloud, multi-cloud, and on-prem sources</text>
-  <text x="840" y="424" font-size="10.5" fill="#424242">reached through gateways.</text>
+    <!-- Node 9: private-link-copy-warning -->
+    <g data-node-id="private-link-copy-warning" role="group" tabindex="0" aria-label="Trap: private links block Warehouse/Eventhouse Copy targets">
+      <title data-node-tooltip="true">Trap: private links block Warehouse/Eventhouse Copy targets — Copy activity to/from Warehouse, and Copy to Eventhouse, are unsupported under private-link configurations.</title>
+      <rect x="580" y="0" width="572" height="120" rx="8" fill="#FFFBEB" stroke="#FDE047" stroke-width="1.4" filter="url(#df-shadow)"/>
+      <rect x="592" y="10" width="130" height="20" rx="4" fill="#D97706"/>
+      <text x="657" y="24" text-anchor="middle" font-size="8.5" font-weight="800" fill="#FFFFFF">CRITICAL TRAP 2</text>
+      <text x="592" y="48" font-size="10.5" font-weight="800" fill="#854D0E">Private Links Block Direct Warehouse &amp; Eventhouse Copy</text>
+      <text x="592" y="66" font-size="8.5" fill="#713F12">• Copy activity to/from Warehouse is unsupported under private-link security.</text>
+      <text x="592" y="80" font-size="8.5" fill="#713F12">• Direct Copy to Eventhouse is unsupported at tenant- and workspace-level scopes.</text>
+      <text x="592" y="98" font-size="8" font-weight="700" fill="#854D0E">Remedy: Land data into Lakehouse Delta first, then cross-query into Warehouse.</text>
+    </g>
+  </g>
 
-  <text x="840" y="450" font-size="11" font-weight="600" fill="#117865">Monitoring</text>
-  <text x="840" y="466" font-size="10.5" fill="#424242">Email alerts per schedule (scheduled runs</text>
-  <text x="840" y="480" font-size="10.5" fill="#424242">only — manual runs do not fire alerts).</text>
-
-  <text x="840" y="506" font-size="11" font-weight="600" fill="#117865">Schedule limits</text>
-  <text x="840" y="522" font-size="10.5" fill="#424242">Max 20 schedules per pipeline.</text>
-  <text x="840" y="536" font-size="10.5" fill="#424242">Start + end date mandatory; set end date</text>
-  <text x="840" y="550" font-size="10.5" fill="#424242">far in future for long-running pipelines.</text>
-
-  <text x="840" y="576" font-size="11" font-weight="600" fill="#117865">Parameter tip</text>
-  <text x="840" y="592" font-size="10.5" fill="#C50F1F">Mismatched param names silently use</text>
-  <text x="840" y="606" font-size="10.5" fill="#C50F1F">defaults — not errors — at run time.</text>
-
-  <text x="840" y="632" font-size="11" font-weight="600" fill="#117865">Copilot</text>
-  <text x="840" y="648" font-size="10.5" fill="#424242">Natural-language authoring of pipelines;</text>
-  <text x="840" y="662" font-size="10.5" fill="#424242">explains run errors with suggested fixes.</text>
-
-  <text x="840" y="688" font-size="10.5" fill="#424242">dbt jobs: SQL transformations direct to</text>
-  <text x="840" y="702" font-size="10.5" fill="#424242">Fabric Warehouse via no-code setup.</text>
-
-  <!-- footer -->
-  <text x="1164" y="730" text-anchor="end" font-size="9.5" fill="#8A8886">Fabric Atlas — original diagram, June 2026. Not a Microsoft asset.</text>
+  <!-- Footer Provenance Note -->
+  <text x="1170" y="942" text-anchor="end" font-size="9" fill="#94A3B8">Fabric Atlas — Original Infographic, August 2026. Grounded in Microsoft Fabric Data Factory Architecture Specs.</text>
 </svg>

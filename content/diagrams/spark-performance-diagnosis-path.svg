@@ -1,0 +1,236 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 940" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-performance-diagnosis-path-title spark-performance-diagnosis-path-desc" data-diagram-id="spark-performance-diagnosis-path">
+  <title id="spark-performance-diagnosis-path-title">Diagnosing a slow Spark job: plan, then metrics, then layout, then settings</title>
+  <desc id="spark-performance-diagnosis-path-desc">Spark performance diagnosis framework: 4-step diagnostic order (Physical plan, Stage metrics, Code/Table layout fixes, Settings last) and 4 key plan anti-pattern fingerprints (PushedFilters empty, BatchEvalPython UDF fallback, Unnecessary SortMergeJoin, Missing AdaptiveSparkPlan wrapper).</desc>
+
+  <defs>
+    <!-- Header Gradient -->
+    <linearGradient id="diag-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4A2170"/>
+      <stop offset="0.5" stop-color="#7C3AAD"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="diag-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#4A2170" flood-opacity="0.08"/>
+    </filter>
+
+    <!-- Arrow Markers -->
+    <marker id="diag-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
+    </marker>
+    <marker id="diag-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="diag-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
+    </marker>
+
+    <!-- Official Microsoft Notebook Item Icon Gradients -->
+    <linearGradient id="diag-nb-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="diag-nb-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="diag-nb-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="diag-nb-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+  </defs>
+
+  <!-- Canvas Base -->
+  <rect width="1200" height="940" fill="#FAF5FF"/>
+
+  <!-- Hero Header Banner -->
+  <rect width="1200" height="88" fill="url(#diag-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1120,24) scale(1.2)">
+      <path fill="url(#diag-nb-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#diag-nb-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#diag-nb-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#diag-nb-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#diag-nb-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#diag-nb-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Diagnosing a Slow Spark Job — The Ordered Diagnostic Path</text>
+  <text x="40" y="64" font-size="12" fill="#E9D8FD">Read physical plan ➔ Check stage metrics (spill &amp; skew) ➔ Fix code or table layout ➔ Change settings last</text>
+
+  <!-- Legend Bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D8FD"/>
+    <circle cx="20" cy="15" r="5" fill="#7C3AAD"/><text x="32" y="19" fill="#4C1D95" font-weight="600">The 4-Step Diagnostic Order</text>
+    <circle cx="270" cy="15" r="5" fill="#DC2626"/><text x="282" y="19" fill="#991B1B" font-weight="600">The 4 Plan Fingerprints &amp; Anti-Patterns</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 1: THE 4-STEP DIAGNOSTIC WORKFLOW (PLAN ➔ METRICS ➔ FIX ➔ SETTINGS) -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="146" width="1120" height="300" rx="14" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
+  <rect x="56" y="156" width="450" height="20" rx="10" fill="#EDE9FE"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#4C1D95" letter-spacing="1px">LANE 1: THE 4-STEP ORDERED DIAGNOSTIC METHOD</text>
+
+  <!-- Step 1: plan -->
+  <g data-node-id="plan" role="group" tabindex="0" aria-label="1. Read the physical plan">
+    <title data-node-tooltip="true">1. Read the physical plan — The physical plan is the first place to look, and EXPLAIN never executes the query.</title>
+    <rect x="56" y="184" width="260" height="242" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#diag-shadow)"/>
+    <rect x="68" y="194" width="110" height="16" rx="8" fill="#EDE9FE"/><text x="123" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">STEP 1 · COMPILE</text>
+    <text x="68" y="228" font-size="13" font-weight="700" fill="#4C1D95">1 · Read Physical Plan</text>
+    <text x="68" y="250" font-size="9.5" fill="#5B21B6">• <tspan font-family="monospace">df.explain("formatted")</tspan> compiles</text>
+    <text x="68" y="264" font-size="9.5" fill="#5B21B6">  plan without running it</text>
+    <text x="68" y="284" font-size="9.5" fill="#5B21B6">• 100% safe on production tables</text>
+    <text x="68" y="304" font-size="9.5" fill="#5B21B6">• Inspect operator tree and pushdowns</text>
+    <text x="68" y="324" font-size="9.5" fill="#5B21B6">• Check final adaptive plan in Spark UI</text>
+    <rect x="68" y="348" width="236" height="66" rx="6" fill="#EDE9FE"/>
+    <text x="76" y="366" font-size="9" font-weight="600" fill="#4C1D95">Target Insight:</text>
+    <text x="76" y="380" font-size="8.5" fill="#5B21B6">Reveals sort-merge joins, missing</text>
+    <text x="76" y="394" font-size="8.5" fill="#5B21B6">pushdowns, and Python UDF fallbacks.</text>
+    <rect x="250" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="276" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Step 2: metrics -->
+  <g data-node-id="metrics" role="group" tabindex="0" aria-label="2. Check stage metrics">
+    <title data-node-tooltip="true">2. Check stage metrics — Stage metrics reveal spill, skew and task-count problems directly.</title>
+    <rect x="332" y="184" width="260" height="242" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.6" filter="url(#diag-shadow)"/>
+    <rect x="344" y="194" width="110" height="16" rx="8" fill="#EDE9FE"/><text x="399" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">STEP 2 · OBSERVE</text>
+    <text x="344" y="228" font-size="13" font-weight="700" fill="#4C1D95">2 · Check Stage Metrics</text>
+    <text x="344" y="250" font-size="9.5" fill="#5B21B6">• <tspan font-weight="700">Spill Columns:</tspan> Non-zero spill</text>
+    <text x="344" y="264" font-size="9.5" fill="#5B21B6">  means execution memory exhausted</text>
+    <text x="344" y="284" font-size="9.5" fill="#5B21B6">• <tspan font-weight="700">Data Skew:</tspan> Max task duration far</text>
+    <text x="344" y="298" font-size="9.5" fill="#5B21B6">  above 75th percentile</text>
+    <text x="344" y="318" font-size="9.5" fill="#5B21B6">• <tspan font-weight="700">Small Files:</tspan> Thousands of sub-second</text>
+    <text x="344" y="332" font-size="9.5" fill="#5B21B6">  tasks indicate over-partitioning</text>
+    <rect x="344" y="348" width="236" height="66" rx="6" fill="#EDE9FE"/>
+    <text x="352" y="366" font-size="9" font-weight="600" fill="#4C1D95">Target Insight:</text>
+    <text x="352" y="380" font-size="8.5" fill="#5B21B6">Distinguishes skew vs cluster</text>
+    <text x="352" y="394" font-size="8.5" fill="#5B21B6">under-provisioning immediately.</text>
+    <rect x="526" y="194" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="552" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <!-- Step 3: fix -->
+  <g data-node-id="fix" role="group" tabindex="0" aria-label="3. Fix the code or the layout">
+    <title data-node-tooltip="true">3. Fix the code or the layout — Most real wins come from fixing code or table layout, not configuration.</title>
+    <rect x="608" y="184" width="260" height="242" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.6" filter="url(#diag-shadow)"/>
+    <rect x="620" y="194" width="120" height="16" rx="8" fill="#D1FAE5"/><text x="680" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">STEP 3 · ROOT CAUSE</text>
+    <text x="620" y="228" font-size="13" font-weight="700" fill="#064E3B">3 · Fix Code &amp; Layout</text>
+    <text x="620" y="250" font-size="9.5" fill="#065F46">• <tspan font-weight="700">Where 90% Wins Live:</tspan></text>
+    <text x="620" y="264" font-size="9.5" fill="#065F46">  Fix cast on join key ➔ pushdown</text>
+    <text x="620" y="284" font-size="9.5" fill="#065F46">• Replace Python UDF with native SQL</text>
+    <text x="620" y="304" font-size="9.5" fill="#065F46">• Run <tspan font-family="monospace">OPTIMIZE</tspan> &amp; V-Order compaction</text>
+    <text x="620" y="324" font-size="9.5" fill="#065F46">• Resolve join skew via key salting</text>
+    <rect x="620" y="348" width="236" height="66" rx="6" fill="#D1FAE5"/>
+    <text x="628" y="366" font-size="9" font-weight="600" fill="#047857">Architect Principle:</text>
+    <text x="628" y="380" font-size="8.5" fill="#065F46">Never mask bad query code or bad</text>
+    <text x="628" y="394" font-size="8.5" fill="#065F46">Delta table layout with cluster scaling.</text>
+    <rect x="802" y="194" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="828" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">PATTERN</text>
+  </g>
+
+  <!-- Step 4: settings -->
+  <g data-node-id="settings" role="group" tabindex="0" aria-label="4. Change settings last">
+    <title data-node-tooltip="true">4. Change settings last — Fabric's defaults are good, and pasted settings often defeat adaptive execution.</title>
+    <rect x="884" y="184" width="260" height="242" rx="10" fill="#FFFBEB" stroke="#FDE68A" stroke-width="1.6" filter="url(#diag-shadow)"/>
+    <rect x="896" y="194" width="110" height="16" rx="8" fill="#FEF3C7"/><text x="951" y="205" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B45309">STEP 4 · LAST RESORT</text>
+    <text x="896" y="228" font-size="13" font-weight="700" fill="#78350F">4 · Change Settings Last</text>
+    <text x="896" y="250" font-size="9.5" fill="#92400E">• Fabric runtime defaults are highly</text>
+    <text x="896" y="264" font-size="9.5" fill="#92400E">  optimized (AQE, V-Order, Native)</text>
+    <text x="896" y="284" font-size="9.5" fill="#92400E">• Pasting config snippets from blogs</text>
+    <text x="896" y="298" font-size="9.5" fill="#92400E">  routinely disables AQE features</text>
+    <text x="896" y="318" font-size="9.5" fill="#92400E">• Change one property deliberately</text>
+    <rect x="896" y="348" width="236" height="66" rx="6" fill="#FEF3C7"/>
+    <text x="904" y="366" font-size="9" font-weight="600" fill="#78350F">Governance Rule:</text>
+    <text x="904" y="380" font-size="8.5" fill="#92400E">Benchmark before and after every</text>
+    <text x="904" y="394" font-size="8.5" fill="#92400E">configuration parameter change.</text>
+    <rect x="1078" y="194" width="52" height="14" rx="7" fill="#FEF3C7"/><text x="1104" y="204" text-anchor="middle" font-size="8" font-weight="700" fill="#B45309">PATTERN</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- LANE 2: THE 4 PLAN FINGERPRINTS & ANTI-PATTERNS                           -->
+  <!-- ========================================================================= -->
+  <rect x="40" y="464" width="1120" height="426" rx="14" fill="#FFFFFF" stroke="#FCA5A5" stroke-width="1.4"/>
+  <rect x="56" y="474" width="450" height="20" rx="10" fill="#FEE2E2"/>
+  <text x="66" y="488" font-size="10.5" font-weight="700" fill="#991B1B" letter-spacing="1px">LANE 2: THE FOUR PLAN FINGERPRINTS &amp; DIRECT REMEDIATIONS</text>
+
+  <!-- Fingerprint 1: pushdown -->
+  <g data-node-id="pushdown" role="group" tabindex="0" aria-label="PushedFilters is empty">
+    <title data-node-tooltip="true">PushedFilters is empty — An empty PushedFilters list means the scan is reading everything.</title>
+    <rect x="56" y="504" width="260" height="366" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#diag-shadow)"/>
+    <rect x="68" y="514" width="100" height="16" rx="8" fill="#FEE2E2"/><text x="118" y="525" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">SCAN ANOMALY</text>
+    <text x="68" y="548" font-size="13" font-weight="700" fill="#991B1B">5 · PushedFilters: [ ]</text>
+    <text x="68" y="570" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Fingerprint in Plan:</tspan></text>
+    <text x="68" y="584" font-size="9.5" fill="#7F1D1D">  <tspan font-family="monospace">PushedFilters: [ ]</tspan> on FileScan</text>
+    <text x="68" y="604" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Root Cause:</tspan> Predicate pushdown</text>
+    <text x="68" y="618" font-size="9.5" fill="#7F1D1D">  failed; scan reads 100% of rows</text>
+    <text x="68" y="632" font-size="9.5" fill="#7F1D1D">  from storage across network</text>
+    <text x="68" y="652" font-size="9.5" fill="#7F1D1D">• Common trigger: Casting the column</text>
+    <text x="68" y="666" font-size="9.5" fill="#7F1D1D">  (<tspan font-family="monospace">CAST(dt AS STRING) = '2026'</tspan>)</text>
+    <rect x="68" y="692" width="236" height="160" rx="6" fill="#FFFFFF" stroke="#FECACA"/>
+    <text x="76" y="710" font-size="9.5" font-weight="700" fill="#991B1B">Direct Remediation:</text>
+    <text x="76" y="728" font-size="9" fill="#7F1D1D">1. Filter on raw column type</text>
+    <text x="76" y="744" font-size="9" fill="#7F1D1D">2. Cast the literal value instead</text>
+    <text x="76" y="760" font-size="9" fill="#7F1D1D">3. Verifies Parquet min/max stats</text>
+    <text x="76" y="776" font-size="9" fill="#7F1D1D">4. Eliminates 90%+ scan I/O</text>
+    <rect x="250" y="514" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="276" y="524" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">FACT</text>
+  </g>
+
+  <!-- Fingerprint 2: udf -->
+  <g data-node-id="udf" role="group" tabindex="0" aria-label="BatchEvalPython appears">
+    <title data-node-tooltip="true">BatchEvalPython appears — A row-at-a-time Python UDF breaks fusion, serializes rows and forces native fallback.</title>
+    <rect x="332" y="504" width="260" height="366" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#diag-shadow)"/>
+    <rect x="344" y="514" width="110" height="16" rx="8" fill="#FEE2E2"/><text x="399" y="525" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">CODEGEN BREAKER</text>
+    <text x="344" y="548" font-size="13" font-weight="700" fill="#991B1B">6 · BatchEvalPython</text>
+    <text x="344" y="570" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Fingerprint in Plan:</tspan></text>
+    <text x="344" y="584" font-size="9.5" fill="#7F1D1D">  <tspan font-family="monospace">BatchEvalPython</tspan> in operator tree</text>
+    <text x="344" y="604" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Root Cause:</tspan> Row-at-a-time Python</text>
+    <text x="344" y="618" font-size="9.5" fill="#7F1D1D">  UDF forces Py4J serialization</text>
+    <text x="344" y="638" font-size="9.5" fill="#7F1D1D">• Breaks whole-stage codegen fusion</text>
+    <text x="344" y="658" font-size="9.5" fill="#7F1D1D">• Drops Native Velox engine to JVM</text>
+    <rect x="344" y="692" width="236" height="160" rx="6" fill="#FFFFFF" stroke="#FECACA"/>
+    <text x="352" y="710" font-size="9.5" font-weight="700" fill="#991B1B">Direct Remediation:</text>
+    <text x="352" y="728" font-size="9" fill="#7F1D1D">1. Rewrite using built-in Spark SQL</text>
+    <text x="352" y="744" font-size="9" fill="#7F1D1D">2. Use Vectorized Pandas/Arrow UDF</text>
+    <text x="352" y="760" font-size="9" fill="#7F1D1D">3. Restores SIMD hardware speeds</text>
+    <text x="352" y="776" font-size="9" fill="#7F1D1D">4. 10x - 50x throughput recovery</text>
+    <rect x="526" y="514" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="552" y="524" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">FACT</text>
+  </g>
+
+  <!-- Fingerprint 3: join -->
+  <g data-node-id="join" role="group" tabindex="0" aria-label="SortMergeJoin on a small side">
+    <title data-node-tooltip="true">SortMergeJoin on a small side — A sort-merge join on a small side pays two sorts and two shuffles unnecessarily.</title>
+    <rect x="608" y="504" width="260" height="366" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#diag-shadow)"/>
+    <rect x="620" y="514" width="110" height="16" rx="8" fill="#FEE2E2"/><text x="675" y="525" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">JOIN INEFFICIENCY</text>
+    <text x="620" y="548" font-size="13" font-weight="700" fill="#991B1B">7 · SMJ on Small Table</text>
+    <text x="620" y="570" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Fingerprint in Plan:</tspan></text>
+    <text x="620" y="584" font-size="9.5" fill="#7F1D1D">  <tspan font-family="monospace">SortMergeJoin</tspan> when side is &lt; 10MB</text>
+    <text x="620" y="604" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Root Cause:</tspan> Pays 2 network shuffles</text>
+    <text x="620" y="618" font-size="9.5" fill="#7F1D1D">  and 2 disk sorts unnecessarily</text>
+    <text x="620" y="638" font-size="9.5" fill="#7F1D1D">• Stale table statistics or AQE missed</text>
+    <text x="620" y="658" font-size="9.5" fill="#7F1D1D">• Memory pressure on sort buffers</text>
+    <rect x="620" y="692" width="236" height="160" rx="6" fill="#FFFFFF" stroke="#FECACA"/>
+    <text x="628" y="710" font-size="9.5" font-weight="700" fill="#991B1B">Direct Remediation:</text>
+    <text x="628" y="728" font-size="9" fill="#7F1D1D">1. Verify AQE autoBroadcast enabled</text>
+    <text x="628" y="744" font-size="9" fill="#7F1D1D">2. Refresh Delta table stats</text>
+    <text x="628" y="760" font-size="9" fill="#7F1D1D">3. Apply <tspan font-family="monospace">broadcast(df)</tspan> hint if small</text>
+    <text x="628" y="776" font-size="9" fill="#7F1D1D">4. Eliminates shuffle exchange</text>
+    <rect x="802" y="514" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="828" y="524" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">FACT</text>
+  </g>
+
+  <!-- Fingerprint 4: noaqe -->
+  <g data-node-id="noaqe" role="group" tabindex="0" aria-label="No AdaptiveSparkPlan wrapper">
+    <title data-node-tooltip="true">No AdaptiveSparkPlan wrapper — A missing adaptive plan wrapper means no runtime re-optimization happened.</title>
+    <rect x="884" y="504" width="260" height="366" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#diag-shadow)"/>
+    <rect x="896" y="514" width="110" height="16" rx="8" fill="#FEE2E2"/><text x="951" y="525" text-anchor="middle" font-size="8.5" font-weight="700" fill="#991B1B">AQE DISABLED</text>
+    <text x="896" y="548" font-size="13" font-weight="700" fill="#991B1B">8 · No Adaptive Wrapper</text>
+    <text x="896" y="570" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Fingerprint in Plan:</tspan></text>
+    <text x="896" y="584" font-size="9.5" fill="#7F1D1D">  Root node lacks <tspan font-family="monospace">AdaptiveSparkPlan</tspan></text>
+    <text x="896" y="604" font-size="9.5" fill="#7F1D1D">• <tspan font-weight="700">Root Cause:</tspan> Query plan is frozen</text>
+    <text x="896" y="618" font-size="9.5" fill="#7F1D1D">  at compile time; 0 dynamic fixes</text>
+    <text x="896" y="638" font-size="9.5" fill="#7F1D1D">• 0 coalescing ➔ thousands of tasks</text>
+    <text x="896" y="658" font-size="9.5" fill="#7F1D1D">• 0 skew splitting ➔ single-node stall</text>
+    <rect x="896" y="692" width="236" height="160" rx="6" fill="#FFFFFF" stroke="#FECACA"/>
+    <text x="904" y="710" font-size="9.5" font-weight="700" fill="#991B1B">Direct Remediation:</text>
+    <text x="904" y="728" font-size="9" fill="#7F1D1D">1. Remove hardcoded spark config</text>
+    <text x="904" y="744" font-size="9" fill="#7F1D1D">2. Enable <tspan font-family="monospace">spark.sql.adaptive=true</tspan></text>
+    <text x="904" y="760" font-size="9" fill="#7F1D1D">3. Remove manual <tspan font-family="monospace">repartition(N)</tspan></text>
+    <text x="904" y="776" font-size="9" fill="#7F1D1D">4. Restores automated runtime loop</text>
+    <rect x="1078" y="514" width="52" height="14" rx="7" fill="#FEE2E2"/><text x="1104" y="524" text-anchor="middle" font-size="8" font-weight="700" fill="#991B1B">FACT</text>
+  </g>
+
+  <!-- Footer Provenance Note -->
+  <text x="1140" y="912" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Sourced from Apache Spark EXPLAIN Plans, Performance Tuning &amp; Fabric Spark Toolkit.</text>
+</svg>

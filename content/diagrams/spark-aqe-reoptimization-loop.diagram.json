@@ -1,0 +1,477 @@
+{
+  "id": "spark-aqe-reoptimization-loop",
+  "title": "Adaptive Query Execution: the runtime re-optimization loop",
+  "purpose": "Adaptive Query Execution loop. Static plan from estimates; Execute materializable stages; Collect real statistics; Coalesce partitions; Convert joins to broadcast; Split skewed partitions.",
+  "accessibleSummary": "Adaptive Query Execution loop. Static plan from estimates; Execute materializable stages; Collect real statistics; Coalesce partitions; Convert joins to broadcast; Split skewed partitions.",
+  "longDescription": "Adaptive Query Execution loop. Static plan from estimates; Execute materializable stages; Collect real statistics; Coalesce partitions; Convert joins to broadcast; Split skewed partitions.",
+  "type": "internals",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-aqe-reoptimization-loop.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "static",
+      "label": "Static plan built from estimates",
+      "summary": "Catalyst commits to a plan using pre-execution estimates that may be badly wrong.",
+      "detail": "Catalyst commits to a plan using pre-execution estimates that may be badly wrong.",
+      "whyItMatters": "Catalyst commits to a plan using pre-execution estimates that may be badly wrong.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "Catalyst plans from pre-execution statistics; AQE exists to correct that plan at runtime."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Table metadata",
+          "Available column statistics"
+        ],
+        "processing": [
+          "Choose join strategy and partition count up front"
+        ],
+        "outputs": [
+          "Initial physical plan"
+        ],
+        "example": "A join is planned as sort-merge because the optimizer cannot measure how selective an upstream filter is.",
+        "controls": [
+          "Table statistics freshness"
+        ],
+        "failureModes": [
+          "A wrong estimate commits the query to two sorts and two shuffles it did not need."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "execute",
+      "label": "Execute materializable stages",
+      "summary": "AQE runs the stages it can and pauses at the shuffle boundary.",
+      "detail": "AQE runs the stages it can and pauses at the shuffle boundary.",
+      "whyItMatters": "AQE runs the stages it can and pauses at the shuffle boundary.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "AQE uses runtime statistics from completed stages to choose the most efficient plan."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Initial physical plan"
+        ],
+        "processing": [
+          "Run stages that can be materialized",
+          "Pause at the exchange"
+        ],
+        "outputs": [
+          "Completed stage output and its statistics"
+        ],
+        "example": "The scan and map side complete while the join strategy for the next stage remains undecided.",
+        "controls": [
+          "spark.sql.adaptive.enabled"
+        ],
+        "failureModes": [
+          "With AQE disabled the whole plan is fixed in advance and no correction is possible."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "stats",
+      "label": "Collect real shuffle statistics",
+      "summary": "Real partition sizes from completed stages replace the original estimates.",
+      "detail": "Real partition sizes from completed stages replace the original estimates.",
+      "whyItMatters": "Real partition sizes from completed stages replace the original estimates.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "AQE re-runs the optimizer and physical planner using measured shuffle statistics."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Shuffle output sizes and row counts"
+        ],
+        "processing": [
+          "Re-run optimizer and physical planner over the remaining plan"
+        ],
+        "outputs": [
+          "Revised plan for the remaining stages"
+        ],
+        "example": "A side estimated at 400 MB measures 6 MB after filtering, changing the join decision.",
+        "controls": [
+          "Runtime statistics from completed stages"
+        ],
+        "failureModes": [
+          "Statistics only exist past an exchange, so an all-narrow query is never revisited."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "coalesce",
+      "label": "Coalesce post-shuffle partitions",
+      "summary": "Undersized post-shuffle partitions merge toward the advisory target size.",
+      "detail": "Undersized post-shuffle partitions merge toward the advisory target size.",
+      "whyItMatters": "Undersized post-shuffle partitions merge toward the advisory target size.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "coalescePartitions merges small post-shuffle partitions toward advisoryPartitionSizeInBytes, default 64 MB."
+        },
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "shuffle.partitions defaults to 200 and acts as an upper bound when coalescing is on."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Measured post-shuffle partition sizes"
+        ],
+        "processing": [
+          "Merge adjacent undersized partitions"
+        ],
+        "outputs": [
+          "Fewer, better-sized partitions"
+        ],
+        "example": "200 planned partitions averaging 8 MB coalesce into roughly 25 partitions near the target.",
+        "controls": [
+          "spark.sql.adaptive.coalescePartitions.enabled",
+          "spark.sql.adaptive.advisoryPartitionSizeInBytes"
+        ],
+        "failureModes": [
+          "Thousands of sub-second tasks indicate coalescing is off or the target is far too small."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "broadcast",
+      "label": "Convert sort-merge to broadcast",
+      "summary": "A sort-merge join converts to broadcast when measured sizes justify it.",
+      "detail": "A sort-merge join converts to broadcast when measured sizes justify it.",
+      "whyItMatters": "A sort-merge join converts to broadcast when measured sizes justify it.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "AQE converts sort-merge join to broadcast hash join when runtime statistics show a side is small enough."
+        },
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "autoBroadcastJoinThreshold defaults to 10485760 bytes."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Measured size of each join side"
+        ],
+        "processing": [
+          "Compare against the adaptive broadcast threshold",
+          "Rewrite the join"
+        ],
+        "outputs": [
+          "Broadcast hash join instead of sort-merge"
+        ],
+        "example": "A dimension that filters down to 6 MB is broadcast, removing both shuffles and both sorts.",
+        "controls": [
+          "spark.sql.autoBroadcastJoinThreshold"
+        ],
+        "failureModes": [
+          "A broadcast forced by an explicit hint bypasses this runtime safety check entirely."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "skew",
+      "label": "Split skewed partitions",
+      "summary": "Oversized partitions are split and the matching side replicated.",
+      "detail": "Oversized partitions are split and the matching side replicated.",
+      "whyItMatters": "Oversized partitions are split and the matching side replicated.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "skewJoin splits partitions exceeding skewedPartitionFactor 5.0 times the median and 256 MB, replicating the matching side."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Measured partition size distribution"
+        ],
+        "processing": [
+          "Identify partitions above both thresholds",
+          "Split and replicate the matching side"
+        ],
+        "outputs": [
+          "Evenly sized join tasks"
+        ],
+        "example": "One 4 GB partition among 200 averaging 50 MB is split into sub-partitions instead of becoming a straggler.",
+        "controls": [
+          "spark.sql.adaptive.skewJoin.enabled",
+          "skewedPartitionFactor",
+          "skewedPartitionThresholdInBytes"
+        ],
+        "failureModes": [
+          "Aggregation skew is not covered by skew-join handling and still requires salting."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "limits",
+      "label": "AQE needs a shuffle to act on",
+      "summary": "AQE only engages where a shuffle exists, and does not fix aggregation skew.",
+      "detail": "AQE only engages where a shuffle exists, and does not fix aggregation skew.",
+      "whyItMatters": "AQE only engages where a shuffle exists, and does not fix aggregation skew.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "AQE depends on runtime statistics produced at shuffle boundaries."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A query plan"
+        ],
+        "processing": [
+          "Check for an exchange to re-optimize around"
+        ],
+        "outputs": [
+          "Either an adaptive plan or an unchanged static one"
+        ],
+        "example": "A filter-and-write job with no join or groupBy runs entirely on the original plan.",
+        "controls": [
+          "Query shape"
+        ],
+        "failureModes": [
+          "Expecting AQE to fix a narrow-only query wastes time that belongs in the table layout."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "defeat",
+      "label": "Hard-coded settings defeat it",
+      "summary": "Hard-coded partition counts override the runtime measurement AQE performs.",
+      "detail": "Hard-coded partition counts override the runtime measurement AQE performs.",
+      "whyItMatters": "Hard-coded partition counts override the runtime measurement AQE performs.",
+      "classification": "warning",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "The common failure mode is a team pasting settings into every notebook and defeating AQE's runtime measurements."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Copied configuration or a hard-coded repartition"
+        ],
+        "processing": [
+          "Override the runtime decision"
+        ],
+        "outputs": [
+          "A plan pinned to a guess"
+        ],
+        "example": "repartition(400) forces a partition count regardless of what the data actually measured.",
+        "controls": [
+          "Remove the override and let AQE measure"
+        ],
+        "failureModes": [
+          "Tuning appears to do nothing because the pinned value replaces the adaptive one."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "static",
+      "to": "execute",
+      "label": "Plan is provisional past the first exchange",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e2",
+      "from": "execute",
+      "to": "stats",
+      "label": "Completed stages report real sizes",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e3",
+      "from": "stats",
+      "to": "coalesce",
+      "label": "Small partitions merged toward the target",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e4",
+      "from": "stats",
+      "to": "broadcast",
+      "label": "Measured size justifies a broadcast",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e5",
+      "from": "stats",
+      "to": "skew",
+      "label": "Oversized partitions split and replicated",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e6",
+      "from": "coalesce",
+      "to": "execute",
+      "label": "Re-optimized plan continues executing",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e7",
+      "from": "stats",
+      "to": "limits",
+      "label": "No exchange means nothing to re-optimize",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e8",
+      "from": "defeat",
+      "to": "coalesce",
+      "label": "Pinned counts override the measurement",
+      "layer": "compute",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "static",
+      "title": "1. Static plan built from estimates",
+      "explanation": "Catalyst commits to a plan using pre-execution estimates that may be badly wrong."
+    },
+    {
+      "nodeId": "execute",
+      "title": "2. Execute materializable stages",
+      "explanation": "AQE runs the stages it can and pauses at the shuffle boundary."
+    },
+    {
+      "nodeId": "stats",
+      "title": "3. Collect real shuffle statistics",
+      "explanation": "Real partition sizes from completed stages replace the original estimates."
+    },
+    {
+      "nodeId": "coalesce",
+      "title": "4. Coalesce post-shuffle partitions",
+      "explanation": "Undersized post-shuffle partitions merge toward the advisory target size."
+    },
+    {
+      "nodeId": "broadcast",
+      "title": "5. Convert sort-merge to broadcast",
+      "explanation": "A sort-merge join converts to broadcast when measured sizes justify it."
+    },
+    {
+      "nodeId": "skew",
+      "title": "6. Split skewed partitions",
+      "explanation": "Oversized partitions are split and the matching side replicated."
+    },
+    {
+      "nodeId": "limits",
+      "title": "7. AQE needs a shuffle to act on",
+      "explanation": "AQE only engages where a shuffle exists, and does not fix aggregation skew."
+    },
+    {
+      "nodeId": "defeat",
+      "title": "8. Hard-coded settings defeat it",
+      "explanation": "Hard-coded partition counts override the runtime measurement AQE performs."
+    }
+  ]
+}

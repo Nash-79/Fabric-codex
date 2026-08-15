@@ -1,0 +1,495 @@
+{
+  "id": "spark-performance-diagnosis-path",
+  "title": "Diagnosing a slow Spark job: plan, then metrics, then layout, then settings",
+  "purpose": "Spark performance diagnosis order. Read the physical plan; Check stage metrics for spill and skew; Fix code or table layout; Adjust settings last; The four symptoms and their fingerprints.",
+  "accessibleSummary": "Spark performance diagnosis order. Read the physical plan; Check stage metrics for spill and skew; Fix code or table layout; Adjust settings last; The four symptoms and their fingerprints.",
+  "longDescription": "Spark performance diagnosis order. Read the physical plan; Check stage metrics for spill and skew; Fix code or table layout; Adjust settings last; The four symptoms and their fingerprints.",
+  "type": "decision",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-performance-diagnosis-path.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "plan",
+      "label": "1. Read the physical plan",
+      "summary": "The physical plan is the first place to look, and EXPLAIN never executes the query.",
+      "detail": "The physical plan is the first place to look, and EXPLAIN never executes the query.",
+      "whyItMatters": "The physical plan is the first place to look, and EXPLAIN never executes the query.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "EXPLAIN compiles and optimizes without executing, making plan inspection safe on production tables."
+        },
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "FORMATTED prints a plan outline plus per-node detail; COST prints statistics that explain the join choice."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A slow query"
+        ],
+        "processing": [
+          "Compile the plan without running it",
+          "Read operators and attributes"
+        ],
+        "outputs": [
+          "Named operators and their attributes"
+        ],
+        "example": "EXPLAIN FORMATTED reveals a sort-merge join where the author assumed a broadcast.",
+        "controls": [
+          "df.explain(\"formatted\")",
+          "df.explain(\"cost\")"
+        ],
+        "failureModes": [
+          "Reading only the initial plan misses the final adaptive plan AQE actually executed."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "metrics",
+      "label": "2. Check stage metrics",
+      "summary": "Stage metrics reveal spill, skew and task-count problems directly.",
+      "detail": "Stage metrics reveal spill, skew and task-count problems directly.",
+      "whyItMatters": "Stage metrics reveal spill, skew and task-count problems directly.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-memory-tuning",
+          "note": "Execution memory exhaustion causes sorts, joins and aggregations to spill to disk."
+        },
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "Skewed partitions exceed the median partition size by a large factor."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Completed stage metrics"
+        ],
+        "processing": [
+          "Inspect spill columns",
+          "Compare max task duration against the percentile spread"
+        ],
+        "outputs": [
+          "A specific resource or distribution diagnosis"
+        ],
+        "example": "A stage where one task ran ten times longer than the median is a skew problem, not a sizing problem.",
+        "controls": [
+          "Spark UI stage detail"
+        ],
+        "failureModes": [
+          "Treating a skew symptom as under-provisioning leads to scaling a cluster that stays idle."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "fix",
+      "label": "3. Fix the code or the layout",
+      "summary": "Most real wins come from fixing code or table layout, not configuration.",
+      "detail": "Most real wins come from fixing code or table layout, not configuration.",
+      "whyItMatters": "Most real wins come from fixing code or table layout, not configuration.",
+      "classification": "pattern",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "A cast on a join key, a Python UDF, or a missing OPTIMIZE explains more slow jobs than any configuration value does."
+        },
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "openCostInBytes compensates for small files at read time but does not fix the underlying problem."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A specific diagnosis"
+        ],
+        "processing": [
+          "Correct the query or the table layout"
+        ],
+        "outputs": [
+          "A structural fix rather than a workaround"
+        ],
+        "example": "Removing a cast from the join key restores predicate pushdown and halves the scan.",
+        "controls": [
+          "Query rewriting",
+          "Compaction and clustering"
+        ],
+        "failureModes": [
+          "Skipping to configuration leaves the real defect in place and the gain temporary."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "settings",
+      "label": "4. Change settings last",
+      "summary": "Fabric's defaults are good, and pasted settings often defeat adaptive execution.",
+      "detail": "Fabric's defaults are good, and pasted settings often defeat adaptive execution.",
+      "whyItMatters": "Fabric's defaults are good, and pasted settings often defeat adaptive execution.",
+      "classification": "pattern",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "The common failure mode is a team pasting settings from a blog into every notebook and defeating AQE."
+        },
+        {
+          "sourceKey": "fabric-spark-runtime-versions",
+          "note": "The Fabric Runtime adds built-in query enhancements and an intelligent cache on top of open-source Spark."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "An unresolved performance problem"
+        ],
+        "processing": [
+          "Change one setting deliberately",
+          "Measure the effect"
+        ],
+        "outputs": [
+          "A justified configuration change"
+        ],
+        "example": "Raising the advisory partition size for a very large scan, after confirming spill is not the issue.",
+        "controls": [
+          "Environment Spark properties"
+        ],
+        "failureModes": [
+          "Setting a value already at its default pins it and hides future engine improvements."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "pushdown",
+      "label": "PushedFilters is empty",
+      "summary": "An empty PushedFilters list means the scan is reading everything.",
+      "detail": "An empty PushedFilters list means the scan is reading everything.",
+      "whyItMatters": "An empty PushedFilters list means the scan is reading everything.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "PushedFilters:[] means predicate pushdown failed and the scan reads everything."
+        },
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Casting the column rather than the literal prevents Spark pushing the filter into the scan."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A scan node in the plan"
+        ],
+        "processing": [
+          "Check the PushedFilters attribute"
+        ],
+        "outputs": [
+          "Confirmation of pushdown success or failure"
+        ],
+        "example": "Casting a string column to date in the predicate blocks pushdown; casting the literal instead restores it.",
+        "controls": [
+          "Filter on the raw column",
+          "Cast the literal side"
+        ],
+        "failureModes": [
+          "A full scan on a large table dominates runtime while the plan otherwise looks reasonable."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "udf",
+      "label": "BatchEvalPython appears",
+      "summary": "A row-at-a-time Python UDF breaks fusion, serializes rows and forces native fallback.",
+      "detail": "A row-at-a-time Python UDF breaks fusion, serializes rows and forces native fallback.",
+      "whyItMatters": "A row-at-a-time Python UDF breaks fusion, serializes rows and forces native fallback.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "A single unsupported expression such as a Python UDF drops the whole enclosing operator to JVM execution."
+        },
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "CODEGEN mode confirms whether whole-stage fusion applied."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A projection or filter containing a UDF"
+        ],
+        "processing": [
+          "Identify the Python evaluation node"
+        ],
+        "outputs": [
+          "A named fusion and fallback cause"
+        ],
+        "example": "Replacing a Python UDF with a built-in expression restores both codegen fusion and native execution.",
+        "controls": [
+          "Built-in functions first",
+          "Arrow or pandas UDFs where unavoidable"
+        ],
+        "failureModes": [
+          "The damage is attributed to the UDF alone, understating the lost operator-level acceleration."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "join",
+      "label": "SortMergeJoin on a small side",
+      "summary": "A sort-merge join on a small side pays two sorts and two shuffles unnecessarily.",
+      "detail": "A sort-merge join on a small side pays two sorts and two shuffles unnecessarily.",
+      "whyItMatters": "A sort-merge join on a small side pays two sorts and two shuffles unnecessarily.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "AQE converts sort-merge to broadcast hash join when runtime statistics show a side is small enough."
+        },
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "autoBroadcastJoinThreshold defaults to 10485760 bytes."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A join node in the plan"
+        ],
+        "processing": [
+          "Compare planned strategy against measured sizes"
+        ],
+        "outputs": [
+          "A justified or unjustified join strategy"
+        ],
+        "example": "The initial plan shows sort-merge but the final adaptive plan shows the broadcast AQE chose.",
+        "controls": [
+          "spark.sql.autoBroadcastJoinThreshold",
+          "Statistics freshness"
+        ],
+        "failureModes": [
+          "An explicit broadcast hint bypasses AQE's runtime safety check and can OOM the driver."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "noaqe",
+      "label": "No AdaptiveSparkPlan wrapper",
+      "summary": "A missing adaptive plan wrapper means no runtime re-optimization happened.",
+      "detail": "A missing adaptive plan wrapper means no runtime re-optimization happened.",
+      "whyItMatters": "A missing adaptive plan wrapper means no runtime re-optimization happened.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "AQE is enabled by default since Spark 3.2.0 and provides coalescing, join conversion and skew handling."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A physical plan"
+        ],
+        "processing": [
+          "Check for the adaptive plan wrapper"
+        ],
+        "outputs": [
+          "Confirmation that runtime re-optimization is active"
+        ],
+        "example": "A plan with no adaptive wrapper gets none of the three runtime corrections.",
+        "controls": [
+          "spark.sql.adaptive.enabled"
+        ],
+        "failureModes": [
+          "Disabling AQE to make plans deterministic forfeits coalescing, join conversion and skew splitting."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "plan",
+      "to": "metrics",
+      "label": "Plan narrows where to look in the metrics",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e2",
+      "from": "metrics",
+      "to": "fix",
+      "label": "Spill or skew points at code or layout",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e3",
+      "from": "fix",
+      "to": "settings",
+      "label": "Only unresolved cases reach configuration",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e4",
+      "from": "plan",
+      "to": "pushdown",
+      "label": "Empty pushed filters visible in the scan",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e5",
+      "from": "plan",
+      "to": "udf",
+      "label": "Python evaluation node visible in the plan",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e6",
+      "from": "plan",
+      "to": "join",
+      "label": "Join strategy visible in the plan",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e7",
+      "from": "plan",
+      "to": "noaqe",
+      "label": "Missing adaptive wrapper visible in the plan",
+      "layer": "compute",
+      "kind": "branch"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "plan",
+      "title": "1. 1. Read the physical plan",
+      "explanation": "The physical plan is the first place to look, and EXPLAIN never executes the query."
+    },
+    {
+      "nodeId": "metrics",
+      "title": "2. 2. Check stage metrics",
+      "explanation": "Stage metrics reveal spill, skew and task-count problems directly."
+    },
+    {
+      "nodeId": "fix",
+      "title": "3. 3. Fix the code or the layout",
+      "explanation": "Most real wins come from fixing code or table layout, not configuration."
+    },
+    {
+      "nodeId": "settings",
+      "title": "4. 4. Change settings last",
+      "explanation": "Fabric's defaults are good, and pasted settings often defeat adaptive execution."
+    },
+    {
+      "nodeId": "settings",
+      "title": "5. 4. Change settings last",
+      "explanation": "Fabric's defaults are good, and pasted settings often defeat adaptive execution."
+    },
+    {
+      "nodeId": "pushdown",
+      "title": "6. PushedFilters is empty",
+      "explanation": "An empty PushedFilters list means the scan is reading everything."
+    },
+    {
+      "nodeId": "udf",
+      "title": "7. BatchEvalPython appears",
+      "explanation": "A row-at-a-time Python UDF breaks fusion, serializes rows and forces native fallback."
+    },
+    {
+      "nodeId": "join",
+      "title": "8. SortMergeJoin on a small side",
+      "explanation": "A sort-merge join on a small side pays two sorts and two shuffles unnecessarily."
+    },
+    {
+      "nodeId": "noaqe",
+      "title": "9. No AdaptiveSparkPlan wrapper",
+      "explanation": "A missing adaptive plan wrapper means no runtime re-optimization happened."
+    }
+  ]
+}

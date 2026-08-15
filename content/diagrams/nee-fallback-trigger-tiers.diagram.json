@@ -1,0 +1,414 @@
+{
+  "id": "nee-fallback-trigger-tiers",
+  "title": "Native Execution Engine fallback: the four trigger tiers",
+  "purpose": "Native execution fallback tiers. Tier one whole query; Tier two operator; Tier three expression; Tier four data type; How to detect fallback.",
+  "accessibleSummary": "Native execution fallback tiers. Tier one whole query; Tier two operator; Tier three expression; Tier four data type; How to detect fallback.",
+  "longDescription": "Native execution fallback tiers. Tier one whole query; Tier two operator; Tier three expression; Tier four data type; How to detect fallback.",
+  "type": "decision",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/nee-fallback-trigger-tiers.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "tier1",
+      "label": "Tier 1 — whole query falls back",
+      "summary": "Streaming, ANSI mode and JSON/XML sources force the entire query onto the JVM.",
+      "detail": "Streaming, ANSI mode and JSON/XML sources force the entire query onto the JVM.",
+      "whyItMatters": "Streaming, ANSI mode and JSON/XML sources force the entire query onto the JVM.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "Structured streaming and ANSI SQL mode always execute on JVM Spark, and JSON/XML source formats are not accelerated."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Query characteristics",
+          "Runtime ANSI setting"
+        ],
+        "processing": [
+          "Detect a whole-query disqualifier"
+        ],
+        "outputs": [
+          "Entire query on JVM Spark"
+        ],
+        "example": "A structured streaming job gains nothing from the native engine regardless of configuration.",
+        "controls": [
+          "spark.sql.ansi.enabled",
+          "Source format choice"
+        ],
+        "failureModes": [
+          "Sizing a streaming cluster against native benchmarks over-promises throughput."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "tier2",
+      "label": "Tier 2 — one operator falls back",
+      "summary": "An operator with no Velox equivalent runs on the JVM with conversions either side.",
+      "detail": "An operator with no Velox equivalent runs on the JVM with conversions either side.",
+      "whyItMatters": "An operator with no Velox equivalent runs on the JVM with conversions either side.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "An unsupported operator causes the affected query segment to fall back to standard JVM Spark."
+        },
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Fallback triggers form four tiers, and identifying the tier is the first diagnostic step."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Physical plan operators"
+        ],
+        "processing": [
+          "Match each operator against Velox support"
+        ],
+        "outputs": [
+          "Mixed native and JVM plan"
+        ],
+        "example": "An unsupported window frame runs on the JVM while the surrounding scan and aggregate stay native.",
+        "controls": [
+          "Query restructuring"
+        ],
+        "failureModes": [
+          "An unsupported operator in the middle of a plan pays conversion cost twice."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "tier3",
+      "label": "Tier 3 — one expression, whole operator lost",
+      "summary": "One unsupported expression or UDF drops its whole enclosing operator to the JVM.",
+      "detail": "One unsupported expression or UDF drops its whole enclosing operator to the JVM.",
+      "whyItMatters": "One unsupported expression or UDF drops its whole enclosing operator to the JVM.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "A single unsupported expression or Python UDF drops the whole enclosing operator to JVM execution."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Expressions inside an operator"
+        ],
+        "processing": [
+          "Detect an unsupported function or UDF"
+        ],
+        "outputs": [
+          "The enclosing operator demoted to JVM"
+        ],
+        "example": "One Python UDF in a projection removes native execution for that entire projection.",
+        "controls": [
+          "Replace UDFs with built-in functions",
+          "Use SQL UDFs where available"
+        ],
+        "failureModes": [
+          "The performance loss is attributed to the UDF alone, understating the true cost."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "tier4",
+      "label": "Tier 4 — data types",
+      "summary": "Deeply nested and complex data types push execution back to the JVM.",
+      "detail": "Deeply nested and complex data types push execution back to the JVM.",
+      "whyItMatters": "Deeply nested and complex data types push execution back to the JVM.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Deeply nested structs and maps, and complex-type manipulation, trigger fallback."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Column data types"
+        ],
+        "processing": [
+          "Detect deeply nested or complex types"
+        ],
+        "outputs": [
+          "JVM execution for the affected work"
+        ],
+        "example": "Repeated manipulation of a nested struct in a hot path keeps returning execution to the JVM.",
+        "controls": [
+          "Flatten early",
+          "Nest once at the edge"
+        ],
+        "failureModes": [
+          "Nesting and unnesting repeatedly multiplies conversion boundaries."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "plan",
+      "label": "Read the plan",
+      "summary": "Plan suffixes reveal which operators genuinely executed natively.",
+      "detail": "Plan suffixes reveal which operators genuinely executed natively.",
+      "whyItMatters": "Plan suffixes reveal which operators genuinely executed natively.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "Native operators carry suffixes such as *Transformer, confirming what actually ran natively."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A compiled query plan"
+        ],
+        "processing": [
+          "Inspect operator suffixes and conversion nodes"
+        ],
+        "outputs": [
+          "Evidence of native or JVM execution"
+        ],
+        "example": "A plan showing only standard operator names with the engine enabled proves total fallback.",
+        "controls": [
+          "df.explain()",
+          "Spark UI SQL tab"
+        ],
+        "failureModes": [
+          "Reading only the initial plan misses AQE's final adaptive plan."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "advisor",
+      "label": "Spark Advisor, inline",
+      "summary": "The Spark Advisor alerts on fallback in real time as a notebook cell runs.",
+      "detail": "The Spark Advisor alerts on fallback in real time as a notebook cell runs.",
+      "whyItMatters": "The Spark Advisor alerts on fallback in real time as a notebook cell runs.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-runtime-versions",
+          "note": "The Fabric Spark Advisor surfaces real-time alerts during notebook cell execution when execution falls back to JVM-based Spark."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A running notebook cell"
+        ],
+        "processing": [
+          "Detect fallback during execution",
+          "Raise an inline alert"
+        ],
+        "outputs": [
+          "Named unsupported operator or configuration"
+        ],
+        "example": "A cell reports fallback immediately, before the job has even finished.",
+        "controls": [
+          "Notebook execution surface"
+        ],
+        "failureModes": [
+          "Alerts are per cell, so a scheduled job needs the post-run Diagnostics route instead."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "diag",
+      "label": "Diagnostics pane, post-run",
+      "summary": "The Diagnostics pane names the root cause of fallback after the run.",
+      "detail": "The Diagnostics pane names the root cause of fallback after the run.",
+      "whyItMatters": "The Diagnostics pane names the root cause of fallback after the run.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-native-execution-engine",
+          "note": "Whether an operator executed natively can be confirmed via the Spark UI."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "A completed application"
+        ],
+        "processing": [
+          "Read the fallback report and root cause"
+        ],
+        "outputs": [
+          "Application-wide fallback picture"
+        ],
+        "example": "The root-cause view names the specific expression that forced the JVM path.",
+        "controls": [
+          "Monitoring hub application detail"
+        ],
+        "failureModes": [
+          "Post-run only, so it cannot shorten the feedback loop during development."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "tier1",
+      "to": "plan",
+      "label": "Confirm no native operators at all",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e2",
+      "from": "tier2",
+      "to": "plan",
+      "label": "Locate where the transformer chain breaks",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e3",
+      "from": "tier3",
+      "to": "advisor",
+      "label": "Advisor names the unsupported expression",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e4",
+      "from": "tier4",
+      "to": "diag",
+      "label": "Diagnostics reports the offending type",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e5",
+      "from": "plan",
+      "to": "diag",
+      "label": "Cross-check the plan against the run report",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e6",
+      "from": "advisor",
+      "to": "diag",
+      "label": "Inline alert confirmed post-run",
+      "layer": "compute",
+      "kind": "branch"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "tier1",
+      "title": "1. Tier 1 — whole query falls back",
+      "explanation": "Streaming, ANSI mode and JSON/XML sources force the entire query onto the JVM."
+    },
+    {
+      "nodeId": "tier2",
+      "title": "2. Tier 2 — one operator falls back",
+      "explanation": "An operator with no Velox equivalent runs on the JVM with conversions either side."
+    },
+    {
+      "nodeId": "tier3",
+      "title": "3. Tier 3 — one expression, whole operator lost",
+      "explanation": "One unsupported expression or UDF drops its whole enclosing operator to the JVM."
+    },
+    {
+      "nodeId": "tier4",
+      "title": "4. Tier 4 — data types",
+      "explanation": "Deeply nested and complex data types push execution back to the JVM."
+    },
+    {
+      "nodeId": "tier4",
+      "title": "5. Tier 4 — data types",
+      "explanation": "Deeply nested and complex data types push execution back to the JVM."
+    },
+    {
+      "nodeId": "plan",
+      "title": "6. Read the plan",
+      "explanation": "Plan suffixes reveal which operators genuinely executed natively."
+    },
+    {
+      "nodeId": "advisor",
+      "title": "7. Spark Advisor, inline",
+      "explanation": "The Spark Advisor alerts on fallback in real time as a notebook cell runs."
+    },
+    {
+      "nodeId": "diag",
+      "title": "8. Diagnostics pane, post-run",
+      "explanation": "The Diagnostics pane names the root cause of fallback after the run."
+    }
+  ]
+}

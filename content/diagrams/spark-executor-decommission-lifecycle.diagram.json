@@ -1,0 +1,358 @@
+{
+  "id": "spark-executor-decommission-lifecycle",
+  "title": "Executor decommissioning: the lifecycle that makes scale-down safe",
+  "purpose": "Executor decommission lifecycle. Scale-down decision; Stop scheduling new tasks; Migrate shuffle blocks; Update block locations; Executor exits safely; What happens without it.",
+  "accessibleSummary": "Executor decommission lifecycle. Scale-down decision; Stop scheduling new tasks; Migrate shuffle blocks; Update block locations; Executor exits safely; What happens without it.",
+  "longDescription": "Executor decommission lifecycle. Scale-down decision; Stop scheduling new tasks; Migrate shuffle blocks; Update block locations; Executor exits safely; What happens without it.",
+  "type": "flow",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-executor-decommission-lifecycle.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "mark",
+      "label": "1. Mark for decommission",
+      "summary": "The executor is flagged for removal rather than terminated immediately.",
+      "detail": "The executor is flagged for removal rather than terminated immediately.",
+      "whyItMatters": "The executor is flagged for removal rather than terminated immediately.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-job-scheduling-dynamic-allocation",
+          "note": "Spark needs a mechanism to decommission an executor gracefully by preserving its state before removing it."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Autoscale decision or infrastructure reclamation"
+        ],
+        "processing": [
+          "Flag the executor for decommission"
+        ],
+        "outputs": [
+          "Executor in decommissioning state"
+        ],
+        "example": "Autoscale determines the pool can shrink after a burst of work completes.",
+        "controls": [
+          "spark.decommission.enabled"
+        ],
+        "failureModes": [
+          "With decommissioning disabled, the executor is simply removed with its data."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "drain",
+      "label": "2. Stop scheduling new tasks",
+      "summary": "No new tasks are scheduled while running work finishes.",
+      "detail": "No new tasks are scheduled while running work finishes.",
+      "whyItMatters": "No new tasks are scheduled while running work finishes.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-job-scheduling-dynamic-allocation",
+          "note": "Graceful decommissioning preserves executor state before removal rather than terminating mid-work."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Decommissioning state"
+        ],
+        "processing": [
+          "Stop assigning new tasks",
+          "Let running tasks complete"
+        ],
+        "outputs": [
+          "An executor with no new obligations"
+        ],
+        "example": "Two in-flight tasks finish while no further tasks are scheduled onto the node.",
+        "controls": [
+          "Scheduler behaviour"
+        ],
+        "failureModes": [
+          "A long-running task delays the whole decommission sequence."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "migrate",
+      "label": "3. Migrate shuffle blocks",
+      "summary": "Shuffle blocks are copied to a peer executor or to fallback storage.",
+      "detail": "Shuffle blocks are copied to a peer executor or to fallback storage.",
+      "whyItMatters": "Shuffle blocks are copied to a peer executor or to fallback storage.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-job-scheduling-dynamic-allocation",
+          "note": "Shuffle blocks are migrated to a peer executor, or to configured fallback storage if no peer has room."
+        },
+        {
+          "sourceKey": "fabric-blog-spark-efficient-scaledown",
+          "note": "Shuffle migration is one of the four cooperating parts of Efficient Scaledown."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Locally held shuffle blocks",
+          "A peer with capacity or fallback storage"
+        ],
+        "processing": [
+          "Copy blocks to their new home"
+        ],
+        "outputs": [
+          "Relocated shuffle blocks"
+        ],
+        "example": "Blocks move to a peer executor over the network before the source node exits.",
+        "controls": [
+          "spark.storage.decommission.shuffleBlocks.enabled"
+        ],
+        "failureModes": [
+          "No peer capacity and no fallback storage configured leaves blocks with nowhere to go."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "update",
+      "label": "4. Update block locations",
+      "summary": "Block location metadata is re-pointed to the blocks' new home.",
+      "detail": "Block location metadata is re-pointed to the blocks' new home.",
+      "whyItMatters": "Block location metadata is re-pointed to the blocks' new home.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-job-scheduling-dynamic-allocation",
+          "note": "Shuffle state must remain resolvable for reduce tasks after the producing executor is gone."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Migrated block locations"
+        ],
+        "processing": [
+          "Update the authoritative location mapping"
+        ],
+        "outputs": [
+          "Reduce tasks resolve to the new location"
+        ],
+        "example": "A reducer scheduled later fetches from the peer rather than the departed executor.",
+        "controls": [
+          "Driver-side tracking"
+        ],
+        "failureModes": [
+          "Stale location metadata sends a fetch to a node that no longer exists."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "exit",
+      "label": "5. Executor exits safely",
+      "summary": "The executor terminates only once every block has a new home.",
+      "detail": "The executor terminates only once every block has a new home.",
+      "whyItMatters": "The executor terminates only once every block has a new home.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-job-scheduling-dynamic-allocation",
+          "note": "The executor exits only once its state has been preserved elsewhere."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "Confirmed block relocation"
+        ],
+        "processing": [
+          "Terminate the executor process",
+          "Release the node"
+        ],
+        "outputs": [
+          "Reclaimed compute with no outstanding obligation"
+        ],
+        "example": "The pool shrinks by one node and billing for it stops, with no downstream failure.",
+        "controls": [
+          "Pool autoscale bounds"
+        ],
+        "failureModes": [
+          "Terminating before confirmation reintroduces exactly the failure decommissioning prevents."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "unsafe",
+      "label": "Without decommissioning",
+      "summary": "Skipping decommissioning loses the blocks and forces a full stage recompute.",
+      "detail": "Skipping decommissioning loses the blocks and forces a full stage recompute.",
+      "whyItMatters": "Skipping decommissioning loses the blocks and forces a full stage recompute.",
+      "classification": "warning",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-blog-spark-efficient-scaledown",
+          "note": "When an executor holding shuffle data is lost, Spark raises FetchFailedException and must re-execute the affected stage."
+        },
+        {
+          "sourceKey": "spark-job-scheduling-dynamic-allocation",
+          "note": "Removing an executor before a shuffle completes means its shuffle files must be recomputed unnecessarily."
+        }
+      ],
+      "tags": [],
+      "drill": {
+        "inputs": [
+          "An executor removed without migration"
+        ],
+        "processing": [
+          "Fail the fetch",
+          "Re-run the owning stage"
+        ],
+        "outputs": [
+          "Repeated work and extended runtime"
+        ],
+        "example": "A ten-minute map stage runs twice because one node was reclaimed early.",
+        "controls": [
+          "Enable decommissioning or remote shuffle storage"
+        ],
+        "failureModes": [
+          "Repeated losses produce a retry storm where progress stalls entirely."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "mark",
+      "to": "drain",
+      "label": "Flagged executor stops taking new work",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e2",
+      "from": "drain",
+      "to": "migrate",
+      "label": "Draining allows block migration to begin",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e3",
+      "from": "migrate",
+      "to": "update",
+      "label": "New block homes are registered",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e4",
+      "from": "update",
+      "to": "exit",
+      "label": "Confirmed relocation permits termination",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e5",
+      "from": "mark",
+      "to": "unsafe",
+      "label": "Terminating without migration loses the blocks",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e6",
+      "from": "unsafe",
+      "to": "migrate",
+      "label": "Recompute regenerates what was not migrated",
+      "layer": "compute",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "mark",
+      "title": "1. 1. Mark for decommission",
+      "explanation": "The executor is flagged for removal rather than terminated immediately."
+    },
+    {
+      "nodeId": "drain",
+      "title": "2. 2. Stop scheduling new tasks",
+      "explanation": "No new tasks are scheduled while running work finishes."
+    },
+    {
+      "nodeId": "migrate",
+      "title": "3. 3. Migrate shuffle blocks",
+      "explanation": "Shuffle blocks are copied to a peer executor or to fallback storage."
+    },
+    {
+      "nodeId": "update",
+      "title": "4. 4. Update block locations",
+      "explanation": "Block location metadata is re-pointed to the blocks' new home."
+    },
+    {
+      "nodeId": "exit",
+      "title": "5. 5. Executor exits safely",
+      "explanation": "The executor terminates only once every block has a new home."
+    },
+    {
+      "nodeId": "unsafe",
+      "title": "6. Without decommissioning",
+      "explanation": "Skipping decommissioning loses the blocks and forces a full stage recompute."
+    }
+  ]
+}
