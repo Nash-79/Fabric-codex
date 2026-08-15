@@ -246,7 +246,9 @@ reads it, with content/queue.md as the offline fallback.
   sidecar-backed evidence tooltips. Its hash must match the registered revision.
 - Each diagram requires a matching `.diagram.json` semantic topology: labelled edges, evidence for
   fact nodes, node-specific drill metadata covering inputs, processing, outputs, a worked example,
-  controls, and failure modes, and exactly one focusable SVG region per node. Caption-derived
+  controls, and failure modes, and exactly one focusable SVG region per node — each anchored to
+  its own shape's coordinates, since two nodes sharing one rect fire each other's tooltips
+  (`npm run validate:diagrams` fails on duplicate region geometry). Caption-derived
   fallback diagrams are not publishable.
 
 - `/publish-topic` commissions **≥2** original diagrams before the blog-author runs — an

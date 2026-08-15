@@ -9,11 +9,17 @@ const diagrams = assets.map((asset) => ({
   slug: basename(asset.path, ".svg"),
   markup: readFileSync(join(root, asset.path), "utf8"),
 }));
+// Windows paths first (the authoring machines), then the Linux locations CI runners use, so the
+// same gate runs in both places without the workflow having to pin an absolute path.
 const browser = [
   process.env.DIAGRAM_BROWSER,
   "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe",
   "C:/Program Files/Microsoft/Edge/Application/msedge.exe",
   "C:/Program Files/Google/Chrome/Application/chrome.exe",
+  "/usr/bin/google-chrome",
+  "/usr/bin/chromium-browser",
+  "/usr/bin/chromium",
+  "/usr/bin/microsoft-edge",
 ]
   .filter(Boolean)
   .find(existsSync);
@@ -41,7 +47,16 @@ const child = spawn(
   { stdio: "ignore" },
 );
 
-const auditExpression = `(()=>{
+// The payload is a multi-megabyte inline script, so the page target becomes connectable well
+// before the parser has evaluated it. Awaiting window.diagrams here is what keeps the audit from
+// throwing "window.diagrams is not iterable" and reporting a crash instead of a real result.
+const auditExpression = `(async()=>{
+for(let attempt=0;attempt<300;attempt++){
+ if(Array.isArray(window.diagrams)&&window.diagrams.length&&document.querySelector('#stage'))break;
+ await new Promise(done=>setTimeout(done,100));
+}
+if(!Array.isArray(window.diagrams)||!window.diagrams.length)return ['audit payload never finished loading'];
+if(!document.querySelector('#stage'))return ['audit stage element missing'];
 const widths=[390,768,1280],failures=[],stage=document.querySelector('#stage');
 const transformedBox=(element,svg)=>{const box=element.getBBox(),root=svg.getScreenCTM(),own=element.getScreenCTM();if(!root||!own)return null;const matrix=root.inverse().multiply(own);const points=[[box.x,box.y],[box.x+box.width,box.y],[box.x,box.y+box.height],[box.x+box.width,box.y+box.height]].map(([x,y])=>new DOMPoint(x,y).matrixTransform(matrix));const xs=points.map(p=>p.x),ys=points.map(p=>p.y);return{x:Math.min(...xs),y:Math.min(...ys),right:Math.max(...xs),bottom:Math.max(...ys)}};
 for(const diagram of window.diagrams){
@@ -90,11 +105,14 @@ try {
       if (message.id !== 1) return;
       clearTimeout(timer);
       socket.close();
-      if (message.result?.exceptionDetails)
+      if (message.result?.exceptionDetails) {
+        // exceptionDetails.text is usually the bare word "Uncaught"; the actual message lives on
+        // the nested exception description. Preferring it keeps a browser-side failure debuggable.
+        const details = message.result.exceptionDetails;
         rejectResult(
-          new Error(message.result.exceptionDetails.text ?? "Browser evaluation failed."),
+          new Error(details.exception?.description ?? details.text ?? "Browser evaluation failed."),
         );
-      else resolveResult(message.result.result.value);
+      } else resolveResult(message.result.result.value);
     });
     socket.addEventListener("error", () => rejectResult(new Error("Browser connection failed.")));
   });

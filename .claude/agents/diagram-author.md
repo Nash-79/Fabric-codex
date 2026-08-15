@@ -76,7 +76,10 @@ before/after).
      Map every sidecar node to exactly one meaningful `<g>` region containing the complete card,
      stage, lane, decision, or callout shape plus its visible label; never attach interaction only
      to a text fragment. Give the group `data-node-id="<node-id>"`, `tabindex="0"`, and an
-     `aria-label`. The article renderer adds the
+     `aria-label`. Each region's rect must match the coordinates of the shape it describes, and
+     **no two nodes may share the same rect** — stacking several ids on one caption-band rectangle
+     makes them fire each other's tooltips and leaves the real shapes unfocusable.
+     `npm run validate:diagrams` fails on duplicate region geometry. The article renderer adds the
      evidence tooltip; do not add scripts or event handlers to the SVG.
    - Mirror the SVG byte-for-byte to `public/diagrams/<slug>.svg` so the app can serve it (blogs embed
      `/diagrams/<slug>.svg`).

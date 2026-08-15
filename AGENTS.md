@@ -82,7 +82,9 @@ in the same run.
 - Every diagram requires a matching `content/diagrams/<slug>.diagram.json` semantic topology. Every
   edge is labelled; every fact node cites evidence; every node drills into inputs, processing,
   outputs, a worked example, controls, and failure modes; and every node maps to one focusable SVG
-  region. Run `npm run validate:diagrams`; caption-derived fallback diagrams are not publishable.
+  region anchored to its own shape's coordinates — two nodes sharing a rect fire each other's
+  tooltips and leave the real shapes unfocusable. Run `npm run validate:diagrams`, which fails on
+  duplicate region geometry; caption-derived fallback diagrams are not publishable.
 - **`## Internals` is mandatory on every article and design** (kept in sync with `CLAUDE.md`):
   fixed sub-headings `### Architecture & design`, `### How it works internally`,
   `### Performance characteristics` — grounded in verified L4/L5 claims where they exist

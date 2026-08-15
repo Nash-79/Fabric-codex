@@ -159,6 +159,26 @@ for (const name of sidecarNames) {
   }
   for (const id of regionIds)
     if (!ids.has(id)) failures.push(`${label}: SVG region references unknown node "${id}"`);
+
+  // Two node ids sharing one rect means at least one is a caption-derived fallback rather than a
+  // hit region over the shape it describes: the stacked regions fire each other's tooltips and the
+  // real node is left with nothing focusable. Each id resolving to exactly one region (checked
+  // above) does not catch this — the geometry has to be distinct too.
+  const regionGeometry = new Map();
+  for (const match of svg.matchAll(
+    /\bdata-node-id=["']([^"']+)["'][\s\S]*?<rect\b[^>]*\bx=["']([\d.-]+)["'][^>]*\by=["']([\d.-]+)["'][^>]*\bwidth=["']([\d.-]+)["'][^>]*\bheight=["']([\d.-]+)["']/g,
+  )) {
+    const [, id, x, y, width, height] = match;
+    const key = `${x},${y},${width},${height}`;
+    if (!regionGeometry.has(key)) regionGeometry.set(key, []);
+    regionGeometry.get(key).push(id);
+  }
+  for (const [key, sharing] of regionGeometry)
+    if (sharing.length > 1)
+      failures.push(
+        `${label}: nodes ${sharing.map((id) => `"${id}"`).join(" and ")} share one SVG region ` +
+          `[${key}] — each node needs its own hit region over the shape it describes`,
+      );
   for (const match of svg.matchAll(
     /<([a-z][\w:-]*)\b[^>]*\bdata-node-id=["']([^"']+)["'][^>]*>/gi,
   )) {
