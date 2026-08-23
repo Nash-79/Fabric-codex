@@ -561,6 +561,7 @@ export type Database = {
           kind: string;
           lesson_meta: Json | null;
           presentation_profile: Json | null;
+          prerequisite_ids: string[];
           ready_to_share: boolean;
           scenario: string;
           slug: string;
@@ -589,6 +590,7 @@ export type Database = {
           lesson_meta?: Json | null;
           presentation_profile?: Json | null;
           ready_to_share?: boolean;
+          prerequisite_ids?: string[];
           scenario?: string;
           slug: string;
           status?: string;
@@ -617,6 +619,7 @@ export type Database = {
           presentation_profile?: Json | null;
           ready_to_share?: boolean;
           scenario?: string;
+          prerequisite_ids?: string[];
           slug?: string;
           status?: string;
           summary?: string;
@@ -956,6 +959,39 @@ export type Database = {
           },
         ];
       };
+      learning_paths: {
+        Row: {
+          active: boolean;
+          audience: string;
+          created_at: string;
+          description: string;
+          slug: string;
+          sort_order: number;
+          title: string;
+          updated_at: string;
+        };
+        Insert: {
+          active?: boolean;
+          audience?: string;
+          created_at?: string;
+          description?: string;
+          slug: string;
+          sort_order?: number;
+          title: string;
+          updated_at?: string;
+        };
+        Update: {
+          active?: boolean;
+          audience?: string;
+          created_at?: string;
+          description?: string;
+          slug?: string;
+          sort_order?: number;
+          title?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       lessons_legacy: {
         Row: {
           body_md: string;
@@ -994,6 +1030,41 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: "capabilities";
             referencedColumns: ["id"];
+          },
+        ];
+      };
+      path_items: {
+        Row: {
+          content_kind: string;
+          content_slug: string;
+          created_at: string;
+          optional: boolean;
+          path_slug: string;
+          position: number;
+        };
+        Insert: {
+          content_kind: string;
+          content_slug: string;
+          created_at?: string;
+          optional?: boolean;
+          path_slug: string;
+          position: number;
+        };
+        Update: {
+          content_kind?: string;
+          content_slug?: string;
+          created_at?: string;
+          optional?: boolean;
+          path_slug?: string;
+          position?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "path_items_path_slug_fkey";
+            columns: ["path_slug"];
+            isOneToOne: false;
+            referencedRelation: "learning_paths";
+            referencedColumns: ["slug"];
           },
         ];
       };
@@ -1625,6 +1696,36 @@ export type Database = {
           invited_by?: string | null;
           revoked_at?: string | null;
           status?: string;
+        };
+        Relationships: [];
+      };
+      user_progress: {
+        Row: {
+          completed_at: string | null;
+          content_kind: string;
+          content_slug: string;
+          percent: number;
+          status: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          content_kind: string;
+          content_slug: string;
+          percent?: number;
+          status?: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          content_kind?: string;
+          content_slug?: string;
+          percent?: number;
+          status?: string;
+          updated_at?: string;
+          user_id?: string;
         };
         Relationships: [];
       };

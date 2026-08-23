@@ -313,10 +313,17 @@ export function ArticleIdeasPanel({
         not the metered Anthropic API). Every idea cites a concrete signal — a roadmap item, a
         capability gap, a queue/feedback entry, or a stale article — and carries a length hint and
         (for articles) diagram guidance calibrated to what blog-author/learning-author actually
-        produce. Approving an idea just marks it <code className="text-teal-300">claimed</code>; run{" "}
-        <code className="text-teal-300">/publish-topic &lt;slug&gt; --idea &lt;id&gt;</code>,{" "}
-        <code className="text-teal-300">/blog &lt;slug&gt; --idea &lt;id&gt;</code>, or{" "}
-        <code className="text-teal-300">
+        produce. Approving an idea just marks it{" "}
+        <code className="text-teal-600 dark:text-teal-300">claimed</code>; run{" "}
+        <code className="text-teal-600 dark:text-teal-300">
+          /publish-topic &lt;slug&gt; --idea &lt;id&gt;
+        </code>
+        ,{" "}
+        <code className="text-teal-600 dark:text-teal-300">
+          /blog &lt;slug&gt; --idea &lt;id&gt;
+        </code>
+        , or{" "}
+        <code className="text-teal-600 dark:text-teal-300">
           /lesson &lt;capability&gt; &lt;level&gt; --idea &lt;id&gt;
         </code>{" "}
         locally to author it with the idea's brief folded in automatically.
@@ -446,7 +453,7 @@ export function ArticleIdeasPanel({
                         <div className="space-y-1 py-2">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="font-semibold text-foreground">Author locally: </span>
-                            <code className="rounded bg-background px-1.5 py-0.5 text-teal-300">
+                            <code className="rounded bg-background px-1.5 py-0.5 text-teal-600 dark:text-teal-300">
                               {localAuthorCommand(item, notes)}
                             </code>
                             <Button
@@ -580,9 +587,9 @@ export function ArticleIdeasPanel({
             <DialogDescription className="text-muted-foreground">
               Sharpen this idea before authoring the article. Changes are saved to the idea's brief
               (used automatically when you run the local authoring command with{" "}
-              <code className="text-teal-300">--idea</code>). Editable while the idea is queued,
-              approved, or failed — not after the article is written. Signal grounding (cited
-              capability/roadmap ids) is preserved and not editable here.
+              <code className="text-teal-600 dark:text-teal-300">--idea</code>). Editable while the
+              idea is queued, approved, or failed — not after the article is written. Signal
+              grounding (cited capability/roadmap ids) is preserved and not editable here.
             </DialogDescription>
           </DialogHeader>
           {amendDraft && amendItem && (

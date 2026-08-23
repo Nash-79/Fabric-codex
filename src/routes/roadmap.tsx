@@ -81,7 +81,7 @@ function RoadmapPage() {
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
+        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-600/80 dark:text-teal-300/80">
           What&rsquo;s next
         </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Roadmap</h1>
@@ -128,7 +128,11 @@ function RoadmapPage() {
         </div>
 
         {isLoading && <div className="mt-8 text-sm text-muted-foreground">Loading roadmap…</div>}
-        {error && <div className="mt-8 text-sm text-rose-300">{(error as Error).message}</div>}
+        {error && (
+          <div className="mt-8 text-sm text-rose-600 dark:text-rose-300">
+            {(error as Error).message}
+          </div>
+        )}
         {!isLoading && items.length === 0 && (
           <div className="mt-8 rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             No roadmap items synced yet.

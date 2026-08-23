@@ -76,10 +76,12 @@ function ApplyTriageResults({ onDone }: { onDone: () => void }) {
   return (
     <Panel title="Apply triage results">
       <p className="mb-3 text-xs text-muted-foreground">
-        After running <code className="text-teal-300">/triage-feedback</code>, paste the contents of
-        the written <code className="text-teal-300">content/feedback-triage/*.json</code> file here
-        to post each verdict's <code className="text-teal-300">ai_analysis</code> and{" "}
-        <code className="text-teal-300">status</code> back.
+        After running <code className="text-teal-600 dark:text-teal-300">/triage-feedback</code>,
+        paste the contents of the written{" "}
+        <code className="text-teal-600 dark:text-teal-300">content/feedback-triage/*.json</code>{" "}
+        file here to post each verdict's{" "}
+        <code className="text-teal-600 dark:text-teal-300">ai_analysis</code> and{" "}
+        <code className="text-teal-600 dark:text-teal-300">status</code> back.
       </p>
       <Textarea
         value={json}
@@ -137,7 +139,7 @@ function FeedbackRow({
             }
             target="_blank"
             rel="noopener noreferrer"
-            className="text-teal-300 hover:underline"
+            className="text-teal-600 dark:text-teal-300 hover:underline"
           >
             {row.content_items.title}
           </a>

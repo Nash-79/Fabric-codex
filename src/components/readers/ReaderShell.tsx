@@ -61,6 +61,8 @@ export function ReaderShell({
   capabilities: any[];
   diagramMeta: any[];
   siblings: {
+    pathSlug?: string | null;
+    pathTitle?: string | null;
     prev: { slug: string; title: string } | null;
     next: { slug: string; title: string } | null;
   };
@@ -126,12 +128,14 @@ export function ReaderShell({
         navigate({
           to: "/blogs/$kind/$slug",
           params: { kind, slug: siblings.prev.slug },
+          search: siblings.pathSlug ? { path: siblings.pathSlug } : undefined,
         });
       } else if (e.key === "]" && siblings.next) {
         e.preventDefault();
         navigate({
           to: "/blogs/$kind/$slug",
           params: { kind, slug: siblings.next.slug },
+          search: siblings.pathSlug ? { path: siblings.pathSlug } : undefined,
         });
       }
     };
@@ -286,7 +290,13 @@ export function ReaderShell({
                 slug={slug}
               />
 
-              <ArticleSiblingsNav kind={kind} prev={siblings.prev} next={siblings.next} />
+              <ArticleSiblingsNav
+                kind={kind}
+                prev={siblings.prev}
+                next={siblings.next}
+                pathSlug={siblings.pathSlug}
+                pathTitle={siblings.pathTitle ?? undefined}
+              />
             </article>
 
             {/* Always-mounted, print-only: Sheet content unmounts on close, so relying on the

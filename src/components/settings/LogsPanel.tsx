@@ -256,7 +256,7 @@ export function LogsPanel({
                         <ChevronRight className="h-3.5 w-3.5" />
                       )
                     ) : e.level === "error" ? (
-                      <AlertTriangle className="h-3.5 w-3.5 text-rose-300" />
+                      <AlertTriangle className="h-3.5 w-3.5 text-rose-600 dark:text-rose-300" />
                     ) : null}
                   </div>
                   <div

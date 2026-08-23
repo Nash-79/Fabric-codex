@@ -87,7 +87,7 @@ function CapabilityDetailPage() {
                       href={c.sources.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs text-teal-300 hover:underline"
+                      className="text-xs text-teal-600 dark:text-teal-300 hover:underline"
                     >
                       {c.sources.title}
                     </a>

@@ -211,29 +211,14 @@ export const getContentItem = createServerFn({ method: "GET" })
   });
 
 export const getContentSiblings = createServerFn({ method: "GET" })
-  .validator((d: { kind: "article" | "design" | "lesson"; slug: string }) => d)
+  .validator((d: { kind: "article" | "design" | "lesson"; slug: string; pathSlug?: string }) => d)
   .handler(async ({ data }) => {
     try {
       const sb = await admin();
-      const { data: rows, error } = await sb
-        .from("content_items")
-        .select("kind,slug,title")
-        .eq("kind", data.kind)
-        .eq("status", "published")
-        .eq("active", true)
-        .order("updated_at", { ascending: false })
-        .order("slug", { ascending: true });
-      if (error) throw new Error(error.message);
-      const list = rows ?? [];
-      const idx = list.findIndex((r) => r.slug === data.slug);
-      if (idx === -1) return { prev: null, next: null };
-      return {
-        prev: idx > 0 ? { slug: list[idx - 1].slug, title: list[idx - 1].title } : null,
-        next:
-          idx < list.length - 1 ? { slug: list[idx + 1].slug, title: list[idx + 1].title } : null,
-      };
+      const { resolveContentSiblings } = await import("@/lib/content-siblings.services.server");
+      return await resolveContentSiblings(sb, data.kind, data.slug, data.pathSlug);
     } catch {
-      return { prev: null, next: null };
+      return { pathSlug: null, pathTitle: null, prev: null, next: null };
     }
   });
 
@@ -282,116 +267,6 @@ export const listContentItems = createServerFn({ method: "GET" })
     return data.limit && data.limit > 0 ? bundled.slice(0, data.limit) : bundled;
   });
 
-// Deprecated thin wrappers — kept for one release so call sites not yet migrated to
-// getContentItem/listContentItems keep working. New code should call those directly.
-export const getBlog = createServerFn({ method: "GET" })
-  .validator((d: { slug: string }) => d)
-  .handler(async ({ data }) => {
-    try {
-      const sb = await admin();
-      const { data: item, error } = await sb
-        .from("content_items")
-        .select("*")
-        .eq("kind", "article")
-        .eq("slug", data.slug)
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      if (item) {
-        const [{ data: cites }, { data: caps }, { data: diagrams }] = await Promise.all([
-          sb
-            .from("content_item_sources")
-            .select("label,position,sources(id,slug,url,title,tier,tags,summary)")
-            .eq("content_item_id", item.id)
-            .order("position"),
-          item.topic_slug
-            ? sb
-                .from("topic_capabilities")
-                .select("capabilities(id,name,maturity)")
-                .eq("topic_slug", item.topic_slug)
-            : Promise.resolve({ data: [] as any[] }),
-          item.topic_slug
-            ? sb.from("diagrams").select("slug,path,caption,kind").eq("topic_slug", item.topic_slug)
-            : Promise.resolve({ data: [] as any[] }),
-        ]);
-        return {
-          blog: item,
-          citations: (cites ?? []).map((c: any) => ({ label: c.label, source: c.sources })),
-          capabilities: (caps ?? []).map((c: any) => c.capabilities).filter(Boolean),
-          diagrams: diagrams ?? [],
-        };
-      }
-    } catch {
-      // Fall through to bundled content.
-    }
-    const fallback = bundledContent.blog(data.slug);
-    if (!fallback) throw new Error("Blog not found");
-    return fallback;
-  });
-
-export const getDesign = createServerFn({ method: "GET" })
-  .validator((d: { slug: string }) => d)
-  .handler(async ({ data }) => {
-    try {
-      const sb = await admin();
-      const { data: item, error } = await sb
-        .from("content_items")
-        .select("*")
-        .eq("kind", "design")
-        .eq("slug", data.slug)
-        .maybeSingle();
-      if (error) throw new Error(error.message);
-      if (item) {
-        const { data: cites } = await sb
-          .from("content_item_sources")
-          .select("label,position,sources(id,slug,url,title,tier,tags,summary)")
-          .eq("content_item_id", item.id)
-          .order("position");
-        return {
-          design: item,
-          citations: (cites ?? []).map((c: any) => ({ label: c.label, source: c.sources })),
-        };
-      }
-    } catch {
-      // Fall through to bundled content.
-    }
-    const fallback = bundledContent.design(data.slug);
-    if (!fallback) throw new Error("Design not found");
-    return fallback;
-  });
-
-export const listBlogs = createServerFn({ method: "GET" }).handler(async () => {
-  try {
-    const sb = await admin();
-    const { data, error } = await sb
-      .from("content_items")
-      .select("slug,title,summary,topic_slug,updated_at")
-      .eq("kind", "article")
-      .eq("status", "published")
-      .eq("active", true)
-      .order("updated_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return data?.length ? data : bundledContent.blogs();
-  } catch {
-    return bundledContent.blogs();
-  }
-});
-
-export const listDesigns = createServerFn({ method: "GET" }).handler(async () => {
-  try {
-    const sb = await admin();
-    const { data, error } = await sb
-      .from("content_items")
-      .select("id,slug,title,summary,status,topic_slug,updated_at")
-      .eq("kind", "design")
-      .eq("active", true)
-      .order("updated_at", { ascending: false });
-    if (error) throw new Error(error.message);
-    return data?.length ? data : bundledContent.designs();
-  } catch {
-    return bundledContent.designs();
-  }
-});
-
 export const listLessons = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const sb = await admin();
@@ -405,6 +280,88 @@ export const listLessons = createServerFn({ method: "GET" }).handler(async () =>
     return data ?? [];
   } catch {
     return [];
+  }
+});
+
+export type LearningPathItem = {
+  content_kind: "article" | "design" | "lesson";
+  content_slug: string;
+  position: number;
+  optional: boolean;
+  title: string;
+  summary: string;
+  depth_levels: number[];
+  lesson_meta: import("@/lib/content-presentation").LessonMeta | null;
+  prerequisite_ids: string[];
+};
+
+export type LearningPath = {
+  slug: string;
+  title: string;
+  description: string;
+  audience: string;
+  sort_order: number;
+  items: LearningPathItem[];
+};
+
+// Powers /learn (WP1.4, docs/plan/phase-1-curriculum.md). Every path's items joined against
+// content_items in one extra query (batched by slug, not N+1) so the page can render titles,
+// summaries, and lesson_meta without a second round-trip per item.
+export const listLearningPaths = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const sb = await admin();
+    const [{ data: paths, error: pathsError }, { data: items, error: itemsError }] =
+      await Promise.all([
+        sb
+          .from("learning_paths")
+          .select("slug,title,description,audience,sort_order")
+          .eq("active", true)
+          .order("sort_order"),
+        sb
+          .from("path_items")
+          .select("path_slug,content_kind,content_slug,position,optional")
+          .order("position"),
+      ]);
+    if (pathsError) throw new Error(pathsError.message);
+    if (itemsError) throw new Error(itemsError.message);
+    if (!paths?.length) return [] as LearningPath[];
+
+    const allSlugs = [...new Set((items ?? []).map((i) => i.content_slug))];
+    const { data: contentRows } = allSlugs.length
+      ? await sb
+          .from("content_items")
+          .select("slug,title,summary,depth_levels,lesson_meta,prerequisite_ids")
+          .in("slug", allSlugs)
+          .eq("active", true)
+          .eq("status", "published")
+      : { data: [] };
+    const contentBySlug = new Map((contentRows ?? []).map((r) => [r.slug, r]));
+
+    const itemsByPath = new Map<string, LearningPathItem[]>();
+    for (const item of items ?? []) {
+      const content = contentBySlug.get(item.content_slug);
+      if (!content) continue; // item references unpublished/missing content — skip rather than render a broken row
+      const list = itemsByPath.get(item.path_slug) ?? [];
+      list.push({
+        content_kind: item.content_kind as LearningPathItem["content_kind"],
+        content_slug: item.content_slug,
+        position: item.position,
+        optional: item.optional,
+        title: content.title,
+        summary: content.summary ?? "",
+        depth_levels: content.depth_levels ?? [],
+        lesson_meta: (content.lesson_meta as LearningPathItem["lesson_meta"]) ?? null,
+        prerequisite_ids: content.prerequisite_ids ?? [],
+      });
+      itemsByPath.set(item.path_slug, list);
+    }
+
+    return paths.map((p) => ({
+      ...p,
+      items: (itemsByPath.get(p.slug) ?? []).sort((a, b) => a.position - b.position),
+    })) as LearningPath[];
+  } catch {
+    return [] as LearningPath[];
   }
 });
 
@@ -770,6 +727,107 @@ export const toggleFavorite = createServerFn({ method: "POST" })
       .insert({ user_id: userId, item_type: data.itemType, item_key: data.itemKey });
     if (error) throw new Error(error.message);
     return { favorited: true };
+  });
+
+// Server-side learner progress (Phase 1 / WP1.2). Anonymous reading is untouched — these three
+// functions are only ever called once signed in; anonymous progress stays entirely in
+// localStorage via the existing use-lesson-progress/use-reading-progress/use-step-progress hooks.
+// See src/lib/use-progress-sync.ts for the client-side merge-on-sign-in + offline queue that
+// drives these, and src/lib/progress.services.server.ts for the unit-testable merge logic.
+export type { ProgressRow } from "@/lib/progress.services.server";
+
+export const listMyProgress = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("user_progress")
+      .select("content_kind,content_slug,status,percent,completed_at,updated_at");
+    if (error) throw new Error(error.message);
+    return (data ?? []) as import("@/lib/progress.services.server").ProgressRow[];
+  });
+
+// Single-item upsert used by the normal in-app "mark complete" / reading-progress writes. Never
+// downgrades: if the existing server row is already further along (higher percent, or already
+// completed) than this write, the write is dropped rather than regressing the row — the same
+// never-downgrade rule the merge-on-sign-in path uses, applied uniformly so a slow duplicate
+// request can't undo a later one.
+export const upsertMyProgress = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (d: {
+      contentKind: "article" | "design" | "lesson";
+      contentSlug: string;
+      status: "in_progress" | "completed";
+      percent: number;
+      completedAt?: string | null;
+    }) => d,
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { isRegression } = await import("@/lib/progress.services.server");
+    const { data: existing } = await supabase
+      .from("user_progress")
+      .select("status,percent,completed_at")
+      .eq("user_id", userId)
+      .eq("content_kind", data.contentKind)
+      .eq("content_slug", data.contentSlug)
+      .maybeSingle();
+
+    if (
+      existing &&
+      isRegression(existing as import("@/lib/progress.services.server").ExistingProgress, data)
+    ) {
+      return { ok: true, skipped: true };
+    }
+
+    const { error } = await supabase.from("user_progress").upsert(
+      {
+        user_id: userId,
+        content_kind: data.contentKind,
+        content_slug: data.contentSlug,
+        status: data.status,
+        percent: data.percent,
+        completed_at:
+          data.completedAt ?? (data.status === "completed" ? new Date().toISOString() : null),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "user_id,content_kind,content_slug" },
+    );
+    if (error) throw new Error(error.message);
+    return { ok: true, skipped: false };
+  });
+
+// One-shot bulk merge run once per device on first authenticated load (see use-progress-sync.ts's
+// fa:merged-at stamp), folding the anonymous localStorage state into the server. Union + max (see
+// progress.services.server.ts's mergeLocalRows) — this table only ever moves forward from a
+// merge, never backward, so a completed lesson can't un-complete because a different device's
+// localStorage was thinner.
+export const mergeLocalProgress = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { rows: import("@/lib/progress.services.server").ProgressRow[] }) => d)
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    if (!data.rows.length) return { merged: 0 };
+    const { mergeLocalRows } = await import("@/lib/progress.services.server");
+
+    const { data: existingRows } = await supabase
+      .from("user_progress")
+      .select("content_kind,content_slug,status,percent,completed_at");
+    const existingByKey = new Map(
+      (existingRows ?? []).map((r) => [
+        `${r.content_kind}:${r.content_slug}`,
+        r as import("@/lib/progress.services.server").ExistingProgress,
+      ]),
+    );
+
+    const merged = mergeLocalRows(data.rows, existingByKey, new Date().toISOString());
+    const toUpsert = merged.map((row) => ({ ...row, user_id: userId }));
+
+    const { error } = await supabase
+      .from("user_progress")
+      .upsert(toUpsert, { onConflict: "user_id,content_kind,content_slug" });
+    if (error) throw new Error(error.message);
+    return { merged: toUpsert.length };
   });
 
 export type ContentFeedbackCategory =

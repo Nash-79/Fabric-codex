@@ -113,7 +113,7 @@ function Consent() {
         {error && (
           <p
             role="alert"
-            className="mt-4 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-300"
+            className="mt-4 rounded-md border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-600 dark:text-rose-300"
           >
             {error}
           </p>

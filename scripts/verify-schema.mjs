@@ -35,6 +35,8 @@ const EXPECTED_TABLES = [
   ["favorites", "fail"],
   ["help_docs", "fail"],
   ["issues", "warn"],
+  ["learning_paths", "fail"],
+  ["path_items", "fail"],
   ["profiles", "fail"],
   ["queue_items", "fail"],
   ["roadmap_items", "fail"],
@@ -44,6 +46,7 @@ const EXPECTED_TABLES = [
   ["topic_capabilities", "fail"],
   ["topics", "fail"],
   ["user_invitations", "warn"],
+  ["user_progress", "warn"],
   ["user_roles", "fail"],
   ["validation_runs", "warn"],
 ];

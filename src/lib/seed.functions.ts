@@ -311,7 +311,7 @@ export const seedFromContent = createServerFn({ method: "POST" })
       await supabaseAdmin.from("diagrams").upsert(diagRows, { onConflict: "slug" });
       summary.diagramRowsUpserted = diagRows.length;
     }
-    const diagramNodes = allAuthoredDiagrams().flatMap((diagram) =>
+    const diagramNodes = (await allAuthoredDiagrams()).flatMap((diagram) =>
       diagram.nodes.map((node) => ({
         diagram_slug: diagram.id,
         node_id: node.id,

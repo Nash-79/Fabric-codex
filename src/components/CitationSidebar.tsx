@@ -37,7 +37,7 @@ export function CitationSidebar({ citations }: { citations: Citation[] }) {
                   href={c.source?.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-xs font-medium leading-relaxed text-foreground hover:text-teal-300"
+                  className="text-xs font-medium leading-relaxed text-foreground hover:text-teal-600 dark:hover:text-teal-300"
                 >
                   [{c.label}] {c.source?.title}
                 </a>

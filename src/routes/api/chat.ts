@@ -1,8 +1,32 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
-import { ADVISOR_MODEL_IDS, DEFAULT_ADVISOR_MODEL } from "@/lib/advisor-models";
+import { DEFAULT_ADVISOR_MODEL } from "@/lib/advisor-models";
 import type { AdvisorMessage } from "@/lib/advisor-types";
+import { trySoftAuth } from "@/lib/soft-auth.server";
+import type { Json } from "@/integrations/supabase/types";
+import {
+  checkRateLimit,
+  requestKeyFromHeaders,
+  resolveAllowedModel,
+  validateMessagePayload,
+} from "@/lib/chat-rate-limit.server";
+
+async function recordChatRejection(reason: string, metadata: Record<string, unknown>) {
+  // Best-effort: a logging failure must never mask the real rejection response.
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.from("admin_audit_events").insert({
+      actor_id: null,
+      action: "chat.request_rejected",
+      target_type: "api_chat",
+      target_id: reason,
+      metadata: metadata as Json,
+    });
+  } catch {
+    // Swallow — diagnostic only.
+  }
+}
 
 export const Route = createFileRoute("/api/chat")({
   server: {
@@ -16,10 +40,36 @@ export const Route = createFileRoute("/api/chat")({
         const key = process.env.LOVABLE_API_KEY;
         if (!key) return new Response("LOVABLE_API_KEY not configured", { status: 500 });
 
+        const payloadCheck = validateMessagePayload(messages);
+        if (!payloadCheck.ok) {
+          return new Response(payloadCheck.error, { status: 400 });
+        }
+
+        const auth = await trySoftAuth(request);
+        const rateLimitKey = requestKeyFromHeaders(request.headers, auth?.userId ?? null);
+        const rateLimit = checkRateLimit(rateLimitKey);
+        if (!rateLimit.allowed) {
+          await recordChatRejection("rate_limited", { key: rateLimitKey });
+          return new Response("Too many requests — please slow down.", {
+            status: 429,
+            headers: { "Retry-After": String(Math.ceil((rateLimit.retryAfterMs ?? 0) / 1000)) },
+          });
+        }
+
         const requestedModel = typeof body.model === "string" ? body.model : "";
-        const modelId = ADVISOR_MODEL_IDS.has(requestedModel)
-          ? requestedModel
-          : DEFAULT_ADVISOR_MODEL;
+        const modelId = resolveAllowedModel(
+          requestedModel,
+          DEFAULT_ADVISOR_MODEL,
+          auth !== null,
+          auth?.approved ?? false,
+        );
+        if (requestedModel && requestedModel !== modelId) {
+          await recordChatRejection("model_tier_downgraded", {
+            requested: requestedModel,
+            resolved: modelId,
+            authenticated: auth !== null,
+          });
+        }
 
         const lastUser = [...messages].reverse().find((m) => m.role === "user");
         const userText =

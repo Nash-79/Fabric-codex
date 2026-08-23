@@ -208,7 +208,7 @@ function Landing() {
         >
           <div className="mx-auto grid max-w-7xl gap-8 px-6 py-10 lg:grid-cols-[360px_minmax(0,1fr)]">
             <div>
-              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
+              <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-teal-700/80 dark:text-teal-300/80">
                 <FabricMark className="h-4 w-4" />
                 Interactive atlas
               </div>
@@ -344,7 +344,7 @@ function Landing() {
                 to={offering.to}
                 className="group rounded-md border border-border bg-card p-4 transition hover:border-teal-400/40 hover:bg-accent"
               >
-                <offering.icon className="h-5 w-5 text-teal-300" />
+                <offering.icon className="h-5 w-5 text-teal-600 dark:text-teal-300" />
                 <div className="mt-2 text-sm font-semibold text-foreground group-hover:text-teal-200">
                   {offering.label}
                 </div>
@@ -412,7 +412,7 @@ function Landing() {
               </div>
               <Link
                 to="/topics"
-                className="mt-4 inline-flex text-xs font-medium text-teal-300 hover:underline"
+                className="mt-4 inline-flex text-xs font-medium text-teal-600 dark:text-teal-300 hover:underline"
               >
                 Browse all topics
               </Link>
@@ -472,7 +472,9 @@ function MetricLink({
         <ArrowRight className="h-3.5 w-3.5 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
       </div>
       <div className="mt-2 text-2xl font-semibold text-foreground">{value}</div>
-      <div className="mt-0.5 text-[10px] uppercase tracking-wider text-teal-300/70">View all</div>
+      <div className="mt-0.5 text-[10px] uppercase tracking-wider text-teal-700/70 dark:text-teal-300/70">
+        View all
+      </div>
     </Link>
   );
 }

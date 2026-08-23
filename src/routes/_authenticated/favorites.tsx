@@ -36,7 +36,10 @@ function FavoritesPage() {
           {!isLoading && (data ?? []).length === 0 && (
             <li className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
               Nothing bookmarked yet.{" "}
-              <Link to="/topics" className="text-teal-300 underline-offset-4 hover:underline">
+              <Link
+                to="/topics"
+                className="text-teal-600 dark:text-teal-300 underline-offset-4 hover:underline"
+              >
                 Browse the atlas
               </Link>
               .

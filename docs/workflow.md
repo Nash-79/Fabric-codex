@@ -97,17 +97,20 @@ server polling persists a changed retained mapping.
 ## Publish
 
 ```bash
-# 1. Author locally with the agents (steps above). Commit content/ to git.
+# 1. Author locally with the agents (steps above). Commit content/ to git and push to main.
 git add content/ && git commit -m "knowledge: add Direct Lake source + diagram"
-
-# 2. Publish the committed content to a running server (local or remote).
-python scripts/import_content.py --base http://localhost:8000      # local
-python scripts/import_content.py --base https://atlas.example.com  # remote
+git push
 ```
 
-Re-running is safe: an already-known source is re-checked for drift, not duplicated. The server
-side only ever runs deterministic logic (versioning, citation, freshness), so it can run anywhere
-with no secrets.
+Publishing itself is a human step in the Lovable app — Settings → Publish → "Publish all"
+republishes everything changed since its last publish (sources → diagrams → articles/designs/
+lessons), or paste a single `content/*.json` for one file before the next deploy. The
+`localhost:8000` FastAPI backend this section used to describe is retired; there is no server to
+run `import_content.py --base` against — that script and `scripts/migrate_to_supabase.py` remain
+useful only for local dev seeding against your own Supabase project (`--base` there points at your
+local dev server, not production). Re-running publish is safe: an already-known source is
+re-checked for drift, not duplicated. The publish path only ever runs deterministic logic
+(versioning, citation, freshness) server-side.
 
 ## Why this split
 

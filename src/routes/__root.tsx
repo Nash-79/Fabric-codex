@@ -13,6 +13,7 @@ import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
+import { useProgressSync } from "@/lib/use-progress-sync";
 import { ContentVersionWatcher } from "@/components/ContentVersionWatcher";
 
 // iOS launch (splash) image link entries. iOS Safari picks the matching file
@@ -280,6 +281,11 @@ function RootShell({ children }: { children: ReactNode }) {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
+  // Drives the merge-on-sign-in + offline-queue-flush machinery (D3, WP1.2) for the whole app.
+  // Mounted once here so it runs regardless of which page loaded first; leaf components (e.g.
+  // MarkLessonCompleteButton) call their own useProgressSync() for recordProgress() — cheap to
+  // re-invoke since the merge is stamp-guarded and the effects are idempotent.
+  useProgressSync();
 
   // Register the app-shell service worker once. The wrapper itself refuses to
   // register (and cleans up) in dev, iframes, and Lovable preview hosts.

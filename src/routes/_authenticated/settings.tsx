@@ -124,7 +124,7 @@ function SettingsPage() {
     <Shell>
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-600/80 dark:text-teal-300/80">
             Administration
           </div>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight">Settings</h1>

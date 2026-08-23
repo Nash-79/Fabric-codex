@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useMemo,
   useState,
   type ComponentProps,
@@ -10,11 +11,13 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
+import { common } from "lowlight";
 import { ExternalLink } from "lucide-react";
 import { markdownPanels } from "@/components/MarkdownPanels";
 import { Callout } from "@/components/Callout";
 import { DiagramLightbox } from "@/components/DiagramLightbox";
-import { getAuthoredDiagram, getStaticDiagramSvg } from "@/diagrams/catalog";
+import { isAuthored, loadAuthoredDiagram } from "@/diagrams/catalog";
+import type { AuthoredDiagram } from "@/diagrams/types";
 import { AdvisorMermaidBlock } from "@/components/AdvisorMermaidBlock";
 import { TierBadge } from "@/components/Badges";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
@@ -27,6 +30,23 @@ import type { PresentationArchetype, ReadingDensity } from "@/lib/content-presen
 import { StepSequence } from "@/components/StepSequence";
 import { CodeGroup } from "@/components/CodeGroup";
 import { parseCodeMeta, isOutputBlock } from "@/lib/code-meta";
+
+// rehype-highlight defaults to lowlight's `common` bundle (37 languages, eagerly evaluated —
+// unlike @streamdown/code's Shiki highlighter used in the Advisor chat, which lazy-loads one
+// grammar chunk per language on demand). Narrowed to what article/lesson/design body_md actually
+// fences (measured via a corpus scan across content/{articles,lessons,designs}); KQL/DAX aren't
+// highlight.js-supported grammars at all, so `detect: true` already falls back to plaintext for
+// them with or without this list.
+const HIGHLIGHT_LANGUAGES = {
+  bash: common.bash,
+  csharp: common.csharp,
+  graphql: common.graphql,
+  http: common.http,
+  json: common.json,
+  python: common.python,
+  sql: common.sql,
+  yaml: common.yaml,
+};
 
 // Wraps runs of consecutive `> [!STEP]` blockquotes in <div data-step-sequence data-section="..">
 // and runs of consecutive fenced code blocks that carry a grouping meta tag in
@@ -350,6 +370,45 @@ export function ContentItemArticle({
     return map;
   }, [bodyMd]);
 
+  // The authored diagram catalog is loaded lazily per-slug (see src/diagrams/catalog.ts) rather
+  // than bundled eagerly — the full set was 4.16 MB of SVG + sidecar source shipped to every
+  // article page for one diagram. Only the diagrams this article's body actually references are
+  // fetched, keyed by filename so the img renderer below can read them back synchronously.
+  const referencedDiagramFiles = useMemo(() => {
+    const files = new Set<string>();
+    for (const match of bodyMd.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)) {
+      const base = match[1]?.split("/").pop();
+      if (base && isAuthored(base)) files.add(base);
+    }
+    return files;
+  }, [bodyMd]);
+
+  const [loadedDiagrams, setLoadedDiagrams] = useState<
+    Map<string, { definition: AuthoredDiagram; markup: string }>
+  >(new Map());
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all(
+      [...referencedDiagramFiles].map(async (file) => {
+        const loaded = await loadAuthoredDiagram(file);
+        return [file, loaded] as const;
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      setLoadedDiagrams((prev) => {
+        const next = new Map(prev);
+        for (const [file, loaded] of results) {
+          if (loaded) next.set(file, loaded);
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [referencedDiagramFiles]);
+
   // The components map MUST be referentially stable. It is passed to ReactMarkdown as element
   // renderers; a new object per render means new component identities, and React responds by
   // unmounting and remounting the entire markdown tree. The article re-renders on every
@@ -526,8 +585,9 @@ export function ContentItemArticle({
               .pop() ?? "";
           const caption = captionByFile.get(base) || alt;
           const figureIndex = figureIndexByFile.get(base);
-          const authored = getAuthoredDiagram(base);
-          const svgMarkup = getStaticDiagramSvg(base);
+          const loaded = loadedDiagrams.get(base);
+          const authored = loaded?.definition;
+          const svgMarkup = loaded?.markup;
           const resolvedSrc = srcByFile.get(base) ?? authored?.staticPath ?? (src as string);
           return (
             <DiagramLightbox
@@ -546,6 +606,7 @@ export function ContentItemArticle({
       captionByFile,
       srcByFile,
       figureIndexByFile,
+      loadedDiagrams,
       citations,
       contentItemId,
       sections,
@@ -564,7 +625,10 @@ export function ContentItemArticle({
     >
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[rehypeRaw, [rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+        rehypePlugins={[
+          rehypeRaw,
+          [rehypeHighlight, { detect: true, ignoreMissing: true, languages: HIGHLIGHT_LANGUAGES }],
+        ]}
         urlTransform={(url) =>
           url.startsWith("/content/diagrams/")
             ? url.replace("/content/diagrams/", "/diagrams/")

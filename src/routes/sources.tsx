@@ -23,7 +23,7 @@ export const Route = createFileRoute("/sources")({
   errorComponent: ({ error, reset }) => (
     <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
-      <p className="mt-6 text-rose-300">{error.message}</p>
+      <p className="mt-6 text-rose-600 dark:text-rose-300">{error.message}</p>
       <button className="mt-3 underline" onClick={reset}>
         Retry
       </button>
@@ -54,7 +54,7 @@ function SourcesPage() {
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <div className="mx-auto max-w-7xl px-6 py-10">
-        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
+        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-600/80 dark:text-teal-300/80">
           Approved sources
         </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">Sources</h1>
@@ -94,7 +94,7 @@ function SourcesPage() {
                   href={s.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-sm font-semibold text-foreground hover:text-teal-300"
+                  className="text-sm font-semibold text-foreground hover:text-teal-600 dark:hover:text-teal-300"
                 >
                   {s.title}
                 </a>

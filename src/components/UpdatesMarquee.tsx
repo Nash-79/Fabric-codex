@@ -122,7 +122,7 @@ export function UpdatesMarquee({
       aria-label="Latest updates"
     >
       <div className="mx-auto flex max-w-7xl items-center gap-3 px-6 py-2">
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-300/80">
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[0.18em] text-teal-600/80 dark:text-teal-300/80">
           Latest
         </span>
         <div

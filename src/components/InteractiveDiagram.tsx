@@ -3,7 +3,7 @@ import { AuthoredSvg } from "@/components/AuthoredSvg";
 import { DiagramDetailPanel } from "@/components/DiagramDetailPanel";
 import type { Citation } from "@/components/CitationSidebar";
 import type { AuthoredDiagram, DiagramLayer } from "@/diagrams/types";
-import { getAuthoredDiagram, getStaticDiagramSvg } from "@/diagrams/catalog";
+import { loadAuthoredDiagram } from "@/diagrams/catalog";
 import { cn } from "@/lib/utils";
 
 // Sits between DiagramLightbox ("the stage" — figure chrome, Dialog, zoom/pan, fullscreen,
@@ -68,11 +68,10 @@ export function InteractiveDiagram({
     });
   }
 
-  function navigateToDiagram(slug: string) {
-    const nextDefinition = getAuthoredDiagram(slug);
-    const nextMarkup = getStaticDiagramSvg(slug);
-    if (!nextDefinition || !nextMarkup) return;
-    setActiveDiagram({ markup: nextMarkup, definition: nextDefinition });
+  async function navigateToDiagram(slug: string) {
+    const loaded = await loadAuthoredDiagram(slug);
+    if (!loaded) return;
+    setActiveDiagram({ markup: loaded.markup, definition: loaded.definition });
     setSelectedNodeId(null);
     setActiveLayerFilter(null);
   }

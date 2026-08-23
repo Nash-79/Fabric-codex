@@ -337,11 +337,11 @@ function QueueSubmitForm({ onDone }: { onDone: () => void }) {
         Queue a source URL
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
-        Adds a <code className="text-teal-300">kind=source</code> item to the ingestion queue. The
-        local knowledge-curator agent drains it (
-        <code className="text-teal-300">/ingest-batch</code>
-        ), extracts cited claims, and writes <code className="text-teal-300">content/sources/</code>
-        .
+        Adds a <code className="text-teal-600 dark:text-teal-300">kind=source</code> item to the
+        ingestion queue. The local knowledge-curator agent drains it (
+        <code className="text-teal-600 dark:text-teal-300">/ingest-batch</code>
+        ), extracts cited claims, and writes{" "}
+        <code className="text-teal-600 dark:text-teal-300">content/sources/</code>.
       </p>
       <div className="grid gap-2 md:grid-cols-2">
         <Input

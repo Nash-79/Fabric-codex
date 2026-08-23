@@ -31,15 +31,18 @@ VALID_TYPES = {"fact", "pattern", "antipattern", "internal"}
 
 
 def load_registry() -> list[str]:
-    """The capability registry lives in backend/app/llm.py (the enforcement copy).
+    """The capability registry lives in atlas-publish.services.server.ts (the enforcement copy
+    used by the real Lovable publish path — backend/app/llm.py's copy is retired dead code).
 
-    The backend silently drops claims whose capability_id is not in CAPABILITY_IDS,
+    The publish path silently drops claims whose capability_id is not in CAPABILITY_IDS,
     so we pre-validate here and warn loudly instead of losing claims quietly.
     """
-    llm_py = ROOT / "backend" / "app" / "llm.py"
+    publish_ts = ROOT / "src" / "lib" / "atlas-publish.services.server.ts"
     try:
         m = re.search(
-            r"CAPABILITY_IDS\s*=\s*\[(.*?)\]", llm_py.read_text(encoding="utf-8"), re.S
+            r"CAPABILITY_IDS\s*=\s*new Set<string>\(\[(.*?)\]\)",
+            publish_ts.read_text(encoding="utf-8"),
+            re.S,
         )
         return re.findall(r'"([a-z0-9-]+)"', m.group(1)) if m else []
     except OSError:
@@ -47,7 +50,7 @@ def load_registry() -> list[str]:
 
 
 def lint(payload: dict, registry: list[str]) -> list[str]:
-    """Pre-flight checks mirroring what the backend enforces (or silently drops)."""
+    """Pre-flight checks mirroring what the publish path enforces (or silently drops)."""
     problems = []
     for i, cl in enumerate(payload.get("claims", [])):
         cid = cl.get("capability_id") or cl.get("capabilityId")

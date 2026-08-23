@@ -7,9 +7,10 @@ import { collectDepUpdates, upgradeCommand } from "./lib/dep-updates.mjs";
 const args = new Set(process.argv.slice(2));
 const brief = args.has("--brief");
 const asJson = args.has("--json");
-const defaultPlanPath =
-  process.env.FABRIC_ATLAS_PLAN_PATH ??
-  "C:\\Users\\nmepa\\.claude\\plans\\review-app-how-much-purrfect-nest.md";
+// Optional external planning file (e.g. a Claude Code plan doc) — purely informational, and only
+// checked when explicitly configured. No hardcoded default: a machine-specific fallback path here
+// broke silently for anyone other than the original author.
+const defaultPlanPath = process.env.FABRIC_ATLAS_PLAN_PATH ?? "";
 
 function loadEnv() {
   for (const file of [".env.local", ".env"]) {
@@ -81,7 +82,7 @@ function textReport(digest) {
   lines.push("Fabric Atlas queue digest");
   if (digest.plan.exists) {
     lines.push(`Plan: ${digest.plan.path}`);
-  } else if (!brief) {
+  } else if (!brief && digest.plan.path) {
     lines.push(`Plan file not found; continuing without it: ${digest.plan.path}`);
   }
   const internalsGapLine = () => {
@@ -139,9 +140,9 @@ async function main() {
   const key = envValue("SUPABASE_PUBLISHABLE_KEY", "VITE_SUPABASE_PUBLISHABLE_KEY");
   const appUrl = envValue("FABRIC_ATLAS_APP_URL");
   const agentToken = envValue("FABRIC_ATLAS_AGENT_READ_TOKEN");
-  const planPath = resolve(defaultPlanPath);
+  const planPath = defaultPlanPath ? resolve(defaultPlanPath) : "";
   const digest = {
-    plan: { path: planPath, exists: existsSync(planPath) },
+    plan: { path: planPath, exists: planPath ? existsSync(planPath) : false },
     queue: { openSources: 0, dueCommissions: 0, failed: 0 },
     rss: { active: 0, stale: 0, failing: 0 },
     coverage: { articleLessTopics: 0, diagramGaps: 0, storageOverrides: 0, internalsGaps: null },

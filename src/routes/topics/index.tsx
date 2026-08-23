@@ -21,7 +21,9 @@ export const Route = createFileRoute("/topics/")({
   errorComponent: ({ error, reset }) => (
     <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
-      <p className="mt-6 text-rose-300">Could not load topics. {error.message}</p>
+      <p className="mt-6 text-rose-600 dark:text-rose-300">
+        Could not load topics. {error.message}
+      </p>
       <button className="mt-3 underline" onClick={reset}>
         Retry
       </button>
@@ -58,7 +60,7 @@ function TopicsPage() {
           <TopicTree topics={topics} />
         </div>
         <div className="mx-auto w-full max-w-7xl">
-          <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
+          <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-700/80 dark:text-teal-300/80">
             Knowledge map
           </div>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight md:text-4xl">Topics</h1>
@@ -95,7 +97,10 @@ function TopicsPage() {
             {roots.length === 0 && (
               <div className="col-span-full rounded-xl border border-dashed border-border p-12 text-center text-muted-foreground">
                 No topics yet. An admin can bootstrap bundled content from the{" "}
-                <Link to="/settings" className="text-teal-300 underline-offset-4 hover:underline">
+                <Link
+                  to="/settings"
+                  className="text-teal-600 dark:text-teal-300 underline-offset-4 hover:underline"
+                >
                   settings page
                 </Link>
                 .

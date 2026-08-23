@@ -130,9 +130,10 @@ export function RoadmapPanel() {
     >
       <p className="mb-3 text-xs text-muted-foreground">
         Synced from the Fabric GPS community mirror of Microsoft&rsquo;s Fabric roadmap (
-        <code className="text-teal-300">fabric-gps.com/api/releases</code>). The paginated API
-        payload is preserved without embellishment. Canonical Microsoft blog links are added to the
-        source queue and auto-claimed; extracted claims still require normal verification.
+        <code className="text-teal-600 dark:text-teal-300">fabric-gps.com/api/releases</code>). The
+        paginated API payload is preserved without embellishment. Canonical Microsoft blog links are
+        added to the source queue and auto-claimed; extracted claims still require normal
+        verification.
       </p>
 
       <div className="mb-4 grid grid-cols-3 gap-2 text-xs">
@@ -152,7 +153,7 @@ export function RoadmapPanel() {
           <div className="text-muted-foreground">Errors</div>
           <div className="text-sm font-semibold">
             {data?.status?.error_count ? (
-              <span className="text-rose-300">
+              <span className="text-rose-600 dark:text-rose-300">
                 {data.status.error_count}: {data.status.last_error}
               </span>
             ) : (

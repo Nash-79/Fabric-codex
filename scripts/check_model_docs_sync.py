@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Fail when backend models change without the data-model documentation.
+"""Fail when the Supabase schema changes without the data-model documentation.
 
-This enforces the project rule in AGENTS.md/CLAUDE.md:
-when backend/app/models.py changes, docs/data-model.md must change in the same PR.
+This enforces the project rule in AGENTS.md/CLAUDE.md: when supabase/migrations/*.sql changes,
+docs/data-model.md must change in the same PR. (Previously watched the retired
+backend/app/models.py — docs/data-model.md itself now states that file is no longer the source
+of truth; the live schema lives in supabase/migrations/.)
 """
 from __future__ import annotations
 
@@ -11,7 +13,7 @@ import subprocess
 import sys
 
 
-MODEL_PATH = "backend/app/models.py"
+MODEL_PATH_PREFIX = "supabase/migrations/"
 DOC_PATH = "docs/data-model.md"
 
 
@@ -75,13 +77,18 @@ def main() -> int:
         print(f"Could not inspect git diff: {exc}", file=sys.stderr)
         return 2
 
-    if (
-        MODEL_PATH in files
-        and DOC_PATH not in files
-        and has_non_whitespace_diff(base_ref, MODEL_PATH)
-    ):
+    changed_migrations = sorted(
+        f
+        for f in files
+        if f.startswith(MODEL_PATH_PREFIX)
+        and f.endswith(".sql")
+        and has_non_whitespace_diff(base_ref, f)
+    )
+
+    if changed_migrations and DOC_PATH not in files:
+        migrations_list = ", ".join(changed_migrations)
         print(
-            f"{MODEL_PATH} changed without {DOC_PATH}. "
+            f"Migration(s) changed without {DOC_PATH}: {migrations_list}. "
             "Update the data model documentation in the same change."
         )
         return 1

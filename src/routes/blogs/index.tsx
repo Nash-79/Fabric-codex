@@ -86,7 +86,7 @@ function ArticlesFeedPage() {
     <div className="min-h-screen bg-background text-foreground">
       <SiteHeader />
       <main className="mx-auto max-w-5xl px-6 py-10">
-        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-300/80">
+        <div className="text-xs font-medium uppercase tracking-[0.18em] text-teal-600/80 dark:text-teal-300/80">
           Reading &amp; reference
         </div>
         <h1 className="mt-1 text-3xl font-semibold tracking-tight">Articles</h1>

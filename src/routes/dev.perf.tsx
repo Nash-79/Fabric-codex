@@ -71,7 +71,7 @@ function PerfPage() {
             ))}
             <button
               onClick={() => clearPerfSamples()}
-              className="rounded-md border border-border px-2.5 py-1 text-xs uppercase tracking-wide text-muted-foreground hover:text-rose-300"
+              className="rounded-md border border-border px-2.5 py-1 text-xs uppercase tracking-wide text-muted-foreground hover:text-rose-600 dark:hover:text-rose-300"
             >
               Clear
             </button>

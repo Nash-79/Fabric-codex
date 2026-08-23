@@ -127,10 +127,10 @@ export function RssPanel() {
         <p className="text-xs text-muted-foreground">
           Subscribe to a blog's RSS/Atom feed (e.g. the Fabric Updates Blog). Polling fetches each
           active feed, dedupes new entries against existing sources and the queue, and adds them as{" "}
-          <code className="text-teal-300">kind=source</code> items — then{" "}
-          <code className="text-teal-300">/ingest-batch</code> extracts cited claims. Use{" "}
-          <span className="text-foreground">Poll now</span> to run all active feeds, or poll a
-          single feed from its row.
+          <code className="text-teal-600 dark:text-teal-300">kind=source</code> items — then{" "}
+          <code className="text-teal-600 dark:text-teal-300">/ingest-batch</code> extracts cited
+          claims. Use <span className="text-foreground">Poll now</span> to run all active feeds, or
+          poll a single feed from its row.
         </p>
         <Button
           size="sm"
@@ -213,7 +213,7 @@ export function RssPanel() {
                     {r.title || r.feed_url}
                   </a>
                   {r.error_count > 0 && (
-                    <div className="text-xs text-rose-300">
+                    <div className="text-xs text-rose-600 dark:text-rose-300">
                       {r.error_count} error(s): {r.last_error}
                     </div>
                   )}

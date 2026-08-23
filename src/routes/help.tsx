@@ -13,7 +13,7 @@ export const Route = createFileRoute("/help")({
   errorComponent: ({ error, reset }) => (
     <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
-      <p className="mt-6 text-rose-300">{error.message}</p>
+      <p className="mt-6 text-rose-600 dark:text-rose-300">{error.message}</p>
       <button className="mt-3 underline" onClick={reset}>
         Retry
       </button>

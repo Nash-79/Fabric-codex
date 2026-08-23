@@ -394,7 +394,9 @@ export function WatchersPanel() {
                       </p>
                     )}
                     {remediation(r.last_error_code) && (
-                      <p className="mt-1 text-rose-300/80">{remediation(r.last_error_code)}</p>
+                      <p className="mt-1 text-rose-600/80 dark:text-rose-300/80">
+                        {remediation(r.last_error_code)}
+                      </p>
                     )}
                   </div>
                 )}

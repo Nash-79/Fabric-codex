@@ -196,7 +196,7 @@ function SearchPage() {
                       href={c.sources.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="mt-1 block text-xs text-teal-300 hover:underline"
+                      className="mt-1 block text-xs text-teal-600 dark:text-teal-300 hover:underline"
                     >
                       {c.sources.title}
                     </a>

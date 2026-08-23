@@ -155,8 +155,8 @@ export function DiagramsPanel() {
           <p className="text-xs text-muted-foreground">
             Replacing a diagram stores an SVG in Supabase Storage and keeps the same slug, so live
             articles update without redeploy. Backport storage overrides to{" "}
-            <code className="text-teal-300">content/diagrams/</code> when the SVG should become
-            source-controlled truth.
+            <code className="text-teal-600 dark:text-teal-300">content/diagrams/</code> when the SVG
+            should become source-controlled truth.
           </p>
           {rows.map((topic) => {
             const topicDiagrams = diagramsByTopic.get(topic.slug) ?? [];
