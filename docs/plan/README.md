@@ -6,13 +6,13 @@ This directory is the plan of record for turning Fabric Atlas from a reference e
 professional Microsoft Fabric learning portal. This file is the **orchestrator**: it tracks
 progress, ordering, and gates. Each phase has its own file with the executable detail.
 
-| Phase | File | Focus | Status |
-|---|---|---|---|
-| 0 | [phase-0-foundation.md](phase-0-foundation.md) | Perf, cost, a11y, dead weight | ☐ Not started |
-| 1 | [phase-1-curriculum.md](phase-1-curriculum.md) | Ordering, progress, `/learn` | ☐ Not started |
-| 2 | [phase-2-content.md](phase-2-content.md) | Structure, toolkit ingest, beginner tier, diagrams | ☐ Not started |
-| 3 | [phase-3-intelligence.md](phase-3-intelligence.md) | pgvector, search UX, automation | ☐ Not started |
-| — | [audit-baseline.md](audit-baseline.md) | Measured "before" numbers — the regression baseline | ☑ Complete |
+| Phase | File                                               | Focus                                               | Status        |
+| ----- | -------------------------------------------------- | --------------------------------------------------- | ------------- |
+| 0     | [phase-0-foundation.md](phase-0-foundation.md)     | Perf, cost, a11y, dead weight                       | ☐ Not started |
+| 1     | [phase-1-curriculum.md](phase-1-curriculum.md)     | Ordering, progress, `/learn`                        | ☐ Not started |
+| 2     | [phase-2-content.md](phase-2-content.md)           | Structure, toolkit ingest, beginner tier, diagrams  | ☐ Not started |
+| 3     | [phase-3-intelligence.md](phase-3-intelligence.md) | pgvector, search UX, automation                     | ☐ Not started |
+| —     | [audit-baseline.md](audit-baseline.md)             | Measured "before" numbers — the regression baseline | ☑ Complete    |
 
 ---
 
@@ -32,22 +32,22 @@ Full measured evidence: [audit-baseline.md](audit-baseline.md).
 
 ## The five defects
 
-| ID | Defect | Fixed by |
-|---|---|---|
-| **D1** | No curriculum. `getContentSiblings` orders by `updated_at DESC`, so Prev/Next is *recency* — editing an old article silently reorders "next" for every reader. No ordering column exists. | Phase 1 |
-| **D2** | Lessons cover 4 of 21 capabilities. All 15 blow the ~400-word budget, have zero diagrams, and empty `prerequisites`; only 2 of 15 have `lesson_meta`. | Phase 1 + 2 |
-| **D3** | Progress is `localStorage`-only — per-device, wiped on cache clear. | Phase 1 |
-| **D4** | No embeddings anywhere. Advisor matches claims with `ILIKE %word%`, truncated to **18 of 1,351**. | Phase 3 |
-| **D5** | Depth inverted (L1 = 101 claims is the *thinnest* tier); 205 stray H1s and 33 heading skips break the derived ToC. | Phase 2 |
+| ID     | Defect                                                                                                                                                                                    | Fixed by    |
+| ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
+| **D1** | No curriculum. `getContentSiblings` orders by `updated_at DESC`, so Prev/Next is _recency_ — editing an old article silently reorders "next" for every reader. No ordering column exists. | Phase 1     |
+| **D2** | Lessons cover 4 of 21 capabilities. All 15 blow the ~400-word budget, have zero diagrams, and empty `prerequisites`; only 2 of 15 have `lesson_meta`.                                     | Phase 1 + 2 |
+| **D3** | Progress is `localStorage`-only — per-device, wiped on cache clear.                                                                                                                       | Phase 1     |
+| **D4** | No embeddings anywhere. Advisor matches claims with `ILIKE %word%`, truncated to **18 of 1,351**.                                                                                         | Phase 3     |
+| **D5** | Depth inverted (L1 = 101 claims is the _thinnest_ tier); 205 stray H1s and 33 heading skips break the derived ToC.                                                                        | Phase 2     |
 
 ## Decisions taken
 
 - **Anonymous-first, optional sign-in.** Reading stays public and anonymous. Progress works
-  instantly via `localStorage` and *upgrades* to durable server state on sign-in, merging local
+  instantly via `localStorage` and _upgrades_ to durable server state on sign-in, merging local
   progress. Public reading behaviour does not change.
 - **`fabric_spark_toolkit` is first-party** (user-authored) — free to publish, including notebooks
   and the 101 SVGs. Needs a LICENSE added.
-- **rssmonster is MIT** (© Piethein Strengholt) — borrow *patterns*, not code; attribute.
+- **rssmonster is MIT** (© Piethein Strengholt) — borrow _patterns_, not code; attribute.
 - Work packages are **model-agnostic and separable**; the user routes them.
 
 ## Dependency graph
@@ -76,24 +76,28 @@ separate models.
 Update the checkbox and date as each work package lands. Do not mark done until its **gate** passes.
 
 ### Phase 0 — Foundation
+
 - [x] WP0.1 Lazy diagram catalog + prune syntax grammars — DiagramLightbox chunk 3,839 KB → 116 KB (97%); verified via fresh build, zero chunks >1MB
 - [x] WP0.2 Rate-limit and tier-gate `/api/chat` — anonymous callers capped at `cheap` tier, in-process token bucket, payload size caps, audit logging
 - [x] WP0.3 Design-system correctness — fixed invalid `hsl(oklch())` focus ring; paired 52 bare `text-teal-300`/`text-rose-300` occurrences across 26 files with light-mode variants (repo-wide, wider than the two files originally sampled)
 - [x] WP0.4 Purge dead weight — removed `backend/` (18 tracked files + `.env`), `frontend/`, `bun.lock`, the `backend` CI job, and the deprecated `getBlog`/`getDesign`/`listBlogs`/`listDesigns` wrappers; re-pointed `validate_migration.py`/`import_content.py`'s capability registry from dead `backend/app/llm.py` to live `atlas-publish.services.server.ts`; generalized `check_model_docs_sync.py` to watch `supabase/migrations/*.sql` instead of the retired models file; fixed the hardcoded personal path in `check-queues.mjs`; fixed the one genuinely stale `localhost:8000` instruction in `docs/workflow.md` (23 of 25 repo-wide references were already correctly caveated as retired — left alone); wrote (not applied) a migration to drop the `*_legacy` tables, pending a deliberate go-ahead since dropping tables is irreversible against the live database
 
 ### Phase 1 — Curriculum spine
+
 - [x] WP1.1 Ordering primitive — `learning_paths`/`path_items` migration (references (kind,slug), not id — versioning-safe); `getContentSiblings` extracted into testable `content-siblings.services.server.ts`, orders by path position with recency fallback; `?path` threaded through the reader route, keyboard nav, and siblings UI; D1 regression test passing
 - [x] WP1.2 Server-side progress — `user_progress` migration (RLS `auth.uid()=user_id`); `progress.services.server.ts` with never-downgrade merge logic (13 unit tests); client-side offline queue + merge-on-sign-in in `use-progress-sync.ts`, mounted at app root; wired into `MarkLessonCompleteButton` and `useReadingProgress`. Anonymous localStorage path fully unchanged
 - [x] WP1.3 Curriculum content model — seed migration for 5 real paths (fabric-foundations from topics.json's 7 root topics; spark/lakehouse/warehouse-dbt/fabric-iq tracks from the 4 existing lesson trios); `lesson_meta` backfilled on all 13 remaining lessons (15/15 total), grounded in each lesson's actual body, all pass the strict Zod schema, all prerequisites resolve
 - [x] WP1.4 Rebuild `/learn` — real `listLearningPaths` server function (batched join, no N+1); path-ordered cards with a progress ring, resume/start/review CTA, sequential lock indicators, linked prerequisite hints; `use-unified-progress.ts` merges server/localStorage progress for one display source; pure resume/lock logic extracted to `learning-path-ui.ts` (12 unit tests); SSR loader added (page previously had none); verified end-to-end against the live dev server (empty-state and article-page rendering both confirmed correct)
 
 ### Phase 2 — Depth, order, clarity
+
 - [x] WP2.1 Fix stray H1s + heading skips — root-caused: both were 100% false positives from a fence-blind regex in `validate-content.mjs` matching `#`-prefixed code comments as markdown headings (verified against the real reader-facing ToC extractor, which was never affected — zero user-facing bug existed). Fixed the validator to strip fenced code first; confirmed **zero real structural issues in the entire corpus** (no content edits needed); promoted both checks to hard CI failures; `gaps.mjs` output confirmed byte-identical to baseline (30/21/0/0/11); warnings 127→73, all remaining are out-of-scope (citation review, word budget — WP2.3's job)
 - [x] WP2.2 complete — toolkit fully ingested. Staged the toolkit into `content/toolkit-source/` for repo-relative citations (`nbhtml/`+`docs.html` excluded per plan); fixed a pre-existing source's misattributed URL (30 verified claims left untouched) and a mojibake bug found along the way; standardized every toolkit citation on `file:///content/toolkit-source/<file>` (valid URL scheme, no personal path). Ingested all 5 planned HTML docs, the `spark_internals.html` decomposition (46 sections, split into 4 subsystem batches), and all 13 notebooks (3 further batches by function) — **22 new sources, 221 new claims** (30 pre-existing + 221 new = 251 total toolkit-family claims). Every batch cross-checked against every already-ingested source (toolkit AND non-toolkit) before extracting, correctly yielding fewer claims wherever real overlap existed rather than padding, and correctly excluding roadmap/preview-timing statements as non-claims twice. Notebook claims are grounded in REAL executed cell output, not hallucinated behavior (e.g. a genuine 14,286-row DQ quarantine count, a real `CANNOT_MODIFY_CONFIG` exception discovered against a live Spark session, a NEE-vs-JVM benchmark's honestly-reported negative local result). Also **added an HTML upload ingestion path** for future sources with no fetchable URL: `source-uploads` Storage bucket (public-read, admin-write, `.html`/`.htm` only, 10 MB — `supabase/migrations/20260823180000_source_upload_storage.sql`), a `submitSourceUpload` server function, and a URL/Upload toggle in Settings → Queue, reusing the existing `kind=source` queue + knowledge-curator pipeline unchanged. **Remaining gap: 0 content items cite any of these 251 claims** — `gaps.mjs`'s 30 internals placeholders won't close until articles/lessons are authored from this material; that's the next highest-leverage step.
 - [x] WP2.3 Author beginner tier (17 capabilities) — all 17 `content/lessons/<capability>-beginner.json` written via 17 parallel learning-author agents, each grounded only in verified L1/L2 claims (ranging from 3 distinct claims for `polaris`, the KB's thinnest capability, up to 57 for `fabric-platform`), every factual sentence cited `[Sn]`, every lesson embeds ≥1 diagram (reusing an existing capability-tagged SVG in all 17 cases — zero new diagrams needed to be commissioned), word counts 395-498 (avg 469, under the 500-word warning ceiling). Agents correctly deduped repeated claim rows, prioritized durable tier-1 fundamentals over dated point-in-time announcements for beginner framing, and were honest about thin coverage (`polaris`'s 3-claim base) rather than padding. `npm run validate:content` clean (162 sources, 74 warnings — the one new warning is `polaris-beginner.json`'s intentionally-uncited scope-limitation closing paragraph, not a defect); `validate:diagrams` unchanged at 95/95; typecheck/lint at the established baseline; 118/118 tests. First run of all 17 hit a session usage-limit wall (0 written, clean failure, no partial files) — re-ran cleanly after reset.
 - [~] WP2.4 partial — duplicate-region-geometry prerequisite done: found an existing check (added just before this phase) was real but `rect`-only via a lazy regex, silently missing 3 of 713 nodes; rewrote it depth-aware covering rect/circle/ellipse/path/transform-rect/text-only, 713/713 now checked, 0 false failures, confirmed still catches real duplicates. QA backlog (95 draft→approved) and the 101-SVG harvest itself not yet started
 
 ### Phase 3 — Intelligence
+
 - [ ] WP3.1 pgvector + local ONNX embeddings + hybrid retrieval
 - [ ] WP3.2 ⌘K palette, facets, cursor pagination
 - [ ] WP3.3 Automation expansion (freshness, EWMA scheduling)
@@ -120,4 +124,4 @@ Carried from [CLAUDE.md](../../CLAUDE.md) — they still hold:
 - **No mega-prompt.** Each agent stays narrow.
 - **No unverified knowledge.** Source, trust tier, and human approval before anything enters the KB.
 - **Do not automate the publish gate.** Human-gated publishing is working; Phase 3 expands
-  *drafting* automation, never approval.
+  _drafting_ automation, never approval.

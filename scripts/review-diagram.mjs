@@ -54,13 +54,14 @@ if (!browser) {
 
 const temp = mkdtempSync(join(tmpdir(), "fabric-atlas-diagram-review-"));
 const htmlPath = join(temp, "index.html");
-const payload = JSON.stringify(
-  diagrams.map((d) => ({ slug: d.slug, markup: d.markup }))
-).replace(/</g, "\\u003c");
+const payload = JSON.stringify(diagrams.map((d) => ({ slug: d.slug, markup: d.markup }))).replace(
+  /</g,
+  "\\u003c",
+);
 
 writeFileSync(
   htmlPath,
-  `<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;width:100%;overflow-x:hidden}#stage{position:absolute;left:-20000px;top:0;width:1280px}.frame{overflow:hidden}.frame>svg{display:block;width:100%;height:100%}</style><div id="stage"></div><script>window.diagrams=${payload}</script>`
+  `<!doctype html><meta charset="utf-8"><style>*{box-sizing:border-box}html,body{margin:0;width:100%;overflow-x:hidden}#stage{position:absolute;left:-20000px;top:0;width:1280px}.frame{overflow:hidden}.frame>svg{display:block;width:100%;height:100%}</style><div id="stage"></div><script>window.diagrams=${payload}</script>`,
 );
 
 const port = 9400 + Math.floor(Math.random() * 500);
@@ -74,7 +75,7 @@ const child = spawn(
     `--user-data-dir=${join(temp, "profile")}`,
     `file:///${htmlPath.replaceAll("\\", "/")}`,
   ],
-  { stdio: "ignore" }
+  { stdio: "ignore" },
 );
 
 const auditExpression = `(()=>{
@@ -356,8 +357,8 @@ try {
           id: 1,
           method: "Runtime.evaluate",
           params: { expression: auditExpression, returnByValue: true, awaitPromise: true },
-        })
-      )
+        }),
+      ),
     );
     socket.addEventListener("message", (event) => {
       const message = JSON.parse(event.data);
@@ -388,7 +389,9 @@ try {
     console.log(`📌 DIAGRAM: ${d.slug}`);
     console.log(`   Path: ${d.svgPath}`);
     if (d.sidecar) {
-      console.log(`   Title: "${d.sidecar.title}" (Type: ${d.sidecar.type}, LayoutHint: ${d.sidecar.layoutHint || "standard"})`);
+      console.log(
+        `   Title: "${d.sidecar.title}" (Type: ${d.sidecar.type}, LayoutHint: ${d.sidecar.layoutHint || "standard"})`,
+      );
     }
 
     // Scoring calculation
@@ -411,13 +414,17 @@ try {
     const deviceFailures = Object.entries(res.viewports).filter(([_, v]) => v.status !== "PASS");
     if (deviceFailures.length > 0) {
       score -= deviceFailures.length * 10;
-      deductions.push(`❌ Failed responsive viewport scaling on: ${deviceFailures.map(([k]) => k).join(", ")}`);
+      deductions.push(
+        `❌ Failed responsive viewport scaling on: ${deviceFailures.map(([k]) => k).join(", ")}`,
+      );
     }
 
     // 4. Icons
     if (res.iconsCount === 0) {
       score -= 10;
-      deductions.push(`⚠️ No official Microsoft Fabric vector icons found (recommend embedding official icons)`);
+      deductions.push(
+        `⚠️ No official Microsoft Fabric vector icons found (recommend embedding official icons)`,
+      );
     }
 
     // 5. Visual Polish (Gradients & Shadows)
@@ -444,25 +451,42 @@ try {
       const sidecarNodes = d.sidecar.nodes?.length || 0;
       if (res.nodeRegionsCount !== sidecarNodes) {
         score -= 10;
-        deductions.push(`⚠️ Node count mismatch: SVG has ${res.nodeRegionsCount} regions, sidecar has ${sidecarNodes} nodes`);
+        deductions.push(
+          `⚠️ Node count mismatch: SVG has ${res.nodeRegionsCount} regions, sidecar has ${sidecarNodes} nodes`,
+        );
       }
       if (res.tooltipsCount < sidecarNodes) {
         score -= 5;
-        deductions.push(`⚠️ Missing tooltips: ${res.tooltipsCount}/${sidecarNodes} node regions have <title data-node-tooltip="true">`);
+        deductions.push(
+          `⚠️ Missing tooltips: ${res.tooltipsCount}/${sidecarNodes} node regions have <title data-node-tooltip="true">`,
+        );
       }
     }
 
     score = Math.max(0, score);
-    const status = score >= 85 ? "✅ EXCELLENT" : score >= 70 ? "🟡 ACCEPTABLE" : "❌ NEEDS RE-AUTHORING";
+    const status =
+      score >= 85 ? "✅ EXCELLENT" : score >= 70 ? "🟡 ACCEPTABLE" : "❌ NEEDS RE-AUTHORING";
 
     console.log(`   Quality Score: ${score}/100 [${status}]`);
     console.log(`   -----------------------------------------------------------------------------`);
-    console.log(`   • Spatial Layout:       ${res.collisions.length === 0 && res.overflows.length === 0 ? "✅ 0 collisions / 0 overflows" : "❌ Collisions or overflows present"}`);
-    console.log(`   • Device Scaling:       ${deviceFailures.length === 0 ? "✅ Passed 390px Mobile, 768px Tablet, 1024px Laptop, 1280px Desktop" : "❌ Failed on " + deviceFailures.map(([k]) => k).join(", ")}`);
-    console.log(`   • Typography:           ${res.textMetrics.totalTextNodes} text elements (Font range: ${minSize}px – ${maxSize}px)`);
-    console.log(`   • Iconography:          ${res.iconsCount > 0 ? `✅ ${res.iconsCount} official Microsoft icon(s)` : "⚠️ 0 official icons"}`);
-    console.log(`   • Aesthetics & Polish:  ${res.gradientsCount} gradients, ${res.filterCount} shadow filters`);
-    console.log(`   • Semantic Grounding:   ${res.nodeRegionsCount} focusable regions, ${res.tooltipsCount} tooltips`);
+    console.log(
+      `   • Spatial Layout:       ${res.collisions.length === 0 && res.overflows.length === 0 ? "✅ 0 collisions / 0 overflows" : "❌ Collisions or overflows present"}`,
+    );
+    console.log(
+      `   • Device Scaling:       ${deviceFailures.length === 0 ? "✅ Passed 390px Mobile, 768px Tablet, 1024px Laptop, 1280px Desktop" : "❌ Failed on " + deviceFailures.map(([k]) => k).join(", ")}`,
+    );
+    console.log(
+      `   • Typography:           ${res.textMetrics.totalTextNodes} text elements (Font range: ${minSize}px – ${maxSize}px)`,
+    );
+    console.log(
+      `   • Iconography:          ${res.iconsCount > 0 ? `✅ ${res.iconsCount} official Microsoft icon(s)` : "⚠️ 0 official icons"}`,
+    );
+    console.log(
+      `   • Aesthetics & Polish:  ${res.gradientsCount} gradients, ${res.filterCount} shadow filters`,
+    );
+    console.log(
+      `   • Semantic Grounding:   ${res.nodeRegionsCount} focusable regions, ${res.tooltipsCount} tooltips`,
+    );
 
     if (deductions.length > 0) {
       console.log(`   Findings & Recommendations:`);
@@ -476,7 +500,9 @@ try {
         if (c.type === "text-card-overflow") {
           console.log(`     • [${c.type}] "${c.text}" overflows card by ${c.overflowPx}px`);
         } else if (c.type === "line-through-text" || c.type === "path-through-text") {
-          console.log(`     • [${c.type}] ${c.textA || c.line} intersects text: "${c.textB || c.text}"`);
+          console.log(
+            `     • [${c.type}] ${c.textA || c.line} intersects text: "${c.textB || c.text}"`,
+          );
         } else {
           console.log(`     • [${c.type}] "${c.textA}" intersects text: "${c.textB}"`);
         }
@@ -485,7 +511,9 @@ try {
     if (res.overflows.length > 0) {
       console.log(`   Detailed Overflows:`);
       for (const o of res.overflows) {
-        console.log(`     • "${o.text}" [box: x=${Math.round(o.box.x)}, y=${Math.round(o.box.y)}, r=${Math.round(o.box.right)}, b=${Math.round(o.box.bottom)}]`);
+        console.log(
+          `     • "${o.text}" [box: x=${Math.round(o.box.x)}, y=${Math.round(o.box.y)}, r=${Math.round(o.box.right)}, b=${Math.round(o.box.bottom)}]`,
+        );
       }
     }
     console.log("\n");

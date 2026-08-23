@@ -3,7 +3,7 @@
 **Fixes:** D1 (no curriculum), D2 (lesson metadata), D3 (no server progress)
 **Depends on:** Phase 0 · **Critical path:** WP1.1 — everything in the learning experience needs it
 
-This is the core of the whole effort. Today `/topics` is a *product-area reference tree*, not a
+This is the core of the whole effort. Today `/topics` is a _product-area reference tree_, not a
 learning sequence, and there is no ordering primitive anywhere in the schema.
 
 ← [Master plan](README.md) · [Baseline](audit-baseline.md)
@@ -61,6 +61,7 @@ breadcrumb already uses); fall back to `updated_at DESC` only for items outside 
 **This single change makes Next/Prev correct and stops edits from reshuffling reading order.**
 
 **Watch out.**
+
 - `content_items` is versioned (`supersedes_id`, one active row per `(kind, slug)`). `path_items`
   references `id`, which changes on republish. Either reference `(kind, slug)` instead, or have the
   publish path carry `path_items` rows forward to the new active id. **Decide this before writing
@@ -98,13 +99,13 @@ RLS: `using (auth.uid() = user_id)` for select/insert/update — the per-user pa
 
 **Merge on sign-in.** Keep the three existing hooks as the anonymous path:
 
-| Hook | Key |
-|---|---|
-| [use-lesson-progress.ts](../../src/lib/use-lesson-progress.ts) | `fa:lesson-done` |
-| [use-reading-progress.ts](../../src/lib/use-reading-progress.ts) | `fa:read:{kind}:{slug}` |
-| [use-step-progress.ts](../../src/lib/use-step-progress.ts) | `fa:steps:{kind}:{slug}` |
+| Hook                                                             | Key                      |
+| ---------------------------------------------------------------- | ------------------------ |
+| [use-lesson-progress.ts](../../src/lib/use-lesson-progress.ts)   | `fa:lesson-done`         |
+| [use-reading-progress.ts](../../src/lib/use-reading-progress.ts) | `fa:read:{kind}:{slug}`  |
+| [use-step-progress.ts](../../src/lib/use-step-progress.ts)       | `fa:steps:{kind}:{slug}` |
 
-On first authenticated load, run a **union + max** merge: a slug completed in *either* place is
+On first authenticated load, run a **union + max** merge: a slug completed in _either_ place is
 completed; `percent` takes the max; `completed_at` takes the earliest non-null. Never let the server
 downgrade a local completion — that reads as data loss. Mark the local store merged (a
 `fa:merged-at` stamp) so it runs once per device, then read through to the server.
@@ -155,14 +156,19 @@ resolves to a real slug.
 string matching:
 
 ```ts
-function familyOf(slug) { /* strips -beginner/-intermediate/-expert */ }
-function nextTierSlug(slug, tierId) { /* label only */ }
+function familyOf(slug) {
+  /* strips -beginner/-intermediate/-expert */
+}
+function nextTierSlug(slug, tierId) {
+  /* label only */
+}
 ```
 
 Tiers come from filtering `depth_levels` against hardcoded `[1,2]/[3]/[4,5]`, and **"Next:" renders
 as plain text, not a link**.
 
 **Build.**
+
 - Path view: ordered modules with position, not a flat card grid.
 - Per-path progress ring reading `user_progress` (falling back to localStorage when anonymous).
 - **Prerequisite chips that link** — and that visibly indicate "not yet done".
@@ -174,7 +180,7 @@ as plain text, not a link**.
 `KindBadge`, `Badges` all exist and work.
 
 **Keep the tier concept** — Beginner (L1–L2) / Intermediate (L3) / Expert (L4–L5) is a documented
-domain rule in [CLAUDE.md](../../CLAUDE.md). Paths sit *alongside* tiers as an ordering layer, they
+domain rule in [CLAUDE.md](../../CLAUDE.md). Paths sit _alongside_ tiers as an ordering layer, they
 do not replace them.
 
 **Gate.** `npm run typecheck && npm run lint && npm test`; manual walk of a full path start→finish

@@ -32,230 +32,140 @@
       "text": "Materialized Lake View's Optimal Refresh chooses between skip, incremental, and full refresh, but silently downgrades to full refresh rather than failing under five independent conditions: any referenced source table lacking Change Data Feed enabled, the MLV being defined in PySpark rather than Spark SQL (a PySpark-defined MLV always full-refreshes regardless of the transform logic), any non-Delta source table, an unsupported SQL construct such as a window function or non-deterministic function, and — independently of all the others and the one most often missed — any DELETE or UPDATE recorded on a source since the last refresh, since incremental refresh currently requires the source to be append-only between refreshes even with CDF enabled and fully supported SQL.",
       "depth": 3,
       "type": "gotcha",
-      "tags": [
-        "MaterializedLakeView",
-        "DeltaLake",
-        "CDF",
-        "IncrementalProcessing"
-      ]
+      "tags": ["MaterializedLakeView", "DeltaLake", "CDF", "IncrementalProcessing"]
     },
     {
       "capability_id": "lakehouse",
       "text": "A practitioner diagnostic sequence for an unexpectedly full-refreshing Materialized Lake View: check delta.enableChangeDataFeed on every referenced source table via SHOW TBLPROPERTIES, then run DESCRIBE HISTORY on each source and inspect the operation column for UPDATE/DELETE/MERGE entries since the MLV's last refresh timestamp — the update/delete check catches the condition most likely to be the actual cause on a big table fed by upstream MERGE logic, even when CDF is on and the query uses only supported SQL constructs.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "MaterializedLakeView",
-        "Troubleshooting",
-        "DeltaLake"
-      ]
+      "tags": ["MaterializedLakeView", "Troubleshooting", "DeltaLake"]
     },
     {
       "capability_id": "spark",
       "text": "Spark 4.x's native SQL session variables (DECLARE / SET VAR, GA'd alongside session-variable support) let a CDF watermark-read-and-advance pipeline run as a single pure-SQL script with no host language at all, referencing the watermark and target version by name in a table_changes() call and a QUALIFY clause; on Spark 3.5 the equivalent requires reading the watermark into Python and passing it back into spark.sql() via bound args={} parameter markers, functionally identical but requiring one line of Python glue per value.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "SparkSQL",
-        "SessionVariables",
-        "CDF",
-        "Runtime2"
-      ]
+      "tags": ["SparkSQL", "SessionVariables", "CDF", "Runtime2"]
     },
     {
       "capability_id": "lakehouse",
       "text": "Delta Lake's transaction-log data skipping and Parquet's own page-footer statistics form two distinct skipping tiers with different column coverage. The transaction log (_delta_log) serializes min/max/null-count structs for only the first 32 columns of a table's schema by default (delta.dataSkippingNumIndexedCols=32), so a filter on a column past that index gets zero driver-level file pruning and the driver schedules tasks against every file. Parquet page footers, by contrast, carry statistics for all columns regardless of position, so once a file is opened an executor can still skip individual row groups locally — but only after paying the network, OneLake transaction, and task-scheduling cost of opening every file in the first place.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "DataSkipping",
-        "DeltaLake",
-        "ColumnStatistics"
-      ]
+      "tags": ["DataSkipping", "DeltaLake", "ColumnStatistics"]
     },
     {
       "capability_id": "lakehouse",
       "text": "The fix for filtering past the Delta transaction log's 32-column default is delta.dataSkippingStatsColumns, a table property naming only the specific high-cardinality filter columns that should get transaction-log-level min/max indexing regardless of their schema position — keeping the commit JSON compact while restoring driver-level file skipping for those columns; a backfill of stats for historical files requires ANALYZE TABLE ... COMPUTE DELTA STATISTICS after setting the property, and the ceiling itself can alternatively be raised globally via delta.dataSkippingNumIndexedCols.",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "DataSkipping",
-        "DeltaLake",
-        "TableProperties"
-      ]
+      "tags": ["DataSkipping", "DeltaLake", "TableProperties"]
     },
     {
       "capability_id": "spark",
       "text": "A physical-plan-to-remediation diagnostic table for five recurring Fabric Spark slowness signatures: zero data skipping shows as file-read count equal to the table's total file count in the SQL tab's FileScan node (remedy: set dataSkippingStatsColumns and cluster on the filter column); Native Execution Engine fallback shows as alternating VeloxColumnarToRow/RowToVeloxColumnar operators in driver stderr around Gluten (remedy: replace the causing UDF or unsupported expression with a built-in function); severe skew shows as a large gap between median and max task duration in the Stages tab (remedy: AQE skew join or explicit key salting); SortMergeJoin spill shows as large Spill (Memory)/Spill (Disk) aggregated-metrics values (remedy: lower the AQE advisory partition size or force a broadcast join under a size threshold); and small-file task explosion shows as tens of thousands of sub-150ms tasks in the Jobs tab (remedy: OPTIMIZE to consolidate into larger V-Ordered files).",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "Troubleshooting",
-        "QueryPlan",
-        "Performance",
-        "NativeExecutionEngine"
-      ]
+      "tags": ["Troubleshooting", "QueryPlan", "Performance", "NativeExecutionEngine"]
     },
     {
       "capability_id": "spark",
       "text": "A Spark SQL CTE or DataFrame referenced multiple times downstream is not automatically materialized: because Spark lazily evaluates the whole lineage as an abstract syntax tree, referencing the same CTE in three separate downstream joins causes Spark to re-execute the CTE's full scan, filter, and aggregation three separate times against OneLake. The stated remediation is computing the expensive aggregation once, calling localCheckpoint(eager=True) to cut the Catalyst lineage graph and persist the result to executor NVMe, then registering it as a temp view so downstream joins read the pre-materialized result instead of re-deriving it.",
       "depth": 4,
       "type": "antipattern",
-      "tags": [
-        "QueryPlan",
-        "Performance",
-        "SparkSQL"
-      ]
+      "tags": ["QueryPlan", "Performance", "SparkSQL"]
     },
     {
       "capability_id": "spark",
       "text": "A group-by-then-self-join pattern for finding the most recent record per entity (joining a table back to a MAX(date) grouped subquery) forces two full scans of the source table plus a SortMergeJoin in Spark, versus a single-pass ROW_NUMBER() window function partitioned by the entity key that scans the source exactly once and executes through the native Velox window operator — offered as a direct T-SQL-to-Spark-SQL rewrite pattern rather than a Spark-specific optimization.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "SparkSQL",
-        "WindowFunctions",
-        "Performance"
-      ]
+      "tags": ["SparkSQL", "WindowFunctions", "Performance"]
     },
     {
       "capability_id": "lakehouse",
       "text": "A stated conditional table-maintenance architecture for Fabric Lakehouses: a Data Factory pipeline first calls the SQL Analytics Endpoint's sys.sp_get_table_health_metrics stored procedure per table, branches on the returned anomaly classification, and only invokes a Spark notebook to run targeted OPTIMIZE or REORG when an anomaly is actually present — leaving already-healthy tables untouched and consuming no Spark capacity units on them. The procedure's classification distinguishes a clean table (average file size 300-500MB, deletion-vector overhead under 5%) from three distinct degradation types: excessive small files (over roughly 1,000 fragmented files under 32MB, remedied by OPTIMIZE with clustering), high deletion-vector ratio (over 20% of files carrying active deletion vectors, remedied by REORG TABLE ... APPLY (PURGE) plus a scoped VACUUM), and skewed file-size variance (extreme disparity between smallest and largest file, remedied by OPTIMIZE to rebalance).",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "Maintenance",
-        "DeltaLake",
-        "SQLDatabase",
-        "PractitionerHeuristic"
-      ]
+      "tags": ["Maintenance", "DeltaLake", "SQLDatabase", "PractitionerHeuristic"]
     },
     {
       "capability_id": "lakehouse",
       "text": "A reusable PySpark catalog-wide conditional maintenance pattern reads each table's Delta $files metadata directly (rather than the SQL endpoint stored procedure) to compute total file count, average file size, the count of files under a small-file threshold, and the count of files carrying a non-null deletionVector column, then dispatches REORG TABLE ... APPLY (PURGE) when the deletion-vector file ratio exceeds a configurable threshold and OPTIMIZE when the small-file count or low average file size exceeds configurable thresholds — skipping tables that meet neither condition entirely.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "Maintenance",
-        "DeltaLake",
-        "PySpark",
-        "PractitionerHeuristic"
-      ]
+      "tags": ["Maintenance", "DeltaLake", "PySpark", "PractitionerHeuristic"]
     },
     {
       "capability_id": "lakehouse",
       "text": "This source frames Data Vault 2.0 in the Fabric Lakehouse silver layer and Kimball dimensional modeling in the gold layer as complementary layers over the same OneLake Delta tables rather than competing methodologies: silver Data Vault hubs (unique business keys), links (relationships), and satellites (attribute history with hash-diffs) prioritize resilience to schema drift and concurrent multi-source ingestion, while gold Kimball fact and conformed dimension tables (SCD Type 1 and Type 2) prioritize fast, intuitive star-schema access for Power BI Direct Lake and self-service analysts.",
       "depth": 2,
       "type": "pattern",
-      "tags": [
-        "DataVault",
-        "KimballDimensional",
-        "Medallion",
-        "DataModeling"
-      ]
+      "tags": ["DataVault", "KimballDimensional", "Medallion", "DataModeling"]
     },
     {
       "capability_id": "lakehouse",
       "text": "Data Vault 2.0 hub and satellite keys use deterministic SHA-256 hash keys specifically because they let independent, parallel, asynchronous silver ingestion from many source systems proceed without a cross-source surrogate-key lookup step — any source can compute the same hash for the same business key without coordinating with a central key-generation service, which is the property that makes hash keys suit multi-source concurrent ingestion in a way sequential integer surrogate keys do not.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "DataVault",
-        "HashKeys",
-        "DataModeling"
-      ]
+      "tags": ["DataVault", "HashKeys", "DataModeling"]
     },
     {
       "capability_id": "lakehouse",
       "text": "Silver Data Vault hubs and links are recommended as physical Delta tables (written via MERGE or INSERT-IF-NOT-EXISTS with CDF, clustered on the hash key) rather than unmaterialized SQL views, because a virtual view over raw bronze forces a full scan of all historical bronze files on every query and cannot be queried through Power BI Direct Lake at all; Materialized Lake Views are positioned as the fit specifically for point-in-time and bridge tables that join hubs, links, and satellites into an intermediate queryable layer without hand-written orchestration, distinct from the hub/link storage layer itself.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "DataVault",
-        "MaterializedLakeView",
-        "DeltaLake"
-      ]
+      "tags": ["DataVault", "MaterializedLakeView", "DeltaLake"]
     },
     {
       "capability_id": "direct-lake",
       "text": "This source's stated rationale for why Kimball gold dimension and fact tables must use BIGINT surrogate keys rather than the SHA-256 string hash keys used upstream in Data Vault silver: VertiPaq bit-packs a BIGINT (8 bytes) far more efficiently than a 32-64 byte hash string, and the source's own worked comparison puts a 500-million-row fact table's foreign-key column at roughly 32GB of Direct Lake capacity memory as a wide string versus roughly 2.4GB as a BIGINT computed via xxhash64 — framed as an 85% reduction that keeps the table within Direct Lake memory limits rather than silently falling back to DirectQuery.",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "DirectLake",
-        "SurrogateKeys",
-        "VertiPaq",
-        "DataModeling"
-      ]
+      "tags": ["DirectLake", "SurrogateKeys", "VertiPaq", "DataModeling"]
     },
     {
       "capability_id": "lakehouse",
       "text": "This source's production Spark SQL pattern for transforming Data Vault silver into a Kimball gold SCD Type 2 dimension: join the hub and satellite on the hash key, derive valid_from from the satellite's load timestamp and valid_to via LEAD() over the same window ordered by load timestamp, cast a 9999-12-31 sentinel for the still-current row's valid_to, and compute the BIGINT surrogate key as CAST(xxhash64(business_key || load_timestamp) AS BIGINT) rather than a sequential identity, so the same deterministic key can be recomputed by any process without a lookup table.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "DataVault",
-        "KimballDimensional",
-        "SCDType2",
-        "DirectLake"
-      ]
+      "tags": ["DataVault", "KimballDimensional", "SCDType2", "DirectLake"]
     },
     {
       "capability_id": "polaris",
       "text": "This source decomposes Polaris into three named architectural components beyond the shared Cascades-compiler/cell-abstraction internals already documented from Microsoft's own VLDB paper: the SQL Front End (SQL-FE), the client-facing entry point for TDS connections on port 1433 handling Entra ID authentication, AST compilation, and initial logical plan generation; the Distributed Query Processor (DQP), which estimates join cardinalities from statistics and decomposes the logical plan into a DAG of physical sub-queries coordinating ShuffleMove and BroadcastMove data movement; and the Polaris Compute Pool, stateless backend nodes each running a single-node C++ query execution engine derived from the SQL Server relational engine.",
       "depth": 3,
       "type": "internal",
-      "tags": [
-        "Polaris",
-        "Warehouse",
-        "Architecture"
-      ]
+      "tags": ["Polaris", "Warehouse", "Architecture"]
     },
     {
       "capability_id": "polaris",
       "text": "Because Polaris compute is serverless and autonomous with no cluster to size and no executor shape to tune, this source frames Warehouse and SQL-endpoint performance tuning as fundamentally a data-modeling, statistics, and SQL query-structure problem rather than the engine-configuration and memory-tuning problem that characterizes Spark performance work.",
       "depth": 3,
       "type": "concept",
-      "tags": [
-        "Polaris",
-        "Warehouse",
-        "PerformanceTuning"
-      ]
+      "tags": ["Polaris", "Warehouse", "PerformanceTuning"]
     },
     {
       "capability_id": "polaris",
       "text": "A PDW-flavored T-SQL DMV diagnostic surface for Fabric Warehouse and SQL Analytics Endpoint slowness, distinct from the Fabric SQL Database DMV surface: sys.dm_pdw_exec_requests lists running/recent distributed queries by elapsed time; sys.dm_pdw_request_steps, filtered by request_id, traces individual DQP steps and their operation_type, distinguishing an expensive ShuffleMoveOperation (row redistribution across compute nodes, usually from unclustered join keys or missing statistics) from a cheap BroadcastMoveOperation; and sys.stats joined to sys.tables with STATS_DATE() audits statistics staleness, since Polaris relies on statistics to choose between broadcast and shuffle and falls back to conservative, slow plans when statistics are missing.",
       "depth": 3,
       "type": "internal",
-      "tags": [
-        "Polaris",
-        "Warehouse",
-        "Diagnostics",
-        "TSQL"
-      ]
+      "tags": ["Polaris", "Warehouse", "Diagnostics", "TSQL"]
     },
     {
       "capability_id": "polaris",
       "text": "This source's Warehouse/SQL-endpoint result-cache-miss diagnosis: non-deterministic T-SQL functions (GETDATE(), NEWID(), RAND()), active row-level-security policies, and active Delta writes against the underlying table all invalidate result set caching even for a query text that appears identical on repeated execution; the stated remediation is passing deterministic parameters from the client rather than calling non-deterministic functions inline, and keeping read-heavy analytical views deterministic.",
       "depth": 3,
       "type": "gotcha",
-      "tags": [
-        "Polaris",
-        "Warehouse",
-        "Caching"
-      ]
+      "tags": ["Polaris", "Warehouse", "Caching"]
     },
     {
       "capability_id": "sql-database",
       "text": "This source frames Fabric SQL Database's performance-tuning surface as fundamentally distinct from Warehouse/Polaris because it is a transactional OLTP engine rather than a distributed stateless one: query plan regressions are diagnosed and fixed through Query Store (sys.query_store_runtime_stats / sys.query_store_plan, with sp_query_store_force_plan to pin a known-good plan), missing indexes through sys.dm_db_missing_index_details and sys.dm_db_missing_index_group_stats, lock contention through sys.dm_os_wait_stats LCK_M_* waits and sys.dm_tran_locks (remedied by enabling Read Committed Snapshot Isolation so readers and writers don't block each other), and OneLake mirroring latency through the Mirroring Monitoring tab, with primary keys on every mirrored table and batching large transactions under roughly 50,000 rows as the stated mitigations.",
       "depth": 3,
       "type": "internal",
-      "tags": [
-        "SQLDatabase",
-        "Diagnostics",
-        "Mirroring",
-        "TSQL"
-      ]
+      "tags": ["SQLDatabase", "Diagnostics", "Mirroring", "TSQL"]
     }
   ],
   "assets": []

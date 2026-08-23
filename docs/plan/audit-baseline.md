@@ -5,17 +5,17 @@ not taken from documentation. Re-run the commands in the right-hand column to re
 
 ## Content inventory
 
-| Metric | Value | How to reproduce |
-|---|---|---|
-| Articles | 41 (~110k words) | `ls content/articles/*.json \| wc -l` |
-| Sources | 140 | `ls content/sources/*.json \| wc -l` |
-| Claims | **1,351** | see depth script below |
-| Designs | 17 | `ls content/designs/*.json \| wc -l` |
-| Lessons | 15 | `ls content/lessons/*.json \| wc -l` |
-| Topics | 43 (9 roots + 34 children) | `grep -c '"slug"' content/topics.json` |
-| Capabilities | 21 | `src/lib/capability-names.ts` |
-| Diagrams | 95 SVG + 95 sidecars (1:1) | `npm run validate:diagrams` |
-| Migrations | 47 | `ls supabase/migrations/*.sql \| wc -l` |
+| Metric       | Value                      | How to reproduce                        |
+| ------------ | -------------------------- | --------------------------------------- |
+| Articles     | 41 (~110k words)           | `ls content/articles/*.json \| wc -l`   |
+| Sources      | 140                        | `ls content/sources/*.json \| wc -l`    |
+| Claims       | **1,351**                  | see depth script below                  |
+| Designs      | 17                         | `ls content/designs/*.json \| wc -l`    |
+| Lessons      | 15                         | `ls content/lessons/*.json \| wc -l`    |
+| Topics       | 43 (9 roots + 34 children) | `grep -c '"slug"' content/topics.json`  |
+| Capabilities | 21                         | `src/lib/capability-names.ts`           |
+| Diagrams     | 95 SVG + 95 sidecars (1:1) | `npm run validate:diagrams`             |
+| Migrations   | 47                         | `ls supabase/migrations/*.sql \| wc -l` |
 
 ## Claim depth distribution — the inverted pyramid (D5)
 
@@ -64,24 +64,24 @@ graphql-api, purview, capacity, materialized-lake-views`.
 
 Quality of the 15 that exist:
 
-| Problem | Count |
-|---|---|
+| Problem                   | Count                            |
+| ------------------------- | -------------------------------- |
 | Over the ~400-word budget | **15 of 15** (1,005–2,238 words) |
-| Missing `summary` | most |
-| Zero diagrams | **15 of 15** |
-| `prerequisites: []` | **15 of 15** |
-| Has any `lesson_meta` | **2 of 15** |
+| Missing `summary`         | most                             |
+| Zero diagrams             | **15 of 15**                     |
+| `prerequisites: []`       | **15 of 15**                     |
+| Has any `lesson_meta`     | **2 of 15**                      |
 
 ## Document structure defects — D5
 
-| Metric | Value |
-|---|---|
-| Content validation warnings | **140** |
-| Stray in-body H1s | **205 across 42 docs** (worst single doc: 33) |
-| Heading-level skips | **33** |
-| Internals `*Coming soon*` placeholders | **30 across 21 docs** |
-| Workload-specific (not gaps, never queued) | 11 |
-| Untracked / stale ledger lines | 0 ✅ |
+| Metric                                     | Value                                         |
+| ------------------------------------------ | --------------------------------------------- |
+| Content validation warnings                | **140**                                       |
+| Stray in-body H1s                          | **205 across 42 docs** (worst single doc: 33) |
+| Heading-level skips                        | **33**                                        |
+| Internals `*Coming soon*` placeholders     | **30 across 21 docs**                         |
+| Workload-specific (not gaps, never queued) | 11                                            |
+| Untracked / stale ledger lines             | 0 ✅                                          |
 
 The ToC is derived client-side by regex over `##` headings
 ([ContentTocSidebar.tsx](../../src/components/ContentTocSidebar.tsx)), so stray H1s and level skips
@@ -104,10 +104,10 @@ Thinnest: `architecture-implementation` 407 · `architecture-strategy` 408 · `d
 for **both** sidecars and SVGs, and is imported by `ContentItemArticle` (a client component on the
 reader route).
 
-| Payload | Size |
-|---|---|
-| All SVGs | 1,993,104 B (1.90 MB) |
-| All sidecars | 2,167,520 B (2.07 MB) |
+| Payload                              | Size                      |
+| ------------------------------------ | ------------------------- |
+| All SVGs                             | 1,993,104 B (1.90 MB)     |
+| All sidecars                         | 2,167,520 B (2.07 MB)     |
 | **Eagerly bundled per article page** | **4.16 MB of raw source** |
 
 Largest built chunks:
@@ -159,7 +159,7 @@ Diagram layout validation passed: 95 SVGs at 390px, 768px, 1280px with no text c
 > **Update (WP2.4, 2026-08-23):** a duplicate-region-geometry check now exists in
 > `validate-diagrams.mjs`, added in the commit immediately preceding this phase's work. Verified
 > it and found it real but incomplete — `rect`-only, via a lazy forward regex that could in
-> principle match a *different* node's rect. Confirmed 3 of 713 existing nodes (non-rect shapes)
+> principle match a _different_ node's rect. Confirmed 3 of 713 existing nodes (non-rect shapes)
 > silently escaped it. Rewrote it depth-aware and scoped to each node's own `<g>`, covering rect,
 > circle, ellipse, path, transform-positioned rect, and text-only nodes — 713/713 nodes now
 > checked, 0 false failures. `CLAUDE.md:250-251`'s claim is accurate as of this fix.
@@ -175,15 +175,15 @@ Diagram layout validation passed: 95 SVGs at 390px, 768px, 1280px with no text c
 
 ## Dead weight
 
-| Item | Status |
-|---|---|
-| `backend/` | Retired FastAPI app; still linted by `quality-gate.yml` on every PR |
-| `frontend/` | 0 tracked files |
-| `langgraph/` | 4 tracked files, no integration point in `src/` |
-| `*_legacy` tables + views | Survive; migration comment says drop after a grep confirms zero reads |
-| `bun.lock` (477 KB) | Stale — CI uses npm |
-| `getBlog`/`getDesign`/`listBlogs`/`listDesigns` | Pre-unification duplicates of `getContentItem`/`listContentItems` |
-| `scripts/check-queues.mjs:5-7` | Hardcodes a personal absolute path to an unrelated project's plan file |
+| Item                                            | Status                                                                 |
+| ----------------------------------------------- | ---------------------------------------------------------------------- |
+| `backend/`                                      | Retired FastAPI app; still linted by `quality-gate.yml` on every PR    |
+| `frontend/`                                     | 0 tracked files                                                        |
+| `langgraph/`                                    | 4 tracked files, no integration point in `src/`                        |
+| `*_legacy` tables + views                       | Survive; migration comment says drop after a grep confirms zero reads  |
+| `bun.lock` (477 KB)                             | Stale — CI uses npm                                                    |
+| `getBlog`/`getDesign`/`listBlogs`/`listDesigns` | Pre-unification duplicates of `getContentItem`/`listContentItems`      |
+| `scripts/check-queues.mjs:5-7`                  | Hardcodes a personal absolute path to an unrelated project's plan file |
 
 ### Agent instruction drift — scoped accurately
 
@@ -200,17 +200,17 @@ Do **not** sweep all 25; that would strip accurate "this is retired" guidance fr
 Real oklch token system in [src/styles.css](../../src/styles.css) (1,009 lines) with full
 light/dark parity and sophisticated `--surface-*` compound tokens. Defects beside it:
 
-| Defect | Location |
-|---|---|
-| **Invalid focus ring** — `hsl(var(--ring))` applied to **oklch** tokens, so `hsl(oklch(…))` is invalid and the global `:focus-visible` box-shadow **silently fails** (a11y defect) | `styles.css:502-505` |
-| Hardcoded dark-only classes (`text-teal-300`, `bg-teal-500/10`) bypassing `--primary` | `src/lib/fabric-theme.ts` + routes |
-| `text-teal-300` with no `dark:` variant on light backgrounds — low contrast | `index.tsx:211,347,415`, `learn.tsx:87` |
-| Radius drift: `rounded-md` / `rounded-xl` / `rounded-2xl`, no rule | multiple |
-| Comment references `frontend/src/theme.js`, which no longer exists | `styles.css:254` |
+| Defect                                                                                                                                                                             | Location                                |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- |
+| **Invalid focus ring** — `hsl(var(--ring))` applied to **oklch** tokens, so `hsl(oklch(…))` is invalid and the global `:focus-visible` box-shadow **silently fails** (a11y defect) | `styles.css:502-505`                    |
+| Hardcoded dark-only classes (`text-teal-300`, `bg-teal-500/10`) bypassing `--primary`                                                                                              | `src/lib/fabric-theme.ts` + routes      |
+| `text-teal-300` with no `dark:` variant on light backgrounds — low contrast                                                                                                        | `index.tsx:211,347,415`, `learn.tsx:87` |
+| Radius drift: `rounded-md` / `rounded-xl` / `rounded-2xl`, no rule                                                                                                                 | multiple                                |
+| Comment references `frontend/src/theme.js`, which no longer exists                                                                                                                 | `styles.css:254`                        |
 
 ## What is genuinely strong (protect this)
 
-- Zero `TODO`/`FIXME`/`HACK` in `src/`. Comments explain *why* and cite the motivating bug.
+- Zero `TODO`/`FIXME`/`HACK` in `src/`. Comments explain _why_ and cite the motivating bug.
 - RLS is consistent and correct: public tables `SELECT USING (true)` with no authenticated-write
   policy; all writes route through server functions gated by `requireAdmin()`.
 - CI gate (typecheck → content → diagrams → layout → lint → test → build → schema) is stronger than

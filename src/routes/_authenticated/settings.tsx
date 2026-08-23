@@ -9,6 +9,7 @@ import {
   Flag,
   Gauge,
   Image as ImageIcon,
+  KeyRound,
   Lightbulb,
   ListChecks,
   Milestone,
@@ -39,6 +40,7 @@ import { SystemPanel } from "@/components/settings/SystemPanel";
 import { MigrationStatusPanel } from "@/components/settings/MigrationStatusPanel";
 import { FeedbackPanel } from "@/components/settings/FeedbackPanel";
 import { ArticleIdeasPanel } from "@/components/settings/ArticleIdeasPanel";
+import { ApiKeysPanel } from "@/components/settings/ApiKeysPanel";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — Fabric Atlas" }] }),
@@ -78,6 +80,7 @@ const navGroups = [
   {
     label: "System",
     items: [
+      { id: "api-keys", label: "API Keys", icon: KeyRound },
       { id: "logs", label: "Logs", icon: Activity },
       { id: "system", label: "System", icon: Gauge },
       { id: "migrations", label: "Migrations", icon: ShieldCheck },
@@ -222,6 +225,9 @@ function SettingsPage() {
           </TabsContent>
           <TabsContent value="roadmap" className="mt-0">
             <RoadmapPanel />
+          </TabsContent>
+          <TabsContent value="api-keys" className="mt-0">
+            <ApiKeysPanel />
           </TabsContent>
           <TabsContent value="logs" className="mt-0">
             <LogsPanel

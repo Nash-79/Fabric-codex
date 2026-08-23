@@ -30,132 +30,84 @@
       "text": "Spark's job/stage/task hierarchy is strictly nested: one job is created per action (write, collect, count) and ends when that action's result is produced; the DAGScheduler cuts a job into stages at every shuffle boundary (a wide transformation), so a job with no wide transformations is a single stage; the TaskScheduler then creates one task per output partition per stage, scheduling tasks onto executor cores as cores free up.",
       "depth": 2,
       "type": "concept",
-      "tags": [
-        "ExecutionModel",
-        "DAGScheduler",
-        "TaskScheduler"
-      ]
+      "tags": ["ExecutionModel", "DAGScheduler", "TaskScheduler"]
     },
     {
       "capability_id": "spark",
       "text": "Deployment mode is defined by where the driver runs, independent of cluster manager: in client mode the driver runs on the submitting machine and the job dies if that machine disconnects, while in cluster mode the driver runs inside the cluster as a managed process and survives client disconnection. Fabric notebooks run the driver inside the Spark pool itself, architecturally closer to cluster mode, with the notebook UI acting as a thin client attached to a live remote session.",
       "depth": 3,
       "type": "concept",
-      "tags": [
-        "ClusterArchitecture",
-        "DeploymentMode",
-        "Notebooks"
-      ]
+      "tags": ["ClusterArchitecture", "DeploymentMode", "Notebooks"]
     },
     {
       "capability_id": "spark",
       "text": "The TaskScheduler places each task according to a four-level data-locality preference ladder, waiting a configurable delay before dropping to a looser level: PROCESS_LOCAL (data already in the same JVM memory, e.g. from .cache()), NODE_LOCAL (data on the same node's local disk, such as an earlier stage's local shuffle output), RACK_LOCAL (another node in the same rack or availability zone), and ANY (a remote fetch, the baseline for every initial OneLake table scan over ABFS).",
       "depth": 4,
       "type": "internal",
-      "tags": [
-        "TaskScheduler",
-        "DataLocality",
-        "ExecutionModel"
-      ]
+      "tags": ["TaskScheduler", "DataLocality", "ExecutionModel"]
     },
     {
       "capability_id": "spark",
       "text": "TaskScheduler-level fault handling is scoped to the individual task and distinct from DAGScheduler-level stage recomputation: a failed task is retried in place up to spark.task.maxFailures (default 4) without recomputing its stage, an executor that fails tasks repeatedly can be blacklisted, and speculative execution launches a duplicate copy of a straggling task on another executor rather than waiting it out.",
       "depth": 4,
       "type": "internal",
-      "tags": [
-        "TaskScheduler",
-        "FaultTolerance",
-        "SpeculativeExecution"
-      ]
+      "tags": ["TaskScheduler", "FaultTolerance", "SpeculativeExecution"]
     },
     {
       "capability_id": "spark",
       "text": "Spark's cost-based optimizer join-reordering gate requires two separate SQLConf keys to both be true — spark.sql.cbo.enabled and spark.sql.cbo.joinReorder.enabled — and both are off by default in Spark 3.5 and 4.x with Fabric not changing that default. With only ANALYZE TABLE COMPUTE STATISTICS run and the reorder gate left off, collected statistics still improve broadcast-size estimation and filter selectivity, but produce no join-order changes at all — a documented reason teams run ANALYZE TABLE and observe no plan change.",
       "depth": 4,
       "type": "gotcha",
-      "tags": [
-        "Catalyst",
-        "CostBasedOptimizer",
-        "JoinReorder"
-      ]
+      "tags": ["Catalyst", "CostBasedOptimizer", "JoinReorder"]
     },
     {
       "capability_id": "spark",
       "text": "Tungsten stores rows as UnsafeRow, a raw word-aligned binary byte array held outside the standard JVM heap, eliminating per-object Java header overhead, pointer chasing, and garbage collection; sort and hash-aggregation operations work directly on 8-byte binary prefixes packed into contiguous cache lines so CPUs can prefetch them sequentially into L1/L2 cache with near-zero cache-miss penalties.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "Tungsten",
-        "UnsafeRow",
-        "MemoryLayout"
-      ]
+      "tags": ["Tungsten", "UnsafeRow", "MemoryLayout"]
     },
     {
       "capability_id": "spark",
       "text": "Whole-Stage Code Generation uses Spark's Janino compiler to collapse an entire pipeline of narrow operators into a single fused Java while-loop, keeping intermediate values in CPU registers rather than writing them to memory between operator boundaries and eliminating the per-row virtual-dispatch cost of the older Volcano iterator model; fused stages are marked in physical plans with a leading asterisk, e.g. *(1) HashAggregate.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "Tungsten",
-        "WholeStageCodeGen",
-        "Janino"
-      ]
+      "tags": ["Tungsten", "WholeStageCodeGen", "Janino"]
     },
     {
       "capability_id": "spark",
       "text": "Adaptive Query Execution includes Dynamic Partition Pruning: for a join between a filtered dimension table and a date/region-partitioned fact table, Spark evaluates the filtered dimension subquery first, broadcasts the distinct matching partition keys, and injects them into the fact table's file-scan reader at runtime, letting the scan skip the large majority of partition directories without reading their file footers — a plan-time optimization Catalyst's static planning alone cannot perform because filter selectivity against the fact table isn't known in advance.",
       "depth": 4,
       "type": "internal",
-      "tags": [
-        "AdaptiveQueryExecution",
-        "DynamicPartitionPruning",
-        "Joins"
-      ]
+      "tags": ["AdaptiveQueryExecution", "DynamicPartitionPruning", "Joins"]
     },
     {
       "capability_id": "spark",
       "text": "AQE has four documented hard limits where it structurally cannot help: skewed GROUP BY aggregations are unaffected because AQE's skew-split logic is coded specifically for join operators (SortMergeJoin/ShuffledHashJoin) and aggregations have no probe side to replicate, requiring manual key salting instead; cartesian products or non-equi joins cannot be hashed or sort-merged so AQE cannot rewrite them, only a query rewrite to include an equi-join predicate can; a narrow-only pipeline (filter/project/append with no shuffle) never triggers AQE's re-optimization loop at all, since that loop fires only at shuffle-exchange stage barriers; and a broadcast build that exceeds spark.sql.broadcastTimeout (default 300s) aborts the query regardless of AQE.",
       "depth": 3,
       "type": "gotcha",
-      "tags": [
-        "AdaptiveQueryExecution",
-        "Limitations",
-        "Troubleshooting"
-      ]
+      "tags": ["AdaptiveQueryExecution", "Limitations", "Troubleshooting"]
     },
     {
       "capability_id": "spark",
       "text": "Executor memory carries a fixed, non-configurable 300 MB reservation subtracted from the JVM heap before any of Spark's memory-fraction math applies; separately, spark.executor.memoryOverhead is requested by Spark on top of spark.executor.memory rather than carved out of it, defaulting to max(384 MB, 0.10 x executor memory), and covers JVM internals, PySpark worker processes, and native/off-heap allocations. Because it is a session-start-only setting, it cannot be changed on an already-running session, and misconfiguring it is described as the single most common cause of an executor OOM that is not actually a data problem.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "MemoryManagement",
-        "ExecutorMemoryOverhead",
-        "OOM"
-      ]
+      "tags": ["MemoryManagement", "ExecutorMemoryOverhead", "OOM"]
     },
     {
       "capability_id": "spark",
       "text": "Since Spark 2.0 all shuffle writes route through SortShuffleManager, which selects one of three writer implementations per task: BypassMergeSortShuffleWriter for fewer than 200 output partitions with no map-side aggregation or ordering needed (cheap, one file per partition, doesn't scale to many partitions); the general-purpose SortShuffleWriter, which delegates to ExternalSorter to buffer, sort by partition, and spill to disk under memory pressure for RDDs of JVM objects; and UnsafeShuffleWriter, which sorts serialized Tungsten binary-row pointers rather than objects and is what almost all DataFrame/Dataset SQL workloads actually use.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "ShuffleInternals",
-        "SortShuffleManager",
-        "Tungsten"
-      ]
+      "tags": ["ShuffleInternals", "SortShuffleManager", "Tungsten"]
     },
     {
       "capability_id": "spark",
       "text": "Fabric Runtime 2.0's Spark 4.x changes several defaults beyond the already-widely-noted ANSI-mode flip: spark.sql.maxSinglePartitionBytes moves from unlimited to 128m, the ORC compression codec moves from snappy to zstd, spark.speculation.multiplier moves from 1.5 to 3 with its quantile moving from 0.75 to 0.9, and the shuffle service's block-removal behavior (spark.shuffle.service.removeShuffle) flips from off to on with its backing store moving to RocksDB.",
       "depth": 3,
       "type": "fact",
-      "tags": [
-        "Runtime2",
-        "ConfigurationDefaults",
-        "VersionHistory"
-      ]
+      "tags": ["Runtime2", "ConfigurationDefaults", "VersionHistory"]
     }
   ],
   "assets": []

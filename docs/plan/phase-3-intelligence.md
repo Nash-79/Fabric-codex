@@ -22,7 +22,7 @@ const { data } = await supabaseAdmin.from("claims").select(...).or(ors).limit(24
 ```
 
 Keyword `ILIKE` OR-matching, truncated to **18 of 1,351 claims (1.3%)**. A question phrased
-differently from the claim text simply misses. This is the hard ceiling on Advisor quality *and* on
+differently from the claim text simply misses. This is the hard ceiling on Advisor quality _and_ on
 `/search`.
 
 **Approach — keep the local-authoring model intact.**
@@ -49,8 +49,8 @@ create index content_items_embedding_idx on public.content_items
   using hnsw (embedding vector_cosine_ops);
 ```
 
-Also store the **model name** alongside each vector. rssmonster's own docs warn: *"Do not switch a
-database with existing semantic vectors between providers — no vector migration is provided."*
+Also store the **model name** alongside each vector. rssmonster's own docs warn: _"Do not switch a
+database with existing semantic vectors between providers — no vector migration is provided."_
 Learn from that — record the model so a future swap is detectable and re-embeddable.
 
 **Hybrid retrieval.** Do **not** discard the existing `tsvector` work — the `search_atlas` RPC and
@@ -67,6 +67,7 @@ Then **raise the truncation limit** — 18 was a lexical-noise guard, not a cont
 With relevance-ranked retrieval, 40–60 claims is comfortable for the models in use.
 
 **Watch out.**
+
 - `claims` is versioned via `supersedes_id`. Embed **active** claims only, and re-embed on supersede.
 - One known perf issue to fix while here: `search_atlas` computes `to_tsvector` **inline in the
   WHERE clause** rather than using a stored generated column, so the GIN index expression must match
@@ -87,6 +88,7 @@ confirm it still refuses.
 never wired**. This is assembly, not construction.
 
 **Add to `/search`** ([search.tsx](../../src/routes/search.tsx), 240 lines):
+
 - **Facets**: capability, depth level, source tier, tag, kind. All exist as columns already.
 - **Highlighted snippets** (`ts_headline`) instead of bare titles.
 - **Signed-cursor pagination** — port rssmonster's `articleSearchCursor` pattern: HMAC-signed opaque
@@ -99,7 +101,7 @@ records that this was previously `useState` and back wiped results. Don't regres
 
 **Optional, high value: a saved-query DSL.** rssmonster's declarative search language
 (`capability:spark depth:>=4 tier:1 sort:relevance`) maps beautifully onto learning paths — a path
-becomes *a saved query plus an order*, not a hardcoded tab. Its parser design (tokenize → structured
+becomes _a saved query plus an order_, not a hardcoded tab. Its parser design (tokenize → structured
 filters → free-text remainder, hand-written and non-backtracking) is worth copying wholesale.
 Consider it after WP1.1 lands, since it interacts with `path_items`.
 
@@ -128,7 +130,7 @@ New consumers, all **draft-only**:
 **Reuse the hardening already learned.** [article-ideas.services.server.ts](../../src/lib/article-ideas.services.server.ts)
 encodes real production lessons — a cross-provider fallback chain, and the **strict-schema
 invariant**: with `supportsStructuredOutputs: true`, OpenAI validates in strict `json_schema` mode
-requiring *every* property in `required`, so `.optional()`, `.default()`, and `.catch()` are all
+requiring _every_ property in `required`, so `.optional()`, `.default()`, and `.catch()` are all
 banned on schema fields. Any new structured-output call must follow the same rule or it 400s before
 a model runs. Log failures to `admin_audit_events` the same way.
 
@@ -144,7 +146,7 @@ Keep the laptop-side `poll-watchers.mjs` fallback — some publishers (Khoros-ho
 an honest client identity is the correct answer.
 
 > **Hard constraint: do not automate the publish gate.** Human-gated publishing via Settings →
-> Publish is working and is a deliberate domain rule. Phase 3 expands *drafting* automation only.
+> Publish is working and is a deliberate domain rule. Phase 3 expands _drafting_ automation only.
 > Nothing here may write to the KB without human approval.
 
 **Gate.** New automation writes only to `queue_items`/drafts, never published content; failures

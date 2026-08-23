@@ -19,11 +19,11 @@ must genuinely branch and label the consequence of each route with condition pil
 Generate a detailed, script-free primary `content/diagrams/<slug>.svg` with a composition chosen
 for the subject — **never a repeated three-card, diamond, or tiled text box template**.
 Author a **visually flow-driven infographic**:
+
 - Use prominent pipeline conduits (`stroke-width="2.5"`), curved bezier connectors, and numbered step badges (① ➔ ② ➔ ③).
 - Embed official Microsoft vector icons from `content/diagrams/icons/microsoft/svg/` in `<g data-official-icon="microsoft" data-icon-name="...">` beside service titles.
 - Use strong visual hierarchy: bold card headlines (13-14px) + state/metric pill badges + max 2 lines of concise takeaway (delegate deep prose to the sidecar drill).
 - Use clear visual metaphors: memory ladders/thermometers, engine execution cutaways, star schema radiating spokes, or trap-vs-remedy split panels.
-Give the SVG root accessibility metadata and map every node to exactly one focusable semantic
-`<g data-node-id="…">` containing the complete visual region. Mirror it byte-for-byte under `public/diagrams/`, then append to `content/diagrams/assets.json`.
-Run `npm run validate:diagrams` and `npm run validate:diagram-layout`.
-
+  Give the SVG root accessibility metadata and map every node to exactly one focusable semantic
+  `<g data-node-id="…">` containing the complete visual region. Mirror it byte-for-byte under `public/diagrams/`, then append to `content/diagrams/assets.json`.
+  Run `npm run validate:diagrams` and `npm run validate:diagram-layout`.

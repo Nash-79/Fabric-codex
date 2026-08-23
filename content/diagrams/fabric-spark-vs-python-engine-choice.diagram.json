@@ -6,9 +6,7 @@
   "longDescription": "Engine choice between Spark and Python notebooks. Working data size heuristic; Python notebook path; Small Spark session path; Scaled Spark pool path; Overrides that beat size; Maintenance consequence.",
   "type": "decision",
   "topicSlug": "spark",
-  "capabilityIds": [
-    "spark"
-  ],
+  "capabilityIds": ["spark"],
   "revision": "1",
   "qaStatus": "draft",
   "staticPath": "/diagrams/fabric-spark-vs-python-engine-choice.svg",
@@ -21,10 +19,7 @@
       "detail": "Under roughly 5-10 GB a single-node Python notebook is usually the cheaper answer.",
       "whyItMatters": "Under roughly 5-10 GB a single-node Python notebook is usually the cheaper answer.",
       "classification": "pattern",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-toolkit-internals",
@@ -33,19 +28,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Working data under roughly 5-10 GB"
-        ],
-        "processing": [
-          "Run single-node with a vectorized engine"
-        ],
-        "outputs": [
-          "Results at a fraction of the capacity cost"
-        ],
+        "inputs": ["Working data under roughly 5-10 GB"],
+        "processing": ["Run single-node with a vectorized engine"],
+        "outputs": ["Results at a fraction of the capacity cost"],
         "example": "A daily reference-data refresh runs in a Python notebook in seconds rather than starting a Spark cluster.",
-        "controls": [
-          "Notebook type selection"
-        ],
+        "controls": ["Notebook type selection"],
         "failureModes": [
           "The threshold is a heuristic; a memory-hungry transform can exceed a single node well below it."
         ]
@@ -63,10 +50,7 @@
       "detail": "Between roughly 10 and 100 GB a small Spark session fits without wide-cluster shuffles.",
       "whyItMatters": "Between roughly 10 and 100 GB a small Spark session fits without wide-cluster shuffles.",
       "classification": "pattern",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-toolkit-internals",
@@ -79,20 +63,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Working data roughly 10-100 GB"
-        ],
-        "processing": [
-          "Run a small Spark session with native execution enabled"
-        ],
-        "outputs": [
-          "Distributed processing without a wide cluster"
-        ],
+        "inputs": ["Working data roughly 10-100 GB"],
+        "processing": ["Run a small Spark session with native execution enabled"],
+        "outputs": ["Distributed processing without a wide cluster"],
         "example": "A silver conform job runs on two or three Medium nodes rather than a large pool.",
-        "controls": [
-          "Pool node size and count",
-          "spark.native.enabled"
-        ],
+        "controls": ["Pool node size and count", "spark.native.enabled"],
         "failureModes": [
           "Over-provisioning at this size wastes capacity units without reducing runtime."
         ]
@@ -110,10 +85,7 @@
       "detail": "Beyond roughly 100 GB with real joins, a scaled Spark pool is warranted.",
       "whyItMatters": "Beyond roughly 100 GB with real joins, a scaled Spark pool is warranted.",
       "classification": "pattern",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-toolkit-internals",
@@ -126,21 +98,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Large working sets with joins and shuffles"
-        ],
-        "processing": [
-          "Size the pool from shuffle volume",
-          "Enable Efficient Scaledown"
-        ],
-        "outputs": [
-          "Distributed execution with prompt scale-down"
-        ],
+        "inputs": ["Large working sets with joins and shuffles"],
+        "processing": ["Size the pool from shuffle volume", "Enable Efficient Scaledown"],
+        "outputs": ["Distributed execution with prompt scale-down"],
         "example": "A gold aggregation over a multi-terabyte silver table sizes its pool from shuffle volume, not input size.",
-        "controls": [
-          "Pool autoscale bounds",
-          "Efficient Scaledown properties"
-        ],
+        "controls": ["Pool autoscale bounds", "Efficient Scaledown properties"],
         "failureModes": [
           "Sizing from input volume rather than shuffle volume under-provisions the expensive stage."
         ]
@@ -158,10 +120,7 @@
       "detail": "Gold writes for Direct Lake belong in Spark because delta-rs cannot apply V-Order.",
       "whyItMatters": "Gold writes for Direct Lake belong in Spark because delta-rs cannot apply V-Order.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-toolkit-internals",
@@ -174,20 +133,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "A gold table serving Direct Lake or the SQL endpoint"
-        ],
-        "processing": [
-          "Write from Spark so V-Order applies"
-        ],
-        "outputs": [
-          "A read-optimized gold table"
-        ],
+        "inputs": ["A gold table serving Direct Lake or the SQL endpoint"],
+        "processing": ["Write from Spark so V-Order applies"],
+        "outputs": ["A read-optimized gold table"],
         "example": "A small gold aggregate is still written from Spark so Direct Lake reads stay fast.",
-        "controls": [
-          "Write path engine choice",
-          "V-Order table property"
-        ],
+        "controls": ["Write path engine choice", "V-Order table property"],
         "failureModes": [
           "A Python-written gold table loses V-Order and degrades Direct Lake read performance."
         ]
@@ -205,10 +155,7 @@
       "detail": "Genuinely distributed shuffles are Spark territory regardless of input size.",
       "whyItMatters": "Genuinely distributed shuffles are Spark territory regardless of input size.",
       "classification": "pattern",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-toolkit-internals",
@@ -217,19 +164,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Large joins or global sorts"
-        ],
-        "processing": [
-          "Redistribute data across executors"
-        ],
-        "outputs": [
-          "Correctly joined or sorted output"
-        ],
+        "inputs": ["Large joins or global sorts"],
+        "processing": ["Redistribute data across executors"],
+        "outputs": ["Correctly joined or sorted output"],
         "example": "A join between two large fact tables cannot be done single-node whatever the file sizes suggest.",
-        "controls": [
-          "Query shape"
-        ],
+        "controls": ["Query shape"],
         "failureModes": [
           "Attempting a distributed join single-node exhausts memory rather than running slowly."
         ]
@@ -247,10 +186,7 @@
       "detail": "Using a multi-node Spark session for single-node work is the most expensive common mistake.",
       "whyItMatters": "Using a multi-node Spark session for single-node work is the most expensive common mistake.",
       "classification": "warning",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-toolkit-internals",
@@ -259,19 +195,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "An over-provisioned workload"
-        ],
-        "processing": [
-          "Compare capacity cost against the work actually required"
-        ],
-        "outputs": [
-          "Identified over-provisioning"
-        ],
+        "inputs": ["An over-provisioned workload"],
+        "processing": ["Compare capacity cost against the work actually required"],
+        "outputs": ["Identified over-provisioning"],
         "example": "A dozen small daily jobs each starting a Spark pool consume far more capacity than the work justifies.",
-        "controls": [
-          "Engine choice per entity in a metadata-driven framework"
-        ],
+        "controls": ["Engine choice per entity in a metadata-driven framework"],
         "failureModes": [
           "The cost is invisible per job and only obvious in aggregate capacity consumption."
         ]
@@ -289,10 +217,7 @@
       "detail": "Tables written from the Python kernel receive no auto-compaction and need more maintenance.",
       "whyItMatters": "Tables written from the Python kernel receive no auto-compaction and need more maintenance.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-toolkit-internals",
@@ -301,20 +226,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Tables written from the Python kernel"
-        ],
-        "processing": [
-          "Schedule explicit compaction and vacuum"
-        ],
-        "outputs": [
-          "Maintained tables"
-        ],
+        "inputs": ["Tables written from the Python kernel"],
+        "processing": ["Schedule explicit compaction and vacuum"],
+        "outputs": ["Maintained tables"],
         "example": "A Python-written bronze table accumulates small files until an explicit OPTIMIZE runs.",
-        "controls": [
-          "Scheduled maintenance notebooks",
-          "Delta table properties"
-        ],
+        "controls": ["Scheduled maintenance notebooks", "Delta table properties"],
         "failureModes": [
           "Choosing Python for cost and skipping maintenance trades compute saving for scan cost later."
         ]

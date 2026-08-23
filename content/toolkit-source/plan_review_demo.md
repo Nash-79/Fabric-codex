@@ -4,7 +4,7 @@
 -->
 
 > **What this is.** Real output from `spark_plan_analyzer.py` run across all 13 notebooks in this
-> toolkit. It is a *demonstration of the analyzer*, not a defect list for the notebooks — several
+> toolkit. It is a _demonstration of the analyzer_, not a defect list for the notebooks — several
 > findings are deliberate (e.g. driver-side loops in the metadata/orchestration notebooks, where the
 > loop is over a handful of control rows, not data).
 >
@@ -16,19 +16,18 @@
 
 **13 notebook(s) analyzed - 12 critical, 36 warnings, 8 informational.**
 
-
 ## Fix these first (ranked by estimated impact)
 
 1. **L017** (score 88.0) - nb_cdf_incremental_pattern.ipynb:cell8: Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
-   - *Fix:* Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
+   - _Fix:_ Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
 2. **L017** (score 88.0) - nb_cdf_incremental_pattern.ipynb:cell10: Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
-   - *Fix:* Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
+   - _Fix:_ Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
 3. **L017** (score 88.0) - nb_cdf_incremental_pattern.ipynb:cell15: Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
-   - *Fix:* Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
+   - _Fix:_ Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
 4. **L017** (score 88.0) - nb_data_quality.ipynb:cell4: Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
-   - *Fix:* Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
+   - _Fix:_ Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
 5. **L017** (score 88.0) - nb_lakehouse_health_audit.ipynb:cell3: Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
-   - *Fix:* Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
+   - _Fix:_ Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
 
 _Impact scores are heuristic weights x severity - a triage aid, not a measurement._
 
@@ -39,76 +38,91 @@ No findings.
 ## nb_cdf_incremental_pattern.ipynb
 
 ### [WARN] L001 - nb_cdf_incremental_pattern.ipynb:cell3
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - nb_cdf_incremental_pattern.ipynb:cell4
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - nb_cdf_incremental_pattern.ipynb:cell8
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [CRITICAL] L017 - nb_cdf_incremental_pattern.ipynb:cell8
+
 Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
 
 **Rewrite/fix:** Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
 
 ### [WARN] L001 - nb_cdf_incremental_pattern.ipynb:cell10
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [CRITICAL] L017 - nb_cdf_incremental_pattern.ipynb:cell10
+
 Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
 
 **Rewrite/fix:** Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
 
 ### [WARN] L001 - nb_cdf_incremental_pattern.ipynb:cell11
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - nb_cdf_incremental_pattern.ipynb:cell12
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - nb_cdf_incremental_pattern.ipynb:cell13
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - nb_cdf_incremental_pattern.ipynb:cell14
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - nb_cdf_incremental_pattern.ipynb:cell15
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [CRITICAL] L017 - nb_cdf_incremental_pattern.ipynb:cell15
+
 Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
 
 **Rewrite/fix:** Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
 
 ### [WARN] S001 - nb_cdf_incremental_pattern.ipynb:cell12:sql
+
 SELECT * - blocks column pruning; the scan reads every column.
 
 **Rewrite/fix:** Project only the columns you need so pruning reaches the FileScan (ReadSchema shrinks).
 
 ### [WARN] S003 - nb_cdf_incremental_pattern.ipynb:cell12:sql
+
 Comma-separated FROM with WHERE-clause join predicates (implicit join).
 
 **Rewrite/fix:** Use explicit JOIN ... ON: a missed predicate silently becomes a cross join.
 
 ### [WARN] S003 - nb_cdf_incremental_pattern.ipynb:cell14:sql
+
 Comma-separated FROM with WHERE-clause join predicates (implicit join).
 
 **Rewrite/fix:** Use explicit JOIN ... ON: a missed predicate silently becomes a cross join.
@@ -154,11 +168,13 @@ _SQL in cell 15: f-string SQL - resolve parameters, then EXPLAIN manually_
 ## nb_data_quality.ipynb
 
 ### [WARN] L001 - nb_data_quality.ipynb:cell4
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [CRITICAL] L017 - nb_data_quality.ipynb:cell4
+
 Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
 
 **Rewrite/fix:** Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
@@ -170,11 +186,13 @@ _SQL in cell 2: f-string SQL - resolve parameters, then EXPLAIN manually_
 ## nb_eventlog_analysis.ipynb
 
 ### [WARN] L001 - nb_eventlog_analysis.ipynb:cell4
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [CRITICAL] L012 - nb_eventlog_analysis.ipynb:cell4
+
 except: pass swallows failures - the orchestrator sees success, downstream layers ingest garbage.
 
 **Rewrite/fix:** Catch specifically, log to the run log, and re-raise (or mark the run FAILED).
@@ -182,6 +200,7 @@ except: pass swallows failures - the orchestrator sees success, downstream layer
 ## nb_fabric_log_diagnostics.ipynb
 
 ### [WARN] N001 - nb_fabric_log_diagnostics.ipynb:cell2
+
 Reads/writes JSON - NEE processes Parquet and Delta natively; other formats force conversion that erases the acceleration.
 
 **Rewrite/fix:** Land JSON into Delta once at bronze, then keep the hot path on Delta/Parquet. (Vectorized CSV parsing was added for NEE; JSON/XML remain fallback paths.)
@@ -189,6 +208,7 @@ Reads/writes JSON - NEE processes Parquet and Delta natively; other formats forc
 ## nb_ingestion_generic.ipynb
 
 ### [WARN] L019 - nb_ingestion_generic.ipynb:cell3
+
 Delta write to a gold/silver table with no V-Order signal in the notebook - Direct Lake semantic models read these files and benefit from V-Order's sorted/encoded layout.
 
 **Rewrite/fix:** Set V-Order for the write, or (preferred) set it as a table property so it survives writers that forget. Note V-Order costs write time and is NOT worth it on bronze/landing tables that are never served to BI.
@@ -196,11 +216,13 @@ Delta write to a gold/silver table with no V-Order signal in the notebook - Dire
 **Related settings:** `spark.sql.parquet.vorder.default=true`, `delta.parquet.vorder.enabled=true`
 
 ### [WARN] L001 - nb_ingestion_generic.ipynb:cell4
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L019 - nb_ingestion_generic.ipynb:cell4
+
 Delta write to a gold/silver table with no V-Order signal in the notebook - Direct Lake semantic models read these files and benefit from V-Order's sorted/encoded layout.
 
 **Rewrite/fix:** Set V-Order for the write, or (preferred) set it as a table property so it survives writers that forget. Note V-Order costs write time and is NOT worth it on bronze/landing tables that are never served to BI.
@@ -214,11 +236,13 @@ _SQL in cell 2: f-string SQL - resolve parameters, then EXPLAIN manually_
 ## nb_lakehouse_health_audit.ipynb
 
 ### [WARN] L001 - nb_lakehouse_health_audit.ipynb:cell3
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [CRITICAL] L017 - nb_lakehouse_health_audit.ipynb:cell3
+
 Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
 
 **Rewrite/fix:** Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
@@ -236,11 +260,13 @@ _SQL in cell 3: f-string SQL - resolve parameters, then EXPLAIN manually_
 ## nb_lakehouse_maintenance.ipynb
 
 ### [WARN] L001 - nb_lakehouse_maintenance.ipynb:cell2
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - nb_lakehouse_maintenance.ipynb:cell3
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
@@ -250,11 +276,13 @@ _SQL in cell 3: f-string SQL - resolve parameters, then EXPLAIN manually_
 ## nb_metadata_sqldb_prototype.ipynb
 
 ### [info] L010 - nb_metadata_sqldb_prototype.ipynb:cell4
+
 Hard-coded abfss:// path in code.
 
 **Rewrite/fix:** Resolve paths from the metadata layer (etl_entity) or use Lakehouse-relative paths - hard-coded storage URIs break across dev/test/prod deployment pipelines.
 
 ### [WARN] L019 - nb_metadata_sqldb_prototype.ipynb:cell4
+
 Delta write to a gold/silver table with no V-Order signal in the notebook - Direct Lake semantic models read these files and benefit from V-Order's sorted/encoded layout.
 
 **Rewrite/fix:** Set V-Order for the write, or (preferred) set it as a table property so it survives writers that forget. Note V-Order costs write time and is NOT worth it on bronze/landing tables that are never served to BI.
@@ -262,14 +290,17 @@ Delta write to a gold/silver table with no V-Order signal in the notebook - Dire
 **Related settings:** `spark.sql.parquet.vorder.default=true`, `delta.parquet.vorder.enabled=true`
 
 ## nb_nee_fallback_analyzer.ipynb
+
 Dependencies: another
 
 ### [WARN] L003 - nb_nee_fallback_analyzer.ipynb:cell4
+
 Row-at-a-time Python UDF - opaque to Catalyst, serializes every row across the JVM/Python boundary, and forces NEE fallback of that operator.
 
 **Rewrite/fix:** Prefer built-in functions (expr/when/regexp_*/higher-order array funcs); if custom logic is required, @pandas_udf (Arrow, vectorized). Verify in the plan: BatchEvalPython is the bad marker, ArrowEvalPython the acceptable one.
 
 ### [CRITICAL] N002 - nb_nee_fallback_analyzer.ipynb:cell4
+
 Python UDF in the plan - a single unsupported expression drops its whole enclosing operator to JVM execution, adding columnar-to-row conversion at the boundary.
 
 **Rewrite/fix:** Replace with built-ins where possible. NEE on Runtime 2.0 added Python/Scala UDF support, but built-ins remain the only way to keep the operator fully native AND Catalyst-visible.
@@ -277,11 +308,13 @@ Python UDF in the plan - a single unsupported expression drops its whole enclosi
 **Related settings:** `spark.native.enabled`
 
 ### [info] N005 - nb_nee_fallback_analyzer.ipynb:cell4
+
 Nested/complex type manipulation - deeply nested struct/map operations are a common fallback trigger.
 
 **Rewrite/fix:** Flatten to columnar operations where the logic allows; do the nesting once at the edge rather than repeatedly in the hot path.
 
 ### [WARN] L018 - nb_nee_fallback_analyzer.ipynb:cell5
+
 Delta write with Hive-style partitionBy without Optimize Write - risks generating thousands of tiny files.
 
 **Rewrite/fix:** Use Liquid Clustering (CLUSTER BY) instead of partitioning under 1 TB, or enable Optimize Write to prevent Direct Lake performance degradation.
@@ -289,26 +322,31 @@ Delta write with Hive-style partitionBy without Optimize Write - risks generatin
 **Related settings:** `spark.microsoft.delta.optimizeWrite.enabled=true`, `spark.microsoft.delta.adaptiveTargetFileSize.enabled=true`
 
 ### [WARN] L001 - nb_nee_fallback_analyzer.ipynb:cell6
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [CRITICAL] L009 - nb_nee_fallback_analyzer.ipynb:cell6
+
 spark.conf.set() on a SESSION-START scoped key - raises CANNOT_MODIFY_CONFIG at runtime (verified empirically; see Sec 13 of the internals doc).
 
 **Rewrite/fix:** Move to %%configure -f at the top of the notebook, or the Environment's Spark properties.
 
 ### [WARN] L003 - nb_nee_fallback_analyzer.ipynb:cell9
+
 Row-at-a-time Python UDF - opaque to Catalyst, serializes every row across the JVM/Python boundary, and forces NEE fallback of that operator.
 
 **Rewrite/fix:** Prefer built-in functions (expr/when/regexp_*/higher-order array funcs); if custom logic is required, @pandas_udf (Arrow, vectorized). Verify in the plan: BatchEvalPython is the bad marker, ArrowEvalPython the acceptable one.
 
 ### [WARN] L011 - nb_nee_fallback_analyzer.ipynb:cell9
+
 %pip install at run time - session-scoped, slow session starts, unauditable versions.
 
 **Rewrite/fix:** Pin the library in the Environment and publish; reserve %pip for exploration only.
 
 ### [CRITICAL] N002 - nb_nee_fallback_analyzer.ipynb:cell9
+
 Python UDF in the plan - a single unsupported expression drops its whole enclosing operator to JVM execution, adding columnar-to-row conversion at the boundary.
 
 **Rewrite/fix:** Replace with built-ins where possible. NEE on Runtime 2.0 added Python/Scala UDF support, but built-ins remain the only way to keep the operator fully native AND Catalyst-visible.
@@ -316,11 +354,13 @@ Python UDF in the plan - a single unsupported expression drops its whole enclosi
 **Related settings:** `spark.native.enabled`
 
 ### [info] N005 - nb_nee_fallback_analyzer.ipynb:cell9
+
 Nested/complex type manipulation - deeply nested struct/map operations are a common fallback trigger.
 
 **Rewrite/fix:** Flatten to columnar operations where the logic allows; do the nesting once at the edge rather than repeatedly in the hot path.
 
 ### [info] G001 - nb_nee_fallback_analyzer.ipynb
+
 Dependency 'another' referenced but not found in search dirs.
 
 **Rewrite/fix:** Pass search_dirs covering all notebook folders for full-tree analysis.
@@ -330,39 +370,47 @@ Dependency 'another' referenced but not found in search dirs.
 No findings.
 
 ## fabric_best_practices.ipynb
+
 Dependencies: another, nb_gold_build, nb_ingest_generic, nb_silver_conform
 
 ### [WARN] L011 - fabric_best_practices.ipynb:cell1
+
 %pip install at run time - session-scoped, slow session starts, unauditable versions.
 
 **Rewrite/fix:** Pin the library in the Environment and publish; reserve %pip for exploration only.
 
 ### [WARN] L001 - fabric_best_practices.ipynb:cell6
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - fabric_best_practices.ipynb:cell9
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - fabric_best_practices.ipynb:cell11
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - fabric_best_practices.ipynb:cell12
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L001 - fabric_best_practices.ipynb:cell13
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [WARN] L019 - fabric_best_practices.ipynb:cell15
+
 Delta write to a gold/silver table with no V-Order signal in the notebook - Direct Lake semantic models read these files and benefit from V-Order's sorted/encoded layout.
 
 **Rewrite/fix:** Set V-Order for the write, or (preferred) set it as a table property so it survives writers that forget. Note V-Order costs write time and is NOT worth it on bronze/landing tables that are never served to BI.
@@ -370,31 +418,37 @@ Delta write to a gold/silver table with no V-Order signal in the notebook - Dire
 **Related settings:** `spark.sql.parquet.vorder.default=true`, `delta.parquet.vorder.enabled=true`
 
 ### [WARN] L001 - fabric_best_practices.ipynb:cell17
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [CRITICAL] L017 - fabric_best_practices.ipynb:cell17
+
 Row-by-row driver loop over collect()/iterrows() - O(n) py4j calls, no parallelism.
 
 **Rewrite/fix:** Express as joins / window functions / groupBy; if per-row logic is unavoidable, use a pandas UDF so it runs vectorized on executors.
 
 ### [info] G001 - fabric_best_practices.ipynb
+
 Dependency 'another' referenced but not found in search dirs.
 
 **Rewrite/fix:** Pass search_dirs covering all notebook folders for full-tree analysis.
 
 ### [info] G001 - fabric_best_practices.ipynb
+
 Dependency 'nb_gold_build' referenced but not found in search dirs.
 
 **Rewrite/fix:** Pass search_dirs covering all notebook folders for full-tree analysis.
 
 ### [info] G001 - fabric_best_practices.ipynb
+
 Dependency 'nb_ingest_generic' referenced but not found in search dirs.
 
 **Rewrite/fix:** Pass search_dirs covering all notebook folders for full-tree analysis.
 
 ### [info] G001 - fabric_best_practices.ipynb
+
 Dependency 'nb_silver_conform' referenced but not found in search dirs.
 
 **Rewrite/fix:** Pass search_dirs covering all notebook folders for full-tree analysis.
@@ -426,16 +480,19 @@ _SQL in cell 14: f-string SQL - resolve parameters, then EXPLAIN manually_
 ## spark_auto_config_utility.ipynb
 
 ### [CRITICAL] L009 - spark_auto_config_utility.ipynb:cell1
+
 spark.conf.set() on a SESSION-START scoped key - raises CANNOT_MODIFY_CONFIG at runtime (verified empirically; see Sec 13 of the internals doc).
 
 **Rewrite/fix:** Move to %%configure -f at the top of the notebook, or the Environment's Spark properties.
 
 ### [WARN] L001 - spark_auto_config_utility.ipynb:cell3
+
 collect() without a visible limit() - unbounded driver materialization risk (#1 driver-OOM cause).
 
 **Rewrite/fix:** collect() only aggregated/limited results; keep data on executors otherwise.
 
 ### [CRITICAL] L012 - spark_auto_config_utility.ipynb:cell3
+
 except: pass swallows failures - the orchestrator sees success, downstream layers ingest garbage.
 
 **Rewrite/fix:** Catch specifically, log to the run log, and re-raise (or mark the run FAILED).

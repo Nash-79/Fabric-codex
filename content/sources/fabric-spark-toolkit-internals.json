@@ -19,335 +19,210 @@
       "text": "Fabric Spark pools bind one executor to one node, so choosing a node size is choosing the executor shape; there is no per-node executor packing decision of the kind classic YARN guidance addresses, and one node in the pool is always reserved for the driver, the single exception being a single-node pool where driver and executor share the node.",
       "depth": 4,
       "type": "internal",
-      "tags": [
-        "Spark",
-        "ClusterArchitecture",
-        "Sizing"
-      ]
+      "tags": ["Spark", "ClusterArchitecture", "Sizing"]
     },
     {
       "capability_id": "spark",
       "text": "A practitioner rule of thumb for Fabric Spark is to keep at least 2–4 times as many shuffle partitions as total executor cores, so a straggler caused by skew or a slow node does not leave most of the cluster idle waiting on the final wave; this is a starting heuristic to validate against your own stage metrics, not a product limit.",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "Partitioning",
-        "Parallelism",
-        "PractitionerHeuristic"
-      ]
+      "tags": ["Partitioning", "Parallelism", "PractitionerHeuristic"]
     },
     {
       "capability_id": "spark",
       "text": "A practitioner engine-choice heuristic for Fabric: under roughly 5–10 GB of working data a single-node Python notebook with Polars, DuckDB or delta-rs is usually the cheaper answer; 10–100 GB suits a small Spark session; beyond roughly 100 GB with real joins and shuffles a scaled Spark pool is warranted. Two considerations override size — writes destined for Direct Lake gold should go through Spark because delta-rs cannot apply V-Order, and any genuinely distributed shuffle is Spark territory regardless of input size.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "EngineChoice",
-        "PythonNotebook",
-        "PractitionerHeuristic"
-      ]
+      "tags": ["EngineChoice", "PythonNotebook", "PractitionerHeuristic"]
     },
     {
       "capability_id": "spark",
       "text": "The most expensive Fabric Spark mistake in practice is not a misconfigured setting but running a multi-node Spark session for work a single small node could do, since a Python notebook runs on one node at a fraction of the capacity-unit cost of even the smallest Spark session while reading and writing the same OneLake Delta tables.",
       "depth": 3,
       "type": "antipattern",
-      "tags": [
-        "EngineChoice",
-        "Cost",
-        "PythonNotebook"
-      ]
+      "tags": ["EngineChoice", "Cost", "PythonNotebook"]
     },
     {
       "capability_id": "spark",
       "text": "Practitioner layer targets for Delta file size in a Fabric medallion lakehouse are roughly 128 MB at bronze, 256 MB at silver and 400 MB at gold, with gold the critical one because the SQL analytics endpoint and Power BI Direct Lake have genuine performance dependencies on file size; these are maintenance thresholds for deciding whether to call OPTIMIZE, not the output file size, which Adaptive Target File Size controls.",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "DeltaLake",
-        "Maintenance",
-        "Medallion",
-        "PractitionerHeuristic"
-      ]
+      "tags": ["DeltaLake", "Maintenance", "Medallion", "PractitionerHeuristic"]
     },
     {
       "capability_id": "spark",
       "text": "Delta table maintenance applies to the tables themselves regardless of which engine wrote them — Spark notebooks, dbt-fabric, Dataflow Gen2, Copy activity and the Python kernel all produce Delta tables with identical maintenance needs — and tables written from the Python kernel are typically in worse shape because no auto-compaction fires and VACUUM never runs automatically.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "DeltaLake",
-        "Maintenance",
-        "PythonNotebook"
-      ]
+      "tags": ["DeltaLake", "Maintenance", "PythonNotebook"]
     },
     {
       "capability_id": "spark",
       "text": "Neglected Delta maintenance presents as a capacity cost problem rather than an untidiness problem: small files accumulate, deletion vectors build up and clustering goes stale, so queries scan more data than they need and the platform works harder without the data or user count growing — the capacity upgrade eventually purchased is often maintenance debt rather than demand.",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "DeltaLake",
-        "Maintenance",
-        "Cost",
-        "Capacity"
-      ]
+      "tags": ["DeltaLake", "Maintenance", "Cost", "Capacity"]
     },
     {
       "capability_id": "spark",
       "text": "Maintenance should cost nothing when tables are already healthy: gating every OPTIMIZE on a DESCRIBE DETAIL metadata check, which scans no data and returns in seconds, lets a maintenance run skip tables already within tolerance of their layer target — the discipline implemented by the delta-doctor notebook library.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "DeltaLake",
-        "Maintenance",
-        "Optimize"
-      ]
+      "tags": ["DeltaLake", "Maintenance", "Optimize"]
     },
     {
       "capability_id": "spark",
       "text": "For tables written by more than one process, a Delta table property beats a session config: a session config applies only to the current notebook session, whereas a table property is set once and applies no matter which pipeline, engine or tool writes next.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "DeltaLake",
-        "Maintenance",
-        "TableProperties"
-      ]
+      "tags": ["DeltaLake", "Maintenance", "TableProperties"]
     },
     {
       "capability_id": "spark",
       "text": "For gold tables serving Direct Lake, VACUUM must run after the semantic model has re-framed to the latest commit; running it before can remove files the model is still pointing at.",
       "depth": 4,
       "type": "gotcha",
-      "tags": [
-        "DeltaLake",
-        "Maintenance",
-        "DirectLake",
-        "Vacuum"
-      ]
+      "tags": ["DeltaLake", "Maintenance", "DirectLake", "Vacuum"]
     },
     {
       "capability_id": "spark",
       "text": "Emitting a Spark setting that is already at its engine default is an anti-pattern in generated configuration: it reads as a deliberate decision, invites cargo-culting, and pins the value so that a future change to the engine default is silently overridden. The defensible reasons to set a value explicitly are that it genuinely differs from the default, or that you are pinning against a known upcoming default change — which belongs in a dated comment, not a silent config entry.",
       "depth": 4,
       "type": "antipattern",
-      "tags": [
-        "Configuration",
-        "PractitionerHeuristic"
-      ]
+      "tags": ["Configuration", "PractitionerHeuristic"]
     },
     {
       "capability_id": "spark",
       "text": "In a Fabric notebook the Spark session already exists before the first cell runs, so calling SparkSession.builder…getOrCreate() silently returns the existing session and every .config() call chained onto it is dropped — the job then runs with settings the author believes were applied. Session-start settings belong in a %%configure cell or the Environment's Spark properties.",
       "depth": 3,
       "type": "gotcha",
-      "tags": [
-        "SparkSession",
-        "Configuration",
-        "Notebooks"
-      ]
+      "tags": ["SparkSession", "Configuration", "Notebooks"]
     },
     {
       "capability_id": "spark",
       "text": "Importing your own modules in Fabric is not a sys.path problem: the production route is an Environment custom library (.whl or .py) that every attached notebook can import, with notebook Resources (from builtin import …) for notebook-scoped helpers, Lakehouse Files plus sys.path as a workable but fragile third option, and %run for helpers defined in notebooks rather than modules.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "Notebooks",
-        "Libraries",
-        "Environment"
-      ]
+      "tags": ["Notebooks", "Libraries", "Environment"]
     },
     {
       "capability_id": "spark",
       "text": "Under the Native Execution Engine a single unsupported expression — one function or Python UDF — drops the whole enclosing operator to JVM execution, which is why the familiar advice that UDFs are slow understates the damage: the cost is not the UDF alone but the loss of native execution for the operator containing it.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "NativeExecutionEngine",
-        "UDF",
-        "Fallback"
-      ]
+      "tags": ["NativeExecutionEngine", "UDF", "Fallback"]
     },
     {
       "capability_id": "spark",
       "text": "Because Gluten inserts a columnar-to-row conversion at every boundary between native and JVM operators, a plan that falls back mid-flight can be slower than running with the Native Execution Engine off entirely — conversion overhead is paid without sustained native execution to amortize it.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "NativeExecutionEngine",
-        "Fallback",
-        "Performance"
-      ]
+      "tags": ["NativeExecutionEngine", "Fallback", "Performance"]
     },
     {
       "capability_id": "spark",
       "text": "Native Execution Engine fallback triggers form four tiers of decreasing blast radius: whole-query (structured streaming, ANSI mode, non-native sources such as JSON and XML), operator (no Velox equivalent), expression (a single unsupported function or UDF inside an otherwise-native operator), and type (deeply nested structs and maps). Diagnosis differs per tier, so identifying the tier is the first step in a fallback investigation.",
       "depth": 5,
       "type": "pattern",
-      "tags": [
-        "NativeExecutionEngine",
-        "Fallback",
-        "Troubleshooting"
-      ]
+      "tags": ["NativeExecutionEngine", "Fallback", "Troubleshooting"]
     },
     {
       "capability_id": "spark",
       "text": "Because Spark 4.x turns ANSI mode on by default and the Native Execution Engine falls back to JVM under ANSI, an untouched Runtime 2.0 environment with NEE apparently enabled can be running almost entirely on the JVM — making a post-migration verification that native operators are actually present the single most valuable check after a runtime move.",
       "depth": 5,
       "type": "gotcha",
-      "tags": [
-        "NativeExecutionEngine",
-        "ANSI",
-        "Runtime",
-        "Migration"
-      ]
+      "tags": ["NativeExecutionEngine", "ANSI", "Runtime", "Migration"]
     },
     {
       "capability_id": "spark",
       "text": "The ANSI-versus-native trade-off on Runtime 2.0 is a per-workload decision rather than a global one: data-quality-critical silver pipelines may prefer ANSI's correctness guarantees, while scan-heavy gold aggregations may prefer native vectorized speed, and the choice belongs in the Environment's Spark properties rather than ad hoc in notebooks.",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "NativeExecutionEngine",
-        "ANSI",
-        "Runtime"
-      ]
+      "tags": ["NativeExecutionEngine", "ANSI", "Runtime"]
     },
     {
       "capability_id": "spark",
       "text": "Fabric Spark configuration lives in five layers with downward precedence: capacity (SKU, bursting, surge protection), workspace Spark settings (pool, default runtime, job admission, high concurrency), the Environment item (runtime override, compute, Spark properties, libraries, the NEE toggle), the notebook or job session (%%configure), and the running session (spark.conf.set for runtime-mutable keys only). When a setting does not stick, the diagnosis is either a lower layer overriding it or a session-start-scope setting applied too late.",
       "depth": 4,
       "type": "internal",
-      "tags": [
-        "Configuration",
-        "Environment",
-        "Capacity"
-      ]
+      "tags": ["Configuration", "Environment", "Capacity"]
     },
     {
       "capability_id": "spark",
       "text": "The most valuable Spark default is the one left alone: AQE, Optimize Write, intelligent cache and high concurrency are on by default in Fabric, and the common failure mode is not under-tuning but a team pasting settings from a blog into every notebook and defeating AQE's runtime measurements.",
       "depth": 3,
       "type": "antipattern",
-      "tags": [
-        "Configuration",
-        "AQE",
-        "PractitionerHeuristic"
-      ]
+      "tags": ["Configuration", "AQE", "PractitionerHeuristic"]
     },
     {
       "capability_id": "spark",
       "text": "A practitioner order of operations for a slow Spark job: read the physical plan, then check stage metrics for spill and skew, then fix the code or the table layout, and only then touch settings — a cast on a join key, a Python UDF, or a missing OPTIMIZE explains more slow jobs than any configuration value does.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "Troubleshooting",
-        "Performance",
-        "PractitionerHeuristic"
-      ]
+      "tags": ["Troubleshooting", "Performance", "PractitionerHeuristic"]
     },
     {
       "capability_id": "spark",
       "text": "Physical-plan red flags map to specific defects: PushedFilters:[] means predicate pushdown failed and the scan reads everything; PartitionFilters:[] means a partitioned or clustered table is being fully scanned; CartesianProduct or BroadcastNestedLoopJoin means no usable equi-join key; BatchEvalPython marks a row-at-a-time Python UDF; a missing AdaptiveSparkPlan wrapper means AQE is off for that query; and missing *(n) codegen prefixes mean operators fell outside whole-stage code generation.",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "QueryPlan",
-        "Troubleshooting",
-        "Performance"
-      ]
+      "tags": ["QueryPlan", "Troubleshooting", "Performance"]
     },
     {
       "capability_id": "spark",
       "text": "A frequent cause of failed predicate pushdown is casting the column rather than the literal in a comparison: a cast wrapped around the column side prevents Spark from pushing the filter into the scan, so the fix is to filter on the raw column and cast the literal instead.",
       "depth": 4,
       "type": "gotcha",
-      "tags": [
-        "QueryPlan",
-        "Performance",
-        "PredicatePushdown"
-      ]
+      "tags": ["QueryPlan", "Performance", "PredicatePushdown"]
     },
     {
       "capability_id": "spark",
       "text": "Reading a CDF stream from startingVersion 0 and filtering on _commit_version afterwards is an anti-pattern: startingVersion and endingVersion are source options rather than filters, so Delta uses them to decide which commit and change-data files to open at all. Filtering after the read makes cost grow with table age rather than with change volume — the exact problem CDF exists to solve.",
       "depth": 4,
       "type": "antipattern",
-      "tags": [
-        "DeltaLake",
-        "CDF",
-        "IncrementalProcessing"
-      ]
+      "tags": ["DeltaLake", "CDF", "IncrementalProcessing"]
     },
     {
       "capability_id": "spark",
       "text": "Change Data Feed carries several rows per key across versions, so applying every intermediate change row with its own MERGE is slow, driver-bound and order-sensitive; collapsing to net change per key with a window function first, then recomputing only the grains the batch touched, is the durable pattern.",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "DeltaLake",
-        "CDF",
-        "IncrementalProcessing",
-        "Merge"
-      ]
+      "tags": ["DeltaLake", "CDF", "IncrementalProcessing", "Merge"]
     },
     {
       "capability_id": "spark",
       "text": "CDF change data is subject to VACUUM retention, so a consumer that stalls longer than the retention window holds a watermark that can no longer be read; the safe design fails loudly with an explicit check that the watermark still predates the earliest retained version, forcing a full refresh rather than silently skipping data.",
       "depth": 4,
       "type": "gotcha",
-      "tags": [
-        "DeltaLake",
-        "CDF",
-        "Vacuum",
-        "Retention"
-      ]
+      "tags": ["DeltaLake", "CDF", "Vacuum", "Retention"]
     },
     {
       "capability_id": "spark",
       "text": "Pure appends write no CDF change-data files because insert-only changes are derivable from the files added in the transaction log, so append-heavy bronze carries almost no CDF overhead; the write amplification lands on updates, deletes and merges. Maintenance operations including OPTIMIZE and VACUUM are not logically data-changing and emit no change rows, so a compaction job does not produce phantom churn for an incremental consumer.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "DeltaLake",
-        "CDF",
-        "Maintenance"
-      ]
+      "tags": ["DeltaLake", "CDF", "Maintenance"]
     },
     {
       "capability_id": "spark",
       "text": "A metadata-driven Fabric ingestion framework should touch its metadata store twice per run, not once per row: one query for active entities at run start, config cached in memory, run-log rows accumulated in a list, then one batched write and one forward-only watermark MERGE per entity at the end. Querying config inside a per-partition function turns the metadata database into a bottleneck and can exhaust connections.",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "MetadataDriven",
-        "Orchestration",
-        "SQLDatabase"
-      ]
+      "tags": ["MetadataDriven", "Orchestration", "SQLDatabase"]
     },
     {
       "capability_id": "spark",
       "text": "Watermark updates in a metadata-driven framework must move forward only — implemented as a single MERGE or an UPDATE guarded by a greater-than comparison — because two runs of the same entity can interleave and last-writer-wins can silently rewind the high-water mark.",
       "depth": 4,
       "type": "gotcha",
-      "tags": [
-        "MetadataDriven",
-        "Watermark",
-        "Idempotency"
-      ]
+      "tags": ["MetadataDriven", "Watermark", "Idempotency"]
     },
     {
       "capability_id": "spark",
       "text": "notebookutils.notebook.runMultiple() runs a DAG of related notebooks inside one shared Spark session, which is a substantial capacity saving over a pipeline that invokes N notebooks each starting its own session; the composed pattern is a pipeline or Activator triggering one coordinator notebook that routes small entities to Python-notebook processing and large ones into a runMultiple DAG on a single right-sized session.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "Orchestration",
-        "RunMultiple",
-        "Cost"
-      ]
+      "tags": ["Orchestration", "RunMultiple", "Cost"]
     }
   ]
 }

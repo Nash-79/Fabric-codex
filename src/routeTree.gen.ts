@@ -23,9 +23,11 @@ import { Route as AdvisorRouteImport } from './routes/advisor'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as TopicsIndexRouteImport } from './routes/topics/index'
+import { Route as DocsIndexRouteImport } from './routes/docs/index'
 import { Route as BlogsIndexRouteImport } from './routes/blogs/index'
 import { Route as TopicsSlugRouteImport } from './routes/topics/$slug'
 import { Route as RegistryIdRouteImport } from './routes/registry.$id'
+import { Route as DocsSlugRouteImport } from './routes/docs/$slug'
 import { Route as DevPerfRouteImport } from './routes/dev.perf'
 import { Route as DevLogsRouteImport } from './routes/dev.logs'
 import { Route as DesignSlugRouteImport } from './routes/design.$slug'
@@ -111,6 +113,11 @@ const TopicsIndexRoute = TopicsIndexRouteImport.update({
   path: '/topics/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DocsIndexRoute = DocsIndexRouteImport.update({
+  id: '/docs/',
+  path: '/docs/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BlogsIndexRoute = BlogsIndexRouteImport.update({
   id: '/blogs/',
   path: '/blogs/',
@@ -125,6 +132,11 @@ const RegistryIdRoute = RegistryIdRouteImport.update({
   id: '/$id',
   path: '/$id',
   getParentRoute: () => RegistryRoute,
+} as any)
+const DocsSlugRoute = DocsSlugRouteImport.update({
+  id: '/docs/$slug',
+  path: '/docs/$slug',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const DevPerfRoute = DevPerfRouteImport.update({
   id: '/dev/perf',
@@ -227,9 +239,11 @@ export interface FileRoutesByFullPath {
   '/design/$slug': typeof DesignSlugRoute
   '/dev/logs': typeof DevLogsRoute
   '/dev/perf': typeof DevPerfRoute
+  '/docs/$slug': typeof DocsSlugRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs/': typeof BlogsIndexRoute
+  '/docs/': typeof DocsIndexRoute
   '/topics/': typeof TopicsIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -260,9 +274,11 @@ export interface FileRoutesByTo {
   '/design/$slug': typeof DesignSlugRoute
   '/dev/logs': typeof DevLogsRoute
   '/dev/perf': typeof DevPerfRoute
+  '/docs/$slug': typeof DocsSlugRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs': typeof BlogsIndexRoute
+  '/docs': typeof DocsIndexRoute
   '/topics': typeof TopicsIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -295,9 +311,11 @@ export interface FileRoutesById {
   '/design/$slug': typeof DesignSlugRoute
   '/dev/logs': typeof DevLogsRoute
   '/dev/perf': typeof DevPerfRoute
+  '/docs/$slug': typeof DocsSlugRoute
   '/registry/$id': typeof RegistryIdRoute
   '/topics/$slug': typeof TopicsSlugRoute
   '/blogs/': typeof BlogsIndexRoute
+  '/docs/': typeof DocsIndexRoute
   '/topics/': typeof TopicsIndexRoute
   '/.lovable/oauth/consent': typeof DotlovableOauthConsentRoute
   '/.mcp/invoke-tool/$tool': typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -330,9 +348,11 @@ export interface FileRouteTypes {
     | '/design/$slug'
     | '/dev/logs'
     | '/dev/perf'
+    | '/docs/$slug'
     | '/registry/$id'
     | '/topics/$slug'
     | '/blogs/'
+    | '/docs/'
     | '/topics/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -363,9 +383,11 @@ export interface FileRouteTypes {
     | '/design/$slug'
     | '/dev/logs'
     | '/dev/perf'
+    | '/docs/$slug'
     | '/registry/$id'
     | '/topics/$slug'
     | '/blogs'
+    | '/docs'
     | '/topics'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -397,9 +419,11 @@ export interface FileRouteTypes {
     | '/design/$slug'
     | '/dev/logs'
     | '/dev/perf'
+    | '/docs/$slug'
     | '/registry/$id'
     | '/topics/$slug'
     | '/blogs/'
+    | '/docs/'
     | '/topics/'
     | '/.lovable/oauth/consent'
     | '/.mcp/invoke-tool/$tool'
@@ -430,8 +454,10 @@ export interface RootRouteChildren {
   DesignSlugRoute: typeof DesignSlugRoute
   DevLogsRoute: typeof DevLogsRoute
   DevPerfRoute: typeof DevPerfRoute
+  DocsSlugRoute: typeof DocsSlugRoute
   TopicsSlugRoute: typeof TopicsSlugRoute
   BlogsIndexRoute: typeof BlogsIndexRoute
+  DocsIndexRoute: typeof DocsIndexRoute
   TopicsIndexRoute: typeof TopicsIndexRoute
   DotlovableOauthConsentRoute: typeof DotlovableOauthConsentRoute
   Char91DotmcpChar93InvokeToolToolRoute: typeof Char91DotmcpChar93InvokeToolToolRoute
@@ -542,6 +568,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TopicsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/docs/': {
+      id: '/docs/'
+      path: '/docs'
+      fullPath: '/docs/'
+      preLoaderRoute: typeof DocsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/blogs/': {
       id: '/blogs/'
       path: '/blogs'
@@ -562,6 +595,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/registry/$id'
       preLoaderRoute: typeof RegistryIdRouteImport
       parentRoute: typeof RegistryRoute
+    }
+    '/docs/$slug': {
+      id: '/docs/$slug'
+      path: '/docs/$slug'
+      fullPath: '/docs/$slug'
+      preLoaderRoute: typeof DocsSlugRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/dev/perf': {
       id: '/dev/perf'
@@ -717,8 +757,10 @@ const rootRouteChildren: RootRouteChildren = {
   DesignSlugRoute: DesignSlugRoute,
   DevLogsRoute: DevLogsRoute,
   DevPerfRoute: DevPerfRoute,
+  DocsSlugRoute: DocsSlugRoute,
   TopicsSlugRoute: TopicsSlugRoute,
   BlogsIndexRoute: BlogsIndexRoute,
+  DocsIndexRoute: DocsIndexRoute,
   TopicsIndexRoute: TopicsIndexRoute,
   DotlovableOauthConsentRoute: DotlovableOauthConsentRoute,
   Char91DotmcpChar93InvokeToolToolRoute: Char91DotmcpChar93InvokeToolToolRoute,

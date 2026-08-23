@@ -6,9 +6,7 @@
   "longDescription": "Native Execution Engine architecture. Catalyst physical plan; Gluten plan translation; Velox vectorized execution; JVM Tungsten fallback path; Columnar to row conversion boundary.",
   "type": "architecture",
   "topicSlug": "spark",
-  "capabilityIds": [
-    "spark"
-  ],
+  "capabilityIds": ["spark"],
   "revision": "1",
   "qaStatus": "draft",
   "staticPath": "/diagrams/nee-gluten-velox-architecture.svg",
@@ -21,9 +19,7 @@
       "detail": "Catalyst's optimizer behaviour is fully preserved under native execution.",
       "whyItMatters": "Catalyst's optimizer behaviour is fully preserved under native execution.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "spark-native-execution-engine",
@@ -32,19 +28,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "DataFrame or SQL query"
-        ],
-        "processing": [
-          "Optimize and produce a physical plan"
-        ],
-        "outputs": [
-          "Optimized physical plan"
-        ],
+        "inputs": ["DataFrame or SQL query"],
+        "processing": ["Optimize and produce a physical plan"],
+        "outputs": ["Optimized physical plan"],
         "example": "A filtered join is planned identically whether or not native execution is enabled.",
-        "controls": [
-          "Standard Catalyst and AQE settings"
-        ],
+        "controls": ["Standard Catalyst and AQE settings"],
         "failureModes": [
           "Expecting the native engine to fix a bad plan — it changes execution, not planning."
         ]
@@ -62,9 +50,7 @@
       "detail": "spark.native.enabled selects the native path per application on both runtimes.",
       "whyItMatters": "spark.native.enabled selects the native path per application on both runtimes.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-runtime-versions",
@@ -77,20 +63,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Environment or session configuration"
-        ],
-        "processing": [
-          "Enable the native execution path"
-        ],
-        "outputs": [
-          "Native execution attempted for supported operators"
-        ],
+        "inputs": ["Environment or session configuration"],
+        "processing": ["Enable the native execution path"],
+        "outputs": ["Native execution attempted for supported operators"],
         "example": "The Environment's Acceleration tab enables it for every notebook attached to that Environment.",
-        "controls": [
-          "spark.native.enabled",
-          "Environment Acceleration tab"
-        ],
+        "controls": ["spark.native.enabled", "Environment Acceleration tab"],
         "failureModes": [
           "Enabling the toggle without verifying the plan can leave a job running entirely on the JVM."
         ]
@@ -108,9 +85,7 @@
       "detail": "Gluten converts supported parts of the physical plan into a Substrait plan.",
       "whyItMatters": "Gluten converts supported parts of the physical plan into a Substrait plan.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "spark-native-execution-engine",
@@ -119,21 +94,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Optimized physical plan"
-        ],
-        "processing": [
-          "Identify supported operators",
-          "Emit a Substrait plan"
-        ],
-        "outputs": [
-          "Substrait plan for Velox",
-          "Remaining JVM operators"
-        ],
+        "inputs": ["Optimized physical plan"],
+        "processing": ["Identify supported operators", "Emit a Substrait plan"],
+        "outputs": ["Substrait plan for Velox", "Remaining JVM operators"],
         "example": "A scan, filter and hash aggregate translate while an unsupported window function does not.",
-        "controls": [
-          "Gluten's operator support surface, which changes per release"
-        ],
+        "controls": ["Gluten's operator support surface, which changes per release"],
         "failureModes": [
           "An unsupported expression inside an operator prevents that whole operator from translating."
         ]
@@ -151,9 +116,7 @@
       "detail": "Velox executes the translated plan as vectorized columnar C++ operators.",
       "whyItMatters": "Velox executes the translated plan as vectorized columnar C++ operators.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "spark-native-execution-engine",
@@ -166,20 +129,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Substrait plan",
-          "Columnar batches"
-        ],
-        "processing": [
-          "Execute vectorized C++ kernels over column batches"
-        ],
-        "outputs": [
-          "Columnar result batches"
-        ],
+        "inputs": ["Substrait plan", "Columnar batches"],
+        "processing": ["Execute vectorized C++ kernels over column batches"],
+        "outputs": ["Columnar result batches"],
         "example": "A sum over one column runs as a single vectorized pass over a contiguous array rather than per-row calls.",
-        "controls": [
-          "Batch size and native memory settings"
-        ],
+        "controls": ["Batch size and native memory settings"],
         "failureModes": [
           "Velox semantics can diverge from JVM Spark in specific casts and rounding behaviour."
         ]
@@ -197,9 +151,7 @@
       "detail": "Microsoft's TPC-DS benchmark reports up to six times open-source Spark performance.",
       "whyItMatters": "Microsoft's TPC-DS benchmark reports up to six times open-source Spark performance.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-runtime-versions",
@@ -208,19 +160,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "A compute-intensive workload"
-        ],
-        "processing": [
-          "Execute natively end to end"
-        ],
-        "outputs": [
-          "Reduced runtime and compute cost"
-        ],
+        "inputs": ["A compute-intensive workload"],
+        "processing": ["Execute natively end to end"],
+        "outputs": ["Reduced runtime and compute cost"],
         "example": "A scan-and-aggregate gold build completes substantially faster with no code change.",
-        "controls": [
-          "Workload shape — compute-bound benefits most"
-        ],
+        "controls": ["Workload shape — compute-bound benefits most"],
         "failureModes": [
           "I/O-bound work sees far less benefit than the headline benchmark suggests."
         ]
@@ -238,9 +182,7 @@
       "detail": "Unsupported operators fall back to standard JVM Spark automatically.",
       "whyItMatters": "Unsupported operators fall back to standard JVM Spark automatically.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "spark-native-execution-engine",
@@ -249,19 +191,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Unsupported plan segment"
-        ],
-        "processing": [
-          "Execute with JVM row-based Spark"
-        ],
-        "outputs": [
-          "Correct results via the traditional path"
-        ],
+        "inputs": ["Unsupported plan segment"],
+        "processing": ["Execute with JVM row-based Spark"],
+        "outputs": ["Correct results via the traditional path"],
         "example": "A JSON source read stays on the JVM while the downstream aggregation runs natively.",
-        "controls": [
-          "Query rewriting to avoid unsupported constructs"
-        ],
+        "controls": ["Query rewriting to avoid unsupported constructs"],
         "failureModes": [
           "Fallback is silent, so a performance regression can have no visible error."
         ]
@@ -279,9 +213,7 @@
       "detail": "Each native-to-JVM crossing inserts a columnar-to-row conversion cost.",
       "whyItMatters": "Each native-to-JVM crossing inserts a columnar-to-row conversion cost.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-toolkit-internals",
@@ -290,19 +222,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "A plan alternating native and JVM operators"
-        ],
-        "processing": [
-          "Convert columnar batches to rows and back"
-        ],
-        "outputs": [
-          "Conversion overhead per boundary"
-        ],
+        "inputs": ["A plan alternating native and JVM operators"],
+        "processing": ["Convert columnar batches to rows and back"],
+        "outputs": ["Conversion overhead per boundary"],
         "example": "VeloxColumnarToRowExec appearing repeatedly in a plan signals repeated conversion cost.",
-        "controls": [
-          "Restructure so unsupported operators sit at the plan edge, not the middle"
-        ],
+        "controls": ["Restructure so unsupported operators sit at the plan edge, not the middle"],
         "failureModes": [
           "Many small native islands cost more in conversion than they save in execution."
         ]
@@ -320,9 +244,7 @@
       "detail": "Plan suffixes, the Spark Advisor and the Diagnostics pane confirm what really ran natively.",
       "whyItMatters": "Plan suffixes, the Spark Advisor and the Diagnostics pane confirm what really ran natively.",
       "classification": "fact",
-      "layers": [
-        "compute"
-      ],
+      "layers": ["compute"],
       "evidence": [
         {
           "sourceKey": "spark-native-execution-engine",
@@ -335,22 +257,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "A completed or running query"
-        ],
-        "processing": [
-          "Inspect plan suffixes",
-          "Read Advisor and Diagnostics output"
-        ],
-        "outputs": [
-          "Confirmed native or fallback status"
-        ],
+        "inputs": ["A completed or running query"],
+        "processing": ["Inspect plan suffixes", "Read Advisor and Diagnostics output"],
+        "outputs": ["Confirmed native or fallback status"],
         "example": "No *Transformer suffixes anywhere with the engine enabled means the query ran entirely on the JVM.",
-        "controls": [
-          "df.explain()",
-          "Spark Advisor",
-          "Monitoring Diagnostics pane"
-        ],
+        "controls": ["df.explain()", "Spark Advisor", "Monitoring Diagnostics pane"],
         "failureModes": [
           "Trusting the configuration toggle instead of the plan hides a fully fallen-back job."
         ]

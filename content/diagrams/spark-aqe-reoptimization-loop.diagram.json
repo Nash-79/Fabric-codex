@@ -6,9 +6,7 @@
   "longDescription": "Adaptive Query Execution loop. Static plan from estimates; Execute materializable stages; Collect real statistics; Coalesce partitions; Convert joins to broadcast; Split skewed partitions.",
   "type": "internals",
   "topicSlug": "spark",
-  "capabilityIds": [
-    "spark"
-  ],
+  "capabilityIds": ["spark"],
   "revision": "1",
   "qaStatus": "draft",
   "staticPath": "/diagrams/spark-aqe-reoptimization-loop.svg",
@@ -21,10 +19,7 @@
       "detail": "Catalyst commits to a plan using pre-execution estimates that may be badly wrong.",
       "whyItMatters": "Catalyst commits to a plan using pre-execution estimates that may be badly wrong.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "metadata"
-      ],
+      "layers": ["compute", "metadata"],
       "evidence": [
         {
           "sourceKey": "spark-sql-performance-tuning",
@@ -33,20 +28,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Table metadata",
-          "Available column statistics"
-        ],
-        "processing": [
-          "Choose join strategy and partition count up front"
-        ],
-        "outputs": [
-          "Initial physical plan"
-        ],
+        "inputs": ["Table metadata", "Available column statistics"],
+        "processing": ["Choose join strategy and partition count up front"],
+        "outputs": ["Initial physical plan"],
         "example": "A join is planned as sort-merge because the optimizer cannot measure how selective an upstream filter is.",
-        "controls": [
-          "Table statistics freshness"
-        ],
+        "controls": ["Table statistics freshness"],
         "failureModes": [
           "A wrong estimate commits the query to two sorts and two shuffles it did not need."
         ]
@@ -64,10 +50,7 @@
       "detail": "AQE runs the stages it can and pauses at the shuffle boundary.",
       "whyItMatters": "AQE runs the stages it can and pauses at the shuffle boundary.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "metadata"
-      ],
+      "layers": ["compute", "metadata"],
       "evidence": [
         {
           "sourceKey": "spark-sql-performance-tuning",
@@ -76,20 +59,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Initial physical plan"
-        ],
-        "processing": [
-          "Run stages that can be materialized",
-          "Pause at the exchange"
-        ],
-        "outputs": [
-          "Completed stage output and its statistics"
-        ],
+        "inputs": ["Initial physical plan"],
+        "processing": ["Run stages that can be materialized", "Pause at the exchange"],
+        "outputs": ["Completed stage output and its statistics"],
         "example": "The scan and map side complete while the join strategy for the next stage remains undecided.",
-        "controls": [
-          "spark.sql.adaptive.enabled"
-        ],
+        "controls": ["spark.sql.adaptive.enabled"],
         "failureModes": [
           "With AQE disabled the whole plan is fixed in advance and no correction is possible."
         ]
@@ -107,10 +81,7 @@
       "detail": "Real partition sizes from completed stages replace the original estimates.",
       "whyItMatters": "Real partition sizes from completed stages replace the original estimates.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "metadata"
-      ],
+      "layers": ["compute", "metadata"],
       "evidence": [
         {
           "sourceKey": "spark-sql-performance-tuning",
@@ -119,19 +90,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Shuffle output sizes and row counts"
-        ],
-        "processing": [
-          "Re-run optimizer and physical planner over the remaining plan"
-        ],
-        "outputs": [
-          "Revised plan for the remaining stages"
-        ],
+        "inputs": ["Shuffle output sizes and row counts"],
+        "processing": ["Re-run optimizer and physical planner over the remaining plan"],
+        "outputs": ["Revised plan for the remaining stages"],
         "example": "A side estimated at 400 MB measures 6 MB after filtering, changing the join decision.",
-        "controls": [
-          "Runtime statistics from completed stages"
-        ],
+        "controls": ["Runtime statistics from completed stages"],
         "failureModes": [
           "Statistics only exist past an exchange, so an all-narrow query is never revisited."
         ]
@@ -149,10 +112,7 @@
       "detail": "Undersized post-shuffle partitions merge toward the advisory target size.",
       "whyItMatters": "Undersized post-shuffle partitions merge toward the advisory target size.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "metadata"
-      ],
+      "layers": ["compute", "metadata"],
       "evidence": [
         {
           "sourceKey": "spark-sql-performance-tuning",
@@ -165,15 +125,9 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Measured post-shuffle partition sizes"
-        ],
-        "processing": [
-          "Merge adjacent undersized partitions"
-        ],
-        "outputs": [
-          "Fewer, better-sized partitions"
-        ],
+        "inputs": ["Measured post-shuffle partition sizes"],
+        "processing": ["Merge adjacent undersized partitions"],
+        "outputs": ["Fewer, better-sized partitions"],
         "example": "200 planned partitions averaging 8 MB coalesce into roughly 25 partitions near the target.",
         "controls": [
           "spark.sql.adaptive.coalescePartitions.enabled",
@@ -196,10 +150,7 @@
       "detail": "A sort-merge join converts to broadcast when measured sizes justify it.",
       "whyItMatters": "A sort-merge join converts to broadcast when measured sizes justify it.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "metadata"
-      ],
+      "layers": ["compute", "metadata"],
       "evidence": [
         {
           "sourceKey": "spark-sql-performance-tuning",
@@ -212,20 +163,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Measured size of each join side"
-        ],
-        "processing": [
-          "Compare against the adaptive broadcast threshold",
-          "Rewrite the join"
-        ],
-        "outputs": [
-          "Broadcast hash join instead of sort-merge"
-        ],
+        "inputs": ["Measured size of each join side"],
+        "processing": ["Compare against the adaptive broadcast threshold", "Rewrite the join"],
+        "outputs": ["Broadcast hash join instead of sort-merge"],
         "example": "A dimension that filters down to 6 MB is broadcast, removing both shuffles and both sorts.",
-        "controls": [
-          "spark.sql.autoBroadcastJoinThreshold"
-        ],
+        "controls": ["spark.sql.autoBroadcastJoinThreshold"],
         "failureModes": [
           "A broadcast forced by an explicit hint bypasses this runtime safety check entirely."
         ]
@@ -243,10 +185,7 @@
       "detail": "Oversized partitions are split and the matching side replicated.",
       "whyItMatters": "Oversized partitions are split and the matching side replicated.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "metadata"
-      ],
+      "layers": ["compute", "metadata"],
       "evidence": [
         {
           "sourceKey": "spark-sql-performance-tuning",
@@ -255,16 +194,12 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Measured partition size distribution"
-        ],
+        "inputs": ["Measured partition size distribution"],
         "processing": [
           "Identify partitions above both thresholds",
           "Split and replicate the matching side"
         ],
-        "outputs": [
-          "Evenly sized join tasks"
-        ],
+        "outputs": ["Evenly sized join tasks"],
         "example": "One 4 GB partition among 200 averaging 50 MB is split into sub-partitions instead of becoming a straggler.",
         "controls": [
           "spark.sql.adaptive.skewJoin.enabled",
@@ -288,10 +223,7 @@
       "detail": "AQE only engages where a shuffle exists, and does not fix aggregation skew.",
       "whyItMatters": "AQE only engages where a shuffle exists, and does not fix aggregation skew.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "metadata"
-      ],
+      "layers": ["compute", "metadata"],
       "evidence": [
         {
           "sourceKey": "spark-sql-performance-tuning",
@@ -300,19 +232,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "A query plan"
-        ],
-        "processing": [
-          "Check for an exchange to re-optimize around"
-        ],
-        "outputs": [
-          "Either an adaptive plan or an unchanged static one"
-        ],
+        "inputs": ["A query plan"],
+        "processing": ["Check for an exchange to re-optimize around"],
+        "outputs": ["Either an adaptive plan or an unchanged static one"],
         "example": "A filter-and-write job with no join or groupBy runs entirely on the original plan.",
-        "controls": [
-          "Query shape"
-        ],
+        "controls": ["Query shape"],
         "failureModes": [
           "Expecting AQE to fix a narrow-only query wastes time that belongs in the table layout."
         ]
@@ -330,10 +254,7 @@
       "detail": "Hard-coded partition counts override the runtime measurement AQE performs.",
       "whyItMatters": "Hard-coded partition counts override the runtime measurement AQE performs.",
       "classification": "warning",
-      "layers": [
-        "compute",
-        "metadata"
-      ],
+      "layers": ["compute", "metadata"],
       "evidence": [
         {
           "sourceKey": "fabric-spark-toolkit-internals",
@@ -342,19 +263,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Copied configuration or a hard-coded repartition"
-        ],
-        "processing": [
-          "Override the runtime decision"
-        ],
-        "outputs": [
-          "A plan pinned to a guess"
-        ],
+        "inputs": ["Copied configuration or a hard-coded repartition"],
+        "processing": ["Override the runtime decision"],
+        "outputs": ["A plan pinned to a guess"],
         "example": "repartition(400) forces a partition count regardless of what the data actually measured.",
-        "controls": [
-          "Remove the override and let AQE measure"
-        ],
+        "controls": ["Remove the override and let AQE measure"],
         "failureModes": [
           "Tuning appears to do nothing because the pinned value replaces the adaptive one."
         ]

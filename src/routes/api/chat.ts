@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { resolveActiveAiProvider, resolveModelForProvider } from "@/lib/ai-gateway.server";
 import { DEFAULT_ADVISOR_MODEL } from "@/lib/advisor-models";
 import type { AdvisorMessage } from "@/lib/advisor-types";
 import { trySoftAuth } from "@/lib/soft-auth.server";
@@ -37,8 +37,13 @@ export const Route = createFileRoute("/api/chat")({
         if (!Array.isArray(messages) || messages.length === 0) {
           return new Response("messages required", { status: 400 });
         }
-        const key = process.env.LOVABLE_API_KEY;
-        if (!key) return new Response("LOVABLE_API_KEY not configured", { status: 500 });
+        const activeAi = await resolveActiveAiProvider();
+        if (!activeAi) {
+          return new Response(
+            "AI provider not configured. Please configure OpenRouter or Lovable in Settings → API Keys.",
+            { status: 500 },
+          );
+        }
 
         const payloadCheck = validateMessagePayload(messages);
         if (!payloadCheck.ok) {
@@ -57,19 +62,21 @@ export const Route = createFileRoute("/api/chat")({
         }
 
         const requestedModel = typeof body.model === "string" ? body.model : "";
-        const modelId = resolveAllowedModel(
+        const allowedModelId = resolveAllowedModel(
           requestedModel,
           DEFAULT_ADVISOR_MODEL,
           auth !== null,
           auth?.approved ?? false,
         );
-        if (requestedModel && requestedModel !== modelId) {
+        if (requestedModel && requestedModel !== allowedModelId) {
           await recordChatRejection("model_tier_downgraded", {
             requested: requestedModel,
-            resolved: modelId,
+            resolved: allowedModelId,
             authenticated: auth !== null,
           });
         }
+
+        const modelId = resolveModelForProvider(allowedModelId, activeAi);
 
         const lastUser = [...messages].reverse().find((m) => m.role === "user");
         const userText =
@@ -105,8 +112,7 @@ Rules (non-negotiable):
 CONTEXT (retrieved from the Fabric Atlas knowledge base):
 ${contextBlock}`;
 
-        const gateway = createLovableAiGatewayProvider(key);
-        const model = gateway(modelId);
+        const model = activeAi.provider(modelId);
 
         const result = streamText({
           model,

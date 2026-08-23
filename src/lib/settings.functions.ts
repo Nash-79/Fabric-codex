@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
+import { parseAndAutofixHtmlDoc } from "@/lib/html-doc-parser";
 
 type AppRole = "admin" | "editor" | "user";
 type ClaimAction = "verify" | "reject" | "promote" | "dismiss";
@@ -1060,25 +1061,52 @@ export const submitSourceUpload = createServerFn({ method: "POST" })
     if (bytes.length === 0) throw new Error("Uploaded file is empty.");
     if (bytes.length > 10 * 1024 * 1024) throw new Error("Uploaded file exceeds the 10 MB limit.");
 
+    const rawHtml = bytes.toString("utf8");
+    const { metadata, autofixedHtml } = parseAndAutofixHtmlDoc(rawHtml, data.title || fileName);
+
     const sb = await adminClient();
+
+    // Deduplication check: check if an identical hash already exists in open queue or sources
+    const { data: existingQueue } = await sb
+      .from("queue_items")
+      .select("id,title,url,notes")
+      .ilike("notes", `%${metadata.contentHash}%`)
+      .limit(1);
+
+    const isDuplicate = Boolean(existingQueue && existingQueue.length > 0);
+    const finalBytes = Buffer.from(autofixedHtml, "utf8");
+
     const objectPath = `${context.userId}/${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
     const { error: uploadError } = await sb.storage
       .from("source-uploads")
-      .upload(objectPath, bytes, { contentType: "text/html", upsert: false });
+      .upload(objectPath, finalBytes, { contentType: "text/html", upsert: false });
     if (uploadError) throw new Error(uploadError.message);
 
     const { data: publicUrl } = sb.storage.from("source-uploads").getPublicUrl(objectPath);
 
     const note = data.note?.trim() ?? "";
+    const metaNote = [
+      `Uploaded file: ${fileName}`,
+      `SHA-256: ${metadata.contentHash}`,
+      `SVGs: ${metadata.svgCount} | Interactive: ${metadata.isInteractive ? "yes" : "no"} | Reading time: ~${metadata.readingTimeMinutes}m`,
+      metadata.gapsDetected.length > 0 ? `Gaps/Markers: ${metadata.gapsDetected.join("; ")}` : null,
+      isDuplicate ? `[DUPLICATE DETECTED: matches queue item ${existingQueue?.[0]?.id}]` : null,
+      note,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const combinedTags = Array.from(new Set([...(data.tags ?? []), ...metadata.capabilities]));
+
     const { data: queued, error } = await sb
       .from("queue_items")
       .insert({
         url: publicUrl.publicUrl,
-        title: data.title?.trim() || fileName,
+        title: data.title?.trim() || metadata.title || fileName,
         tier,
-        tags: data.tags ?? [],
+        tags: combinedTags,
         kind: "source",
-        notes: note ? `${note}\n\nUploaded file: ${fileName}` : `Uploaded file: ${fileName}`,
+        notes: metaNote,
         submitted_by: context.userId,
         status: "queued",
       })
@@ -1089,8 +1117,11 @@ export const submitSourceUpload = createServerFn({ method: "POST" })
     await recordAudit(context.userId, "source.upload_submitted", "queue", queued.id, {
       fileName,
       objectPath,
+      contentHash: metadata.contentHash,
+      isDuplicate,
+      isInteractive: metadata.isInteractive,
     });
-    return { ok: true as const, queue: queued };
+    return { ok: true as const, queue: queued, metadata, isDuplicate };
   });
 
 // --- RSS subscriptions -----------------------------------------------------
@@ -1624,3 +1655,469 @@ export const validateContent = createServerFn({ method: "POST" })
     await recordAudit(context.userId, `${data.kind}.validation_run`, data.kind, data.id);
     return { ok: true as const, result };
   });
+
+// --- API Keys & Provider Settings ------------------------------------------
+
+function maskSecret(val: string): string {
+  const trimmed = val.trim();
+  if (!trimmed) return "";
+  if (trimmed.length <= 8) return "••••••••";
+  if (trimmed.startsWith("sk-or-v1-")) {
+    return `sk-or-v1-••••••••${trimmed.slice(-4)}`;
+  }
+  if (trimmed.startsWith("sk-")) {
+    return `sk-••••••••${trimmed.slice(-4)}`;
+  }
+  return `${trimmed.slice(0, 4)}••••••••${trimmed.slice(-4)}`;
+}
+
+export type OpenRouterModelOption = {
+  id: string;
+  label: string;
+  isFree: boolean;
+  hint: string;
+  recommended?: boolean;
+};
+
+export const RECOMMENDED_OPENROUTER_MODELS: OpenRouterModelOption[] = [
+  {
+    id: "google/gemini-2.0-flash-exp:free",
+    label: "Gemini 2.0 Flash (Free)",
+    isFree: true,
+    hint: "Ultra-fast multimodal reasoning, $0 cost",
+    recommended: true,
+  },
+  {
+    id: "meta-llama/llama-3.3-70b-instruct:free",
+    label: "Llama 3.3 70B Instruct (Free)",
+    isFree: true,
+    hint: "High-capability open architecture, $0 cost",
+    recommended: true,
+  },
+  {
+    id: "deepseek/deepseek-r1:free",
+    label: "DeepSeek R1 (Free)",
+    isFree: true,
+    hint: "Deep chain-of-thought & code reasoning, $0 cost",
+    recommended: true,
+  },
+  {
+    id: "qwen/qwen-2.5-coder-32b-instruct:free",
+    label: "Qwen 2.5 Coder 32B (Free)",
+    isFree: true,
+    hint: "Optimized for code generation & JSON schemas, $0 cost",
+    recommended: true,
+  },
+  {
+    id: "mistralai/mistral-small-24b-instruct-2501:free",
+    label: "Mistral Small 24B (Free)",
+    isFree: true,
+    hint: "Compact low-latency assistant, $0 cost",
+  },
+  {
+    id: "anthropic/claude-3.7-sonnet",
+    label: "Claude 3.7 Sonnet",
+    isFree: false,
+    hint: "Industry standard for hybrid reasoning & deep architecture",
+    recommended: true,
+  },
+  {
+    id: "anthropic/claude-3.5-haiku",
+    label: "Claude 3.5 Haiku",
+    isFree: false,
+    hint: "Fast, highly cost-effective Claude intelligence",
+  },
+  {
+    id: "openai/gpt-4o-mini",
+    label: "GPT-4o Mini",
+    isFree: false,
+    hint: "Reliable OpenAI multimodal intelligence at low cost",
+    recommended: true,
+  },
+  {
+    id: "deepseek/deepseek-chat",
+    label: "DeepSeek V3",
+    isFree: false,
+    hint: "Top value multi-domain model",
+  },
+];
+
+export type OpenRouterPolicy = {
+  free_tier_only: boolean;
+  primary_model: string;
+  fallback_models: string[];
+  prevent_cost_runs: boolean;
+};
+
+export const DEFAULT_OPENROUTER_POLICY: OpenRouterPolicy = {
+  free_tier_only: false,
+  primary_model: "google/gemini-2.0-flash-exp:free",
+  fallback_models: [
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "deepseek/deepseek-r1:free",
+    "qwen/qwen-2.5-coder-32b-instruct:free",
+  ],
+  prevent_cost_runs: true,
+};
+
+export type ApiKeyProviderConfig = {
+  key: string;
+  provider: "openrouter" | "lovable" | "openai" | "anthropic";
+  label: string;
+  description: string;
+  isConfigured: boolean;
+  source: "db" | "env" | "none";
+  maskedValue: string;
+  updatedAt: string | null;
+};
+
+export const getApiKeysConfig = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(
+    async ({
+      context,
+    }): Promise<{ providers: ApiKeyProviderConfig[]; openrouterPolicy: OpenRouterPolicy }> => {
+      await requireAdmin(context);
+      const sb = await adminClient();
+
+      let dbRows: Array<{ key: string; value: string; updated_at: string }> = [];
+      try {
+        const { data } = await sb
+          .from("system_settings")
+          .select("key, value, updated_at")
+          .in("key", [
+            "openrouter_api_key",
+            "openrouter_policy",
+            "lovable_api_key",
+            "openai_api_key",
+            "anthropic_api_key",
+          ]);
+        if (data) dbRows = data;
+      } catch {
+        // Table might not exist yet if unmigrated
+      }
+
+      let openrouterPolicy = { ...DEFAULT_OPENROUTER_POLICY };
+      const policyRow = dbRows.find((r) => r.key === "openrouter_policy");
+      if (policyRow?.value) {
+        try {
+          const parsed = JSON.parse(policyRow.value);
+          openrouterPolicy = { ...DEFAULT_OPENROUTER_POLICY, ...parsed };
+        } catch {
+          // Keep defaults if parse fails
+        }
+      }
+
+      const definitions: Array<{
+        key: string;
+        provider: ApiKeyProviderConfig["provider"];
+        label: string;
+        description: string;
+        envVar: string;
+      }> = [
+        {
+          key: "openrouter_api_key",
+          provider: "openrouter",
+          label: "OpenRouter",
+          description: "Unified AI inference & models (Gemini, Claude, GPT, DeepSeek, Qwen).",
+          envVar: process.env.OPENROUTER_API_KEY ?? "",
+        },
+        {
+          key: "lovable_api_key",
+          provider: "lovable",
+          label: "Lovable AI Gateway",
+          description: "Cloud-hosted proxy gateway for hosted deployments.",
+          envVar: process.env.LOVABLE_API_KEY ?? "",
+        },
+        {
+          key: "openai_api_key",
+          provider: "openai",
+          label: "OpenAI",
+          description: "Direct OpenAI API key (GPT-4o, GPT-5, text-embedding-3).",
+          envVar: process.env.OPENAI_API_KEY ?? "",
+        },
+        {
+          key: "anthropic_api_key",
+          provider: "anthropic",
+          label: "Anthropic",
+          description: "Direct Anthropic API key (Claude 3.5 / 3.7 Sonnet).",
+          envVar: process.env.ANTHROPIC_API_KEY ?? "",
+        },
+      ];
+
+      const providers: ApiKeyProviderConfig[] = definitions.map((def) => {
+        const dbRow = dbRows.find((r) => r.key === def.key && r.value?.trim());
+        if (dbRow) {
+          return {
+            key: def.key,
+            provider: def.provider,
+            label: def.label,
+            description: def.description,
+            isConfigured: true,
+            source: "db",
+            maskedValue: maskSecret(dbRow.value),
+            updatedAt: dbRow.updated_at,
+          };
+        }
+        if (def.envVar.trim()) {
+          return {
+            key: def.key,
+            provider: def.provider,
+            label: def.label,
+            description: def.description,
+            isConfigured: true,
+            source: "env",
+            maskedValue: maskSecret(def.envVar),
+            updatedAt: null,
+          };
+        }
+        return {
+          key: def.key,
+          provider: def.provider,
+          label: def.label,
+          description: def.description,
+          isConfigured: false,
+          source: "none",
+          maskedValue: "",
+          updatedAt: null,
+        };
+      });
+
+      return { providers, openrouterPolicy };
+    },
+  );
+
+export const testAiProviderKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (d: { provider: "openrouter" | "lovable" | "openai" | "anthropic"; apiKey: string }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const key = (data.apiKey ?? "").trim();
+    if (!key) {
+      return { ok: false, error: "API key cannot be empty." };
+    }
+
+    const start = Date.now();
+
+    if (data.provider === "openrouter") {
+      try {
+        const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "HTTP-Referer": "https://fabric-atlas.dev",
+            "X-Title": "Fabric Atlas Key Validator",
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+        const latencyMs = Date.now() - start;
+
+        if (!res.ok) {
+          let errMsg = `HTTP ${res.status} ${res.statusText}`;
+          try {
+            const errJson = (await res.json()) as any;
+            if (errJson?.error?.message) errMsg = errJson.error.message;
+          } catch (_e) {
+            void _e;
+          }
+          return { ok: false, error: errMsg, latencyMs };
+        }
+
+        const json = (await res.json()) as any;
+        const info = json?.data || {};
+        return {
+          ok: true as const,
+          latencyMs,
+          message: "OpenRouter key is valid and connected.",
+          details: {
+            label: info.label || "Valid Key",
+            usage: info.usage != null ? Number(info.usage).toFixed(4) : "0.0000",
+            usageWeekly:
+              info.usage_weekly != null ? Number(info.usage_weekly).toFixed(4) : undefined,
+            limit: info.limit,
+            isFreeTier: Boolean(info.is_free_tier),
+          },
+        };
+      } catch (err: any) {
+        return { ok: false, error: err?.message || "Connection timed out or network error." };
+      }
+    }
+
+    if (data.provider === "openai") {
+      try {
+        const res = await fetch("https://api.openai.com/v1/models", {
+          headers: { Authorization: `Bearer ${key}` },
+          signal: AbortSignal.timeout(10000),
+        });
+        const latencyMs = Date.now() - start;
+        if (!res.ok) {
+          let errMsg = `HTTP ${res.status}`;
+          try {
+            const errJson = (await res.json()) as any;
+            if (errJson?.error?.message) errMsg = errJson.error.message;
+          } catch (_e) {
+            void _e;
+          }
+          return { ok: false, error: errMsg, latencyMs };
+        }
+        return { ok: true as const, latencyMs, message: "OpenAI key is valid." };
+      } catch (err: any) {
+        return { ok: false, error: err?.message || "Connection error." };
+      }
+    }
+
+    if (data.provider === "anthropic") {
+      try {
+        const res = await fetch("https://api.anthropic.com/v1/models", {
+          headers: {
+            "x-api-key": key,
+            "anthropic-version": "2023-06-01",
+          },
+          signal: AbortSignal.timeout(10000),
+        });
+        const latencyMs = Date.now() - start;
+        if (!res.ok && res.status !== 200) {
+          let errMsg = `HTTP ${res.status}`;
+          try {
+            const errJson = (await res.json()) as any;
+            if (errJson?.error?.message) errMsg = errJson.error.message;
+          } catch (_e) {
+            void _e;
+          }
+          return { ok: false, error: errMsg, latencyMs };
+        }
+        return { ok: true as const, latencyMs, message: "Anthropic key is valid." };
+      } catch (err: any) {
+        return { ok: false, error: err?.message || "Connection error." };
+      }
+    }
+
+    return { ok: true as const, latencyMs: Date.now() - start, message: "Key recorded." };
+  });
+
+export const saveApiKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { key: string; value: string; description?: string }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const key = (data.key ?? "").trim();
+    const value = (data.value ?? "").trim();
+
+    if (!key) throw new Error("Key name is required.");
+    if (!value) throw new Error("API key value cannot be empty.");
+
+    const allowedKeys = [
+      "openrouter_api_key",
+      "lovable_api_key",
+      "openai_api_key",
+      "anthropic_api_key",
+    ];
+    if (!allowedKeys.includes(key)) {
+      throw new Error(`Unsupported API key setting '${key}'.`);
+    }
+
+    const sb = await adminClient();
+    const { data: updated, error } = await sb
+      .from("system_settings")
+      .upsert(
+        {
+          key,
+          value,
+          description: data.description || "Configured via Settings UI",
+          is_secret: true,
+          updated_at: new Date().toISOString(),
+          updated_by: context.userId,
+        },
+        { onConflict: "key" },
+      )
+      .select("key, updated_at")
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    await recordAudit(context.userId, "settings.api_key_saved", "system_settings", key, {
+      key,
+      masked: maskSecret(value),
+    });
+
+    return { ok: true as const, setting: updated };
+  });
+
+export const deleteApiKey = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { key: string }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const key = (data.key ?? "").trim();
+    if (!key) throw new Error("Key name is required.");
+
+    const sb = await adminClient();
+    const { error } = await sb.from("system_settings").delete().eq("key", key);
+    if (error) throw new Error(error.message);
+
+    await recordAudit(context.userId, "settings.api_key_deleted", "system_settings", key, { key });
+    return { ok: true as const };
+  });
+
+export const saveOpenRouterPolicy = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (d: {
+      policy: {
+        free_tier_only: boolean;
+        primary_model: string;
+        fallback_models: string[];
+        prevent_cost_runs: boolean;
+      };
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const policy = { ...data.policy };
+
+    // Guardrail validation: If free_tier_only is enabled, enforce free models to guarantee zero spend
+    if (policy.free_tier_only) {
+      if (!policy.primary_model.endsWith(":free")) {
+        policy.primary_model = "google/gemini-2.0-flash-exp:free";
+      }
+      policy.fallback_models = (policy.fallback_models || []).filter((m) => m.endsWith(":free"));
+      if (policy.fallback_models.length === 0) {
+        policy.fallback_models = [
+          "meta-llama/llama-3.3-70b-instruct:free",
+          "deepseek/deepseek-r1:free",
+          "qwen/qwen-2.5-coder-32b-instruct:free",
+        ];
+      }
+    }
+
+    const sb = await adminClient();
+    const { data: updated, error } = await sb
+      .from("system_settings")
+      .upsert(
+        {
+          key: "openrouter_policy",
+          value: JSON.stringify(policy),
+          description: "OpenRouter inference routing policy and free-tier fallback configuration",
+          is_secret: false,
+          updated_at: new Date().toISOString(),
+          updated_by: context.userId,
+        },
+        { onConflict: "key" },
+      )
+      .select("key, updated_at")
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    await recordAudit(
+      context.userId,
+      "settings.openrouter_policy_saved",
+      "system_settings",
+      "openrouter_policy",
+      policy,
+    );
+
+    return { ok: true as const, policy, setting: updated };
+  });
+

@@ -10,6 +10,7 @@ from. Published articles live in `content/articles/`; this directory is the cita
 ## What's here and what's excluded
 
 Copied from the original toolkit, minus:
+
 - `nbhtml/` — pure derived nbconvert output (~81% bundled third-party CSS), zero content loss
   since every notebook here already carries its own outputs.
 - `docs.html` — a viewer wrapping the four `.md`/`.ipynb`-adjacent docs already present here as

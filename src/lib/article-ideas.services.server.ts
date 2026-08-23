@@ -1,6 +1,6 @@
 import { APICallError, generateObject, NoObjectGeneratedError } from "ai";
 import { z } from "zod";
-import { createLovableAiGatewayProvider } from "@/lib/ai-gateway.server";
+import { resolveActiveAiProvider } from "@/lib/ai-gateway.server";
 import { ADVISOR_MODEL_IDS, DEFAULT_ADVISOR_MODEL } from "@/lib/advisor-models";
 
 // Fallback chain tried in order after the requested/default model fails. Deliberately spans two
@@ -346,8 +346,11 @@ export async function generateIdeaCandidates(
     priorIdeas?: PriorIdeaContext[];
   } = {},
 ): Promise<GenerateIdeaResult> {
-  const key = process.env.LOVABLE_API_KEY;
-  if (!key) throw new Error("LOVABLE_API_KEY not configured");
+  const activeAi = await resolveActiveAiProvider();
+  if (!activeAi)
+    throw new Error(
+      "AI provider not configured. Please configure OpenRouter or Lovable in Settings → API Keys.",
+    );
 
   const modelId =
     opts.modelId && ADVISOR_MODEL_IDS.has(opts.modelId) ? opts.modelId : DEFAULT_ADVISOR_MODEL;
@@ -390,7 +393,7 @@ export async function generateIdeaCandidates(
     ? `ADMIN DIRECTION:\n${userPrompt}\n\nCONTEXT (JSON):\n${JSON.stringify(signals)}${priorRoundBlock}`
     : `CONTEXT (JSON):\n${JSON.stringify(signals)}${priorRoundBlock}`;
 
-  const gateway = createLovableAiGatewayProvider(key);
+  const gateway = activeAi.provider;
 
   // Try the requested/default model first, then fall back through FALLBACK_MODEL_IDS on any
   // failure (schema mismatch, gateway/provider API error, timeout, etc.) — a single flaky model

@@ -11,6 +11,7 @@ Use this skill whenever asked to review, audit, quality-check, or validate the v
 
 1. **Automated Layout & Geometry Scan:**
    Run the headless audit tool on the target diagram:
+
    ```bash
    node scripts/review-diagram.mjs --slug <diagram-slug>
    ```

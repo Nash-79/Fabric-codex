@@ -6,9 +6,7 @@
   "longDescription": "Spark shuffle internals. Wide transformation forces redistribution; Map task writes data and index files; MapOutputTracker holds block locations; Reduce task fetches blocks; Lost executor triggers stage recompute.",
   "type": "internals",
   "topicSlug": "spark",
-  "capabilityIds": [
-    "spark"
-  ],
+  "capabilityIds": ["spark"],
   "revision": "1",
   "qaStatus": "draft",
   "staticPath": "/diagrams/spark-shuffle-write-read-path.svg",
@@ -21,10 +19,7 @@
       "detail": "A wide transformation forces redistribution and starts a new stage.",
       "whyItMatters": "A wide transformation forces redistribution and starts a new stage.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "spark-sql-performance-tuning",
@@ -33,19 +28,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "A join, groupBy, distinct or repartition"
-        ],
-        "processing": [
-          "Cut a new stage at the exchange"
-        ],
-        "outputs": [
-          "Two stages separated by a shuffle"
-        ],
+        "inputs": ["A join, groupBy, distinct or repartition"],
+        "processing": ["Cut a new stage at the exchange"],
+        "outputs": ["Two stages separated by a shuffle"],
         "example": "A groupBy on order_date splits one job into a map stage and a reduce stage.",
-        "controls": [
-          "spark.sql.shuffle.partitions"
-        ],
+        "controls": ["spark.sql.shuffle.partitions"],
         "failureModes": [
           "Chaining many wide operations produces a shuffle storm, each a full network and disk barrier."
         ]
@@ -63,10 +50,7 @@
       "detail": "Each map task writes one data file and one index file of partition offsets.",
       "whyItMatters": "Each map task writes one data file and one index file of partition offsets.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "spark-job-scheduling-dynamic-allocation",
@@ -75,24 +59,15 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Records from the map stage"
-        ],
+        "inputs": ["Records from the map stage"],
         "processing": [
           "Group records by destination partition",
           "Write a data file and an index file"
         ],
-        "outputs": [
-          "Shuffle data file",
-          "Shuffle index file"
-        ],
+        "outputs": ["Shuffle data file", "Shuffle index file"],
         "example": "A task producing 200 output partitions writes one data file and one index of 200 offsets.",
-        "controls": [
-          "Executor local disk capacity"
-        ],
-        "failureModes": [
-          "Local disk exhaustion fails the task outright."
-        ]
+        "controls": ["Executor local disk capacity"],
+        "failureModes": ["Local disk exhaustion fails the task outright."]
       },
       "drillTarget": {
         "kind": "topic",
@@ -107,10 +82,7 @@
       "detail": "Shuffle output is written once to executor-local disk with no replica.",
       "whyItMatters": "Shuffle output is written once to executor-local disk with no replica.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-spark-efficient-scaledown",
@@ -119,22 +91,12 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Shuffle data and index files"
-        ],
-        "processing": [
-          "Persist to the executor's own disk"
-        ],
-        "outputs": [
-          "Unreplicated shuffle output"
-        ],
+        "inputs": ["Shuffle data and index files"],
+        "processing": ["Persist to the executor's own disk"],
+        "outputs": ["Unreplicated shuffle output"],
         "example": "One executor holds the only copy of the blocks forty reducers will need.",
-        "controls": [
-          "Remote shuffle storage removes this dependency"
-        ],
-        "failureModes": [
-          "Losing the executor loses the only copy of its shuffle output."
-        ]
+        "controls": ["Remote shuffle storage removes this dependency"],
+        "failureModes": ["Losing the executor loses the only copy of its shuffle output."]
       },
       "drillTarget": {
         "kind": "topic",
@@ -149,10 +111,7 @@
       "detail": "The driver's MapOutputTracker maps shuffle partitions to block locations.",
       "whyItMatters": "The driver's MapOutputTracker maps shuffle partitions to block locations.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "spark-job-scheduling-dynamic-allocation",
@@ -161,19 +120,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Completed map task reports"
-        ],
-        "processing": [
-          "Record shuffle and partition to block manager mapping"
-        ],
-        "outputs": [
-          "Authoritative block location map"
-        ],
+        "inputs": ["Completed map task reports"],
+        "processing": ["Record shuffle and partition to block manager mapping"],
+        "outputs": ["Authoritative block location map"],
         "example": "Reduce partition 37 resolves to the block manager on executor 4.",
-        "controls": [
-          "Driver memory holds the tracker state"
-        ],
+        "controls": ["Driver memory holds the tracker state"],
         "failureModes": [
           "Very high shuffle partition counts inflate tracker metadata on the driver."
         ]
@@ -191,10 +142,7 @@
       "detail": "Reduce tasks fetch their blocks in parallel from every producing executor.",
       "whyItMatters": "Reduce tasks fetch their blocks in parallel from every producing executor.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "spark-job-scheduling-dynamic-allocation",
@@ -203,24 +151,12 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Block locations",
-          "Network access to peer executors"
-        ],
-        "processing": [
-          "Fetch blocks in parallel",
-          "Return a sorted iterator"
-        ],
-        "outputs": [
-          "Reduce-side input partition"
-        ],
+        "inputs": ["Block locations", "Network access to peer executors"],
+        "processing": ["Fetch blocks in parallel", "Return a sorted iterator"],
+        "outputs": ["Reduce-side input partition"],
         "example": "A reducer pulls its slice from 40 producing executors concurrently.",
-        "controls": [
-          "Fetch concurrency and buffer settings"
-        ],
-        "failureModes": [
-          "A saturated producer becomes a straggler for every reducer needing it."
-        ]
+        "controls": ["Fetch concurrency and buffer settings"],
+        "failureModes": ["A saturated producer becomes a straggler for every reducer needing it."]
       },
       "drillTarget": {
         "kind": "topic",
@@ -235,10 +171,7 @@
       "detail": "An executor holding unread shuffle output cannot be safely released.",
       "whyItMatters": "An executor holding unread shuffle output cannot be safely released.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "spark-job-scheduling-dynamic-allocation",
@@ -251,21 +184,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "An executor with no running tasks",
-          "Unread shuffle output"
-        ],
-        "processing": [
-          "Scale-down evaluation"
-        ],
-        "outputs": [
-          "Executor retained and still billed"
-        ],
+        "inputs": ["An executor with no running tasks", "Unread shuffle output"],
+        "processing": ["Scale-down evaluation"],
+        "outputs": ["Executor retained and still billed"],
         "example": "An executor sits idle for minutes holding blocks a later stage has not yet fetched.",
-        "controls": [
-          "spark.dynamicAllocation.shuffleTracking.enabled",
-          "External shuffle service"
-        ],
+        "controls": ["spark.dynamicAllocation.shuffleTracking.enabled", "External shuffle service"],
         "failureModes": [
           "Elastic scaling is defeated: you pay for idle compute purely to protect data."
         ]
@@ -283,10 +206,7 @@
       "detail": "A failed fetch recomputes the entire owning stage, not one partition.",
       "whyItMatters": "A failed fetch recomputes the entire owning stage, not one partition.",
       "classification": "warning",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-spark-efficient-scaledown",
@@ -295,21 +215,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "A failed block fetch"
-        ],
-        "processing": [
-          "Raise FetchFailedException",
-          "Re-run the owning ShuffleMapStage"
-        ],
-        "outputs": [
-          "Repeated work and extended runtime"
-        ],
+        "inputs": ["A failed block fetch"],
+        "processing": ["Raise FetchFailedException", "Re-run the owning ShuffleMapStage"],
+        "outputs": ["Repeated work and extended runtime"],
         "example": "One lost executor forces a 12-minute map stage to run a second time.",
-        "controls": [
-          "Graceful decommissioning",
-          "Remote shuffle storage"
-        ],
+        "controls": ["Graceful decommissioning", "Remote shuffle storage"],
         "failureModes": [
           "Repeated losses cause a retry storm where stages re-run faster than they complete."
         ]
@@ -327,10 +237,7 @@
       "detail": "Shuffle output living and dying with its executor is the bond to break.",
       "whyItMatters": "Shuffle output living and dying with its executor is the bond to break.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-spark-efficient-scaledown",
@@ -339,22 +246,12 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Executor-local shuffle output"
-        ],
-        "processing": [
-          "Identify the lifetime coupling"
-        ],
-        "outputs": [
-          "The problem each mitigation addresses"
-        ],
+        "inputs": ["Executor-local shuffle output"],
+        "processing": ["Identify the lifetime coupling"],
+        "outputs": ["The problem each mitigation addresses"],
         "example": "An executor cannot leave because it is the only holder of its shuffle blocks.",
-        "controls": [
-          "Choice of mitigation strategy"
-        ],
-        "failureModes": [
-          "Without any mitigation, scale-down is either blocked or unsafe."
-        ]
+        "controls": ["Choice of mitigation strategy"],
+        "failureModes": ["Without any mitigation, scale-down is either blocked or unsafe."]
       },
       "drillTarget": {
         "kind": "topic",
@@ -369,10 +266,7 @@
       "detail": "Shuffle tracking keeps executors holding needed shuffle data alive.",
       "whyItMatters": "Shuffle tracking keeps executors holding needed shuffle data alive.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "spark-job-scheduling-dynamic-allocation",
@@ -381,22 +275,12 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Dynamic allocation decisions"
-        ],
-        "processing": [
-          "Retain executors still holding needed shuffle data"
-        ],
-        "outputs": [
-          "Correct execution without recompute"
-        ],
+        "inputs": ["Dynamic allocation decisions"],
+        "processing": ["Retain executors still holding needed shuffle data"],
+        "outputs": ["Correct execution without recompute"],
         "example": "An executor is exempted from removal while its blocks remain unread.",
-        "controls": [
-          "spark.dynamicAllocation.shuffleTracking.enabled"
-        ],
-        "failureModes": [
-          "It preserves correctness but still pays for idle compute."
-        ]
+        "controls": ["spark.dynamicAllocation.shuffleTracking.enabled"],
+        "failureModes": ["It preserves correctness but still pays for idle compute."]
       },
       "drillTarget": {
         "kind": "topic",
@@ -411,10 +295,7 @@
       "detail": "An external shuffle service serves shuffle files beyond the executor's lifetime.",
       "whyItMatters": "An external shuffle service serves shuffle files beyond the executor's lifetime.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "spark-job-scheduling-dynamic-allocation",
@@ -423,22 +304,12 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Shuffle output"
-        ],
-        "processing": [
-          "Serve blocks from a separate service"
-        ],
-        "outputs": [
-          "Shuffle state that outlives the executor"
-        ],
+        "inputs": ["Shuffle output"],
+        "processing": ["Serve blocks from a separate service"],
+        "outputs": ["Shuffle state that outlives the executor"],
         "example": "Executors fetch from the service rather than from the process that produced the data.",
-        "controls": [
-          "External shuffle service configuration"
-        ],
-        "failureModes": [
-          "The service itself becomes shared infrastructure to operate and scale."
-        ]
+        "controls": ["External shuffle service configuration"],
+        "failureModes": ["The service itself becomes shared infrastructure to operate and scale."]
       },
       "drillTarget": {
         "kind": "topic",
@@ -453,10 +324,7 @@
       "detail": "Graceful decommissioning migrates blocks to a peer before the executor exits.",
       "whyItMatters": "Graceful decommissioning migrates blocks to a peer before the executor exits.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "spark-job-scheduling-dynamic-allocation",
@@ -465,16 +333,9 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "An executor selected for removal"
-        ],
-        "processing": [
-          "Migrate blocks to a peer or fallback storage",
-          "Then exit"
-        ],
-        "outputs": [
-          "Safe removal without recompute"
-        ],
+        "inputs": ["An executor selected for removal"],
+        "processing": ["Migrate blocks to a peer or fallback storage", "Then exit"],
+        "outputs": ["Safe removal without recompute"],
         "example": "Blocks move to a peer executor over the network before the source node terminates.",
         "controls": [
           "spark.decommission.enabled",

@@ -30,203 +30,126 @@
       "text": "Spark's shuffle write path physically produces exactly two files per map task regardless of which of the three shuffle-writer implementations runs: a data file holding compressed, serialized records for every output partition concatenated together, and an index file recording byte offsets so a reduce-side task can seek directly to its partition's range without reading the whole data file.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "Spark",
-        "ShuffleInternals",
-        "SortShuffleManager"
-      ]
+      "tags": ["Spark", "ShuffleInternals", "SortShuffleManager"]
     },
     {
       "capability_id": "spark",
       "text": "Two driver/executor-resident components make shuffle reads work: per-executor BlockManager serves both cached RDD blocks and shuffle blocks over the network, while MapOutputTracker is the metadata layer — the driver-side MapOutputTrackerMaster holds the authoritative (shuffleId, partition) to BlockManagerId mapping, and each executor caches a copy that refreshes when stale.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "Spark",
-        "BlockManager",
-        "MapOutputTracker"
-      ]
+      "tags": ["Spark", "BlockManager", "MapOutputTracker"]
     },
     {
       "capability_id": "spark",
       "text": "A FetchFailedException is a symptom of a stale shuffle-block location (typically because the executor holding it is gone), not a retryable single-task error: Spark's scheduler responds by marking the entire owning ShuffleMapStage as needing recomputation and re-running the map tasks that produced the lost output before resuming the consumer stage, which is why a single lost executor can cascade into a full stage re-run rather than a single task retry.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "Spark",
-        "FetchFailedException",
-        "StageRetry"
-      ]
+      "tags": ["Spark", "FetchFailedException", "StageRetry"]
     },
     {
       "capability_id": "spark",
       "text": "Fabric's Shuffle Migration is a tuned, minimal activation of Apache Spark's general-purpose executor decommissioning framework (introduced in Spark 3.1 under the SPARK-20624 epic, originally motivated by spot/preemptible instance reclaim): the recommended configuration enables exactly four decommission-related properties (shuffleBlocks.enabled, shuffleBlocks.cleanup, shuffleBlocks.migrateToFallbackStorage, fallbackStorage.cleanUp) rather than a bespoke Fabric-only mechanism.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "Spark",
-        "ExecutorDecommissioning",
-        "SPARK-20624"
-      ]
+      "tags": ["Spark", "ExecutorDecommissioning", "SPARK-20624"]
     },
     {
       "capability_id": "spark",
       "text": "The Spark executor decommission lifecycle proceeds through distinct phases driven from CoarseGrainedSchedulerBackend: a trigger fires (driver decision, cloud preemption notice, or a POSIX signal), the driver excludes the executor from new task scheduling while letting already-running tasks finish, the executor migrates cached and shuffle blocks to a peer (or to fallback storage if no peer has capacity), the driver's MapOutputTracker is updated with each block's new location as it lands, and only once all blocks report migrated does the executor notify the driver and exit cleanly.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "Spark",
-        "ExecutorDecommissioning",
-        "Lifecycle"
-      ]
+      "tags": ["Spark", "ExecutorDecommissioning", "Lifecycle"]
     },
     {
       "capability_id": "spark",
       "text": "An in-flight reduce task whose cached block location still points at a just-decommissioned executor hits one fetch failure, but because the driver's MapOutputTracker was already updated with the block's new location before the executor exited, a re-fetch resolves against the new location instead of triggering a full stage recompute — this is what distinguishes a graceful, migrated decommission from an unplanned executor loss.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "Spark",
-        "ExecutorDecommissioning",
-        "FetchFailedException"
-      ]
+      "tags": ["Spark", "ExecutorDecommissioning", "FetchFailedException"]
     },
     {
       "capability_id": "spark",
       "text": "ShuffleDataIO is Apache Spark's public plugin interface (introduced in Spark 3.0) for swapping the storage backend used for shuffle bytes; it is loaded once per process and exposes two entry points, executor() returning the reader/writer implementation used by tasks and driver() returning the component that bootstraps the plugin's metadata on the driver side. Fabric's Remote Shuffle Manager is inferred (not confirmed by Microsoft's public documentation) to be an implementation of this interface or an equivalent ShuffleManager-level plugin.",
       "depth": 5,
       "type": "internal",
-      "tags": [
-        "Spark",
-        "ShuffleDataIO",
-        "PluginArchitecture"
-      ]
+      "tags": ["Spark", "ShuffleDataIO", "PluginArchitecture"]
     },
     {
       "capability_id": "spark",
       "text": "Remote Shuffle Manager's architectural pattern (writing shuffle bytes directly to cloud object storage via a ShuffleDataIO-style plugin) has public precedent on other platforms: AWS Glue ships a Cloud Shuffle Storage Plugin that redirects shuffle I/O to Amazon S3 via the same spark.shuffle.sort.io.plugin.class extension point, and the open-source OAP project ships a comparable remote-shuffle ShuffleManager targeting any Hadoop-compatible filesystem — both are closer analogues to Fabric's RSM than standalone shuffle-service projects like Celeborn, Uniffle, or LinkedIn's Magnet, which run shuffle as an independent scaled service rather than writing to existing object storage.",
       "depth": 4,
       "type": "fact",
-      "tags": [
-        "Spark",
-        "RemoteShuffleManager",
-        "ShuffleDataIO",
-        "PriorArt"
-      ]
+      "tags": ["Spark", "RemoteShuffleManager", "ShuffleDataIO", "PriorArt"]
     },
     {
       "capability_id": "spark",
       "text": "Of Efficient Scaledown's four cooperating capabilities, only two have a public upstream Apache Spark equivalent that Fabric configures (Remote Shuffle Manager via ShuffleDataIO, Shuffle Migration via the SPARK-20624 decommission framework); the Decision Layer and AQE Shuffle Write are Fabric-specific orchestration with no shipped open-source Spark equivalent as of this document's writing.",
       "depth": 4,
       "type": "fact",
-      "tags": [
-        "Spark",
-        "EfficientScaledown",
-        "Attribution"
-      ]
+      "tags": ["Spark", "EfficientScaledown", "Attribution"]
     },
     {
       "capability_id": "spark",
       "text": "Fabric's per-stage Decision Layer for Efficient Scaledown routes at Spark-stage granularity only — every ShuffleMapTask within a given stage follows the same local-disk-versus-remote routing decision, evaluated once per stage rather than per task or per partition — so a single stage with mostly small partitions and one skewed large partition is routed as a whole to one branch based on aggregate statistics; AQE's independent skew-join handling still applies but does not give the Decision Layer partition-level intelligence.",
       "depth": 4,
       "type": "gotcha",
-      "tags": [
-        "Spark",
-        "DecisionLayer",
-        "EfficientScaledown"
-      ]
+      "tags": ["Spark", "DecisionLayer", "EfficientScaledown"]
     },
     {
       "capability_id": "spark",
       "text": "AQE Shuffle Write lets Adaptive Query Execution participate during the shuffle write itself rather than only re-coalescing partitions after the fact, so the partitioning a shuffle write produces is already close to the shape downstream AQE consumers want — described as producing fewer, better-sized blocks, which directly reduces the number of small objects Remote Shuffle Manager has to manage in Blob Storage and avoids a redundant re-coalescing pass.",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "Spark",
-        "AQE",
-        "AQEShuffleWrite"
-      ]
+      "tags": ["Spark", "AQE", "AQEShuffleWrite"]
     },
     {
       "capability_id": "spark",
       "text": "This document's own author infers (and flags explicitly as inference rather than documented Microsoft fact) that the Native Execution Engine is a stated prerequisite for Efficient Scaledown because the Decision Layer and AQE Shuffle Write both need accurate, fast runtime statistics about data actually written at each stage boundary, and NEE's vectorized execution path is what produces that data in the current implementation — Microsoft's own documentation states the NEE dependency as a fact without publishing the underlying mechanism.",
       "depth": 4,
       "type": "internal",
-      "tags": [
-        "Spark",
-        "NativeExecutionEngine",
-        "EfficientScaledown",
-        "Inference"
-      ]
+      "tags": ["Spark", "NativeExecutionEngine", "EfficientScaledown", "Inference"]
     },
     {
       "capability_id": "spark",
       "text": "Remote Shuffle Manager requires a standard BlockBlobStorage account with hierarchical namespace (HNS) disabled as its shuffle target — it does not support ADLS Gen2 (HNS-enabled) accounts, and the same OneLake/ADLS Gen2 account backing a workspace's Lakehouse data cannot be reused as the RSM target; a dedicated non-HNS storage account or container is required, provisioned separately from the governed data estate.",
       "depth": 3,
       "type": "gotcha",
-      "tags": [
-        "Spark",
-        "RemoteShuffleManager",
-        "Storage",
-        "BlockBlobStorage"
-      ]
+      "tags": ["Spark", "RemoteShuffleManager", "Storage", "BlockBlobStorage"]
     },
     {
       "capability_id": "spark",
       "text": "Remote Shuffle Manager is not currently supported for Fabric Spark clusters running in Azure Private Link-networked workspaces, because those clusters cannot reach the external RSM Blob endpoint across a private endpoint; the documented workaround for a Private Link-mandated environment is leaving spark.remote.shuffle.enabled off and relying on Shuffle Migration alone against fallback storage.",
       "depth": 3,
       "type": "gotcha",
-      "tags": [
-        "Spark",
-        "RemoteShuffleManager",
-        "PrivateLink",
-        "Networking"
-      ]
+      "tags": ["Spark", "RemoteShuffleManager", "PrivateLink", "Networking"]
     },
     {
       "capability_id": "spark",
       "text": "Efficient Scaledown's reported compute-cost savings and its effect on total wall-clock runtime move in different directions: enabling it can lengthen total job runtime because autoscale releases executors faster, meaning fewer are alive concurrently at any given moment — so the cost benefit and the latency effect need to be evaluated separately depending on whether a workload is cost-sensitive, latency-sensitive (interactive), or SLA-bound (overnight batch with a hard deadline).",
       "depth": 4,
       "type": "pattern",
-      "tags": [
-        "Spark",
-        "EfficientScaledown",
-        "CostVsLatency"
-      ]
+      "tags": ["Spark", "EfficientScaledown", "CostVsLatency"]
     },
     {
       "capability_id": "capacity",
       "text": "Remote Shuffle Manager's egress and transaction costs against its dedicated shuffle storage account are a separate, additive billing line beyond Spark VM-minute costs; accurate chargeback for Efficient Scaledown requires monitoring Blob Storage transaction and capacity costs on the shuffle account alongside Spark compute costs, not treating the reported compute-cost-reduction percentage as the whole cost picture.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "Capacity",
-        "CostGovernance",
-        "Chargeback"
-      ]
+      "tags": ["Capacity", "CostGovernance", "Chargeback"]
     },
     {
       "capability_id": "capacity",
       "text": "Autoscale Billing for Spark (Fabric's separate pay-as-you-go serverless compute billing model) and Efficient Scaledown address different cost levers and compose together: Autoscale Billing changes how Spark compute is billed, while Efficient Scaledown changes how much total Spark compute (VM-minutes) a given job consumes — a workload already on Autoscale Billing still benefits from Efficient Scaledown's reduction in total VM-minutes.",
       "depth": 3,
       "type": "fact",
-      "tags": [
-        "Capacity",
-        "AutoscaleBilling",
-        "Spark"
-      ]
+      "tags": ["Capacity", "AutoscaleBilling", "Spark"]
     },
     {
       "capability_id": "spark",
       "text": "Because enabling Efficient Scaledown is entirely a Spark-configuration change with no code change required, the recommended governance pattern is workload segmentation at the Fabric Environment level rather than enabling it capacity-wide: attach the configuration to environments used by ad hoc, exploratory, or cost-sensitive bursty workloads (the class the benchmark savings were measured against), and withhold it from SLA-bound overnight batch workloads where completion time matters more than compute cost.",
       "depth": 3,
       "type": "pattern",
-      "tags": [
-        "Spark",
-        "EfficientScaledown",
-        "Governance",
-        "WorkloadSegmentation"
-      ]
+      "tags": ["Spark", "EfficientScaledown", "Governance", "WorkloadSegmentation"]
     }
   ],
   "assets": []

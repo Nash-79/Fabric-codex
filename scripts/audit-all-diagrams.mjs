@@ -37,7 +37,9 @@ for (let i = 0; i < assets.length; i++) {
 }
 
 console.log("\n" + "=".repeat(80));
-console.log(`AUDIT COMPLETE: ${scores.filter(s => s.score === 100).length}/${assets.length} diagrams scored 100/100.`);
+console.log(
+  `AUDIT COMPLETE: ${scores.filter((s) => s.score === 100).length}/${assets.length} diagrams scored 100/100.`,
+);
 console.log("=".repeat(80));
 
 if (issues.length > 0) {

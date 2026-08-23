@@ -15,6 +15,7 @@ import { reportLovableError } from "../lib/lovable-error-reporting";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { useProgressSync } from "@/lib/use-progress-sync";
 import { ContentVersionWatcher } from "@/components/ContentVersionWatcher";
+import { CommandPalette } from "@/components/CommandPalette";
 
 // iOS launch (splash) image link entries. iOS Safari picks the matching file
 // via `media` — CSS-pixel dimensions + device-pixel-ratio + orientation.
@@ -333,6 +334,7 @@ function RootComponent() {
       <ContentVersionWatcher />
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <OfflineIndicator />
+      <CommandPalette />
       <Outlet />
       <Toaster />
     </QueryClientProvider>

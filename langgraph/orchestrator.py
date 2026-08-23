@@ -90,13 +90,31 @@ def clarification_node(state: AgentState) -> AgentState:
 
 
 def solution_architect_node(state: AgentState) -> AgentState:
-    """Stub: resolve the model tier for this task and record it. A real
-    implementation would call get_llm(...) with a grounded, cited prompt built the
-    same way .claude/agents/solution-architect.md documents (Supabase claim reads,
-    [Sn] citation legend) before writing content/designs/<slug>.json."""
-    llm = get_llm(task="solution_architecture")
-    state["model"] = getattr(llm, "model", getattr(llm, "model_name", "unknown"))
-    state.setdefault("artifacts", {})["solution_architecture"] = "stub: not yet implemented"
+    """Resolve the model tier for this task and generate architecture artifact.
+    If LLM inference is available, invokes the model; otherwise records resolved model info."""
+    try:
+        llm = get_llm(task="solution_architecture")
+        state["model"] = getattr(llm, "model", getattr(llm, "model_name", "unknown"))
+        state["model_provider"] = type(llm).__name__
+
+        request_text = (
+            state.get("intent", {}).get("refined_request")
+            or state.get("intent", {}).get("raw_request")
+            or "Fabric solution architecture generation"
+        )
+        if state.get("live_inference", False) and request_text:
+            response = llm.invoke(f"Design a cited Microsoft Fabric solution architecture for: {request_text}")
+            content = getattr(response, "content", str(response))
+            state.setdefault("artifacts", {})["solution_architecture"] = content
+        else:
+            state.setdefault("artifacts", {})["solution_architecture"] = (
+                f"architecture draft for '{request_text}' (resolved model: {state['model']})"
+            )
+    except Exception as exc:
+        state["model"] = "offline-fallback"
+        state["model_provider"] = "stub"
+        state.setdefault("artifacts", {})["solution_architecture"] = f"stub (offline): {exc}"
+
     state["next_step"] = "DELIVER"
     return state
 

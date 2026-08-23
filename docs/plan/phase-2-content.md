@@ -19,6 +19,7 @@ navigation** — exactly the "clarity / digestibility" problem.
 
 **Fix.** Demote stray `#` to the correct level and repair skips (`h1 → h3` becomes `h2 → h3`). This
 is largely mechanical and scriptable, but **must not** disturb:
+
 - The mandatory `## Internals` section and its three fixed sub-headings
   (`### Architecture & design`, `### How it works internally`, `### Performance characteristics`) —
   these are hard exact-match conventions, not schema fields.
@@ -74,6 +75,7 @@ URL-fetched sources.
   cross-referencing standards ↔ analyzer ↔ notebooks.
 
 **Handle on ingest:**
+
 - **Exclude `nbhtml/`** (4.7 MB, 13 files, ~81% bundled third-party CSS). Removes 63% of the
   folder's bytes and all third-party licensing surface, with zero content loss — the `.ipynb`
   files already hold it.
@@ -86,7 +88,7 @@ URL-fetched sources.
   exists nowhere else and is a ready-made internal gap inventory.
 - `README_index.md` is stale (claims 48 sections; there are 47; omits two files). **Trust
   `index.html`** as the manifest.
-- Notebooks were authored under Python 3.12.3 — matching *neither* Runtime 1.3 (3.11) nor 2.0
+- Notebooks were authored under Python 3.12.3 — matching _neither_ Runtime 1.3 (3.11) nor 2.0
   (3.13). Worth flagging to learners as a portability caveat.
 
 **Expected outcome.** Closes most of the **30 internals placeholders** and roughly triples L4/L5
@@ -113,12 +115,12 @@ materialized-lake-views`.
 
 **Also fix the 15 that exist** — they are short articles, not lessons:
 
-| Problem | Current |
-|---|---|
-| Over the ~400-word budget | 15 of 15 (1,005–2,238 words) |
-| Zero diagrams | 15 of 15 |
-| Missing `summary` | most |
-| Uncited factual paragraphs | many |
+| Problem                    | Current                      |
+| -------------------------- | ---------------------------- |
+| Over the ~400-word budget  | 15 of 15 (1,005–2,238 words) |
+| Zero diagrams              | 15 of 15                     |
+| Missing `summary`          | most                         |
+| Uncited factual paragraphs | many                         |
 
 **Rules.** Enforce the ~400-word budget. **Every lesson gets at least one diagram** (they currently
 have none, while articles do). Every factual sentence cites `[Sn]`. Use the `learning-author` agent
@@ -145,6 +147,7 @@ Distribution: 74 in `spark_internals.html`, 12 in `runtime_2_0_guide.html`, 6 in
 No Mermaid — all hand-drawn inline SVG.
 
 **Extraction caveats.**
+
 - They are **inline** and depend on the surrounding page's CSS classes. Extraction must inline
   computed styles or map classes to Atlas tokens, or they render unstyled.
 - **Several are interactive JS widgets** (the plan explorer, memory-region bars, NEE fallback

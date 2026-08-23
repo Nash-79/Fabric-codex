@@ -48,6 +48,20 @@ def fetch_json(url, headers):
 def probe_available():
     """Return {provider_key: set(model_ids)} for providers we have keys for."""
     avail = {}
+    if k := (os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENROUTER_API_KEYS")):
+        try:
+            primary_key = [x.strip() for x in re.split(r"[,;\s]+", k) if x.strip()][0]
+            data = fetch_json(
+                "https://openrouter.ai/api/v1/models",
+                {
+                    "Authorization": f"Bearer {primary_key}",
+                    "HTTP-Referer": "https://fabric-atlas.dev",
+                    "X-Title": "Fabric Atlas",
+                },
+            )
+            avail["openrouter"] = {m["id"] for m in data.get("data", [])}
+        except Exception as e:
+            print(f"  ! openrouter probe failed: {e}")
     if k := os.getenv("ANTHROPIC_API_KEY"):
         try:
             data = fetch_json("https://api.anthropic.com/v1/models",

@@ -1,6 +1,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ChevronDown, Menu, X } from "lucide-react";
+import { ChevronDown, Menu, Search, X } from "lucide-react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -101,6 +101,20 @@ export function SiteHeader() {
 
         {/* Right cluster */}
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))
+            }
+            className="hidden items-center gap-1.5 rounded-md border border-border/80 bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground transition md:flex"
+            title="Quick search (⌘K or Ctrl+K)"
+          >
+            <Search className="h-3.5 w-3.5" />
+            <span className="hidden lg:inline">Search</span>
+            <kbd className="pointer-events-none hidden h-4 select-none items-center gap-0.5 rounded border border-border bg-background px-1 font-mono text-[10px] font-medium text-muted-foreground sm:flex">
+              ⌘K
+            </kbd>
+          </button>
           <ThemeToggle />
           <Link
             to="/advisor"

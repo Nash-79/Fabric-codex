@@ -11,14 +11,19 @@ WP0.4 removes noise every later phase would otherwise wade through.
 
 ## WP0.1 — Kill the 4.16 MB eager diagram bundle
 
-**Problem.** [src/diagrams/catalog.ts](../../src/diagrams/catalog.ts) eagerly globs *both* sidecars
+**Problem.** [src/diagrams/catalog.ts](../../src/diagrams/catalog.ts) eagerly globs _both_ sidecars
 and SVGs:
 
 ```ts
 const sidecarModules = import.meta.glob<{ default: AuthoredDiagram }>(
-  "../../content/diagrams/*.diagram.json", { eager: true });
+  "../../content/diagrams/*.diagram.json",
+  { eager: true },
+);
 const staticSvgModules = import.meta.glob<string>("../../content/diagrams/*.svg", {
-  eager: true, query: "?raw", import: "default" });
+  eager: true,
+  query: "?raw",
+  import: "default",
+});
 ```
 
 `ContentItemArticle` (a client component on the reader route) imports it, so **every article page
@@ -26,6 +31,7 @@ downloads all 95 SVGs (1.90 MB) + all 95 sidecars (2.07 MB) to display one diagr
 3,839 KB.
 
 **Fix.**
+
 1. Drop `eager: true` from both globs; keep the glob patterns so slug resolution is unchanged.
 2. Expose `async loadDiagram(slug)` and keep a **synchronous** `hasDiagram(slug)` built from
    `Object.keys(modules)` — the keys are static, so `isAuthored()` stays cheap and synchronous.
@@ -36,6 +42,7 @@ downloads all 95 SVGs (1.90 MB) + all 95 sidecars (2.07 MB) to display one diagr
    json, yaml, tsx, tsql. Removes ~1.6 MB of `emacs-lisp`, `cpp`, `wolfram` grammars.
 
 **Watch out.**
+
 - `ReaderShell.tsx:88`'s `diagramCount` regex must keep matching `validate-content.mjs`'s
   `markdownDiagram` — a comment says so and nothing tests it. Extract a shared constant and add a test.
 - SSR: the reader route is SSR'd. `ContentItemArticle` already memoizes figure indices because a
@@ -44,10 +51,12 @@ downloads all 95 SVGs (1.90 MB) + all 95 sidecars (2.07 MB) to display one diagr
   resolve before print or printing loses them.
 
 **Gate.**
+
 ```bash
 npm run build     # assert no chunk > 1 MB (from 3,839 KB)
 npm test && npm run typecheck
 ```
+
 Manual: open an article with a diagram — renders, lightboxes, prints, no CLS.
 
 ---
@@ -65,6 +74,7 @@ const modelId = ADVISOR_MODEL_IDS.has(requestedModel) ? requestedModel : DEFAULT
 spend at the highest rate, unauthenticated.
 
 **Fix.**
+
 1. **Tier gate.** Anonymous callers may only select `tier: "cheap"` models
    ([advisor-models.ts](../../src/lib/advisor-models.ts) already carries the tier). Authenticated
    callers get `moderate`; `expensive` needs an approved profile. Silently downgrade rather than
@@ -115,6 +125,7 @@ with a baseline file for known exceptions. This is what would have prevented the
 ## WP0.4 — Purge dead weight
 
 **Remove.**
+
 - `backend/` — retired FastAPI app (18 tracked Python files) **and** `backend/.env`.
   Also delete the `backend` job from [quality-gate.yml](../../.github/workflows/quality-gate.yml) —
   you currently pay CI on every PR to lint a dead app.

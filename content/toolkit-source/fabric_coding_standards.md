@@ -1,15 +1,15 @@
 # Fabric Coding Standards — Data Platform Engineering (v2)
 
 Standards for notebooks and Spark code on Microsoft Fabric, with **worked before/after examples**.
-Organising principle: *a notebook is a job in a platform, not a script on a laptop.*
+Organising principle: _a notebook is a job in a platform, not a script on a laptop._
 
 **Version tags** appear on every example:
 
-| Tag | Meaning |
-|---|---|
-| `3.5+` | Works on Runtime 1.3 (Spark 3.5) **and** Runtime 2.0 (Spark 4.x). The safe default. |
-| `4.x only` | Requires Runtime 2.0 / Spark 4.x. |
-| `differs` | Same intent, different code or behaviour per version — both shown. |
+| Tag        | Meaning                                                                             |
+| ---------- | ----------------------------------------------------------------------------------- |
+| `3.5+`     | Works on Runtime 1.3 (Spark 3.5) **and** Runtime 2.0 (Spark 4.x). The safe default. |
+| `4.x only` | Requires Runtime 2.0 / Spark 4.x.                                                   |
+| `differs`  | Same intent, different code or behaviour per version — both shown.                  |
 
 Companions: `spark_internals.html` (the why), `fabric_workload_advisor.py` / `spark_plan_analyzer.py`
 (the rules as code), the notebook kit (the rules applied). Finding codes in brackets — e.g. `[L003]`,
@@ -575,15 +575,15 @@ size. Encode the decision with `choose_engine()` rather than re-litigating it pe
 
 ## 9. The kit as the standard applied
 
-| Notebook | Pattern |
-|---|---|
-| `nb_lakehouse_health_audit` | Observe before acting; platform APIs; versioned report |
-| `nb_lakehouse_maintenance` | Metadata-driven destructive ops; dry-run default; post-checked |
-| `nb_data_quality` | Rules as data; severity gates; quarantine |
-| `nb_ingestion_generic` | One worker, N entities; watermark state; self-proving idempotency |
+| Notebook                      | Pattern                                                              |
+| ----------------------------- | -------------------------------------------------------------------- |
+| `nb_lakehouse_health_audit`   | Observe before acting; platform APIs; versioned report               |
+| `nb_lakehouse_maintenance`    | Metadata-driven destructive ops; dry-run default; post-checked       |
+| `nb_data_quality`             | Rules as data; severity gates; quarantine                            |
+| `nb_ingestion_generic`        | One worker, N entities; watermark state; self-proving idempotency    |
 | `nb_metadata_sqldb_prototype` | Fabric SQL DB schema, connectivity, gotchas, forward-only watermarks |
-| `nb_nee_fallback_analyzer` | Measure NEE vs JVM; native coverage per query; ANSI×NEE trade-off |
-| `nb_workspace_monitoring` | KQL over the Monitoring Eventhouse; Spark-logs-to-Eventhouse route |
+| `nb_nee_fallback_analyzer`    | Measure NEE vs JVM; native coverage per query; ANSI×NEE trade-off    |
+| `nb_workspace_monitoring`     | KQL over the Monitoring Eventhouse; Spark-logs-to-Eventhouse route   |
 
 Run `spark_plan_analyzer.review(entry, out, spark, runtime="fabric-2.0")` in a scheduled QA notebook
 to enforce most of this automatically — it reports L/N/S/P codes with rewrites and ranks the top

@@ -6,9 +6,7 @@
   "longDescription": "Efficient Scaledown capabilities. The coupling problem; Remote Shuffle Manager; Shuffle Migration; Decision Layer; AQE Shuffle Write; Measured effect and platform constraints.",
   "type": "architecture",
   "topicSlug": "spark",
-  "capabilityIds": [
-    "spark"
-  ],
+  "capabilityIds": ["spark"],
   "revision": "1",
   "qaStatus": "draft",
   "staticPath": "/diagrams/efficient-scaledown-four-capabilities.svg",
@@ -21,10 +19,7 @@
       "detail": "Shuffle data on executor-local disk blocks safe scale-down and risks stage recompute.",
       "whyItMatters": "Shuffle data on executor-local disk blocks safe scale-down and risks stage recompute.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-spark-efficient-scaledown",
@@ -37,19 +32,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "A shuffle-heavy job with autoscaling enabled"
-        ],
-        "processing": [
-          "Retain executors holding unread shuffle output"
-        ],
-        "outputs": [
-          "Idle but billed executors, or costly recomputes"
-        ],
+        "inputs": ["A shuffle-heavy job with autoscaling enabled"],
+        "processing": ["Retain executors holding unread shuffle output"],
+        "outputs": ["Idle but billed executors, or costly recomputes"],
         "example": "An executor sits idle for minutes purely because a later stage has not yet fetched its blocks.",
-        "controls": [
-          "Dynamic allocation settings"
-        ],
+        "controls": ["Dynamic allocation settings"],
         "failureModes": [
           "Aggressive scale-down triggers stage recomputes that cost more than the compute saved."
         ]
@@ -67,10 +54,7 @@
       "detail": "Spark's graceful decommissioning and pluggable shuffle IO are the foundation Fabric builds on.",
       "whyItMatters": "Spark's graceful decommissioning and pluggable shuffle IO are the foundation Fabric builds on.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "spark-job-scheduling-dynamic-allocation",
@@ -83,17 +67,9 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Spark 3.1+ decommission framework",
-          "Pluggable shuffle IO interface"
-        ],
-        "processing": [
-          "Migrate blocks before exit",
-          "Allow alternative shuffle storage"
-        ],
-        "outputs": [
-          "A foundation platforms can extend"
-        ],
+        "inputs": ["Spark 3.1+ decommission framework", "Pluggable shuffle IO interface"],
+        "processing": ["Migrate blocks before exit", "Allow alternative shuffle storage"],
+        "outputs": ["A foundation platforms can extend"],
         "example": "An executor being decommissioned copies its blocks to a peer before terminating.",
         "controls": [
           "spark.decommission.enabled",
@@ -116,10 +92,7 @@
       "detail": "Remote Shuffle Manager writes shuffle data to Blob Storage instead of local disk.",
       "whyItMatters": "Remote Shuffle Manager writes shuffle data to Blob Storage instead of local disk.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-spark-efficient-scaledown",
@@ -132,19 +105,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Shuffle output from map tasks"
-        ],
-        "processing": [
-          "Write shuffle blocks to remote Blob Storage"
-        ],
-        "outputs": [
-          "Shuffle data independent of executor lifetime"
-        ],
+        "inputs": ["Shuffle output from map tasks"],
+        "processing": ["Write shuffle blocks to remote Blob Storage"],
+        "outputs": ["Shuffle data independent of executor lifetime"],
         "example": "An executor finishing its tasks can be released immediately because its shuffle output lives remotely.",
-        "controls": [
-          "spark.remote.shuffle.enabled"
-        ],
+        "controls": ["spark.remote.shuffle.enabled"],
         "failureModes": [
           "Remote writes add network latency, which is why routing every shuffle remotely is not optimal."
         ]
@@ -162,10 +127,7 @@
       "detail": "Shuffle Migration moves locally held blocks to a peer before an executor exits.",
       "whyItMatters": "Shuffle Migration moves locally held blocks to a peer before an executor exits.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-spark-efficient-scaledown",
@@ -174,20 +136,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "An executor selected for removal",
-          "Locally held shuffle blocks"
-        ],
-        "processing": [
-          "Migrate blocks to a peer before exit"
-        ],
-        "outputs": [
-          "Safe executor removal without recompute"
-        ],
+        "inputs": ["An executor selected for removal", "Locally held shuffle blocks"],
+        "processing": ["Migrate blocks to a peer before exit"],
+        "outputs": ["Safe executor removal without recompute"],
         "example": "Blocks kept local by the Decision Layer are moved rather than lost when the executor scales down.",
-        "controls": [
-          "Decommission-related Spark properties"
-        ],
+        "controls": ["Decommission-related Spark properties"],
         "failureModes": [
           "Migration takes time, so very aggressive scale-down can still outpace it."
         ]
@@ -205,10 +158,7 @@
       "detail": "The Decision Layer routes large shuffles remotely and keeps small ones local.",
       "whyItMatters": "The Decision Layer routes large shuffles remotely and keeps small ones local.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-spark-efficient-scaledown",
@@ -217,19 +167,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Per-stage shuffle size"
-        ],
-        "processing": [
-          "Route large shuffles remote, small shuffles local"
-        ],
-        "outputs": [
-          "Latency-appropriate shuffle placement"
-        ],
+        "inputs": ["Per-stage shuffle size"],
+        "processing": ["Route large shuffles remote, small shuffles local"],
+        "outputs": ["Latency-appropriate shuffle placement"],
         "example": "A small broadcast-scale exchange stays on local disk while a multi-terabyte shuffle goes remote.",
-        "controls": [
-          "spark.sql.rsm.decisionlayer.enabled"
-        ],
+        "controls": ["spark.sql.rsm.decisionlayer.enabled"],
         "failureModes": [
           "Routing decisions are per stage, so a mixed stage cannot be split further."
         ]
@@ -247,10 +189,7 @@
       "detail": "AQE Shuffle Write shapes the blocks handed to remote shuffle storage.",
       "whyItMatters": "AQE Shuffle Write shapes the blocks handed to remote shuffle storage.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-spark-efficient-scaledown",
@@ -263,21 +202,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Shuffle write phase",
-          "Runtime statistics"
-        ],
-        "processing": [
-          "Shape partitioning during the write itself"
-        ],
-        "outputs": [
-          "Fewer, better-sized shuffle blocks"
-        ],
+        "inputs": ["Shuffle write phase", "Runtime statistics"],
+        "processing": ["Shape partitioning during the write itself"],
+        "outputs": ["Fewer, better-sized shuffle blocks"],
         "example": "Remote storage receives a modest number of well-sized blocks rather than thousands of tiny ones.",
-        "controls": [
-          "AQE settings",
-          "Efficient Scaledown properties"
-        ],
+        "controls": ["AQE settings", "Efficient Scaledown properties"],
         "failureModes": [
           "Without write-side shaping, remote shuffle storage receives many small blocks and pays more overhead."
         ]
@@ -295,10 +224,7 @@
       "detail": "Microsoft reports a 54% compute reduction and up to 57% faster runtime from per-stage routing.",
       "whyItMatters": "Microsoft reports a 54% compute reduction and up to 57% faster runtime from per-stage routing.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-spark-efficient-scaledown",
@@ -307,19 +233,11 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "A shuffle-heavy benchmark workload"
-        ],
-        "processing": [
-          "Run with and without Efficient Scaledown"
-        ],
-        "outputs": [
-          "Measured compute and runtime difference"
-        ],
+        "inputs": ["A shuffle-heavy benchmark workload"],
+        "processing": ["Run with and without Efficient Scaledown"],
+        "outputs": ["Measured compute and runtime difference"],
         "example": "The benchmark ran all queries in one session with a three-minute pause between them.",
-        "controls": [
-          "Benchmark conditions materially affect the result"
-        ],
+        "controls": ["Benchmark conditions materially affect the result"],
         "failureModes": [
           "Quoting the headline number for a workload with little shuffle overstates the benefit."
         ]
@@ -337,10 +255,7 @@
       "detail": "Efficient Scaledown requires the native engine and explicit configuration to enable.",
       "whyItMatters": "Efficient Scaledown requires the native engine and explicit configuration to enable.",
       "classification": "fact",
-      "layers": [
-        "compute",
-        "data"
-      ],
+      "layers": ["compute", "data"],
       "evidence": [
         {
           "sourceKey": "fabric-blog-spark-efficient-scaledown",
@@ -353,23 +268,12 @@
       ],
       "tags": [],
       "drill": {
-        "inputs": [
-          "Platform and networking topology"
-        ],
-        "processing": [
-          "Verify prerequisites before adoption"
-        ],
-        "outputs": [
-          "A go or no-go adoption decision"
-        ],
+        "inputs": ["Platform and networking topology"],
+        "processing": ["Verify prerequisites before adoption"],
+        "outputs": ["A go or no-go adoption decision"],
         "example": "A regulated estate must confirm its storage and networking constraints before planning on the savings.",
-        "controls": [
-          "Native execution engine enabled",
-          "Explicit Spark properties"
-        ],
-        "failureModes": [
-          "Assuming it is on by default means the savings never materialize."
-        ]
+        "controls": ["Native execution engine enabled", "Explicit Spark properties"],
+        "failureModes": ["Assuming it is on by default means the savings never materialize."]
       },
       "drillTarget": {
         "kind": "topic",

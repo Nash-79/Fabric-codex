@@ -29,4 +29,3 @@ don't average these.
 2. Score all 10 axes pass/fail against the rendered SVG (at 390px width per axes 4/8, and in both
    themes per axis 7).
 3. Any axis fail (including failing the "not a tiled text grid" rule) → diagram fails the rubric → flag for re-authoring.
-
