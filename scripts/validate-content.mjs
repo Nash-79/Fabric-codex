@@ -6,6 +6,27 @@ import { presentationProfileSchema, lessonMetaSchema } from "./lib/content-prese
 
 const root = resolve(import.meta.dirname, "..");
 const read = (path) => JSON.parse(readFileSync(join(root, path), "utf8"));
+
+// Strips fenced code blocks (```...```) before heading/H1 detection, replacing each fenced line
+// with a blank line so match offsets and line numbers in the rest of the file stay unchanged. A
+// `#`-prefixed comment inside a Python/bash/SQL snippet (e.g. "# Illustrative -- mirrors...") is
+// not a markdown heading; matching it as one was a false-positive bug in this script (verified:
+// the real reader-facing ToC extractor, useTocHeadings in ContentTocSidebar.tsx, only ever
+// matches ##/### and never saw a false match here — zero ##/### lines exist inside any fenced
+// block across the whole corpus. This was a validator bug, not a content defect).
+function stripFencedCode(bodyMd) {
+  const lines = bodyMd.split("\n");
+  let inFence = false;
+  return lines
+    .map((line) => {
+      if (line.trimStart().startsWith("```")) {
+        inFence = !inFence;
+        return line; // keep the fence marker line itself so fence-count parity is unaffected
+      }
+      return inFence ? "" : line;
+    })
+    .join("\n");
+}
 const jsonFiles = (dir) => readdirSync(join(root, dir)).filter((name) => name.endsWith(".json"));
 const sourceSchema = z
   .object({
@@ -166,10 +187,16 @@ for (const dir of ["content/articles", "content/designs", "content/lessons"])
 
     // --- Editorial Experience Revamp Phase 1: content metrics + presentation shape ---
     const wordCount = item.body_md.split(/\s+/).filter(Boolean).length;
-    const h1Count = [...item.body_md.matchAll(/^# .+$/gm)].length;
+    // Fence-stripped once, reused by every heading-shape check below — a `#`-prefixed comment
+    // inside a code sample (e.g. "# Illustrative -- mirrors...") is not a markdown heading.
+    const bodyForHeadingChecks = stripFencedCode(item.body_md);
+    const h1Count = [...bodyForHeadingChecks.matchAll(/^# .+$/gm)].length;
     const sourceLegendCount = [...item.body_md.matchAll(/^##\s+Source Legend\s*$/gim)].length;
+    // Promoted from warning to failure once the false-positive fence-blindness bug was fixed
+    // (WP2.1, docs/plan/phase-2-content.md) and the baseline confirmed clean at 0 — this must
+    // not silently regress.
     if (h1Count > 1)
-      warnings.push(
+      failures.push(
         `${path}: duplicate in-body H1 (${h1Count} found) — page hero already renders the title as H1`,
       );
     if (sourceLegendCount > 1)
@@ -219,13 +246,15 @@ for (const dir of ["content/articles", "content/designs", "content/lessons"])
     if (untaggedFences)
       warnings.push(`${path}: ${untaggedFences} fenced code block(s) with no language tag`);
 
-    // b. Heading hierarchy — warn on a level skip (e.g. h2 -> h4) in document order.
-    const headingLines = [...item.body_md.matchAll(/^(#{1,6})\s+.+$/gm)];
+    // b. Heading hierarchy — a level skip (e.g. h2 -> h4) in document order. Promoted from
+    // warning to failure once the fence-blindness bug was fixed (WP2.1) and the baseline
+    // confirmed clean at 0 — this must not silently regress.
+    const headingLines = [...bodyForHeadingChecks.matchAll(/^(#{1,6})\s+.+$/gm)];
     let previousLevel = 1; // the page's own H1 (rendered by the hero) is the implicit root.
     for (const heading of headingLines) {
       const level = heading[1].length;
       if (level > previousLevel + 1)
-        warnings.push(
+        failures.push(
           `${path}: heading level skips from h${previousLevel} to h${level} ("${heading[0].slice(0, 60)}")`,
         );
       previousLevel = level;
@@ -233,7 +262,7 @@ for (const dir of ["content/articles", "content/designs", "content/lessons"])
 
     // c. Unique anchor/slug enforcement — only ##/### are actually anchored/slugged at runtime
     // (matches useTocHeadings' own scope). A collision is a real broken-deep-link bug: failure.
-    const anchoredHeadings = [...item.body_md.matchAll(/^(#{2,3})\s+(.+)$/gm)];
+    const anchoredHeadings = [...bodyForHeadingChecks.matchAll(/^(#{2,3})\s+(.+)$/gm)];
     const seenSlugs = new Map();
     for (const heading of anchoredHeadings) {
       const slug = slugifyHeading(stripMarkdownInline(heading[2].trim()));

@@ -247,9 +247,9 @@ reads it, with content/queue.md as the offline fallback.
 - Each diagram requires a matching `.diagram.json` semantic topology: labelled edges, evidence for
   fact nodes, node-specific drill metadata covering inputs, processing, outputs, a worked example,
   controls, and failure modes, and exactly one focusable SVG region per node — each anchored to
-  its own shape's coordinates, since two nodes sharing one rect fire each other's tooltips
-  (`npm run validate:diagrams` fails on duplicate region geometry). Caption-derived
-  fallback diagrams are not publishable.
+  its own shape's coordinates, since two nodes sharing one region's geometry fire each other's
+  tooltips (`npm run validate:diagrams` fails on duplicate region geometry across rect, circle,
+  ellipse, path, and text-only nodes). Caption-derived fallback diagrams are not publishable.
 
 - `/publish-topic` commissions **≥2** original diagrams before the blog-author runs — an
   architecture diagram and a decision/internals diagram.

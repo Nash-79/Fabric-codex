@@ -28,7 +28,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { bulkClaimQueueItems, mutateQueueItem, submitSourceUrl } from "@/lib/settings.functions";
+import {
+  bulkClaimQueueItems,
+  mutateQueueItem,
+  submitSourceUpload,
+  submitSourceUrl,
+} from "@/lib/settings.functions";
 import { Empty, Panel, statusBadge } from "@/components/settings/shared";
 
 type QueueAction = "claim" | "complete" | "fail" | "requeue" | "dismiss";
@@ -297,17 +302,40 @@ function FailDialog({
   );
 }
 
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // reader.result is "data:<mime>;base64,<data>" — keep only the payload.
+      resolve(result.slice(result.indexOf(",") + 1));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Could not read file."));
+    reader.readAsDataURL(file);
+  });
+}
+
 function QueueSubmitForm({ onDone }: { onDone: () => void }) {
-  const submitFn = useServerFn(submitSourceUrl);
+  const [mode, setMode] = useState<"url" | "upload">("url");
+  const submitUrlFn = useServerFn(submitSourceUrl);
+  const submitUploadFn = useServerFn(submitSourceUpload);
   const [url, setUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
   const [tier, setTier] = useState("6");
   const [tags, setTags] = useState("");
   const [note, setNote] = useState("");
 
-  const submit = useMutation({
+  const resetShared = () => {
+    setTitle("");
+    setTags("");
+    setNote("");
+    setTier("6");
+  };
+
+  const submitUrl = useMutation({
     mutationFn: () =>
-      submitFn({
+      submitUrlFn({
         data: {
           url: url.trim(),
           title: title.trim() || undefined,
@@ -322,34 +350,93 @@ function QueueSubmitForm({ onDone }: { onDone: () => void }) {
     onSuccess: () => {
       toast.success("Queued. Run /ingest-batch to extract claims from the source.");
       setUrl("");
-      setTitle("");
-      setTags("");
-      setNote("");
-      setTier("6");
+      resetShared();
       onDone();
     },
     onError: (err) => toast.error((err as Error).message),
   });
 
+  const submitUpload = useMutation({
+    mutationFn: async () => {
+      if (!file) throw new Error("Choose an HTML file first.");
+      const contentBase64 = await fileToBase64(file);
+      return submitUploadFn({
+        data: {
+          fileName: file.name,
+          contentBase64,
+          title: title.trim() || undefined,
+          tier: Number(tier),
+          tags: tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean),
+          note: note.trim() || undefined,
+        },
+      });
+    },
+    onSuccess: () => {
+      toast.success("Uploaded and queued. Run /ingest-batch to extract claims from the source.");
+      setFile(null);
+      resetShared();
+      onDone();
+    },
+    onError: (err) => toast.error((err as Error).message),
+  });
+
+  const pending = submitUrl.isPending || submitUpload.isPending;
+
   return (
     <div className="mb-4 rounded-md border border-border bg-card p-4">
-      <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        Queue a source URL
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Queue a source
+        </div>
+        <div className="flex gap-1">
+          <Button
+            size="sm"
+            variant={mode === "url" ? "default" : "outline"}
+            className="h-7 px-2 text-xs"
+            onClick={() => setMode("url")}
+          >
+            URL
+          </Button>
+          <Button
+            size="sm"
+            variant={mode === "upload" ? "default" : "outline"}
+            className="h-7 px-2 text-xs"
+            onClick={() => setMode("upload")}
+          >
+            Upload HTML
+          </Button>
+        </div>
       </div>
       <p className="mb-3 text-xs text-muted-foreground">
         Adds a <code className="text-teal-600 dark:text-teal-300">kind=source</code> item to the
         ingestion queue. The local knowledge-curator agent drains it (
         <code className="text-teal-600 dark:text-teal-300">/ingest-batch</code>
         ), extracts cited claims, and writes{" "}
-        <code className="text-teal-600 dark:text-teal-300">content/sources/</code>.
+        <code className="text-teal-600 dark:text-teal-300">content/sources/</code>.{" "}
+        {mode === "upload" &&
+          "An uploaded file is stored under a stable public URL, so it's fetchable and citable like any other source."}
       </p>
       <div className="grid gap-2 md:grid-cols-2">
-        <Input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://learn.microsoft.com/..."
-          className="h-8 border-border bg-card text-foreground md:col-span-2"
-        />
+        {mode === "url" ? (
+          <Input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://learn.microsoft.com/..."
+            className="h-8 border-border bg-card text-foreground md:col-span-2"
+          />
+        ) : (
+          <label className="flex h-8 items-center gap-2 rounded-md border border-border bg-card px-2 text-sm text-foreground md:col-span-2">
+            <input
+              type="file"
+              accept=".html,.htm,text/html"
+              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              className="w-full text-xs file:mr-2 file:rounded file:border-0 file:bg-secondary file:px-2 file:py-1 file:text-xs file:text-secondary-foreground"
+            />
+          </label>
+        )}
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -383,13 +470,15 @@ function QueueSubmitForm({ onDone }: { onDone: () => void }) {
         />
       </div>
       <div className="mt-3 flex justify-end">
-        <Button
-          size="sm"
-          onClick={() => submit.mutate()}
-          disabled={!url.trim() || submit.isPending}
-        >
-          {submit.isPending ? "Queuing…" : "Queue source"}
-        </Button>
+        {mode === "url" ? (
+          <Button size="sm" onClick={() => submitUrl.mutate()} disabled={!url.trim() || pending}>
+            {submitUrl.isPending ? "Queuing…" : "Queue source"}
+          </Button>
+        ) : (
+          <Button size="sm" onClick={() => submitUpload.mutate()} disabled={!file || pending}>
+            {submitUpload.isPending ? "Uploading…" : "Upload & queue"}
+          </Button>
+        )}
       </div>
     </div>
   );

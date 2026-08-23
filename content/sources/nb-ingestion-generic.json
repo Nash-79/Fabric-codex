@@ -1,0 +1,39 @@
+{
+  "url": "file:///content/toolkit-source/nb_ingestion_generic.ipynb",
+  "title": "Fabric Spark Toolkit — nb_ingestion_generic: the parameterized worker behind a runMultiple DAG (first-party executable Spark/Delta notebook demonstrating a config-driven generic ingestion worker; staged at content/toolkit-source/)",
+  "tier": 4,
+  "summary": "A six-cell, first-party executable PySpark/Delta notebook implementing one generic ingestion worker that takes only an ENTITY_ID parameter and derives everything else — source path, target path, load type, merge keys, watermark column, column renames, and target table properties — from a per-entity JSON configuration row, intended to sit behind a runMultiple DAG or pipeline coordinator that fans out many entities to the same notebook. The knowledge base already holds this toolkit's metadata-driven orchestration philosophy in depth (querying metadata once per run rather than per row, forward-only watermark MERGE guarded by a greater-than comparison, and the runMultiple DAG pattern itself) from a prior source, so this extraction captures only the one element not previously documented: the concrete JSON configuration schema that makes a single worker notebook generic across entities, grounded in the notebook's real saved execution proving that schema drives a correct initial load, then a correct idempotent no-op on immediate re-run.",
+  "audience": "Fabric data engineers designing the config schema for a single reusable ingestion worker notebook intended to be invoked once per entity by a coordinator (pipeline or notebookutils.runMultiple), who need a concrete example of what fields that per-entity configuration must carry to support both full-load and incremental-load entities without branching worker code per entity.",
+  "why_it_matters": "This notebook is the concrete implementation the toolkit's already-documented runMultiple DAG and metadata-touch-twice orchestration claims describe in the abstract: it shows the actual JSON configuration contract (source_path, target_path, load_type, merge_keys, watermark_col, rename, target_props) that a per-entity metadata row must carry for one worker notebook to handle arbitrarily different entities without any entity-specific code path, and it demonstrates that contract driving both the initial-load branch (no existing target) and the incremental-merge branch (existing target, full-key MERGE) from the same function.",
+  "takeaways": [
+    "A single generic ingestion worker notebook can be parameterized by nothing more than an entity identifier if all entity-specific behavior — source and target paths, load type, the merge key list used to build the MERGE condition, the watermark column, a rename map applied before writing, and target Delta table properties — is expressed as a JSON configuration document attached to that entity's metadata row, letting a coordinator fan out to arbitrarily many entities against the same unmodified worker code.",
+    "The worker's merge condition is built generically from the entity's configured merge_keys list (joining t.<key> = s.<key> for each key with AND) rather than being hard-coded per entity, so an entity with a composite key requires only a longer merge_keys array in its configuration, not a code change.",
+    "The notebook's real saved execution proved the config-driven worker correct end to end for one entity: the first run performed an initial load from a 100,000-row source, and an immediate second run against the identical unchanged source ingested zero new rows and left the target's row count unchanged, confirming both the initial-load and idempotent-incremental-no-op code paths execute correctly from the same JSON-configured entity."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "DeltaLake",
+    "MetadataDriven",
+    "Orchestration",
+    "Notebooks"
+  ],
+  "claims": [
+    {
+      "capability_id": "data-factory",
+      "text": "A demonstrated generic-worker ingestion pattern parameterizes a single notebook by only an entity identifier, deriving every other behavior from a JSON configuration document attached to that entity's metadata row: source_path and target_path (physical Delta locations), load_type (full vs incremental), merge_keys (a list of columns used to build the MERGE join condition generically, supporting composite keys without a code change), watermark_col (the column compared against the stored watermark to bound an incremental read), rename (a map of source-to-target column renames applied before any write), and target_props (Delta table properties, such as enabling deletion vectors and Change Data Feed, applied only on first creation of the target) — so a coordinator can fan out to arbitrarily many differently-shaped entities against the same unmodified worker notebook.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MetadataDriven", "Orchestration", "PySpark", "DeltaLake"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "This notebook's real saved execution proved its config-driven worker correct for one entity across two consecutive runs: the first run performed an initial load of a 100,000-row source table into a new target with the configured Delta properties, and an immediate second run against the identical, unchanged source ingested exactly zero rows while the target's row count remained 100,000, confirming both the initial-load and the idempotent-incremental-no-op branches of the same generic, JSON-configured worker function execute correctly.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MetadataDriven", "Idempotency", "Testing", "DeltaLake"]
+    }
+  ],
+  "assets": []
+}

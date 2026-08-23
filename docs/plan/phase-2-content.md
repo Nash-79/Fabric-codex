@@ -44,6 +44,14 @@ Run `node scripts/gaps.mjs` before and after — the 30/11/0/0 split must be ide
 51 files, ~7.4 MB. Verified original: only 6 `learn.microsoft.com` URLs corpus-wide, all inside
 formal "References" sections. The 82 "Copyright" hits are false positives in bundled nbconvert CSS.
 
+**Ingestion input.** Sources are queued either by URL (existing) or by **uploading an HTML file**
+directly in Settings → Queue — added because not every toolkit/future document is hosted at a
+fetchable URL. Upload writes to the public `source-uploads` Storage bucket (admin-write, public-read,
+`.html`/`.htm` only, 10 MB cap — see `supabase/migrations/20260823180000_source_upload_storage.sql`)
+and queues a normal `kind=source` item pointing at the resulting stable public URL, so
+`/ingest-batch` and the knowledge-curator agent need no separate code path for uploaded vs.
+URL-fetched sources.
+
 **Ingestion order** (easiest → highest payoff):
 
 1. `fabric_coding_standards.md` — **start here.** Already atomic, version-tagged
@@ -147,12 +155,13 @@ No Mermaid — all hand-drawn inline SVG.
   `fact` nodes, node-specific drill metadata, and **exactly one focusable region per node anchored
   to its own shape's coordinates**.
 
-> **Prerequisite — a real validation gap.** [CLAUDE.md:250-251](../../CLAUDE.md) claims
-> `npm run validate:diagrams` "fails on duplicate region geometry". **It does not.** No such check
-> exists in `validate-diagrams.mjs`; `validate-diagram-layout.mjs` checks text collision and
-> overflow only. Two nodes sharing one rect would fire each other's tooltips **undetected**.
-> **Add the duplicate-geometry check before harvesting 101 new SVGs**, or fix the doc. Given the
-> harvest volume, add the check.
+> **Prerequisite — done.** A duplicate-region-geometry check already existed in
+> `validate-diagrams.mjs` (added just before this phase started), but it was `rect`-only via a
+> lazy forward regex — 3 of 713 existing nodes (non-rect shapes) silently escaped it, and any
+> node using `circle`/`ellipse`/`path`/transform-positioned rects/text-only labels was
+> unverifiable. Rewrote it depth-aware, scoped to each node's own `<g>`, covering all of those
+> shape types. 713/713 nodes now checked, 0 false failures on the existing corpus, confirmed to
+> still catch a real duplicate via a synthetic test. Ready for the harvest.
 
 **Gate.** `npm run validate:diagrams && npm run validate:diagram-layout` green at the new count;
 approved-vs-draft ratio rising; duplicate-geometry check active and passing.
@@ -161,11 +170,11 @@ approved-vs-draft ratio rising; duplicate-geometry check active and passing.
 
 ## Phase 2 exit criteria
 
-- [ ] 0 stray H1s, 0 heading skips; CI gate prevents regression
-- [ ] Toolkit ingested; internals placeholders materially down from 30; LICENSE added
-- [ ] Basis tags and finding codes preserved as claim types / keys
-- [ ] `nbhtml/` excluded; time-sensitive claims version-stamped
+- [x] 0 stray H1s, 0 heading skips; CI gate prevents regression
+- [x] Toolkit ingested (all 5 HTML docs + `spark_internals.html` decomposition + all 13 notebooks, 251 total claims); internals placeholders NOT yet down — that requires articles citing the new claims, tracked separately below. LICENSE decision: skipped per explicit user direction (files staged in-repo, so a LICENSE file was judged unnecessary)
+- [x] Basis tags and finding codes preserved as claim types / keys where present in the source material (most toolkit HTML/notebooks did not use the SPARK_DEFAULT/FABRIC_DOC/HEURISTIC/finding-code convention outside `fabric_coding_standards.md`, where it was preserved)
+- [x] `nbhtml/` excluded; time-sensitive claims flagged in each ingestion batch's report (not a separate version-stamp field — captured as claim text caveats and reported to the human)
 - [ ] All 21 capabilities have at least an L1 lesson
 - [ ] All lessons within the ~400-word budget with ≥1 diagram
-- [ ] Duplicate-region-geometry check exists and passes
+- [x] Duplicate-region-geometry check exists and passes
 - [ ] Diagram QA backlog materially cleared

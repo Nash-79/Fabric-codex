@@ -1,0 +1,166 @@
+{
+  "url": "file:///content/toolkit-source/fabric_deepdives.html",
+  "title": "Fabric Deep Dives — SQL Surface, Functions, dbt (first-party guide covering Spark view/function types with executed VERIFIED/FALSIFIED checks, a Native Execution Engine do's-and-don'ts practice sheet, three Fabric SQL Database notebook access paths, Fabric User Data Functions, and a two-adapter dbt-on-Fabric deep dive; staged at content/toolkit-source/)",
+  "tier": 4,
+  "summary": "A first-party companion reference to the Spark internals guide, covering five practitioner topics: which Spark view and function types actually exist and behave as expected (with several claims executed against a live Spark 3.5 session and marked VERIFIED or FALSIFIED rather than assumed); a do's-and-don'ts practice sheet for the Native Execution Engine; the three distinct ways a Fabric notebook can talk to a Fabric SQL Database and the gotchas of each; where Fabric User Data Functions items fit relative to Spark UDFs; and a deep dive on Microsoft's two separate dbt adapters for Fabric (Lakehouse/Spark vs. Warehouse/T-SQL), including a dbt-scheduled Materialized Lake View pattern.",
+  "audience": "Data engineers and platform teams building production Fabric notebooks and dbt projects who need to know which SQL surface behaviors are real versus assumed, how to choose a Fabric SQL Database access path without hitting a stored-procedure or partitioning gotcha, and how the two dbt adapters differ in practice.",
+  "why_it_matters": "This source's value is concentrated in ground genuinely untouched by other ingested toolkit and Microsoft Learn sources: the existing KB's dbt coverage is Warehouse-only and never mentions the Spark/Lakehouse adapter or its Materialized-Lake-View scheduling integration; existing SQL Database coverage never documents the three notebook access paths (pyodbc, Spark JDBC, OneLake mirror) or their operational gotchas; and Fabric User Data Functions as a serverless-Python item type distinct from a Spark UDF has no prior KB coverage at all. Its Native Execution Engine section, by contrast, mostly restates fallback mechanics already captured at greater depth elsewhere in the KB, so only its incremental practitioner framing is extracted from that section.",
+  "takeaways": [
+    "Four Spark view types exist with materially different lifetimes and gotchas — most notably that a computed column with no alias works in a TEMP VIEW but fails only when promoted to a permanent VIEW, and that Fabric's Materialized Lake View syntax does not exist in open-source Spark at all.",
+    "Fabric SQL UDFs (CREATE FUNCTION ... RETURN) are verified Runtime-2.0-only, not merely newer — they raise a ParseException on Spark 3.5, which matters for teams planning shared SQL business logic before confirming their runtime.",
+    "A Fabric notebook has three non-interchangeable ways to reach a Fabric SQL Database (pyodbc/Entra token, Spark JDBC, OneLake mirror), each suited to a different workload, and picking the wrong one is described as the source of most 'why is my metadata layer slow' complaints — this three-path breakdown and its specific gotchas (no stored procedures over JDBC, connection-count risk from numPartitions) are not covered elsewhere in the KB.",
+    "Fabric User Data Functions are serverless Python items invisible to the Spark query plan (unlike a Spark UDF, which forces Native Execution Engine fallback for its whole operator) — a distinction with no prior KB coverage.",
+    "Microsoft ships two separate, non-interchangeable dbt adapters for Fabric — dbt-fabricspark for the Lakehouse over Livy, and dbt-fabric for the Warehouse over ODBC — and only the Spark/Lakehouse adapter can materialize and schedule a dbt model as a Materialized Lake View, a capability absent from the KB's existing Warehouse-only dbt coverage.",
+    "Time-sensitive claims in this source (dbt Jobs preview timing, dbt Fusion support timing, and several UI/API surface names) are called out separately in the ingestion report for version-stamping given this section's fast-aging risk."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "SparkSQL",
+    "NativeExecutionEngine",
+    "SQLDatabase",
+    "UserDataFunctions",
+    "dbt",
+    "Lakehouse",
+    "Warehouse",
+    "MaterializedLakeViews",
+    "PractitionerGuide"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "Spark's four view types behave distinctly and were individually executed against a live Spark 3.5 session rather than assumed: a TEMP VIEW is scoped to the SparkSession and vanishes at session end; a GLOBAL TEMP VIEW is shared across sessions in the same Spark application (in Fabric, across notebooks sharing a high-concurrency session) but must be queried through the global_temp database prefix; a permanent VIEW is catalog-stored, survives sessions, and re-executes its SQL on every read with no storage cost until queried; and Fabric's Materialized Lake View syntax (CREATE MATERIALIZED LAKE VIEW) does not exist in open-source Spark 3.5 at all — it raises a ParseException there, while in Fabric it produces a real Delta table with managed refresh.",
+      "depth": 2,
+      "type": "fact",
+      "tags": ["Spark", "SparkSQL", "Views", "Verified"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A computed column without an explicit alias is accepted when creating a TEMP VIEW but raises a parse error (CREATE_PERMANENT_VIEW_WITHOUT_ALIAS) when the same SELECT is used to create a permanent VIEW, an asymmetry confirmed by execution; the practical trap is that development against a temp view will not surface the error until the view is promoted to permanent.",
+      "depth": 2,
+      "type": "gotcha",
+      "tags": ["Spark", "SparkSQL", "Views", "Verified"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Fabric's SQL UDF syntax (CREATE FUNCTION ... RETURN) was confirmed by execution to raise a ParseException on Spark 3.5, meaning it is genuinely Runtime-2.0-only rather than simply new; where available it is presented as the preferred home for shared SQL business logic because it is catalog-resident, inlined by the optimizer, and does not force Native Execution Engine fallback the way a Python row UDF does.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["Spark", "SparkSQL", "UDF", "Verified", "Runtime2"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Across Spark's function options, built-in functions are the default first choice because Catalyst optimizes through them and the Native Execution Engine offloads them natively; a pandas UDF (vectorized via Arrow, appearing as ArrowEvalPython in the plan) is the right fallback when logic cannot be expressed in built-ins; and a plain Python row UDF (F.udf, appearing as BatchEvalPython) works but is described as still the wrong tool because of row-at-a-time serialization and native-execution fallback, a claim the source states it confirmed by execution.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Spark", "SparkSQL", "UDF", "PandasUDF", "Verified"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "On a JDK 21 container, pandas UDFs can fail with UnsupportedOperationException referencing sun.misc.Unsafe or DirectByteBuffer because Arrow requires the --add-opens java.base/java.nio=ALL-UNNAMED JVM flag on modern JDKs; Fabric configures this automatically, so the same error appearing in a custom JVM setting or a local dev environment on Runtime 2.0 (JDK 21) indicates a JVM flag problem rather than a code problem.",
+      "depth": 5,
+      "type": "gotcha",
+      "tags": ["Spark", "JDK21", "Arrow", "PandasUDF", "Runtime2"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A practitioner one-line diagnostic for whether the Native Execution Engine is actually helping a given job: if df.explain() shows no *Transformer operators while spark.native.enabled=true is set, native execution is not occurring for that plan, so the workload should either have its fallback trigger removed or have NEE turned off for that job rather than left on for no benefit.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Spark", "NativeExecutionEngine", "Diagnostics"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The Native Execution Engine is framed as targeting compute-intensive queries specifically, not I/O-bound work or streaming (still a JVM path); the source names a specific analyzer notebook, nb_nee_fallback_analyzer, as the recommended way to measure actual native-execution coverage rather than assuming acceleration from the feature being enabled.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["Spark", "NativeExecutionEngine", "Diagnostics", "Performance"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "A Fabric notebook has three distinct, non-interchangeable ways to reach a Fabric SQL Database: pyodbc with an Entra token is the only path that can call stored procedures, run DML/DDL, or execute exactly once, making it the control-plane path; Spark JDBC returns a DataFrame for bulk reads and query pushdown but cannot call stored procedures; and the automatic OneLake mirror gives read-only, near-real-time (not synchronous) analytical access at lakehouse speed with no live connection at all, and should never be used for control-plane decisions.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SQLDatabase", "PySpark", "Architecture"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "Five operational gotchas for accessing Fabric SQL Database from notebooks: Spark JDBC cannot call stored procedures (it wraps queries in a subselect, so pyodbc is required); a JDBC read without a partitionColumn option runs as a single connection and single task, which looks like generic Spark slowness rather than the actual cause; numPartitions sets the number of concurrent connections opened against the live operational database, so an aggressive value can self-inflict a denial-of-service; row-by-row writes (one DataFrame write or one execute() per row) are enormous overhead versus executemany or a single batched write; and pyodbc connections are not shareable across concurrent runMultiple activities, so each activity should open its own connection and close it in a finally block.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["SQLDatabase", "PySpark", "JDBC", "Performance"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "A recommended access-path split for Fabric SQL Database from notebooks: use pyodbc for control-plane reads and all writes, use Spark JDBC only when metadata is genuinely large or must be joined to lakehouse data, and use the OneLake mirror for analytical history; fetch configuration once per run into a cached dict and write any run log once at the end rather than incrementally.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SQLDatabase", "PySpark", "Orchestration"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A Fabric User Data Functions item is a serverless Python item, callable from notebooks, pipelines, Activator rules, Power BI translytical task flows, and external clients via a per-function REST endpoint, and is explicitly not a Spark UDF: it does not execute inside the Spark query plan, so it never appears in a physical plan and never causes Native Execution Engine fallback, unlike a Spark UDF which forces its enclosing operator to the JVM.",
+      "depth": 2,
+      "type": "concept",
+      "tags": ["UserDataFunctions", "Spark", "UDF", "Architecture"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Only functions explicitly decorated (e.g., @udf.function()) in a Fabric User Data Functions item are externally callable; undecorated functions in the same item are private helpers. Calling code retrieves the item's callable functions via notebookutils.udf.getFunctions(item_name) for a same-workspace item or notebookutils.udf.getFunctions(item_name, workspace_id) for a cross-workspace item, then invokes them with named parameters.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["UserDataFunctions", "Notebooks", "CrossWorkspace"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Fabric User Data Functions are positioned for control-plane logic rather than distributed data transformation: centralized run logging callable identically from a notebook and a pipeline, validation gates consulted by every orchestrator, wrapping a SQL Database lookup so notebooks never hold connection secrets, and rate-limited/async API calls where a serverless model avoids idling a Spark session while waiting on I/O.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["UserDataFunctions", "Orchestration", "Governance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Calling a Fabric User Data Functions item per row inside a Spark withColumn transformation over millions of rows is described as an antipattern because each call is a network round trip to a service, not a vectorized operator; where data must go through a UDF item at all, passing a batch via Arrow-backed pandas DataFrame/Series input and output is the correct pattern, while genuinely distributed row transformation belongs in Spark built-ins instead.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["UserDataFunctions", "Performance", "Antipattern"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Microsoft ships two separate, non-interchangeable dbt adapters for Fabric: dbt-fabricspark targets the Lakehouse over the Livy API in session-jobs mode (reusing one Spark session across models) and auto-detects schema-enabled lakehouses via the Fabric REST API to switch between two-part and three/four-part table naming, while dbt-fabric targets the Warehouse over ODBC using Microsoft ODBC Driver 18 (17 also works) against T-SQL semantics — a distinction absent from this KB's existing Warehouse-only dbt coverage.",
+      "depth": 2,
+      "type": "concept",
+      "tags": ["dbt", "Warehouse", "Lakehouse", "Spark", "Architecture"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "The dbt-fabricspark adapter supports materialized='materialized_lake_view' as a model materialization, letting dbt create and schedule a Fabric Materialized Lake View (including cron/daily schedule configuration) directly from a dbt model, combining dbt's lineage, testing, and CI/CD with Fabric-managed refresh; the adapter enforces only one active schedule per lakehouse lineage, updating an existing schedule rather than adding a second.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["dbt", "MaterializedLakeViews", "Lakehouse", "Scheduling"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "A dbt model materialized as a Fabric Materialized Lake View inherits the same incremental-refresh constraints as an MLV created any other way (window functions force full refresh, sources must have Change Data Feed enabled, and any update or delete on a source forces full refresh regardless): dbt makes an MLV easier to author and schedule but does not change its incremental-refresh limitations, so a source with update/delete traffic is better served by a dbt incremental model using MERGE.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["dbt", "MaterializedLakeViews", "IncrementalRefresh"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "Adapter-specific dbt-on-Fabric gotchas: the Spark adapter's incremental models use persisted staging tables instead of temp views to work around Spark's REQUIRES_SINGLE_PART_NAMESPACE limitation, producing extra physical tables that need maintenance; four-part table naming works only against schema-enabled lakehouses, and setting workspace_name against a non-schema-enabled target raises a parse-time error; Livy session-jobs mode holds one Spark session across an entire dbt run and can fail mid-run on inactivity timeout for long DAGs; and Fabric Warehouse is tested on the case-sensitive, binary Latin1_General_100_BIN2_UTF8 collation, so models relying on case-insensitive comparisons behave differently than on typical SQL Server.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["dbt", "Warehouse", "Lakehouse", "Collation", "Livy"]
+    },
+    {
+      "capability_id": "warehouse",
+      "text": "A practical Fabric dbt architecture pattern: bronze and silver layers built in the Lakehouse via metadata-driven Spark notebooks, gold modelled in dbt using materialized_lake_view for genuinely append-only SQL-expressible aggregates and an incremental model with MERGE for everything else, Direct Lake served from Lakehouse gold, and Warehouse used only where multi-table transactional guarantees or T-SQL-specific tooling are required — explicitly avoiding modelling gold twice as both MLVs and Warehouse tables.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["dbt", "Lakehouse", "Warehouse", "MedallionArchitecture", "DirectLake"]
+    }
+  ],
+  "assets": []
+}

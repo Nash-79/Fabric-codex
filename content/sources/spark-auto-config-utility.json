@@ -1,0 +1,108 @@
+{
+  "url": "file:///content/toolkit-source/spark_auto_config_utility.ipynb",
+  "title": "Fabric Spark Toolkit — Spark Auto-Configurator: a self-configuring utility for PySpark/Fabric notebooks (first-party executable notebook, 22 cells, a pure-Python heuristic engine plus a live-session-facing wrapper, executed end to end against a real local SparkSession with a real DataFrame)",
+  "tier": 4,
+  "summary": "A 22-cell, first-party executable notebook that builds and runs SparkAutoConfigurator, a small library that profiles a real Delta/Parquet table and a cluster shape and produces a complete, basis-tagged, ready-to-apply set of Spark configuration recommendations — shuffle partitions, executor shape, memory fractions, broadcast threshold, and Fabric Efficient Scaledown wiring — rather than leaving those formulas to be copy-pasted from memory or a blog post. Every recommendation is tagged with a basis (SPARK_DEFAULT, FABRIC_DOC, or HEURISTIC, so the tool never dresses a rule of thumb up as a documented fact) and a scope (runtime, safe to apply via spark.conf.set on the current session, versus session_start, which requires a %%configure block before the session exists). The scope split is not asserted from memory: the notebook states it was discovered by empirically breaking a live local Spark 3.5.1 session (calling spark.conf.set on a session-start key raises AnalysisException[CANNOT_MODIFY_CONFIG]) and built the fix — an apply() method that only ever calls spark.conf.set on runtime-scoped keys, routing session-start keys to a separate session_start_snippet() renderer instead — directly into the tool. The knowledge base already holds this toolkit's engine-choice threshold, config five-layer precedence, and Runtime 2.0 workload-archetype recipes from prior sources, so this extraction focuses on what is genuinely new: the specific heuristic formulas themselves (shuffle-partition sizing, broadcast-threshold headroom, YARN-style executor-core sizing, autoscale bounds), the empirically-discovered and now-encoded config mutability boundary, the DESCRIBE DETAIL-first data-profiling strategy, and the tool's own real executed report and applied-configuration proof against a live session and a real 4-million-row dataset.",
+  "audience": "Fabric and OSS Spark practitioners who want concrete, cited starting-point formulas for shuffle partitions, executor shape, broadcast threshold, and autoscale bounds rather than a single blanket number, and who need to understand precisely which Spark settings can be changed on a running session versus which require a session restart before they build automation that calls spark.conf.set programmatically.",
+  "why_it_matters": "Most Spark tuning guidance gives a single number (200 shuffle partitions, 10 MB broadcast threshold) without connecting it to the data actually being processed or explaining which settings can be changed after the fact. This notebook's value is in making that connection executable and honest about its own certainty: every formula states whether it is a documented Spark or Fabric default versus a community heuristic that must be validated against the Spark UI's actual stage metrics, and the tool refuses to silently no-op or crash a caller's session by classifying every setting's mutability scope up front — a classification the notebook states was reverse-engineered by deliberately triggering the failure against a real session rather than assumed from documentation.",
+  "takeaways": [
+    "The tool classifies every Spark setting into two scopes and encodes the boundary as a literal list of key prefixes rather than a single global rule: session_start settings (spark.executor.cores/memory/instances, spark.driver.memory/cores, spark.memory.fraction/storageFraction/offHeap, spark.dynamicAllocation.*, and shuffle-plugin/Remote-Shuffle-Manager wiring) must be supplied before the session exists, while everything else defaults to runtime scope, safe to change via spark.conf.set on an already-running session.",
+    "This scope boundary is stated as empirically discovered, not assumed: the notebook records that calling spark.conf.set() on a session-start-scoped key against a real local Spark 3.5.1 session raises AnalysisException[CANNOT_MODIFY_CONFIG] rather than silently no-op-ing, and the tool's apply() method is built to only ever pass runtime-scoped keys to spark.conf.set, routing every session-start-scoped recommendation to a separate session_start_snippet() renderer that produces a %%configure -f JSON block (Fabric) or a SparkConf-builder snippet (OSS) instead.",
+    "The tool's shuffle-partition heuristic takes the larger of two independently computed values: a size-based estimate (total input bytes divided by a target partition size, defaulting to 128 MB to match Spark's own read-side maxPartitionBytes default) and a parallelism floor of twice the total executor vCore count, so a tiny dataset on a large cluster still gets enough partitions to keep every core busy rather than collapsing to a single partition.",
+    "The tool's broadcast-join-threshold heuristic, when given a known smallest-join-side size, recommends 1.5x headroom over that measured size, floored at Spark's 10 MB default and capped at a 512 MB ceiling described as an industry-common production ceiling well below typical executor memory — explicitly flagged as a HEURISTIC rather than a Spark or Fabric default, with a note that broadcasting still costs every executor that memory and that the driver must collect and broadcast the data first.",
+    "On Fabric, the tool encodes that one executor is bound to exactly one node (no per-node executor-packing decision the way classic YARN guidance addresses) and that Fabric Spark pools are memory-optimized at a fixed 8 GB of RAM per vCore across all five documented node sizes (Small 4 vCore/32 GB through XXLarge 64 vCore/512 GB); on generic/OSS Spark it falls back to classic Cloudera YARN-style guidance of 4-5 cores per executor to avoid both thin-executor JVM/broadcast overhead and fat-executor GC/HDFS-concurrency problems.",
+    "The tool's data-profiling method tries Delta's DESCRIBE DETAIL first (reading exact sizeInBytes/numFiles straight from the Delta transaction log with no data scan) and falls back to a Hadoop FileSystem listing scan (summing every resolved input file's byte length) only for non-Delta formats or when DESCRIBE DETAIL fails — and deliberately defaults row-count estimation to off, since counting rows on a large table triggers a full scan that DESCRIBE DETAIL's metadata-only read avoids.",
+    "The tool's real executed live-session run against a genuine 4-million-row synthetic Parquet dataset and an OSS local session produced a full basis-and-scope-tagged report (9 runtime-mutable and 5 session-start-only recommendations), then genuinely applied the 9 runtime-mutable settings via spark.conf.set and verified each one's live value matched what was requested — including a computed spark.sql.shuffle.partitions of 24 (the parallelism floor of 12 vCores times 2, since the tiny 0.03 GB dataset's size-based estimate of 1 partition was smaller) — followed by rendering the 5 session-start-only settings as a ready-to-paste %%configure -f JSON block for the next session start.",
+    "The tool's own stated limitations list its shuffle-size estimate as a proxy based on total input bytes rather than a measurement of actual shuffle write bytes (a groupBy that aggregates away most rows shuffles far less than a row-exploding join shuffles more), its cluster auto-detection as best-effort introspection through non-public PySpark internals (SparkContext's status tracker, spark.conf.get) rather than a documented API, and its single data-profile-to-single-recommendation model as not stage-aware for a notebook whose cells have genuinely different data-shape and shuffle characteristics."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "SparkInternals",
+    "Configuration",
+    "Performance",
+    "Notebooks",
+    "PractitionerHeuristic"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "This notebook's Spark configuration utility classifies every setting it recommends into exactly two mutability scopes and encodes the boundary as a literal list of key prefixes: session_start scope (spark.executor.cores/memory/instances, spark.driver.memory/cores, spark.memory.fraction/storageFraction/offHeap, spark.dynamicAllocation.*, and shuffle-plugin/Remote-Shuffle-Manager wiring keys) must be supplied before the SparkSession is created, while every other key defaults to runtime scope and is safe to change on an already-running session via spark.conf.set.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Configuration", "SessionScope", "PySpark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook states its session-start-versus-runtime scope classification was discovered empirically rather than assumed from documentation: calling spark.conf.set() on a session-start-scoped key against a real local Spark 3.5.1 session raises AnalysisException[CANNOT_MODIFY_CONFIG] rather than silently no-op-ing, so a notebook that attempts to set spark.executor.cores after the session already exists crashes outright — a real, reproduced failure mode, not a documented Spark behavior the notebook is merely citing.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": ["Configuration", "SessionScope", "PySpark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's utility applies its scope classification operationally: its apply() method only ever passes runtime-scoped recommendations to spark.conf.set on the live session, and routes every session-start-scoped recommendation instead to a separate session_start_snippet() method that renders them as a %%configure -f JSON block (for pasting as a Fabric notebook's first cell) or as a SparkConf-builder code snippet (for OSS Spark) — so the tool structurally cannot attempt the failing spark.conf.set call on a session-start key.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Configuration", "SessionScope", "PySpark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's shuffle-partition-count heuristic computes the larger of two independently derived values: a size-based estimate (total input bytes divided by a target partition size, defaulting to 128 MB to mirror Spark's own read-side maxPartitionBytes default) and a parallelism floor of twice the total executor vCore count, explicitly so that a small dataset on a large cluster still receives enough partitions to keep every core occupied rather than collapsing toward a single partition; the notebook labels the sizing formula itself a HEURISTIC starting point to validate against the Spark UI's actual Shuffle Write metric, not a measurement.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["Partitioning", "PractitionerHeuristic", "Performance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's broadcast-join-threshold heuristic, when given a measured size for the smaller side of a join, recommends 1.5x headroom above that measured size, floored at Spark's own 10 MB default when no join-side size is known and capped at a stated industry-common production ceiling of 512 MB, with an explicit caveat that broadcasting still costs every executor that memory allocation and that the driver must first collect and broadcast the data, so spark.driver.memory headroom should be verified before applying it.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["BroadcastJoin", "PractitionerHeuristic", "Performance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's Fabric-specific executor-shape logic encodes that a Fabric Spark pool binds exactly one executor to one node (no per-node executor-packing decision of the kind classic YARN guidance addresses) and that Fabric Spark pools are memory-optimized at a fixed 8 GB of RAM per vCore across all five documented node sizes it embeds (Small 4 vCore/32 GB, Medium 8 vCore/64 GB, Large 16 vCore/128 GB, XLarge 32 vCore/256 GB, XXLarge 64 vCore/512 GB), citing Microsoft Learn's 'Apache Spark compute for Data Engineering and Data Science' page as the source for both the node-size table and the 1 Capacity Unit = 2 vCores conversion.",
+      "depth": 3,
+      "type": "internal",
+      "tags": ["ClusterArchitecture", "FabricDoc", "Sizing"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "For non-Fabric (generic/OSS/YARN) Spark, this notebook's executor-shape heuristic falls back to classic Cloudera-attributed sizing guidance: 4-5 cores per executor JVM (reduced to 4 when the workload is flagged cache-heavy, to leave more per-task storage-memory headroom), explicitly reasoning that below roughly 3 cores per-executor JVM and broadcast-variable overhead is paid too many times, while above roughly 5 concurrent tasks per JVM, HDFS client concurrency and GC pause times begin to dominate — one core per node is separately reserved for the OS/node-manager daemon before dividing the remaining cores into executors.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["ExecutorSizing", "PractitionerHeuristic", "YARN"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's data-profiling method tries Delta's DESCRIBE DETAIL first, reading exact sizeInBytes and numFiles values directly from the Delta transaction log with no data scan required, and falls back to a Hadoop FileSystem listing scan (resolving every input file via df.inputFiles() and summing each file's on-disk byte length through Spark's internal Hadoop FileSystem bridge) only when the table is not Delta or the DESCRIBE DETAIL call fails; row-count estimation defaults to disabled specifically because calling .count() on a large table triggers a full scan that the metadata-only DESCRIBE DETAIL path avoids.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataProfiling", "DeltaLake", "DescribeDetail"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's real executed live-session run against a genuine 4-million-row synthetic Parquet dataset on an OSS local Spark session produced a report of 9 runtime-mutable and 5 session-start-only recommendations, computing a shuffle-partition count of 24 (the parallelism floor of 12 total executor vCores times 2, since the dataset's tiny 0.03 GB size-based estimate of 1 partition was smaller), then genuinely applied all 9 runtime-mutable settings via spark.conf.set and verified each one's live value on the session matched the requested value — confirming the tool's own recommend-then-apply pipeline is correct end to end against a real session, not only against unit-test assertions.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["Testing", "Configuration", "PySpark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's own stated limitations describe its shuffle-size estimate as a proxy based on total input bytes rather than a measurement of actual shuffle write bytes, explicitly noting that a groupBy which aggregates away most input rows shuffles far less than its input size suggests while a row-exploding join shuffles more, and it recommends correcting the heuristic's shuffle_fraction_of_input parameter against the Spark UI's real Shuffle Write metric after a job has actually run once rather than trusting the proxy indefinitely.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": ["PractitionerHeuristic", "Limitations", "Performance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's own stated limitations describe its cluster-shape auto-detection as best-effort only: it introspects a live session's executor count and configured cores/memory through PySpark internals (SparkContext's status tracker via _jsc, and spark.conf.get) that are real, commonly used patterns but not part of PySpark's stable public API, and it notes Fabric does not expose pool node size through any documented notebookutils or spark.conf call as of the notebook's writing — so node_size and num_nodes should always be passed explicitly for a recommendation intended for production use.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": ["ClusterDetection", "Limitations", "PySpark"]
+    }
+  ],
+  "assets": []
+}

@@ -160,18 +160,103 @@ for (const name of sidecarNames) {
   for (const id of regionIds)
     if (!ids.has(id)) failures.push(`${label}: SVG region references unknown node "${id}"`);
 
-  // Two node ids sharing one rect means at least one is a caption-derived fallback rather than a
-  // hit region over the shape it describes: the stacked regions fire each other's tooltips and the
-  // real node is left with nothing focusable. Each id resolving to exactly one region (checked
-  // above) does not catch this — the geometry has to be distinct too.
+  // Two node ids sharing one region's geometry means at least one is a caption-derived fallback
+  // rather than a hit region over the shape it describes: the stacked regions fire each other's
+  // tooltips and the real node is left with nothing focusable. Each id resolving to exactly one
+  // region (checked above) does not catch this — the geometry has to be distinct too.
+  //
+  // Scoped to each node's OWN <g data-node-id="..."> block (depth-aware, not a lazy forward scan)
+  // so a node's shape is never confused with a later, unrelated node's shape. Covers rect, circle,
+  // ellipse, and path (via its 'd' bounding box) — not rect alone. rect-only previously silently
+  // skipped any node whose primary shape is one of the other three; ~1,400 non-rect shapes exist
+  // across the corpus today, so that gap was real, not theoretical.
   const regionGeometry = new Map();
-  for (const match of svg.matchAll(
-    /\bdata-node-id=["']([^"']+)["'][\s\S]*?<rect\b[^>]*\bx=["']([\d.-]+)["'][^>]*\by=["']([\d.-]+)["'][^>]*\bwidth=["']([\d.-]+)["'][^>]*\bheight=["']([\d.-]+)["']/g,
-  )) {
-    const [, id, x, y, width, height] = match;
-    const key = `${x},${y},${width},${height}`;
-    if (!regionGeometry.has(key)) regionGeometry.set(key, []);
-    regionGeometry.get(key).push(id);
+  const nodeGroupRe = /<g\b[^>]*\bdata-node-id=["']([^"']+)["'][^>]*>/g;
+  let groupMatch;
+  while ((groupMatch = nodeGroupRe.exec(svg))) {
+    const id = groupMatch[1];
+    const rest = svg.slice(groupMatch.index);
+    // Depth-aware scan for this <g>'s own matching closing tag, so nested/sibling groups don't
+    // leak this node's shape search into a different node's markup.
+    const tagRe = /<\/?g\b[^>]*>/g;
+    let depth = 0;
+    let endIdx = -1;
+    let tagMatch;
+    while ((tagMatch = tagRe.exec(rest))) {
+      if (tagMatch[0].startsWith("</g")) {
+        depth -= 1;
+        if (depth === 0) {
+          endIdx = tagMatch.index;
+          break;
+        }
+      } else if (!tagMatch[0].endsWith("/>")) {
+        depth += 1;
+      }
+    }
+    const block = endIdx > -1 ? rest.slice(0, endIdx) : rest;
+
+    const rect =
+      /<rect\b[^>]*\bx=["']([\d.-]+)["'][^>]*\by=["']([\d.-]+)["'][^>]*\bwidth=["']([\d.-]+)["'][^>]*\bheight=["']([\d.-]+)["']/.exec(
+        block,
+      );
+    const circle =
+      !rect &&
+      /<circle\b[^>]*\bcx=["']([\d.-]+)["'][^>]*\bcy=["']([\d.-]+)["'][^>]*\br=["']([\d.-]+)["']/.exec(
+        block,
+      );
+    const ellipse =
+      !rect &&
+      !circle &&
+      /<ellipse\b[^>]*\bcx=["']([\d.-]+)["'][^>]*\bcy=["']([\d.-]+)["'][^>]*\brx=["']([\d.-]+)["'][^>]*\bry=["']([\d.-]+)["']/.exec(
+        block,
+      );
+    // Path bounding box: cheap heuristic over every numeric pair in the 'd' attribute rather than
+    // a full path parser — good enough to detect an exact-duplicate shape, which is what this
+    // check exists to catch (a copy-pasted path is byte-identical, so its numeric extent is too).
+    const path = !rect && !circle && !ellipse && /<path\b[^>]*\bd=["']([^"']+)["']/.exec(block);
+    // Transform-positioned rect: width/height only, positioned via a wrapping
+    // <g transform="translate(x, y)"> rather than its own x/y attributes (e.g. an inline
+    // "commit log" chip). Combine the translate with the rect's width/height for an absolute key.
+    const translatedRect =
+      !rect &&
+      !circle &&
+      !ellipse &&
+      !path &&
+      (() => {
+        const t =
+          /<g\b[^>]*\btransform=["']translate\(\s*([\d.-]+)[\s,]+([\d.-]+)\s*\)["'][^>]*>\s*(?:<[^>]+>\s*)*?<rect\b[^>]*\bwidth=["']([\d.-]+)["'][^>]*\bheight=["']([\d.-]+)["']/.exec(
+            block,
+          );
+        return t;
+      })();
+    // Last resort: a text-only annotation node with no shape at all — key on the text's own
+    // position, which is still enough to detect two nodes rendering at the exact same spot.
+    const textOnly =
+      !rect &&
+      !circle &&
+      !ellipse &&
+      !path &&
+      !translatedRect &&
+      /<text\b[^>]*\bx=["']([\d.-]+)["'][^>]*\by=["']([\d.-]+)["']/.exec(block);
+
+    let key = null;
+    if (rect) key = `rect:${rect[1]},${rect[2]},${rect[3]},${rect[4]}`;
+    else if (circle) key = `circle:${circle[1]},${circle[2]},${circle[3]}`;
+    else if (ellipse) key = `ellipse:${ellipse[1]},${ellipse[2]},${ellipse[3]},${ellipse[4]}`;
+    else if (path) key = `path:${path[1]}`;
+    else if (translatedRect)
+      key = `rect:${translatedRect[1]},${translatedRect[2]},${translatedRect[3]},${translatedRect[4]}`;
+    else if (textOnly) key = `text:${textOnly[1]},${textOnly[2]}`;
+
+    if (key) {
+      if (!regionGeometry.has(key)) regionGeometry.set(key, []);
+      regionGeometry.get(key).push(id);
+    } else {
+      failures.push(
+        `${label}: node "${id}" has no rect/circle/ellipse/path/text found in its own <g> — ` +
+          `geometry cannot be verified distinct from other nodes`,
+      );
+    }
   }
   for (const [key, sharing] of regionGeometry)
     if (sharing.length > 1)

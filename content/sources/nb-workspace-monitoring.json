@@ -1,0 +1,62 @@
+{
+  "url": "file:///content/toolkit-source/nb_workspace_monitoring.ipynb",
+  "title": "Fabric Spark Toolkit — nb_workspace_monitoring: querying the Workspace Monitoring Eventhouse with KQL (first-party executable notebook, 15 cells, a query library plus the Spark-logs-not-yet-native gap and its documented workaround)",
+  "tier": 4,
+  "summary": "A 15-cell, first-party executable notebook demonstrating Fabric Workspace Monitoring — a read-only Eventhouse KQL database provisioned per-workspace that centrally collects logs and metrics from Fabric items — via a parameterized KQL query library (queries stored as data, run through one generic runner) covering job failure triage, duration-regression trend analysis, and Eventhouse query/ingestion health, plus the explicit gap that Spark application logs are not yet a native workspace-monitoring table and the documented diagnostic-emitter-to-Eventstream-to-Eventhouse route that closes it. This is genuinely new material not covered by prior toolkit sources, which document the Spark diagnostic emitter's Log-Analytics configuration and the Spark History Server/Advisor REST APIs but not the separate Workspace Monitoring Eventhouse feature, its table set, or its capacity-throttling-immunity property.",
+  "audience": "Fabric platform teams and data engineers setting up centralized, KQL-queryable operational monitoring across Fabric items (job failures, duration trends, Eventhouse and Power BI semantic model telemetry) who need to know what tables exist today, how to route Spark application telemetry into the same estate since it isn't natively collected yet, and why Workspace Monitoring is specifically useful during capacity throttling.",
+  "why_it_matters": "No prior source in the knowledge base documents Fabric's Workspace Monitoring Eventhouse feature at all — the existing REST-API and diagnostic-emitter sources cover per-application Spark telemetry (History Server API, Log Analytics emitter config) but not this separate, workspace-wide, centrally-provisioned KQL database that already collects job events, Power BI semantic model logs, and the Eventhouse family of tables. This notebook establishes what tables exist today, the explicit gap that Spark application logs are not among them, the documented workaround (diagnostic emitter to Event Hubs, an Eventstream into the same Eventhouse) that lands Spark telemetry in the same query surface, and an operationally significant asymmetry: monitoring ingestion and KQL queries keep functioning during capacity throttling even though Power BI reports and Activator alerts built on top of that same data respect capacity state — making Workspace Monitoring specifically useful as a place to observe throttling from, rather than a monitoring surface that itself goes dark when throttled.",
+  "takeaways": [
+    "Fabric Workspace Monitoring provisions a read-only, per-workspace Eventhouse KQL database (enabled under Workspace settings, ~10-15 minute ingestion latency, 30-day default retention, Contributor role or above required to query) that already collects ItemJobEvents (job performance across Fabric item types), Power BI SemanticModelLogs, the Eventhouse family of tables (query/command/data-operation/ingestion-result logs plus metrics), and GraphQL and mirrored-database logs.",
+    "Spark application logs are explicitly not yet a native Workspace Monitoring table; the documented route to get them into the same Eventhouse is the existing Fabric Spark diagnostic emitter targeting Azure Event Hubs, with an Eventstream item reading that Event Hub and writing into the same Eventhouse database Workspace Monitoring already populates, so Spark telemetry ends up queryable alongside job events in one KQL surface rather than a separate store.",
+    "Because table sets in the monitoring database evolve, the recommended first move in any session is a schema discovery query (.show tables) rather than assuming a documented table name is present, and if an expected table is missing, toggling the Log workspace activity setting off and back on is the documented way to refresh the schema.",
+    "Workspace Monitoring ingestion and KQL queries continue to function even when the workspace's capacity is being throttled, but Power BI reports and Activator alerts built on top of the same monitoring data respect capacity state and can themselves be affected — making the monitoring Eventhouse specifically useful as a place to observe throttling behavior from, in combination with the Capacity Metrics App, rather than a dashboard that goes dark exactly when it would be most needed.",
+    "The demonstrated cross-reference pattern for turning a monitoring finding into a root-cause investigation is joining an ItemJobEvents row (identified by item name and time window) to an internally-maintained run log by run id and Spark application id, then to the Monitoring hub's per-application detail — a three-hop join chain from 'this item failed in this window' to the specific Spark application that caused it."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "WorkspaceMonitoring",
+    "Eventhouse",
+    "KQL",
+    "Troubleshooting",
+    "Capacity",
+    "Notebooks"
+  ],
+  "claims": [
+    {
+      "capability_id": "rti",
+      "text": "Fabric Workspace Monitoring provisions a read-only, per-workspace Eventhouse KQL database (enabled under Workspace settings, roughly 10-15 minute ingestion latency, 30-day default retention, Contributor role or above required to query) that already collects ItemJobEvents (job performance and trends across Fabric item types), Power BI SemanticModelLogs, the Eventhouse family of tables (query, command, data-operation, and ingestion-result logs plus metrics), and GraphQL and mirrored-database logs, without any per-item configuration beyond the one workspace-level toggle.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["WorkspaceMonitoring", "Eventhouse", "KQL"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "Spark application logs are explicitly not yet a native Workspace Monitoring table; the documented route to get Spark driver/executor logs, events, and metrics into the same monitoring Eventhouse is the existing Fabric Apache Spark diagnostic emitter configured to target Azure Event Hubs (Environment-level Spark properties: spark.synapse.diagnostic.emitters=EH, emitter type AzureEventHub, categories Log/EventLog/Metrics, secret via Key Vault), paired with an Eventstream item whose source is that Event Hub and whose destination is the same Eventhouse database Workspace Monitoring already populates, so Spark telemetry becomes queryable alongside job events in one KQL surface rather than a separate store.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Spark", "WorkspaceMonitoring", "Eventhouse", "KQL"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "Because the Workspace Monitoring database's table set evolves over time, the recommended first action in any monitoring session is a schema-discovery query (.show tables) rather than assuming a documented table name is present, and if a documented table is missing, the stated remedy is toggling the Log workspace activity setting off and back on to refresh the schema.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["WorkspaceMonitoring", "KQL", "Troubleshooting"]
+    },
+    {
+      "capability_id": "capacity",
+      "text": "Workspace Monitoring ingestion and KQL queries continue functioning even while the workspace's capacity is being throttled, but Power BI reports and Activator alerts built on top of that same monitoring data respect capacity state and can themselves be affected by throttling — making the monitoring Eventhouse specifically useful, in combination with the Capacity Metrics App, as a place to observe throttling behavior from rather than a dashboard surface that goes dark exactly when throttling makes it most needed.",
+      "depth": 3,
+      "type": "fact",
+      "tags": ["Capacity", "WorkspaceMonitoring", "Throttling"]
+    },
+    {
+      "capability_id": "rti",
+      "text": "The demonstrated root-cause workflow for a monitoring-surfaced failure is a three-hop join chain: an ItemJobEvents row (identified by item name and time window) is cross-referenced to an internally-maintained run log by run id and Spark application id, which is then opened in the Monitoring hub's per-application detail view — turning a workspace-level 'this item failed' signal into the specific Spark application responsible without manual searching across tabs.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["WorkspaceMonitoring", "Troubleshooting", "Spark"]
+    }
+  ],
+  "assets": []
+}

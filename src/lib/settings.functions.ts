@@ -1024,6 +1024,75 @@ export const submitSourceUrl = createServerFn({ method: "POST" })
     return { ok: true as const, queue: queued };
   });
 
+// Uploads an HTML source file the curator can't reach by URL yet (a draft, a paywalled export, a
+// one-off document). Stored in the admin-only `source-uploads` bucket; queued exactly like a URL
+// submission so /ingest-batch and the knowledge-curator agent need no separate code path — they
+// just fetch the resulting storage URL like any other source.
+export const submitSourceUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (d: {
+      fileName: string;
+      contentBase64: string;
+      title?: string;
+      tier?: number;
+      tags?: string[];
+      note?: string;
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+
+    const fileName = (data.fileName ?? "").trim();
+    if (!fileName.toLowerCase().endsWith(".html") && !fileName.toLowerCase().endsWith(".htm")) {
+      throw new Error("Only .html/.htm files can be uploaded.");
+    }
+
+    const tier = data.tier ?? 6;
+    if (tier < 1 || tier > 6) throw new Error("Tier must be between 1 and 6.");
+
+    let bytes: Buffer;
+    try {
+      bytes = Buffer.from(data.contentBase64, "base64");
+    } catch {
+      throw new Error("Uploaded file content was not valid.");
+    }
+    if (bytes.length === 0) throw new Error("Uploaded file is empty.");
+    if (bytes.length > 10 * 1024 * 1024) throw new Error("Uploaded file exceeds the 10 MB limit.");
+
+    const sb = await adminClient();
+    const objectPath = `${context.userId}/${Date.now()}-${fileName.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+    const { error: uploadError } = await sb.storage
+      .from("source-uploads")
+      .upload(objectPath, bytes, { contentType: "text/html", upsert: false });
+    if (uploadError) throw new Error(uploadError.message);
+
+    const { data: publicUrl } = sb.storage.from("source-uploads").getPublicUrl(objectPath);
+
+    const note = data.note?.trim() ?? "";
+    const { data: queued, error } = await sb
+      .from("queue_items")
+      .insert({
+        url: publicUrl.publicUrl,
+        title: data.title?.trim() || fileName,
+        tier,
+        tags: data.tags ?? [],
+        kind: "source",
+        notes: note ? `${note}\n\nUploaded file: ${fileName}` : `Uploaded file: ${fileName}`,
+        submitted_by: context.userId,
+        status: "queued",
+      })
+      .select("*")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await recordAudit(context.userId, "source.upload_submitted", "queue", queued.id, {
+      fileName,
+      objectPath,
+    });
+    return { ok: true as const, queue: queued };
+  });
+
 // --- RSS subscriptions -----------------------------------------------------
 // Feeds are stored here; the local /poll-rss-feeds agent does the actual fetch/parse/queue.
 

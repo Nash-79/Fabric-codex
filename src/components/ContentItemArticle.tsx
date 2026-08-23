@@ -11,7 +11,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import rehypeHighlight from "rehype-highlight";
-import { common } from "lowlight";
+import { all, common } from "lowlight";
 import { ExternalLink } from "lucide-react";
 import { markdownPanels } from "@/components/MarkdownPanels";
 import { Callout } from "@/components/Callout";
@@ -36,12 +36,14 @@ import { parseCodeMeta, isOutputBlock } from "@/lib/code-meta";
 // grammar chunk per language on demand). Narrowed to what article/lesson/design body_md actually
 // fences (measured via a corpus scan across content/{articles,lessons,designs}); KQL/DAX aren't
 // highlight.js-supported grammars at all, so `detect: true` already falls back to plaintext for
-// them with or without this list.
+// them with or without this list. `http` isn't in `common` (only in `all`) — pulling it from
+// `common` silently sets `languages.http = undefined`, which crashed rehype-highlight with
+// "Cannot read properties of undefined (reading 'bind')" on the one article with a ```http fence.
 const HIGHLIGHT_LANGUAGES = {
   bash: common.bash,
   csharp: common.csharp,
   graphql: common.graphql,
-  http: common.http,
+  http: all.http,
   json: common.json,
   python: common.python,
   sql: common.sql,

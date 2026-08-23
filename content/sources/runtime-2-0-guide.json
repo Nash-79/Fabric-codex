@@ -1,0 +1,194 @@
+{
+  "url": "file:///content/toolkit-source/runtime_2_0_guide.html",
+  "title": "Fabric Runtime 2.0 Deep Dive — Spark 4.1, Delta 4.2 & Migration Architecture (first-party practitioner reference tracing the ANSI-default × Native Execution Engine interaction, a V-Order workload decision matrix, a %%configure scope-necessity reference, and four reusable workload-archetype configuration recipes across the Fabric Runtime 1.1–2.0 lineage; staged at content/toolkit-source/)",
+  "tier": 4,
+  "summary": "A first-party deep dive on Microsoft Fabric Runtime 2.0, framed around one central trade-off: ANSI SQL mode is on by default in Runtime 2.0's Spark 4.1, and because the Native Execution Engine's Velox kernels implement non-ANSI null semantics, ANSI expressions force a fallback to JVM execution. The document walks the full Runtime 1.1 through 2.0 component lineage, gives a layer-by-layer V-Order enable/disable decision matrix with an explicit CPU-overhead-versus-read-speed trade-off, a reference table for when %%configure session restarts are actually required versus when a setting is runtime-mutable, and four named workload archetypes (bronze streaming ingestion, silver CDC/merge, gold Direct Lake serving, heavy ML/wide-shuffle) each with a concrete starting configuration.",
+  "audience": "Data engineers and platform architects planning or executing a migration from Fabric Runtime 1.3 to Runtime 2.0, and anyone choosing per-layer Spark configuration (V-Order, session vs. runtime scope, shuffle/broadcast sizing) for a specific medallion-layer workload shape.",
+  "why_it_matters": "Most Runtime 2.0 announcements list new component versions; this document is unusual in naming the specific mechanism by which the single biggest default-behavior change (ANSI-on) collides with the Native Execution Engine, and in turning V-Order and session-scope guidance into a decision table and four ready-to-adapt configuration recipes rather than leaving the trade-offs implicit.",
+  "takeaways": [
+    "Runtime 2.0's headline change is ANSI SQL mode flipping from off-by-default (Runtime 1.3/Spark 3.5) to on-by-default (Spark 4.1), and this document names the specific fallback path — a Gluten planner intercept forcing JVM Janino execution — that makes the interaction with the Native Execution Engine a first-class migration risk, not just a SQL-semantics footnote.",
+    "V-Order is framed as a layer-by-layer decision rather than a blanket setting: the document assigns an explicit recommendation per medallion layer (off for bronze/streaming/scratch, on for gold) with the write-overhead-versus-read-acceleration trade-off stated at each layer.",
+    "A configuration-scope reference table separates which settings actually require a %%configure session restart (custom pool sizing, pip package resolution) from which are safe to toggle live per cell or per pipeline (AQE targets, V-Order, most session-mutable SQL configs) — with Delta table properties called out as a third category that never belongs in Spark session conf at all.",
+    "Four named workload archetypes (bronze/streaming, silver CDC/merge, gold/Direct Lake, heavy ML/wide-shuffle) each carry a distinct starting configuration profile, suggesting configuration should be chosen by workload shape rather than applied uniformly across a workspace.",
+    "The runtime lineage from 1.1 through 2.0 is a genuine version progression (Spark 3.3 through 4.1, Delta 2.2 through 4.2, Python 3.10 through 3.13, Java 11 through 21) — exact version pairings that are useful for migration planning but that Microsoft revises over time, so treat the specific numbers as a snapshot rather than a permanent reference."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "Runtime2",
+    "NativeExecutionEngine",
+    "ANSI",
+    "VOrder",
+    "DirectLake",
+    "PySpark",
+    "Migration",
+    "PractitionerWhitepaper"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "Fabric Runtime 2.0 (GA) pairs Apache Spark 4.1.0 with Delta Lake 4.2.0, Python 3.13, Java 21 (LTS), Scala 2.13 and Azure Linux 3.0, succeeding Runtime 1.3 (LTS), which paired Spark 3.5.2 with Delta 3.2.1, Python 3.11, Java 11 and Azure Linux 2.0; the two prior minor runtimes (1.1, 1.2) ran Spark 3.3.4 and 3.4.1 respectively, both on Python 3.10 and Java 11.",
+      "depth": 2,
+      "type": "fact",
+      "tags": [
+        "Runtime2",
+        "VersionHistory",
+        "Migration"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The Native Execution Engine's Gluten/Velox path first appeared as a preview in Runtime 1.2 and reached broader capability in Runtime 2.0 with SIMD AVX-512 vectorized acceleration; Runtime 1.3 is the last runtime in this lineage where ANSI SQL mode is off by default, making it the last stop before the ANSI-default behavioral shift lands in Runtime 2.0.",
+      "depth": 2,
+      "type": "fact",
+      "tags": [
+        "NativeExecutionEngine",
+        "Runtime2",
+        "ANSI",
+        "VersionHistory"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The described mechanism by which ANSI mode defeats native execution in Runtime 2.0: Velox's C++ SIMD kernels implement non-ANSI, silent-NULL semantics for operations like integer overflow and invalid casts, so when ANSI mode is on and an expression would need to throw an exception rather than return NULL, the Gluten planner intercepts that expression and routes the surrounding operator through a JVM fallback path (named in this document as VeloxColumnarToRowExec) using Janino-compiled bytecode instead of native code.",
+      "depth": 5,
+      "type": "internal",
+      "tags": [
+        "NativeExecutionEngine",
+        "ANSI",
+        "Gluten",
+        "Velox",
+        "Fallback"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This document states the ANSI-triggered JVM fallback under Runtime 2.0's Native Execution Engine costs a 2x to 4x execution slowdown relative to staying on the native SIMD path, presented as this source's own figure rather than an attributed Microsoft benchmark.",
+      "depth": 4,
+      "type": "fact",
+      "tags": [
+        "NativeExecutionEngine",
+        "ANSI",
+        "Performance",
+        "Fallback"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The stated remediation for the ANSI-versus-native conflict is workload-dependent rather than a single fix: using try_cast() (and equivalent try_* functions) in SQL preserves native SIMD execution while keeping ANSI's exception-on-error semantics for everything else, whereas explicitly setting spark.sql.ansi.enabled to false is offered as a second strategy for pure batch ETL pipelines where raw throughput matters more than ANSI strictness.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "ANSI",
+        "NativeExecutionEngine",
+        "TryCast",
+        "PySpark"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This document treats enabling V-Order globally across every workload and layer as a major anti-pattern, stating a roughly 10% to 15% write-time CPU and memory overhead is paid at write in exchange for roughly 20% to 40% faster read scans for Power BI Direct Lake and the SQL analytics endpoint — meaning the trade-off only pays off for layers actually read by those consumers.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": [
+        "VOrder",
+        "DirectLake",
+        "Performance",
+        "Capacity"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This document's per-layer V-Order recommendation sets spark.sql.parquet.vorder.default to false for bronze/raw ingestion, streaming micro-batches, and intermediate ETL/scratch staging tables (none are queried directly by BI, so the write-overhead is pure cost with no downstream read benefit), leaves silver transformed tables off by default unless a table is queried directly by Direct Lake, and sets it to true only for gold reporting and semantic-mart tables that back Direct Lake or high-concurrency SQL analytics endpoint queries.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "VOrder",
+        "Medallion",
+        "DirectLake",
+        "PySpark"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "V-Order can be deferred to scheduled off-peak maintenance rather than paid at every write: running Delta OPTIMIZE against a gold table applies V-Order encoding during compaction, decoupling the V-Order cost from the production ingestion path and its SLAs.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "VOrder",
+        "Optimize",
+        "Maintenance"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This document gives a specific decision boundary for when a Fabric notebook actually needs %%configure -f (which forces a full kernel restart and a new session): only session-locked infrastructure changes, specifically installing custom PyPI packages/index and sizing custom-pool executor core/memory allocations, since both require action before the SparkSession itself initializes; it states custom Fabric Starter Pools require zero %%configure boilerplate at all.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "Configuration",
+        "SessionScope",
+        "Notebooks"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This document classifies AQE tuning keys (spark.sql.adaptive.* including advisoryPartitionSizeInBytes and parallelismFirst) and spark.sql.parquet.vorder.default as runtime-mutable settings that should be set per cell or per pipeline via spark.conf.set — never inside a %%configure -f block — calling that combination an anti-pattern because it forces an unnecessary session restart for a setting that doesn't require one.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": [
+        "Configuration",
+        "AQE",
+        "SessionScope"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Delta table properties such as delta.enableDeletionVectors are called out as a third configuration category distinct from both %%configure session-start settings and spark.conf.set runtime settings: they belong exclusively in TBLPROPERTIES at table DDL time and are described as invalid if placed in Spark session configuration.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": [
+        "Configuration",
+        "DeltaLake",
+        "TableProperties"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This document presents four named Fabric Spark workload archetypes, each with a distinct starting configuration profile intended as a reusable recipe: bronze/high-frequency streaming ingestion under roughly 50 GB (V-Order off, smaller shuffle-partition count around 128), silver CDC/heavy-merge ETL in the 100 GB–1 TB range (128 MB optimize-write bin size, V-Order off, a raised AQE skew-join factor), gold/Direct Lake BI serving (V-Order on, 512 MB optimize-write bin size, CLUSTER BY instead of Hive partitioning), and heavy ML prep/wide shuffle above roughly 1 TB (shuffle partitions raised to 8192, a 256 MB broadcast-join threshold, and an explicit AQE advisory partition size).",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "PySpark",
+        "Configuration",
+        "WorkloadArchetype",
+        "PractitionerHeuristic"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The silver CDC/merge archetype in this document pairs a smaller 128 MB optimize-write bin size (spark.microsoft.delta.optimizeWrite.binSize = 134217728) with an explicitly raised AQE skew-join partition factor (spark.sql.adaptive.skewJoin.skewedPartitionFactor = 5), framed as minimizing rewrite footprint during MERGE operations while giving AQE more headroom to detect and split skewed partitions typical of change-data-capture workloads.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "DeltaLake",
+        "Merge",
+        "AQE",
+        "PySpark"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The gold/Direct Lake archetype in this document pairs V-Order enabled with a substantially larger 512 MB optimize-write bin size (spark.microsoft.delta.optimizeWrite.binSize = 536870912) than the silver archetype's 128 MB, and recommends CLUSTER BY on the columns Direct Lake and BI queries filter/join on, in place of Hive-style partitionBy, as the file-layout choice for tables serving Power BI Direct Lake VertiPaq paging.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "DirectLake",
+        "VOrder",
+        "DeltaLake",
+        "LiquidClustering"
+      ]
+    }
+  ],
+  "assets": []
+}

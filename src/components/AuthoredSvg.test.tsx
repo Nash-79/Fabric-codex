@@ -11,12 +11,12 @@ describe("authored SVG diagram contract", () => {
 
   beforeAll(async () => {
     diagrams = await allAuthoredDiagrams();
-    svgById = new Map();
-    for (const diagram of diagrams) {
-      const loaded = await loadAuthoredDiagram(diagram.id);
-      svgById.set(diagram.id, loaded!.markup);
-    }
-  });
+    // Loaded in parallel, not one at a time — 95 sequential awaits was slow enough to blow the
+    // default 10s beforeAll timeout under load (e.g. the full suite running alongside 16 other
+    // test files), even though each individual load is fast.
+    const loaded = await Promise.all(diagrams.map((d) => loadAuthoredDiagram(d.id)));
+    svgById = new Map(diagrams.map((d, i) => [d.id, loaded[i]!.markup]));
+  }, 30_000); // 95 file reads in parallel; default 10s can be tight under a loaded machine/CI runner
 
   it("pairs every authored node with one accessible SVG region", () => {
     expect(diagrams.length).toBeGreaterThan(0);

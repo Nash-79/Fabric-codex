@@ -1,0 +1,73 @@
+{
+  "url": "file:///content/toolkit-source/nb_cdf_incremental_pattern.ipynb",
+  "title": "Fabric Spark Toolkit — nb_cdf_incremental_pattern: CDF-driven deltas without MLV, watermarked in an external SQL store (first-party executable Spark/Delta notebook, 27 cells, proving version-bounded CDF reads, net-change collapse, idempotency and the CDF-retention trap end to end; staged at content/toolkit-source/)",
+  "tier": 4,
+  "summary": "A 27-cell, first-party executable PySpark/Delta notebook demonstrating an incremental silver-to-gold pattern built on Change Data Feed plus a watermark held in an external SQL metadata store (Fabric SQL Database in production, SQLite locally) rather than in a Materialized Lake View or a Delta control table, chosen explicitly because MLV's Optimal Refresh requires append-only sources between refreshes and this pattern's source table receives real UPDATE and DELETE traffic. The knowledge base already holds this toolkit's general CDF mechanics — version-bounds-as-source-options versus post-read filtering, net-change collapse via window functions, CDF's VACUUM-retention exposure, and pure appends emitting no CDF rows — from prior sources, so this extraction captures only what is genuinely new: the external-SQL-store watermark variant and its explicit rationale relative to MLV's append-only constraint, the forward-only watermark upsert's concrete SQL guard, and the real executed proof (physical-plan pushdown verification, a zero-row idempotent second run, a zero-row proof that OPTIMIZE emits no CDF churn, and a triggered retention-trap exception) that grounds those already-known mechanics in genuine run output rather than restating the theory.",
+  "audience": "Fabric data engineers who need an incremental silver-to-gold pattern for a source table that receives updates and deletes (not just appends), where Materialized Lake View's append-only incremental-refresh requirement rules MLV out, and who need the watermark-storage design decision — external SQL metadata table versus a Delta control table versus MLV framework state — made explicit with a working, tested implementation in both PySpark and pure Spark SQL.",
+  "why_it_matters": "The prior toolkit sources in the knowledge base establish MLV's five full-refresh-forcing conditions (including that any UPDATE/DELETE since the last refresh forces full refresh even with CDF enabled) and general CDF read/merge/retention mechanics, but no prior source documents the specific alternative this notebook builds and proves: storing the incremental-processing watermark in an external SQL table (Fabric SQL Database columns: entity_name primary key, source_table, last_version, last_run_id, rows_applied, updated_at) instead of relying on MLV's own refresh-tracking or a Delta-table watermark, with a concrete forward-only-only-if-greater upsert guard against concurrent runs. It also supplies genuine executed evidence — not restated theory — for facts the knowledge base held only as documented behavior: a captured physical-plan PushedFilters string proving predicate pushdown reached the CDF scan, a real zero-row second run proving idempotency, a real zero-row change-feed window proving OPTIMIZE emits no CDF rows even though it advances the table version, and a real triggered LookupError proving the retention-guard fires rather than silently returning stale or missing data.",
+  "takeaways": [
+    "A CDF-plus-external-SQL-watermark pattern is presented as the deliberate alternative to Materialized Lake View specifically because MLV's incremental (Optimal) refresh requires append-only source changes between refreshes, and this pattern's demonstrated source table receives real UPDATE and DELETE traffic that would force any MLV built on it to full-refresh regardless of CDF being enabled — the notebook proves this by running its own live MLV-eligibility diagnostic against its source table and getting a WOULD FULL-REFRESH verdict before building the CDF-based pipeline instead.",
+    "The watermark is held in an external SQL metadata table (Fabric SQL Database columns: entity_name primary key, source_table, last_version last successfully processed, last_run_id, rows_applied, updated_at) rather than in a Delta control table or relying on MLV's own state, giving the pipeline full control over batching (a MAX_VERSIONS_PER_RUN cap bounds catch-up so a long-stalled consumer processes in capped batches rather than one unbounded job), ordering, and error handling that MLV's managed refresh schedule does not expose.",
+    "The forward-only watermark upsert is implemented as an INSERT ... ON CONFLICT DO UPDATE guarded by a WHERE clause comparing the new version against the stored version, so a concurrent or out-of-order write can never move the watermark backwards even under interleaved runs.",
+    "The notebook's real saved execution captured the actual PushedFilters string from the query's physical plan after a version-bounded, predicate-filtered CDF read, confirming both the version-window pushdown and the business predicate reached the scan rather than being applied only after data was read into memory.",
+    "The notebook's real saved execution proved two mechanics with genuine run output rather than assertion alone: a second run against an unchanged source processed exactly zero rows (idempotency), and a version window spanning only an OPTIMIZE operation returned zero CDF change rows even though the table version advanced, confirming compaction produces no phantom churn for a CDF consumer.",
+    "The notebook's real saved execution deliberately simulated a stalled consumer by passing a watermark predating the earliest retained version, which triggered a genuine LookupError from the retention guard rather than returning silently-wrong or partial results, and the notebook states the operational monitoring implication: alert on growing (current_version - last_version) lag and on watermark age approaching the table's log-retention or VACUUM-retention window, since lag is the leading indicator before the guard actually fires."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "SparkSQL",
+    "DeltaLake",
+    "CDF",
+    "IncrementalProcessing",
+    "SQLDatabase",
+    "MaterializedLakeView",
+    "Notebooks"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "This notebook builds and proves a CDF-driven incremental silver-to-gold pipeline whose watermark (last successfully processed Delta version) is stored in an external SQL metadata table rather than in a Delta control table or Materialized Lake View state — Fabric SQL Database in production, SQLite locally, with an identical schema in both: entity_name as primary key, source_table, last_version, last_run_id, rows_applied, and updated_at — chosen explicitly because the pattern's source table receives real UPDATE and DELETE traffic, which the notebook's own live MLV-eligibility check confirms would force any MLV built on that source to full-refresh even with CDF enabled, since MLV's incremental refresh requires append-only source changes between refreshes.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["CDF", "SQLDatabase", "MaterializedLakeView", "IncrementalProcessing"]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "This notebook's forward-only watermark update is implemented as a single upsert statement (INSERT with an ON CONFLICT DO UPDATE clause in the SQLite form, an equivalent MERGE guarded by a greater-than comparison in the Fabric SQL Database form) whose WHERE clause compares the incoming version against the currently stored version, so the update only applies when the new version is strictly greater — making the watermark's forward-only invariant enforced by the SQL statement itself rather than by application-level ordering discipline, which protects against concurrent or out-of-order writes moving it backwards.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["SQLDatabase", "Watermark", "Idempotency"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's real saved execution captured the query's physical plan after issuing a Change Data Feed read bounded by startingVersion/endingVersion and filtered on a business predicate, and extracted the actual PushedFilters string via regex from the formatted explain output, confirming both the update_preimage exclusion and the business predicate (status = 'complete') were present in PushedFilters and that the resulting ReadSchema was narrowed to only the selected columns — genuine proof that predicate and column pushdown reached the CDF scan on top of the version-window bounding, rather than being asserted as expected behavior.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["CDF", "QueryPlan", "PredicatePushdown"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's real saved execution proved CDF idempotency and the maintenance-produces-no-CDF-churn behavior with genuine run output: a second pipeline run against an unchanged source processed a change-feed window that returned zero rows even though the table's version had advanced past the stored watermark, because the only operation in that version window was an OPTIMIZE — confirming that a compaction between runs does not appear as phantom change data to a CDF-driven consumer, and that re-running the pipeline with nothing new to process correctly does nothing.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["CDF", "Idempotency", "DeltaLake", "Testing"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's real saved execution deliberately simulated a stalled consumer by passing a watermark version older than the source table's earliest retained version, which triggered a genuine LookupError from an explicit guard function comparing the requested starting version against the table's earliest available history version — proving in a real run (not just describing) that a CDF consumer whose watermark has aged out of retention fails loudly with a message stating the recovery action (full recompute of the target, then resetting the watermark to the current version) rather than silently returning an incomplete or empty result.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": ["CDF", "Vacuum", "Retention", "Troubleshooting"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's stated operational monitoring rule for a CDF-plus-watermark pipeline: alert on the gap between the source table's current Delta version and the stored watermark's last-processed version growing over time, and separately alert as the watermark's age approaches the table's log-retention duration or VACUUM retention window, since a growing lag is the leading indicator of an eventual retention-trap failure well before the guard actually triggers.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["CDF", "Monitoring", "Retention"]
+    }
+  ],
+  "assets": []
+}

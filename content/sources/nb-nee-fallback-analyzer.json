@@ -1,0 +1,71 @@
+{
+  "url": "file:///content/toolkit-source/nb_nee_fallback_analyzer.ipynb",
+  "title": "Fabric Spark Toolkit — nb_nee_fallback_analyzer: measuring NEE vs JVM instead of assuming (first-party executable notebook, 17 cells, A/B wall-clock harness plus plan-text native-coverage scoring over 9 real queries)",
+  "tier": 4,
+  "summary": "A 17-cell, first-party executable notebook that measures — rather than assumes — whether the Native Execution Engine is actually accelerating a given query set, via an A/B wall-clock harness across nine real queries (five generic-shape, four investment-data-domain-shaped) plus a plan-text native-coverage scorer. The knowledge base already holds this toolkit's NEE fallback taxonomy and the ANSI-versus-native mechanism from prior sources, so this extraction captures only the genuinely new material: the actual measurement methodology (two-Environment A/B comparison, not a runtime toggle, because the toggle is explicitly documented as unreliable), the plan-text regex technique used to compute a 'native coverage percentage' from operator names, and the notebook's own honest real-run result — a fully JVM local run producing a negative delta on every query, which the notebook itself explains validates the measurement mechanism rather than demonstrating acceleration, since no native execution was actually available locally.",
+  "audience": "Fabric data engineers who want to validate whether NEE is actually helping a specific workload rather than trusting that enabling it helps by default, and who need a repeatable A/B methodology (not a one-off) that produces a coverage percentage and a verdict per query.",
+  "why_it_matters": "Prior sources in the knowledge base document NEE's fallback taxonomy and the ANSI-mode mechanism that defeats native execution, but neither specifies how a practitioner would actually measure, on their own workload, whether NEE is helping or silently paying conversion overhead for no gain. This notebook supplies that missing methodology: run the same query set twice under two separate Environments differing only in the Acceleration setting (the notebook explicitly warns that runtime-toggling the underlying flag is not reliably supported and two Environments is the trustworthy comparison), score each run's plan text for native-operator versus conversion-operator counts to get a coverage percentage, and take the minimum of repeated wall-clock runs to reduce noise. Its own real executed run — necessarily JVM-only because NEE is Fabric-only and this environment is local — produced a negative delta (JVM-only 'NEE-off' pass faster than the 'NEE-on' pass) on every one of nine queries, which the notebook explains as expected: with no native engine actually available, the comparison correctly detects zero acceleration rather than fabricating a false positive, which is itself evidence the measurement technique behaves honestly when its precondition (an actual native engine) isn't met.",
+  "takeaways": [
+    "The recommended NEE A/B measurement methodology is two separate Fabric Environments identical except for the Acceleration (NEE) setting, not toggling a runtime config value mid-session — the notebook states runtime-toggling spark.native.enabled is not guaranteed to take effect and that two Environments is the only comparison that can be trusted.",
+    "Native execution coverage is computed by regex-scanning the formatted physical plan text for native-operator name patterns (operators suffixed *Transformer or *NativeFileScan) versus conversion-boundary markers (VeloxColumnarToRowExec, RowToVeloxColumnar), giving a coverage percentage = native operator count / (native + conversion operator count) per query — a concrete, reproducible scoring technique rather than a qualitative read of the plan.",
+    "Wall-clock timing takes the minimum across repeated runs of the same query (not the mean or a single run) specifically to reduce measurement noise before comparing NEE-on against NEE-off.",
+    "The notebook's real executed local run — necessarily both passes on plain JVM Spark since NEE is Fabric-only and unavailable locally — measured a negative wall-clock delta (the 'NEE-off' JVM pass faster than the 'NEE-on' labeled pass) on all nine tested queries including both generic-shape and investment-data-domain-shaped workloads, and the notebook's own interpretation is that this correctly validates the measurement mechanism's honesty (it does not fabricate a speedup when no native engine is actually present) rather than demonstrating any real acceleration, which can only be measured in Fabric.",
+    "A recommended third comparison pass on Runtime 2.0 specifically sets spark.sql.ansi.enabled=false to isolate whether an environment's apparent lack of NEE benefit is caused by ANSI-triggered fallback rather than the workload itself being unsuited to native execution, since NEE falls back under ANSI mode.",
+    "The notebook includes a static, pre-execution source-level lint step (separate from the runtime plan-text measurement) that flags known fallback triggers such as Python UDFs and nested/complex-type manipulation directly in query source before the query ever runs, positioned as a 'fix before it runs' complement to the after-the-fact plan measurement.",
+    "The included as-of/point-in-time valuation join (an inequality join condition matching each position to the latest valuation on or before its date) is flagged in-notebook as a deliberately included performance trap likely to produce a BroadcastNestedLoopJoin or range join in the physical plan, included specifically because as-of joins are common in investment-data workloads and are a known source of unexpected join-strategy selection."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "NativeExecutionEngine",
+    "Performance",
+    "Benchmarking",
+    "Notebooks"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "The trustworthy methodology for measuring whether the Native Execution Engine is actually accelerating a workload is running the same query set under two separate Fabric Environments that differ only in the Acceleration (NEE) setting, not toggling the underlying flag at runtime within one session — runtime-toggling is explicitly documented as unreliable and not guaranteed to take effect on all builds.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": ["NativeExecutionEngine", "Benchmarking", "Performance"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Native execution coverage for a query can be computed reproducibly by regex-matching the formatted physical plan text for native-operator suffixes (*Transformer, *NativeFileScan) against columnar-conversion-boundary markers (VeloxColumnarToRowExec, RowToVeloxColumnar), yielding coverage percentage = native operator count divided by the sum of native and conversion operator counts — a concrete plan-text scoring technique rather than a qualitative plan read.",
+      "depth": 4,
+      "type": "internal",
+      "tags": ["NativeExecutionEngine", "QueryPlan"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's real executed local A/B run — necessarily both passes on plain JVM Spark since NEE is Fabric-only and unavailable outside Fabric — measured a negative wall-clock delta (the JVM-only 'NEE-off' labeled pass ran faster than the 'NEE-on' labeled pass) across all nine tested queries, and the notebook's own stated interpretation is that this result correctly validates the measurement mechanism's honesty rather than demonstrating acceleration, since real NEE speedup can only be measured inside an actual Fabric session with native execution available.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["NativeExecutionEngine", "Benchmarking"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A recommended third measurement pass on Runtime 2.0, alongside the NEE-on/NEE-off pair, sets spark.sql.ansi.enabled=false specifically to isolate whether an environment's apparent lack of native-execution benefit stems from ANSI-mode-triggered fallback rather than from the workload itself being unsuited to native execution.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["NativeExecutionEngine", "ANSI"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's fallback-prediction tooling includes a static, pre-execution source-level lint pass distinct from its runtime plan-text coverage measurement: it scans query source text for known fallback triggers (for example, a Python UDF or nested/complex-type manipulation such as to_json/from_json round-trips) and surfaces the fix before the query is ever run, positioned as complementary to after-the-fact plan-based measurement rather than a replacement for it.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["NativeExecutionEngine", "Troubleshooting"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "An as-of/point-in-time valuation join (matching each position row to the most recent valuation row on or before its own date via an inequality join condition) is called out as a deliberately included performance trap in this notebook's domain query set, expected to produce a BroadcastNestedLoopJoin or range join in the physical plan rather than a standard equi-join strategy, because inequality-condition joins of this shape are common in investment-data workloads and are a known source of unexpected join-strategy selection.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": ["Performance", "QueryPlan"]
+    }
+  ],
+  "assets": []
+}

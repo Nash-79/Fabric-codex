@@ -1,0 +1,48 @@
+{
+  "url": "file:///content/toolkit-source/nb_lakehouse_maintenance.ipynb",
+  "title": "Fabric Spark Toolkit — nb_lakehouse_maintenance: acts on the health report, dry-run by default (first-party executable Spark/Delta notebook, the acting half of the toolkit's audit-then-act maintenance pair; staged at content/toolkit-source/)",
+  "tier": 4,
+  "summary": "A five-cell, first-party executable PySpark/Delta notebook that reads the latest run of the health-audit notebook's report table and executes only the flagged actions, dispatching each of the audit's four flag codes to a specific Delta maintenance SQL statement, with a DRY_RUN parameter that prints the planned SQL instead of running it. Every action is logged to a separate Delta log table with a status field (PLANNED/OK/FAILED) and linked back to the audit run that triggered it. The knowledge base already holds this toolkit's broader conditional-maintenance philosophy and the underlying VACUUM/Direct-Lake and table-property-vs-session-config guidance from prior sources; the health-audit sibling source in this batch already captures the flag taxonomy and thresholds, so this extraction is narrow: the specific audit-report-to-action dispatch architecture, its dry-run-by-default safety convention, and the post-action self-verification step, none of which were previously captured.",
+  "audience": "Fabric data engineers designing the acting half of a two-notebook (audit, then maintenance) automated Delta maintenance pipeline that must never run destructive operations without an explicit, loggable, dry-run-overridable decision trail.",
+  "why_it_matters": "This notebook demonstrates the concrete separation between observation and action that the toolkit's maintenance philosophy calls for elsewhere: a distinct notebook consumes the prior notebook's versioned health report rather than re-deriving health signals itself, maps each flag to exactly one maintenance SQL statement via a lookup dispatch, and defaults to a dry-run mode that must be explicitly overridden (in the pipeline parameter, not the code) before anything destructive runs. It also demonstrates a concrete post-check pattern: re-querying DESCRIBE DETAIL after a COMPACT action to assert the file count actually decreased, rather than trusting that OPTIMIZE succeeded just because it returned without error.",
+  "takeaways": [
+    "Splitting Delta maintenance into two notebooks — one that only reads and writes a versioned health report, and a separate one that reads that report and acts — lets the acting notebook's action set be a pure, auditable function of the report table rather than re-deriving health signals from scratch each run.",
+    "A demonstrated flag-to-action dispatch maps each of four flag codes to exactly one Delta maintenance SQL statement: COMPACT and NEVER_OPTIMIZED both map to OPTIMIZE, PURGE_DV maps to REORG TABLE ... APPLY (PURGE), and VACUUM_OVERDUE maps to VACUUM ... RETAIN <hours> HOURS, with the retention hours held as a named parameter documented as never going below the table's time-travel or CDF consumer window.",
+    "The stated production convention is DRY_RUN=True by default, flipped only via a pipeline parameter rather than edited in notebook code, so that promoting the notebook to a new environment or table set defaults to printing the planned SQL rather than executing it until a human or pipeline explicitly opts in.",
+    "Every planned action is logged to a separate Delta table before or after execution with a status field (PLANNED, OK, or FAILED), the originating audit run_id, the exact SQL text, and elapsed seconds, and a failed action causes the notebook to assert and stop rather than silently continuing past a failed maintenance statement.",
+    "A demonstrated post-action verification step re-runs DESCRIBE DETAIL after a COMPACT action and asserts the resulting file count is strictly lower than the pre-action count, rather than treating the absence of an exception from the maintenance SQL as proof the operation had the intended effect."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "DeltaLake",
+    "Maintenance",
+    "Notebooks",
+    "PractitionerHeuristic"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "This notebook demonstrates a distinct maintenance-acting stage that consumes a separate audit notebook's versioned health-report table (filtered to the latest run_id and non-OK flags) rather than re-computing health signals itself, then dispatches each flag code to exactly one Delta maintenance statement via a lookup table: COMPACT and NEVER_OPTIMIZED both map to OPTIMIZE, PURGE_DV maps to REORG TABLE ... APPLY (PURGE), and VACUUM_OVERDUE maps to VACUUM ... RETAIN <N> HOURS — separating the read-only observation stage from the stage that performs destructive operations.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DeltaLake", "Maintenance", "Orchestration", "PySpark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's stated production convention is a DRY_RUN parameter defaulting to True, overridden only via a pipeline/job parameter rather than a code edit, so that printing the planned maintenance SQL is the default behavior and actually executing destructive Delta operations (OPTIMIZE, REORG PURGE, VACUUM) requires an explicit opt-in each run; every planned or executed action is logged to a Delta table with a PLANNED/OK/FAILED status, the triggering audit run_id, the literal SQL text, and elapsed time, and any FAILED entry causes the notebook to assert and stop rather than continuing past it.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DeltaLake", "Maintenance", "PractitionerHeuristic"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "After executing an OPTIMIZE action, this notebook re-queries DESCRIBE DETAIL and asserts the resulting file count is strictly lower than the pre-action file count, treating a successful-but-ineffective OPTIMIZE (one that returns without error but does not actually reduce the file count) as a failure condition rather than trusting the absence of an exception as proof the maintenance operation had its intended effect.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DeltaLake", "Maintenance", "Testing"]
+    }
+  ],
+  "assets": []
+}

@@ -1,0 +1,97 @@
+{
+  "url": "file:///content/toolkit-source/fabric_best_practices.ipynb",
+  "title": "Fabric Spark Toolkit — Fabric Best Practices: Runtime-Portable, Capacity-Aware, Metadata-Driven (first-party executable notebook, 29 cells, working code for Runtime 1.3/Spark 3.5 and Runtime 2.0/Spark 4.x executed end to end against a real local Spark 3.5 plus Delta 3.2 session with genuine Polars/DuckDB/delta-rs cross-engine interop)",
+  "tier": 4,
+  "summary": "A 29-cell, first-party executable notebook that walks Fabric's full working-practice surface — runtime detection and portable session configuration, engine choice between a Python notebook and Spark, executed Delta best practices (deletion vectors, Change Data Feed, MERGE hygiene, liquid clustering, maintenance), a metadata-driven ingestion loop, and orchestration guidance — as genuinely executed code against a real local Spark 3.5 plus Delta 3.2 session, with Fabric-only pieces (notebookutils, MLVs, V-Order) cleanly guarded so the identical notebook runs unchanged inside Fabric. Its most distinctive real, executed content is a three-way single-node engine interoperability proof: the same real Delta table on disk is queried with Polars' lazy scan_delta, then with DuckDB's delta_scan SQL extension, and a separate table is written entirely with delta-rs (no Spark session at all) and then read back correctly by Spark — genuinely demonstrating, rather than asserting, that these engines interoperate on the same Delta table format. The knowledge base already holds this toolkit's config five-layer precedence, metadata-driven orchestration philosophy, engine-choice GB threshold, and deletion-vector/CDF mechanics in depth from prior sources, so this extraction is deliberately narrow: the runtime-portability technique itself (one profile dict driving both Runtime 1.3 and 2.0 without code branches), the ANSI-strategy-as-migration-testing-parameter idea, the real cross-engine interop demonstration, and the notebook's own measured Delta-operation proof points (deletion-vector metrics, CDF change counts, MERGE row counts) that go beyond what prior sources documented conceptually.",
+  "audience": "Fabric data engineers and platform architects who want one working reference notebook demonstrating that a single codebase can target both Runtime 1.3 and Runtime 2.0 through configuration alone, and who need concrete proof (not just a claim) that Polars, DuckDB, delta-rs, and Spark can all read and write the same Delta table without data corruption or format incompatibility.",
+  "why_it_matters": "Runtime portability and cross-engine interoperability are both frequently asserted in Fabric guidance but rarely demonstrated with genuinely executing code against the same physical table. This notebook's value is that its central claims are proven rather than described: the same session-configuration profile dict drives Runtime 1.3 and 2.0 without an if-version branch in the working code, a table is written entirely outside Spark by delta-rs and correctly read back by Spark afterward, and a DELETE against a deletion-vector-enabled table is checked immediately afterward with DESCRIBE HISTORY's operationMetrics to confirm zero files were rewritten and four deletion vectors were added — turning an abstract mechanism claim into a directly observed, reproducible verification technique.",
+  "takeaways": [
+    "This notebook's runtime-portability approach concentrates every Runtime 1.3-versus-2.0 difference into a profile dict and a build_session_conf() function, so that no other code in the notebook branches on the runtime version; a detect_environment() function distinguishes fabric-1.3 from fabric-2.0 (and their OSS equivalents) solely from whether notebookutils is importable and the installed PySpark major version.",
+    "The notebook frames the ANSI-mode choice on Runtime 2.0 as a parameterized strategy rather than a fixed setting: passing ansi_strategy='ansi_safety' to the session-config builder even while running on Runtime 1.3 (Spark 3.5) is presented as a technique for pre-testing how a workload will behave under Spark 4.x's ANSI-on-by-default semantics before actually migrating the runtime.",
+    "The notebook's real executed engine-choice demonstration builds one real Delta table with Spark and then queries the identical table three different single-node ways without any Spark session: Polars' lazy scan_delta() with a filter, group-by, and sort pushed into the scan; DuckDB's delta_scan() table function queried with plain SQL; and a separate small reference table written entirely by delta-rs (no Spark session at all), which Spark subsequently reads back correctly — demonstrating genuine cross-engine Delta interoperability rather than asserting it.",
+    "The notebook explicitly states delta-rs is legitimate for writing bronze/silver Delta tables from a Python notebook with no Spark session, but is not suitable for gold tables that require V-Order, since delta-rs cannot apply V-Order encoding — the write for any V-Order-requiring gold table must go through Fabric Spark regardless of the data's size.",
+    "This notebook's real executed DELETE against a Delta table with deletion vectors enabled was checked immediately afterward via DESCRIBE HISTORY's operationMetrics field: the operation added four deletion vectors while adding and removing zero physical files, giving a concrete, reproducible verification technique (checking numDeletionVectorsAdded against numAddedFiles/numRemovedFiles in operationMetrics) for confirming deletion vectors are actually engaging on a mutation, rather than only trusting that the table property is set.",
+    "This notebook's real executed MERGE (a full-key ON clause against a source pre-filtered to only the affected date range) and subsequent Change Data Feed read (readChangeFeed with startingVersion bounding the read to only the versions since the last processed point) both produced real row and change-type counts from an actual multi-hundred-thousand-row Delta table, demonstrating the incremental silver-to-gold pattern of persisting the last-processed version, reading only the changes since it, and advancing the watermark without a full table rescan.",
+    "Liquid clustering is demonstrated as a profile-gated feature: on Delta 3.2 (Runtime 1.3) it requires explicitly setting spark.databricks.delta.clusteredTable.enableClusteringTablePreview to true before creating a CLUSTER BY table, while on Delta 4.2 (Runtime 2.0) the same CREATE TABLE ... CLUSTER BY syntax is expected to work without that preview flag — the notebook's own executed run confirmed the preview-flag path works on its local Delta 3.2 session and produced the expected clusteringColumns in DESCRIBE DETAIL.",
+    "The notebook's real executed metadata-driven ingestion loop routed three seeded entities by their configured engine_hint field with zero entity-specific code: a Spark-hinted entity read and wrote through a full Spark DataFrame pipeline, a python-hinted entity was moved entirely through delta-rs with no Spark job at all, and a disabled third entity was skipped — all three outcomes logged to a run-log table from the same unmodified generic loop.",
+    "The notebook closes with a stated six-part rule of thumb distilled from its own six sections: prefer configuration over code for runtime differences, metadata over hard-coding for entity-specific behavior, the smallest engine that fits the data size, Delta table properties set at table-creation time rather than added later, one shared Spark session for many notebooks via runMultiple rather than one session per notebook, and diagnostic logs shipped somewhere queryable before they're needed rather than only reviewed after an incident."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "DeltaLake",
+    "Runtime2",
+    "Polars",
+    "DuckDB",
+    "MetadataDriven",
+    "Notebooks",
+    "PractitionerWhitepaper"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "This notebook's runtime-portability technique concentrates every difference between Fabric Runtime 1.3 (Spark 3.5) and Runtime 2.0 (Spark 4.x) into a single profile dict plus a build_session_conf() function, so that no other code in the notebook branches on runtime version; environment detection itself relies only on whether notebookutils is importable (a convenience heuristic for 'in Fabric') and the installed PySpark major version number (3 versus 4) to distinguish which of the two runtimes is active.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Runtime2", "Configuration", "Portability"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook frames the ANSI-mode setting on Runtime 2.0 as a parameterized migration-testing technique rather than only a final destination setting: passing an 'ansi_safety' strategy value to the session-config builder while still running on Runtime 1.3 (Spark 3.5, where ANSI defaults off) is presented as a way to pre-test how a workload behaves under Spark 4.x's ANSI-on-by-default semantics before actually migrating the runtime, expressing a migration technique as one function parameter rather than a separate procedure.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["ANSI", "Runtime2", "Migration"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's real executed engine-choice demonstration wrote one real 1-million-row Delta table with Spark, then genuinely queried the identical table three different single-node ways with no Spark session involved in the read: Polars' lazy scan_delta() (filter, group-by, and sort pushed into the scan, returning the correct top-5 customers by total order amount), and DuckDB's delta_scan() table function queried with plain SQL (returning correct per-status row counts and revenue totals) — proving cross-engine Delta read compatibility on the exact same table rather than describing it as a general property.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["EngineChoice", "Polars", "DuckDB", "DeltaLake"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's real executed run wrote a small reference Delta table entirely with delta-rs (write_deltalake from a PyArrow table, with no Spark session created or used for the write at all) and then had Spark read that same table back and return the correct row count, genuinely demonstrating that a table written by delta-rs is fully readable by Spark; the notebook explicitly states delta-rs is legitimate for bronze/silver writes from a Python notebook but not for gold tables requiring V-Order, since delta-rs cannot apply V-Order encoding and that write must go through Fabric Spark regardless of the data's size.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["EngineChoice", "DeltaLake", "VOrder"]
+    },
+    {
+      "capability_id": "lakehouse",
+      "text": "This notebook's real executed DELETE against a Delta table with deletion vectors enabled was verified immediately afterward via DESCRIBE HISTORY's operationMetrics field, which recorded numDeletionVectorsAdded of 4 alongside numAddedFiles and numRemovedFiles both at 0 — giving a concrete, reproducible verification technique (checking operationMetrics for a nonzero deletion-vector count paired with a zero or near-zero file-rewrite count) for confirming deletion vectors are actually engaging on a given mutation, distinct from only trusting that the delta.enableDeletionVectors table property is set.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DeletionVectors", "DeltaLake", "Verification"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's real executed MERGE (a full-key ON t.order_id = s.order_id clause against a source DataFrame pre-filtered to only the affected date range before the merge, rather than merging the full source table) and its subsequent Change Data Feed read (readChangeFeed with startingVersion bounding the read to only the table versions since the last processed point) both produced real, verified row and change-type counts against an actual multi-hundred-thousand-row Delta table, demonstrating the incremental silver-to-gold pattern of persisting the last-processed version, reading only the intervening changes, and advancing the watermark without a full table rescan.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Merge", "CDF", "DeltaLake", "IncrementalProcessing"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook demonstrates liquid clustering as a profile-gated, runtime-dependent feature: on Delta 3.2 (Runtime 1.3) it requires explicitly setting spark.databricks.delta.clusteredTable.enableClusteringTablePreview to true before a CREATE TABLE ... CLUSTER BY statement will succeed, while on Delta 4.2 (Runtime 2.0) the identical CLUSTER BY syntax is expected to work without that preview flag; the notebook's real executed run against its local Delta 3.2 session confirmed the preview-flag code path works, with the resulting table's DESCRIBE DETAIL clusteringColumns field correctly listing the configured clustering columns.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": ["LiquidClustering", "Runtime2", "DeltaLake"]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "This notebook's real executed metadata-driven ingestion loop routed three seeded entities entirely by their configured engine_hint field with zero entity-specific code in the loop itself: a Spark-hinted entity was read and written through a full Spark DataFrame pipeline (1,000,000 rows), a python-hinted entity was moved entirely through delta-rs with no Spark job created for it at all (12 rows), and a third entity marked disabled was correctly skipped and logged as SKIPPED_DISABLED — all three distinct outcomes produced by the same unmodified generic loop reading only a JSON configuration document per entity.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["MetadataDriven", "EngineChoice", "Orchestration"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook states that Fabric's Materialized Lake Views can remove orchestration entirely for a transform that is expressible as SQL, positioning MLVs alongside notebookutils.runMultiple() (one shared session for a DAG of notebooks), Spark Job Definitions (hardening non-interactive batch jobs), and Activator (replacing a schedule trigger with an event trigger such as file arrival or a capacity signal) as the set of orchestration alternatives to choose between, with pipelines remaining the correct outer trigger (schedules, Copy activities, alerts) that invokes a single coordinator notebook rather than one pipeline activity per notebook.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["Orchestration", "MaterializedLakeView", "RunMultiple"]
+    }
+  ],
+  "assets": []
+}

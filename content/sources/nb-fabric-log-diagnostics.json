@@ -1,0 +1,47 @@
+{
+  "url": "file:///content/toolkit-source/nb_fabric_log_diagnostics.ipynb",
+  "title": "Fabric Spark Toolkit — nb_fabric_log_diagnostics: a ranked-diagnosis algorithm over the Fabric Spark Monitoring REST API (first-party executable notebook, 14 cells, demo backend exercises the full jobs-to-diagnosis pipeline end to end)",
+  "tier": 4,
+  "summary": "A 14-cell, first-party executable notebook implementing a client for the Fabric Spark Monitoring REST API and, more specifically, the seven-step ranking and synthesis algorithm that turns five separate API calls (jobs, stages, task list, advisor advice, resource usage) into a single ranked diagnosis. The knowledge base already holds this toolkit's REST API endpoint paths, the job-group-id troubleshooting pattern, and the Advisor API from a prior source, so this extraction captures only what's new: the specific ranking logic (skew outranks spill), the corroboration step that cross-checks a spill finding against measured peak memory utilization before presenting it as confirmed, and the explicit 'no findings' branch that concludes data volume rather than an anti-pattern is the cause. All logic is proven end to end against schema-accurate simulated API responses (the notebook is explicit that the live HTTP calls themselves are untested here); the demonstrated ranking and synthesis logic is real, executed code, not just documented behavior.",
+  "audience": "Fabric data engineers who want to automate the manual 'this cell is slow' investigation (list jobs, find the slow one, its stages, check skew, check spill, check advisor findings, check resource usage) into one function call producing a single ranked, actionable diagnosis, and who need the ranking/synthesis logic itself rather than just the underlying API surface.",
+  "why_it_matters": "The prior REST-API source in the knowledge base establishes the endpoint paths, the job-group-id-identifies-the-cell pattern, and the Advisor API's existence, but does not specify how to combine multiple findings into a single prioritized answer when several exist simultaneously, nor how to distinguish a genuinely slow-because-of-data-volume cell from an anti-pattern when no findings fire at all. This notebook supplies both: a fixed ranking order (skew outranks spill) so the diagnosis output is deterministic and actionable rather than an unordered dump, and explicit corroboration logic that treats a spill finding as confirmed only when resource usage independently shows memory near saturation (>=90% peak) in the same window, giving a second, independent signal rather than trusting one API's classification alone.",
+  "takeaways": [
+    "The diagnosis algorithm ranks findings deterministically — skew above spill — so when a stage has both, the output leads with skew (the higher-blast-radius cause: one task dominating wall time) rather than presenting an unordered list the reader must prioritize themselves.",
+    "A spill finding is treated as corroborated, not just asserted, when the same job's independently-queried resource-usage data shows peak memory utilization at or above 90% in the same window — an explicit cross-check between two different API responses (stage-level spill bytes and job-group-level resource usage) rather than trusting either signal alone.",
+    "When no skew, spill, or advisor findings fire at all for the slowest-identified job, the algorithm's explicit conclusion is that the cell is likely slow due to data volume rather than an anti-pattern, with the stated next step being to compare shuffle bytes against pool size before adding capacity — an explicit negative-finding branch, not silence.",
+    "The demonstrated workflow identifies the slow unit of work by jobGroupId (which the toolkit maps 1:1 to the triggering notebook cell) before ever looking at stages, task lists, or advice, so the seven-step chain always starts from 'which cell' rather than 'which stage' — cutting straight to a cell-scoped answer.",
+    "All demonstrated logic — job selection, per-stage skew/spill computation, advisor-finding aggregation, resource-usage corroboration, and the final ranked-diagnosis synthesis — runs end to end in this notebook against schema-accurate simulated API responses; the notebook is explicit that only the live HTTP call path itself is unexercised here, so the ranking and synthesis behavior shown is real executed logic, not documentation."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "Troubleshooting",
+    "DataSkew",
+    "REST",
+    "Notebooks"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "This notebook's ranked-diagnosis algorithm orders findings by a fixed severity ranking (skew ranked above spill) so that when a stage exhibits both signals simultaneously, the synthesized diagnosis output leads with the skew finding rather than presenting both as an unordered list — a deterministic prioritization decision baked into the ranking function, not left to the reader to infer.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataSkew", "Troubleshooting"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's diagnosis logic treats a stage-level spill finding as corroborated rather than merely asserted when the job's independently-queried resource-usage response shows peak memory utilization at or above 90% for that same job group, explicitly cross-checking two separately-fetched API responses (stage spill bytes and job-group resource usage) against each other before presenting the spill cause as confirmed.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Troubleshooting", "REST"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's diagnosis function has an explicit branch for when no skew, spill, or advisor findings are present for the identified slowest job: rather than reporting nothing, it concludes the cell is likely slow due to data volume rather than an anti-pattern, and states the recommended next check is comparing shuffle bytes against pool size before adding nodes.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["Troubleshooting", "Capacity"]
+    }
+  ],
+  "assets": []
+}

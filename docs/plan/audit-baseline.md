@@ -156,10 +156,13 @@ Diagram validation passed: 95 registered diagrams, 95 with authored evidence sid
 Diagram layout validation passed: 95 SVGs at 390px, 768px, 1280px with no text collisions or overflow.
 ```
 
-> **Known documentation error:** [CLAUDE.md:250-251](../../CLAUDE.md) claims
-> `npm run validate:diagrams` "fails on duplicate region geometry". **It does not** — no such check
-> exists in `validate-diagrams.mjs` or `validate-diagram-layout.mjs`. The layout script checks text
-> collision and overflow only. WP2.4 must add the geometry check before harvesting 101 new SVGs.
+> **Update (WP2.4, 2026-08-23):** a duplicate-region-geometry check now exists in
+> `validate-diagrams.mjs`, added in the commit immediately preceding this phase's work. Verified
+> it and found it real but incomplete — `rect`-only, via a lazy forward regex that could in
+> principle match a *different* node's rect. Confirmed 3 of 713 existing nodes (non-rect shapes)
+> silently escaped it. Rewrote it depth-aware and scoped to each node's own `<g>`, covering rect,
+> circle, ellipse, path, transform-positioned rect, and text-only nodes — 713/713 nodes now
+> checked, 0 false failures. `CLAUDE.md:250-251`'s claim is accurate as of this fix.
 
 ## Security & cost
 

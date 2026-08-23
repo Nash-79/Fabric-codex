@@ -1,0 +1,108 @@
+{
+  "url": "file:///content/toolkit-source/nb_api_zip_ingestion.ipynb",
+  "title": "Fabric Spark Toolkit — nb_api_zip_ingestion: rate-limited API and zipped-JSON-over-HTTPS ingestion (first-party executable notebook, 18 cells, real local HTTP server exercising 429/Retry-After backoff, cursor pagination, and streamed zip extraction)",
+  "tier": 4,
+  "summary": "An 18-cell, first-party executable notebook that stands up a real local HTTP server to demonstrate two single-node, network-bound ingestion patterns end to end: a token-bucket-rate-limited, cursor-paginated API crawl that genuinely triggers and recovers from a 429 response with a Retry-After header, and a streamed zip-over-HTTPS download that extracts member JSON files one at a time without ever materializing the whole archive in memory. Both patterns land gzipped NDJSON into datetime-partitioned directories driven by a small `etl_api_config` metadata table, and both runs log an estimated CU cost so ingestion cost is attributable per entity. The knowledge base already holds this toolkit's generic-worker metadata schema and engine-choice threshold from prior sources, so this extraction captures only what is specific to this notebook: the token-bucket-plus-Retry-After backoff mechanics, the streamed zip-extraction technique, and the notebook's own measured CU comparison between the Python-notebook path actually used and an equivalent idle Spark node.",
+  "audience": "Fabric data engineers building ingestion connectors against rate-limited REST APIs or archive-based file drops who need concrete, executed backoff and streaming-extraction code rather than a description of the pattern.",
+  "why_it_matters": "Rate limiting and zip handling are exactly the kind of mechanics a developer gets subtly wrong under time pressure — guessing a backoff delay instead of reading Retry-After, or calling .read() on a multi-gigabyte archive and OOM-ing a single-node kernel. This notebook proves both failure modes are avoidable with a small amount of real, executed code: a token bucket that blocks proactively so a 429 is the exception rather than the norm, a retry loop that only retries 429/5xx (never a client-error 4xx, which is a bug in the request, not a rate limit), and a zip reader that opens one member stream at a time so memory stays flat regardless of archive size. It also gives a concrete, if narrow, CU comparison: the notebook's own logged run put the same crawl at roughly a quarter of the capacity-unit cost on a Python notebook versus an idling Medium Spark node, grounding the toolkit's general engine-choice guidance with one measured data point.",
+  "takeaways": [
+    "A token bucket that blocks proactively before every request (consuming a token, sleeping if none are available) is used specifically so the crawl rarely triggers a 429 at all; the retry-with-backoff loop exists as the safety net for when the server disagrees, not as the primary rate-limiting mechanism.",
+    "The retry loop only retries HTTP 429 and 5xx responses — a 4xx status other than 429 is treated as a bug in the request itself and is re-raised immediately rather than retried, since retrying it would only waste quota without ever succeeding.",
+    "When a 429 response carries a Retry-After header, the notebook honours that exact value rather than computing its own exponential backoff; exponential backoff is used only as the fallback when the server doesn't supply Retry-After.",
+    "The API crawl persists its pagination cursor to a watermark table after every single page fetched, not just at the end of the crawl, so a mid-crawl crash resumes from the last completed page rather than restarting from page zero.",
+    "Landing paths are structured with ingest_date=/ingest_hour= partition segments specifically so a replay of the same crawl window overwrites the same partition rather than duplicating data, and so downstream bronze loads can prune by partition instead of listing every file.",
+    "The zip-over-HTTPS pattern streams the download to local disk in fixed-size chunks (never a single .read() call on the whole response), then opens the zip archive and extracts each member individually via a per-member stream rather than loading the entire archive's contents into memory at once — memory use stays flat regardless of archive size.",
+    "Landed records are written as gzipped NDJSON (one JSON object per line) rather than one large JSON document per file or page, because NDJSON is splittable and substantially cheaper for Spark to read downstream than a single large JSON array.",
+    "The notebook's own logged run compared its actual Python-notebook CU cost for a rate-limited crawl against an estimated cost for the same crawl running on an idling Medium Fabric Spark node (8 vCores) and found the Python-notebook path at roughly one quarter the capacity-unit cost, attributing most of a Spark node's cost in this scenario to sitting idle while honouring the rate limit rather than doing useful work."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "DataEngineering",
+    "PySpark",
+    "Python",
+    "APIIngestion",
+    "RateLimiting",
+    "Notebooks",
+    "MetadataDriven",
+    "Capacity"
+  ],
+  "claims": [
+    {
+      "capability_id": "data-factory",
+      "text": "This notebook's demonstrated rate-limiting pattern is a token bucket that blocks proactively before each request is sent (consuming a token, sleeping if none are available), so the request stream stays under the configured rate and a 429 response is the rare exception rather than the expected outcome; the accompanying retry loop exists as a safety net for when the server disagrees, not as the primary throttling mechanism, and it retries only HTTP 429 and 5xx responses, re-raising any other 4xx immediately since a non-429 client error is treated as a bug in the request rather than something retrying can fix.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "RateLimiting",
+        "APIIngestion",
+        "PythonNotebook"
+      ]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "When a 429 response includes a Retry-After header, this notebook's retry logic honours that exact server-supplied delay rather than computing its own exponential backoff; exponential backoff is used only as a fallback for the case where the server does not supply Retry-After, on the stated reasoning that guessing a backoff when the server has told you the answer is a way crawls get banned.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": [
+        "RateLimiting",
+        "RetryAfter",
+        "APIIngestion"
+      ]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "This notebook's real executed run against a local test HTTP server that deterministically throttles one request with a 429-plus-Retry-After response proved the rate-limit-and-retry mechanics correct end to end: the crawl retrieved all 1,000 expected rows across 5 pages, encountered and successfully recovered from exactly one 429 by honouring the returned Retry-After delay, and the resumable cursor was persisted to a watermark table after every page rather than only at crawl completion.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": [
+        "RateLimiting",
+        "Testing",
+        "APIIngestion"
+      ]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "This notebook's landing path pattern embeds ingest_date=/ingest_hour= partition segments in the write path so that replaying the same crawl window overwrites rather than duplicates data, and so a downstream bronze load can prune by partition instead of listing every landed file; landed records are written as gzipped NDJSON (one JSON object per line) rather than a single large JSON document, because NDJSON is splittable and cheaper for Spark to read than one large array.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": [
+        "Partitioning",
+        "Landing",
+        "APIIngestion"
+      ]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "This notebook's demonstrated zip-over-HTTPS ingestion pattern streams the archive download to local disk in fixed-size chunks rather than calling a single .read() on the whole HTTP response, then opens each member of the archive individually via a per-member stream rather than materializing the entire archive's contents in memory at once — memory usage stays flat regardless of archive size, which the notebook frames as necessary because a whole-response .read() on a multi-gigabyte archive is a single-node out-of-memory failure waiting to happen.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": [
+        "ZipIngestion",
+        "StreamingIO",
+        "PythonNotebook"
+      ]
+    },
+    {
+      "capability_id": "data-factory",
+      "text": "This notebook's real executed zip-ingestion run against a local test HTTP server hosting a 3.7 KB test archive extracted all 3 JSON members to gzipped NDJSON correctly (450 total rows), completing in well under a second, confirming the streamed-download-plus-per-member-extraction code path is correct rather than merely described.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": [
+        "ZipIngestion",
+        "Testing"
+      ]
+    },
+    {
+      "capability_id": "capacity",
+      "text": "This notebook's real logged run compared its own measured Python-notebook capacity-unit cost for a rate-limited API crawl (computed as duration times the Python notebook's default 2 vCores divided by 2) against an estimated capacity-unit cost for the identical crawl running on an idling Medium Fabric Spark node (8 vCores), and found the Python-notebook path at roughly one quarter the capacity-unit cost of the equivalent Spark node, attributing the difference to most of a Spark node's time in this scenario being spent idle while honouring the rate limit rather than doing useful distributed work.",
+      "depth": 3,
+      "type": "fact",
+      "tags": [
+        "Capacity",
+        "Chargeback",
+        "EngineChoice"
+      ]
+    }
+  ],
+  "assets": []
+}

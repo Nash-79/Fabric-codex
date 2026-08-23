@@ -1,0 +1,40 @@
+{
+  "url": "file:///content/toolkit-source/nb_lakehouse_health_audit.ipynb",
+  "title": "Fabric Spark Toolkit — nb_lakehouse_health_audit: table inventory & health report notebook (first-party executable Spark/Delta notebook, read-only observability stage of the toolkit's audit-then-act maintenance pair; staged at content/toolkit-source/)",
+  "tier": 4,
+  "summary": "A six-cell, first-party executable PySpark/Delta notebook that walks every Delta table under a Lakehouse root using only Delta's own metadata APIs (DESCRIBE DETAIL, SHOW TBLPROPERTIES, DESCRIBE HISTORY) and writes the results as a versioned, append-only health report table rather than acting on anything itself. The notebook's saved execution shows it running end to end against four real Delta tables and computing a per-table flag verdict from concrete numeric thresholds. The knowledge base already holds this toolkit's broader maintenance-gating philosophy (conditional maintenance costs nothing when tables are healthy, table-property vs session-config, the 128/256/400MB layer targets) from prior sources, so this extraction is narrow: the specific single-table health-scoring flag taxonomy and its threshold logic, and the deletion-vector-pending counting technique, which were not previously captured at this level of implementation detail.",
+  "audience": "Fabric data engineers building or reviewing an automated Delta table health-audit stage that must decide, per table and without scanning any data, whether OPTIMIZE, REORG PURGE, or VACUUM is warranted.",
+  "why_it_matters": "The toolkit's prior-ingested sources establish that maintenance should be conditional and cheap to check; this notebook is the first source in the knowledge base to show the actual per-table scoring rule a real audit stage applies — four independent flag conditions, each with a concrete numeric threshold, computed entirely from DESCRIBE DETAIL/HISTORY metadata with no data scan. It also demonstrates a specific technique for bounding deletion-vector accounting to only the changes since the last compaction, which avoids double-counting DV additions that OPTIMIZE or REORG already resolved in an earlier run.",
+  "takeaways": [
+    "A Delta table health audit can classify a table's maintenance need using four independent boolean flags computed purely from DESCRIBE DETAIL/HISTORY metadata (no data scan): too-small average file size given a minimum file count, pending deletion-vector rows since the last compaction, a total table size past a threshold that has never been OPTIMIZEd, and a long history with no VACUUM ever recorded.",
+    "Counting deletion-vector-pending rows accurately requires walking DESCRIBE HISTORY from the newest version backward and stopping accumulation as soon as an OPTIMIZE or REORG operation is reached, since deletion vectors added before the last compaction were already resolved by it.",
+    "The notebook's real saved execution against four Delta tables (one plain table, one quarantine table, and two DV+CDF-enabled silver tables) found zero flagged tables, illustrating that an audit stage correctly reports nothing to do rather than forcing action when tables are already within tolerance.",
+    "Writing the health report as an append-only Delta table keyed by run_id, rather than overwriting a single current-state table, keeps a full audit history queryable while a downstream consumer just filters to max(run_id) for the latest state."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "DeltaLake",
+    "Maintenance",
+    "Observability",
+    "Notebooks"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "A demonstrated Delta table health-audit scoring rule computes four independent flags per table purely from Delta metadata APIs, with no data scan: COMPACT fires when a table has at least a minimum file count (demonstrated threshold: 8 files) and an average file size below a small-file threshold (demonstrated threshold: 64MB); PURGE_DV fires when deletion vectors are enabled and the count of deletion-vector-adding rows accumulated since the last OPTIMIZE/REORG (walking DESCRIBE HISTORY backward and stopping at the most recent compaction operation) is greater than zero; NEVER_OPTIMIZED fires when no OPTIMIZE appears anywhere in DESCRIBE HISTORY and total table size exceeds a threshold (demonstrated threshold: 256MB); and VACUUM_OVERDUE fires when no VACUUM operation appears in history and the history itself has grown past a length threshold (demonstrated threshold: 20 versions). A table with none of these flags is scored OK.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DeltaLake", "Maintenance", "Observability", "PySpark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's real saved execution audited four Delta tables (a plain table, a quarantine table, and two deletion-vector-and-CDF-enabled silver tables) via DESCRIBE DETAIL/TBLPROPERTIES/HISTORY, wrote the results to an append-only versioned health-report Delta table keyed by run_id, and every table scored OK with zero flags raised — demonstrating the audit stage correctly reporting no maintenance action needed when tables are already within the defined thresholds, rather than manufacturing work.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DeltaLake", "Maintenance", "Observability"]
+    }
+  ],
+  "assets": []
+}

@@ -1,0 +1,55 @@
+{
+  "url": "file:///content/toolkit-source/nb_data_quality.ipynb",
+  "title": "Fabric Spark Toolkit — nb_data_quality: declarative quality rules, quarantine, severity gates (first-party executable Spark/Delta notebook demonstrating rules-as-data DQ enforcement; staged at content/toolkit-source/)",
+  "tier": 4,
+  "summary": "A six-cell, first-party executable PySpark/Delta notebook implementing data quality as a declarative rules table (rule_id, table_path, kind, JSON params, severity) evaluated by one generic runner that never changes when a rule is added, with two severity behaviors: error-severity failures raise and stop the pipeline, warn-severity failures quarantine only the offending rows to a sibling Delta table and let the pipeline continue. This rules-as-data architecture, its severity-gating behavior, and its quarantine mechanism are not covered by any prior-ingested toolkit source, so the full pattern is extracted here, grounded in the notebook's real saved execution: five rules of five distinct kinds ran against a 100,000-row table, four passed, one (an accepted_values check) failed as a warning and quarantined exactly 14,286 rows, and the pipeline completed successfully rather than halting.",
+  "audience": "Fabric data engineers designing a reusable data-quality enforcement layer that must support adding new checks without touching runner code, and that must distinguish between violations severe enough to halt a pipeline and violations that should be set aside for review without blocking downstream processing.",
+  "why_it_matters": "This is the first source in the knowledge base to document a quality-rules-as-data pattern for Fabric Spark: a Delta (in production, SQL Database-resident) rules table holds each check as a row of metadata rather than as bespoke pipeline code, so operators add or change checks by inserting or updating rows, never by editing or redeploying the runner notebook. The severity-gate behavior is a concrete, load-bearing pipeline-control mechanism (an assertion on any error-severity failure that stops the whole run) paired with a non-blocking quarantine path for warn-severity failures, demonstrated with a specific, non-trivial real quarantine count (14,286 of 100,000 rows, 14.3%) rather than a token example.",
+  "takeaways": [
+    "Data quality rules stored as rows in a Delta table (kind, JSON params, severity) evaluated by one generic runner function let new checks be added by inserting metadata rather than by writing or deploying new pipeline code, mirroring the toolkit's broader metadata-driven orchestration philosophy applied specifically to quality enforcement.",
+    "A demonstrated five-rule-kind vocabulary (min_rows, not_null, unique, accepted_values, custom_sql) covers the common data-quality check shapes with one column of JSON parameters per kind, and the runner dispatches on the kind string to build the appropriate PySpark predicate.",
+    "Severity is a per-rule property that changes pipeline control flow, not just a log label: an error-severity rule that fails raises an assertion that stops the notebook (and therefore the pipeline) entirely, while a warn-severity rule that fails is recorded as WARN and does not stop anything.",
+    "A warn-severity failure quarantines only the rows that violated that specific rule to a table-specific quarantine location (the source table's path suffixed _quarantine), tagged with the triggering rule_id and run_id, rather than either discarding the bad rows silently or blocking the whole batch on their account.",
+    "The notebook's real saved execution ran five rules against a 100,000-row demo orders table: four passed outright (min_rows, not_null, unique, and a custom_sql check on amount >= 0), one accepted_values rule failed as a WARN because 14,286 rows had a status value outside the accepted set, those 14,286 rows were quarantined, and the run completed as a success (0 hard failures) rather than halting — concrete proof the severity-gate and quarantine mechanism behave as designed rather than as an untested claim."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "DeltaLake",
+    "DataQuality",
+    "Notebooks",
+    "MetadataDriven"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "A demonstrated data-quality architecture stores each check as a row in a rules table (rule_id, target table path, a kind string, a JSON params column, and a severity of error or warn) evaluated by one generic runner that dispatches on the kind string to build the corresponding PySpark predicate; the runner code itself never changes when a new rule is added, since adding a check means inserting a new metadata row (in production, into a Fabric SQL Database table alongside other ETL metadata) rather than editing or redeploying the notebook.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataQuality", "MetadataDriven", "PySpark", "DeltaLake"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A demonstrated five-kind data-quality rule vocabulary and its JSON parameter shape: min_rows ({min: N}) counts total rows; not_null ({column}) counts nulls in a column; unique ({column}) groups by the column and counts groups with count > 1; accepted_values ({column, values}) counts rows whose column value is outside an allow-list; and custom_sql ({sql}) counts rows failing an arbitrary boolean SQL predicate — each returning a boolean pass/fail, a human-readable observed-metric string, and (for warn-severity failures) the DataFrame of offending rows.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["DataQuality", "PySpark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Rule severity directly controls pipeline flow rather than being a log-only label: this notebook's error-severity rule failures are tracked in a hard_fail flag that triggers a Python assert after all rules have run, stopping the notebook (and therefore the pipeline) on any error-severity violation, while warn-severity failures never trip that assert and the pipeline continues to completion regardless of how many warn-severity rules fail.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataQuality", "PySpark", "Orchestration"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A warn-severity rule failure quarantines only the specific rows that violated that rule — written via Delta append, tagged with the triggering rule_id and run_id as extra columns — to a quarantine table located at the source table's path suffixed _quarantine, rather than discarding the offending rows or blocking the rest of the batch; the notebook's real execution demonstrated this against a genuine violation: 14,286 of 100,000 rows failed an accepted_values check on a status column and were quarantined, while the remaining rows and the pipeline run as a whole proceeded successfully.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["DataQuality", "DeltaLake", "PySpark"]
+    }
+  ],
+  "assets": []
+}

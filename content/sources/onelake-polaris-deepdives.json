@@ -1,0 +1,101 @@
+{
+  "url": "file:///content/toolkit-source/onelake_polaris_deepdives.html",
+  "title": "OneLake Storage, Polaris Distributed SQL & Direct Lake Deep Dives (first-party architectural guide covering OneLake shortcut identity resolution, Polaris's distributed SQL compilation pipeline, Direct Lake file-fragmentation diagnostics, and the Fabric SQL Database OneLake shadow-replica query pattern; staged at content/toolkit-source/)",
+  "tier": 4,
+  "summary": "A first-party architectural guide to Microsoft Fabric's storage and distributed query tier, covering four areas: how OneLake resolves shortcut access through three identity-resolution paths behind a security broker; a summarized walkthrough of the Polaris distributed SQL engine's compilation-to-result pipeline, including the client-facing result-delivery protocol; a diagnostic T-SQL query pattern for checking Delta table file fragmentation before publishing a Direct Lake semantic model; and a PySpark pattern for querying a Fabric SQL Database's automatic OneLake replica alongside lakehouse data for HTAP-style analytics.",
+  "audience": "Data platform engineers and architects who need a working mental model of how OneLake authorizes shortcut access, how Polaris turns a submitted SQL query into a streamed result, and practical diagnostics for keeping Direct Lake-backed Delta tables healthy.",
+  "why_it_matters": "OneLake shortcuts and Polaris are both widely used but sparsely documented internals in the public Microsoft Fabric literature; this source is useful less for headline facts (most of its deeper Polaris compilation detail already exists in the KB at greater depth from Microsoft's own VLDB paper) and more for two practical, previously-uncaptured items: a concrete pre-publish diagnostic query for Direct Lake file health, and a worked pattern for treating a Fabric SQL Database's OneLake replica as just another Spark-readable table.",
+  "takeaways": [
+    "OneLake frames shortcut authorization as resolving through one security broker across three distinct identity paths depending on shortcut type: internal shortcuts pass through the calling user's own Entra token, external shortcuts use a workspace-stored SAS/key bound to a cloud connection, and delegated shortcuts run under a consumer-specific application role rather than the querying user's identity.",
+    "The Polaris distributed SQL engine's compilation pipeline (two-phase Cascades optimization, cache-affinitized task placement, stateless workers) is described here at a summary level; the Fabric Atlas KB already holds much deeper Polaris internals from Microsoft's own published VLDB paper, so this source's incremental contribution on Polaris is narrower: it explicitly names which Fabric surfaces run on Polaris (the Data Warehouse and the automatic SQL analytics endpoint over Lakehouse Delta tables share the same engine) and names the client-facing result-delivery step — results stream back over the TDS protocol for sub-second client response.",
+    "A concrete T-SQL diagnostic pattern — querying sys.tables cross-applied with sys.dm_delta_files — surfaces per-table Parquet file counts, total size, and average file size, offered as a pre-publish health check for tables about to back a Direct Lake semantic model.",
+    "Fabric SQL Database's continuous, automatic replication of its data into OneLake as Delta tables is treated here as directly Spark-readable: a PySpark pattern reads the replicated table and joins it with lakehouse gold data without touching the transactional (OLTP) engine at all.",
+    "Two claims in this source's diagrams and callouts — that deleting a shortcut object only removes the metadata pointer while deleting files through the shortcut path deletes the underlying source data, and that DirectLake-over-SQL access forces delegated (not per-user) identity — restate facts already captured in the Fabric Atlas KB from a prior OneLake shortcuts source, so they are not re-extracted as new claims here."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "OneLake",
+    "Polaris",
+    "DirectLake",
+    "Shortcuts",
+    "SQLDatabase",
+    "PySpark",
+    "TSQL",
+    "PractitionerWhitepaper"
+  ],
+  "claims": [
+    {
+      "capability_id": "onelake",
+      "text": "OneLake resolves shortcut access requests through a single security broker that routes to one of three identity paths depending on shortcut type: an internal shortcut passes through the querying user's own Entra token, an external shortcut uses a workspace-stored SAS token or key bound to a cloud connection, and a delegated shortcut runs under a consumer-specific application role distinct from the querying user's own identity.",
+      "depth": 3,
+      "type": "concept",
+      "tags": [
+        "OneLake",
+        "Shortcuts",
+        "Security",
+        "Identity"
+      ]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "This document states Polaris is the distributed engine that powers both the Fabric Data Warehouse and the automatically-generated SQL analytics endpoint over Lakehouse Delta tables, meaning both surfaces share the same underlying stateless distributed query engine rather than each running a separate SQL implementation.",
+      "depth": 2,
+      "type": "fact",
+      "tags": [
+        "Polaris",
+        "Warehouse",
+        "SQLAnalyticsEndpoint",
+        "Lakehouse"
+      ]
+    },
+    {
+      "capability_id": "polaris",
+      "text": "This document describes Polaris returning query results to the client over the TDS (Tabular Data Stream) protocol as a direct stream from the final execution stage, framed as the mechanism enabling sub-second result delivery once compilation and task execution have completed.",
+      "depth": 4,
+      "type": "internal",
+      "tags": [
+        "Polaris",
+        "TDS",
+        "QueryExecution"
+      ]
+    },
+    {
+      "capability_id": "direct-lake",
+      "text": "A practitioner diagnostic pattern for pre-publish Direct Lake health checks: querying sys.tables cross-applied with the sys.dm_delta_files dynamic management function against the SQL analytics endpoint or warehouse returns, per table, the total Parquet file count, aggregate size in MB, and average file size in MB — used to spot excessive file fragmentation before a table backs a Direct Lake semantic model.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "DirectLake",
+        "Diagnostics",
+        "TSQL",
+        "FileFragmentation"
+      ]
+    },
+    {
+      "capability_id": "sql-database",
+      "text": "A practitioner PySpark pattern for Fabric SQL Database HTAP workloads: read the database's automatically-replicated OneLake shadow copy directly as a Spark table (spark.read.table on the database's dbo schema) and join it with lakehouse gold-layer data, querying recent transactional data alongside historical analytical data without issuing any query against the live OLTP engine itself.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": [
+        "SQLDatabase",
+        "HTAP",
+        "PySpark",
+        "OneLake"
+      ]
+    }
+  ],
+  "assets": [
+    {
+      "kind": "referenced",
+      "url": "file:///content/toolkit-source/onelake_polaris_deepdives.html",
+      "caption": "OneLake Shortcut Identity & Security Resolution — an inline SVG diagram showing a consumer request (Power BI / Spark / T-SQL) resolving through a OneLake Security Broker across three identity paths (internal pass-through, external SAS/key, delegated app role) to a physical storage target (lakehouse Parquet data or external ADLS/S3 via zero-copy REST translation).",
+      "attribution": "First-party diagram from the user-authored fabric_spark_toolkit reference (content/toolkit-source/onelake_polaris_deepdives.html); inline SVG, not re-hosted."
+    },
+    {
+      "kind": "referenced",
+      "url": "file:///content/toolkit-source/onelake_polaris_deepdives.html",
+      "caption": "Polaris Two-Phase Cascades Compilation & Distributed Scheduling — an inline SVG diagram walking SQL submission, Cascades compiler optimization (task fusion vs. data-move enforcement), cache-affinitized workload scheduling, and TDS result streaming.",
+      "attribution": "First-party diagram from the user-authored fabric_spark_toolkit reference (content/toolkit-source/onelake_polaris_deepdives.html); inline SVG, not re-hosted."
+    }
+  ]
+}

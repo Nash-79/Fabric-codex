@@ -1,0 +1,62 @@
+{
+  "url": "file:///content/toolkit-source/nb_eventlog_analysis.ipynb",
+  "title": "Fabric Spark Toolkit — nb_eventlog_analysis: parsing a real Spark event log into a ranked diagnosis (first-party executable notebook, 15 cells, deliberately skewed join proves the skew detector on genuine data)",
+  "tier": 4,
+  "summary": "A 15-cell, first-party executable notebook that downloads or reads a Spark event log — the raw SparkListener JSON-lines stream the Spark UI itself is rendered from — and parses it directly into stage-level metrics and findings, rather than going through the Fabric REST API. The knowledge base already holds this toolkit's REST-API surface (event log download path, History-Server-compatible endpoints, five common URL-parsing failure causes) from a prior source, so this extraction captures only the genuinely new material: the URL-shape normalization the notebook performs across six different ways a Fabric application URL can be pasted, and the stage-ranking and skew-detection algorithm itself, proved against a real Spark session run live in this notebook with a deliberately skewed join, with the actual measured skew ratio and timings the run produced.",
+  "audience": "Fabric data engineers debugging a specific slow Spark application who have (or can download) its event log and want a stage-level, ranked diagnosis derived directly from the raw event stream rather than reading the Spark UI tab by tab.",
+  "why_it_matters": "The prior REST-API source in the knowledge base documents the endpoints for fetching a Fabric Spark event log, but not how to turn the downloaded log into an actual diagnosis once you have it, nor how forgiving the tooling can be about the many different shapes a Fabric application URL arrives in (a full REST URL, a portal URL with ids in the query string, a URL missing the attempt-id segment, one wrapped in quotes with a trailing fragment). This notebook proves both: a URL-normalization layer that accepts six real-world variants and rejects only genuinely unparseable input with an actionable error, and a stage-ranking-plus-skew-detection algorithm exercised against a real Spark session with a deliberately skewed join, producing a real measured 3.8x task-duration skew ratio rather than an assumed one.",
+  "takeaways": [
+    "The notebook's URL parser accepts at least six different real-world shapes for the same underlying Spark application reference (full REST URL, URL missing the /attemptId/ segment, a relative path with no host, a URL wrapped in quotes with query string and fragment, a Spark Job Definition variant, and a portal URL carrying the ids in query parameters) and normalizes all of them to the same workspace/item/livySession/application identifiers, defaulting a missing attempt id to 1.",
+    "Malformed input is rejected with an error that names exactly what is missing (e.g. 'expected 3 GUIDs but found 0; no application id of the form application_<epoch>_<seq> found') rather than a generic parse failure, so the fix is immediately obvious from the message alone.",
+    "The stage-ranking algorithm sorts a job's stages by wall-clock share of total application duration ('critical path'), computing each stage's percentage of total time alongside its own skew ratio and spill volume in one pass, so the slowest stage is identified by actual time contribution rather than task count or stage order.",
+    "Skew is computed as the ratio of a stage's maximum task duration to its median task duration; the notebook's real executed run against a deliberately skewed join (70% of rows mapped to one join key) measured a genuine 3.8x skew ratio (1733ms max vs 457ms median) on the affected stage, which the notebook's own assertion confirms exceeded its 3.0x flagging threshold — a real detection, not an assumed one.",
+    "The notebook demonstrates that Spark configuration values relevant to diagnosis (AQE enabled/disabled, shuffle partition count, NEE/ANSI flags) are read directly out of the event log's SparkListenerEnvironmentUpdate event rather than assumed from notebook-level settings, so the diagnosis reflects the configuration the job actually ran under even if that differs from current session defaults."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "EventLog",
+    "Troubleshooting",
+    "DataSkew",
+    "Notebooks"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "This notebook's Fabric-application-URL parser accepts at least six different real-world shapes of the same underlying reference (full REST URL, URL missing the /attemptId/ path segment, a relative path lacking a host, a URL wrapped in quotes with a trailing query string and fragment, a Spark Job Definition variant, and a portal URL carrying the workspace/item/session ids as query parameters rather than path segments) and normalizes every one to the same workspace/item-kind/item/livySession/application identifier tuple, defaulting a missing attempt id to 1 rather than failing.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["EventLog", "Troubleshooting", "Notebooks"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's URL parser rejects genuinely unparseable input with a message naming exactly which identifiers could not be found (for example, stating it expected 3 GUIDs but found 0, and that no application id of the form application_<epoch>_<seq> was present) rather than returning a generic parse error, so the required correction is legible from the exception text alone.",
+      "depth": 2,
+      "type": "pattern",
+      "tags": ["EventLog", "Troubleshooting"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's stage-ranking algorithm sorts a Spark application's stages by each stage's percentage share of total application wall-clock duration (the 'critical path'), reporting per-stage skew ratio and spill volume alongside that share in a single pass over the parsed event log, so the stage most worth investigating is identified by actual measured time contribution rather than by task count, stage id order, or shuffle bytes alone.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": ["EventLog", "Troubleshooting", "DataSkew"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook's real saved execution ran a deliberately skewed join live in the notebook (70% of a 1.2M-row left table's rows mapped to a single join key against a 500-row right table) and its event-log-derived skew detector measured a genuine 3.8x task-duration skew ratio (max task 1733ms versus median 457ms across 16 tasks) on the affected stage, which exceeded the notebook's own 3.0x flagging threshold and produced a critical-severity finding with the recommended fix (confirm AQE skew-join is enabled, salt the key, or check whether the hot key is NULL) — genuine measured proof rather than an asserted or fixture-based detection.",
+      "depth": 4,
+      "type": "fact",
+      "tags": ["DataSkew", "EventLog", "PySpark"]
+    },
+    {
+      "capability_id": "spark",
+      "text": "This notebook demonstrates that Spark configuration values material to diagnosis (whether AQE was enabled, the shuffle partition count, and NEE/ANSI flags) can be recovered directly from the event log's own environment-update event rather than assumed from the analyst's current notebook session, and its real executed run confirmed the recovered shuffle-partition-count value (16) matched the value the job was actually configured with, not a default or guess.",
+      "depth": 3,
+      "type": "internal",
+      "tags": ["EventLog", "Troubleshooting"]
+    }
+  ],
+  "assets": []
+}

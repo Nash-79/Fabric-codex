@@ -1,0 +1,445 @@
+{
+  "url": "file:///content/toolkit-source/fabric_coding_standards.md",
+  "title": "Fabric Coding Standards — Data Platform Engineering (v2): notebooks-as-jobs, PySpark performance, Spark SQL, Delta, NEE, and metadata-driven orchestration, with worked before/after examples and version tags per Fabric Runtime (first-party practitioner standards doc; staged at content/toolkit-source/)",
+  "tier": 4,
+  "summary": "A first-party coding-standards document for Fabric notebooks and Spark code, organized around the principle that a notebook is a job in a platform, not a script on a laptop. Nine sections of paired BAD/GOOD examples, each tagged with a Fabric Runtime compatibility marker (works on both 1.3 and 2.0, requires 2.0 only, or differs by version) and cross-referenced to analyzer finding codes.",
+  "audience": "Data engineers and platform teams writing production Fabric notebooks, and anyone reviewing notebook code for the difference between a script that happens to run and a job that survives a deployment pipeline.",
+  "why_it_matters": "Most Fabric guidance describes what a feature does; this document is prescriptive about what to do and not do, with concrete before/after code for each rule and an explicit compatibility marker for Runtime 1.3 vs 2.0 — closing the gap between 'AQE exists' and 'here is the anti-pattern that defeats it, and the fix.'",
+  "takeaways": [
+    "Session-start-scope Spark settings (executor memory, memory fraction) raise AnalysisException[CANNOT_MODIFY_CONFIG] if set via spark.conf.set on a live session; they must go in %%configure or the Environment, while only runtime-mutable keys like shuffle partition count belong in spark.conf.set.",
+    "Under the Native Execution Engine, one Python UDF does not just cost its own row-at-a-time overhead — it drops the entire enclosing operator to JVM execution, which is a materially larger performance cliff than the traditional 'UDFs are slow' framing suggests.",
+    "Gold tables serving a Direct Lake semantic model have three non-negotiable table properties (V-Order, deletion vectors, a 7-day-minimum file retention) that must be set at table creation, because they are table properties, not session settings, and survive writers that forget to set them.",
+    "A practitioner engine-choice rule: a single-node Python notebook with Polars, DuckDB, or delta-rs is usually the cheaper answer for small data, with two hard overrides — V-Order gold writes and genuinely distributed shuffles both require Spark regardless of size.",
+    "Never partition and cluster the same Delta table; under roughly 1 TB, partitioning usually hurts and clustering should be preferred, with partitioning reserved for genuine retention-boundary needs."
+  ],
+  "tags": [
+    "MicrosoftFabric",
+    "Spark",
+    "PySpark",
+    "CodingStandards",
+    "DeltaLake",
+    "NativeExecutionEngine",
+    "Performance",
+    "BestPractices"
+  ],
+  "claims": [
+    {
+      "capability_id": "spark",
+      "text": "A Fabric notebook parameterized from metadata (a parameters cell resolving config per entity ID) rather than cloned once per source table means adding a new source is a metadata insert, not a new notebook and a pull request — the standards document frames this as the single highest-leverage habit for notebooks that will scale past a handful of sources.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "Notebooks",
+        "MetadataDriven",
+        "L010"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A notebook activity that catches a write exception and silently passes lets the orchestrator see success while downstream consumers ingest incomplete or missing data; the correct pattern logs the error with run context (entity, error text, Spark application ID) to a run log and re-raises so the activity genuinely fails.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": [
+        "ErrorHandling",
+        "Orchestration",
+        "L012"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Session-start-scope Spark configuration keys (such as executor memory and memory fraction) raise AnalysisException with error class CANNOT_MODIFY_CONFIG if set via spark.conf.set after the session has started; they must be set via a %%configure cell (the notebook's first cell) or the attached Environment's Spark properties, while only runtime-mutable keys like spark.sql.shuffle.partitions belong in a live spark.conf.set call.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": [
+        "Configuration",
+        "SessionScope",
+        "L009"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Hard-coding an abfss:// path with a literal workspace or lakehouse GUID breaks the moment a notebook is deployed to a different stage (test, prod) via a deployment pipeline; Fabric injects the current session's workspace and lakehouse identifiers as the trident.workspace.id and trident.lakehouse.id Spark conf keys, which should be read at runtime instead — or, where the lakehouse is already attached to the notebook, paths can be skipped entirely in favor of spark.read.table().",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "Notebooks",
+        "DeploymentPipelines",
+        "L013"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The trident.workspace.id and trident.lakehouse.id Spark conf keys are populated automatically by Fabric at session start and are absent when code runs outside a Fabric session (e.g. local testing), so code reading them for path construction should guard for a None/missing value rather than assume they are always present.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": [
+        "Configuration",
+        "LocalDevelopment"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A row-at-a-time Python UDF is opaque to Catalyst (the optimizer cannot see inside it), forces per-row JVM-to-Python serialization, and breaks whole-stage code generation; the standards document's recommended replacement is built-in Spark SQL functions, which stay Catalyst-visible and codegen-fused, with a SQL UDF (Runtime 2.0 only) as a catalog-resident alternative when shared custom logic is genuinely required.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": [
+        "UDF",
+        "Performance",
+        "L003",
+        "N002",
+        "P003"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "When custom row-level logic is genuinely unavoidable, a pandas UDF (@pandas_udf, Arrow-backed and vectorized) is the recommended fallback over a plain row-at-a-time UDF, distinguishable in the physical plan by an ArrowEvalPython node rather than BatchEvalPython.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "UDF",
+        "QueryPlan",
+        "Performance"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Iterating over the results of df.collect() in a driver-side Python for-loop produces O(n) py4j round trips with zero cluster parallelism; the standards document's fix is expressing the same logic as a distributed join or window operation (e.g. a broadcast join plus a conditional column) so the work runs across executors instead of the driver.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": [
+        "DriverLoops",
+        "Performance",
+        "L017"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Calling df.toPandas() or summing values from df.collect() on the driver for a large DataFrame is identified as the number-one cause of driver out-of-memory errors; the recommended pattern is aggregating on executors (e.g. df.agg(F.sum(...)).collect()) and only ever collecting a small, deliberately bounded result such as df.limit(1000).toPandas().",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": [
+        "DriverMaterialization",
+        "OOM",
+        "L001",
+        "L002"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Casting a join key on one side of a join (e.g. .cast('string') to match a mismatched type) defeats equi-join detection and column statistics used for join planning; the standards document's fix is normalizing the column's type once during the bronze-to-silver transformation, so the join at query time is a native, statistics-visible equi-join that Adaptive Query Execution can convert to a broadcast join at runtime.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": [
+        "JoinKeys",
+        "QueryPlan",
+        "S004",
+        "P008"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Hard-coding a fixed repartition or coalesce(1) partition count on a Delta write is discouraged in favor of letting Adaptive Query Execution size shuffle partitions dynamically via spark.sql.adaptive.advisoryPartitionSizeInBytes, combined with Optimize Write (a Fabric default) sizing output files — manual partition counts fight both mechanisms rather than working with them.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": [
+        "Partitioning",
+        "AQE",
+        "L006",
+        "L007"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A DataFrame cached with .cache() and never released competes with execution memory for the remainder of the session; the standards document's rule is caching only DataFrames reused two or more times, and explicitly calling .unpersist() once the reuse window ends.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": [
+        "Caching",
+        "Memory",
+        "L005"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Reading a CSV with inferSchema=true costs an extra full data scan to determine types and risks type drift between runs as the underlying data changes; the recommended pattern is deriving an explicit StructType schema from stored metadata (e.g. a metadata-store entity definition) and passing it to spark.read.schema(), which is both faster and stable across runs.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": [
+        "SchemaInference",
+        "Metadata",
+        "L004"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Interpolating a literal value directly into a spark.sql() f-string query text is both an injection risk and produces a distinct query text per value, which defeats Spark's query-plan caching; the standards document's fix is named bound parameters via the args= keyword argument to spark.sql(), which keeps the query text stable and plan-cacheable across calls with different parameter values.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": [
+        "SparkSQL",
+        "Parameterization",
+        "Security",
+        "S001"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Computing the latest record per key via a self-join against a MAX(updated_at) subquery requires two passes and two shuffles and can duplicate rows on timestamp ties; a single ROW_NUMBER() OVER (PARTITION BY key ORDER BY updated_at DESC) window function computes the same result in one pass, one shuffle, and deterministically breaks ties via a secondary sort key.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "SparkSQL",
+        "WindowFunctions",
+        "Performance"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A NOT IN (subquery) exclusion filter returns zero rows for the entire query if any single row in the subquery's result is NULL, because SQL's three-valued NULL logic makes every NOT IN comparison against a NULL evaluate to unknown rather than true; the NULL-safe, broadcast-plannable replacement is a LEFT ANTI JOIN, which has no such failure mode.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": [
+        "SparkSQL",
+        "NullHandling",
+        "S002"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Applying a function to a column in a WHERE clause (e.g. YEAR(order_date) = 2026 or UPPER(status) = 'COMPLETE') defeats predicate pushdown — the physical plan shows PushedFilters: [] and the engine performs a full scan; the fix is transforming the literal instead of the column (e.g. a date-range comparison against the raw order_date column, and lower-casing the literal to match stored-case data).",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": [
+        "PredicatePushdown",
+        "QueryPlan",
+        "S005",
+        "P006"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The same CAST(customer_ref AS INT) statement returns NULL silently under Spark 3.5 (Runtime 1.3) but throws under Spark 4.x (Runtime 2.0), because ANSI mode is on by default in Runtime 2.0; the version-portable, explicit form is try_cast (or try_divide / try_add for arithmetic), used deliberately for known-dirty data rather than disabling ANSI globally as a workaround.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": [
+        "ANSI",
+        "Runtime",
+        "ErrorHandling"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Runtime 2.0 (Spark 4.x) supports SQL scripting (a BEGIN...FOR...END FOR...END block) that expresses multi-step, per-region logic as one reviewable SQL unit, replacing a Runtime 1.3 pattern of a Python for-loop issuing one spark.sql() f-string INSERT per region — the SQL-scripting form keeps the whole unit in one place rather than fragmenting control flow between Python and generated SQL text.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "SparkSQL",
+        "SqlScripting",
+        "Runtime2"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A Delta MERGE with a partial or unfiltered source condition rewrites most of the target table; the fix is pre-filtering the source to the affected slice (e.g. rows since the last watermark) and matching on the full business key, then checking numTargetFilesAdded and numTargetFilesRemoved in DESCRIBE HISTORY to confirm the rewrite amplification actually shrank.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "DeltaLake",
+        "Merge",
+        "L018"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A mutation-heavy silver Delta table should set delta.enableDeletionVectors and delta.enableChangeDataFeed as table properties at CREATE TABLE time rather than after the fact, so MERGE and DELETE operations mark rows instead of rewriting whole files from the table's first write, and downstream consumers can read only what changed from the start.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "DeltaLake",
+        "TableProperties",
+        "CDF"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Liquid clustering on Delta tables is preview-gated behind an explicit SET spark.databricks.delta.clusteredTable.enableClusteringTablePreview = true flag on Runtime 1.3 (Delta 3.2), and is standard with no preview flag required on Runtime 2.0 (Delta 4.2) — the CREATE TABLE ... CLUSTER BY syntax itself is identical across both versions.",
+      "depth": 3,
+      "type": "fact",
+      "tags": [
+        "DeltaLake",
+        "LiquidClustering",
+        "Runtime"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A Delta table should never be both partitioned and clustered; under roughly 1 TB of data, partitioning usually hurts performance, and the standards document's guidance is reserving partitioning for genuine retention-boundary needs (e.g. dropping old partitions wholesale) while defaulting to liquid clustering otherwise.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": [
+        "DeltaLake",
+        "Partitioning",
+        "LiquidClustering"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Rebuilding a gold aggregate table from scratch on every run (INSERT OVERWRITE ... SELECT ... FROM silver_table) scales cost with the full history of the source table rather than with the volume of actual change; the incremental alternative reads only rows changed since the last processed version via Change Data Feed (readChangeFeed=true, startingVersion=last_version) and merges just that slice into gold.",
+      "depth": 4,
+      "type": "antipattern",
+      "tags": [
+        "DeltaLake",
+        "CDF",
+        "IncrementalProcessing"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Gold Delta tables read by a Direct Lake semantic model carry three non-negotiable table properties set at creation — delta.parquet.vorder.enabled (Direct Lake transcoding), delta.enableDeletionVectors, and delta.deletedFileRetentionDuration set to at least 'interval 7 days' — plus CLUSTER BY rather than partitionBy, because these are table properties that survive writers who forget to set them, unlike a session-scoped setting.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "DeltaLake",
+        "DirectLake",
+        "L019",
+        "L021"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Running VACUUM with a retention period below 168 hours (7 days) against a gold table serving Direct Lake, or disabling the retention duration check (spark.databricks.delta.retentionDurationCheck.enabled = false) to force a shorter retention, risks deleting files a Direct Lake semantic model may still be framed against; 168 hours is described as the floor, not a starting point to negotiate down from.",
+      "depth": 4,
+      "type": "gotcha",
+      "tags": [
+        "DeltaLake",
+        "DirectLake",
+        "Vacuum",
+        "L020"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "V-Order is deliberately scoped to gold-layer tables only in the standards document's guidance: it trades write throughput for a read-optimized layout, which is pure overhead on bronze or landing tables that no downstream consumer directly serves queries against.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "DeltaLake",
+        "VOrder",
+        "Performance"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Reading a chain of un-materialized transformations (JSON source, a UDF, then nested-field extraction) forces the query through three separate Native Execution Engine fallback tiers in sequence; the standards document's fix is landing raw JSON into Delta once at the ingestion edge, then reading from that Delta table with only built-in functions on flat columns for subsequent transforms, keeping the hot path native end to end.",
+      "depth": 5,
+      "type": "pattern",
+      "tags": [
+        "NativeExecutionEngine",
+        "Fallback",
+        "N001",
+        "N002",
+        "N005"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "On Runtime 2.0, enabling spark.native.enabled=true does not guarantee native execution, because ANSI mode is on by default and the Native Execution Engine falls back under ANSI — the standards document's remediation is deliberately choosing an ANSI strategy per workload at session start (native_speed, which disables ANSI in favor of native throughput, or ansi_safety, which keeps ANSI guards and accepts the JVM path) rather than leaving the interaction unexamined.",
+      "depth": 5,
+      "type": "gotcha",
+      "tags": [
+        "NativeExecutionEngine",
+        "ANSI",
+        "N003"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "The Native Execution Engine's Velox operators run in native C++ outside the JVM heap, drawing from Spark's off-heap memory pool, which is disabled by default; enabling spark.native.enabled without also enabling spark.memory.offHeap.enabled and sizing spark.memory.offHeap.size causes the native engine to allocate into whatever memory the container has left, surfacing as native allocation failures rather than a recognizable Java OOM.",
+      "depth": 5,
+      "type": "internal",
+      "tags": [
+        "NativeExecutionEngine",
+        "OffHeapMemory",
+        "Internals"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "spark.native.enabled, spark.memory.offHeap.enabled, and spark.memory.offHeap.size are all session-start-scope settings for the Native Execution Engine, because the Velox runtime is wired up when the plugin registry is built during session initialization — calling spark.conf.set on any of the three during a live session has no effect.",
+      "depth": 5,
+      "type": "internal",
+      "tags": [
+        "NativeExecutionEngine",
+        "SessionScope",
+        "Configuration"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A recommended starting point for off-heap memory sizing when the Native Execution Engine is enabled is reserving roughly 30% of a node's total memory for native buffers, with JVM heap sized down to match — the standards document is explicit that this figure is a starting point to verify against measured peak off-heap usage in the Spark UI, not a fixed constant.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "NativeExecutionEngine",
+        "OffHeapMemory",
+        "Sizing"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A metadata-driven ingestion loop that queries the metadata store once per entity inside a per-row loop turns that store into a per-run runtime dependency scaling with entity count; the recommended pattern reads the full active-entity configuration once at run start into an in-memory dictionary, accumulates run-log rows in a list during processing, then performs one batched write at the end.",
+      "depth": 3,
+      "type": "antipattern",
+      "tags": [
+        "MetadataDriven",
+        "Orchestration"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A forward-only watermark update, implemented as a MERGE with a WHEN MATCHED AND (new_value > old_value) guard rather than an unconditional UPDATE, is required so that concurrent or out-of-order runs of the same entity can never move the watermark backwards, which an unconditional last-writer-wins update would allow.",
+      "depth": 4,
+      "type": "pattern",
+      "tags": [
+        "MetadataDriven",
+        "Watermark",
+        "Idempotency"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "A Fabric pipeline invoking N separate notebooks starts up to N separate Spark sessions, each paying its own startup cost; notebookutils.notebook.runMultiple() expresses the same work as a DAG of dependencies executed inside one shared Spark session instead.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "Orchestration",
+        "RunMultiple",
+        "Cost"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "For work small enough that a multi-node Spark session is disproportionate (the standards document's example: moving 2 GB of Delta data), a single-node Python notebook using Polars for the transform and the deltalake (delta-rs) library for the write reads and writes the same OneLake Delta tables Spark would, at a fraction of the capacity-unit cost — the two hard overrides that require Spark regardless of data size are V-Order gold writes and genuinely distributed shuffles.",
+      "depth": 3,
+      "type": "pattern",
+      "tags": [
+        "EngineChoice",
+        "PythonNotebook",
+        "Cost"
+      ]
+    },
+    {
+      "capability_id": "spark",
+      "text": "Fabric Environments are the intended place to pin library dependencies for production notebooks — %pip install in a production code path is session-scoped, slow to re-run every session, and not centrally auditable — and every Environment must be re-published when a workspace moves to Runtime 2.0 (Python 3.11 to 3.13), or attached jobs fail with a 'No module found' error against the old published environment.",
+      "depth": 3,
+      "type": "gotcha",
+      "tags": [
+        "Environment",
+        "Dependencies",
+        "L011",
+        "Runtime"
+      ]
+    }
+  ],
+  "assets": []
+}
