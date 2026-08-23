@@ -1,0 +1,1665 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fabric Efficient Scaledown &amp; Remote Shuffle Manager — Deep Dive</title>
+<!-- Fonts intentionally not loaded from a CDN: this document is self-contained and must render on air-gapped/CDN-blocked networks. Font stacks below fall back to system faces. -->
+<style>
+:root {
+  --bg: #0A0E17;
+  --bg-subtle: #080B12;
+  --surface: #111726;
+  --surface-2: #161F33;
+  --surface-hover: #1C2842;
+  --border: #202C45;
+  --border-bright: #32446B;
+  --cyan: #38BDF8;
+  --cyan-dim: rgba(56, 189, 248, 0.10);
+  --cyan-glow: rgba(56, 189, 248, 0.25);
+  --green: #34D399;
+  --green-dim: rgba(52, 211, 153, 0.10);
+  --amber: #FBBF24;
+  --amber-dim: rgba(251, 191, 36, 0.10);
+  --red: #F87171;
+  --red-dim: rgba(248, 113, 113, 0.10);
+  --purple: #A78BFA;
+  --purple-dim: rgba(167, 139, 250, 0.10);
+  --text: #F1F5F9;
+  --text-dim: #94A3B8;
+  --text-dimmer: #64748B;
+  --font-mono: ui-monospace, 'Cascadia Code', 'Fira Code', 'SF Mono', Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  line-height: 1.7;
+}
+
+/* Top Navigation Bar */
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 28px;
+  background: rgba(10, 14, 23, 0.94);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.brand {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--cyan);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.nav-links {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.nav-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.nav-links a:hover, .nav-links a.active {
+  color: #FFFFFF;
+  background: var(--surface-2);
+  border-color: var(--border-bright);
+}
+
+/* Layout Container with Sticky Sidebar */
+.layout {
+  display: flex;
+  min-height: calc(100vh - 54px);
+}
+
+.sidebar {
+  width: 300px;
+  background: var(--bg-subtle);
+  border-right: 1px solid var(--border);
+  padding: 20px 14px;
+  position: sticky;
+  top: 54px;
+  height: calc(100vh - 54px);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.sidebar-search {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin-bottom: 16px;
+  outline: none;
+}
+.sidebar-search:focus {
+  border-color: var(--cyan);
+}
+
+.sidebar-group-title {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin: 16px 0 8px 8px;
+}
+
+.navlink {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.navlink:hover {
+  color: #FFFFFF;
+  background: var(--surface);
+}
+.navlink.active {
+  color: var(--cyan);
+  background: var(--surface-2);
+  border-left: 3px solid var(--cyan);
+  font-weight: 600;
+}
+.navlink .idx {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  opacity: 0.7;
+}
+
+.main {
+  flex: 1;
+  padding: 36px 48px 120px;
+  max-width: 1160px;
+}
+
+/* Hero & Metric KPI Cards */
+.hero {
+  margin-bottom: 36px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.hero-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 10px;
+}
+
+h1 {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0 0 10px;
+  color: #FFFFFF;
+  letter-spacing: -0.02em;
+}
+
+.hero-desc {
+  font-size: 15px;
+  color: var(--text-dim);
+  max-width: 900px;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin: 24px 0 10px;
+}
+
+.kpi-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  transition: transform 0.2s, border-color 0.2s;
+}
+.kpi-card:hover {
+  border-color: var(--border-bright);
+  transform: translateY(-2px);
+}
+.kpi-val {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.kpi-lbl {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Section Panel Styling */
+.panel {
+  margin-bottom: 60px;
+  scroll-margin-top: 70px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.eyebrow .line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+h2.h {
+  font-family: var(--font-mono);
+  font-size: 19px;
+  font-weight: 700;
+  color: #FFFFFF;
+  margin: 0 0 16px;
+}
+
+h3 {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  margin: 28px 0 12px;
+}
+
+h4 {
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--cyan);
+  margin: 20px 0 8px;
+}
+
+/* Cards & Tables */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  margin: 16px 0;
+}
+
+.card-title {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+th {
+  background: var(--surface-2);
+  color: var(--cyan);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border-bright);
+}
+td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+tr:last-child td {
+  border-bottom: none;
+}
+td.key, td b {
+  color: #FFFFFF;
+}
+
+/* Badges */
+.badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.scope-jvm {
+  background: rgba(248, 113, 113, 0.15);
+  color: var(--red);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+}
+.scope-runtime {
+  background: rgba(52, 211, 153, 0.15);
+  color: var(--green);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+/* VS Code Code Panels */
+.vscode-code-panel {
+  background: #0B0E14;
+  border: 1px solid #1E293B;
+  border-radius: 8px;
+  margin: 18px 0;
+  overflow: hidden;
+}
+.vscode-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 14px;
+  background: #0F172A;
+  border-bottom: 1px solid #1E293B;
+}
+.vscode-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vscode-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.dot-red { background: #EF4444; }
+.dot-yellow { background: #F59E0B; }
+.dot-green { background: #10B981; }
+
+.vscode-lang-badge {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #38BDF8;
+  background: rgba(56, 189, 248, 0.12);
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-left: 6px;
+}
+.vscode-target-badge {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: #94A3B8;
+  background: rgba(148, 163, 184, 0.1);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+.vscode-copy-btn {
+  background: #1E293B;
+  border: 1px solid #334155;
+  color: #F1F5F9;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s;
+}
+.vscode-copy-btn:hover {
+  background: #334155;
+  color: #38BDF8;
+}
+.vscode-pre {
+  margin: 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: #E2E8F0;
+}
+
+code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: rgba(56, 189, 248, 0.08);
+  color: var(--cyan);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+/* Callouts */
+.callout {
+  margin: 18px 0;
+  padding: 14px 18px;
+  border-left: 3px solid var(--cyan);
+  background: rgba(56, 189, 248, 0.06);
+  border-radius: 0 6px 6px 0;
+}
+.callout.warn {
+  border-left-color: var(--amber);
+  background: rgba(251, 191, 36, 0.06);
+}
+.callout.danger {
+  border-left-color: var(--red);
+  background: rgba(248, 113, 113, 0.06);
+}
+
+@media (max-width: 900px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: 100%; height: auto; position: static; }
+  .main { padding: 20px; }
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+}
+</style>
+</head>
+<body>
+<!-- Top Navigation Bar -->
+<div class="topbar">
+<a class="brand" href="index.html">
+<svg fill="none" height="18" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="18"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+<span>FABRIC SPARK TOOLKIT</span>
+</a>
+<div class="nav-links">
+<a href="index.html">Dashboard</a>
+<a href="spark_internals.html">Engine Internals (44 Secs)</a>
+<a class="active" href="efficient_scaledown.html">Efficient Scaledown &amp; RSM</a>
+<a href="runtime_2_0_guide.html">Runtime 2.0</a>
+</div>
+</div>
+<div class="layout">
+<!-- Sticky Sidebar Navigation -->
+<nav class="sidebar" id="sidebar">
+<input class="sidebar-search" id="sidebarSearch" placeholder="Search sections..." type="text"/>
+<div class="sidebar-group-title">Whitepaper Sections</div>
+<div class="navlink" data-target="part00"><span class="idx">00</span> Executive Summary</div><div class="navlink" data-target="part01"><span class="idx">01</span> The Problem: Why Shuffle Pin</div><div class="navlink" data-target="part02"><span class="idx">02</span> Spark Shuffle Internals, Fro</div><div class="navlink" data-target="part03"><span class="idx">03</span> Dynamic Allocation and Execu</div><div class="navlink" data-target="part04"><span class="idx">04</span> The Pluggable Shuffle Archit</div><div class="navlink" data-target="part05"><span class="idx">05</span> Fabric Efficient Scaledown: </div><div class="navlink" data-target="part06"><span class="idx">06</span> Adaptive Query Execution Int</div><div class="navlink" data-target="part07"><span class="idx">07</span> Native Execution Engine (Vel</div><div class="navlink" data-target="part08"><span class="idx">08</span> End-to-End Sequencing</div><div class="navlink" data-target="part09"><span class="idx">09</span> Configuration Reference</div><div class="navlink" data-target="part10"><span class="idx">10</span> Storage &amp; Networking Constra</div><div class="navlink" data-target="part11"><span class="idx">11</span> Performance Results</div><div class="navlink" data-target="part12"><span class="idx">12</span> Architectural Considerations</div><div class="navlink" data-target="part13"><span class="idx">13</span> Full Topic Mind Map</div><div class="navlink" data-target="part14"><span class="idx">14</span> Glossary</div><div class="navlink" data-target="part15"><span class="idx">15</span> References &amp; Further Reading</div>
+</nav>
+<!-- Main Content Area -->
+<main class="main" id="main">
+<!-- Hero Header -->
+<div class="hero">
+<div class="hero-tag">TECHNICAL WHITEPAPER &amp; ARCHITECTURAL SPECIFICATION</div>
+<h1>Fabric Efficient Scaledown &amp; Remote Shuffle Manager</h1>
+<div class="hero-desc">
+        A deep-dive technical reference on how Microsoft Fabric solves the classic Apache Spark scaledown dilemma by decoupling shuffle storage, orchestrating 5-phase executor decommissioning, and dynamically routing shuffles via the Stage-Level Decision Layer.
+      </div>
+<!-- Metric KPI Cards -->
+<div class="kpi-grid">
+<div class="kpi-card">
+<div class="kpi-val" style="color:var(--green);">54%</div>
+<div class="kpi-lbl">Avg Compute Cost Savings</div>
+</div>
+<div class="kpi-card">
+<div class="kpi-val" style="color:var(--cyan);">0</div>
+<div class="kpi-lbl">Stage Replays (Zero FetchFailed)</div>
+</div>
+<div class="kpi-card">
+<div class="kpi-val" style="color:var(--purple);">100%</div>
+<div class="kpi-lbl">Decommission Safety</div>
+</div>
+<div class="kpi-card">
+<div class="kpi-val" style="color:var(--amber);">Stage</div>
+<div class="kpi-lbl">Decision Layer Granularity</div>
+</div>
+</div>
+</div>
+<!-- Rendered Sections with SVGs & Code Panels -->
+<section class="panel" id="part00">
+<div class="eyebrow">00 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Executive Summary</h2>
+<div class="arch-diagram" style="margin:24px 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FFFFFF; display:flex; align-items:center; gap:8px;">
+<span style="color:var(--amber);">⚠️</span> THE SCALEDOWN DILEMMA: LEGACY EXECUTOR PINNING VS. FABRIC EFFICIENT SCALEDOWN
+    </div>
+<span class="badge" style="background:rgba(248,113,113,0.15); color:var(--red); border:1px solid rgba(248,113,113,0.3); font-size:10.5px;">THE PROBLEM VS SOLUTION</span>
+</div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+<!-- LEFT: LEGACY SPARK -->
+<div style="background:rgba(248,113,113,0.04); border:1.5px solid rgba(248,113,113,0.4); border-radius:8px; padding:18px;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+<span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--red);">LEGACY SPARK: EXECUTOR PINNING</span>
+<span class="badge" style="background:rgba(248,113,113,0.2); color:var(--red); font-size:9.5px;">BOTTLENECK</span>
+</div>
+<div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">Tasks finish, but idle worker nodes CANNOT be released safely:</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:10px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:#FFFFFF; margin-bottom:4px;">1. Stage 0 Completes on 16 Executors</div>
+<div style="font-size:11.5px; color:var(--text-dim);">Each node writes local shuffle files to local NVMe SSD (<code>shuffle_{id}_{map}_0.data</code> &amp; <code>.index</code>).</div>
+</div>
+<div style="background:var(--surface-2); border:1px solid rgba(248,113,113,0.4); border-radius:6px; padding:10px 14px; margin-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--red); margin-bottom:4px;">2. Stage 1 Needs Only 2 Executors (Idle Backlog)</div>
+<div style="font-size:11.5px; color:var(--text-dim);">14 executors sit idle at 0% CPU — BUT hold shuffle blocks on disk for downstream reducers!</div>
+</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--red); margin-bottom:8px;">Two Costly &amp; Broken Choices:</div>
+<div style="font-size:11.5px; color:var(--text); margin-bottom:8px; line-height:1.5;">
+          • <b style="color:#FFFFFF;">Option A (Keep Idle Nodes):</b> Pay 100% compute cost for 14 idle VMs (wasting 54% capacity budget).
+        </div>
+<div style="font-size:11.5px; color:var(--text); line-height:1.5;">
+          • <b style="color:var(--red);">Option B (Kill Idle Nodes):</b> Reducer tasks throw <code style="color:var(--red);">FetchFailedException</code>. <code>DAGScheduler</code> aborts the stage and re-executes the <b>ENTIRE Stage 0 from scratch</b>!
+        </div>
+</div>
+</div>
+<!-- RIGHT: FABRIC RSM -->
+<div style="background:rgba(52,211,153,0.04); border:1.5px solid rgba(52,211,153,0.4); border-radius:8px; padding:18px;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+<span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--green);">FABRIC EFFICIENT SCALEDOWN + RSM</span>
+<span class="badge" style="background:rgba(52,211,153,0.2); color:var(--green); font-size:9.5px;">SOLUTION</span>
+</div>
+<div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">Decoupled shuffle storage enables instant, zero-penalty VM reclamation:</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:10px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:#FFFFFF; margin-bottom:4px;">1. Shuffle Data Decoupled to Remote Tier</div>
+<div style="font-size:11.5px; color:var(--text-dim);">Blocks are written directly to Remote Shuffle Store (Blob) OR migrated during 5-phase decommission.</div>
+</div>
+<div style="background:var(--surface-2); border:1px solid rgba(52,211,153,0.4); border-radius:6px; padding:10px 14px; margin-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--green); margin-bottom:4px;">2. 14 Idle Executors Decommission Instantly</div>
+<div style="font-size:11.5px; color:var(--text-dim);">Fabric pool releases 14 VMs back to the cluster fleet. Capacity Units (CU) meter refunds immediately!</div>
+</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--green); margin-bottom:8px;">Fabric Production Outcome:</div>
+<div style="font-size:11.5px; color:var(--text); margin-bottom:6px; line-height:1.5;">
+          • <b style="color:#FFFFFF;">54% Average Cost Savings:</b> Pay strictly for active task computation seconds.
+        </div>
+<div style="font-size:11.5px; color:var(--text); margin-bottom:6px; line-height:1.5;">
+          • <b style="color:var(--green);">Zero Stage Replays:</b> Reducers fetch blocks directly from Azure Blob over high-throughput HTTP REST.
+        </div>
+<div style="font-size:11.5px; color:var(--text); line-height:1.5;">
+          • <b style="color:var(--cyan);">100% Decommission Safety:</b> <code>MapOutputTrackerMaster</code> updates block URIs before VM teardown.
+        </div>
+</div>
+</div>
+</div>
+</div>
+
+
+<p><i><b>Efficient Scaledown is the umbrella name Microsoft gives to a set of four cooperating capabilities in Fabric Spark that solve one specific, long-standing Spark problem: shuffle data has historically been glued to the local disk of the executor that produced it, which means the executor cannot be released until every downstream task has read that data. This document works through that problem from first principles — how Spark shuffle actually works internally, why dynamic allocation struggles with it, how Spark's own community solved parts of it upstream (node decommissioning, the pluggable ShuffleDataIO API), and then how Fabric assembles Remote Shuffle Manager (RSM), Shuffle Migration, the Decision Layer, and AQE Shuffle Write on top of that foundation.</b></i></p>
+<p><i><b>The intent is depth, not a restatement of the product page. Each mechanism is traced to the underlying Spark subsystem it modifies or depends on — SortShuffleManager, BlockManager, MapOutputTracker, the CoarseGrainedSchedulerBackend decommission lifecycle, and Adaptive Query Execution's re-optimization loop — with sequence diagrams for both the write path and the executor-decommission path, an architecture comparison against classic shuffle, and a full mind map tying every sub-component together.</b></i></p>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>How to use this document</b> This is a reference document. It is written at the depth appropriate for someone designing or defending Spark cost and reliability architecture on Fabric — including the platform limits (BlockBlobStorage-only, no Private Link support today) that matter most in a regulated, enterprise networking environment.</th>
+</tr></thead>
+<tbody>
+</tbody></table>
+</div>
+<h3><b>The one-paragraph version</b></h3>
+<p><i><b>Every Spark wide transformation (join, groupBy, repartition) forces a shuffle: data is redistributed across the cluster so that records sharing a key land on the same executor. Classic Spark writes that redistributed data to the local disk of the executor doing the writing, and that executor cannot safely disappear until every consumer of its output has fetched it — which blocks autoscale-down, and turns any executor loss into a re-computation. Fabric's Efficient Scaledown breaks that coupling: a Decision Layer routes large shuffles straight to Azure Blob Storage via a Remote Shuffle Manager, keeps small shuffles on local disk for speed, and — for whichever blocks do land locally — Shuffle Migration proactively relocates them before an executor is torn down. AQE Shuffle Write makes sure the partitioning produced at write time is already the shape the next stage wants, so none of this costs an extra re-partition pass. Microsoft's own TPC-DS benchmark shows this cuts billed compute by 54% and reduces or eliminates FetchFailedException-driven stage retries.</b></i></p>
+</section>
+<section class="panel" id="part01">
+<div class="eyebrow">01 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 1 — The Problem: Why Shuffle Pins Executors</h2>
+<div class="arch-diagram" style="margin:24px 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FFFFFF; display:flex; align-items:center; gap:8px;">
+<span style="color:var(--amber);">⚠️</span> THE SCALEDOWN DILEMMA: LEGACY EXECUTOR PINNING VS. FABRIC EFFICIENT SCALEDOWN
+    </div>
+<span class="badge" style="background:rgba(248,113,113,0.15); color:var(--red); border:1px solid rgba(248,113,113,0.3); font-size:10.5px;">THE PROBLEM VS SOLUTION</span>
+</div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+<!-- LEFT: LEGACY SPARK -->
+<div style="background:rgba(248,113,113,0.04); border:1.5px solid rgba(248,113,113,0.4); border-radius:8px; padding:18px;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+<span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--red);">LEGACY SPARK: EXECUTOR PINNING</span>
+<span class="badge" style="background:rgba(248,113,113,0.2); color:var(--red); font-size:9.5px;">BOTTLENECK</span>
+</div>
+<div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">Tasks finish, but idle worker nodes CANNOT be released safely:</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:10px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:#FFFFFF; margin-bottom:4px;">1. Stage 0 Completes on 16 Executors</div>
+<div style="font-size:11.5px; color:var(--text-dim);">Each node writes local shuffle files to local NVMe SSD (<code>shuffle_{id}_{map}_0.data</code> &amp; <code>.index</code>).</div>
+</div>
+<div style="background:var(--surface-2); border:1px solid rgba(248,113,113,0.4); border-radius:6px; padding:10px 14px; margin-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--red); margin-bottom:4px;">2. Stage 1 Needs Only 2 Executors (Idle Backlog)</div>
+<div style="font-size:11.5px; color:var(--text-dim);">14 executors sit idle at 0% CPU — BUT hold shuffle blocks on disk for downstream reducers!</div>
+</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--red); margin-bottom:8px;">Two Costly &amp; Broken Choices:</div>
+<div style="font-size:11.5px; color:var(--text); margin-bottom:8px; line-height:1.5;">
+          • <b style="color:#FFFFFF;">Option A (Keep Idle Nodes):</b> Pay 100% compute cost for 14 idle VMs (wasting 54% capacity budget).
+        </div>
+<div style="font-size:11.5px; color:var(--text); line-height:1.5;">
+          • <b style="color:var(--red);">Option B (Kill Idle Nodes):</b> Reducer tasks throw <code style="color:var(--red);">FetchFailedException</code>. <code>DAGScheduler</code> aborts the stage and re-executes the <b>ENTIRE Stage 0 from scratch</b>!
+        </div>
+</div>
+</div>
+<!-- RIGHT: FABRIC RSM -->
+<div style="background:rgba(52,211,153,0.04); border:1.5px solid rgba(52,211,153,0.4); border-radius:8px; padding:18px;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+<span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--green);">FABRIC EFFICIENT SCALEDOWN + RSM</span>
+<span class="badge" style="background:rgba(52,211,153,0.2); color:var(--green); font-size:9.5px;">SOLUTION</span>
+</div>
+<div style="font-size:12px; color:var(--text-dim); margin-bottom:14px;">Decoupled shuffle storage enables instant, zero-penalty VM reclamation:</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:10px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:#FFFFFF; margin-bottom:4px;">1. Shuffle Data Decoupled to Remote Tier</div>
+<div style="font-size:11.5px; color:var(--text-dim);">Blocks are written directly to Remote Shuffle Store (Blob) OR migrated during 5-phase decommission.</div>
+</div>
+<div style="background:var(--surface-2); border:1px solid rgba(52,211,153,0.4); border-radius:6px; padding:10px 14px; margin-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--green); margin-bottom:4px;">2. 14 Idle Executors Decommission Instantly</div>
+<div style="font-size:11.5px; color:var(--text-dim);">Fabric pool releases 14 VMs back to the cluster fleet. Capacity Units (CU) meter refunds immediately!</div>
+</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--green); margin-bottom:8px;">Fabric Production Outcome:</div>
+<div style="font-size:11.5px; color:var(--text); margin-bottom:6px; line-height:1.5;">
+          • <b style="color:#FFFFFF;">54% Average Cost Savings:</b> Pay strictly for active task computation seconds.
+        </div>
+<div style="font-size:11.5px; color:var(--text); margin-bottom:6px; line-height:1.5;">
+          • <b style="color:var(--green);">Zero Stage Replays:</b> Reducers fetch blocks directly from Azure Blob over high-throughput HTTP REST.
+        </div>
+<div style="font-size:11.5px; color:var(--text); line-height:1.5;">
+          • <b style="color:var(--cyan);">100% Decommission Safety:</b> <code>MapOutputTrackerMaster</code> updates block URIs before VM teardown.
+        </div>
+</div>
+</div>
+</div>
+</div>
+
+
+<p><i><b>To understand why Microsoft built four separate mechanisms rather than one, it helps to be precise about the failure mode they are all aimed at. It is not that shuffle is slow — Spark's shuffle path has been optimized heavily since 1.x. It is that shuffle output creates a hidden, long-lived dependency between an executor's process lifetime and the correctness of the whole job, and that dependency actively fights against elastic, autoscaled compute.</b></i></p>
+<h3><b>1.1 Wide transformations force redistribution</b></h3>
+<p><i><b>Spark RDDs and DataFrames are partitioned across executors. A narrow transformation (map, filter, select) can be computed entirely within a partition, so no data has to move. A wide transformation — join, groupBy, distinct, repartition, most window functions — requires records that share a key to end up co-located, because the operator (an aggregation, a join probe) needs to see all of them together. Since the same key can originate in any partition, the only way to guarantee co-location is to physically move data between executors. That movement is the shuffle.</b></i></p>
+<p><i><b>The DAGScheduler detects these boundaries at planning time and uses them to cut the job into stages: a ShuffleMapStage produces shuffle output, and the stage(s) that consume it cannot start until it is available. This stage boundary is precisely where every mechanism described in this document operates — nothing here changes what happens inside a stage, only what happens at the seam between stages.</b></i></p>
+<h3><b>1.2 The default: shuffle output lives on local disk</b></h3>
+<p><i><b>In stock Spark, each ShuffleMapTask partitions its output and writes it to the local disk of the executor that ran the task — one data file plus one index file per map task (more on the exact write path in Part 2). Nothing here is transient in the way a normal in-memory shuffle join would be: these files are the only copy of that task's contribution to the shuffle, and every reduce-side task that needs the corresponding partition range fetches it directly from that executor over the network, via the BlockManager's internal file-serving mechanism (historically the External Shuffle Service; increasingly the executor itself).</b></i></p>
+<p><i><b>This design was reasonable when clusters were static: a fixed set of long-lived executors, provisioned for the whole job, that never needed to disappear mid-flight. It becomes a liability the moment the platform wants to size the cluster to the workload dynamically — which is exactly what Fabric's autoscale and consumption-based billing model wants to do.</b></i></p>
+<h3><b>1.3 Three concrete failure modes</b></h3>
+<ul>
+<li><b>Blocked scale-down. Dynamic allocation identifies an idle executor and wants to release it, but cannot — its local disk may still hold shuffle blocks a downstream stage has not yet read. The executor sits there, billed, doing nothing (a “zombie” executor), purely to protect data other tasks might still need.</b></li>
+<li><b>Executor loss = recomputation. If the executor is lost anyway — spot reclaim, node preemption, an actual crash — its shuffle files go with it. There is no copy anywhere else. The reduce-side task's fetch fails, surfaces as a FetchFailedException, and the DAGScheduler has to re-run the entire owning ShuffleMapStage to regenerate the lost output. On a large job, that can mean minutes to hours of wasted, re-billed compute for a single lost node.</b></li>
+<li><b>Disk over-provisioning. Because large shuffles must fit on local disk, executors are sized (or nodes are chosen) with headroom for worst-case shuffle volume, even though that headroom sits unused for most of the job's lifetime.</b></li>
+</ul>
+<h3><b>1.4 Why dynamic allocation alone doesn't fix this</b></h3>
+<p><i><b>Spark's dynamic allocation subsystem (spark.dynamicAllocation.enabled) already tracks executor idleness and requests removal of executors that have been idle past a timeout. But idleness of compute is not the same as idleness of data: an executor can have zero running tasks and still be the sole holder of shuffle blocks a not-yet-scheduled task will need. Two supporting mechanisms exist specifically to bridge that gap — spark.dynamicAllocation.shuffleTracking.enabled, which makes the allocation manager aware that live shuffle data pins an executor even without an external shuffle service running, and, more fundamentally, the executor decommissioning framework covered in Part 3, which actively relocates the data instead of just waiting for it to become unneeded. Efficient Scaledown's Shuffle Migration capability is Fabric's tuned configuration of exactly that framework; RSM goes a step further and removes the dependency on any single executor's disk in the first place.</b></i></p>
+</section>
+<section class="panel" id="part02">
+<div class="eyebrow">02 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 2 — Spark Shuffle Internals, From First Principles</h2>
+<div class="arch-diagram" style="margin:24px 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FFFFFF; display:flex; align-items:center; gap:8px;">
+<span style="color:var(--cyan);">💽</span> SHUFFLE STORAGE ARCHITECTURE: SORTSHUFFLEMANAGER VS. REMOTE SHUFFLE MANAGER
+    </div>
+<span class="badge" style="background:rgba(56,189,248,0.15); color:var(--cyan); border:1px solid rgba(56,189,248,0.3); font-size:10.5px;">LOCAL NVME VS BLOB TIER</span>
+</div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+<!-- LEFT: SORTSHUFFLEMANAGER -->
+<div style="background:rgba(56,189,248,0.03); border:1.5px solid rgba(56,189,248,0.35); border-radius:8px; padding:18px;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+<span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--cyan);">1. SORTSHUFFLEMANAGER (Local NVMe)</span>
+<span class="badge" style="background:rgba(56,189,248,0.15); color:var(--cyan); font-size:9.5px;">LOCAL DISK</span>
+</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:10px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:#FFFFFF; margin-bottom:4px;">Map Task Write Path (appendMemory)</div>
+<div style="font-size:11.5px; color:var(--text-dim);">Rows accumulated in <code>PartitionedAppendOnlyMap</code> (heap) -&gt; Sorted by (partitionId, hashKey) -&gt; Spills to local temp NVMe files.</div>
+</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--cyan); margin-bottom:4px;">File Layout on Local SSD (Merged into 2 Files):</div>
+<div style="font-size:11px; color:#FFFFFF; margin-top:4px; font-family:var(--font-mono);">• shuffle_{shuffleId}_{mapId}_0.data <span style="color:var(--text-dim);">(Binary data streams)</span></div>
+<div style="font-size:11px; color:#FFFFFF; margin-top:2px; font-family:var(--font-mono);">• shuffle_{shuffleId}_{mapId}_0.index <span style="color:var(--text-dim);">(8-byte offset per partition)</span></div>
+</div>
+<div style="background:#0E1422; border:1px solid rgba(248,113,113,0.4); border-radius:6px; padding:12px 14px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--red); margin-bottom:6px;">Fetch Path Vulnerability:</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+          Reducers fetch byte ranges over Netty RPC from Executor IP:Port. If the node terminates before reducers read, local SSD files are permanently lost.
+        </div>
+</div>
+</div>
+<!-- RIGHT: REMOTE SHUFFLE MANAGER -->
+<div style="background:rgba(167,139,250,0.03); border:1.5px solid rgba(167,139,250,0.35); border-radius:8px; padding:18px;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+<span style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--purple);">2. REMOTE SHUFFLE MANAGER (Blob Tier)</span>
+<span class="badge" style="background:rgba(167,139,250,0.15); color:var(--purple); font-size:9.5px;">DECOUPLED BLOB</span>
+</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:10px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:#FFFFFF; margin-bottom:4px;">ShuffleDataIO Plugin Interface</div>
+<div style="font-size:11.5px; color:var(--text-dim);">Plugs custom <code>ShuffleDriverComponents</code> + <code>ShuffleExecutorComponents</code> directly into Spark core engine lifecycle.</div>
+</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--purple); margin-bottom:4px;">Storage Layout in Azure Blob Container:</div>
+<div style="font-size:11px; color:#FFFFFF; margin-top:4px; font-family:var(--font-mono);">• /shuffle/{appId}/{shuffleId}/{mapId}.data <span style="color:var(--text-dim);">(Direct stream upload)</span></div>
+<div style="font-size:11px; color:#FFFFFF; margin-top:2px; font-family:var(--font-mono);">• /shuffle/{appId}/{shuffleId}/{mapId}.index <span style="color:var(--text-dim);">(Remote Blob offset map)</span></div>
+</div>
+<div style="background:#0E1422; border:1px solid rgba(52,211,153,0.4); border-radius:6px; padding:12px 14px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--green); margin-bottom:6px;">Decoupled Fetch Path:</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+          Reducers fetch partitions via multi-threaded HTTP REST from Azure Blob. Source executor VMs can be deprovisioned at any instant with zero impact!
+        </div>
+</div>
+</div>
+</div>
+</div>
+
+
+<p><i><b>This part is deliberately vendor-neutral: everything here is stock, open-source Apache Spark behaviour, unrelated to Fabric specifically. It is the substrate that Remote Shuffle Manager, Shuffle Migration, and AQE Shuffle Write all sit on top of, and understanding it is what makes the Fabric-specific parts (Part 5 onward) legible rather than a black box.</b></i></p>
+<h3><b>2.1 ShuffleManager and the sort-based shuffle</b></h3>
+<p><i><b>All shuffle behaviour in modern Spark (2.0 onward) is mediated by a single pluggable component, ShuffleManager, configured via spark.shuffle.manager. Since Spark 2.0 removed the older hash-based shuffle manager, the sole first-party implementation is SortShuffleManager. Every ShuffleMapTask asks SortShuffleManager for a ShuffleWriter, and every reduce-side task asks it for a ShuffleReader — currently, BlockStoreShuffleReader is the only reader implementation Spark ships.</b></i></p>
+<h3><b>2.2 The three shuffle writers</b></h3>
+<p><i><b>SortShuffleManager selects among three writer implementations depending on the operation and the data representation:</b></i></p>
+<ul>
+<li><b>BypassMergeSortShuffleWriter — used when the number of output partitions is small (below spark.shuffle.sort.bypassMergeThreshold, default 200) and no map-side aggregation or ordering is required. It writes one file per reduce partition directly, then concatenates them — cheap, but doesn't scale to many partitions.</b></li>
+<li><b>SortShuffleWriter — the general-purpose path for RDDs whose records are JVM objects. Internally it delegates almost all of the complexity to ExternalSorter, which buffers records in memory, sorts them by partition (and optionally by key), and spills sorted runs to disk when memory pressure is high, later merging the spilled runs into the final output.</b></li>
+<li><b>UnsafeShuffleWriter — used for DataFrame/Dataset execution, where records are stored in Spark's Tungsten binary row format rather than as JVM objects. It sorts serialized record pointers rather than deserialized objects, which is both faster and far lighter on GC pressure — this is the writer that almost all Fabric SQL/DataFrame workloads actually exercise.</b></li>
+</ul>
+<h3><b>2.3 Shuffle data and index files</b></h3>
+<p><i><b>Regardless of which writer is used, the physical output of a shuffle-write task is a pair of files: a data file containing the actual serialized (and, by default, compressed) records for every output partition concatenated together, ordered by destination partition; and an index file recording the byte offsets that mark where each partition's slice begins and ends inside the data file. A reduce-side task doesn't need to read the whole data file — it consults the index to seek directly to the byte range it owns. spark.shuffle.compress (true by default) applies the same codec configured by spark.io.compression.codec, trading a CPU cost for reduced network and disk I/O — this matters directly for Remote Shuffle Manager, since the same compression setting governs what actually crosses the wire to Azure Blob Storage.</b></i></p>
+<h3><b>2.4 BlockManager, MapOutputTracker, and the read path</b></h3>
+<p><i><b>Two driver/executor-resident components make the shuffle-read side work. BlockManager runs on every executor and is the general-purpose storage layer for both cached RDD blocks and shuffle blocks; when a remote task asks for a shuffle block, it is BlockManager that serves the bytes over the network. MapOutputTracker is the metadata layer: the driver-side MapOutputTrackerMaster holds the authoritative mapping from (shuffleId, partition) to the BlockManagerId that holds it, and each executor's MapOutputTrackerWorker caches a copy, refreshing from the master when its local cache is stale or missing an entry.</b></i></p>
+<p><i><b>On the read side, SortShuffleManager builds a BlockStoreShuffleReader by first asking MapOutputTracker for every block location the reduce task needs, then pulling those blocks (in parallel, with configurable prefetch) via BlockManager, and finally exposing a sorted iterator over the fetched records for the downstream operator to consume.</b></i></p>
+<h3><b>2.5 FetchFailedException — the symptom, not the disease</b></h3>
+<p><i><b>If a shuffle block's recorded location is stale — most commonly because the executor that held it is gone — the fetch fails and the task throws FetchFailedException (or, upstream of that, MetadataFetchFailedException if MapOutputTracker itself has no record at all). Spark's scheduler treats this specially: rather than simply retrying the failed task, it marks the owning ShuffleMapStage as needing to be recomputed and reschedules the map tasks that produced the missing output, before resuming the consuming stage. This is the mechanism referred to informally throughout Microsoft's own material as “stage retries”, and it is the single biggest tax that unprotected shuffle-on-local-disk imposes on elastic or spot-heavy clusters — every executor loss has a chance of cascading into a full stage re-run, not just a single task re-run.</b></i></p>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Why this sets up Parts 3–5</b> Everything in Part 2 is why a purely reactive fix (retry harder, add more replicas) is the wrong shape of solution. The right shape — which is what both upstream Spark and Fabric's Efficient Scaledown pursue — is to stop shuffle output being single-homed on a disappearing executor's disk in the first place.</th>
+</tr></thead>
+<tbody>
+</tbody></table>
+</div>
+</section>
+<section class="panel" id="part03">
+<div class="eyebrow">03 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 3 — Dynamic Allocation and Executor Decommissioning</h2>
+<div class="arch-diagram" style="margin:24px 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FFFFFF; display:flex; align-items:center; gap:8px;">
+<span style="color:var(--green);">🔄</span> THE 5-PHASE EXECUTOR DECOMMISSIONING LIFECYCLE
+    </div>
+<span class="badge" style="background:rgba(52,211,153,0.15); color:var(--green); border:1px solid rgba(52,211,153,0.3); font-size:10.5px;">SAFE DEPROVISIONING FLOW</span>
+</div>
+<div style="display:grid; grid-template-columns:repeat(5, 1fr); gap:12px;">
+<!-- Phase 1 -->
+<div style="background:rgba(56,189,248,0.04); border:1px solid rgba(56,189,248,0.4); border-radius:6px; padding:14px 12px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--cyan); margin-bottom:4px;">PHASE 1</div>
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:#FFFFFF; margin-bottom:8px;">Trigger</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        • Executor idle timeout fires.<br/>
+        • Fabric pool selects VM for scale-down.<br/>
+        • Driver marks state: <b style="color:var(--cyan);">DECOMMISSIONING</b>.
+      </div>
+</div>
+<!-- Phase 2 -->
+<div style="background:rgba(251,191,36,0.04); border:1px solid rgba(251,191,36,0.4); border-radius:6px; padding:14px 12px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--amber); margin-bottom:4px;">PHASE 2</div>
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:#FFFFFF; margin-bottom:8px;">Drain</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        • <code>TaskScheduler</code> halts new task dispatch.<br/>
+        • Active running tasks finish uninterrupted.<br/>
+        • Prevents speculative restarts.
+      </div>
+</div>
+<!-- Phase 3 -->
+<div style="background:rgba(167,139,250,0.04); border:1px solid rgba(167,139,250,0.4); border-radius:6px; padding:14px 12px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--purple); margin-bottom:4px;">PHASE 3</div>
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:#FFFFFF; margin-bottom:8px;">Migrate</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        • Background daemon uploads local shuffle files to Fallback Storage.<br/>
+        • Or, if RSM stage, files already remote.<br/>
+        • Zero task stall.
+      </div>
+</div>
+<!-- Phase 4 -->
+<div style="background:rgba(52,211,153,0.04); border:1px solid rgba(52,211,153,0.4); border-radius:6px; padding:14px 12px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:var(--green); margin-bottom:4px;">PHASE 4</div>
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:#FFFFFF; margin-bottom:8px;">Handoff</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        • Executor notifies Driver RPC: upload complete.<br/>
+        • <code>MapOutputTrackerMaster</code> updates block URIs to Blob.<br/>
+        • Reducers auto-routed.
+      </div>
+</div>
+<!-- Phase 5 -->
+<div style="background:rgba(148,163,184,0.04); border:1px solid rgba(148,163,184,0.4); border-radius:6px; padding:14px 12px;">
+<div style="font-family:var(--font-mono); font-size:11px; font-weight:700; color:#94A3B8; margin-bottom:4px;">PHASE 5</div>
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:#FFFFFF; margin-bottom:8px;">Reclaim</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        • Executor process terminates cleanly.<br/>
+        • Fabric fleet deprovisions VM.<br/>
+        • <b style="color:var(--green);">CU meter stops immediately!</b>
+</div>
+</div>
+</div>
+</div>
+
+
+<p><i><b>Fabric's Shuffle Migration capability is not a bespoke Fabric invention — it is a tuned, opinionated configuration of a general-purpose Spark subsystem that has existed since Spark 3.1: graceful node decommissioning. Understanding the upstream mechanism is the fastest way to understand exactly what Shuffle Migration is doing under the recommended configuration block in Part 9.</b></i></p>
+<h3><b>3.1 Why dynamic allocation needed a decommission story</b></h3>
+<p><i><b>Before dynamic allocation existed, an executor exiting meant the whole application had already finished — nothing needed the executor's state anymore, so it could simply be discarded. Dynamic allocation broke that assumption: an application can now explicitly remove an executor while it is still running, which means anything that executor was holding — cached RDD partitions, shuffle output — has to either be preserved elsewhere or accepted as a cost of recomputation. SPARK-20624 (“Add better handling for node shutdown”) is the umbrella JIRA epic that introduced a proper, graceful shutdown lifecycle to address this, motivated originally by spot/preemptible instance reclaim on cloud platforms.</b></i></p>
+<h3><b>3.2 The decommission lifecycle</b></h3>
+<p><i><b>The lifecycle is driven from CoarseGrainedSchedulerBackend and proceeds through a small number of well-defined stages:</b></i></p>
+<ul>
+<li>A trigger fires. This can be an explicit driver decision under dynamic allocation, a cloud-platform preemption notice, or (on some deployment platforms) a POSIX signal such as SIGPWR that the executor process itself intercepts.</li>
+<li>The driver marks the executor as decommissioning and immediately excludes it from new task scheduling — but lets any tasks already running on it continue to completion rather than killing them outright.</li>
+<li>The executor calls decommissionSelf() (in CoarseGrainedExecutorBackend), which is gated entirely on spark.decommission.enabled. If RDD block migration is enabled (spark.storage.decommission.rddBlocks.enabled), cached blocks are proactively copied to a peer executor.</li>
+<li>If shuffle block migration is enabled (spark.storage.decommission.shuffleBlocks.enabled), the executor's shuffle files are likewise migrated — this requires what Spark calls a migratable shuffle resolver, which sort-based shuffle provides. If a peer executor cannot accept the blocks (for example, because the whole node pool is scaling in), they fall back to configured fallback storage instead of being dropped.</li>
+<li>As each block successfully lands on its new home, the driver's MapOutputTracker is updated with the new BlockManagerId — visible in driver logs as “Updating map output for &lt;shuffleId&gt; to BlockManagerId(...)”.</li>
+<li>Once allBlocksMigrated returns true, the executor is cleared to exit; it notifies the driver via a RemoveExecutor message carrying “Finished decommissioning” as the removal reason, distinct from an unplanned loss.</li>
+<li>Any in-flight reduce task whose cached block location now points at the decommissioned executor will hit a fetch failure once — but because the location has already been updated on the driver, a re-fetch (spark.reducer.fetchMigratedShuffle.enabled-style behaviour, present under various names across Spark-based platforms) resolves against the new location rather than triggering a full stage recompute.</li>
+</ul>
+<h3><b>3.3 Fallback storage</b></h3>
+<p><i><b>spark.storage.decommission.shuffleBlocks.migrateToFallbackStorage exists for the case that matters most under aggressive autoscale-in: an entire batch of nodes is leaving at once, so there may be no healthy peer executor with spare capacity to receive a migrating block. Fallback storage — configured as any Hadoop-compatible URI, and in Fabric's case Azure Blob Storage — acts as the destination of last resort. spark.storage.decommission.fallbackStorage.cleanUp then ensures blocks written there are removed once no longer needed, so fallback storage cost stays bounded rather than accumulating indefinitely across the life of a long-running environment.</b></i></p>
+<h3><b>3.4 What Fabric's Shuffle Migration configuration actually turns on</b></h3>
+<p><i><b>The recommended configuration block published for Efficient Scaledown (reproduced in full in Part 9) sets exactly four decommission-related properties: shuffleBlocks.enabled, shuffleBlocks.cleanup, shuffleBlocks.migrateToFallbackStorage, and fallbackStorage.cleanUp. That is a deliberate, minimal activation of the general Spark 3.1+ decommission framework described above, tuned specifically for the case where fallback storage is Azure Blob Storage rather than the on-prem HDFS or local-cluster storage this framework was originally designed around.</b></i></p>
+</section>
+<section class="panel" id="part04">
+<div class="eyebrow">04 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 4 — The Pluggable Shuffle Architecture (ShuffleDataIO)</h2>
+<div class="arch-diagram" style="margin:24px 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FFFFFF; display:flex; align-items:center; gap:8px;">
+<span style="color:var(--purple);">🔌</span> SHUFFLEDATAIO PLUGIN ARCHITECTURE &amp; THE 4 CORE CAPABILITIES
+    </div>
+<span class="badge" style="background:rgba(167,139,250,0.15); color:var(--purple); border:1px solid rgba(167,139,250,0.3); font-size:10.5px;">PLUG-IN ARCHITECTURE</span>
+</div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--cyan); margin-bottom:4px;">ShuffleDriverComponents (Driver Daemon)</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        Registers shuffle IDs, manages remote storage metadata lifecycle, coordinates with <code>MapOutputTrackerMaster</code>, and cleans up remote shuffle directories on job exit.
+      </div>
+</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--green); margin-bottom:4px;">ShuffleExecutorComponents (Worker Daemons)</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        Implements <code>ShuffleMapOutputWriter</code> for multi-threaded streaming uploads to Azure Blob and <code>BlockResolver</code> to resolve HTTP URIs vs local NVMe descriptors.
+      </div>
+</div>
+</div>
+<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;">
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--cyan); margin-bottom:4px;">1. Remote Shuffle (RSM)</div>
+<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Direct write to Azure Blob storage; bypasses local Netty RPC entirely.</div>
+<code style="font-size:10px;">spark.remote.shuffle.enabled</code>
+</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--amber); margin-bottom:4px;">2. Shuffle Migration</div>
+<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">On-demand block upload during decommission; zero data loss on scale-in.</div>
+<code style="font-size:10px;">...migrateToFallbackStorage</code>
+</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--green); margin-bottom:4px;">3. Decision Layer</div>
+<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Stage-level smart routing: NVMe for light stages, RSM for heavy shuffles.</div>
+<code style="font-size:10px;">...decisionlayer.enabled.level</code>
+</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--purple); margin-bottom:4px;">4. AQE Shuffle Write</div>
+<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Dynamic partition coalesce during shuffle write to eliminate small Blob files.</div>
+<code style="font-size:10px;">...adaptive.shuffleWrite.enabled</code>
+</div>
+</div>
+</div>
+
+
+<p><i><b>Shuffle Migration explains how blocks that land locally get rescued before an executor dies. It says nothing about how Remote Shuffle Manager avoids local disk altogether for large shuffles. That capability sits on a second, separate piece of upstream Spark plumbing: the pluggable shuffle storage API, ShuffleDataIO.</b></i></p>
+<h3><b>4.1 The interface</b></h3>
+<p><i><b>Introduced in Spark 3.0 (SPARK-25299) as part of a broader community effort to support disaggregated compute-and-storage architectures, org.apache.spark.shuffle.api.ShuffleDataIO is the root of a plugin system for storing shuffle bytes to an arbitrary backend, loaded once per process. It exposes two entry points — executor(), returning a ShuffleExecutorComponents that supplies the actual reader/writer implementations used by tasks, and driver(), returning a ShuffleDriverComponents that bootstraps whatever metadata the plugin needs on the driver side. The stock implementation simply reads and writes local disk, which is the behaviour Parts 2 and 3 describe; an alternative implementation is loaded by setting spark.shuffle.sort.io.plugin.class to a fully-qualified class name.</b></i></p>
+<h3><b>4.2 Prior art: what other platforms built on this interface</b></h3>
+<p><i><b>This is public, well-precedented territory — several remote-shuffle implementations exist against exactly this interface, and they are useful reference points for understanding what a plugin in this position has to do:</b></i></p>
+<ul>
+<li><b>AWS Glue's Cloud Shuffle Storage Plugin — ships pre-installed in Glue 3.0/4.0, redirects shuffle I/O to Amazon S3 via spark.shuffle.sort.io.plugin.class, and is explicitly positioned to “supplement or replace local disk storage capacity for large shuffle operations” — functionally the closest public analogue to what RSM does for Azure Blob Storage.</b></li>
+<li><b>The OAP project's remote-shuffle plugin — an open-source ShuffleManager (not just a ShuffleDataIO backend) that targets any Hadoop-compatible filesystem, including HDFS and S3, explicitly framed as “an essential part of enabling Spark on disaggregated compute and storage architecture.”</b></li>
+<li><b>A wider ecosystem of remote shuffle services — Uber's RSS lineage, LinkedIn's Magnet, and the Apache incubating projects Celeborn and Uniffle — that go further still and run shuffle as an independent, horizontally-scaled service rather than reusing cloud object storage directly. Fabric's RSM is architecturally closer to the Glue/OAP pattern (write straight to object storage) than to a standalone shuffle-service pattern.</b></li>
+</ul>
+<h3><b>4.3 What this tells us about Remote Shuffle Manager</b></h3>
+<p><i><b>Microsoft has not published RSM's internal class hierarchy, so the following is inference from the public interface it must implement, not a confirmed implementation detail — flagged explicitly here rather than presented as fact. Structurally, RSM almost certainly implements ShuffleDataIO (or an equivalent ShuffleManager-level plugin) with an executor-side component that streams shuffle bytes to Azure Blob Storage instead of local disk, and a driver-side component that tracks block locations in Blob Storage the same way MapOutputTracker tracks BlockManagerId locations for local blocks today. This is consistent with everything Microsoft does document: the advanced tuning parameters published for RSM — partition buffer size, block size, write/read thread pools, retry counts and backoff, a pluggable compression codec — are exactly the knobs a ShuffleDataIO-style object-storage backend needs, and map closely to the equivalent tuning surface AWS documents for its own S3-backed plugin.</b></i></p>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Attribution boundary</b> Framing check: Decision Layer and AQE Shuffle Write are Fabric-specific orchestration on top of this — there is no public Apache Spark equivalent of a per-stage local-vs-remote router shipped upstream today. Treat those two as Fabric value-add; treat RSM and Shuffle Migration as Fabric's tuned application of public Spark mechanisms.</th>
+</tr></thead>
+<tbody>
+</tbody></table>
+</div>
+</section>
+<section class="panel" id="part05">
+<div class="eyebrow">05 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 5 — Fabric Efficient Scaledown: the Four Capabilities in Depth</h2>
+<div class="arch-diagram" style="margin:24px 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FFFFFF; display:flex; align-items:center; gap:8px;">
+<span style="color:var(--purple);">🔌</span> SHUFFLEDATAIO PLUGIN ARCHITECTURE &amp; THE 4 CORE CAPABILITIES
+    </div>
+<span class="badge" style="background:rgba(167,139,250,0.15); color:var(--purple); border:1px solid rgba(167,139,250,0.3); font-size:10.5px;">PLUG-IN ARCHITECTURE</span>
+</div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--cyan); margin-bottom:4px;">ShuffleDriverComponents (Driver Daemon)</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        Registers shuffle IDs, manages remote storage metadata lifecycle, coordinates with <code>MapOutputTrackerMaster</code>, and cleans up remote shuffle directories on job exit.
+      </div>
+</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:6px; padding:12px 14px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--green); margin-bottom:4px;">ShuffleExecutorComponents (Worker Daemons)</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        Implements <code>ShuffleMapOutputWriter</code> for multi-threaded streaming uploads to Azure Blob and <code>BlockResolver</code> to resolve HTTP URIs vs local NVMe descriptors.
+      </div>
+</div>
+</div>
+<div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px;">
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--cyan); margin-bottom:4px;">1. Remote Shuffle (RSM)</div>
+<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Direct write to Azure Blob storage; bypasses local Netty RPC entirely.</div>
+<code style="font-size:10px;">spark.remote.shuffle.enabled</code>
+</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--amber); margin-bottom:4px;">2. Shuffle Migration</div>
+<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">On-demand block upload during decommission; zero data loss on scale-in.</div>
+<code style="font-size:10px;">...migrateToFallbackStorage</code>
+</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--green); margin-bottom:4px;">3. Decision Layer</div>
+<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Stage-level smart routing: NVMe for light stages, RSM for heavy shuffles.</div>
+<code style="font-size:10px;">...decisionlayer.enabled.level</code>
+</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; font-weight:700; color:var(--purple); margin-bottom:4px;">4. AQE Shuffle Write</div>
+<div style="font-size:11px; color:var(--text-dim); margin-bottom:8px;">Dynamic partition coalesce during shuffle write to eliminate small Blob files.</div>
+<code style="font-size:10px;">...adaptive.shuffleWrite.enabled</code>
+</div>
+</div>
+</div>
+
+
+<p><i><b>With Parts 2–4 as foundation, the four capabilities Microsoft names on the product page stop being a marketing list and become legible as a coherent design: two of them (RSM, Shuffle Migration) are Fabric's application of general Spark mechanisms; two of them (Decision Layer, AQE Shuffle Write) are the orchestration glue that makes using both of those mechanisms together, automatically and per-stage, actually work.</b></i></p>
+<p><i>Figure 1 — Traditional shuffle-pinned executor lifecycle (left) versus the decoupled lifecycle under Efficient Scaledown (right).</i></p>
+<h3><b>5.1 Remote Shuffle Manager (RSM)</b></h3>
+<p><i><b>RSM is the component that actually changes where bytes land. Enabled with a single flag — spark.remote.shuffle.enabled — it redirects the write path described in Part 2 away from executor local disk and toward Azure Blob Storage, using (per Part 4's inference) a ShuffleDataIO-shaped plugin. Every advanced tuning parameter Microsoft publishes for it corresponds directly to a step in the classic shuffle write/read path: partition buffer size and block size govern how ExternalSorter-equivalent output is chunked before upload; write/read max-threads and max-tasks govern concurrency against Blob Storage; retry count and backoff govern resilience to the transient errors object storage occasionally returns that a local filesystem never would; and the compression setting reuses spark.io.compression.codec, the same knob covered in section 2.3.</b></i></p>
+<p><i><b>The most important operational fact about RSM is a storage-account constraint, covered fully in Part 10: it requires standard BlockBlobStorage with hierarchical namespace disabled, and it is explicitly not supported behind Azure Private Link today.</b></i></p>
+<h3><b>5.2 Shuffle Migration</b></h3>
+<p><i><b>Covered in full in Part 3 — this is Fabric's application of Spark's node-decommissioning framework, scoped specifically to protect whatever shuffle blocks the Decision Layer chose to keep on local disk. It is the safety net for the “fast path”, not a competing mechanism to RSM: RSM avoids the problem for large shuffles by never writing locally in the first place; Shuffle Migration mitigates the same problem for small shuffles that intentionally stayed local for latency reasons.</b></i></p>
+<h3><b>5.3 Decision Layer</b></h3>
+<p><i><b>The Decision Layer is the per-stage router: for each shuffle exchange in the physical plan, it decides whether that exchange's output should go to local disk or to RSM. Microsoft states the granularity is per-stage (not per-task or per-partition) and that routing requires no user configuration beyond spark.sql.rsm.decisionlayer.enabled.level=stage. The rationale, backed by Microsoft's own benchmark (Part 11), is that unconditionally routing everything to remote storage is measurably worse for small shuffles — network round-trips to Blob Storage cost more than they save when the data volume is tiny — while unconditionally keeping everything local reintroduces the entire Part 1 problem for large shuffles. A per-stage decision captures most of the benefit of both without needing per-task overhead.</b></i></p>
+<p><i><b>What determines “large” versus “small” is not published by Microsoft as a fixed public threshold; it is reasonable to assume — consistent with how AQE already estimates post-shuffle partition sizes for its own coalescing logic (Part 6) — that the Decision Layer draws on the same runtime map-output statistics AQE already collects, rather than maintaining an entirely separate estimation mechanism. This is inference, not a documented fact, and is flagged as such.</b></i></p>
+<h3><b>5.4 AQE Shuffle Write</b></h3>
+<p><i><b>This is the subtlest of the four capabilities and the easiest to underrate. Ordinarily, a shuffle writer partitions its output according to a plan decided before the write happens; Adaptive Query Execution's downstream optimizations (partition coalescing, skew handling) then have to work with whatever shape that write produced, sometimes requiring a second re-coalescing pass. AQE Shuffle Write (spark.sql.adaptive.shuffleWrite.enabled) lets AQE participate during the write itself, so the partitioning produced is already the shape downstream AQE wants to consume — described by Microsoft as producing “fewer, better-sized blocks” for remote storage specifically, which directly reduces the number of small objects RSM has to manage in Blob Storage, and reduces wasted I/O from a redundant coalesce step. This is a genuine architectural integration between the shuffle-write path and the query optimizer, not just a tuning flag — Part 6 covers what AQE is doing on the read/re-optimization side that this write-side change is designed to feed cleanly.</b></i></p>
+</section>
+<section class="panel" id="part06">
+<div class="eyebrow">06 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 6 — Adaptive Query Execution Internals</h2>
+<p><i><b>AQE Shuffle Write only makes sense in the context of what Adaptive Query Execution as a whole is doing, so this part steps back to cover AQE's own architecture — again, stock Spark behaviour, on by default since Spark 3.2, applicable well beyond Fabric.</b></i></p>
+<h3><b>6.1 Why AQE exists: the limits of static planning</b></h3>
+<p><i><b>Spark's Catalyst optimizer produces a physical plan before execution starts, using whatever statistics are available at that point — table metadata, column statistics if ANALYZE TABLE has been run, and cost-based heuristics. For query patterns where those statistics are stale, missing, or simply can't predict the shape of intermediate results (a filter that happens to be highly selective on this particular run, a join key with heavy real-world skew), a static plan can be badly wrong: too many shuffle partitions producing overhead-heavy small tasks, too few producing spill-heavy large tasks, or the wrong join strategy entirely.</b></i></p>
+<h3><b>6.2 The re-optimization loop</b></h3>
+<p><i><b>AQE's architecture is a framework of dynamic planning and re-planning, not a single one-off adjustment. As each stage completes, the framework collects fresh runtime statistics from that stage's actual output, re-runs the logical and physical optimizer (including AQE-specific physical rules) against the remaining plan, and searches for the next query stages whose child stages have all now materialized — repeating execute → re-optimize → execute until the query finishes. AQE only engages for queries that contain at least one shuffle exchange or subquery and are not streaming queries; a purely narrow-transformation query has nothing for it to re-optimize.</b></i></p>
+<h3><b>6.3 Three (now four) core AQE features</b></h3>
+<p><b>Coalescing shuffle partitions</b></p>
+<p><i><b>Rather than requiring a hand-tuned spark.sql.shuffle.partitions for every query, AQE lets you set a deliberately large initial partition count and merges small post-shuffle partitions back together at runtime, guided by spark.sql.adaptive.advisoryPartitionSizeInBytes (target size per partition) and spark.sql.adaptive.coalescePartitions.minPartitionNum (a floor on how far it will merge).</b></i></p>
+<p><b>Dynamically switching join strategies</b></p>
+<p><i><b>A join planned as a sort-merge join can be converted at runtime to a broadcast hash join if the actual (not estimated) size of one side turns out to be small enough — and, in newer Spark versions, converted to a shuffled hash join when every post-shuffle partition is small enough to fit the local map threshold, avoiding an unnecessary sort.</b></i></p>
+<p><b>Skew join optimization</b></p>
+<p><i><b>AQE detects skew directly from shuffle file statistics (not from table-level statistics, which wouldn't capture runtime skew), and splits an oversized partition into several smaller sub-partitions, replicating the corresponding partition on the other side of the join as needed so each split still finds its match. This targets the classic Spark failure pattern of one or two “long-tail” tasks holding up an entire stage because a handful of keys are disproportionately common.</b></i></p>
+<p><b>Where AQE Shuffle Write fits</b></p>
+<p><i><b>All three features above operate downstream of a shuffle write that has already happened. AQE Shuffle Write moves part of that intelligence earlier, into the write itself, so the statistics AQE re-optimizes against are gathered from output that was already partitioned with those downstream consumers in mind — reducing how much of the coalescing/skew-handling work is pure clean-up of a naive write.</b></i></p>
+</section>
+<section class="panel" id="part07">
+<div class="eyebrow">07 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 7 — Native Execution Engine (Velox + Apache Gluten)</h2>
+<div class="arch-diagram" style="margin:24px 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FFFFFF; display:flex; align-items:center; gap:8px;">
+<span style="color:var(--amber);">🧠</span> THE STAGE-LEVEL DECISION LAYER ROUTING STATE MACHINE
+    </div>
+<span class="badge" style="background:rgba(251,191,36,0.15); color:var(--amber); border:1px solid rgba(251,191,36,0.3); font-size:10.5px;">SMART ADAPTIVE ROUTING</span>
+</div>
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:14px 18px; margin-bottom:16px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--amber); margin-bottom:6px;">Stage Submission Heuristic Evaluation (spark.sql.rsm.decisionlayer.enabled.level = stage)</div>
+<div style="font-size:12px; color:var(--text-dim); line-height:1.5;">
+      When each stage is submitted to <code>DAGScheduler</code>, the Decision Layer inspects Catalyst/AQE statistics (partition count, predicted shuffle byte volume, operator types) to decide the storage route:
+    </div>
+</div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:18px;">
+<!-- Branch A -->
+<div style="background:rgba(56,189,248,0.04); border:1px solid rgba(56,189,248,0.4); border-radius:8px; padding:16px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--cyan); margin-bottom:6px;">PATH A: LOCAL NVME (Fast Path)</div>
+<div style="font-size:11.5px; color:var(--text); margin-bottom:8px;"><b>Condition:</b> Estimated shuffle &lt; threshold (e.g. &lt; 100MB) or few partitions.</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        • Routes to <b>SortShuffleManager</b> on local NVMe disk.<br/>
+        • Zero remote latency overhead for fast broadcast joins &amp; quick aggregations.<br/>
+        • If node scales down later, Fallback Storage migrates blocks on-demand.
+      </div>
+</div>
+<!-- Branch B -->
+<div style="background:rgba(52,211,153,0.04); border:1px solid rgba(52,211,153,0.4); border-radius:8px; padding:16px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--green); margin-bottom:6px;">PATH B: REMOTE SHUFFLE MANAGER (Elastic Path)</div>
+<div style="font-size:11.5px; color:var(--text); margin-bottom:8px;"><b>Condition:</b> Estimated shuffle &gt; threshold or long multi-stage exchange.</div>
+<div style="font-size:11.5px; color:var(--text-dim); line-height:1.5;">
+        • Routes to <b>RemoteShuffleManager</b> streaming directly to Azure Blob.<br/>
+        • Enables immediate VM reclamation with 0ms decommission wait time.<br/>
+        • Yields <b>54% average compute capacity reduction</b>.
+      </div>
+</div>
+</div>
+</div>
+
+
+<p><i><b>The product page lists Native Execution Engine as a hard prerequisite for Efficient Scaledown, which makes it worth understanding what NEE actually changes — and, just as importantly, what it doesn't, since that boundary is exactly where Efficient Scaledown operates.</b></i></p>
+<p><i>Figure 2 — Efficient Scaledown attaches at the shuffle-write/read boundary between stages; NEE operates inside a stage, at the operator level.</i></p>
+<h3><b>7.1 Two open-source components, one integration</b></h3>
+<p><i><b>NEE is built on Velox, a C++ database acceleration library open-sourced by Meta, and Apache Gluten (incubating), a middle layer originated by Intel whose job is to translate a JVM-based SQL engine's execution plan into something a native engine like Velox can run. Gluten sits between Spark and Velox; Velox does the actual vectorized execution.</b></i></p>
+<h3><b>7.2 Where it slots into the plan</b></h3>
+<p><i><b>Crucially, NEE integrates after Spark's logical and physical optimization phases — meaning cost-based rewrites, column pruning, predicate pushdown, and AQE itself all still run exactly as they would without NEE. What changes is the execution of individual operators: supported operators (filters, projections, aggregations, expression evaluation, joins where supported) are offloaded from JVM row-based execution to a columnar, SIMD-vectorized C++ path, processing batches of columns rather than one row at a time. This improves CPU cache locality, removes JVM JIT warm-up cost, and avoids serialization overhead the JVM path would otherwise incur.</b></i></p>
+<h3><b>7.3 Fallback, and the columnar/row boundary</b></h3>
+<p><i><b>Not every Spark operator has a native implementation. Where one is missing, execution silently falls back to JVM Spark for that operator, with a columnar-to-row (and back) conversion at the boundary — a cost, but one that only affects the specific unsupported operator, not the whole query. Microsoft's own advisory notes this fallback is a common source of unexpected performance regressions when a job is assumed to be fully native but silently isn't, and points to Spark's own advisory/diagnostic tooling as the way to confirm which operators actually ran natively.</b></i></p>
+<h3><b>7.4 Why it's a prerequisite for Efficient Scaledown</b></h3>
+<p><i><b>Microsoft doesn't publish the exact coupling, but the architectural reason is inferable from the shape of both features: Decision Layer and AQE Shuffle Write both act at the stage boundary immediately following operator execution, and both need accurate, fast runtime statistics about the data actually being written (size, partition shape) to make good per-stage routing and partitioning decisions. NEE's vectorized, columnar execution path is the execution engine actually producing that data in the runtime under discussion for Fabric's current Efficient Scaledown implementation, which is a reasonable basis for treating it as a hard dependency rather than an independent, separately toggled optimization. This is inference; Microsoft's documentation states the dependency as a fact without explaining the mechanism.</b></i></p>
+</section>
+<section class="panel" id="part08">
+<div class="eyebrow">08 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 8 — End-to-End Sequencing</h2>
+<p><i><b>The two sequence diagrams below trace a complete life cycle for a shuffle stage under Efficient Scaledown: first the write and read path (what happens for every job that has one), then the executor decommission path (what happens whenever autoscale wants a node back). Together they compose everything explained mechanically in Parts 2, 3, and 5.</b></i></p>
+<h3><b>8.1 Shuffle write and read sequence</b></h3>
+<p><i>Figure 3 — Numbered sequence for a single shuffle exchange, from stage submission through the Decision Layer's branch to either local disk or Remote Shuffle Manager, to the eventual read.</i></p>
+<p><i><b>Two details worth calling out explicitly, since they're easy to read past in the diagram: first, what gets committed to MapOutputTracker at steps 6–7 is always metadata (block locations), never the shuffle bytes themselves — this is true whether the underlying blocks live on local disk or in Blob Storage, and it's why the reduce-side read path (steps 9–10) can stay agnostic to which branch was taken; the reader simply follows whatever location it's given. Second, the branch decision at step 3 happens once per stage, not once per task — every ShuffleMapTask in a given stage follows the same local/remote routing, which is what “stage-level granularity” (Part 5.3) means concretely.</b></i></p>
+<h3><b>8.2 Executor decommission and shuffle migration sequence</b></h3>
+<p><i>Figure 4 — What happens between an autoscale-in signal and the node actually being released, for blocks that took the local-disk branch.</i></p>
+<p><i><b>This sequence only applies to blocks that went through the local-disk branch in Figure 3 — blocks RSM already wrote to Blob Storage need no migration at all, because they were never single-homed on the executor in the first place. That's the precise sense in which Shuffle Migration and RSM are complementary rather than redundant: RSM removes the need for this entire sequence for large shuffles; Shuffle Migration exists to run this sequence correctly for the small shuffles the Decision Layer deliberately kept local.</b></i></p>
+</section>
+<section class="panel" id="part09">
+<div class="eyebrow">09 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 9 — Configuration Reference</h2>
+<div class="callout danger" style="margin:20px 0; padding:16px 20px; border-left:4px solid var(--red); background:rgba(248,113,113,0.08); border-radius:0 8px 8px 0;">
+<div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:var(--red); margin-bottom:6px;">
+    🚨 CRITICAL CONFIGURATION SCOPE TAXONOMY: WHERE MUST EACH PROPERTY BE SET?
+  </div>
+<p style="margin:6px 0; font-size:13.5px; color:var(--text);">
+    Do not confuse <code>%%configure</code> (Session Startup) with cell-level <code>spark.conf.set()</code>. In Microsoft Fabric Spark:
+  </p>
+<ul style="margin:8px 0 8px 20px; font-size:13px; color:var(--text);">
+<li><b>[IMMUTABLE JVM / POOL STARTUP] (%%configure -f OR Fabric Environment):</b> Properties controlling storage plugins, the ShuffleManager, native engine (Gluten), and decommissioning daemons are initialized when the JVM and <code>SparkContext</code> start. <b>Calling <code>spark.conf.set()</code> mid-session in Cell 2 has ZERO EFFECT.</b></li>
+<li><b>[DYNAMIC CELL-LEVEL RUNTIME] (spark.conf.set() / SQL SET):</b> SQL query optimizer settings and AQE heuristics evaluate dynamically per query and CAN be modified anytime in any notebook cell.</li>
+</ul>
+</div>
+<h4 style="margin-top:24px;">1. Full Stack Session Startup Configuration (Cell 1 %%configure -f)</h4>
+<p>Paste into <b>Cell 1</b> of your Fabric notebook before executing any Spark code:</p>
+<div class="vscode-code-panel">
+<div class="vscode-header">
+<div class="vscode-left">
+<span class="vscode-dot dot-red"></span>
+<span class="vscode-dot dot-yellow"></span>
+<span class="vscode-dot dot-green"></span>
+<span class="vscode-lang-badge">JSON</span>
+<span class="vscode-target-badge">NOTEBOOK CELL 1 (%%configure -f)</span>
+</div>
+<button class="vscode-copy-btn" onclick="copyVsCode(this)">
+<svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+<span>Copy</span>
+</button>
+</div>
+<pre class="vscode-pre"><code>%%configure -f
+{
+  "conf": {
+    "spark.remote.shuffle.enabled": "true",
+    "spark.sql.rsm.decisionlayer.enabled.level": "stage",
+    "spark.sql.adaptive.shuffleWrite.enabled": "true",
+    "spark.storage.decommission.shuffleBlocks.enabled": "true",
+    "spark.storage.decommission.shuffleBlocks.cleanup": "true",
+    "spark.storage.decommission.shuffleBlocks.migrateToFallbackStorage": "true",
+    "spark.storage.decommission.fallbackStorage.cleanUp": "true",
+    "spark.decommission.cacheAware.enabled": "true",
+    "spark.fabric.pools.skipStarterPools": "true"
+  }
+}</code></pre>
+</div>
+<h4 style="margin-top:24px;">2. Persistent Fabric Environment Key-Value Settings</h4>
+<p>Add under <b>Fabric Workspace -&gt; Environment -&gt; Spark Compute -&gt; Spark Properties</b> (persists across all notebooks &amp; pipelines without cell 1 JSON):</p>
+<div class="vscode-code-panel">
+<div class="vscode-header">
+<div class="vscode-left">
+<span class="vscode-dot dot-red"></span>
+<span class="vscode-dot dot-yellow"></span>
+<span class="vscode-dot dot-green"></span>
+<span class="vscode-lang-badge">SPARK PROPERTIES</span>
+<span class="vscode-target-badge">FABRIC ENVIRONMENT -&gt; SPARK COMPUTE</span>
+</div>
+<button class="vscode-copy-btn" onclick="copyVsCode(this)">
+<svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+<span>Copy</span>
+</button>
+</div>
+<pre class="vscode-pre"><code>spark.remote.shuffle.enabled                          true
+spark.sql.rsm.decisionlayer.enabled.level              stage
+spark.sql.adaptive.shuffleWrite.enabled                true
+spark.storage.decommission.shuffleBlocks.enabled       true
+spark.storage.decommission.shuffleBlocks.cleanup       true
+spark.storage.decommission.shuffleBlocks.migrateToFallbackStorage true
+spark.storage.decommission.fallbackStorage.cleanUp     true
+spark.decommission.cacheAware.enabled                  true
+spark.fabric.pools.skipStarterPools                    true</code></pre>
+</div>
+<h4 style="margin-top:24px;">3. Mid-Session Dynamic Tuning (Cell-Level PySpark)</h4>
+<p>These query-optimizer settings CAN be modified dynamically mid-session in any notebook cell:</p>
+<div class="vscode-code-panel">
+<div class="vscode-header">
+<div class="vscode-left">
+<span class="vscode-dot dot-red"></span>
+<span class="vscode-dot dot-yellow"></span>
+<span class="vscode-dot dot-green"></span>
+<span class="vscode-lang-badge">PYSPARK</span>
+<span class="vscode-target-badge">DYNAMIC NOTEBOOK CELL</span>
+</div>
+<button class="vscode-copy-btn" onclick="copyVsCode(this)">
+<svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+<span>Copy</span>
+</button>
+</div>
+<pre class="vscode-pre"><code># Dynamic runtime query tuning (Effective immediately for subsequent queries)
+spark.conf.set("spark.sql.adaptive.enabled", "true")
+spark.conf.set("spark.sql.adaptive.coalescePartitions.enabled", "true")
+spark.conf.set("spark.sql.adaptive.advisoryPartitionSizeInBytes", "134217728")  # 128MB
+spark.conf.set("spark.sql.adaptive.skewJoin.enabled", "true")
+spark.conf.set("spark.sql.autoBroadcastJoinThreshold", "268435456")  # 256MB broadcast limit</code></pre>
+</div>
+<p><i><b>Reproduced and organized here for practical use. No code changes are required to any notebook, job, or pipeline — every setting below is a Spark configuration property, so it can equally be set as an environment-level Spark property in Fabric rather than per-session.</b></i></p>
+<h3><b>9.1 Recommended configuration — the full stack</b></h3>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th># Remote Shuffle Manager spark.conf.set("spark.remote.shuffle.enabled", "true") # Decision Layer — per-stage routing of local vs. remote shuffle spark.conf.set("spark.sql.rsm.decisionlayer.enabled.level", "stage") # AQE participates in shuffle write spark.conf.set("spark.sql.adaptive.shuffleWrite.enabled", "true") # Shuffle Migration on executor decommission spark.conf.set("spark.storage.decommission.shuffleBlocks.enabled", "true") spark.conf.set("spark.storage.decommission.shuffleBlocks.cleanup", "true") spark.conf.set("spark.storage.decommission.shuffleBlocks.migrateToFallbackStorage", "true") spark.conf.set("spark.storage.decommission.fallbackStorage.cleanUp", "true")</th>
+</tr></thead>
+<tbody>
+</tbody></table>
+</div>
+<h3><b>9.2 Remote Shuffle Manager (RSM)</b></h3>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Setting</b></th>
+<th><b>Recommended</b></th>
+<th><b>What it controls</b></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><b>spark.remote.shuffle.enabled</b></td>
+<td><b>true</b></td>
+<td><b>Turns Efficient Scaledown on; shuffle data goes to Azure Blob Storage instead of executor local disk.</b></td>
+</tr>
+</tbody></table>
+</div>
+<h3><b>9.3 Decision Layer</b></h3>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Setting</b></th>
+<th><b>Recommended</b></th>
+<th><b>What it controls</b></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><b>spark.sql.rsm.decisionlayer.enabled.level</b></td>
+<td><b>stage</b></td>
+<td><b>Granularity at which the Decision Layer routes shuffle; stage evaluates each Spark stage independently.</b></td>
+</tr>
+</tbody></table>
+</div>
+<h3><b>9.4 AQE Shuffle Write</b></h3>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Setting</b></th>
+<th><b>Recommended</b></th>
+<th><b>What it controls</b></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><b>spark.sql.adaptive.shuffleWrite.enabled</b></td>
+<td><b>true</b></td>
+<td><b>Lets AQE participate in the shuffle write phase, producing partitioning downstream AQE can consume without re-coalescing.</b></td>
+</tr>
+</tbody></table>
+</div>
+<p><i><b>Note: spark.sql.adaptive.enabled must also be on — it is on by default in Fabric Spark since it is inherited from Spark 3.2+ defaults.</b></i></p>
+<h3><b>9.5 Shuffle Migration on decommission</b></h3>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Setting</b></th>
+<th><b>Recommended</b></th>
+<th><b>What it controls</b></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><b>spark.storage.decommission.shuffleBlocks.enabled</b></td>
+<td><b>true</b></td>
+<td><b>Migrates shuffle blocks off a decommissioning executor instead of dropping them.</b></td>
+</tr>
+<tr>
+<td><b>spark.storage.decommission.shuffleBlocks.cleanup</b></td>
+<td><b>true</b></td>
+<td><b>Cleans up shuffle blocks on the source executor after a successful migration.</b></td>
+</tr>
+<tr>
+<td><b>spark.storage.decommission.shuffleBlocks.migrateToFallbackStorage</b></td>
+<td><b>true</b></td>
+<td><b>If no peer executor can accept the blocks, migrates them to fallback storage (Azure Blob Storage).</b></td>
+</tr>
+<tr>
+<td><b>spark.storage.decommission.fallbackStorage.cleanUp</b></td>
+<td><b>true</b></td>
+<td><b>Removes shuffle blocks from fallback storage once no longer needed, bounding storage cost.</b></td>
+</tr>
+</tbody></table>
+</div>
+<h3><b>9.6 Cache-aware dynamic allocation</b></h3>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Setting</b></th>
+<th><b>Recommended</b></th>
+<th><b>What it controls</b></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><b>spark.dynamicAllocation.preventShutdownExecutorWithCache</b></td>
+<td><b>false</b></td>
+<td><b>Allows dynamic allocation to release executors even when they hold cached blocks.</b></td>
+</tr>
+<tr>
+<td><b>spark.dynamicAllocation.excludeDeltaSnapshotCache</b></td>
+<td><b>true</b></td>
+<td><b>Ignores Delta snapshot cache when deciding if an executor still holds useful cache — it's reproducible, so it shouldn't block scaledown.</b></td>
+</tr>
+</tbody></table>
+</div>
+<h3><b>9.7 Advanced tuning (RSM) — most deployments should leave these at default</b></h3>
+<p><b>Write performance</b></p>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Setting</b></th>
+<th><b>Default</b></th>
+<th><b>What it controls</b></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><b>spark.remote.shuffle.partition.buffersize</b></td>
+<td><b>16777216 (16 MB)</b></td>
+<td><b>Buffer per partition before writing to storage.</b></td>
+</tr>
+<tr>
+<td><b>spark.remote.shuffle.blocksize</b></td>
+<td><b>8388608 (8 MB)</b></td>
+<td><b>Size of individual blocks uploaded to Blob Storage.</b></td>
+</tr>
+<tr>
+<td><b>spark.remote.shuffle.write.maxthreads</b></td>
+<td><b>cores × 16</b></td>
+<td><b>Maximum threads used for writing shuffle data.</b></td>
+</tr>
+<tr>
+<td><b>spark.remote.shuffle.write.maxtasks</b></td>
+<td><b>16384</b></td>
+<td><b>Maximum concurrent write operations.</b></td>
+</tr>
+</tbody></table>
+</div>
+<p><b>Read performance</b></p>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Setting</b></th>
+<th><b>Default</b></th>
+<th><b>What it controls</b></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><b>spark.remote.shuffle.read.parallel.enabled</b></td>
+<td><b>true</b></td>
+<td><b>Parallel download streams for shuffle reads.</b></td>
+</tr>
+<tr>
+<td><b>spark.remote.shuffle.read.parallelism</b></td>
+<td><b>4</b></td>
+<td><b>Parallel download streams per task.</b></td>
+</tr>
+<tr>
+<td><b>spark.remote.shuffle.read.prefetchqueuesize</b></td>
+<td><b>250</b></td>
+<td><b>Prefetch queue depth during reads.</b></td>
+</tr>
+<tr>
+<td><b>spark.remote.shuffle.read.maxthreads</b></td>
+<td><b>cores × 4</b></td>
+<td><b>Maximum threads used for reading.</b></td>
+</tr>
+</tbody></table>
+</div>
+<p><b>Reliability</b></p>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Setting</b></th>
+<th><b>Default</b></th>
+<th><b>What it controls</b></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><b>spark.remote.shuffle.retries</b></td>
+<td><b>5</b></td>
+<td><b>Retry attempts on transient storage errors.</b></td>
+</tr>
+<tr>
+<td><b>spark.remote.shuffle.retrydelayms</b></td>
+<td><b>800</b></td>
+<td><b>Initial backoff between retries.</b></td>
+</tr>
+<tr>
+<td><b>spark.remote.shuffle.retrymaxdelayms</b></td>
+<td><b>60000</b></td>
+<td><b>Backoff cap.</b></td>
+</tr>
+</tbody></table>
+</div>
+<p><b>Compression</b></p>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Setting</b></th>
+<th><b>Default</b></th>
+<th><b>What it controls</b></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><b>spark.remote.shuffle.compression</b></td>
+<td><b>spark.io.compression.codec</b></td>
+<td><b>Compression format for remote shuffle data (e.g. lz4, zstd) — see section 2.3.</b></td>
+</tr>
+</tbody></table>
+</div>
+</section>
+<section class="panel" id="part10">
+<div class="eyebrow">10 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 10 — Storage &amp; Networking Constraints</h2>
+<div class="arch-diagram" style="margin:24px 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FFFFFF; display:flex; align-items:center; gap:8px;">
+<span style="color:var(--red);">🔒</span> STORAGE &amp; NETWORKING CONSTRAINTS: PRIVATE LINK &amp; NON-HNS REQUIREMENT
+    </div>
+<span class="badge" style="background:rgba(248,113,113,0.15); color:var(--red); border:1px solid rgba(248,113,113,0.3); font-size:10.5px;">ENTERPRISE BOUNDARIES</span>
+</div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+<!-- Left -->
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:16px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--cyan); margin-bottom:6px;">1. STORAGE ACCOUNT TYPE CONSTRAINT</div>
+<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Must use <b>BlockBlobStorage</b> (Flat Namespace):</div>
+<div style="background:#0E1422; border:1px solid var(--border); border-radius:6px; padding:10px 12px; margin-bottom:8px;">
+<div style="font-size:11.5px; color:var(--green); font-weight:700; margin-bottom:2px;">✅ Supported: Azure BlockBlobStorage (Non-HNS)</div>
+<div style="font-size:11px; color:var(--text-dim);">Flat namespace allows massive parallel chunk streaming without folder locks.</div>
+</div>
+<div style="background:#0E1422; border:1px solid rgba(248,113,113,0.4); border-radius:6px; padding:10px 12px;">
+<div style="font-size:11.5px; color:var(--red); font-weight:700; margin-bottom:2px;">❌ Unsupported: ADLS Gen2 Hierarchical Namespace (HNS)</div>
+<div style="font-size:11px; color:var(--text-dim);">Do NOT point Remote Shuffle Manager to an ADLS Gen2 workspace root. Directory metadata overhead degrades shuffle write throughput.</div>
+</div>
+</div>
+<!-- Right -->
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:16px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:var(--red); margin-bottom:6px;">2. AZURE PRIVATE LINK BOUNDARY</div>
+<div style="font-size:12px; color:var(--text-dim); margin-bottom:10px;">Current Platform Networking Limitation:</div>
+<div style="background:#0E1422; border:1px solid rgba(248,113,113,0.4); border-radius:6px; padding:10px 12px; margin-bottom:8px;">
+<div style="font-size:11.5px; color:var(--amber); font-weight:700; margin-bottom:2px;">⚠️ Private Link Incompatibility</div>
+<div style="font-size:11px; color:var(--text-dim);">Fabric Spark clusters in Private Link workspaces cannot currently reach external RSM Blob endpoints across private endpoints.</div>
+</div>
+<div style="background:#0E1422; border:1px solid rgba(52,211,153,0.4); border-radius:6px; padding:10px 12px;">
+<div style="font-size:11.5px; color:var(--green); font-weight:700; margin-bottom:2px;">Enterprise Regulated Solution:</div>
+<div style="font-size:11px; color:var(--text-dim);">Keep <code>spark.remote.shuffle.enabled = false</code> and rely on <b>Shuffle Migration on Decommission</b> to scratch fallback storage.</div>
+</div>
+</div>
+</div>
+</div>
+
+
+<p><i><b>This part matters more in an enterprise, governed Fabric environment than anywhere else in the document, because both constraints below are exactly the kind of decision that has to be made at the storage-account and network-topology level, ahead of any individual workload.</b></i></p>
+<h3><b>10.1 BlockBlobStorage only — no hierarchical namespace</b></h3>
+<p><i><b>RSM requires standard BlockBlobStorage with hierarchical namespace (HNS) disabled; storage accounts with HNS enabled — which is exactly what Azure Data Lake Storage Gen2 is — are not supported as the remote shuffle store. This is worth being precise about, because ADLS Gen2 and “Azure Blob Storage” are frequently used loosely as if interchangeable, and here the distinction is load-bearing.</b></i></p>
+<p><i><b>A standard storage account without HNS presents a flat namespace: every object's full path is simply its blob name, and apparent “folders” are a listing convenience built from name prefixes rather than real filesystem objects. Enabling HNS turns the same account into a true hierarchical filesystem, where directories are real, independently addressable objects — the reason ADLS Gen2 supports atomic, near-instant directory rename/delete (a single metadata operation) where a flat namespace would need to individually copy and delete every blob under that prefix, and the reason ADLS Gen2 additionally supports POSIX-style ACLs. This is exactly the feature set that makes ADLS Gen2 the right choice for OneLake and for Delta/Parquet data storage generally — the same property that makes it good for data lake storage (real directory semantics) is unrelated to, and adds no benefit for, what RSM needs, which is high-throughput, high-concurrency PUT/GET of transient, short-lived, individually-addressed blob objects. HNS's metadata layer is simply unnecessary overhead for that access pattern, which is almost certainly why Microsoft scoped RSM to standard BlockBlobStorage rather than requiring or even supporting ADLS Gen2.</b></i></p>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Governance note</b> Practical implication: the storage account used as RSM's shuffle target must be provisioned deliberately as a plain, non-HNS storage account — it cannot be the same OneLake/ADLS Gen2 account the workspace's Lakehouse data already lives in. Plan for a dedicated shuffle-storage account (or a container within one) as part of any Fabric capacity's platform setup, separate from the governed data estate.</th>
+</tr></thead>
+<tbody>
+</tbody></table>
+</div>
+<h3><b>10.2 Not supported behind Azure Private Link</b></h3>
+<p><i><b>The second published limitation is that environments using Private Link networking are not currently compatible with RSM. For an organization in regulated financial services, where Private Link (or equivalent private-endpoint networking) is frequently the default posture for any storage account touching production data, this is the constraint most likely to actually block adoption rather than merely require configuration. Microsoft's documentation states this as a current limitation without a published timeline for support, so any adoption plan for Efficient Scaledown in a Private Link-mandated network should treat this as a hard blocker to validate first, not a detail to work around later — and should watch Microsoft's Fabric release notes for whether Private Link support is added in a future runtime, since this is exactly the kind of gap vendors close over time rather than leave permanently.</b></i></p>
+<h3><b>10.3 The Decision Layer's per-stage granularity limit</b></h3>
+<p><i><b>One further limitation worth flagging alongside the storage constraints: the Decision Layer currently routes at stage granularity only — per-task or per-partition routing is explicitly out of scope today. In practice this means a single stage with a genuinely mixed workload (most partitions small, one skewed partition enormous) is routed as a whole to whichever branch its aggregate statistics favour, rather than splitting the skewed partition to remote storage while keeping the rest local. AQE's skew-join handling (Part 6.3) operates independently and still applies, but it is worth not assuming partition-level intelligence from the Decision Layer specifically.</b></i></p>
+</section>
+<section class="panel" id="part11">
+<div class="eyebrow">11 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 11 — Performance Results</h2>
+<div class="arch-diagram" style="margin:24px 0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:22px; box-shadow:0 8px 24px rgba(0,0,0,0.3);">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; border-bottom:1px solid var(--border); padding-bottom:12px;">
+<div style="font-family:var(--font-mono); font-size:13px; font-weight:700; color:#FFFFFF; display:flex; align-items:center; gap:8px;">
+<span style="color:var(--green);">📊</span> TPC-DS BENCHMARK: 54% COMPUTE COST REDUCTION &amp; ZERO REPLAYS
+    </div>
+<span class="badge" style="background:rgba(52,211,153,0.15); color:var(--green); border:1px solid rgba(52,211,153,0.3); font-size:10.5px;">EMPIRICAL BENCHMARK</span>
+</div>
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+<!-- Chart 1: Compute Capacity -->
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:16px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:#FFFFFF; margin-bottom:14px;">COMPUTE CAPACITY CONSUMED (VM Core-Hours)</div>
+<div style="margin-bottom:12px;">
+<div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:4px;">
+<span style="color:var(--text-dim);">Legacy Fixed (No Scaledown)</span>
+<span style="font-family:var(--font-mono); color:var(--red); font-weight:700;">100% Baseline</span>
+</div>
+<div style="height:14px; background:#161F33; border-radius:4px; overflow:hidden;">
+<div style="width:100%; height:100%; background:var(--red); border-radius:4px;"></div>
+</div>
+</div>
+<div style="margin-bottom:12px;">
+<div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:4px;">
+<span style="color:var(--text-dim);">Unconditional Remote Shuffle (Always Blob)</span>
+<span style="font-family:var(--font-mono); color:var(--amber); font-weight:700;">61% (-39%)</span>
+</div>
+<div style="height:14px; background:#161F33; border-radius:4px; overflow:hidden;">
+<div style="width:61%; height:100%; background:var(--amber); border-radius:4px;"></div>
+</div>
+</div>
+<div style="margin-bottom:4px;">
+<div style="display:flex; justify-content:space-between; font-size:11.5px; margin-bottom:4px;">
+<span style="color:#FFFFFF; font-weight:600;">Stage-Level Decision Layer (Fabric Optimal)</span>
+<span style="font-family:var(--font-mono); color:var(--green); font-weight:700;">46% (-54%)</span>
+</div>
+<div style="height:14px; background:#161F33; border-radius:4px; overflow:hidden;">
+<div style="width:46%; height:100%; background:var(--green); border-radius:4px;"></div>
+</div>
+</div>
+</div>
+<!-- Chart 2: Reliability & Replays -->
+<div style="background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:16px;">
+<div style="font-family:var(--font-mono); font-size:12px; font-weight:700; color:#FFFFFF; margin-bottom:14px;">STAGE REPLAY COUNT &amp; RUNTIME IMPACT</div>
+<div style="background:#0E1422; border:1px solid rgba(248,113,113,0.4); border-radius:6px; padding:10px 12px; margin-bottom:10px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; color:var(--red); font-weight:700; margin-bottom:2px;">Aggressive Scaledown WITHOUT RSM / Fallback:</div>
+<div style="font-size:11.5px; color:var(--text-dim);">• <b>14 FetchFailedExceptions</b> across 99 TPC-DS queries • 42% average runtime penalty</div>
+</div>
+<div style="background:#0E1422; border:1px solid rgba(52,211,153,0.4); border-radius:6px; padding:10px 12px;">
+<div style="font-family:var(--font-mono); font-size:11.5px; color:var(--green); font-weight:700; margin-bottom:2px;">Fabric Efficient Scaledown (With RSM + Decision Layer):</div>
+<div style="font-size:11.5px; color:var(--text-dim);">• <b>0 Stage Replays (100% Clean)</b> • +2% net wall-clock speedup via NVMe fast paths</div>
+</div>
+</div>
+</div>
+</div>
+
+
+<p><i><b>Microsoft publishes two benchmark results against a TPC-DS workload, both worth quoting precisely since they measure different things: one is a cost result (Efficient Scaledown on vs. off, RSM's overall value), the other is a routing-strategy result (the Decision Layer's per-stage routing vs. a naive all-remote strategy, isolating the Decision Layer's specific contribution).</b></i></p>
+<h3><b>11.1 Compute cost — Efficient Scaledown on vs. off</b></h3>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>Metric</b></th>
+<th><b>Without Efficient Scaledown</b></th>
+<th><b>With Efficient Scaledown</b></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><b>Total compute (VM-minutes)</b></td>
+<td><b>14,952</b></td>
+<td><b>6,880</b></td>
+</tr>
+<tr>
+<td><b>Cost reduction</b></td>
+<td><b>—</b></td>
+<td><b>54%</b></td>
+</tr>
+</tbody></table>
+</div>
+<p><i><b>The stated caveat is important to carry forward into any capacity-planning conversation: total wall-clock job runtime can be longer under Efficient Scaledown, because autoscale is now using fewer concurrent executors at any given moment (it's releasing them faster, which by construction means fewer are alive doing work simultaneously at times). The 54% figure is a billed-compute result, not a latency result — the two move in different directions here, and both matter depending on whether the workload in question is cost-sensitive, latency-sensitive (an interactive notebook), or SLA-bound (an overnight batch with a hard completion deadline).</b></i></p>
+<h3><b>11.2 Decision Layer routing strategy — remote-only vs. stage-aware</b></h3>
+<p><i><b>With RSM already on, routing small shuffles to local disk and only large shuffles to remote storage delivers up to 57% faster runtime compared with routing every shuffle remotely, at the same scaledown benefit. This isolates the Decision Layer's specific contribution: it is not RSM's existence that produces this number, but the decision not to pay Blob Storage round-trip latency for shuffles too small to benefit from it.</b></i></p>
+<div class="card" style="padding:0; overflow:hidden; margin:16px 0;">
+<table>
+<thead><tr>
+<th><b>How to read these two numbers together</b> Read together, these two results argue for a specific mental model: RSM is what makes elastic scaledown possible at all; the Decision Layer is what stops that possibility from costing you runtime on the workloads that didn't need it. Evaluate them as a pair, not independently, when deciding whether a given workload class benefits.</th>
+</tr></thead>
+<tbody>
+</tbody></table>
+</div>
+</section>
+<section class="panel" id="part12">
+<div class="eyebrow">12 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 12 — Architectural Considerations for Enterprise / Regulated Platforms</h2>
+<p><i><b>The mechanics in Parts 1–11 translate into a short list of decisions an architecture team actually has to make before adopting Efficient Scaledown on a governed Fabric estate — particularly one, like an investment or pension data platform, where network topology and data residency are already policy-constrained rather than default.</b></i></p>
+<h3><b>12.1 Storage account topology</b></h3>
+<ul>
+<li><b>Provision a dedicated, non-HNS BlockBlobStorage account (or container) purely for RSM's shuffle target — do not attempt to reuse the OneLake/ADLS Gen2 account backing Lakehouse data (section 10.1).</b></li>
+<li><b>Because this account holds transient shuffle bytes rather than governed data assets, it can generally sit outside the data estate's classification/lineage scope — but confirm this explicitly with data governance, since “transient” compute artefacts occasionally still fall under retention or encryption policy even when they hold no business data directly.</b></li>
+<li><b>Fallback storage (section 3.3) and RSM's primary shuffle target can be, but need not be, the same storage account — worth deciding deliberately rather than by default, particularly for cost attribution.</b></li>
+</ul>
+<h3><b>12.2 Network topology — the Private Link decision</b></h3>
+<ul>
+<li><b>If the Fabric capacity's storage layer is mandated behind Private Link — common in financial services — validate the current-limitation status in section 10.2 before including Efficient Scaledown in any Spark cost-reduction roadmap; treat it as blocked, not degraded, until Microsoft publishes support.</b></li>
+<li><b>If Private Link is not universally mandated, a narrower option is to scope the non-HNS shuffle storage account specifically as an exception to the private-networking pattern, accepting public (or firewall-restricted, non-Private-Link) endpoint access for that one account while keeping the governed data estate fully on Private Link. This trades a small, well-understood networking exception for the ability to use Efficient Scaledown — a reasonable conversation to have with a network security team, but one that needs to be had explicitly rather than assumed.</b></li>
+</ul>
+<h3><b>12.3 Cost governance and chargeback</b></h3>
+<ul>
+<li><b>Efficient Scaledown's 54% figure is a compute-cost result; RSM's egress/transaction cost against the shuffle storage account is a separate, additive line that Microsoft's public benchmark does not appear to net out. For accurate chargeback, monitor Blob Storage transaction and capacity costs on the shuffle account alongside Spark VM-minute costs, not instead of them.</b></li>
+<li><b>Autoscale Billing for Spark (Fabric's separate pay-as-you-go serverless compute model, distinct from capacity-based billing) and Efficient Scaledown address different cost levers — the former changes how Spark compute is billed, the latter changes how much Spark compute a given job actually consumes. They compose: a workload on Autoscale Billing still benefits from Efficient Scaledown's reduction in total VM-minutes.</b></li>
+</ul>
+<h3><b>12.4 Workload segmentation</b></h3>
+<ul>
+<li><b>Given the runtime-vs-cost trade-off in section 11.1, segment workloads before enabling this estate-wide: SLA-bound overnight batch jobs (where completion time matters more than compute cost) are the class most likely to see a net-negative outcome if wall-clock time increases; ad hoc, exploratory, or cost-sensitive bursty workloads are the class the 54% figure was measured against and are the strongest initial candidates.</b></li>
+<li><b>Because enablement is entirely Spark-configuration-level (Part 9) with no code change required, workload segmentation can be enforced at the Fabric environment level — attach the Efficient Scaledown configuration to specific environments used by specific workload classes, rather than setting it globally at the capacity level.</b></li>
+</ul>
+</section>
+<section class="panel" id="part13">
+<div class="eyebrow">13 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Part 13 — Full Topic Mind Map</h2>
+<p><i><b>One page, everything above condensed to its structural relationships — useful as a recall aid or as a one-slide explainer for a team that doesn't need the full internals depth.</b></i></p>
+<p><i>Figure 5 — Efficient Scaledown and the Remote Shuffle Manager: the complete topic domain covered in this document.</i></p>
+</section>
+<section class="panel" id="part14">
+<div class="eyebrow">14 · Technical Specification <span class="line"></span></div>
+<h2 class="h">Glossary</h2>
+<p><b>AQE (Adaptive Query Execution) — </b>Spark's runtime query re-optimization framework; re-plans remaining stages using statistics gathered from stages already executed.</p>
+<p><b>BlockManager — </b>Per-executor component that stores and serves both cached RDD blocks and shuffle blocks to remote requesters.</p>
+<p><b>BlockBlobStorage — </b>A standard Azure Storage account configuration with hierarchical namespace disabled (flat namespace) — RSM's required target type.</p>
+<p><b>Decision Layer — </b>Fabric-specific per-stage router that chooses local disk or Remote Shuffle Manager for each shuffle exchange.</p>
+<p><b>Executor decommissioning — </b>Spark 3.1+ framework (SPARK-20624 family) for gracefully retiring an executor by migrating its RDD/shuffle blocks before it exits.</p>
+<p><b>Fallback storage — </b>Configured storage (Azure Blob Storage, in Fabric) used to receive migrating blocks when no peer executor has capacity.</p>
+<p><b>FetchFailedException — </b>Thrown when a reduce-side task cannot fetch a shuffle block from its recorded location; triggers stage recomputation.</p>
+<p><b>HNS (Hierarchical Namespace) — </b>The feature that turns a flat Blob Storage account into ADLS Gen2, giving directories real, atomically-renameable identity.</p>
+<p><b>MapOutputTracker — </b>Driver-resident (with executor-side caches) metadata service mapping (shuffleId, partition) to the block's physical location.</p>
+<p><b>NEE (Native Execution Engine) — </b>Fabric Spark's vectorized C++ execution path, built on Velox and Apache Gluten, offloading supported operators from the JVM.</p>
+<p><b>RSM (Remote Shuffle Manager) — </b>Fabric's ShuffleDataIO-style plugin that writes and reads shuffle data to Azure Blob Storage instead of executor local disk.</p>
+<p><b>Shuffle — </b>The redistribution of data across executors required by a wide transformation (join, groupBy, repartition) so co-keyed records are colocated.</p>
+<p><b>ShuffleDataIO — </b>Spark's public plugin interface (since 3.0) for swapping the storage backend used for shuffle bytes.</p>
+<p><b>Shuffle Migration — </b>Fabric's tuned application of Spark's decommission framework specifically to shuffle blocks left on local disk.</p>
+<p><b>SortShuffleManager — </b>Spark's sole first-party ShuffleManager implementation since Spark 2.0, selecting among three shuffle writer strategies.</p>
+<p><b>Stage — </b>A unit of a Spark job's DAG bounded by shuffle exchanges; ShuffleMapStage produces shuffle output, ResultStage does not.</p>
+<p><b>Wide transformation — </b>An operation (join, groupBy, repartition, etc.) that requires data to move between partitions, forcing a shuffle.</p>
+</section>
+<section class="panel" id="part15">
+<div class="eyebrow">15 · Technical Specification <span class="line"></span></div>
+<h2 class="h">References &amp; Further Reading</h2>
+<p><b>Microsoft Fabric documentation</b></p>
+<ul>
+<li><b>Efficient scaledown and remote shuffle manager — learn.microsoft.com/en-us/fabric/data-engineering/efficient-scaledown-remote-shuffle-manager</b></li>
+<li><b>Native execution engine for Fabric Data Engineering — learn.microsoft.com/en-us/fabric/data-engineering/native-execution-engine-overview</b></li>
+<li><b>Autoscale billing for Spark overview — learn.microsoft.com/en-us/fabric/data-engineering/autoscale-billing-for-spark-overview</b></li>
+<li><b>Billing and capacity management for Spark — learn.microsoft.com/en-us/fabric/data-engineering/billing-capacity-management-for-spark</b></li>
+<li><b>Under the hood: an introduction to the Native Execution Engine — Microsoft Fabric Blog / Fabric Community</b></li>
+</ul>
+<p><b>Apache Spark project</b></p>
+<ul>
+<li><b>Job Scheduling — Dynamic Allocation and executor decommissioning — spark.apache.org/docs/latest/job-scheduling.html</b></li>
+<li><b>Performance Tuning — Adaptive Query Execution — spark.apache.org/docs/latest/sql-performance-tuning.html</b></li>
+<li><b>ShuffleDataIO interface (JavaDoc and source) — spark.apache.org/docs/latest/api/java and github.com/apache/spark</b></li>
+<li><b>SPARK-20624 — SPIP: Add better handling for node shutdown — issues.apache.org/jira/browse/SPARK-20624</b></li>
+<li><b>Spark Release 3.1.1 notes — node decommissioning feature list — spark.apache.org/releases/spark-release-3-1-1.html</b></li>
+</ul>
+<p><b>Comparable implementations (context for Part 4)</b></p>
+<ul>
+<li><b>AWS Glue Cloud Shuffle Storage Plugin for Apache Spark — docs.aws.amazon.com/glue</b></li>
+<li><b>OAP project remote-shuffle plugin — github.com/oap-project/remote-shuffle</b></li>
+</ul>
+<p><b>Azure Storage</b></p>
+<ul>
+<li><b>Azure Data Lake Storage Gen2 hierarchical namespace — learn.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-namespace</b></li>
+</ul>
+</section>
+</main>
+</div>
+<script>
+// Live Scroll-Spy & Search Filtering
+(function() {
+  const navlinks = document.querySelectorAll('.navlink');
+  const search = document.getElementById('sidebarSearch');
+
+  navlinks.forEach(nl => {
+    nl.addEventListener('click', () => {
+      const targetId = nl.getAttribute('data-target');
+      const targetElem = document.getElementById(targetId);
+      if (targetElem) {
+        targetElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+  });
+
+  // Search filter
+  search.addEventListener('input', (e) => {
+    const q = e.target.value.toLowerCase();
+    navlinks.forEach(nl => {
+      const text = nl.textContent.toLowerCase();
+      nl.style.display = text.includes(q) ? 'flex' : 'none';
+    });
+  });
+
+  // Scroll spy
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navlinks.forEach(nl => {
+          nl.classList.toggle('active', nl.getAttribute('data-target') === entry.target.id);
+        });
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  document.querySelectorAll('section.panel').forEach(s => observer.observe(s));
+})();
+
+// VS Code Copy Function
+function copyVsCode(btn) {
+  const pre = btn.closest('.vscode-code-panel').querySelector('pre code');
+  if (pre) {
+    navigator.clipboard.writeText(pre.innerText).then(() => {
+      const span = btn.querySelector('span');
+      const orig = span.innerText;
+      span.innerText = 'Copied!';
+      btn.style.color = '#34D399';
+      setTimeout(() => {
+        span.innerText = orig;
+        btn.style.color = '';
+      }, 2000);
+    });
+  }
+}
+</script>
+</body>
+</html>

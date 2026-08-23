@@ -1,0 +1,31 @@
+{
+  "slug": "eventhouse-kql-beginner",
+  "capability_id": "eventhouse-kql",
+  "title": "Eventhouse and KQL databases — Beginner",
+  "body_md": "## What an Eventhouse actually is\n\nAn Eventhouse is a workspace-level container built to hold high-volume, time-stamped data — telemetry, logs, or sensor readings arriving continuously rather than in scheduled batches. The storage hierarchy nests three levels deep: a workspace can hold multiple eventhouses, each eventhouse can hold multiple KQL databases, and each KQL database can hold multiple tables [S1]. \"KQL\" is short for Kusto Query Language, the query language these databases use.\n\nThe container level is a real sharing boundary, not just a folder. Databases in the same Eventhouse jointly share its underlying capacity, so cost and performance are optimized across all of them together [S2]. Monitoring reflects this: a single system-overview page at the eventhouse level tracks storage, compute, ingestion, and top-queried databases, while each KQL database only exposes its own narrower metrics [S2].\n\n## Getting data in and out\n\nEventhouses are built for ingest-then-query speed: records are automatically organized by arrival time as they land, keeping queries fast and indexed at large scale [S3]. That data isn't locked to KQL alone — every Eventhouse table is also mirrored to OneLake as a single logical copy, so other Fabric engines can read it without a separate export step [S3]. Querying has two front doors: native KQL for full expressiveness, and a T-SQL analytics endpoint plus KQL querysets for people and BI tools that prefer SQL [S3]. Data living outside the database can also be pulled in via a shortcut — it lands in the Shortcuts folder and is queried with `external_table()` rather than as a native table [S4].\n\n![Eventhouse and KQL database architecture](/diagrams/eventhouse-kql.svg)\n\n## A worked example\n\nA fleet-monitoring team creates one Eventhouse for all vehicle telemetry and puts three KQL databases inside it, one per business unit, so shared capacity absorbs uneven load instead of each database needing its own headroom [S2]. A data engineer building a medallion-style pipeline lands raw telemetry into a Bronze table inside that Eventhouse, either from an Eventstream destination or written straight into a raw table [S5]. An analyst who only knows SQL later connects a BI tool to the T-SQL analytics endpoint and queries the same data without writing any KQL [S3].\n\n## What goes wrong\n\n- **Splitting related data across many eventhouses by default.** Capacity and monitoring are shared at the eventhouse level, so scattering related databases across separate eventhouses forfeits that efficiency and hides fleet-wide health behind narrower per-database views [S2].\n- **Querying a shortcut like a native table.** A shortcut lands as an external table and must be queried with `external_table()`, not treated as directly ingested data [S4].\n- **Assuming Copilot works the same everywhere.** Under Outbound Access Protection, Copilot-powered query generation for Eventhouse is not supported, though manually authored KQL queries continue to work unaffected [S6].\n",
+  "depth_levels": [2],
+  "cited_source_keys": [
+    "fabric-platform-terminology",
+    "eventhouse-overview",
+    "rti-overview",
+    "onelake-shortcuts",
+    "ms-learn-rti-medallion-architecture",
+    "fabric-blog-oap-rti"
+  ],
+  "lesson_meta": {
+    "summary": "What an Eventhouse and its KQL databases are, how the storage hierarchy and shared capacity work, and the two ways to query the data — KQL and T-SQL.",
+    "level": "beginner",
+    "estimated_minutes": 8,
+    "objectives": [
+      "Explain the Eventhouse-to-KQL-database-to-table storage hierarchy",
+      "Describe why grouping related KQL databases in one Eventhouse shares capacity and simplifies monitoring",
+      "Identify the two ways to query Eventhouse data: native KQL and the T-SQL analytics endpoint",
+      "Recognize how shortcuts and OneLake mirroring make Eventhouse data available outside KQL"
+    ],
+    "prerequisites": [],
+    "completion_outcome": "You can describe what an Eventhouse is, where it sits in the Fabric storage hierarchy, and how to query and share its data with other Fabric engines."
+  },
+  "presentation_profile": {
+    "archetype": "lesson"
+  }
+}

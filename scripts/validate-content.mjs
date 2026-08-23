@@ -28,9 +28,19 @@ function stripFencedCode(bodyMd) {
     .join("\n");
 }
 const jsonFiles = (dir) => readdirSync(join(root, dir)).filter((name) => name.endsWith(".json"));
+// A source's url is normally an absolute URL. The one exception is a root-relative app path
+// (e.g. "/toolkit-source/spark_internals.html") for first-party material the app hosts itself as
+// a static file under public/ — a real, resolvable <a href> in the reader, but not a URL with a
+// scheme, so z.string().url() alone would reject it. Hardcoding a production origin here would
+// just trade one fragile absolute path for another (this app has no fixed known domain).
+const sourceUrlSchema = z
+  .string()
+  .refine((value) => value.startsWith("/") || z.string().url().safeParse(value).success, {
+    message: "must be an absolute URL or a root-relative app path starting with /",
+  });
 const sourceSchema = z
   .object({
-    url: z.string().url(),
+    url: sourceUrlSchema,
     title: z.string().min(1),
     tier: z.number().int().min(1).max(6),
     claims: z

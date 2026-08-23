@@ -95,6 +95,11 @@ function SourcesPage() {
                   target="_blank"
                   rel="noreferrer"
                   className="text-sm font-semibold text-foreground hover:text-teal-600 dark:hover:text-teal-300"
+                  title={
+                    s.url?.startsWith("/")
+                      ? "Opens the original document, hosted in Fabric Atlas"
+                      : undefined
+                  }
                 >
                   {s.title}
                 </a>

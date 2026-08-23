@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Fabric Deep Dives — SQL Surface, Functions, dbt</title>
+<style>
+/* ============================================================================
+   DESIGN TOKENS
+   Direction: "engine console" — an instrumentation panel for a distributed
+   execution engine, not a marketing page. Dense, dark, dual-accent (cyan for
+   live/active data flow, amber for thresholds & configuration), monospace
+   headers to keep a schematic/datasheet register throughout.
+   ============================================================================ */
+:root {
+  --ink:        #090D16;
+  --panel:      #101728;
+  --panel-2:    #151E33;
+  --panel-3:    #1B2740;
+  --border:     #253048;
+  --border-soft:#1B2438;
+  --text:       #E8ECF6;
+  --text-dim:   #97A2BC;
+  --text-faint: #5C6785;
+  --cyan:       #52E0F0;
+  --cyan-dim:   #1D4A54;
+  --amber:      #F5A93F;
+  --amber-dim:  #4A3A1C;
+  --green:      #55E0A0;
+  --green-dim:  #1C4636;
+  --red:        #FF7A7A;
+  --red-dim:    #4A2226;
+  --violet:     #B79CFF;
+  --violet-dim: #362C56;
+  --font-mono:  ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, 'Liberation Mono', monospace;
+  --font-sans:  -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --sidebar-w:  272px;
+  --topbar-h:   52px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.62;
+  -webkit-font-smoothing: antialiased;
+}
+::selection { background: var(--cyan-dim); color: var(--cyan); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--ink); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+a { color: var(--cyan); text-decoration: none; }
+code, .mono { font-family: var(--font-mono); }
+code {
+  background: var(--panel-3); color: var(--amber); padding: 0.1em 0.42em;
+  border-radius: 4px; font-size: 0.86em; border: 1px solid var(--border);
+}
+
+/* ---------- Top status bar ---------- */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; height: var(--topbar-h);
+  background: var(--panel); border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 18px; z-index: 100;
+  font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim);
+  gap: 22px;
+}
+.topbar .brand { color: var(--text); font-weight: 700; letter-spacing: 0.02em; display: flex; align-items: center; gap: 8px; }
+.topbar .brand .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2.4s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.topbar .seg { display: flex; align-items: center; gap: 6px; }
+.topbar .seg b { color: var(--cyan); font-weight: 600; }
+.topbar-spacer { flex: 1; }
+.topbar-menu-btn { display: none; background: none; border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 6px 10px; font-family: var(--font-mono); cursor: pointer; }
+
+/* ---------- Layout ---------- */
+.shell { display: flex; padding-top: var(--topbar-h); min-height: 100vh; }
+
+.sidebar {
+  position: fixed; top: var(--topbar-h); left: 0; bottom: 0; width: var(--sidebar-w);
+  background: var(--panel); border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 18px 0 40px;
+  font-family: var(--font-mono);
+}
+.sidebar-group { margin-bottom: 4px; }
+.sidebar-group-title {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.11em; color: var(--text-faint);
+  padding: 14px 20px 7px;
+}
+.navlink {
+  display: flex; align-items: baseline; gap: 9px; padding: 7px 20px; color: var(--text-dim);
+  font-size: 12.8px; cursor: pointer; border-left: 2px solid transparent; transition: all .12s;
+}
+.navlink .idx { color: var(--text-faint); font-size: 11px; min-width: 18px; }
+.navlink:hover { color: var(--text); background: var(--panel-2); }
+.navlink.active { color: var(--cyan); border-left-color: var(--cyan); background: var(--panel-2); }
+.navlink.active .idx { color: var(--cyan); }
+
+.main { margin-left: var(--sidebar-w); flex: 1; min-width: 0; }
+.content { max-width: 940px; margin: 0 auto; padding: 44px 40px 120px; }
+
+section.panel { padding-top: 26px; scroll-margin-top: calc(var(--topbar-h) + 14px); }
+section.panel + section.panel { border-top: 1px solid var(--border-soft); margin-top: 46px; }
+
+.eyebrow {
+  font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--cyan); margin-bottom: 10px; display: flex; align-items: center; gap: 10px;
+}
+.eyebrow .line { flex: 1; height: 1px; background: linear-gradient(90deg, var(--cyan-dim), transparent); }
+h1.title { font-size: 30px; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 10px; }
+h2.h { font-family: var(--font-mono); font-size: 19px; font-weight: 700; color: var(--text); margin: 34px 0 14px; display:flex; align-items:center; gap:10px;}
+h2.h .num { color: var(--text-faint); font-weight: 500; }
+h3.h3 { font-family: var(--font-mono); font-size: 14.5px; font-weight: 600; color: var(--amber); margin: 24px 0 10px; }
+p { color: var(--text-dim); margin-bottom: 14px; }
+p b, li b { color: var(--text); font-weight: 600; }
+.lede { font-size: 16.5px; color: var(--text-dim); max-width: 72ch; }
+ul, ol { color: var(--text-dim); margin: 0 0 16px 22px; }
+li { margin-bottom: 7px; }
+.small { font-size: 12.5px; color: var(--text-faint); }
+
+/* ---------- Cards / panels ---------- */
+.card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  padding: 20px 22px; margin: 18px 0;
+}
+.card-title { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-faint); margin-bottom: 12px; }
+
+.note {
+  border-left: 3px solid var(--amber); background: var(--amber-dim); background: rgba(245,169,63,0.08);
+  border-radius: 0 8px 8px 0; padding: 13px 16px; margin: 16px 0; font-size: 14px; color: var(--text-dim);
+}
+.note b { color: var(--amber); }
+.note.cyan { border-left-color: var(--cyan); background: rgba(82,224,240,0.06); }
+.note.cyan b { color: var(--cyan); }
+.note.green { border-left-color: var(--green); background: rgba(85,224,160,0.06); }
+.note.green b { color: var(--green); }
+.note.red { border-left-color: var(--red); background: rgba(255,122,122,0.06); }
+.note.red b { color: var(--red); }
+
+/* ---------- badges ---------- */
+.badge {
+  display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 10.5px;
+  font-weight: 700; letter-spacing: 0.04em; padding: 2px 7px; border-radius: 4px; text-transform: uppercase;
+}
+.badge.default { background: var(--panel-3); color: var(--text-dim); border: 1px solid var(--border); }
+.badge.fabric { background: var(--cyan-dim); color: var(--cyan); border: 1px solid rgba(82,224,240,0.35); }
+.badge.heuristic { background: var(--amber-dim); color: var(--amber); border: 1px solid rgba(245,169,63,0.35); }
+.badge.runtime { background: var(--green-dim); color: var(--green); border: 1px solid rgba(85,224,160,0.35); }
+.badge.session { background: var(--red-dim); color: var(--red); border: 1px solid rgba(255,122,122,0.35); }
+
+/* ---------- tables ---------- */
+table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 13.2px; }
+th { text-align: left; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+     color: var(--text-faint); padding: 9px 12px; border-bottom: 1px solid var(--border); }
+td { padding: 10px 12px; border-bottom: 1px solid var(--border-soft); color: var(--text-dim); vertical-align: top; }
+td.key, td code.key { color: var(--amber); font-family: var(--font-mono); font-size: 12.4px; }
+tr:hover td { background: var(--panel-2); }
+.tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; }
+.tbl-wrap table { margin: 0; }
+.tbl-wrap th:first-child, .tbl-wrap td:first-child { padding-left: 16px; }
+
+/* ---------- tabs ---------- */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 18px 0 0; flex-wrap: wrap; }
+.tab-btn {
+  font-family: var(--font-mono); font-size: 12.5px; color: var(--text-dim); background: none; border: none;
+  padding: 10px 16px; cursor: pointer; border-bottom: 2px solid transparent; transition: all .15s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--cyan); border-bottom-color: var(--cyan); }
+.tab-panel { display: none; padding: 18px 0 6px; }
+.tab-panel.active { display: block; animation: fadein .2s; }
+@keyframes fadein { from { opacity: 0; transform: translateY(3px);} to { opacity: 1; transform: translateY(0);} }
+
+/* ---------- accordion ---------- */
+.acc-item { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px; overflow: hidden; background: var(--panel); }
+.acc-head {
+  display: flex; align-items: center; justify-content: space-between; padding: 13px 16px; cursor: pointer;
+  font-family: var(--font-mono); font-size: 13px; color: var(--text); user-select: none;
+}
+.acc-head:hover { background: var(--panel-2); }
+.acc-head .chev { color: var(--text-faint); transition: transform .18s; font-size: 11px; }
+.acc-item.open .acc-head .chev { transform: rotate(90deg); color: var(--cyan); }
+.acc-body { max-height: 0; overflow: hidden; transition: max-height .22s ease; }
+.acc-item.open .acc-body { max-height: 900px; }
+.acc-body-inner { padding: 2px 16px 16px; font-size: 13.6px; color: var(--text-dim); }
+
+/* ---------- buttons / inputs ---------- */
+.btn {
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; padding: 9px 16px; border-radius: 7px;
+  border: 1px solid var(--border); background: var(--panel-3); color: var(--text); cursor: pointer; transition: all .15s;
+  display: inline-flex; align-items: center; gap: 7px;
+}
+.btn:hover { border-color: var(--cyan); color: var(--cyan); }
+.btn.primary { background: var(--cyan); color: var(--ink); border-color: var(--cyan); }
+.btn.primary:hover { background: #74e8f5; color: var(--ink); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn.sm { padding: 6px 11px; font-size: 11.5px; }
+
+select, input[type=text], input[type=number] {
+  font-family: var(--font-mono); background: var(--panel-3); border: 1px solid var(--border); color: var(--text);
+  border-radius: 6px; padding: 8px 10px; font-size: 13px; width: 100%;
+}
+select:focus, input:focus { outline: none; border-color: var(--cyan); }
+label.field-label { display: block; font-family: var(--font-mono); font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--text-faint); margin-bottom: 6px; }
+.field { margin-bottom: 16px; }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+input[type=range] {
+  -webkit-appearance: none; width: 100%; height: 4px; background: var(--panel-3); border-radius: 2px; outline: none;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--cyan); cursor: pointer;
+  border: 3px solid var(--ink); box-shadow: 0 0 0 1px var(--cyan);
+}
+.slider-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.slider-row .slabel { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); min-width: 168px; }
+.slider-row .sval { font-family: var(--font-mono); font-size: 12.5px; color: var(--cyan); min-width: 76px; text-align: right; }
+
+::placeholder { color: var(--text-faint); }
+
+/* ---------- code block ---------- */
+pre.code {
+  background: #0C1220; border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px;
+  overflow-x: auto; font-family: var(--font-mono); font-size: 12.6px; line-height: 1.65; color: #C9E8D4; margin: 14px 0;
+}
+pre.code .c1 { color: #6C7A98; }
+pre.code .s1 { color: #F5A93F; }
+pre.code .k1 { color: #B79CFF; }
+
+/* ---------- glossary chip / grid ---------- */
+.def-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin: 16px 0; }
+.def-card { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+.def-card .term { font-family: var(--font-mono); font-size: 12.8px; color: var(--cyan); font-weight: 700; margin-bottom: 5px; }
+.def-card .def { font-size: 12.8px; color: var(--text-dim); }
+
+/* ---------- footer ---------- */
+.footer { margin-top: 70px; padding-top: 24px; border-top: 1px solid var(--border-soft); color: var(--text-faint); font-size: 12px; font-family: var(--font-mono); }
+
+/* ---------- responsive ---------- */
+@media (max-width: 980px) {
+  .sidebar { transform: translateX(-100%); transition: transform .2s; z-index: 90; }
+  .sidebar.open { transform: translateX(0); box-shadow: 20px 0 40px rgba(0,0,0,0.5); }
+  .main { margin-left: 0; }
+  .topbar-menu-btn { display: inline-flex; }
+  .content { padding: 30px 20px 100px; }
+  .field-row { grid-template-columns: 1fr; }
+}
+
+.secref { display:inline-block; padding:1px 7px; border:1px solid var(--border); border-radius:20px;
+  background:rgba(82,224,240,.07); color:var(--cyan); font-family:var(--font-mono); font-size:11px;
+  text-decoration:none; white-space:nowrap; }
+.secref:hover { background:rgba(82,224,240,.16); }
+#cfgTable td:last-child, #cfgTable th:last-child { min-width:280px; white-space:normal; }
+#cfgTable td { vertical-align:top; }
+@media (max-width: 1100px){ .tbl-wrap table { font-size:12px; } }
+body[data-runtime="1.3"] .only-20 { display:none !important; }
+body[data-runtime="2.0"] .only-13 { display:none !important; }
+.rt-select { background:var(--bg-panel,#0d1524); color:var(--cyan); border:1px solid var(--border);
+  border-radius:8px; padding:5px 10px; font-family:var(--font-mono); font-size:12px; }
+.feat-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:12px; margin-top:12px; }
+.feat-card { border:1px solid var(--border); border-radius:12px; padding:14px 16px; background:rgba(255,255,255,.015); }
+.feat-card.dimmed { opacity:.42; }
+.feat-card .fc-name { font-family:var(--font-mono); font-size:13.5px; color:var(--text); margin-bottom:6px; }
+.feat-card .fc-why { font-size:12.5px; color:var(--text-dim); line-height:1.6; }
+.feat-card code { font-size:11px; }
+.fc-badges { display:flex; gap:5px; flex-wrap:wrap; margin-bottom:8px; }
+.fc-b { font-family:var(--font-mono); font-size:10px; padding:1px 7px; border-radius:20px; border:1px solid var(--border); color:var(--text-dim); }
+.fc-b.spark { color:#f0a852; border-color:rgba(240,168,82,.4); }
+.fc-b.delta { color:#52e0a0; border-color:rgba(82,224,160,.4); }
+.fc-b.fabric { color:var(--cyan); border-color:rgba(82,224,240,.4); }
+.fc-b.new20 { color:#ff8db0; border-color:rgba(255,141,176,.45); }
+
+
+.mapnode rect { fill:rgba(82,224,240,.05); stroke:var(--border); stroke-width:1.4; cursor:pointer; transition:all .25s; }
+.mapnode text { fill:var(--text); font-family:var(--font-mono); font-size:14px; text-anchor:middle; cursor:pointer; }
+.mapnode .mn-sub { fill:var(--text-dim); font-size:11px; }
+.mapnode:hover rect { stroke:var(--cyan); fill:rgba(82,224,240,.12); }
+.mapnode.lit rect { stroke:var(--cyan); stroke-width:2.4; fill:rgba(82,224,240,.18); }
+.mapnode.lit text { fill:var(--cyan); }
+.mapedge { stroke:#3a4a63; stroke-width:1.6; marker-end:url(#mArr); }
+.mapedge.loop { stroke:var(--cyan); stroke-dasharray:6 5; marker-end:url(#mArrC); opacity:.85; }
+.mapedge.dim { stroke:#26314a; stroke-dasharray:2 5; marker-end:none; }
+.mn-loop { fill:var(--cyan); font-family:var(--font-mono); font-size:11px; opacity:.8; }
+.pl-line { display:inline-block; width:100%; padding:1px 8px; border-radius:6px; cursor:pointer; }
+.pl-line:hover { background:rgba(82,224,240,.08); }
+.pl-line.sel { background:rgba(82,224,240,.14); outline:1px solid rgba(82,224,240,.4); }
+.pl-ok   { color:#63d8a2; }
+.pl-warn { color:#f0c064; }
+.pl-bad  { color:#ff8db0; }
+
+
+.rt-banner { margin-left:12px; padding:3px 12px; border-radius:20px; font-family:var(--font-mono);
+  font-size:11px; border:1px solid rgba(82,224,240,.4); color:var(--cyan); }
+body[data-runtime="2.0"] .rt-banner { border-color:rgba(255,141,176,.5); color:#ff8db0; }
+body[data-runtime="2.0"] #rtGlobal { border-color:rgba(255,141,176,.5); color:#ff8db0; }
+.cfg-d4 { display:inline-block; margin-left:8px; padding:0 7px; border-radius:20px; font-size:10px;
+  font-family:var(--font-mono); color:#ff8db0; border:1px solid rgba(255,141,176,.45); white-space:nowrap; }
+
+
+.codepair { display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:14px; margin:14px 0; }
+.cp-side { border:1px solid var(--border); border-radius:12px; padding:14px 16px; background:rgba(255,255,255,.015); }
+.cp-side.bad { border-color:rgba(255,141,176,.32); }
+.cp-side.good { border-color:rgba(99,216,162,.32); }
+.cp-h { font-family:var(--font-mono); font-size:12px; margin-bottom:9px; color:var(--text-dim); }
+.cp-side.bad .cp-h { color:#ff8db0; } .cp-side.good .cp-h { color:#63d8a2; }
+.cp-n { font-size:12.3px; color:var(--text-dim); line-height:1.65; margin-top:9px; }
+.cp-side pre { margin:0; overflow-x:auto; background:rgba(0,0,0,.28); border-radius:8px; padding:11px 13px; }
+.cp-side pre code { font-size:11.6px; line-height:1.62; }
+.verb { font-family:var(--font-mono); font-size:9.5px; padding:1px 7px; border-radius:20px; border:1px solid var(--border); color:var(--text-dim); margin-left:6px; vertical-align:1px; }
+.verb.v35 { color:#f0c064; border-color:rgba(240,192,100,.45); }
+.verb.v4 { color:#ff8db0; border-color:rgba(255,141,176,.45); }
+.hl-kw { color:#7ea6ff; } .hl-str { color:#63d8a2; } .hl-com { color:#5d6b85; font-style:italic; }
+.hl-num { color:#f0c064; } .hl-fn { color:#52E0F0; } .hl-dec { color:#ff8db0; }
+
+
+.pp-box rect { fill:rgba(82,224,240,.06); stroke:var(--border); stroke-width:1.4; }
+.pp-box.good rect { stroke:rgba(99,216,162,.6); fill:rgba(99,216,162,.07); }
+.pp-box.bad rect { stroke:rgba(255,141,176,.6); fill:rgba(255,141,176,.07); }
+.pp-t { fill:var(--text); font-family:var(--font-mono); font-size:13px; text-anchor:middle; }
+.pp-s { fill:var(--text-dim); font-family:var(--font-mono); font-size:10.5px; text-anchor:middle; }
+.pp-lbl { fill:var(--text); font-family:var(--font-mono); font-size:12px; }
+.pp-lbl.dim { fill:var(--text-dim); font-size:11px; }
+.pp-lbl.good { fill:#63d8a2; } .pp-lbl.warn { fill:#f0c064; }
+.pp-bar { fill:rgba(255,255,255,.05); stroke:var(--border); }
+.pp-bar.ok { stroke:rgba(99,216,162,.5); } .pp-bar.warn { stroke:rgba(240,192,100,.6); }
+.pp-bar.bad { stroke:rgba(255,141,176,.7); } .pp-bar.good { fill:rgba(99,216,162,.3); stroke:rgba(99,216,162,.6); }
+.pp-bar.fill { fill:rgba(99,216,162,.35); stroke:none; }
+.pp-bar.fill-warn { fill:rgba(240,192,100,.4); stroke:none; }
+.pp-bar.fill-bad { fill:rgba(255,141,176,.45); stroke:none; }
+.pp-arrow { stroke:#52E0F0; stroke-width:1.6; }
+
+
+.cc-controls { display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }
+.cc-ctl { display:flex; flex-direction:column; gap:4px; min-width:150px; flex:1; }
+.cc-ctl select { background:#0f1728; color:var(--text); border:1px solid var(--border);
+  border-radius:8px; padding:6px 9px; font-family:var(--font-mono); font-size:11.5px; }
+.cc-configline { margin-top:11px; font-family:var(--font-mono); font-size:11px; color:var(--text-dim);
+  background:#0b1120; border:1px solid var(--border); border-radius:8px; padding:9px 12px;
+  line-height:1.75; overflow-x:auto; }
+.cc-configline b { color:var(--cyan); font-weight:600; }
+.cc-configline .chg { color:#ff8db0; }
+.ccnode rect { fill:#151E33; stroke:#253048; stroke-width:1.5; cursor:pointer; transition:all .2s; }
+.ccnode:hover rect { stroke:var(--cyan); }
+.ccnode.sel rect { stroke:var(--cyan); stroke-width:2.2; fill:#17233d; }
+.cc-t1 { fill:#E8ECF6; font-family:Consolas, monospace; font-size:12px; font-weight:700; pointer-events:none; }
+.cc-t2 { fill:#97A2BC; font-family:Consolas, monospace; font-size:9.5px; pointer-events:none; }
+.cc-info { display:none; border-top:1px solid #253048; padding:14px 20px; background:#0b1120;
+  font-size:12.6px; line-height:1.72; color:var(--text-dim); }
+.cc-info h4 { margin:0 0 7px; font-family:var(--font-mono); font-size:13px; color:var(--cyan); }
+.cc-info .kv { color:var(--text); }
+.cc-info ul { margin:8px 0 0 18px; padding:0; }
+.cc-info li { margin-bottom:5px; }
+
+
+/* ==========================================================================
+   VS Code Dark+ Syntax Theme & Code Panel Styling
+   ========================================================================== */
+.vscode-code-panel {
+  background: #1E1E1E !important;
+  border: 1px solid #333333 !important;
+  border-radius: 8px !important;
+  margin: 20px 0 26px !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35) !important;
+}
+.vscode-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 8px 14px !important;
+  background: #252526 !important;
+  border-bottom: 1px solid #333333 !important;
+}
+.vscode-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+.vscode-dot {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  display: inline-block !important;
+}
+.dot-red { background: #FF5F56 !important; }
+.dot-yellow { background: #FFBD2E !important; }
+.dot-green { background: #27C93F !important; }
+.vscode-lang-badge {
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  background: #333333 !important;
+  color: #52E0F0 !important;
+  letter-spacing: 0.05em !important;
+  margin-left: 6px !important;
+}
+.vscode-target-badge {
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace !important;
+  font-size: 10px !important;
+  color: #858585 !important;
+}
+.vscode-copy-btn {
+  background: #333333 !important;
+  border: 1px solid #3E3E42 !important;
+  color: #CCCCCC !important;
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace !important;
+  font-size: 11px !important;
+  padding: 4px 11px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.2s !important;
+}
+.vscode-copy-btn:hover {
+  background: #52E0F0 !important;
+  color: #000 !important;
+  border-color: #52E0F0 !important;
+}
+.vscode-pre {
+  margin: 0 !important;
+  padding: 16px 18px !important;
+  background: #1E1E1E !important;
+  overflow-x: auto !important;
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+.vscode-pre code {
+  background: none !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  color: #D4D4D4 !important;
+}
+
+/* VS Code Dark+ Syntax Token Colors */
+.vsc-k  { color: #569CD6 !important; font-weight: 600 !important; }
+.vsc-kd { color: #569CD6 !important; }
+.vsc-s, .vsc-s1, .vsc-s2 { color: #CE9178 !important; }
+.vsc-c, .vsc-c1, .vsc-cm { color: #6A9955 !important; font-style: italic !important; }
+.vsc-m, .vsc-mi, .vsc-mf { color: #B5CEA8 !important; }
+.vsc-nf { color: #DCDCAA !important; }
+.vsc-n, .vsc-na { color: #9CDCFE !important; }
+.vsc-nb { color: #4EC9B0 !important; }
+.vsc-o, .vsc-p { color: #D4D4D4 !important; }
+.vsc-nd { color: #DCDCAA !important; }
+.vsc-ow { color: #569CD6 !important; font-weight: 600 !important; }
+
+
+/* ==========================================================================
+   UNIFIED MASTER DESIGN SYSTEM & CLEAN LAYOUT POLISH
+   ========================================================================== */
+:root {
+  --bg: #0B0F19;
+  --bg-subtle: #080B12;
+  --surface: #111726;
+  --surface-2: #161F33;
+  --surface-hover: #1C2842;
+  --border: #202C45;
+  --border-bright: #32446B;
+  --cyan: #38BDF8;
+  --cyan-dim: rgba(56, 189, 248, 0.10);
+  --cyan-glow: rgba(56, 189, 248, 0.25);
+  --green: #34D399;
+  --green-dim: rgba(52, 211, 153, 0.10);
+  --amber: #FBBF24;
+  --amber-dim: rgba(251, 191, 36, 0.10);
+  --red: #F87171;
+  --red-dim: rgba(248, 113, 113, 0.10);
+  --purple: #A78BFA;
+  --purple-dim: rgba(167, 139, 250, 0.10);
+  --text: #F1F5F9;
+  --text-dim: #94A3B8;
+  --text-dimmer: #64748B;
+  --font-mono: 'Cascadia Code', 'Fira Code', 'SF Mono', Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 14.5px !important;
+  line-height: 1.68 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.topbar {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 12px 32px !important;
+  background: rgba(11, 15, 25, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+  border-bottom: 1px solid var(--border) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1000 !important;
+}
+
+.brand {
+  font-family: var(--font-mono) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--cyan) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  text-decoration: none !important;
+  letter-spacing: 0.05em !important;
+}
+
+.nav-links {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+.nav-links a {
+  color: var(--text-dim) !important;
+  text-decoration: none !important;
+  font-size: 12.5px !important;
+  font-family: var(--font-mono) !important;
+  padding: 6px 14px !important;
+  border-radius: 6px !important;
+  border: 1px solid transparent !important;
+  transition: all 0.2s ease !important;
+}
+
+.nav-links a:hover, .nav-links a.active {
+  color: #FFFFFF !important;
+  background: var(--surface-2) !important;
+  border-color: var(--border-bright) !important;
+}
+.nav-links a.active {
+  color: var(--cyan) !important;
+  border-color: var(--cyan) !important;
+  background: var(--cyan-dim) !important;
+}
+
+.container {
+  max-width: 1180px !important;
+  margin: 0 auto !important;
+  padding: 40px 24px 100px !important;
+}
+
+.hero {
+  margin-bottom: 40px !important;
+  padding-bottom: 28px !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.hero .tag {
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  color: var(--cyan) !important;
+  margin-bottom: 10px !important;
+}
+
+.hero h1 {
+  font-family: var(--font-mono) !important;
+  font-size: 30px !important;
+  font-weight: 700 !important;
+  margin-bottom: 14px !important;
+  color: #FFFFFF !important;
+  letter-spacing: -0.02em !important;
+}
+
+.hero p {
+  font-size: 15px !important;
+  color: var(--text-dim) !important;
+  max-width: 960px !important;
+  line-height: 1.7 !important;
+}
+
+h2 {
+  font-family: var(--font-mono) !important;
+  font-size: 19px !important;
+  font-weight: 700 !important;
+  color: var(--cyan) !important;
+  margin: 48px 0 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+h2::after {
+  content: '' !important;
+  flex: 1 !important;
+  height: 1px !important;
+  background: var(--border) !important;
+}
+
+h3 {
+  font-family: var(--font-mono) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: #FFFFFF !important;
+  margin: 28px 0 12px !important;
+}
+
+p, ul, ol {
+  margin-bottom: 16px !important;
+  color: var(--text) !important;
+}
+
+ul { padding-left: 24px !important; }
+li { margin-bottom: 6px !important; }
+
+.card {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  padding: 22px !important;
+  margin: 24px 0 !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+}
+
+.card h3 {
+  margin-top: 0 !important;
+}
+
+.card p:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Crisp Data Tables */
+.data-table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  margin: 22px 0 30px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  background: var(--surface) !important;
+  font-size: 13.5px !important;
+}
+
+.data-table th {
+  background: var(--surface-2) !important;
+  color: #FFFFFF !important;
+  font-family: var(--font-mono) !important;
+  font-weight: 600 !important;
+  text-align: left !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+  font-size: 12.5px !important;
+  letter-spacing: 0.03em !important;
+}
+
+.data-table td {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  vertical-align: top !important;
+  line-height: 1.6 !important;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none !important;
+}
+
+.data-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* VS Code Code Panels Clean Alignment */
+.vscode-code-panel {
+  background: #181C24 !important;
+  border: 1px solid #283347 !important;
+  border-radius: 8px !important;
+  margin: 18px 0 24px !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3) !important;
+}
+
+.vscode-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 8px 14px !important;
+  background: #1F2633 !important;
+  border-bottom: 1px solid #283347 !important;
+}
+
+.vscode-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.vscode-dot {
+  width: 9px !important;
+  height: 9px !important;
+  border-radius: 50% !important;
+  display: inline-block !important;
+}
+
+.dot-red { background: #F87171 !important; }
+.dot-yellow { background: #FBBF24 !important; }
+.dot-green { background: #34D399 !important; }
+
+.vscode-lang-badge {
+  font-family: var(--font-mono) !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  background: #2A3549 !important;
+  color: var(--cyan) !important;
+  letter-spacing: 0.04em !important;
+  margin-left: 6px !important;
+}
+
+.vscode-target-badge {
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  color: var(--text-dim) !important;
+}
+
+.vscode-copy-btn {
+  background: #2A3549 !important;
+  border: 1px solid #374660 !important;
+  color: #E2E8F0 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  padding: 4px 12px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.2s ease !important;
+}
+
+.vscode-copy-btn:hover {
+  background: var(--cyan) !important;
+  color: #000000 !important;
+  border-color: var(--cyan) !important;
+}
+
+.vscode-pre {
+  margin: 0 !important;
+  padding: 16px 18px !important;
+  background: #141820 !important;
+  overflow-x: auto !important;
+  font-family: var(--font-mono) !important;
+  font-size: 12.8px !important;
+  line-height: 1.62 !important;
+}
+
+/* Embedded Diagram Stages */
+.diagram-stage {
+  background: radial-gradient(circle at 50% 30%, #151D2E 0%, #0D121E 100%) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  padding: 24px !important;
+  margin: 24px 0 32px !important;
+  text-align: center !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+}
+
+.diagram-stage svg {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+
+/* Codepair Layout Refinement (No More Horizontal Cramping) */
+.codepair {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)) !important;
+  gap: 20px !important;
+  margin: 20px 0 28px !important;
+}
+
+.cp-side {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.cp-side .vscode-code-panel {
+  margin: 8px 0 12px !important;
+  flex: 1 !important;
+}
+
+.cp-h {
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  padding: 6px 12px !important;
+  border-radius: 6px 6px 0 0 !important;
+  background: var(--surface-2) !important;
+  border: 1px solid var(--border) !important;
+  border-bottom: none !important;
+  color: var(--text) !important;
+}
+
+.cp-side.bad .cp-h {
+  border-left: 3px solid var(--red) !important;
+  color: var(--red) !important;
+}
+
+.cp-side.good .cp-h {
+  border-left: 3px solid var(--green) !important;
+  color: var(--green) !important;
+}
+
+.cp-n {
+  font-size: 13px !important;
+  color: var(--text-dim) !important;
+  line-height: 1.5 !important;
+  padding: 8px 12px !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0 0 6px 6px !important;
+  margin-top: -12px !important;
+  margin-bottom: 12px !important;
+}
+
+</style>
+<style>.wrap{max-width:1180px;margin:0 auto;padding:26px 24px 90px;}.title{font-family:var(--font-mono);font-size:30px;margin:0 0 8px;}</style>
+</head>
+<body>
+<div style="background:rgba(14,21,38,0.92); border-bottom:1px solid #23314E; padding:12px 28px; display:flex; justify-content:space-between; align-items:center; position:sticky; top:0; z-index:100; font-family:ui-monospace,monospace;">
+<a href="index.html" style="color:#52E0F0; text-decoration:none; font-weight:700; font-size:14px;">FABRIC SPARK TOOLKIT</a>
+<div style="display:flex; gap:12px; font-size:12px;">
+<a href="index.html" style="color:#97A2BC; text-decoration:none; padding:4px 8px;">← Hub</a>
+<a href="spark_internals.html" style="color:#97A2BC; text-decoration:none; padding:4px 8px;">Spark Internals</a>
+<a href="runtime_2_0_guide.html" style="color:#97A2BC; text-decoration:none; padding:4px 8px;">Runtime 2.0 Guide</a>
+<a href="onelake_polaris_deepdives.html" style="color:#97A2BC; text-decoration:none; padding:4px 8px;">OneLake &amp; Polaris</a>
+<a href="fabric_deepdives.html" style="color:#52E0F0; text-decoration:none; background:rgba(82,224,240,0.12); border-radius:4px; padding:4px 8px;">Fabric Deep Dives</a>
+</div>
+</div>
+<div class="topbar">
+<a class="secref" href="index.html" style="margin-right:10px;">⌂ Toolkit index</a>
+<a class="secref" href="spark_internals.html">← Spark internals reference</a>
+<span class="rt-banner">Deep dives · SQL surface, functions, dbt</span>
+</div>
+<div class="wrap">
+<h1 class="title">Fabric Deep Dives</h1>
+<div class="small" style="margin-bottom:6px;">Views &amp; UDFs in Spark · NEE do's and don'ts · Fabric SQL Database from notebooks · User Data Functions · dbt on Lakehouse and Warehouse. Companion to the <a class="secref" href="spark_internals.html">Spark internals reference</a>.</div>
+<div class="note cyan" style="margin-top:16px;">
+<b>Fact-checked, not recalled.</b> Every Spark capability claim in Section 1 was executed against a
+real Spark 3.5 session while writing this page. Three claims that "everyone knows" turned out to be
+wrong — they are called out inline as <b>VERIFIED</b> or <b>FALSIFIED</b>. Fabric-specific
+behaviour (SQL Database, UDF items, dbt adapters) is sourced from Microsoft and dbt Labs
+documentation and marked where it could not be executed here.
+</div>
+<!-- ============================== 1. VIEWS & UDFs ============================== -->
+<section class="panel" id="viewsudfs">
+<div class="eyebrow">01 · Spark SQL Surface <span class="line"></span></div>
+<h2 class="h">Views and Functions in Spark — What Actually Exists</h2>
+<h3 class="h3">The four view types</h3>
+<div class="card">
+<table>
+<tr><th style="width:20%">Type</th><th style="width:14%">Lifetime</th><th>Behaviour and use</th></tr>
+<tr><td class="key">TEMP VIEW</td><td>Session</td><td><b>VERIFIED.</b> Scoped to the SparkSession, invisible to other sessions, vanishes on session end. The workhorse for staging steps inside one notebook. No catalog write, so no permissions to manage.</td></tr>
+<tr><td class="key">GLOBAL TEMP VIEW</td><td>Application</td><td><b>VERIFIED.</b> Shared across all sessions in the same Spark application — which in Fabric means across notebooks sharing a <a class="secref" href="spark_internals.html#capacity">high-concurrency session</a>. Must be read via the <code>global_temp</code> database: <code>SELECT * FROM global_temp.v_name</code>. Forgetting that prefix is the usual "table not found".</td></tr>
+<tr><td class="key">VIEW (persistent)</td><td>Permanent</td><td><b>VERIFIED.</b> Stored in the catalog, survives sessions, visible to anyone with access to the Lakehouse. This is a <i>logical</i> view — the SQL re-executes on every read. No storage, no refresh, no cost until queried.</td></tr>
+<tr><td class="key">MATERIALIZED LAKE VIEW</td><td>Permanent + stored</td><td>Fabric-only. <b>FALSIFIED for OSS:</b> <code>CREATE MATERIALIZED VIEW</code> raises <code>ParseException</code> on open-source Spark 3.5 — the syntax simply does not exist there. In Fabric, <code>CREATE MATERIALIZED LAKE VIEW</code> produces a real Delta table with managed refresh (<a class="secref" href="spark_internals.html#deltaopt">internals Sec 20</a>).</td></tr>
+</table>
+</div>
+<div class="note red">
+<b>Gotcha, executed and confirmed: permanent views require an alias on every computed column.</b>
+<div class="vscode-code-panel">
+<div class="vscode-header">
+<div class="vscode-left">
+<span class="vscode-dot dot-red"></span>
+<span class="vscode-dot dot-yellow"></span>
+<span class="vscode-dot dot-green"></span>
+<span class="vscode-lang-badge">SPARK SQL</span>
+<span class="vscode-target-badge">NOTEBOOK %%sql OR SQL ENDPOINT</span>
+</div>
+<button class="vscode-copy-btn" onclick="copyVsCode(this)">
+<svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+<span>Copy</span>
+</button>
+</div>
+<pre class="vscode-pre"><code><span class="vsc-c1">-- FAILS: [CREATE_PERMANENT_VIEW_WITHOUT_ALIAS]
+</span><span class="vsc-k">CREATE</span> <span class="vsc-k">OR</span> <span class="vsc-k">REPLACE</span> <span class="vsc-k">VIEW</span> <span class="vsc-n">v_bad</span> <span class="vsc-k">AS</span> <span class="vsc-k">SELECT</span> <span class="vsc-n">cat</span><span class="vsc-p">,</span> <span class="vsc-k">count</span><span class="vsc-p">(</span><span class="vsc-o">*</span><span class="vsc-p">)</span> <span class="vsc-k">FROM</span> <span class="vsc-n">orders</span> <span class="vsc-k">GROUP</span> <span class="vsc-k">BY</span> <span class="vsc-n">cat</span><span class="vsc-p">;</span>
+<span class="vsc-c1">-- WORKS
+</span><span class="vsc-k">CREATE</span> <span class="vsc-k">OR</span> <span class="vsc-k">REPLACE</span> <span class="vsc-k">VIEW</span> <span class="vsc-n">v_good</span> <span class="vsc-k">AS</span> <span class="vsc-k">SELECT</span> <span class="vsc-n">cat</span><span class="vsc-p">,</span> <span class="vsc-k">count</span><span class="vsc-p">(</span><span class="vsc-o">*</span><span class="vsc-p">)</span> <span class="vsc-k">AS</span> <span class="vsc-n">n</span> <span class="vsc-k">FROM</span> <span class="vsc-n">orders</span> <span class="vsc-k">GROUP</span> <span class="vsc-k">BY</span> <span class="vsc-n">cat</span><span class="vsc-p">;</span>
+<span class="vsc-c1">-- WORKS (temp views are exempt - which is why this bites only on promotion to permanent)
+</span><span class="vsc-k">CREATE</span> <span class="vsc-k">OR</span> <span class="vsc-k">REPLACE</span> <span class="vsc-n">TEMP</span> <span class="vsc-k">VIEW</span> <span class="vsc-n">v_tmp</span> <span class="vsc-k">AS</span> <span class="vsc-k">SELECT</span> <span class="vsc-n">cat</span><span class="vsc-p">,</span> <span class="vsc-k">count</span><span class="vsc-p">(</span><span class="vsc-o">*</span><span class="vsc-p">)</span> <span class="vsc-k">FROM</span> <span class="vsc-n">orders</span> <span class="vsc-k">GROUP</span> <span class="vsc-k">BY</span> <span class="vsc-n">cat</span><span class="vsc-p">;</span></code></pre>
+</div>
+    The trap is the asymmetry: your temp view works all through development, then fails the moment
+    you promote it to a permanent view.
+  </div>
+<h3 class="h3">The function types, and which to reach for</h3>
+<div class="card">
+<table>
+<tr><th style="width:22%">Type</th><th style="width:12%">Runtime</th><th>Verdict</th></tr>
+<tr><td class="key">Built-in functions</td><td>both</td><td><b>Always first choice.</b> Catalyst optimises through them, whole-stage codegen fuses them, and NEE offloads them natively.</td></tr>
+<tr><td class="key">SQL UDF<br/><code>CREATE FUNCTION … RETURN</code></td><td class="mono">4.x only</td><td><b>VERIFIED FALSIFIED on 3.5:</b> raises <code>ParseException</code> on Spark 3.5 — it is genuinely Runtime 2.0 only, not merely "newer". Where available it is the best home for shared business logic: catalog-resident, inlined by the optimizer, zero serialization, NEE-friendly.</td></tr>
+<tr><td class="key">pandas UDF<br/><code>@pandas_udf</code></td><td>both</td><td>Vectorized via Arrow — the right fallback when logic cannot be expressed in built-ins. Appears as <code>ArrowEvalPython</code> in the plan.</td></tr>
+<tr><td class="key">Python row UDF<br/><code>F.udf(…)</code></td><td>both</td><td><b>VERIFIED it works — and it is still the wrong tool.</b> Row-at-a-time serialization, opaque to Catalyst, breaks codegen, and drops the enclosing operator out of NEE. Appears as <code>BatchEvalPython</code>.</td></tr>
+<tr><td class="key">Registered Python UDF for SQL<br/><code>spark.udf.register</code></td><td>both</td><td><b>VERIFIED.</b> Makes a Python function callable from <code>%%sql</code>. Same performance caveats as a row UDF — convenience, not optimisation.</td></tr>
+<tr><td class="key">Python UDTF<br/><code>@udtf</code></td><td class="mono">4.x</td><td>Table-valued Python functions. The <code>udtf</code> symbol exists in the 3.5 API surface, but treat UDTFs as a 4.x capability for production use.</td></tr>
+</table>
+<p class="small" style="margin-top:8px;"><code>SHOW USER FUNCTIONS</code> lists what is registered in
+    the current session — useful for confirming a SQL UDF actually landed in the catalog rather
+    than the session.</p>
+</div>
+<div class="note">
+<b>JDK 21 + Arrow note (relevant to Runtime 2.0).</b> While validating these examples, pandas UDFs
+    failed on a JDK 21 container with
+    <code>UnsupportedOperationException: sun.misc.Unsafe or java.nio.DirectByteBuffer… not available</code>
+    — Arrow needs <code>--add-opens java.base/java.nio=ALL-UNNAMED</code> on modern JDKs. Fabric
+    configures this for you; the reason to know it is that the same error in a <i>custom</i> JVM
+    setting or a local dev environment on Runtime 2.0 (JDK 21) is a JVM flag problem, not a code problem.
+  </div>
+</section>
+<!-- ============================== 2. NEE ============================== -->
+<section class="panel" id="neepractice">
+<div class="eyebrow">02 · Native Execution <span class="line"></span></div>
+<h2 class="h">NEE — Do's, Don'ts, and the Cost Model</h2>
+<p>Mechanics and fallback tiers are in <a class="secref" href="spark_internals.html#neefallback">internals Sec 25</a>.
+  This is the practice sheet.</p>
+<div class="codepair">
+<div class="cp-side good">
+<div class="cp-h">DO</div>
+<ul style="margin:0 0 0 16px; font-size:12.6px; line-height:1.75;">
+<li><b>Keep sources Delta or Parquet.</b> Native scan is the foundation; JSON/XML forfeit it entirely.</li>
+<li><b>Use built-in functions</b> for everything expressible. One unsupported expression drops its whole operator to the JVM.</li>
+<li><b>Parse semi-structured data once</b> at bronze, then never again. Re-parsing JSON downstream re-enters fallback every time.</li>
+<li><b>Flatten before the hot path.</b> Deeply nested struct/map manipulation is a documented fallback trigger.</li>
+<li><b>Verify natively</b> — look for <code>*Transformer</code> / <code>*NativeFileScan</code> in the plan, and watch the Diagnostics pane's fallback panel.</li>
+<li><b>Decide ANSI deliberately on Runtime 2.0</b> — ANSI on means NEE falls back, and ANSI is the 4.x default.</li>
+<li><b>Measure</b> with <code>nb_nee_fallback_analyzer</code> rather than assuming acceleration.</li>
+</ul>
+</div>
+<div class="cp-side bad">
+<div class="cp-h">DON'T</div>
+<ul style="margin:0 0 0 16px; font-size:12.6px; line-height:1.75;">
+<li><b>Don't assume "enabled" means "running natively."</b> The most common NEE failure is a fully-fallen-back plan nobody checked.</li>
+<li><b>Don't leave NEE on for a plan that fully falls back</b> — you pay columnar↔row conversion for no native execution, which can be <i>slower</i> than NEE off.</li>
+<li><b>Don't expect gains on I/O-bound work.</b> Microsoft is explicit that NEE targets compute-intensive queries.</li>
+<li><b>Don't expect it for streaming</b> — still a JVM path.</li>
+<li><b>Don't scatter row UDFs</b> through silver transforms; each one is an operator dropped from native execution.</li>
+<li><b>Don't chase a frozen operator list.</b> Coverage moves every release — read the plan instead.</li>
+</ul>
+</div>
+</div>
+<div class="note green">
+<b>The one-line test.</b> If <code>df.explain()</code> shows no <code>*Transformer</code> operators
+    while <code>spark.native.enabled=true</code>, NEE is costing you and giving nothing. Either remove
+    the trigger, or turn it off for that job.
+  </div>
+</section>
+<!-- ============================== 3. FABRIC SQL DB ============================== -->
+<section class="panel" id="sqldbnb">
+<div class="eyebrow">03 · Fabric SQL Database <span class="line"></span></div>
+<h2 class="h">Talking to Fabric SQL Database from Notebooks</h2>
+<p>Three access paths, and they are not interchangeable. Picking the wrong one is the source of most
+  "why is my metadata layer slow" complaints.</p>
+<div class="card">
+<table>
+<tr><th style="width:20%">Path</th><th style="width:20%">Can it call…</th><th>Use for</th></tr>
+<tr><td class="key">pyodbc + Entra token</td><td>tables, views, <b>stored procedures</b>, DML, DDL</td><td><b>The control plane.</b> Anything transactional, anything with output parameters, anything that must run exactly once. The only path that can execute a stored procedure.</td></tr>
+<tr><td class="key">Spark JDBC</td><td>tables, views, <code>query</code> pushdown</td><td><b>Bulk reads only.</b> Returns a DataFrame for joining against lakehouse data. <b>Cannot call stored procedures.</b></td></tr>
+<tr><td class="key">OneLake mirror</td><td>mirrored tables (read-only)</td><td>Analytical reads over SQL DB data at lakehouse speed, no connection at all. <b>Near-real-time, not synchronous</b> — never use it for control-plane decisions.</td></tr>
+</table>
+</div>
+<h3 class="h3">Calling a stored procedure (pyodbc)</h3>
+<div class="vscode-code-panel">
+<div class="vscode-header">
+<div class="vscode-left">
+<span class="vscode-dot dot-red"></span>
+<span class="vscode-dot dot-yellow"></span>
+<span class="vscode-dot dot-green"></span>
+<span class="vscode-lang-badge">PYSPARK</span>
+<span class="vscode-target-badge">FABRIC NOTEBOOK UTILS</span>
+</div>
+<button class="vscode-copy-btn" onclick="copyVsCode(this)">
+<svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+<span>Copy</span>
+</button>
+</div>
+<pre class="vscode-pre"><code><span class="vsc-c1"># Obtain Entra ID bearer token for Azure SQL / Fabric SQL Database</span>
+<span class="vsc-n">token</span> <span class="vsc-o">=</span> <span class="vsc-n">notebookutils</span><span class="vsc-o">.</span><span class="vsc-n">credentials</span><span class="vsc-o">.</span><span class="vsc-n">getToken</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">https://database.windows.net/</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-n">jdbc_url</span> <span class="vsc-o">=</span> <span class="vsc-s">f</span><span class="vsc-s2">"</span><span class="vsc-s2">jdbc:sqlserver://</span><span class="vsc-s">{</span><span class="vsc-n">SQL_SERVER</span><span class="vsc-s">}</span><span class="vsc-s2">:1433;database=</span><span class="vsc-s">{</span><span class="vsc-n">SQL_DB</span><span class="vsc-s">}</span><span class="vsc-s2">;encrypt=true;</span><span class="vsc-s2">"</span>
+<span class="vsc-c1"># Read a VIEW: Push filter predicates into SQL engine directly</span>
+<span class="vsc-n">meta</span> <span class="vsc-o">=</span> <span class="vsc-p">(</span>
+<span class="vsc-n">spark</span><span class="vsc-o">.</span><span class="vsc-n">read</span><span class="vsc-o">.</span><span class="vsc-n">format</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">jdbc</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">url</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-n">jdbc_url</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">accessToken</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-n">token</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">query</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-s2">"</span><span class="vsc-s2">SELECT entity_id, target_table, load_type FROM dbo.vw_active_entities WHERE layer = </span><span class="vsc-s2">'</span><span class="vsc-s2">silver</span><span class="vsc-s2">'</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">load</span><span class="vsc-p">(</span><span class="vsc-p">)</span>
+<span class="vsc-p">)</span>
+<span class="vsc-c1"># Parallel read of a LARGE table with partition pushdown</span>
+<span class="vsc-n">big</span> <span class="vsc-o">=</span> <span class="vsc-p">(</span>
+<span class="vsc-n">spark</span><span class="vsc-o">.</span><span class="vsc-n">read</span><span class="vsc-o">.</span><span class="vsc-n">format</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">jdbc</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">url</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-n">jdbc_url</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">accessToken</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-n">token</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">dbtable</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-s2">"</span><span class="vsc-s2">dbo.fact_positions</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">partitionColumn</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-s2">"</span><span class="vsc-s2">position_id</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">lowerBound</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-mi">1</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">upperBound</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-mi">50_000_000</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">numPartitions</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-mi">16</span><span class="vsc-p">)</span> <span class="vsc-c1"># 16 concurrent JDBC connections</span>
+<span class="vsc-o">.</span><span class="vsc-n">load</span><span class="vsc-p">(</span><span class="vsc-p">)</span>
+<span class="vsc-p">)</span></code></pre>
+</div>
+<h3 class="h3">Reading a view or table in bulk (Spark JDBC)</h3>
+<div class="vscode-code-panel">
+<div class="vscode-header">
+<div class="vscode-left">
+<span class="vscode-dot dot-red"></span>
+<span class="vscode-dot dot-yellow"></span>
+<span class="vscode-dot dot-green"></span>
+<span class="vscode-lang-badge">PYSPARK</span>
+<span class="vscode-target-badge">FABRIC NOTEBOOK UTILS</span>
+</div>
+<button class="vscode-copy-btn" onclick="copyVsCode(this)">
+<svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+<span>Copy</span>
+</button>
+</div>
+<pre class="vscode-pre"><code><span class="vsc-c1"># Obtain Entra ID bearer token for Azure SQL / Fabric SQL Database</span>
+<span class="vsc-n">token</span> <span class="vsc-o">=</span> <span class="vsc-n">notebookutils</span><span class="vsc-o">.</span><span class="vsc-n">credentials</span><span class="vsc-o">.</span><span class="vsc-n">getToken</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">https://database.windows.net/</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-n">jdbc_url</span> <span class="vsc-o">=</span> <span class="vsc-s">f</span><span class="vsc-s2">"</span><span class="vsc-s2">jdbc:sqlserver://</span><span class="vsc-s">{</span><span class="vsc-n">SQL_SERVER</span><span class="vsc-s">}</span><span class="vsc-s2">:1433;database=</span><span class="vsc-s">{</span><span class="vsc-n">SQL_DB</span><span class="vsc-s">}</span><span class="vsc-s2">;encrypt=true;</span><span class="vsc-s2">"</span>
+<span class="vsc-c1"># Read a VIEW: Push filter predicates into SQL engine directly</span>
+<span class="vsc-n">meta</span> <span class="vsc-o">=</span> <span class="vsc-p">(</span>
+<span class="vsc-n">spark</span><span class="vsc-o">.</span><span class="vsc-n">read</span><span class="vsc-o">.</span><span class="vsc-n">format</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">jdbc</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">url</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-n">jdbc_url</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">accessToken</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-n">token</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">query</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-s2">"</span><span class="vsc-s2">SELECT entity_id, target_table, load_type FROM dbo.vw_active_entities WHERE layer = </span><span class="vsc-s2">'</span><span class="vsc-s2">silver</span><span class="vsc-s2">'</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">load</span><span class="vsc-p">(</span><span class="vsc-p">)</span>
+<span class="vsc-p">)</span>
+<span class="vsc-c1"># Parallel read of a LARGE table with partition pushdown</span>
+<span class="vsc-n">big</span> <span class="vsc-o">=</span> <span class="vsc-p">(</span>
+<span class="vsc-n">spark</span><span class="vsc-o">.</span><span class="vsc-n">read</span><span class="vsc-o">.</span><span class="vsc-n">format</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">jdbc</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">url</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-n">jdbc_url</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">accessToken</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-n">token</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">dbtable</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-s2">"</span><span class="vsc-s2">dbo.fact_positions</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">partitionColumn</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-s2">"</span><span class="vsc-s2">position_id</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">lowerBound</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-mi">1</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">upperBound</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-mi">50_000_000</span><span class="vsc-p">)</span>
+<span class="vsc-o">.</span><span class="vsc-n">option</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">numPartitions</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-mi">16</span><span class="vsc-p">)</span> <span class="vsc-c1"># 16 concurrent JDBC connections</span>
+<span class="vsc-o">.</span><span class="vsc-n">load</span><span class="vsc-p">(</span><span class="vsc-p">)</span>
+<span class="vsc-p">)</span></code></pre>
+</div>
+<div class="note red">
+<b>Five gotchas that cost real time.</b>
+<ol style="margin:8px 0 0 18px;">
+<li><b>Spark JDBC cannot call stored procedures.</b> It expects a query it can wrap in a subselect. Use pyodbc.</li>
+<li><b>A JDBC read without <code>partitionColumn</code> is one connection, one task.</b> Fine for metadata, disastrous for a 50M-row table — and it looks like "Spark is slow" rather than "you asked for one thread".</li>
+<li><b><code>numPartitions</code> is concurrent connections</b> to an operational database. 64 partitions against a busy SQL DB is a denial-of-service you inflicted on yourself.</li>
+<li><b>Never write run logs row-by-row.</b> One DataFrame write or one <code>execute()</code> per row against SQL DB is enormous overhead; use <code>cur.executemany(...)</code> or accumulate and write once (<a class="secref" href="spark_internals.html#sqldbmeta">internals Sec 27</a>).</li>
+<li><b>Connections are not shareable across concurrent <code>runMultiple</code> activities.</b> Open per activity, close in <code>finally</code>.</li>
+</ol>
+</div>
+<div class="note green">
+<b>Shape that works:</b> pyodbc for control-plane reads and all writes · Spark JDBC only when
+    the metadata is genuinely large or must be joined to lakehouse data · the OneLake mirror for
+    analytical history. Fetch config once per run, cache to a dict, write the run log once at the end.
+  </div>
+</section>
+<!-- ============================== 4. USER DATA FUNCTIONS ============================== -->
+<section class="panel" id="udfitems">
+<div class="eyebrow">04 · User Data Functions <span class="line"></span></div>
+<h2 class="h">Fabric User Data Functions — Where They Actually Fit</h2>
+<p>A <b>User Data Functions</b> item is serverless Python hosted by Fabric, callable from notebooks,
+  pipelines, Activator rules, Power BI translytical task flows, and external clients via a per-function
+  REST endpoint. Crucially it is <b>not</b> a Spark UDF: it does not run inside your Spark plan, so it
+  never appears in a query plan and never causes NEE fallback.</p>
+<div class="card">
+<div class="card-title">Spark UDF vs Fabric User Data Function — different tools entirely</div>
+<table>
+<tr><th style="width:24%">Dimension</th><th style="width:36%">Spark UDF</th><th>Fabric User Data Function</th></tr>
+<tr><td class="key">Executes</td><td>Inside the Spark plan, per row/batch on executors</td><td>Outside Spark, serverless, once per call</td></tr>
+<tr><td class="key">Scale unit</td><td>Billions of rows</td><td>One call (which may carry a DataFrame)</td></tr>
+<tr><td class="key">Plan impact</td><td><code>BatchEvalPython</code>; forces NEE fallback</td><td>None — invisible to Catalyst</td></tr>
+<tr><td class="key">Reuse</td><td>Per session, or a library</td><td>Item-level, cross-workspace, versioned, REST-addressable</td></tr>
+<tr><td class="key">Right for</td><td>Row transformations that must be distributed</td><td>Control-plane logic: validation, lookups, logging, API calls, orchestration decisions</td></tr>
+</table>
+</div>
+<div class="vscode-code-panel">
+<div class="vscode-header">
+<div class="vscode-left">
+<span class="vscode-dot dot-red"></span>
+<span class="vscode-dot dot-yellow"></span>
+<span class="vscode-dot dot-green"></span>
+<span class="vscode-lang-badge">PYSPARK</span>
+<span class="vscode-target-badge">FABRIC NOTEBOOK UTILS</span>
+</div>
+<button class="vscode-copy-btn" onclick="copyVsCode(this)">
+<svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+<span>Copy</span>
+</button>
+</div>
+<pre class="vscode-pre"><code><span class="vsc-c1"># --- Inside the User Data Functions item ---</span>
+<span class="vsc-kd">import</span> <span class="vsc-n">fabric</span><span class="vsc-n">.</span><span class="vsc-n">functions</span> <span class="vsc-k">as</span> <span class="vsc-n">fn</span>
+<span class="vsc-kd">import</span> <span class="vsc-n">logging</span>
+<span class="vsc-n">udf</span> <span class="vsc-o">=</span> <span class="vsc-n">fn</span><span class="vsc-o">.</span><span class="vsc-n">UserDataFunctions</span><span class="vsc-p">(</span><span class="vsc-p">)</span>
+<span class="vsc-nd">@udf</span><span class="vsc-o">.</span><span class="vsc-n">function</span><span class="vsc-p">(</span><span class="vsc-p">)</span> <span class="vsc-c1"># only decorated functions are externally callable</span>
+<span class="vsc-k">def</span> <span class="vsc-nf">validate_entity</span><span class="vsc-p">(</span><span class="vsc-n">entity_name</span><span class="vsc-p">:</span> <span class="vsc-nb">str</span><span class="vsc-p">,</span> <span class="vsc-n">row_count</span><span class="vsc-p">:</span> <span class="vsc-nb">int</span><span class="vsc-p">,</span> <span class="vsc-n">expected_min</span><span class="vsc-p">:</span> <span class="vsc-nb">int</span> <span class="vsc-o">=</span> <span class="vsc-mi">1000</span><span class="vsc-p">)</span> <span class="vsc-o">-</span><span class="vsc-o">&gt;</span> <span class="vsc-nb">dict</span><span class="vsc-p">:</span>
+<span class="vsc-n">ok</span> <span class="vsc-o">=</span> <span class="vsc-n">row_count</span> <span class="vsc-o">&gt;</span><span class="vsc-o">=</span> <span class="vsc-n">expected_min</span>
+<span class="vsc-n">logging</span><span class="vsc-o">.</span><span class="vsc-n">info</span><span class="vsc-p">(</span><span class="vsc-s">f</span><span class="vsc-s2">"</span><span class="vsc-s2">validate </span><span class="vsc-s">{</span><span class="vsc-n">entity_name</span><span class="vsc-s">}</span><span class="vsc-s2">: </span><span class="vsc-s">{</span><span class="vsc-n">row_count</span><span class="vsc-s">}</span><span class="vsc-s2"> rows, ok=</span><span class="vsc-s">{</span><span class="vsc-n">ok</span><span class="vsc-s">}</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-k">return</span> <span class="vsc-p">{</span><span class="vsc-s2">"</span><span class="vsc-s2">entity</span><span class="vsc-s2">"</span><span class="vsc-p">:</span> <span class="vsc-n">entity_name</span><span class="vsc-p">,</span> <span class="vsc-s2">"</span><span class="vsc-s2">ok</span><span class="vsc-s2">"</span><span class="vsc-p">:</span> <span class="vsc-n">ok</span><span class="vsc-p">,</span> <span class="vsc-s2">"</span><span class="vsc-s2">row_count</span><span class="vsc-s2">"</span><span class="vsc-p">:</span> <span class="vsc-n">row_count</span><span class="vsc-p">}</span>
+<span class="vsc-k">def</span> <span class="vsc-nf">_helper</span><span class="vsc-p">(</span><span class="vsc-p">)</span><span class="vsc-p">:</span> <span class="vsc-c1"># no decorator = private, not callable from outside</span>
+<span class="vsc-o">.</span><span class="vsc-o">.</span><span class="vsc-o">.</span>
+<span class="vsc-c1"># --- Calling it from a notebook ---</span>
+<span class="vsc-n">fns</span> <span class="vsc-o">=</span> <span class="vsc-n">notebookutils</span><span class="vsc-o">.</span><span class="vsc-n">udf</span><span class="vsc-o">.</span><span class="vsc-n">getFunctions</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">etl-shared-functions</span><span class="vsc-s2">"</span><span class="vsc-p">)</span> <span class="vsc-c1"># same workspace</span>
+<span class="vsc-n">fns</span> <span class="vsc-o">=</span> <span class="vsc-n">notebookutils</span><span class="vsc-o">.</span><span class="vsc-n">udf</span><span class="vsc-o">.</span><span class="vsc-n">getFunctions</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">etl-shared-functions</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-n">WS_ID</span><span class="vsc-p">)</span> <span class="vsc-c1"># cross-workspace</span>
+<span class="vsc-n">result</span> <span class="vsc-o">=</span> <span class="vsc-n">fns</span><span class="vsc-o">.</span><span class="vsc-n">validate_entity</span><span class="vsc-p">(</span><span class="vsc-n">entity_name</span><span class="vsc-o">=</span><span class="vsc-s2">"</span><span class="vsc-s2">silver_orders</span><span class="vsc-s2">"</span><span class="vsc-p">,</span> <span class="vsc-n">row_count</span><span class="vsc-o">=</span><span class="vsc-mi">41230</span><span class="vsc-p">)</span> <span class="vsc-c1"># named params</span>
+<span class="vsc-n">display</span><span class="vsc-p">(</span><span class="vsc-n">fns</span><span class="vsc-o">.</span><span class="vsc-n">validate_entity</span><span class="vsc-o">.</span><span class="vsc-n">functionDetails</span><span class="vsc-p">)</span> <span class="vsc-c1"># inspect the signature</span></code></pre>
+</div>
+<h3 class="h3">Where they earn their place in a metadata-driven framework</h3>
+<div class="card">
+<table>
+<tr><th style="width:26%">Use</th><th>Why a UDF item beats the alternatives</th></tr>
+<tr><td class="key">Centralised run logging</td><td>One <code>log_run()</code> callable identically from a notebook <b>and</b> a pipeline. Without it, pipelines cannot write your run log without a notebook activity purely to hold the code.</td></tr>
+<tr><td class="key">Validation gates</td><td>"Is this entity allowed to run now?" as one function consulted by every orchestrator. Business rules change in one place.</td></tr>
+<tr><td class="key">Config resolution</td><td>Wrap the SQL Database lookup so notebooks never carry connection logic or secrets handling at all.</td></tr>
+<tr><td class="key">Rate-limited API calls</td><td>Async support suits I/O-bound work, and the serverless model means no Spark session idles while you wait (<a class="secref" href="spark_internals.html#ingestion">internals Sec 32</a>).</td></tr>
+<tr><td class="key">Cross-workspace standards</td><td>Centralise in a platform workspace; every domain workspace calls the same tested function.</td></tr>
+</table>
+</div>
+<div class="note red">
+<b>Where NOT to use them.</b> <b>Never per row.</b> A UDF item is a service call, not a vectorized
+    operator — calling it inside a Spark <code>withColumn</code> over millions of rows is a
+    per-row network round trip. Community guidance is consistent: keep them for <i>light</i> tasks.
+    Pandas DataFrame/Series input and output (Arrow-backed) lets you pass a <i>batch</i> in one call,
+    which is the correct pattern when data must go through a UDF item at all — but distributed
+    row transformation belongs in Spark built-ins.
+  </div>
+</section>
+<!-- ============================== 5. DBT ============================== -->
+<section class="panel" id="dbtfabric">
+<div class="eyebrow">05 · dbt on Fabric <span class="line"></span></div>
+<h2 class="h">dbt on Lakehouse and Warehouse — Deep Dive</h2>
+<p>Microsoft ships <b>two separate adapters</b>, and the split matters more than most teams expect:
+  they target different engines, different SQL dialects, and different materializations.</p>
+<div class="card">
+<table>
+<tr><th style="width:18%">Adapter</th><th style="width:16%">Target</th><th>Mechanics</th></tr>
+<tr><td class="key mono">dbt-fabricspark</td><td>Lakehouse (Spark SQL)</td><td>Connects to Fabric Spark <b>through the Livy API</b>, session-jobs mode only (so the Spark session is reused across models). Auto-detects schema-enabled lakehouses via the Fabric REST API and switches between two-part and three/four-part naming accordingly.</td></tr>
+<tr><td class="key mono">dbt-fabric</td><td>Warehouse (T-SQL)</td><td>Connects over ODBC — requires <b>Microsoft ODBC Driver 18</b> (17 also works). T-SQL dialect, warehouse semantics.</td></tr>
+</table>
+<p class="small" style="margin-top:8px;"><b>dbt Jobs in Fabric</b> entered public preview in December 2025 as a
+    native orchestration item, and Microsoft has stated dbt Fusion support is expected later in Q2 2026.
+    A community adapter (<code>dbt-fabric-samdebruyn</code>) supports both engines in one package and
+    newer dbt-core versions — worth knowing about, but evaluate support model before production use.</p>
+</div>
+<h3 class="h3">The feature that changes the MLV conversation</h3>
+<div class="note cyan">
+<b><code>dbt-fabricspark</code> supports <code>materialized='materialized_lake_view'</code></b> —
+    dbt can create and <b>schedule</b> Materialized Lake Views directly, including cron and daily
+    schedule configuration. This resolves the usual tension: you keep dbt's lineage, testing and CI/CD
+    while the refresh itself is managed by Fabric.
+<div class="vscode-code-panel">
+<div class="vscode-header">
+<div class="vscode-left">
+<span class="vscode-dot dot-red"></span>
+<span class="vscode-dot dot-yellow"></span>
+<span class="vscode-dot dot-green"></span>
+<span class="vscode-lang-badge">SPARK SQL</span>
+<span class="vscode-target-badge">NOTEBOOK %%sql OR SQL ENDPOINT</span>
+</div>
+<button class="vscode-copy-btn" onclick="copyVsCode(this)">
+<svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+<span>Copy</span>
+</button>
+</div>
+<pre class="vscode-pre"><code>{{ <span class="vsc-n">config</span><span class="vsc-p">(</span>
+<span class="vsc-n">materialized</span><span class="vsc-o">=</span><span class="vsc-s1">'materialized_lake_view'</span><span class="vsc-p">,</span>
+<span class="vsc-n">mlv_schedule</span><span class="vsc-o">=</span>{
+      <span class="vsc-s">"enabled"</span><span class="vsc-p">:</span> <span class="vsc-k">true</span><span class="vsc-p">,</span>
+<span class="vsc-s">"configuration"</span><span class="vsc-p">:</span> {
+        <span class="vsc-s">"startDateTime"</span><span class="vsc-p">:</span> <span class="vsc-s">"2026-04-10T00:00:00"</span><span class="vsc-p">,</span>
+<span class="vsc-s">"endDateTime"</span><span class="vsc-p">:</span> <span class="vsc-s">"2026-12-31T23:59:59"</span><span class="vsc-p">,</span>
+<span class="vsc-s">"localTimeZoneId"</span><span class="vsc-p">:</span> <span class="vsc-s">"Central Standard Time"</span><span class="vsc-p">,</span>
+<span class="vsc-s">"type"</span><span class="vsc-p">:</span> <span class="vsc-s">"Daily"</span><span class="vsc-p">,</span>
+<span class="vsc-s">"times"</span><span class="vsc-p">:</span> <span class="vsc-p">[</span><span class="vsc-s">"06:00"</span><span class="vsc-p">,</span> <span class="vsc-s">"18:00"</span><span class="vsc-p">]</span>
+      }
+    }
+<span class="vsc-p">)</span> }}
+
+<span class="vsc-k">SELECT</span> <span class="vsc-n">order_date</span><span class="vsc-p">,</span> <span class="vsc-k">SUM</span><span class="vsc-p">(</span><span class="vsc-n">amount</span><span class="vsc-p">)</span> <span class="vsc-k">AS</span> <span class="vsc-n">revenue</span>
+<span class="vsc-k">FROM</span> {{ <span class="vsc-k">ref</span><span class="vsc-p">(</span><span class="vsc-s1">'silver_orders'</span><span class="vsc-p">)</span> }}
+<span class="vsc-k">WHERE</span> <span class="vsc-n">status</span> <span class="vsc-o">=</span> <span class="vsc-s1">'complete'</span>
+<span class="vsc-k">GROUP</span> <span class="vsc-k">BY</span> <span class="vsc-n">order_date</span></code></pre>
+</div>
+<b>Documented limit:</b> only <b>one active schedule per lakehouse lineage</b> — the adapter
+    updates an existing schedule rather than adding a second. Plan one schedule per lineage, not per model.
+  </div>
+<div class="note red">
+<b>The MLV trap carries straight through dbt.</b> A dbt model materialized as an MLV inherits every
+    incremental-refresh constraint from <a class="secref" href="spark_internals.html#deltaopt">internals Sec 20</a>:
+    window functions force full refresh, sources must have CDF enabled, and <b>any update or delete on
+    a source forces full refresh regardless</b>. dbt makes the MLV easier to author and schedule; it
+    does not make it incremental. If your source has update/delete traffic, an <code>incremental</code>
+    dbt model doing a MERGE is the better materialization — you get incremental behaviour dbt
+    controls, instead of an MLV that quietly rebuilds every cycle.
+  </div>
+<h3 class="h3">Gotchas, by adapter</h3>
+<div class="card">
+<table>
+<tr><th style="width:26%">Gotcha</th><th>Detail</th></tr>
+<tr><td class="key">Schema-enabled vs not (Spark)</td><td>Four-part naming works <b>only</b> against schema-enabled lakehouses; setting <code>workspace_name</code> on a non-schema-enabled target raises a parse-time error. Set it once in <code>profiles.yml</code> as a target default rather than per model.</td></tr>
+<tr><td class="key">Incremental models use staging tables</td><td>The Spark adapter uses <b>persisted staging tables instead of temp views</b> to work around Spark's <code>REQUIRES_SINGLE_PART_NAMESPACE</code> limitation. Expect extra physical tables, and include them in your maintenance scope (<a class="secref" href="spark_internals.html#maintenance">internals Sec 30</a>).</td></tr>
+<tr><td class="key">Livy session lifetime</td><td>Session-jobs mode reuses one Spark session across models — good for CU, but a long dbt run holds that session. Livy sessions also time out on inactivity, which surfaces as a mid-run failure on very long DAGs.</td></tr>
+<tr><td class="key">ODBC driver on the runner (Warehouse)</td><td><code>dbt-fabric</code> needs ODBC Driver 18 installed on whatever runs dbt, including CI agents and containers. On Debian/Ubuntu you also need the ODBC header files before <code>pip install</code>.</td></tr>
+<tr><td class="key">Collation (Warehouse)</td><td>Fabric Warehouse is tested on <code>Latin1_General_100_BIN2_UTF8</code> — a <b>case-sensitive, binary</b> collation. Models that rely on case-insensitive joins or comparisons behave differently than on a typical SQL Server.</td></tr>
+<tr><td class="key">Authentication</td><td>Azure CLI (<code>az login</code>) is fine for self-hosted development; use an <b>Entra service principal</b> for CI/CD and scheduled runs.</td></tr>
+<tr><td class="key">Threads</td><td>Fabric Lakehouse profiles commonly use <code>threads: 1</code>. Raising it multiplies concurrent Livy work — test against capacity before increasing (<a class="secref" href="spark_internals.html#capacity">internals Sec 18</a>).</td></tr>
+</table>
+</div>
+<h3 class="h3">Choosing where gold lives — Lakehouse or Warehouse</h3>
+<div class="card">
+<table>
+<tr><th style="width:22%">Signal</th><th style="width:24%">Lakehouse (dbt-fabricspark)</th><th>Warehouse (dbt-fabric)</th></tr>
+<tr><td class="key">Team dialect</td><td>Spark SQL; Python models available</td><td>T-SQL; familiar to SQL Server teams</td></tr>
+<tr><td class="key">Consumption</td><td>Direct Lake, Spark, notebooks</td><td>T-SQL clients, multi-table transactions, tools expecting a relational warehouse</td></tr>
+<tr><td class="key">Transactions</td><td>Per-table Delta commits</td><td>Multi-table transactional guarantees</td></tr>
+<tr><td class="key">MLV materialization</td><td><b>Supported</b></td><td>Not applicable</td></tr>
+<tr><td class="key">Write path</td><td>Spark, so V-Order and clustering are yours to control</td><td>Warehouse manages its own storage and maintenance</td></tr>
+</table>
+</div>
+<div class="note green">
+<b>A composition that works in practice.</b> Bronze and silver in the Lakehouse via Spark notebooks
+    (metadata-driven, CDF-incremental where updates exist — <a class="secref" href="spark_internals.html#cdfsql">internals Sec 38</a>).
+    Gold modelled in dbt: <code>materialized_lake_view</code> for genuinely append-only SQL-expressible
+    aggregates, <code>incremental</code> with MERGE for everything else. Serve Direct Lake from the
+    Lakehouse gold; push into Warehouse only where you need T-SQL semantics or multi-table transactions.
+    Orchestrate with dbt Jobs or a pipeline calling dbt, and keep <b>one schedule per lakehouse lineage</b>.
+    <br/><br/><b>The trap to avoid:</b> using dbt as a reason to model gold twice — once as MLVs and
+    again as warehouse tables. Pick the consumption surface first, then the materialization.
+  </div>
+</section>
+<div class="footer" style="margin-top:26px;">
+  Sources: Microsoft Learn (User Data Functions, notebookutils.udf, SQL Database connectivity, dbt on
+  Fabric), dbt Labs documentation (fabricspark and fabric adapters), the <code>microsoft/dbt-fabricspark</code>
+  repository and PyPI package notes, and the Microsoft Fabric blog. Spark capability claims in Section 1
+  were executed against Spark 3.5 while writing. Preview statuses move — verify anything marked
+  preview before building on it.
+</div>
+</div>
+<script>
+// ============================================================================
+// SPARK INTERNALS — part 6: syntax highlighting + sections 25-28 interactivity
+// ============================================================================
+(function () {
+  "use strict";
+
+  /* ---------------- Minimal self-contained syntax highlighter ---------------- */
+  const KW = {
+    python: /\b(def|class|return|if|elif|else|for|while|in|not|and|or|import|from|as|with|try|except|finally|raise|lambda|None|True|False|await|async|yield|assert|global|pass|break|continue)\b/g,
+    sql: /\b(SELECT|FROM|WHERE|GROUP|BY|ORDER|HAVING|JOIN|LEFT|RIGHT|INNER|OUTER|ANTI|SEMI|ON|AS|AND|OR|NOT|IN|EXISTS|CREATE|TABLE|VIEW|FUNCTION|RETURNS|RETURN|INSERT|INTO|UPDATE|DELETE|MERGE|USING|MATCHED|THEN|WHEN|CASE|ELSE|END|WITH|UNION|ALL|DISTINCT|LIMIT|OVER|PARTITION|QUALIFY|CLUSTER|TBLPROPERTIES|BEGIN|DECLARE|FOR|DO|SET|VALUES|PRIMARY|KEY|FOREIGN|REFERENCES|CONSTRAINT|INDEX|NULL|DEFAULT|OPTIMIZE|VACUUM|EXPLAIN|DESCRIBE)\b/gi
+  };
+  function escapeHtml(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  function highlight(code, lang) {
+    // tokens are protected with placeholders so later passes can't corrupt earlier spans
+    const store = [];
+    const keep = (cls, txt) => { store.push(`<span class="hl-${cls}">${txt}</span>`); return `\u0000x${store.length - 1}x\u0000`; };
+    let s = escapeHtml(code);
+    // comments first
+    s = s.replace(/(#[^\n]*)/g, m => keep("com", m));
+    s = s.replace(/(--[^\n]*)/g, m => keep("com", m));
+    // strings (triple then single)
+    s = s.replace(/("""[\s\S]*?"""|'''[\s\S]*?''')/g, m => keep("str", m));
+    s = s.replace(/("(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*')/g, m => keep("str", m));
+    // numbers
+    s = s.replace(/\b(\d+\.?\d*)\b/g, m => keep("num", m));
+    // keywords
+    if (lang === "sql") s = s.replace(KW.sql, m => keep("kw", m));
+    else s = s.replace(KW.python, m => keep("kw", m));
+    // function calls
+    s = s.replace(/\b([A-Za-z_][\w]*)\s*\(/g, (m, n) => keep("fn", n) + "(");
+    // decorators
+    s = s.replace(/(@[\w.]+)/g, m => keep("dec", m));
+    return s.replace(/\u0000x(\d+)x\u0000/g, (m, i) => store[+i]);
+  }
+  function applyHighlighting(root) {
+    (root || document).querySelectorAll("pre code[class*='lang-']").forEach(el => {
+      if (el.dataset.hl) return;
+      const lang = (el.className.match(/lang-(\w+)/) || [, "python"])[1];
+      el.innerHTML = highlight(el.textContent, lang === "sql" ? "sql" : "python");
+      el.dataset.hl = "1";
+    });
+  }
+  applyHighlighting(document);
+  window.__applyHighlighting = applyHighlighting;
+
+  /* ---------------- Sec 25: fallback simulator ---------------- */
+  function simulate() {
+    const fmt = document.getElementById("nfFormat").value;
+    const rt = document.getElementById("nfRuntime").value;
+    const ansiSel = document.getElementById("nfAnsi").value;
+    const wl = document.getElementById("nfWorkload").value;
+    const udf = document.getElementById("nfUdf").value;
+    const nested = document.getElementById("nfNested").value;
+    const ansiOn = ansiSel === "on" || (ansiSel === "default" && rt === "2.0");
+    const blockers = [];
+
+    if (wl === "stream") blockers.push(["Tier 1 — whole query", "Structured Streaming falls back to JVM Spark entirely.", "No NEE acceleration for this workload. Size compute on JVM performance; keep NEE on for batch jobs sharing the environment."]);
+    if (ansiOn) blockers.push(["Tier 1 — whole query", `ANSI mode is ON (${ansiSel === "default" ? "Runtime " + rt + " default" : "explicitly set"}) and NEE falls back under ANSI.`, rt === "2.0" ? "This is THE Runtime 2.0 trap: NEE 'enabled' but inactive. Choose ansi_strategy='native_speed' (ansi=false) for throughput, or accept the JVM path for ANSI correctness — per workload, deliberately." : "Set spark.sql.ansi.enabled=false unless you enabled it deliberately to pre-test 4.x behaviour."]);
+    if (fmt === "json") blockers.push(["Tier 1 — source", "JSON/XML are not native sources.", "Land once into Delta at bronze, then keep the hot path on Delta/Parquet."]);
+    if (fmt === "csv" && rt === "1.3") blockers.push(["Tier 1 — source", "CSV is not vectorized on Runtime 1.3.", "Vectorized CSV parsing arrived with Runtime 2.0's NEE; on 1.3, convert to Delta first."]);
+    if (udf === "row") blockers.push(["Tier 3 — expression", "Row-at-a-time Python UDF drops its whole enclosing operator to JVM.", "Replace with built-in functions. This is the highest-value single fix in most plans (analyzer N002)."]);
+    if (udf === "pandas" && rt === "1.3") blockers.push(["Tier 3 — expression", "pandas UDF: vectorized, but not natively offloaded on Runtime 1.3.", "Runtime 2.0 added Python/Scala UDF support to NEE; built-ins remain best on both."]);
+    if (nested === "nested") blockers.push(["Tier 4 — types", "Deeply nested struct/map operations are a common fallback trigger.", "Flatten to columnar operations where the logic allows; nest once at the edge."]);
+    if (wl === "io") blockers.push(["Not a blocker — fit", "I/O-bound copy work is not where NEE helps.", "Microsoft is explicit that gains concentrate in compute-intensive queries. Expect little difference; keep NEE on, but don't expect the headline numbers."]);
+
+    const hard = blockers.filter(b => b[0].startsWith("Tier 1")).length;
+    const partial = blockers.filter(b => b[0].startsWith("Tier 3") || b[0].startsWith("Tier 4")).length;
+    let verdict, cls, summary;
+    if (hard > 0) {
+      verdict = "FULL FALLBACK LIKELY"; cls = "red";
+      summary = "One or more whole-query triggers are present — expect little or no native execution, while still paying conversion overhead at any boundaries. A fully-fallen-back plan can be <b>slower than NEE-off</b>: measure both.";
+    } else if (partial > 0) {
+      verdict = "PARTIAL FALLBACK"; cls = "";
+      summary = "Native execution will run, but breaks around the trigger(s) below — the expensive shape, because conversion happens mid-plan. Removing the interleaved trigger usually pays more than any config change.";
+    } else {
+      verdict = wl === "io" ? "NATIVE, LITTLE GAIN" : "GOOD NATIVE COVERAGE"; cls = "green";
+      summary = wl === "io"
+        ? "Nothing blocks native execution, but this workload shape is I/O-bound so the ceiling is low."
+        : "No known fallback triggers: Delta/Parquet source, built-ins only, flat types, ANSI compatible. This is the shape where NEE delivers its documented gains.";
+    }
+    document.getElementById("nfOut").innerHTML =
+      `<div class="note ${cls}"><b>Predicted: ${verdict}</b><br>${summary}</div>` +
+      (blockers.length ? `<table><tr><th style="width:20%">Tier</th><th style="width:34%">Trigger</th><th>What to do</th></tr>` +
+        blockers.map(b => `<tr><td class="key">${b[0]}</td><td>${b[1]}</td><td class="small">${b[2]}</td></tr>`).join("") + `</table>` : "") +
+      `<p class="small" style="margin-top:10px;">Heuristic prediction. Confirm with <code>df.explain()</code> (look for <code>*Transformer</code> / <code>VeloxColumnarToRowExec</code>), Spark Advisor's inline cell alerts, and the Diagnostics pane. Measure the real delta with <code>nb_nee_fallback_analyzer</code>.</p>`;
+  }
+  ["nfFormat", "nfRuntime", "nfAnsi", "nfWorkload", "nfUdf", "nfNested"].forEach(id => {
+    const e = document.getElementById(id);
+    if (e) e.addEventListener("change", simulate);
+  });
+  if (document.getElementById("nfOut")) simulate();
+
+  /* ---------------- Sec 26: SQL pattern gallery ---------------- */
+  const GALLERY = [
+    { name: "Latest record per key", ver: "3.5+",
+      bad: `-- self-join to find the max timestamp\nSELECT o.*\nFROM orders o\nJOIN (\n  SELECT customer_id, MAX(updated_at) AS mx\n  FROM orders GROUP BY customer_id\n) m\n  ON o.customer_id = m.customer_id\n AND o.updated_at = m.mx`,
+      badWhy: "Reads the table twice and shuffles twice — one aggregate plus one join. Also silently returns duplicates when two rows share the max timestamp.",
+      good: `SELECT * FROM (\n  SELECT o.*,\n         ROW_NUMBER() OVER (\n           PARTITION BY customer_id ORDER BY updated_at DESC\n         ) AS rn\n  FROM orders o\n)\nWHERE rn = 1`,
+      goodWhy: "One pass, one shuffle: the window partitions by key and ranks within it. Deterministic tie-breaking by adding a secondary ORDER BY column. This is the single most common SQL rewrite win in ETL." },
+    { name: "Anti-join / exclusion", ver: "3.5+",
+      bad: `SELECT * FROM orders\nWHERE customer_id NOT IN (\n  SELECT customer_id FROM blocked_customers\n)`,
+      badWhy: "The NULL trap: if <b>any</b> row in the subquery has a NULL customer_id, three-valued logic makes the predicate UNKNOWN for every row and the query returns <b>nothing</b>. Plans poorly too (analyzer S002).",
+      good: `SELECT o.* FROM orders o\nLEFT ANTI JOIN blocked_customers b\n  ON o.customer_id = b.customer_id\n\n-- or: WHERE NOT EXISTS (\n--   SELECT 1 FROM blocked_customers b\n--   WHERE b.customer_id = o.customer_id)`,
+      goodWhy: "NULL-safe and expressed as a join the optimizer understands — it can broadcast the small exclusion list instead of running a correlated scan." },
+    { name: "Filter pushdown", ver: "3.5+",
+      bad: `SELECT * FROM orders\nWHERE YEAR(order_date) = 2026\n  AND UPPER(status) = 'COMPLETE'`,
+      badWhy: "Functions wrap the <b>columns</b>, so no predicate reaches the scan — <code>PushedFilters: []</code>, <code>PartitionFilters: []</code>, and the whole table (all columns) is read and filtered in Spark (S005, P006).",
+      good: `SELECT order_id, customer_id, amount FROM orders\nWHERE order_date >= DATE'2026-01-01'\n  AND order_date <  DATE'2027-01-01'\n  AND status = 'complete'`,
+      goodWhy: "Predicates on raw columns push into the file reader, skipping row groups and partitions before Spark sees them; the explicit column list lets pruning shrink ReadSchema. Transform the literal, never the column." },
+    { name: "Join key type mismatch", ver: "3.5+",
+      bad: `SELECT *\nFROM orders o\nJOIN customer_dim c\n  ON CAST(o.customer_id AS STRING) = c.customer_key`,
+      badWhy: "A CAST on the join key blocks clean equi-join detection and destroys the statistics the optimizer needs — you get SortMergeJoin (two shuffles, two sorts) where a broadcast belonged (S004).",
+      good: `-- fix the schema once at bronze->silver, then:\nSELECT o.order_id, o.amount, c.segment\nFROM orders o\nJOIN customer_dim c\n  ON o.customer_id = c.customer_id`,
+      goodWhy: "Native type match: AQE can convert to BroadcastHashJoin at runtime when the dimension is small. If you cannot fix upstream, materialize the derived key as a stored column so the cast happens once, not per join." },
+    { name: "Incremental merge from CDF", ver: "3.5+",
+      bad: `-- rebuild the whole gold table every run\nINSERT OVERWRITE gold.daily_revenue\nSELECT order_date, SUM(amount)\nFROM silver.orders\nGROUP BY order_date`,
+      badWhy: "Full rescan and full rewrite for a handful of changed rows. Cost scales with history, not with change volume — the classic reason nightly jobs creep from 4 to 40 minutes.",
+      good: `-- read only what changed since the last processed version\nMERGE INTO gold.daily_revenue t\nUSING (\n  SELECT order_date, SUM(amount) AS revenue\n  FROM table_changes('silver.orders', :last_version)\n  WHERE _change_type != 'update_preimage'\n  GROUP BY order_date\n) s\nON t.order_date = s.order_date\nWHEN MATCHED THEN UPDATE SET t.revenue = s.revenue\nWHEN NOT MATCHED THEN INSERT *`,
+      goodWhy: "Change Data Feed turns cost into a function of change volume. Persist the processed version in the run log (Sec 27) so retries resume correctly. Enable <code>delta.enableChangeDataFeed</code> at table creation." },
+    { name: "Broadcast hints", ver: "3.5+",
+      bad: `SELECT /*+ BROADCAST(f) */ *\nFROM fact_orders f\nJOIN dim_region r ON f.region_id = r.region_id`,
+      badWhy: "Hinting the <b>fact</b> table for broadcast: Spark attempts to collect a huge table to the driver and ship it to every executor — driver OOM, or a very slow job if it survives.",
+      good: `SELECT /*+ BROADCAST(r) */ f.order_id, f.amount, r.region_name\nFROM fact_orders f\nJOIN dim_region r ON f.region_id = r.region_id`,
+      goodWhy: "Hint the <b>small</b> side, and only when you have measured it. Usually you need no hint at all — AQE converts joins from real runtime sizes; verify in the final plan (<code>isFinalPlan=true</code>) rather than hinting defensively." },
+  ];
+  const gb = document.getElementById("sqlGalleryBtns");
+  if (gb) {
+    gb.innerHTML = GALLERY.map((g, i) => `<button class="btn sm sqlg${i === 0 ? " primary" : ""}" data-i="${i}">${g.name}</button>`).join("");
+    const render = i => {
+      const g = GALLERY[i];
+      document.getElementById("sqlGalleryOut").innerHTML = `
+        <div class="codepair">
+          <div class="cp-side bad"><div class="cp-h">Anti-pattern <span class="verb">${g.ver}</span></div>
+            <div class="code-container" style="background:#080C14; border:1px solid #23314E; border-radius:8px; margin:16px 0 20px; overflow:hidden;">
+  <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 14px; background:#141E34; border-bottom:1px solid #23314E;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="font-family:ui-monospace,monospace; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:4px; background:#23314E; color:#52E0F0;">PYTHON</span>
+      <span style="font-family:ui-monospace,monospace; font-size:10px; color:#97A2BC;">FABRIC CODE BLOCK</span>
+    </div>
+    <button onclick="copyCodeBlock(this)" style="background:#23314E; border:1px solid #374D77; color:#E8ECF6; font-family:ui-monospace,monospace; font-size:11px; padding:4px 10px; border-radius:4px; cursor:pointer;">Copy</button>
+  </div>
+  <pre style="margin:0; padding:14px; overflow-x:auto;"><code style="font-family:ui-monospace,monospace; font-size:12.5px; color:#E8ECF6;">${g.bad.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>
+</div>
+            <div class="cp-n">${g.badWhy}</div></div>
+          <div class="cp-side good"><div class="cp-h">Better <span class="verb">${g.ver}</span></div>
+            <div class="code-container" style="background:#080C14; border:1px solid #23314E; border-radius:8px; margin:16px 0 20px; overflow:hidden;">
+  <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 14px; background:#141E34; border-bottom:1px solid #23314E;">
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span style="font-family:ui-monospace,monospace; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:4px; background:#23314E; color:#52E0F0;">PYTHON</span>
+      <span style="font-family:ui-monospace,monospace; font-size:10px; color:#97A2BC;">FABRIC CODE BLOCK</span>
+    </div>
+    <button onclick="copyCodeBlock(this)" style="background:#23314E; border:1px solid #374D77; color:#E8ECF6; font-family:ui-monospace,monospace; font-size:11px; padding:4px 10px; border-radius:4px; cursor:pointer;">Copy</button>
+  </div>
+  <pre style="margin:0; padding:14px; overflow-x:auto;"><code style="font-family:ui-monospace,monospace; font-size:12.5px; color:#E8ECF6;">${g.good.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</code></pre>
+</div>
+            <div class="cp-n">${g.goodWhy}</div></div>
+        </div>`;
+      applyHighlighting(document.getElementById("sqlGalleryOut"));
+    };
+    gb.querySelectorAll(".sqlg").forEach(b => b.addEventListener("click", () => {
+      gb.querySelectorAll(".sqlg").forEach(x => x.classList.remove("primary"));
+      b.classList.add("primary");
+      render(+b.dataset.i);
+    }));
+    render(0);
+  }
+
+  /* ---------------- Sec 28: migration readiness scorer ---------------- */
+  const MRQ = [
+    { q: "Custom Scala/Java JARs in your Environments?", w: 20, warn: "Recompile for Scala 2.13 / JDK 21 before switching." },
+    { q: "Environments with many pinned Python libraries?", w: 18, warn: "Every Environment with libraries must be re-published (Python 3.11 → 3.13) or jobs fail with 'No module found'." },
+    { q: "Code that relies on silent NULLs (casts, arithmetic, array indexing)?", w: 25, warn: "ANSI is on by default in 4.x — pre-test on 1.3 with spark.sql.ansi.enabled=true and fix with try_* functions." },
+    { q: "Structured Streaming jobs in scope?", w: 12, warn: "State migration needs care; streaming also falls back from NEE on both runtimes." },
+    { q: "Tables read by non-Spark Fabric engines (SQL endpoint, Direct Lake, other readers)?", w: 15, warn: "Gate Delta 4.x-only features (collations, VARIANT columns) — they are Spark-only today." },
+    { q: "Do you depend on NEE acceleration for SLA?", w: 14, warn: "Verify NEE stays native after the move — ANSI-on 2.0 environments can silently run JVM-only (N003/N007)." },
+    { q: "WASB paths, EventHubConnector, or SparkR still in use?", w: 10, warn: "Deprecated: migrate to ABFS, the Kafka connector, and sparklyr/PySpark respectively." },
+    { q: "Is this workload production-critical with no pilot capacity?", w: 22, warn: "Runtime 2.0 is GA but not yet the default runtime — production-critical work with no isolated pilot path should wait for GA." },
+  ];
+  const mq = document.getElementById("mrQuestions");
+  if (mq) {
+    mq.innerHTML = MRQ.map((m, i) =>
+      `<label style="display:flex; gap:10px; align-items:flex-start; margin-bottom:9px; cursor:pointer;">
+         <input type="checkbox" class="mrq" data-i="${i}" style="margin-top:3px;">
+         <span class="small">${m.q}</span></label>`).join("");
+    document.getElementById("mrScore").addEventListener("click", () => {
+      const checked = Array.from(document.querySelectorAll(".mrq:checked")).map(c => +c.dataset.i);
+      const score = checked.reduce((s, i) => s + MRQ[i].w, 0);
+      let verdict, cls;
+      if (score === 0) { verdict = "READY TO PILOT — no blockers identified"; cls = "green"; }
+      else if (score <= 30) { verdict = "PILOT WITH CARE — minor blockers, address before switching"; cls = "cyan"; }
+      else if (score <= 60) { verdict = "PREPARE FIRST — material migration work required"; cls = ""; }
+      else { verdict = "STAGE CAREFULLY — significant blockers to clear before migrating"; cls = "red"; }
+      document.getElementById("mrOut").innerHTML =
+        `<div class="note ${cls}"><b>${verdict}</b> <span class="small">(blocker weight ${score})</span></div>` +
+        (checked.length ? `<table><tr><th style="width:44%">Blocker</th><th>Action before migrating</th></tr>` +
+          checked.map(i => `<tr><td class="key">${MRQ[i].q}</td><td class="small">${MRQ[i].warn}</td></tr>`).join("") + `</table>`
+          : `<p class="small">Still run the ANSI pre-test on Runtime 1.3 and pilot in a non-production workspace first — Runtime 2.0 is GA but not yet the default runtime.</p>`) +
+        `<p class="small" style="margin-top:8px;">Weights are heuristic triage, not a risk model. Automate the ANSI-sensitivity part with <code>review(..., runtime="fabric-2.0")</code>.</p>`;
+    });
+  }
+})();
+
+</script>
+<div class="deepdive-section" id="dd-data-agent" style="margin-top:50px;">
+<div class="eyebrow" style="color:#52E0F0; font-family:ui-monospace,monospace; font-size:12px; text-transform:uppercase;">Deep Dive 6 · AI &amp; Knowledge</div>
+<h2 style="color:#fff; font-family:ui-monospace,monospace; font-size:22px; margin:8px 0 16px;">Fabric Data Agents &amp; Governed NL-to-Query Architecture</h2>
+<p style="color:#E8ECF6; line-height:1.7;">Fabric Data Agents provide conversational data access over Lakehouses, Warehouses, and KQL Databases under strict security isolation. Unlike raw LLM text-to-SQL prompts, Fabric Data Agents enforce a four-layer governance hierarchy and restrict unbounded outputs.</p>
+<div class="card" style="background:#0E1526; border:1px solid #23314E; border-radius:10px; padding:20px; margin:20px 0;">
+<div style="color:#52E0F0; font-family:ui-monospace,monospace; font-weight:700; font-size:13px; margin-bottom:12px;">Architecture: Fabric Data Agent Life of a Request</div>
+<svg style="width:100%; height:auto; display:block;" viewbox="0 0 880 160">
+<rect fill="#141E34" height="130" rx="6" stroke="#23314E" width="180" x="10" y="15"></rect>
+<text fill="#E8ECF6" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle" x="100" y="38">1. User NL Prompt</text>
+<text fill="#97A2BC" font-family="monospace" font-size="9" text-anchor="middle" x="100" y="60">Natural Language Question</text>
+<rect fill="#0C1220" height="45" rx="4" width="150" x="25" y="80"></rect>
+<text fill="#52E0F0" font-family="monospace" font-size="8.5" text-anchor="middle" x="100" y="100">Passed with user Entra</text>
+<text fill="#52E0F0" font-family="monospace" font-size="8.5" text-anchor="middle" x="100" y="113">Security Context</text>
+<line stroke="#52E0F0" stroke-width="2" x1="190" x2="230" y1="80" y2="80"></line>
+<rect fill="#0C1220" height="130" rx="6" stroke="#F5A93F" stroke-width="1.2" width="220" x="235" y="15"></rect>
+<text fill="#F5A93F" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle" x="345" y="38">2. Grounded Routing</text>
+<text fill="#97A2BC" font-family="monospace" font-size="9" text-anchor="middle" x="345" y="60">Source Routing + Schema</text>
+<rect fill="#141E34" height="45" rx="4" width="190" x="250" y="80"></rect>
+<text fill="#E8ECF6" font-family="monospace" font-size="8.5" text-anchor="middle" x="345" y="100">NL2Ontology or Guarded T-SQL</text>
+<text fill="#F5A93F" font-family="monospace" font-size="8.5" text-anchor="middle" x="345" y="113">Prevents Unsafe Joins</text>
+<line stroke="#52E0F0" stroke-width="2" x1="455" x2="495" y1="80" y2="80"></line>
+<rect fill="#141E34" height="130" rx="6" stroke="#52E0F0" stroke-width="1.2" width="200" x="500" y="15"></rect>
+<text fill="#52E0F0" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle" x="600" y="38">3. Delegated Execution</text>
+<text fill="#97A2BC" font-family="monospace" font-size="9" text-anchor="middle" x="600" y="60">Target Engine Query</text>
+<rect fill="#0C1220" height="45" rx="4" width="170" x="515" y="80"></rect>
+<text fill="#55E0A0" font-family="monospace" font-size="8.5" text-anchor="middle" x="600" y="100">SQL Analytics / Lakehouse</text>
+<text fill="#FF6666" font-family="monospace" font-size="8.5" text-anchor="middle" x="600" y="113">Hard 25-Row Result Cap</text>
+<line stroke="#52E0F0" stroke-width="2" x1="700" x2="740" y1="80" y2="80"></line>
+<rect fill="#0C1220" height="130" rx="6" stroke="#55E0A0" stroke-width="1.2" width="125" x="745" y="15"></rect>
+<text fill="#55E0A0" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle" x="807" y="38">4. Response</text>
+<rect fill="#1C4636" height="60" rx="4" width="105" x="755" y="65"></rect>
+<text fill="#55E0A0" font-family="monospace" font-size="9" text-anchor="middle" x="807" y="95">Governed</text>
+<text fill="#E8ECF6" font-family="monospace" font-size="8.5" text-anchor="middle" x="807" y="110">Answer</text>
+</svg>
+</div>
+</div>
+<div class="deepdive-section" id="dd-fabric-iq" style="margin-top:40px;">
+<div class="eyebrow" style="color:#52E0F0; font-family:ui-monospace,monospace; font-size:12px; text-transform:uppercase;">Deep Dive 7 · Enterprise Knowledge</div>
+<h2 style="color:#fff; font-family:ui-monospace,monospace; font-size:22px; margin:8px 0 16px;">Fabric IQ: The Ontology Layer Over OneLake Data</h2>
+<p style="color:#E8ECF6; line-height:1.7;">Fabric IQ introduces a shared semantic ontology layer mapped directly to existing Power BI semantic models and OneLake Delta tables. This replaces ad-hoc entity definitions across departments with an authoritative instance graph.</p>
+</div>
+<script>
+function copyCodeBlock(btn) {
+  const container = btn.closest('.code-container');
+  const code = container.querySelector('code').innerText;
+  navigator.clipboard.writeText(code).then(() => {
+    const originalText = btn.innerText;
+    btn.innerText = 'Copied! ✓';
+    btn.style.background = '#55E0A0';
+    btn.style.color = '#000';
+    setTimeout(() => {
+      btn.innerText = originalText;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 2000);
+  });
+}
+</script>
+</body>
+</html>

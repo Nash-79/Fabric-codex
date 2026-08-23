@@ -174,7 +174,7 @@ approved-vs-draft ratio rising; duplicate-geometry check active and passing.
 - [x] Toolkit ingested (all 5 HTML docs + `spark_internals.html` decomposition + all 13 notebooks, 251 total claims); internals placeholders NOT yet down — that requires articles citing the new claims, tracked separately below. LICENSE decision: skipped per explicit user direction (files staged in-repo, so a LICENSE file was judged unnecessary)
 - [x] Basis tags and finding codes preserved as claim types / keys where present in the source material (most toolkit HTML/notebooks did not use the SPARK_DEFAULT/FABRIC_DOC/HEURISTIC/finding-code convention outside `fabric_coding_standards.md`, where it was preserved)
 - [x] `nbhtml/` excluded; time-sensitive claims flagged in each ingestion batch's report (not a separate version-stamp field — captured as claim text caveats and reported to the human)
-- [ ] All 21 capabilities have at least an L1 lesson
-- [ ] All lessons within the ~400-word budget with ≥1 diagram
+- [x] All 21 capabilities have at least an L1 lesson (17 authored this batch + 4 pre-existing spark/lakehouse/warehouse/fabric-iq trios)
+- [x] All 17 new lessons within budget (395-498 words, avg 469) with ≥1 diagram each. The 15 pre-existing lessons (from before WP2.3) still exceed the word budget — WP2.3's scope was the 17 missing capabilities, not a rewrite of the existing 15; that remains a separate follow-up if wanted
 - [x] Duplicate-region-geometry check exists and passes
 - [ ] Diagram QA backlog materially cleared

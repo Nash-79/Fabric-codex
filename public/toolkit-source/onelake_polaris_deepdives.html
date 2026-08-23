@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>OneLake Storage, Polaris Distributed SQL &amp; Direct Lake Deep Dives</title>
+<style>
+:root {
+  --bg: #090D16;
+  --panel: #0E1526;
+  --panel-2: #141E34;
+  --panel-hover: #1A2846;
+  --border: #23314E;
+  --border-bright: #374D77;
+  --cyan: #52E0F0;
+  --cyan-dim: rgba(82,224,240,0.12);
+  --amber: #F5A93F;
+  --amber-dim: rgba(245,169,63,0.12);
+  --green: #55E0A0;
+  --green-dim: rgba(85,224,160,0.12);
+  --red: #FF6666;
+  --red-dim: rgba(255,102,102,0.12);
+  --purple: #B79CFF;
+  --purple-dim: rgba(183,156,255,0.12);
+  --text: #E8ECF6;
+  --text-dim: #97A2BC;
+  --font-mono: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, 'Courier New', monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  line-height: 1.65;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 28px;
+  background: rgba(14,21,38,0.92);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.brand {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--cyan);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+.nav-links {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.nav-links a {
+  color: var(--text-dim);
+  text-decoration: none;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+.nav-links a:hover, .nav-links a.active {
+  color: var(--cyan);
+  border-color: var(--border-bright);
+  background: var(--cyan-dim);
+}
+
+.container {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 40px 24px 100px;
+}
+
+.hero {
+  margin-bottom: 40px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 30px;
+}
+.hero .tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin-bottom: 12px;
+}
+.hero h1 {
+  font-family: var(--font-mono);
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: #fff;
+}
+.hero p {
+  font-size: 15.5px;
+  color: var(--text-dim);
+  max-width: 900px;
+  line-height: 1.7;
+}
+
+h2 {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  color: var(--cyan);
+  margin: 48px 0 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+h2::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+h3 {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: #fff;
+  margin: 28px 0 12px;
+}
+
+p, ul {
+  margin-bottom: 16px;
+  color: var(--text);
+}
+ul { padding-left: 24px; }
+li { margin-bottom: 8px; }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 22px 24px;
+  margin: 24px 0;
+}
+.card-title {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 700;
+  margin-bottom: 14px;
+}
+
+.note {
+  border-left: 4px solid var(--cyan);
+  background: var(--cyan-dim);
+  padding: 14px 18px;
+  border-radius: 0 8px 8px 0;
+  margin: 20px 0;
+  font-size: 13.5px;
+}
+.note.amber { border-color: var(--amber); background: var(--amber-dim); }
+.note.red { border-color: var(--red); background: var(--red-dim); }
+.note.green { border-color: var(--green); background: var(--green-dim); }
+
+/* Code Container with Pretty Header and Copy Button */
+.code-container {
+  background: #080C14;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 18px 0 24px;
+  overflow: hidden;
+}
+.code-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+.code-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lang-badge {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--border);
+  color: var(--cyan);
+  text-transform: uppercase;
+}
+.target-badge {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+}
+.copy-btn {
+  background: var(--border);
+  border: 1px solid var(--border-bright);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+.copy-btn:hover {
+  background: var(--cyan);
+  color: #000;
+  border-color: var(--cyan);
+}
+pre {
+  margin: 0;
+  padding: 16px;
+  overflow-x: auto;
+}
+pre code {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--text);
+}
+
+/* ==========================================================================
+   VS Code Dark+ Syntax Theme & Code Panel Styling
+   ========================================================================== */
+.vscode-code-panel {
+  background: #1E1E1E !important;
+  border: 1px solid #333333 !important;
+  border-radius: 8px !important;
+  margin: 20px 0 26px !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.35) !important;
+}
+.vscode-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 8px 14px !important;
+  background: #252526 !important;
+  border-bottom: 1px solid #333333 !important;
+}
+.vscode-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+.vscode-dot {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 50% !important;
+  display: inline-block !important;
+}
+.dot-red { background: #FF5F56 !important; }
+.dot-yellow { background: #FFBD2E !important; }
+.dot-green { background: #27C93F !important; }
+.vscode-lang-badge {
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  background: #333333 !important;
+  color: #52E0F0 !important;
+  letter-spacing: 0.05em !important;
+  margin-left: 6px !important;
+}
+.vscode-target-badge {
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace !important;
+  font-size: 10px !important;
+  color: #858585 !important;
+}
+.vscode-copy-btn {
+  background: #333333 !important;
+  border: 1px solid #3E3E42 !important;
+  color: #CCCCCC !important;
+  font-family: ui-monospace, 'Cascadia Code', 'SF Mono', Consolas, monospace !important;
+  font-size: 11px !important;
+  padding: 4px 11px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.2s !important;
+}
+.vscode-copy-btn:hover {
+  background: #52E0F0 !important;
+  color: #000 !important;
+  border-color: #52E0F0 !important;
+}
+.vscode-pre {
+  margin: 0 !important;
+  padding: 16px 18px !important;
+  background: #1E1E1E !important;
+  overflow-x: auto !important;
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', Consolas, monospace !important;
+  font-size: 13px !important;
+  line-height: 1.6 !important;
+}
+.vscode-pre code {
+  background: none !important;
+  padding: 0 !important;
+  font-family: inherit !important;
+  font-size: inherit !important;
+  color: #D4D4D4 !important;
+}
+
+/* VS Code Dark+ Syntax Token Colors */
+.vsc-k  { color: #569CD6 !important; font-weight: 600 !important; }
+.vsc-kd { color: #569CD6 !important; }
+.vsc-s, .vsc-s1, .vsc-s2 { color: #CE9178 !important; }
+.vsc-c, .vsc-c1, .vsc-cm { color: #6A9955 !important; font-style: italic !important; }
+.vsc-m, .vsc-mi, .vsc-mf { color: #B5CEA8 !important; }
+.vsc-nf { color: #DCDCAA !important; }
+.vsc-n, .vsc-na { color: #9CDCFE !important; }
+.vsc-nb { color: #4EC9B0 !important; }
+.vsc-o, .vsc-p { color: #D4D4D4 !important; }
+.vsc-nd { color: #DCDCAA !important; }
+.vsc-ow { color: #569CD6 !important; font-weight: 600 !important; }
+
+
+/* ==========================================================================
+   UNIFIED MASTER DESIGN SYSTEM & CLEAN LAYOUT POLISH
+   ========================================================================== */
+:root {
+  --bg: #0B0F19;
+  --bg-subtle: #080B12;
+  --surface: #111726;
+  --surface-2: #161F33;
+  --surface-hover: #1C2842;
+  --border: #202C45;
+  --border-bright: #32446B;
+  --cyan: #38BDF8;
+  --cyan-dim: rgba(56, 189, 248, 0.10);
+  --cyan-glow: rgba(56, 189, 248, 0.25);
+  --green: #34D399;
+  --green-dim: rgba(52, 211, 153, 0.10);
+  --amber: #FBBF24;
+  --amber-dim: rgba(251, 191, 36, 0.10);
+  --red: #F87171;
+  --red-dim: rgba(248, 113, 113, 0.10);
+  --purple: #A78BFA;
+  --purple-dim: rgba(167, 139, 250, 0.10);
+  --text: #F1F5F9;
+  --text-dim: #94A3B8;
+  --text-dimmer: #64748B;
+  --font-mono: 'Cascadia Code', 'Fira Code', 'SF Mono', Consolas, monospace;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  background: var(--bg) !important;
+  color: var(--text) !important;
+  font-family: var(--font-sans) !important;
+  font-size: 14.5px !important;
+  line-height: 1.68 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.topbar {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 12px 32px !important;
+  background: rgba(11, 15, 25, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+  border-bottom: 1px solid var(--border) !important;
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1000 !important;
+}
+
+.brand {
+  font-family: var(--font-mono) !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: var(--cyan) !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  text-decoration: none !important;
+  letter-spacing: 0.05em !important;
+}
+
+.nav-links {
+  display: flex !important;
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+.nav-links a {
+  color: var(--text-dim) !important;
+  text-decoration: none !important;
+  font-size: 12.5px !important;
+  font-family: var(--font-mono) !important;
+  padding: 6px 14px !important;
+  border-radius: 6px !important;
+  border: 1px solid transparent !important;
+  transition: all 0.2s ease !important;
+}
+
+.nav-links a:hover, .nav-links a.active {
+  color: #FFFFFF !important;
+  background: var(--surface-2) !important;
+  border-color: var(--border-bright) !important;
+}
+.nav-links a.active {
+  color: var(--cyan) !important;
+  border-color: var(--cyan) !important;
+  background: var(--cyan-dim) !important;
+}
+
+.container {
+  max-width: 1180px !important;
+  margin: 0 auto !important;
+  padding: 40px 24px 100px !important;
+}
+
+.hero {
+  margin-bottom: 40px !important;
+  padding-bottom: 28px !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+
+.hero .tag {
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.14em !important;
+  text-transform: uppercase !important;
+  color: var(--cyan) !important;
+  margin-bottom: 10px !important;
+}
+
+.hero h1 {
+  font-family: var(--font-mono) !important;
+  font-size: 30px !important;
+  font-weight: 700 !important;
+  margin-bottom: 14px !important;
+  color: #FFFFFF !important;
+  letter-spacing: -0.02em !important;
+}
+
+.hero p {
+  font-size: 15px !important;
+  color: var(--text-dim) !important;
+  max-width: 960px !important;
+  line-height: 1.7 !important;
+}
+
+h2 {
+  font-family: var(--font-mono) !important;
+  font-size: 19px !important;
+  font-weight: 700 !important;
+  color: var(--cyan) !important;
+  margin: 48px 0 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+h2::after {
+  content: '' !important;
+  flex: 1 !important;
+  height: 1px !important;
+  background: var(--border) !important;
+}
+
+h3 {
+  font-family: var(--font-mono) !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: #FFFFFF !important;
+  margin: 28px 0 12px !important;
+}
+
+p, ul, ol {
+  margin-bottom: 16px !important;
+  color: var(--text) !important;
+}
+
+ul { padding-left: 24px !important; }
+li { margin-bottom: 6px !important; }
+
+.card {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  padding: 22px !important;
+  margin: 24px 0 !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2) !important;
+}
+
+.card h3 {
+  margin-top: 0 !important;
+}
+
+.card p:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Crisp Data Tables */
+.data-table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  margin: 22px 0 30px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+  background: var(--surface) !important;
+  font-size: 13.5px !important;
+}
+
+.data-table th {
+  background: var(--surface-2) !important;
+  color: #FFFFFF !important;
+  font-family: var(--font-mono) !important;
+  font-weight: 600 !important;
+  text-align: left !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+  font-size: 12.5px !important;
+  letter-spacing: 0.03em !important;
+}
+
+.data-table td {
+  padding: 12px 16px !important;
+  border-bottom: 1px solid var(--border) !important;
+  color: var(--text) !important;
+  vertical-align: top !important;
+  line-height: 1.6 !important;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none !important;
+}
+
+.data-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02) !important;
+}
+
+/* VS Code Code Panels Clean Alignment */
+.vscode-code-panel {
+  background: #181C24 !important;
+  border: 1px solid #283347 !important;
+  border-radius: 8px !important;
+  margin: 18px 0 24px !important;
+  overflow: hidden !important;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3) !important;
+}
+
+.vscode-header {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 8px 14px !important;
+  background: #1F2633 !important;
+  border-bottom: 1px solid #283347 !important;
+}
+
+.vscode-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.vscode-dot {
+  width: 9px !important;
+  height: 9px !important;
+  border-radius: 50% !important;
+  display: inline-block !important;
+}
+
+.dot-red { background: #F87171 !important; }
+.dot-yellow { background: #FBBF24 !important; }
+.dot-green { background: #34D399 !important; }
+
+.vscode-lang-badge {
+  font-family: var(--font-mono) !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  padding: 2px 8px !important;
+  border-radius: 4px !important;
+  background: #2A3549 !important;
+  color: var(--cyan) !important;
+  letter-spacing: 0.04em !important;
+  margin-left: 6px !important;
+}
+
+.vscode-target-badge {
+  font-family: var(--font-mono) !important;
+  font-size: 10px !important;
+  color: var(--text-dim) !important;
+}
+
+.vscode-copy-btn {
+  background: #2A3549 !important;
+  border: 1px solid #374660 !important;
+  color: #E2E8F0 !important;
+  font-family: var(--font-mono) !important;
+  font-size: 11px !important;
+  padding: 4px 12px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  transition: all 0.2s ease !important;
+}
+
+.vscode-copy-btn:hover {
+  background: var(--cyan) !important;
+  color: #000000 !important;
+  border-color: var(--cyan) !important;
+}
+
+.vscode-pre {
+  margin: 0 !important;
+  padding: 16px 18px !important;
+  background: #141820 !important;
+  overflow-x: auto !important;
+  font-family: var(--font-mono) !important;
+  font-size: 12.8px !important;
+  line-height: 1.62 !important;
+}
+
+/* Embedded Diagram Stages */
+.diagram-stage {
+  background: radial-gradient(circle at 50% 30%, #151D2E 0%, #0D121E 100%) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  padding: 24px !important;
+  margin: 24px 0 32px !important;
+  text-align: center !important;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+}
+
+.diagram-stage svg {
+  max-width: 100% !important;
+  height: auto !important;
+}
+
+
+/* Codepair Layout Refinement (No More Horizontal Cramping) */
+.codepair {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(460px, 1fr)) !important;
+  gap: 20px !important;
+  margin: 20px 0 28px !important;
+}
+
+.cp-side {
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.cp-side .vscode-code-panel {
+  margin: 8px 0 12px !important;
+  flex: 1 !important;
+}
+
+.cp-h {
+  font-family: var(--font-mono) !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  padding: 6px 12px !important;
+  border-radius: 6px 6px 0 0 !important;
+  background: var(--surface-2) !important;
+  border: 1px solid var(--border) !important;
+  border-bottom: none !important;
+  color: var(--text) !important;
+}
+
+.cp-side.bad .cp-h {
+  border-left: 3px solid var(--red) !important;
+  color: var(--red) !important;
+}
+
+.cp-side.good .cp-h {
+  border-left: 3px solid var(--green) !important;
+  color: var(--green) !important;
+}
+
+.cp-n {
+  font-size: 13px !important;
+  color: var(--text-dim) !important;
+  line-height: 1.5 !important;
+  padding: 8px 12px !important;
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 0 0 6px 6px !important;
+  margin-top: -12px !important;
+  margin-bottom: 12px !important;
+}
+
+</style>
+</head>
+<body>
+<header class="topbar">
+<a class="brand" href="index.html">
+<svg fill="none" height="18" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="18"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path></svg>
+    FABRIC SPARK TOOLKIT
+  </a>
+<nav class="nav-links">
+<a href="index.html">← Hub</a>
+<a href="spark_internals.html">Spark Internals</a>
+<a href="runtime_2_0_guide.html">Runtime 2.0 Guide</a>
+<a class="active" href="onelake_polaris_deepdives.html">OneLake &amp; Polaris</a>
+<a href="fabric_deepdives.html">Fabric Deep Dives</a>
+</nav>
+</header>
+<main class="container">
+<div class="hero">
+<div class="tag">ENTERPRISE STORAGE &amp; QUERY ENGINE INTERNALS</div>
+<h1>OneLake Storage, Polaris Distributed SQL &amp; Direct Lake</h1>
+<p>In-depth architectural guide to Microsoft Fabric's unified storage substrate and distributed relational query tier. Covers OneLake shortcut identity resolution, Iceberg REST Catalog zero-copy sharing, Polaris Cascades compilation, and Direct Lake lazy paging internals.</p>
+</div>
+<h2>1. OneLake Storage, Shortcuts &amp; Delegated Identity</h2>
+<p>OneLake provides a single, tenant-wide hierarchical namespace over Azure Data Lake Storage Gen2. Instead of copying files between services, Fabric uses lightweight metadata references called <b>Shortcuts</b>.</p>
+<div class="card">
+<div class="card-title" style="color:var(--cyan);">Architecture: OneLake Shortcut Identity &amp; Security Resolution</div>
+<svg style="width:100%; height:auto; display:block;" viewbox="0 0 920 200">
+<defs>
+<lineargradient id="olGrad" x1="0%" x2="100%" y1="0%" y2="100%">
+<stop offset="0%" stop-color="#141E34"></stop>
+<stop offset="100%" stop-color="#0E1526"></stop>
+</lineargradient>
+<marker id="arrCyanOL" markerheight="6" markerwidth="6" orient="auto" refx="6" refy="5" viewbox="0 0 10 10">
+<path d="M 0 1 L 10 5 L 0 9 z" fill="#52E0F0"></path>
+</marker>
+</defs>
+<!-- User / Engine -->
+<rect fill="url(#olGrad)" height="150" rx="8" stroke="#52E0F0" stroke-width="1.2" width="220" x="10" y="25"></rect>
+<text fill="#52E0F0" font-family="monospace" font-size="11.5" font-weight="700" text-anchor="middle" x="120" y="50">Consumer Request</text>
+<rect fill="#0C1220" height="35" rx="4" width="190" x="25" y="65"></rect>
+<text fill="#E8ECF6" font-family="monospace" font-size="9.5" text-anchor="middle" x="120" y="87">Power BI / Spark / T-SQL</text>
+<rect fill="#1A2846" height="50" rx="4" width="190" x="25" y="110"></rect>
+<text fill="#97A2BC" font-family="monospace" font-size="9" text-anchor="middle" x="120" y="130">Target: /Tables/dim_customer</text>
+<text fill="#F5A93F" font-family="monospace" font-size="8.5" text-anchor="middle" x="120" y="145">(Shortcut Pointer)</text>
+<line marker-end="url(#arrCyanOL)" stroke="#52E0F0" stroke-width="2" x1="230" x2="280" y1="100" y2="100"></line>
+<!-- OneLake Security Broker -->
+<rect fill="#0C1220" height="150" rx="8" stroke="#F5A93F" stroke-width="1.3" width="310" x="285" y="25"></rect>
+<text fill="#F5A93F" font-family="monospace" font-size="11.5" font-weight="700" text-anchor="middle" x="440" y="50">OneLake Security Broker</text>
+<text fill="#55E0A0" font-family="monospace" font-size="9.5" x="300" y="78">1. Internal Shortcut: User Entra token pass-through</text>
+<text fill="#52E0F0" font-family="monospace" font-size="9.5" x="300" y="103">2. External Shortcut: Workspace stored SAS / Key</text>
+<text fill="#B79CFF" font-family="monospace" font-size="9.5" x="300" y="128">3. Delegated Shortcut: Consumer-specific App Role</text>
+<text fill="#FF6666" font-family="monospace" font-size="9" x="300" y="153">⚠ DirectLake-over-SQL Trap: Forces delegation</text>
+<line marker-end="url(#arrCyanOL)" stroke="#52E0F0" stroke-width="2" x1="595" x2="645" y1="100" y2="100"></line>
+<!-- Physical Target -->
+<rect fill="url(#olGrad)" height="150" rx="8" stroke="#55E0A0" stroke-width="1.2" width="260" x="650" y="25"></rect>
+<text fill="#55E0A0" font-family="monospace" font-size="11.5" font-weight="700" text-anchor="middle" x="780" y="50">Physical Storage Target</text>
+<rect fill="#1C4636" height="40" rx="4" width="230" x="665" y="65"></rect>
+<text fill="#55E0A0" font-family="monospace" font-size="9.5" text-anchor="middle" x="780" y="85">Target Lakehouse Parquet Data</text>
+<text fill="#E8ECF6" font-family="monospace" font-size="8.5" text-anchor="middle" x="780" y="98">Zero data movement</text>
+<rect fill="#0C1220" height="45" rx="4" width="230" x="665" y="115"></rect>
+<text fill="#97A2BC" font-family="monospace" font-size="9" text-anchor="middle" x="780" y="135">External ADLS / AWS S3 Bucket</text>
+<text fill="#F5A93F" font-family="monospace" font-size="8.5" text-anchor="middle" x="780" y="148">Zero-Copy REST Translation</text>
+</svg>
+</div>
+<div class="note red">
+<b>CRITICAL DELETE SEMANTICS:</b> Deleting a Shortcut object in the Fabric UI removes the metadata pointer only. However, running <code>DELETE FROM my_shortcut_table</code> or issuing an SDK file delete against the shortcut path <b>permanently deletes the underlying physical data in the source container</b>. Always educate engineering teams on path boundary safety.
+  </div>
+<h2>2. Polaris: Inside Microsoft's Distributed SQL Query Engine</h2>
+<p>Polaris is the distributed, stateless cloud query engine powering the Fabric Data Warehouse and the automatic SQL Analytics Endpoint over Lakehouse Delta tables.</p>
+<div class="card">
+<div class="card-title" style="color:var(--cyan);">Architecture: Polaris Two-Phase Cascades Compilation &amp; Distributed Scheduling</div>
+<svg style="width:100%; height:auto; display:block;" viewbox="0 0 920 200">
+<!-- Step 1: SQL Parse -->
+<rect fill="#141E34" height="150" rx="8" stroke="#23314E" width="190" x="10" y="25"></rect>
+<text fill="#E8ECF6" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle" x="105" y="50">1. SQL Submission</text>
+<text fill="#97A2BC" font-family="monospace" font-size="9.5" text-anchor="middle" x="105" y="75">T-SQL Query Parser</text>
+<rect fill="#0E1526" height="40" rx="4" width="160" x="25" y="90"></rect>
+<text fill="#52E0F0" font-family="monospace" font-size="9" text-anchor="middle" x="105" y="110">Cell Metadata Binding</text>
+<text fill="#97A2BC" font-family="monospace" font-size="8.5" text-anchor="middle" x="105" y="123">Delta Transaction State</text>
+<line marker-end="url(#arrCyanOL)" stroke="#52E0F0" stroke-width="2" x1="200" x2="240" y1="100" y2="100"></line>
+<!-- Step 2: Cascades -->
+<rect fill="#0C1220" height="150" rx="8" stroke="#F5A93F" stroke-width="1.2" width="220" x="245" y="25"></rect>
+<text fill="#F5A93F" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle" x="355" y="50">2. Cascades Compiler</text>
+<text fill="#55E0A0" font-family="monospace" font-size="9.5" text-anchor="middle" x="355" y="75">Two-Phase CBO Optimization</text>
+<rect fill="#141E34" height="65" rx="4" width="190" x="260" y="90"></rect>
+<text fill="#E8ECF6" font-family="monospace" font-size="9" text-anchor="middle" x="355" y="110">Task Fusion (Zero Shuffle)</text>
+<text fill="#97A2BC" font-family="monospace" font-size="8.5" text-anchor="middle" x="355" y="125">or Data-Move Enforcer</text>
+<text fill="#F5A93F" font-family="monospace" font-size="8.5" text-anchor="middle" x="355" y="140">(Hash Partition Exchange)</text>
+<line marker-end="url(#arrCyanOL)" stroke="#52E0F0" stroke-width="2" x1="465" x2="505" y1="100" y2="100"></line>
+<!-- Step 3: Workload Graph -->
+<rect fill="#141E34" height="150" rx="8" stroke="#52E0F0" stroke-width="1.2" width="210" x="510" y="25"></rect>
+<text fill="#52E0F0" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle" x="615" y="50">3. Workload Scheduler</text>
+<text fill="#97A2BC" font-family="monospace" font-size="9.5" text-anchor="middle" x="615" y="75">Cache-Affinitized Placement</text>
+<rect fill="#0E1526" height="65" rx="4" width="180" x="525" y="90"></rect>
+<text fill="#55E0A0" font-family="monospace" font-size="9" text-anchor="middle" x="615" y="112">NVMe SSD Cell Cache Hit</text>
+<text fill="#97A2BC" font-family="monospace" font-size="8.5" text-anchor="middle" x="615" y="128">Stateless Compute Worker</text>
+<text fill="#97A2BC" font-family="monospace" font-size="8.5" text-anchor="middle" x="615" y="142">Hierarchical State Machine</text>
+<line marker-end="url(#arrCyanOL)" stroke="#52E0F0" stroke-width="2" x1="720" x2="760" y1="100" y2="100"></line>
+<!-- Step 4: Result -->
+<rect fill="#0C1220" height="150" rx="8" stroke="#55E0A0" stroke-width="1.3" width="145" x="765" y="25"></rect>
+<text fill="#55E0A0" font-family="monospace" font-size="11" font-weight="700" text-anchor="middle" x="837" y="50">4. Result Return</text>
+<rect fill="#1C4636" height="80" rx="4" width="125" x="775" y="75"></rect>
+<text fill="#55E0A0" font-family="monospace" font-size="10" font-weight="700" text-anchor="middle" x="837" y="105">Direct Stream</text>
+<text fill="#E8ECF6" font-family="monospace" font-size="8.5" text-anchor="middle" x="837" y="125">Sub-second client</text>
+<text fill="#E8ECF6" font-family="monospace" font-size="8.5" text-anchor="middle" x="837" y="138">TDS protocol</text>
+</svg>
+</div>
+<h2>3. Direct Lake Residency &amp; Lazy Column Transcoding</h2>
+<p>Direct Lake bridges the gap between massive data lakes and sub-second BI dashboards by allowing Power BI Analysis Services to load Parquet columns directly into VertiPaq memory pages without executing DAX-to-SQL query translation.</p>
+<div class="vscode-code-panel">
+<div class="vscode-header">
+<div class="vscode-left">
+<span class="vscode-dot dot-red"></span>
+<span class="vscode-dot dot-yellow"></span>
+<span class="vscode-dot dot-green"></span>
+<span class="vscode-lang-badge" style="background:#201A36; color:#B79CFF; border:1px solid rgba(183,156,255,0.3);">T-SQL</span>
+<span class="vscode-target-badge" style="color:#B79CFF;">FABRIC SQL ANALYTICS ENDPOINT / WAREHOUSE</span>
+</div>
+<button class="vscode-copy-btn" onclick="copyVsCode(this)">
+<svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+<span>Copy</span>
+</button>
+</div>
+<pre class="vscode-pre"><code><span class="vsc-o">-</span><span class="vsc-o">-</span> <span class="vsc-n">Check</span> <span class="vsc-n">table</span> <span class="vsc-n">file</span> <span class="vsc-n">fragmentation</span> <span class="vsc-ow">and</span> <span class="vsc-n">row</span> <span class="vsc-n">counts</span> <span class="vsc-n">before</span> <span class="vsc-n">publishing</span> <span class="vsc-n">Direct</span> <span class="vsc-n">Lake</span> <span class="vsc-n">semantic</span> <span class="vsc-n">models</span>
+<span class="vsc-n">SELECT</span>
+<span class="vsc-n">t</span><span class="vsc-o">.</span><span class="vsc-n">name</span> <span class="vsc-n">AS</span> <span class="vsc-n">TableName</span><span class="vsc-p">,</span>
+<span class="vsc-n">COUNT</span><span class="vsc-p">(</span><span class="vsc-n">f</span><span class="vsc-o">.</span><span class="vsc-n">file_id</span><span class="vsc-p">)</span> <span class="vsc-n">AS</span> <span class="vsc-n">TotalParquetFiles</span><span class="vsc-p">,</span>
+<span class="vsc-n">SUM</span><span class="vsc-p">(</span><span class="vsc-n">f</span><span class="vsc-o">.</span><span class="vsc-n">size_in_bytes</span><span class="vsc-p">)</span> <span class="vsc-o">/</span> <span class="vsc-p">(</span><span class="vsc-mf">1024.0</span> <span class="vsc-o">*</span> <span class="vsc-mf">1024.0</span><span class="vsc-p">)</span> <span class="vsc-n">AS</span> <span class="vsc-n">SizeMB</span><span class="vsc-p">,</span>
+<span class="vsc-n">AVG</span><span class="vsc-p">(</span><span class="vsc-n">f</span><span class="vsc-o">.</span><span class="vsc-n">size_in_bytes</span><span class="vsc-p">)</span> <span class="vsc-o">/</span> <span class="vsc-p">(</span><span class="vsc-mf">1024.0</span> <span class="vsc-o">*</span> <span class="vsc-mf">1024.0</span><span class="vsc-p">)</span> <span class="vsc-n">AS</span> <span class="vsc-n">AvgFileMB</span>
+<span class="vsc-n">FROM</span> <span class="vsc-n">sys</span><span class="vsc-o">.</span><span class="vsc-n">tables</span> <span class="vsc-n">t</span>
+<span class="vsc-n">CROSS</span> <span class="vsc-n">APPLY</span> <span class="vsc-n">sys</span><span class="vsc-o">.</span><span class="vsc-n">dm_delta_files</span><span class="vsc-p">(</span><span class="vsc-n">t</span><span class="vsc-o">.</span><span class="vsc-n">object_id</span><span class="vsc-p">)</span> <span class="vsc-n">f</span>
+<span class="vsc-n">GROUP</span> <span class="vsc-n">BY</span> <span class="vsc-n">t</span><span class="vsc-o">.</span><span class="vsc-n">name</span>
+<span class="vsc-n">ORDER</span> <span class="vsc-n">BY</span> <span class="vsc-n">TotalParquetFiles</span> <span class="vsc-n">DESC</span><span class="vsc-p">;</span></code></pre>
+</div>
+<h2>4. Fabric SQL Database Translytical Path</h2>
+<p>Fabric SQL Database represents a cloud-native Hyperscale OLTP engine with autonomous, continuous physical Delta replication into OneLake, enabling true HTAP (Hybrid Transactional/Analytical Processing).</p>
+<div class="vscode-code-panel">
+<div class="vscode-header">
+<div class="vscode-left">
+<span class="vscode-dot dot-red"></span>
+<span class="vscode-dot dot-yellow"></span>
+<span class="vscode-dot dot-green"></span>
+<span class="vscode-lang-badge">PYSPARK</span>
+<span class="vscode-target-badge">RUNNABLE IN FABRIC NOTEBOOK</span>
+</div>
+<button class="vscode-copy-btn" onclick="copyVsCode(this)">
+<svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+<span>Copy</span>
+</button>
+</div>
+<pre class="vscode-pre"><code><span class="vsc-c1"># Query the automatic OneLake shadow replica of an operational SQL Database without hitting the OLTP engine</span>
+<span class="vsc-n">df_replicated</span> <span class="vsc-o">=</span> <span class="vsc-n">spark</span><span class="vsc-o">.</span><span class="vsc-n">read</span><span class="vsc-o">.</span><span class="vsc-n">table</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">fabric_sqldb_name.dbo.customer_orders</span><span class="vsc-s2">"</span><span class="vsc-p">)</span>
+<span class="vsc-c1"># Join with historical Lakehouse cold data seamlessly</span>
+<span class="vsc-n">df_joined</span> <span class="vsc-o">=</span> <span class="vsc-n">df_replicated</span><span class="vsc-o">.</span><span class="vsc-n">join</span><span class="vsc-p">(</span>
+<span class="vsc-n">spark</span><span class="vsc-o">.</span><span class="vsc-n">read</span><span class="vsc-o">.</span><span class="vsc-n">table</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">lakehouse_gold.dim_customer</span><span class="vsc-s2">"</span><span class="vsc-p">)</span><span class="vsc-p">,</span>
+<span class="vsc-s2">"</span><span class="vsc-s2">customer_id</span><span class="vsc-s2">"</span>
+<span class="vsc-p">)</span>
+<span class="vsc-n">display</span><span class="vsc-p">(</span><span class="vsc-n">df_joined</span><span class="vsc-o">.</span><span class="vsc-n">groupBy</span><span class="vsc-p">(</span><span class="vsc-s2">"</span><span class="vsc-s2">region</span><span class="vsc-s2">"</span><span class="vsc-p">)</span><span class="vsc-o">.</span><span class="vsc-n">count</span><span class="vsc-p">(</span><span class="vsc-p">)</span><span class="vsc-p">)</span></code></pre>
+</div>
+</main>
+<script>
+function copyCode(btn) {
+  const container = btn.closest('.code-container');
+  const code = container.querySelector('code').innerText;
+  navigator.clipboard.writeText(code).then(() => {
+    const originalText = btn.innerText;
+    btn.innerText = 'Copied! ✓';
+    btn.style.background = 'var(--green)';
+    btn.style.color = '#000';
+    setTimeout(() => {
+      btn.innerText = originalText;
+      btn.style.background = '';
+      btn.style.color = '';
+    }, 2000);
+  });
+}
+</script>
+</body>
+</html>

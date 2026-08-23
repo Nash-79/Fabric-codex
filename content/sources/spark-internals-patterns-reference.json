@@ -1,5 +1,5 @@
 {
-  "url": "file:///content/toolkit-source/spark_internals.html",
+  "url": "/toolkit-source/spark_internals.html",
   "title": "Fabric Spark Toolkit — Pain-Point Diagrams, Plan Reading, Settings/Defaults Reference, SQL 4.x Patterns, CDF-in-SQL Walkthrough, Coding Standards, Maintenance Runbook, Engine Choice, Rate-Limited Ingestion, Metadata Store, Orchestration, Session/Import Mechanics, Runtime 2.0 Deep Dive, Migration Framework, Setup Runbook, and Beyond-Spark Governance (first-party interactive internals reference; final Batch D of 4 covering the reference/runbook/reconciliation half of the toolkit; staged at content/toolkit-source/)",
   "tier": 4,
   "summary": "The final quarter of a large first-party interactive Spark internals toolkit. Structurally this batch is mostly reconciliation and restatement: a 'Settings Matrix' section explicitly states its own purpose is resolving prior sections' %%configure blocks into one baseline, a 'Recommended Defaults' section restates the same baseline with rationale, a coding-standards gallery and a maintenance runbook both point back to prior sections' anti-patterns and targets, and a glossary and expert-learning-path close out the document as pure reference/curriculum material rather than new claims. Three areas nonetheless contain genuinely new mechanics not captured in the three prior batches or the eight other already-ingested toolkit sources: a chained-Materialized-Lake-View gotcha (any node in an MLV dependency chain lacking CDF or full-refreshing propagates that status downstream), Spark 4.x's native VARIANT column type for semi-structured data with an explicit Spark-only interop warning, and a rate-limited-API/archive ingestion pattern (token-bucket limiting, Retry-After handling, splittable-file landing layout, and the CU cost of running network-bound crawls on Spark). A fourth area, 'Beyond Spark' governance/CI-CD/security, turned out to be almost entirely already covered by existing tier-1 OneLake-security and deployment-pipeline sources already in the knowledge base; only a narrow interoperability gotcha about combining shortcuts, SQL-endpoint RLS and OneLake security across workspaces, and a specific pre-migration ANSI-testing technique, survived that overlap check.",
@@ -30,56 +30,92 @@
       "text": "Beyond the five independent conditions that force a Materialized Lake View to full-refresh, a chained MLV (one MLV defined by querying another MLV) inherits the upstream node's refresh status: if any MLV anywhere in the dependency chain lacks CDF, is itself full-refreshing, or uses an unsupported construct, every downstream MLV in that chain is also blocked from incremental refresh regardless of how clean its own definition and direct sources are. Diagnosing an unexpectedly full-refreshing downstream MLV therefore requires checking every node in the chain, not just the node under investigation, and every node intended to be consumed incrementally must independently declare delta.enableChangeDataFeed=true, since an intermediate node having CDF enabled does not propagate that property to a node built on top of it.",
       "depth": 3,
       "type": "gotcha",
-      "tags": ["MaterializedLakeView", "DeltaLake", "CDF", "Troubleshooting"]
+      "tags": [
+        "MaterializedLakeView",
+        "DeltaLake",
+        "CDF",
+        "Troubleshooting"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Spark 4.1 / Delta 4.x introduces a native VARIANT column type for semi-structured data: raw JSON is converted once at ingest via parse_json() into a binary-encoded, shredded on-disk representation, and downstream queries read fields with dot/colon path syntax and an explicit cast (payload:device.id::STRING) at native execution speed, replacing the Runtime-1.3 pattern of calling get_json_object() on every read, which re-parses the JSON string each time and forces a Native-Execution-Engine JVM fallback. VARIANT is stated as a Spark-only Delta 4.x feature today, so enabling it on a table read by the SQL analytics endpoint, Direct Lake, or another non-Spark Fabric engine breaks that reader — the same interop caution this source applies to Delta 4.x collations.",
       "depth": 4,
       "type": "pattern",
-      "tags": ["SparkSQL", "DeltaLake", "Runtime2", "SemiStructuredData"]
+      "tags": [
+        "SparkSQL",
+        "DeltaLake",
+        "Runtime2",
+        "SemiStructuredData"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Rate-limited API crawls and single-archive downloads are framed as network-bound, single-node work that a multi-node Spark cluster handles poorly rather than accelerates: a fixed requests-per-second limit caps a crawl's wall-clock time regardless of how much compute is applied, since the extra capacity is spent idling inside sleep/backoff waits, and a compressed archive (a zip, for example) is not a splittable file — Spark reads the whole thing on a single executor while every other executor in the cluster sits idle. The stated remedy is a single-node Python notebook for both shapes, reserving Spark for the transform stage once data has landed as many parallelizable files.",
       "depth": 3,
       "type": "antipattern",
-      "tags": ["EngineChoice", "Ingestion", "PythonNotebook", "Cost"]
+      "tags": [
+        "EngineChoice",
+        "Ingestion",
+        "PythonNotebook",
+        "Cost"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "A stated production-durable rate-limiting pattern for API ingestion combines four elements: a token bucket that blocks the caller before a request is sent (rather than a fixed guessed sleep, which under-uses the quota when the API is fast and over-runs it when the API is slow); honoring the server's Retry-After response header on HTTP 429 and 5xx responses instead of a hard-coded backoff value; treating only 429 and 5xx as retryable while raising immediately on 4xx client errors, since retrying a 403 or 400 only spends quota re-confirming that the request itself is malformed; and persisting the pagination cursor to durable metadata storage after every page rather than only at the end of the crawl, so a crawl that dies partway through resumes near its last completed page instead of restarting from the beginning.",
       "depth": 3,
       "type": "pattern",
-      "tags": ["Ingestion", "PythonNotebook", "PractitionerHeuristic"]
+      "tags": [
+        "Ingestion",
+        "PythonNotebook",
+        "PractitionerHeuristic"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "A stated landing-layout pattern for rate-limited or archive-sourced data lands each crawl window as gzipped NDJSON (one JSON record per line) partitioned by ingest date and hour, rather than as a single large JSON document or array: re-running a window overwrites its own partition, so replays are idempotent without a separate dedup pass; a partitioned landing zone lets the bronze reader touch only new time windows instead of listing the whole raw storage area; and NDJSON is line-splittable across many files even though each individual gzip file itself is not splittable, so many small gzipped NDJSON parts parallelize across executors while one large JSON array or a single zip archive does not.",
       "depth": 3,
       "type": "pattern",
-      "tags": ["Ingestion", "DeltaLake", "Partitioning"]
+      "tags": [
+        "Ingestion",
+        "DeltaLake",
+        "Partitioning"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "A stated pyodbc-to-Fabric-SQL-Database connection gotcha: the Entra ID bearer token used for authentication must be UTF-16-LE encoded and length-prefixed into the connection's attrs_before dictionary under a specific numeric SQL Server attribute key rather than passed as a plain string; getting this encoding step wrong produces an opaque login failure with no indication that token formatting, rather than the token's validity, is the cause.",
       "depth": 4,
       "type": "gotcha",
-      "tags": ["SQLDatabase", "Authentication", "PySpark"]
+      "tags": [
+        "SQLDatabase",
+        "Authentication",
+        "PySpark"
+      ]
     },
     {
       "capability_id": "fabric-platform",
       "text": "This source states that combining OneLake shortcuts, SQL-analytics-endpoint row-level security, and OneLake security roles across workspace boundaries is not fully supported as a combination even though each mechanism functions correctly in isolation, and recommends two workarounds: materializing gold tables physically in the consuming workspace rather than shortcutting them across workspaces, or centralizing row-level-security enforcement in the semantic model layer instead of splitting equivalent rules across the data layer and the SQL endpoint layer.",
       "depth": 3,
       "type": "gotcha",
-      "tags": ["OneLake", "Governance", "RowLevelSecurity"]
+      "tags": [
+        "OneLake",
+        "Governance",
+        "RowLevelSecurity"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "This source's stated Runtime-2.0-migration testing technique: before switching an Environment's runtime version, set spark.sql.ansi.enabled=true on the existing Runtime 1.3 Environment and run the full test suite there. Because Runtime 1.3 stays on Spark 3.5 with ANSI off by default, this technique surfaces the dominant class of Runtime 2.0 breakage (queries that relied on ANSI-off's silent-NULL behavior for bad casts, overflow, or division by zero) while still running on a runtime that can be rolled back instantly, rather than discovering the same failures only after the production Environment has already moved to Runtime 2.0.",
       "depth": 3,
       "type": "pattern",
-      "tags": ["Runtime2", "Migration", "ANSI", "Testing"]
+      "tags": [
+        "Runtime2",
+        "Migration",
+        "ANSI",
+        "Testing"
+      ]
     }
   ],
   "assets": []

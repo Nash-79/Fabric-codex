@@ -1,5 +1,5 @@
 {
-  "url": "file:///content/toolkit-source/spark_internals.html",
+  "url": "/toolkit-source/spark_internals.html",
   "title": "Fabric Spark Toolkit — Config Reference, Capacity Throttling Mechanics, Chargeback & Troubleshooting Surfaces (first-party interactive internals reference; Batch B of a 4-batch ingestion covering configuration scoping through diagnostic tooling; staged at content/toolkit-source/)",
   "tier": 4,
   "summary": "The second quarter of a large first-party interactive Spark internals toolkit, spanning the configuration-reference and capacity sections through the Spark Logs REST API. Covers a searchable Spark-setting reference and an interactive config advisor with medallion presets, Fabric node-sizing and capacity-unit tables, a Spark 3.5-vs-4.x runtime comparison with a migration checklist, an engine-compatibility feature explorer, the mechanics of Fabric capacity job admission and CU chargeback, and a deep walk through the five overlapping Spark troubleshooting surfaces culminating in the Spark Logs REST API. Several tier-1 Microsoft Learn sources already in the knowledge base cover the generic capacity throttling ladder, node-size/vCore tables, and Spark History Server snapshot-loading performance in detail, so this extraction is deliberately narrow: only Spark-specific mechanics, chargeback patterns, and diagnostic-tooling detail not already captured.",
@@ -29,126 +29,198 @@
       "text": "Fabric Spark uses optimistic job admission: a job is admitted as soon as its minimum configured node count fits available capacity, then grows toward its maximum via autoscale as capacity allows. When even the minimum node count does not fit, the two submission paths behave differently: interactive (notebook-submitted) jobs are rejected immediately with HTTP 430 (TooManyRequestsForCapacity), while scheduled or pipeline-triggered jobs instead enter a SKU-dependent queue and start once capacity frees up rather than failing outright.",
       "depth": 4,
       "type": "internal",
-      "tags": ["JobAdmission", "Capacity", "HTTP430"]
+      "tags": [
+        "JobAdmission",
+        "Capacity",
+        "HTTP430"
+      ]
     },
     {
       "capability_id": "capacity",
       "text": "Because interactive jobs fail hard on admission while scheduled jobs queue, two practical mitigations follow directly from the admission mechanics: setting a low pool minimum node count (e.g. 1 rather than 10) makes interactive admission succeed far more often since a smaller minimum is easier to fit, and any automation that submits jobs interactively should implement retry-with-backoff to absorb transient 430s rather than treating them as terminal failures.",
       "depth": 3,
       "type": "pattern",
-      "tags": ["JobAdmission", "Capacity", "PractitionerHeuristic"]
+      "tags": [
+        "JobAdmission",
+        "Capacity",
+        "PractitionerHeuristic"
+      ]
     },
     {
       "capability_id": "capacity",
       "text": "Microsoft's documentation states that consuming, using, or modifying the Capacity Metrics App's underlying semantic model is not supported, and the app's retained history window is short; it should be treated as the billing authority and a reconciliation surface, not an ETL source for building a cross-workspace cost rollup. The documented alternative is the inversion: a single central run-log table that every workspace's jobs write to directly becomes the actual cross-workspace rollup, reconciled against the app periodically by eye — with the caveat that an in-run estimate omits session startup, library installation and idle session time, while the app's own figures exclude library-management consumption and system Spark jobs and carry a 10-15 minute refresh latency.",
       "depth": 3,
       "type": "gotcha",
-      "tags": ["Capacity", "Chargeback", "CapacityMetricsApp"]
+      "tags": [
+        "Capacity",
+        "Chargeback",
+        "CapacityMetricsApp"
+      ]
     },
     {
       "capability_id": "capacity",
       "text": "A practitioner pattern for per-entity CU chargeback in a metadata-driven Fabric framework is extending the run-log table with columns beyond duration: engine (python-notebook/spark/copy-activity, making the engine-choice decision auditable after the fact), vcores actually used, an estimated cu_seconds computed as duration_seconds times vcores divided by two, plus rows/bytes/files-landed as denominators for cost-per-row and cost-per-GB trend lines that surface a slowly regressing job as a slope rather than only as a capacity-upgrade request.",
       "depth": 3,
       "type": "pattern",
-      "tags": ["Capacity", "Chargeback", "MetadataDriven"]
+      "tags": [
+        "Capacity",
+        "Chargeback",
+        "MetadataDriven"
+      ]
     },
     {
       "capability_id": "capacity",
       "text": "Reserved and pay-as-you-go Fabric capacities provision identical CU mechanics — the same smoothing, bursting, and throttling behavior — differing only in commercial terms: pay-as-you-go capacities can be paused and resumed, and pausing a throttled capacity settles its accumulated overage, while reservations trade that pause/resume flexibility for a substantial discount (on the order of 40%, varying by region). A stated enterprise pattern is reserving the steady-state baseline while keeping spiky or experimental workloads on pay-as-you-go or Autoscale Billing for Spark.",
       "depth": 3,
       "type": "pattern",
-      "tags": ["Capacity", "ReservedCapacity", "CostGovernance"]
+      "tags": [
+        "Capacity",
+        "ReservedCapacity",
+        "CostGovernance"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Before Spark ever runs submitted code, Fabric routes the submission through Apache Livy, the REST session layer: a notebook or Spark Job Definition triggers a Livy session request, which passes through capacity admission, container acquisition, and Environment resolution (runtime version, libraries, Spark properties) before spark-submit runs and the session goes idle. Each notebook session is a Livy session with its own id and state machine (not_started -> starting -> idle <-> busy -> dead).",
       "depth": 4,
       "type": "internal",
-      "tags": ["Livy", "SessionLifecycle", "ExecutionModel"]
+      "tags": [
+        "Livy",
+        "SessionLifecycle",
+        "ExecutionModel"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "A whole class of Fabric Spark failures happens at the Livy bootstrap layer before any actual Spark job exists — capacity 430s, library resolution conflicts, unpublished Environments, and session timeouts — and these appear only in the Livy log, never in the Spark UI's job/stage/task tabs, which is why a session that never starts or takes minutes to start should be diagnosed from the Livy log rather than the Jobs tab.",
       "depth": 4,
       "type": "gotcha",
-      "tags": ["Livy", "Troubleshooting", "SessionLifecycle"]
+      "tags": [
+        "Livy",
+        "Troubleshooting",
+        "SessionLifecycle"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Fabric Spark troubleshooting is spread across five overlapping surfaces that look like one: in-cell live progress scoped to the running cell; the in-cell Spark Advisor panel giving real-time static and runtime analysis as the cell runs; Recent runs / Monitoring hub listing every Spark application (one per notebook run) with its Livy id and application id; the tabbed Application detail view (Jobs, Resources, Logs, Data, Item snapshots, Diagnostics); and the Spark History Server, the full classic OSS Spark UI for completed runs reached from Application detail.",
       "depth": 3,
       "type": "pattern",
-      "tags": ["Troubleshooting", "SparkUI", "Observability"]
+      "tags": [
+        "Troubleshooting",
+        "SparkUI",
+        "Observability"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Fabric tags every Spark job with a jobGroupId corresponding to the notebook cell that triggered it; this is a real, queryable field rather than a UI convenience, and it is the join key that lets a diagnosis move directly from 'cell 14 is slow' to the specific jobs, stages, and tasks that cell actually produced, including filtering the Resources tab's executor-allocation timeline down to just that cell's window.",
       "depth": 4,
       "type": "internal",
-      "tags": ["JobGroupId", "Troubleshooting", "Notebooks"]
+      "tags": [
+        "JobGroupId",
+        "Troubleshooting",
+        "Notebooks"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "The Application detail Logs tab exposes three separate log streams that answer different failure questions: the Livy log (session submission, lifecycle, queuing), a Prelaunch log (node warmup, container bootstrap, pool allocation — the log that reveals pool allocation failures or wheel dependency conflicts when a job fails before any task runs), and the Driver log (stdout/stderr, print output, stack traces).",
       "depth": 3,
       "type": "internal",
-      "tags": ["Troubleshooting", "Logs", "Livy"]
+      "tags": [
+        "Troubleshooting",
+        "Logs",
+        "Livy"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Fabric's Item Snapshots feature captures an immutable copy of the exact notebook cell code, widget inputs, and parameter values as they existed at the moment a specific run executed, so root-cause analysis on a scheduled run remains reproducible even if the notebook has since been edited or overwritten — the debugging target is the code that ran, not the code that currently exists.",
       "depth": 3,
       "type": "pattern",
-      "tags": ["Troubleshooting", "ItemSnapshots", "Reproducibility"]
+      "tags": [
+        "Troubleshooting",
+        "ItemSnapshots",
+        "Reproducibility"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Fabric exposes Spark application internals as a REST API that mirrors the OSS Spark History Server API contract exactly (same endpoints, parameters, and JSON shapes for jobs, stages, tasks, executors, storage and streaming) under the path pattern /v1/workspaces/{workspaceId}/notebooks|sparkJobDefinitions|lakehouses/{itemId}/livySessions/{livyId}/applications/{appId}/{attemptId}/{endpoint}, authenticated with a pre-authenticated Fabric REST client from inside a notebook or an Entra app/SPN token from outside.",
       "depth": 4,
       "type": "internal",
-      "tags": ["RESTAPI", "SparkHistoryServer", "Observability"]
+      "tags": [
+        "RESTAPI",
+        "SparkHistoryServer",
+        "Observability"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Beyond mirroring the OSS Spark History Server contract, Fabric adds endpoints with no open-source equivalent: advice returns the Spark Advisor's Info/Warning/Error findings as structured JSON filterable by stageId, jobId, jobGroupId, or executorId; resourceUsage returns executor CPU/memory utilization over time filterable by jobGroup, the same data behind the Resources tab's chart but as thresholdable numbers; and a logs endpoint with type=driver returns raw driver stdout/stderr text fetchable without opening the Fabric portal.",
       "depth": 4,
       "type": "internal",
-      "tags": ["RESTAPI", "SparkAdvisor", "Observability"]
+      "tags": [
+        "RESTAPI",
+        "SparkAdvisor",
+        "Observability"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "A REST-API-driven diagnosis workflow for a slow Spark cell: list the application's jobs sorted by duration to find the jobGroupId (the slow cell), list that job's stages sorted by duration and pull the slowest stage's task list, compute max-versus-median task duration from the task list to distinguish skew from general slowness, check the stage summary for non-zero spill (which points at partition sizing or executor shape rather than needing more time), pull the Advisor findings for that job/stage, and cross-check resource usage for the same jobGroup window to confirm whether executors were memory-starved or simply busy.",
       "depth": 4,
       "type": "pattern",
-      "tags": ["RESTAPI", "Troubleshooting", "Diagnosis"]
+      "tags": [
+        "RESTAPI",
+        "Troubleshooting",
+        "Diagnosis"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "The Fabric diagnostic emitter (streaming Spark driver/executor logs and metrics continuously to Azure Log Analytics, Azure Storage, or Event Hubs) is configured as Spark properties on a Fabric Environment, which makes it session-start scope rather than settable from a running notebook. It is distinct from the per-application event log, which is the same underlying raw event stream but pulled on demand via REST for one specific past application rather than pushed continuously.",
       "depth": 3,
       "type": "internal",
-      "tags": ["DiagnosticEmitter", "LogAnalytics", "Configuration"]
+      "tags": [
+        "DiagnosticEmitter",
+        "LogAnalytics",
+        "Configuration"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Configuring the Fabric diagnostic emitter for Log Analytics has four documented gotchas: the property spark.fabric.pools.skipStarterPools must be set to true or a starter pool silently never engages the emitter at all (the single most common failure, since everything else looks correctly configured); the emitter category-name list differs by destination (Log,EventLog,Metrics for Log Analytics versus DriverLog,ExecutorLog,EventLog,Metrics for Storage/Event Hubs, so copying one example into the other destination collects nothing useful); the required secret is the Log Analytics workspace's primary key from the Agents blade, not an Entra token or connection string; and users submitting Spark jobs need read access to the Key Vault secret when using the Key Vault-backed secret route, or the emitter fails to initialize per session.",
       "depth": 4,
       "type": "gotcha",
-      "tags": ["DiagnosticEmitter", "LogAnalytics", "Configuration"]
+      "tags": [
+        "DiagnosticEmitter",
+        "LogAnalytics",
+        "Configuration"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Pulling a Fabric Spark application's raw event log via REST (rather than relying on the continuously-pushed diagnostic emitter) is the direct route for post-hoc analysis of one specific past run, whether or not an emitter was configured in advance; it also surfaces detail the portal UI does not expose, including exact per-stage skew ratios computed from every individual task-end event, spill attribution broken down by task or executor, a true critical-path ranking of stages by wall-time share, and the application's actual effective Spark configuration (SparkListenerEnvironmentUpdate) as ground truth against what was intended to be set.",
       "depth": 4,
       "type": "internal",
-      "tags": ["EventLog", "RESTAPI", "Troubleshooting"]
+      "tags": [
+        "EventLog",
+        "RESTAPI",
+        "Troubleshooting"
+      ]
     },
     {
       "capability_id": "spark",
       "text": "Fetching a Fabric Spark event log via REST has five common failure causes, in order of frequency: omitting the required /{attemptId}/ path segment (normally 1, or 2 after a retry), which returns an unhelpful 400/404; using the wrong item-kind path segment (a Spark Job Definition's application under /notebooks/ 404s, since the segment must match the item type that launched the app); pasting the portal Monitoring-hub URL directly, which contains the right ids but is not itself a valid API endpoint; copy artifacts such as stray quotes, a trailing slash, a URL fragment, or an accidentally-included query string; and querying an application that has not yet finished, since event logs only finalize on completion.",
       "depth": 3,
       "type": "gotcha",
-      "tags": ["EventLog", "RESTAPI", "Troubleshooting"]
+      "tags": [
+        "EventLog",
+        "RESTAPI",
+        "Troubleshooting"
+      ]
     }
   ],
   "assets": []
