@@ -1,10 +1,24 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useSuspenseQueries, queryOptions } from "@tanstack/react-query";
-import { ArrowRight, Bot, BookOpen, Database, FileText, Milestone, Network } from "lucide-react";
+import {
+  ArrowRight,
+  Bot,
+  BookOpen,
+  Clock,
+  Database,
+  ExternalLink,
+  FileCode,
+  FileText,
+  Layers,
+  Milestone,
+  Network,
+  Sparkles,
+} from "lucide-react";
 import { useMemo } from "react";
 import { FabricMark } from "@/components/FabricMark";
 import { SiteHeader } from "@/components/SiteHeader";
 import { UpdatesMarquee } from "@/components/UpdatesMarquee";
+import { Badge } from "@/components/ui/badge";
 import {
   listCapabilities,
   listClaimCountsByCapability,
@@ -13,7 +27,9 @@ import {
   listTopics,
   listContentItems,
   listRoadmapItems,
+  getContentCounts,
 } from "@/lib/atlas.functions";
+import { REFERENCE_DOCS } from "@/lib/reference-docs";
 import { accent } from "@/lib/fabric-theme";
 import { presentationProfileSchema } from "@/lib/content-presentation";
 
@@ -33,8 +49,12 @@ const diagramsQO = queryOptions({
 });
 const contentItemsQO = queryOptions({
   queryKey: ["home-content-items", { limit: 40 }],
-  // Home only needs recent items for the feed + counts; a 40-row cap keeps the SSR payload small.
+  // Home only needs recent items for the feed; exact counts come from contentCountsQO.
   queryFn: () => listContentItems({ data: { limit: 40 } }),
+});
+const contentCountsQO = queryOptions({
+  queryKey: ["home-content-counts"],
+  queryFn: () => getContentCounts(),
 });
 const roadmapQO = queryOptions({
   queryKey: ["home-roadmap"],
@@ -51,6 +71,12 @@ const OFFERINGS = [
     icon: Network,
     label: "Topics",
     description: "The reading portal — a topic tree gathering every article, design, and lesson.",
+  },
+  {
+    to: "/docs" as const,
+    icon: FileCode,
+    label: "Reference Docs",
+    description: "Authoritative deep dives, engine internals whitepapers, and interactive traces.",
   },
   {
     to: "/advisor" as const,
@@ -116,9 +142,6 @@ export const Route = createFileRoute("/")({
     ],
   }),
   loader: ({ context }) =>
-    // All seven feed useSuspenseQueries below, so keep them awaited in parallel. The real
-    // wins are (a) the paginated contentItemsQO (limit: 40) that used to fetch every row,
-    // and (b) defaultPreload:"intent" on the router prefetching on hover.
     Promise.all([
       context.queryClient.ensureQueryData(topicsQO),
       context.queryClient.ensureQueryData(sourcesQO),
@@ -126,6 +149,7 @@ export const Route = createFileRoute("/")({
       context.queryClient.ensureQueryData(claimCountsQO),
       context.queryClient.ensureQueryData(diagramsQO),
       context.queryClient.ensureQueryData(contentItemsQO),
+      context.queryClient.ensureQueryData(contentCountsQO),
       context.queryClient.ensureQueryData(roadmapQO),
     ]),
   component: Landing,
@@ -139,6 +163,7 @@ function Landing() {
     { data: claimCounts },
     { data: diagrams },
     { data: contentItems },
+    { data: contentCounts },
     { data: roadmap },
   ] = useSuspenseQueries({
     queries: [
@@ -148,6 +173,7 @@ function Landing() {
       claimCountsQO,
       diagramsQO,
       contentItemsQO,
+      contentCountsQO,
       roadmapQO,
     ],
   });
@@ -219,13 +245,19 @@ function Landing() {
                 Browse Microsoft Fabric by capability, inspect cited claims, open source-backed
                 articles, and jump into Advisor prompts grounded in the same registry.
               </p>
-              <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                 <MetricLink to="/topics" icon={Network} label="Topics" value={childTopics.length} />
                 <MetricLink
                   to="/blogs"
                   icon={BookOpen}
                   label="Articles"
-                  value={(contentItems ?? []).filter((i: any) => i.kind === "article").length}
+                  value={contentCounts.articles}
+                />
+                <MetricLink
+                  to="/docs"
+                  icon={FileCode}
+                  label="Ref Docs"
+                  value={REFERENCE_DOCS.length}
                 />
                 <MetricLink to="/sources" icon={Database} label="Sources" value={sources.length} />
                 <MetricLink
@@ -337,7 +369,7 @@ function Landing() {
             </div>
             <h2 className="mt-1 text-lg font-semibold">Jump straight to what you need</h2>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
             {OFFERINGS.map((offering) => (
               <Link
                 key={offering.to}
@@ -352,6 +384,109 @@ function Landing() {
                   {offering.description}
                 </p>
               </Link>
+            ))}
+          </div>
+        </section>
+
+        {/* First-Party Deep Dives & Reference Docs Showcase */}
+        <section className="mx-auto max-w-7xl px-6 py-8 border-t border-border/60">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+            <div>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-teal-600 dark:text-teal-400">
+                <Sparkles className="h-4 w-4" />
+                First-Party Deep Dives &amp; Engine Internals
+              </div>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight">Reference Documentation &amp; Whitepapers</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Self-contained, production-grade technical whitepapers covering Apache Spark execution internals, Remote Shuffle Manager, Runtime 2.0, and Polaris.
+              </p>
+            </div>
+            <Link
+              to="/docs"
+              className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3.5 py-2 text-xs font-medium text-foreground hover:bg-accent shrink-0 transition"
+            >
+              <span>View all {REFERENCE_DOCS.length} reference docs</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {REFERENCE_DOCS.slice(0, 3).map((doc) => (
+              <div
+                key={doc.slug}
+                className="group flex flex-col justify-between rounded-xl border border-border/80 bg-card p-5 shadow-sm transition hover:border-primary/50 hover:shadow-md"
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {doc.isInteractive && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-teal-500/10 px-2 py-0.5 text-[10px] font-semibold text-teal-600 dark:text-teal-400 border border-teal-500/20">
+                          <Sparkles className="h-3 w-3" />
+                          Interactive
+                        </span>
+                      )}
+                      {doc.capabilities.slice(0, 2).map((c) => (
+                        <Badge key={c} variant="secondary" className="text-[11px] capitalize">
+                          {c.replace("-", " ")}
+                        </Badge>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>~{doc.readingTimeMinutes} min</span>
+                    </div>
+                  </div>
+
+                  <h3 className="mt-3 text-lg font-semibold tracking-tight text-card-foreground group-hover:text-primary transition-colors">
+                    {doc.title}
+                  </h3>
+                  <p className="mt-1 text-xs font-medium text-muted-foreground line-clamp-1">
+                    {doc.subtitle}
+                  </p>
+                  <p className="mt-2.5 text-xs leading-relaxed text-muted-foreground line-clamp-2">
+                    {doc.summary}
+                  </p>
+
+                  <div className="mt-3 border-t border-border/40 pt-2.5">
+                    <ul className="space-y-1 text-xs text-foreground/80">
+                      {doc.highlightPoints.slice(0, 2).map((pt, i) => (
+                        <li key={i} className="flex items-start gap-1.5 text-[11px]">
+                          <span className="text-teal-500 font-bold">•</span>
+                          <span className="line-clamp-1">{pt}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between border-t border-border/60 pt-3">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1">
+                      <Layers className="h-3.5 w-3.5 text-teal-500" />
+                      {doc.svgCount} SVGs
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href={doc.staticPath}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Open raw document in new window"
+                      className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                    <Link
+                      to="/docs/$slug"
+                      params={{ slug: doc.slug }}
+                      className="inline-flex items-center gap-1 rounded-md bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                    >
+                      <span>Read Doc</span>
+                      <ArrowRight className="h-3 w-3" />
+                    </Link>
+                  </div>
+                </div>
+              </div>
             ))}
           </div>
         </section>

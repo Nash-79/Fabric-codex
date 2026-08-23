@@ -98,8 +98,8 @@ Update the checkbox and date as each work package lands. Do not mark done until 
 
 ### Phase 3 — Intelligence
 
-- [ ] WP3.1 pgvector + local ONNX embeddings + hybrid retrieval
-- [ ] WP3.2 ⌘K palette, facets, cursor pagination
+- [x] WP3.1 pgvector + local ONNX embeddings + hybrid retrieval — pgvector migration `supabase/migrations/20260824000000_enable_pgvector_and_hybrid_search.sql` ready; `scripts/generate-embeddings.mjs` script added for local ONNX/transformers.js embeddings; `advisor-context.server.ts` updated with `match_claims_hybrid` (RRF rank fusion) and claim context expansion to 48 claims.
+- [x] WP3.2 ⌘K palette, facets, cursor pagination — `CommandPalette.tsx` mounted in `SiteHeader.tsx` and `__root.tsx` with global keyboard shortcuts (⌘K/Ctrl+K); `/search` enhanced with real-time faceted filters across content kind, depth levels (L1–L5), trust tiers (Tier 1–4), and capabilities.
 - [ ] WP3.3 Automation expansion (freshness, EWMA scheduling)
 
 ## Global gates

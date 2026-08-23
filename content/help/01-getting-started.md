@@ -13,6 +13,8 @@ generated piece is validated against what it cites.
   designs, and lessons written about it. Start here if you want to _learn_ Fabric.
 - **Blogs** (under the **Knowledge** menu) — every article, design, and lesson in one
   filterable, chronological list (filter by kind or topic), and the detail page for each.
+- **Reference Docs** (under the **Knowledge** menu) — authoritative deep-dive technical
+  whitepapers and engine internals reference documentation with interactive traces and SVGs.
 - **Capability Registry** — the spine: every tracked capability with its live claim, depth,
   and diagram coverage. Read-only — a coverage dashboard, not a moderation tool.
 - **Sources** — every approved source with its trust tier, searchable and filterable by tier.

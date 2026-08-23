@@ -139,9 +139,50 @@ export async function advisorRetrieveContext(term: string): Promise<AdvisorRetri
   const hitClaimIds = hitKinds.claim
     .map((c) => c.id)
     .filter(Boolean)
-    .slice(0, 24);
+    .slice(0, 48);
   const claimRows: ClaimRow[] = [];
 
+  // 1. Try Hybrid Search (pgvector + tsvector RRF) if available
+  let hybridWorked = false;
+  if (query) {
+    try {
+      const { data: hybridHits, error: hybridErr } = await (supabaseAdmin as any).rpc(
+        "match_claims_hybrid",
+        {
+          query_text: query,
+          match_count: 48,
+          rrf_k: 60,
+        },
+      );
+
+      if (!hybridErr && Array.isArray(hybridHits) && hybridHits.length > 0) {
+        const hybridIds = hybridHits.map((h: any) => h.id).filter(Boolean);
+        if (hybridIds.length > 0) {
+          const { data } = await supabaseAdmin
+            .from("claims")
+            .select("id,text,depth,type,tags,capability_id,sources(slug,title,url,tier)")
+            .eq("active", true)
+            .eq("status", "verified")
+            .in("id", hybridIds)
+            .limit(48);
+
+          if (data && data.length > 0) {
+            // Sort by RRF rank order
+            const rowMap = new Map((data as any[]).map((r) => [r.id, r]));
+            for (const hid of hybridIds) {
+              const r = rowMap.get(hid);
+              if (r) claimRows.push(r);
+            }
+            hybridWorked = true;
+          }
+        }
+      }
+    } catch {
+      // Fall through to lexical search
+    }
+  }
+
+  // 2. Lexical & search_atlas fallback if hybrid search wasn't used or yielded few results
   if (hitClaimIds.length) {
     const { data } = await supabaseAdmin
       .from("claims")
@@ -149,11 +190,11 @@ export async function advisorRetrieveContext(term: string): Promise<AdvisorRetri
       .eq("active", true)
       .eq("status", "verified")
       .in("id", hitClaimIds)
-      .limit(24);
+      .limit(36);
     claimRows.push(...((data ?? []) as any[]));
   }
 
-  if (termWords.length) {
+  if (!hybridWorked && termWords.length) {
     const ors = termWords.map((word) => `text.ilike.%${word}%`).join(",");
     const { data } = await supabaseAdmin
       .from("claims")
@@ -161,11 +202,11 @@ export async function advisorRetrieveContext(term: string): Promise<AdvisorRetri
       .eq("active", true)
       .eq("status", "verified")
       .or(ors)
-      .limit(24);
+      .limit(36);
     claimRows.push(...((data ?? []) as any[]));
   }
 
-  const claims = uniqBy(claimRows, (row) => row.id, 18);
+  const claims = uniqBy(claimRows, (row) => row.id, 48);
   const capabilityIds = new Set(claims.map((c) => c.capability_id).filter(Boolean) as string[]);
   const hitTopicSlugs = new Set(hitKinds.topic.map((t) => t.slug).filter(Boolean));
   const hitContent = [...hitKinds.article, ...hitKinds.design, ...hitKinds.lesson]

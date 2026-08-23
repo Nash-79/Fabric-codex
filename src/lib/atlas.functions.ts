@@ -267,6 +267,52 @@ export const listContentItems = createServerFn({ method: "GET" })
     return data.limit && data.limit > 0 ? bundled.slice(0, data.limit) : bundled;
   });
 
+export const getContentCounts = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const sb = await admin();
+    const kinds = ["article", "design", "lesson"] as const;
+    const counts: Record<string, number> = {
+      article: 0,
+      design: 0,
+      lesson: 0,
+      articles: 0,
+      designs: 0,
+      lessons: 0,
+      total: 0,
+    };
+    await Promise.all(
+      kinds.map(async (kind) => {
+        const { count, error } = await sb
+          .from("content_items")
+          .select("*", { count: "exact", head: true })
+          .eq("kind", kind)
+          .eq("status", "published")
+          .eq("active", true);
+        if (!error && count !== null) {
+          counts[kind] = count;
+          counts[`${kind}s`] = count;
+        }
+      }),
+    );
+    counts.total = counts.article + counts.design + counts.lesson;
+    if (counts.total > 0) return counts;
+  } catch {
+    // Fall through to bundled counts
+  }
+  const artCount = bundledContent.blogs().length;
+  const desCount = bundledContent.designs().length;
+  const lesCount = bundledContent.lessons().length;
+  return {
+    article: artCount,
+    design: desCount,
+    lesson: lesCount,
+    articles: artCount,
+    designs: desCount,
+    lessons: lesCount,
+    total: artCount + desCount + lesCount,
+  };
+});
+
 export const listLessons = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const sb = await admin();
@@ -514,17 +560,44 @@ export const getRegistryCoverage = createServerFn({ method: "GET" }).handler(
         };
       });
     } catch {
-      // Fall through to bundled content — no live coverage, but the page still renders.
+      // Fall through to bundled content — compute coverage from bundled topics, blogs, diagrams.
       const counts = bundledContent.claims().reduce<Record<string, any[]>>((acc, claim) => {
         (acc[claim.capability_id] ??= []).push(claim);
         return acc;
       }, {});
+      const topicCaps = bundledContent.topics().flatMap((t: any) =>
+        (t.capability_ids ?? []).map((cid: string) => ({ capability_id: cid, topic_slug: t.slug })),
+      );
+      const capTopics = new Map<string, Set<string>>();
+      for (const tc of topicCaps) {
+        if (!tc.topic_slug) continue;
+        const set = capTopics.get(tc.capability_id) ?? new Set<string>();
+        set.add(tc.topic_slug);
+        capTopics.set(tc.capability_id, set);
+      }
+      const blogsByTopic = new Map<string, number>();
+      for (const b of bundledContent.blogs()) {
+        if (b.topic_slug) blogsByTopic.set(b.topic_slug, (blogsByTopic.get(b.topic_slug) ?? 0) + 1);
+      }
+      const diagramsByTopic = new Map<string, number>();
+      for (const d of bundledContent.diagrams()) {
+        if (d.topic_slug)
+          diagramsByTopic.set(d.topic_slug, (diagramsByTopic.get(d.topic_slug) ?? 0) + 1);
+      }
+
       return bundledContent.capabilities().map((c: any) => {
         const capClaims = counts[c.id] ?? [];
         const depth_coverage = emptyDepth();
         for (const cl of capClaims) {
           const d = cl.depth as 1 | 2 | 3 | 4 | 5;
           if (d >= 1 && d <= 5) depth_coverage[d] += 1;
+        }
+        const topics = capTopics.get(c.id) ?? new Set<string>();
+        let blog_count = 0;
+        let diagram_count = 0;
+        for (const slug of topics) {
+          blog_count += blogsByTopic.get(slug) ?? 0;
+          diagram_count += diagramsByTopic.get(slug) ?? 0;
         }
         return {
           id: c.id,
@@ -535,8 +608,8 @@ export const getRegistryCoverage = createServerFn({ method: "GET" }).handler(
           claim_count: capClaims.length,
           verified_count: 0,
           depth_coverage,
-          blog_count: 0,
-          diagram_count: 0,
+          blog_count,
+          diagram_count,
         };
       });
     }
