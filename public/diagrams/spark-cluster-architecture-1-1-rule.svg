@@ -1,0 +1,304 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1180" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="scar-title scar-desc" data-diagram-id="spark-cluster-architecture-1-1-rule">
+  <title id="scar-title">Fabric Spark cluster architecture and the driver-to-executor 1:1 rule</title>
+  <desc id="scar-desc">A Fabric Spark pool is one head node running the driver's SparkContext, DAGScheduler, and Catalyst optimizer, plus worker nodes that each host exactly one executor JVM. This diagram shows the driver's internal coordination components, the fixed 1:1 node-to-executor ratio and its single-node pool exception, how a capacity SKU's vCore budget converts into a fixed count of executor slots, and the capacity-planning and failure-mode consequences of that fixed topology.</desc>
+
+  <defs>
+    <linearGradient id="scar-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3B0764"/>
+      <stop offset="0.5" stop-color="#6D28D9"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+    <linearGradient id="scar-driver-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4C1D95"/>
+      <stop offset="1" stop-color="#2E1065"/>
+    </linearGradient>
+    <linearGradient id="scar-exec-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F0FDF4"/>
+      <stop offset="1" stop-color="#DCFCE7"/>
+    </linearGradient>
+    <filter id="scar-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#3B0764" flood-opacity="0.10"/>
+    </filter>
+    <marker id="scar-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AED"/>
+    </marker>
+    <marker id="scar-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="scar-arr-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
+    </marker>
+    <marker id="scar-arr-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="1180" fill="#FAF5FF"/>
+
+  <!-- Hero header -->
+  <rect width="1200" height="86" fill="url(#scar-head)"/>
+  <text x="40" y="36" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Fabric Spark Cluster Architecture &amp; the Driver-to-Executor 1:1 Rule</text>
+  <text x="40" y="62" font-size="12" fill="#DDD6FE">One head node runs the driver's coordination stack ➔ every remaining node hosts exactly one executor ➔ that fixed ratio is the unit capacity planning must reason in</text>
+
+  <!-- Legend bar -->
+  <g transform="translate(40,100)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#DDD6FE"/>
+    <circle cx="20" cy="15" r="5" fill="#7C3AED"/><text x="32" y="19" fill="#5B21B6" font-weight="600">Driver (head node)</text>
+    <circle cx="200" cy="15" r="5" fill="#059669"/><text x="212" y="19" fill="#065F46" font-weight="600">Executor (worker node)</text>
+    <circle cx="410" cy="15" r="5" fill="#0284C7"/><text x="422" y="19" fill="#0369A1" font-weight="600">Capacity math</text>
+    <circle cx="580" cy="15" r="5" fill="#D97706"/><text x="592" y="19" fill="#92400E" font-weight="600">Exception / risk</text>
+    <circle cx="760" cy="15" r="5" fill="#DC2626"/><text x="772" y="19" fill="#991B1B" font-weight="600">Failure mode</text>
+    <text x="1100" y="19" text-anchor="end" fill="#64748B">Fabric Atlas Original</text>
+  </g>
+
+  <!-- ================================================================= -->
+  <!-- ZONE 1: THE POOL — HEAD NODE (DRIVER) vs WORKER NODES (EXECUTORS) -->
+  <!-- ================================================================= -->
+  <rect x="40" y="146" width="1120" height="404" rx="14" fill="#FFFFFF" stroke="#DDD6FE" stroke-width="1.4"/>
+  <rect x="56" y="156" width="420" height="20" rx="10" fill="#EDE9FE"/>
+  <text x="66" y="170" font-size="10.5" font-weight="700" fill="#5B21B6" letter-spacing="1px">ZONE 1 · POOL TOPOLOGY — ONE HEAD NODE, N WORKER NODES</text>
+
+  <!-- Driver / head node card -->
+  <g data-node-id="driver-node" role="group" tabindex="0" aria-label="Driver — head node coordination stack">
+    <title data-node-tooltip="true">Driver (head node) — hosts Livy, YARN Resource Manager, ZooKeeper, and the Spark driver process itself, which runs SparkContext, the DAGScheduler, the TaskScheduler, and the Catalyst optimizer.</title>
+    <rect x="56" y="186" width="330" height="346" rx="12" fill="url(#scar-driver-fill)" stroke="#7C3AED" stroke-width="1.8" filter="url(#scar-shadow)"/>
+    <rect x="72" y="198" width="110" height="18" rx="9" fill="#7C3AED"/><text x="127" y="211" text-anchor="middle" font-size="9" font-weight="700" fill="#FFFFFF">HEAD NODE</text>
+    <text x="72" y="240" font-size="14.5" font-weight="700" fill="#FFFFFF">Driver</text>
+    <text x="72" y="258" font-size="9.5" fill="#C4B5FD">One dedicated node — never runs task code</text>
+
+    <!-- driver internal components -->
+    <rect x="72" y="272" width="298" height="46" rx="8" fill="#5B21B6" stroke="#8B5CF6" stroke-width="1"/>
+    <text x="82" y="288" font-size="10.5" font-weight="700" fill="#FFFFFF">SparkContext</text>
+    <text x="82" y="303" font-size="9" fill="#DDD6FE">Entry point; registers the app with the</text>
+    <text x="82" y="315" font-size="9" fill="#DDD6FE">cluster manager and owns the session.</text>
+
+    <rect x="72" y="324" width="298" height="52" rx="8" fill="#5B21B6" stroke="#8B5CF6" stroke-width="1"/>
+    <text x="82" y="340" font-size="10.5" font-weight="700" fill="#FFFFFF">DAGScheduler</text>
+    <text x="82" y="355" font-size="9" fill="#DDD6FE">Cuts each job into stages at shuffle</text>
+    <text x="82" y="367" font-size="9" fill="#DDD6FE">boundaries; TaskScheduler assigns one</text>
+    <text x="82" y="379" font-size="9" fill="#DDD6FE">task per output partition to a core.</text>
+
+    <rect x="72" y="382" width="298" height="46" rx="8" fill="#5B21B6" stroke="#8B5CF6" stroke-width="1"/>
+    <text x="82" y="398" font-size="10.5" font-weight="700" fill="#FFFFFF">Catalyst optimizer</text>
+    <text x="82" y="413" font-size="9" fill="#DDD6FE">Parses, analyzes, rule-optimizes and</text>
+    <text x="82" y="425" font-size="9" fill="#DDD6FE">plans every query, driver-side, before a task ships.</text>
+
+    <rect x="72" y="434" width="298" height="42" rx="8" fill="#5B21B6" stroke="#8B5CF6" stroke-width="1"/>
+    <text x="82" y="450" font-size="10.5" font-weight="700" fill="#FFFFFF">Livy · YARN RM · ZooKeeper</text>
+    <text x="82" y="465" font-size="9" fill="#DDD6FE">Session REST layer, resource manager, and</text>
+    <text x="82" y="477" font-size="9" fill="#DDD6FE">coordination service, co-located on this node.</text>
+
+    <rect x="72" y="484" width="298" height="34" rx="8" fill="#312E81" stroke="#6D28D9" stroke-width="1"/>
+    <text x="82" y="503" font-size="9.5" fill="#E9D5FF">One task scheduler → many executors: the driver is</text>
+    <text x="82" y="514" font-size="9.5" fill="#E9D5FF">a single process — it cannot be scaled out.</text>
+
+    <rect x="330" y="198" width="52" height="14" rx="7" fill="#7C3AED"/><text x="356" y="208" text-anchor="middle" font-size="8" font-weight="700" fill="#FFFFFF">FACT</text>
+  </g>
+
+  <!-- Arrow driver -> executors -->
+  <path d="M 386 300 H 424" stroke="#7C3AED" stroke-width="2.4" fill="none" marker-end="url(#scar-arr-purple)"/>
+  <text x="405" y="292" font-size="8.5" fill="#6D28D9" text-anchor="middle" transform="rotate(-90 405 292)"></text>
+  <text x="405" y="230" font-size="9" fill="#5B21B6" font-weight="700" text-anchor="middle">schedules</text>
+  <text x="405" y="242" font-size="9" fill="#5B21B6" font-weight="700" text-anchor="middle">tasks onto</text>
+
+  <!-- Executor / worker nodes card -->
+  <g data-node-id="executor-nodes" role="group" tabindex="0" aria-label="Executors — one per worker node, fixed 1:1 ratio">
+    <title data-node-tooltip="true">Executors (worker nodes) — Fabric fixes the node-to-executor ratio at 1:1: one node is dedicated to the driver and each remaining node hosts exactly one executor JVM, which runs Node Agent and YARN Node Manager plus the Spark Executor service.</title>
+    <rect x="424" y="186" width="392" height="346" rx="12" fill="url(#scar-exec-fill)" stroke="#22C55E" stroke-width="1.8" filter="url(#scar-shadow)"/>
+    <rect x="440" y="198" width="150" height="18" rx="9" fill="#059669"/><text x="515" y="211" text-anchor="middle" font-size="9" font-weight="700" fill="#FFFFFF">WORKER NODES — 1:1</text>
+    <text x="440" y="240" font-size="14.5" font-weight="700" fill="#064E3B">Executors</text>
+    <text x="440" y="258" font-size="9.5" fill="#166534">Exactly one Executor JVM per worker node</text>
+
+    <!-- three executor mini-cards -->
+    <g>
+      <rect x="440" y="272" width="112" height="130" rx="8" fill="#FFFFFF" stroke="#86EFAC" stroke-width="1.4"/>
+      <text x="496" y="290" text-anchor="middle" font-size="10" font-weight="700" fill="#166534">Worker 1</text>
+      <rect x="450" y="298" width="92" height="20" rx="4" fill="#DCFCE7"/><text x="496" y="311" text-anchor="middle" font-size="8" font-weight="700" fill="#15803D">Node Agent</text>
+      <rect x="450" y="322" width="92" height="20" rx="4" fill="#DCFCE7"/><text x="496" y="335" text-anchor="middle" font-size="8" font-weight="700" fill="#15803D">YARN Node Mgr</text>
+      <rect x="450" y="346" width="92" height="46" rx="4" fill="#059669"/><text x="496" y="364" text-anchor="middle" font-size="9" font-weight="700" fill="#FFFFFF">Executor JVM</text>
+      <text x="496" y="378" text-anchor="middle" font-size="7.5" fill="#D1FAE5">cores · heap · cache</text>
+      <text x="496" y="388" text-anchor="middle" font-size="7.5" fill="#D1FAE5">shuffle blocks</text>
+    </g>
+    <g>
+      <rect x="562" y="272" width="112" height="130" rx="8" fill="#FFFFFF" stroke="#86EFAC" stroke-width="1.4"/>
+      <text x="618" y="290" text-anchor="middle" font-size="10" font-weight="700" fill="#166534">Worker 2</text>
+      <rect x="572" y="298" width="92" height="20" rx="4" fill="#DCFCE7"/><text x="618" y="311" text-anchor="middle" font-size="8" font-weight="700" fill="#15803D">Node Agent</text>
+      <rect x="572" y="322" width="92" height="20" rx="4" fill="#DCFCE7"/><text x="618" y="335" text-anchor="middle" font-size="8" font-weight="700" fill="#15803D">YARN Node Mgr</text>
+      <rect x="572" y="346" width="92" height="46" rx="4" fill="#059669"/><text x="618" y="364" text-anchor="middle" font-size="9" font-weight="700" fill="#FFFFFF">Executor JVM</text>
+      <text x="618" y="378" text-anchor="middle" font-size="7.5" fill="#D1FAE5">cores · heap · cache</text>
+      <text x="618" y="388" text-anchor="middle" font-size="7.5" fill="#D1FAE5">shuffle blocks</text>
+    </g>
+    <g>
+      <rect x="684" y="272" width="112" height="130" rx="8" fill="#FFFFFF" stroke="#86EFAC" stroke-width="1.4" stroke-dasharray="4 3"/>
+      <text x="740" y="290" text-anchor="middle" font-size="10" font-weight="700" fill="#166534">Worker N</text>
+      <rect x="694" y="298" width="92" height="20" rx="4" fill="#DCFCE7"/><text x="740" y="311" text-anchor="middle" font-size="8" font-weight="700" fill="#15803D">Node Agent</text>
+      <rect x="694" y="322" width="92" height="20" rx="4" fill="#DCFCE7"/><text x="740" y="335" text-anchor="middle" font-size="8" font-weight="700" fill="#15803D">YARN Node Mgr</text>
+      <rect x="694" y="346" width="92" height="46" rx="4" fill="#059669"/><text x="740" y="364" text-anchor="middle" font-size="9" font-weight="700" fill="#FFFFFF">Executor JVM</text>
+      <text x="740" y="378" text-anchor="middle" font-size="7.5" fill="#D1FAE5">cores · heap · cache</text>
+      <text x="740" y="388" text-anchor="middle" font-size="7.5" fill="#D1FAE5">shuffle blocks</text>
+    </g>
+    <text x="440" y="418" font-size="9.5" fill="#166534" font-weight="600">Node size chosen at pool creation = executor shape.</text>
+    <text x="440" y="434" font-size="9.5" fill="#166534">No per-node executor packing (unlike classic YARN).</text>
+    <text x="440" y="452" font-size="9.5" fill="#166534" font-weight="600">Dynamic allocation grows/shrinks worker COUNT</text>
+    <text x="440" y="468" font-size="9.5" fill="#166534">between the pool's configured min and max nodes —</text>
+    <text x="440" y="484" font-size="9.5" fill="#166534">it never changes the 1:1 ratio itself.</text>
+
+    <rect x="736" y="198" width="52" height="14" rx="7" fill="#059669"/><text x="762" y="208" text-anchor="middle" font-size="8" font-weight="700" fill="#FFFFFF">FACT</text>
+  </g>
+
+  <!-- Single-node exception callout -->
+  <g data-node-id="single-node-exception" role="group" tabindex="0" aria-label="Single-node pool exception">
+    <title data-node-tooltip="true">Single-node pool exception — in a single-node pool, the driver and executor split that one node's resources roughly in half, a setup with restorable high availability aimed at small workloads, instead of a node being dedicated purely to the driver.</title>
+    <rect x="836" y="186" width="324" height="346" rx="12" fill="#FFFBEB" stroke="#FCD34D" stroke-width="1.8" filter="url(#scar-shadow)"/>
+    <rect x="852" y="198" width="150" height="18" rx="9" fill="#D97706"/><text x="927" y="211" text-anchor="middle" font-size="9" font-weight="700" fill="#FFFFFF">EXCEPTION</text>
+    <text x="852" y="240" font-size="14.5" font-weight="700" fill="#78350F">Single-Node Pool</text>
+    <text x="852" y="258" font-size="9.5" fill="#92400E">The one case where the 1:1 rule bends</text>
+
+    <rect x="852" y="272" width="292" height="130" rx="8" fill="#FFFFFF" stroke="#FCD34D" stroke-width="1.4"/>
+    <text x="998" y="298" text-anchor="middle" font-size="10.5" font-weight="700" fill="#78350F">One Node</text>
+    <line x1="998" y1="308" x2="998" y2="392" stroke="#FCD34D" stroke-width="1.5" stroke-dasharray="3 3"/>
+    <rect x="864" y="316" width="120" height="76" rx="6" fill="#EDE9FE" stroke="#C4B5FD"/>
+    <text x="924" y="340" text-anchor="middle" font-size="9.5" font-weight="700" fill="#5B21B6">Driver</text>
+    <text x="924" y="358" text-anchor="middle" font-size="8" fill="#6D28D9">~50% of node's</text>
+    <text x="924" y="370" text-anchor="middle" font-size="8" fill="#6D28D9">cores &amp; memory</text>
+    <rect x="1012" y="316" width="120" height="76" rx="6" fill="#DCFCE7" stroke="#86EFAC"/>
+    <text x="1072" y="340" text-anchor="middle" font-size="9.5" font-weight="700" fill="#166534">Executor</text>
+    <text x="1072" y="358" text-anchor="middle" font-size="8" fill="#15803D">~50% of node's</text>
+    <text x="1072" y="370" text-anchor="middle" font-size="8" fill="#15803D">cores &amp; memory</text>
+
+    <text x="852" y="420" font-size="9.5" fill="#92400E" font-weight="600">Restorable HA, aimed at small workloads —</text>
+    <text x="852" y="436" font-size="9.5" fill="#92400E">not a scaled-down version of the multi-node</text>
+    <text x="852" y="452" font-size="9.5" fill="#92400E">topology; driver and executor now compete</text>
+    <text x="852" y="468" font-size="9.5" fill="#92400E">for the same node's resources.</text>
+    <text x="852" y="490" font-size="9.5" fill="#92400E" font-weight="600">Use for: dev/test, low-concurrency, cost-first.</text>
+    <text x="852" y="506" font-size="9.5" fill="#92400E">Avoid for: sustained multi-job production load.</text>
+
+    <rect x="1058" y="198" width="60" height="14" rx="7" fill="#FEF3C7"/><text x="1088" y="208" text-anchor="middle" font-size="8" font-weight="700" fill="#B45309">INTERNAL</text>
+  </g>
+
+  <!-- ================================================================= -->
+  <!-- ZONE 2: CAPACITY PLANNING MATH — SKU → vCORES → NODES → EXECUTORS -->
+  <!-- ================================================================= -->
+  <rect x="40" y="566" width="1120" height="252" rx="14" fill="#FFFFFF" stroke="#BAE6FD" stroke-width="1.4"/>
+  <rect x="56" y="576" width="480" height="20" rx="10" fill="#E0F2FE"/>
+  <text x="66" y="590" font-size="10.5" font-weight="700" fill="#0369A1" letter-spacing="1px">ZONE 2 · WHY THE 1:1 RATIO IS THE CAPACITY-PLANNING UNIT</text>
+
+  <g data-node-id="capacity-math" role="group" tabindex="0" aria-label="SKU vCore budget converts to a fixed executor slot count">
+    <title data-node-tooltip="true">Capacity math — a Fabric capacity SKU sets a Spark vCore ceiling; custom pool node size sets vCores per node; because the ratio is fixed at 1:1, the vCore budget directly determines the maximum number of executor slots, not just a soft compute ceiling.</title>
+    <rect x="56" y="606" width="1088" height="196" rx="10" fill="#F0F9FF" stroke="#7DD3FC" stroke-width="1.5" filter="url(#scar-shadow)"/>
+
+    <!-- 4-step chain -->
+    <g>
+      <rect x="76" y="626" width="230" height="150" rx="8" fill="#FFFFFF" stroke="#7DD3FC" stroke-width="1.3"/>
+      <text x="191" y="648" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0369A1">1 · Capacity SKU</text>
+      <text x="90" y="670" font-size="9.5" fill="#075985">F2 → 4 vCores</text>
+      <text x="90" y="688" font-size="9.5" fill="#075985">F8 → 16 vCores</text>
+      <text x="90" y="706" font-size="9.5" fill="#075985">F64 → 128 vCores</text>
+      <text x="90" y="724" font-size="9.5" fill="#075985">F256 → 512 vCores</text>
+      <text x="90" y="750" font-size="8.5" fill="#0284C7" font-weight="600">1 Capacity Unit = 2 Spark vCores</text>
+      <text x="90" y="764" font-size="8.5" fill="#0284C7">(fixed conversion, all SKUs)</text>
+    </g>
+    <path d="M 306 700 H 342" stroke="#0284C7" stroke-width="2.2" fill="none" marker-end="url(#scar-arr-slate)"/>
+
+    <g>
+      <rect x="342" y="626" width="230" height="150" rx="8" fill="#FFFFFF" stroke="#7DD3FC" stroke-width="1.3"/>
+      <text x="457" y="648" text-anchor="middle" font-size="10.5" font-weight="700" fill="#0369A1">2 · Node size</text>
+      <text x="356" y="670" font-size="9" fill="#075985">Small: 4 vCore / 32 GB</text>
+      <text x="356" y="686" font-size="9" fill="#075985">Medium: 8 vCore / 64 GB</text>
+      <text x="356" y="702" font-size="9" fill="#075985">Large: 16 vCore / 128 GB</text>
+      <text x="356" y="718" font-size="9" fill="#075985">X-Large: 32 vCore / 256 GB</text>
+      <text x="356" y="734" font-size="9" fill="#075985">XX-Large: 64 vCore / 512 GB</text>
+      <text x="356" y="758" font-size="8.5" fill="#0284C7" font-weight="600">8 GB RAM per vCore, fixed ratio</text>
+      <text x="356" y="770" font-size="8.5" fill="#0284C7">across every node size</text>
+    </g>
+    <path d="M 572 700 H 608" stroke="#0284C7" stroke-width="2.2" fill="none" marker-end="url(#scar-arr-slate)"/>
+
+    <g>
+      <rect x="608" y="626" width="230" height="150" rx="8" fill="#EDE9FE" stroke="#C4B5FD" stroke-width="1.3"/>
+      <text x="723" y="648" text-anchor="middle" font-size="10.5" font-weight="700" fill="#5B21B6">3 · Node count</text>
+      <text x="622" y="672" font-size="9.5" fill="#5B21B6">vCore budget ÷ node size</text>
+      <text x="622" y="690" font-size="9.5" fill="#5B21B6">= max nodes in the pool</text>
+      <text x="622" y="716" font-size="9" fill="#6D28D9" font-weight="600">1 node is ALWAYS reserved</text>
+      <text x="622" y="732" font-size="9" fill="#6D28D9" font-weight="600">for the driver, off the top</text>
+      <text x="622" y="756" font-size="8.5" fill="#7C3AED">(single-node pools are the</text>
+      <text x="622" y="768" font-size="8.5" fill="#7C3AED">documented exception — see Zone 1)</text>
+    </g>
+    <path d="M 838 700 H 874" stroke="#059669" stroke-width="2.2" fill="none" marker-end="url(#scar-arr-green)"/>
+
+    <g>
+      <rect x="874" y="626" width="230" height="150" rx="8" fill="#DCFCE7" stroke="#86EFAC" stroke-width="1.3"/>
+      <text x="989" y="648" text-anchor="middle" font-size="10.5" font-weight="700" fill="#166534">4 · Executor slots</text>
+      <text x="888" y="676" font-size="9.5" fill="#065F46">= worker node count</text>
+      <text x="888" y="694" font-size="9.5" fill="#065F46">(remaining nodes, 1:1)</text>
+      <text x="888" y="722" font-size="9.5" fill="#065F46" font-weight="700">This is the real concurrency</text>
+      <text x="888" y="738" font-size="9.5" fill="#065F46" font-weight="700">ceiling for one Spark session —</text>
+      <text x="888" y="754" font-size="9.5" fill="#065F46" font-weight="700">not the raw vCore count.</text>
+    </g>
+  </g>
+
+  <!-- ================================================================= -->
+  <!-- ZONE 3: WHY TOPOLOGY MATTERS — CONSEQUENCES / FAILURE MODES        -->
+  <!-- ================================================================= -->
+  <rect x="40" y="834" width="1120" height="306" rx="14" fill="#FFFFFF" stroke="#FECACA" stroke-width="1.4"/>
+  <rect x="56" y="844" width="480" height="20" rx="10" fill="#FEE2E2"/>
+  <text x="66" y="858" font-size="10.5" font-weight="700" fill="#991B1B" letter-spacing="1px">ZONE 3 · WHY THIS TOPOLOGY MATTERS FOR CAPACITY PLANNING</text>
+
+  <!-- Failure mode 1 -->
+  <g data-node-id="driver-bottleneck" role="group" tabindex="0" aria-label="Single driver becomes a coordination bottleneck">
+    <title data-node-tooltip="true">Single driver bottleneck — a single shared cluster funnels job submission and coordination through one driver node, which becomes a bottleneck under high job volume and can cause initialization failures when many jobs start together, because the driver is one unscalable process no matter how many executor nodes exist.</title>
+    <rect x="56" y="874" width="352" height="240" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#scar-shadow)"/>
+    <rect x="70" y="886" width="130" height="16" rx="8" fill="#FEE2E2"/><text x="135" y="897" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B91C1C">ANTIPATTERN</text>
+    <text x="70" y="924" font-size="12.5" font-weight="700" fill="#7F1D1D">The driver never scales out</text>
+    <text x="70" y="946" font-size="9.5" fill="#991B1B">One shared cluster funnels ALL job</text>
+    <text x="70" y="962" font-size="9.5" fill="#991B1B">submission and coordination through</text>
+    <text x="70" y="978" font-size="9.5" fill="#991B1B">its single driver node.</text>
+    <text x="70" y="1000" font-size="9.5" fill="#991B1B" font-weight="600">Under high job volume this becomes</text>
+    <text x="70" y="1016" font-size="9.5" fill="#991B1B">a bottleneck, and many jobs starting</text>
+    <text x="70" y="1032" font-size="9.5" fill="#991B1B">together can trigger initialization</text>
+    <text x="70" y="1048" font-size="9.5" fill="#991B1B">failures on that one process.</text>
+    <text x="70" y="1070" font-size="9.5" fill="#991B1B" font-weight="600">Adding executor nodes does not help —</text>
+    <text x="70" y="1086" font-size="9.5" fill="#991B1B">isolate high-volume workloads across</text>
+    <text x="70" y="1102" font-size="9.5" fill="#991B1B">separate pools or sessions instead.</text>
+    <rect x="330" y="886" width="60" height="14" rx="7" fill="#FEE2E2"/><text x="360" y="896" text-anchor="middle" font-size="8" font-weight="700" fill="#B91C1C">WARNING</text>
+  </g>
+
+  <!-- Failure mode 2 -->
+  <g data-node-id="driver-oom" role="group" tabindex="0" aria-label="Driver out-of-memory from collecting data">
+    <title data-node-tooltip="true">Driver OOM from collect — calling df.toPandas() or summing values from df.collect() on the driver for a large DataFrame is the number-one cause of driver out-of-memory errors, since that single dedicated node has no executor-scale memory headroom; the fix is aggregating on executors and only ever collecting a small, deliberately bounded result.</title>
+    <rect x="424" y="874" width="352" height="240" rx="10" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.6" filter="url(#scar-shadow)"/>
+    <rect x="438" y="886" width="130" height="16" rx="8" fill="#FEE2E2"/><text x="503" y="897" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B91C1C">ANTIPATTERN</text>
+    <text x="438" y="924" font-size="12.5" font-weight="700" fill="#7F1D1D">Driver memory is not executor memory</text>
+    <text x="438" y="946" font-size="9.5" fill="#991B1B">.collect() or .toPandas() on a large</text>
+    <text x="438" y="962" font-size="9.5" fill="#991B1B">DataFrame pulls the FULL result onto</text>
+    <text x="438" y="978" font-size="9.5" fill="#991B1B">the single driver node's heap.</text>
+    <text x="438" y="1000" font-size="9.5" fill="#991B1B" font-weight="600">Identified as the #1 cause of driver</text>
+    <text x="438" y="1016" font-size="9.5" fill="#991B1B">out-of-memory errors — the driver</text>
+    <text x="438" y="1032" font-size="9.5" fill="#991B1B">has no distributed executor pool to</text>
+    <text x="438" y="1048" font-size="9.5" fill="#991B1B">spread that memory across.</text>
+    <text x="438" y="1070" font-size="9.5" fill="#065F46" font-weight="600">Fix: aggregate on executors, e.g.</text>
+    <text x="438" y="1086" font-size="9.5" fill="#065F46">df.agg(...).collect(); only ever collect</text>
+    <text x="438" y="1102" font-size="9.5" fill="#065F46">a small, deliberately bounded result.</text>
+    <rect x="698" y="886" width="60" height="14" rx="7" fill="#FEE2E2"/><text x="728" y="896" text-anchor="middle" font-size="8" font-weight="700" fill="#B91C1C">WARNING</text>
+  </g>
+
+  <!-- Consequence 3: effective parallelism -->
+  <g data-node-id="effective-parallelism" role="group" tabindex="0" aria-label="Effective parallelism is capped at executor count">
+    <title data-node-tooltip="true">Effective parallelism ceiling — running many jobs on one shared cluster caps effective parallelism at the cluster's executor count, so a four-executor cluster behaves like four available execution slots regardless of how many jobs are queued; this is a direct, mechanical consequence of the fixed 1:1 ratio.</title>
+    <rect x="792" y="874" width="368" height="240" rx="10" fill="#F0F9FF" stroke="#7DD3FC" stroke-width="1.6" filter="url(#scar-shadow)"/>
+    <rect x="806" y="886" width="150" height="16" rx="8" fill="#E0F2FE"/><text x="881" y="897" text-anchor="middle" font-size="8.5" font-weight="700" fill="#0369A1">CAPACITY-PLANNING FACT</text>
+    <text x="806" y="924" font-size="12.5" font-weight="700" fill="#0C4A6E">Executor count = real concurrency ceiling</text>
+    <text x="806" y="946" font-size="9.5" fill="#075985">Running many jobs on one shared cluster</text>
+    <text x="806" y="962" font-size="9.5" fill="#075985">caps effective parallelism at the cluster's</text>
+    <text x="806" y="978" font-size="9.5" fill="#075985">executor count — a 4-worker pool behaves</text>
+    <text x="806" y="994" font-size="9.5" fill="#075985">like exactly 4 execution slots, however</text>
+    <text x="806" y="1010" font-size="9.5" fill="#075985">many jobs are queued behind it.</text>
+    <text x="806" y="1036" font-size="9.5" fill="#0C4A6E" font-weight="600">Because the ratio is fixed at 1:1, sizing</text>
+    <text x="806" y="1052" font-size="9.5" fill="#0C4A6E">a pool IS sizing its concurrency: node</text>
+    <text x="806" y="1068" font-size="9.5" fill="#0C4A6E">count and node size are the two levers,</text>
+    <text x="806" y="1084" font-size="9.5" fill="#0C4A6E">not an abstract "more compute" dial.</text>
+    <rect x="1074" y="886" width="52" height="14" rx="7" fill="#E0F2FE"/><text x="1100" y="896" text-anchor="middle" font-size="8" font-weight="700" fill="#0369A1">FACT</text>
+  </g>
+
+  <!-- Footer provenance -->
+  <text x="1140" y="1162" text-anchor="end" font-size="9.5" fill="#64748B">Fabric Atlas — Original Diagram, August 2026. Sourced from Microsoft Learn: Apache Spark compute for Fabric &amp; Configure starter pools; Fabric Spark Toolkit internals references.</text>
+</svg>

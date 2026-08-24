@@ -1,0 +1,318 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1980" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-rest-diag-title spark-rest-diag-desc" data-diagram-id="spark-logs-rest-api-diagnostics">
+  <title id="spark-rest-diag-title">Automated Spark diagnostics: pulling logs and metrics through Fabric's REST API instead of clicking through the Spark UI</title>
+  <desc id="spark-rest-diag-desc">A flow diagram contrasting manual Spark UI troubleshooting across five overlapping surfaces with an automated pipeline that resolves application identifiers, calls Fabric's Spark monitoring REST API (an OSS Spark History Server mirror plus Fabric-only advice/resourceUsage/logs endpoints), pulls the raw event log, parses it into skew/spill/critical-path findings, maps findings to named remedies, and produces a severity-ranked report — with branch lanes for Livy bootstrap failures and the continuously-pushed diagnostic emitter, plus warning callouts for common REST fetch failures and emitter misconfiguration.</desc>
+
+  <defs>
+    <linearGradient id="rd-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1E3A5F"/>
+      <stop offset="0.55" stop-color="#0F6E5E"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="rd-shadow" x="-4%" y="-6%" width="108%" height="118%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#0F172A" flood-opacity="0.10"/>
+    </filter>
+    <marker id="rd-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="rd-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="rd-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B45309"/>
+    </marker>
+    <marker id="rd-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="1980" fill="#F0F9F6"/>
+
+  <!-- Header -->
+  <rect width="1200" height="92" fill="url(#rd-head)"/>
+  <text x="40" y="38" font-size="21" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Automated Spark Diagnostics — REST API and Event-Log Pipeline vs Manual Spark UI</text>
+  <text x="40" y="64" font-size="12.5" fill="#CFEEE4">Resolve ids ➔ call the Spark monitoring REST API ➔ pull &amp; parse the event log ➔ rank findings ➔ map to a named remedy</text>
+  <text x="1160" y="82" text-anchor="end" font-size="9.5" fill="#9FD9C7">Fabric Atlas Original</text>
+
+  <!-- Legend -->
+  <g transform="translate(40,106)" font-size="10.5">
+    <rect width="1120" height="32" rx="8" fill="#FFFFFF" stroke="#B9E4D8"/>
+    <circle cx="20" cy="16" r="5" fill="#2563EB"/><text x="32" y="20" fill="#1E3A5F" font-weight="600">Automated pipeline (fact)</text>
+    <circle cx="230" cy="16" r="5" fill="#7C3AAD"/><text x="242" y="20" fill="#4C1D95" font-weight="600">Branch lane (Livy / emitter)</text>
+    <circle cx="440" cy="16" r="5" fill="#059669"/><text x="452" y="20" fill="#065F46" font-weight="600">Pattern (remediation)</text>
+    <circle cx="620" cy="16" r="5" fill="#B45309"/><text x="632" y="20" fill="#7C2D12" font-weight="600">Warning (documented failure)</text>
+    <circle cx="900" cy="16" r="5" fill="#64748B"/><text x="912" y="20" fill="#334155" font-weight="600">Manual baseline (contrast)</text>
+  </g>
+
+  <!-- ============================================================= -->
+  <!-- ROW 0: MANUAL BASELINE                                        -->
+  <!-- ============================================================= -->
+  <g data-node-id="manual-baseline" role="group" tabindex="0" aria-label="Manual path: five overlapping UI surfaces">
+    <title data-node-tooltip="true">Manual path: five overlapping UI surfaces — Without automation, troubleshooting is spread across five overlapping Spark UI surfaces that look like one.</title>
+    <rect x="40" y="154" width="1120" height="96" rx="10" fill="#F1F5F9" stroke="#94A3B8" stroke-width="1.6" filter="url(#rd-shadow)"/>
+    <rect x="56" y="164" width="180" height="16" rx="8" fill="#E2E8F0"/><text x="146" y="175" text-anchor="middle" font-size="8.5" font-weight="700" fill="#334155">MANUAL BASELINE · CONTRAST</text>
+    <text x="56" y="200" font-size="13.5" font-weight="700" fill="#1E293B">Without automation: five overlapping Spark UI surfaces, navigated one at a time</text>
+    <text x="56" y="220" font-size="10" fill="#475569">In-cell live progress · in-cell Spark Advisor panel · Recent runs / Monitoring hub · tabbed Application detail (Jobs/Resources/Logs/Data/Diagnostics) · full Spark History Server</text>
+    <text x="56" y="236" font-size="9.5" fill="#64748B" font-style="italic">A human must know which surface holds the answer and reassemble a diagnosis from scratch every time.</text>
+    <rect x="1060" y="164" width="86" height="14" rx="7" fill="#E2E8F0"/><text x="1103" y="174" text-anchor="middle" font-size="8" font-weight="700" fill="#334155">FACT</text>
+  </g>
+
+  <path d="M 600 250 V 276" stroke="#334155" stroke-width="2.2" stroke-dasharray="1 6" stroke-linecap="round" fill="none" marker-end="url(#rd-arr-blue)"/>
+  <text x="614" y="268" font-size="9.5" fill="#334155" font-style="italic">Automation replaces UI tab-hopping with identifier resolution</text>
+
+  <!-- ============================================================= -->
+  <!-- ROW 1: IDENTIFY                                                -->
+  <!-- ============================================================= -->
+  <g data-node-id="identify" role="group" tabindex="0" aria-label="Resolve identifiers from a description">
+    <title data-node-tooltip="true">Resolve identifiers from a description — An automated diagnostic tool resolves workspace and item identifiers from a plain-English description before calling any API.</title>
+    <rect x="330" y="278" width="540" height="112" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.6" filter="url(#rd-shadow)"/>
+    <rect x="346" y="288" width="160" height="16" rx="8" fill="#DBEAFE"/><text x="426" y="299" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">STEP 1 · RESOLVE IDENTIFIERS</text>
+    <text x="346" y="324" font-size="13.5" font-weight="700" fill="#1E3A8A">"The nightly ETL notebook failed again" → workspaceId, itemId, livyId, applicationId, attemptId</text>
+    <text x="346" y="346" font-size="10" fill="#1E40AF">Fabric Spark Operations Skill (preview): resolves ids from a plain-English description</text>
+    <text x="346" y="364" font-size="9.5" fill="#3B5BA9">Scenarios: health review · root-cause analysis · pipeline-failure tracing · Livy session triage</text>
+    <rect x="798" y="288" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="824" y="298" text-anchor="middle" font-size="8" font-weight="700" fill="#1D4ED8">FACT</text>
+  </g>
+
+  <path d="M 600 390 V 416" stroke="#2563EB" stroke-width="2.2" fill="none" marker-end="url(#rd-arr-blue)"/>
+  <text x="614" y="408" font-size="9.5" fill="#1D4ED8" font-style="italic">Resolved ids drive the REST endpoint path</text>
+
+  <!-- Livy branch arrow from identify (left) -->
+  <path d="M 330 334 H 210 Q 190 334 190 354 V 470" stroke="#7C3AAD" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#rd-arr-purple)"/>
+  <text x="196" y="460" font-size="9" fill="#6D28D9" font-style="italic" transform="rotate(-90 196 460)" text-anchor="middle">A session that never started routes here</text>
+
+  <!-- ============================================================= -->
+  <!-- ROW 2: REST API SURFACE + FABRIC-ONLY ENDPOINTS (left main) and LIVY LANE (far left branch) -->
+  <!-- ============================================================= -->
+
+  <!-- Livy lane box (branch) -->
+  <g data-node-id="livy-log" role="group" tabindex="0" aria-label="Livy log: the only view into bootstrap failures">
+    <title data-node-tooltip="true">Livy log: the only view into bootstrap failures — A whole class of Fabric Spark failures happens before any Spark job exists and is visible only in the Livy log, never the Spark UI's job/stage/task tabs.</title>
+    <rect x="40" y="418" width="270" height="230" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.8" filter="url(#rd-shadow)"/>
+    <rect x="52" y="428" width="130" height="16" rx="8" fill="#EDE9FE"/><text x="117" y="439" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">BRANCH · LIVY LOG</text>
+    <text x="52" y="464" font-size="12.5" font-weight="700" fill="#4C1D95">Bootstrap failures exist before any job does</text>
+    <text x="52" y="484" font-size="9.3" fill="#5B21B6">Capacity 430s, library conflicts,</text>
+    <text x="52" y="498" font-size="9.3" fill="#5B21B6">unpublished Environments, timeouts —</text>
+    <text x="52" y="512" font-size="9.3" fill="#5B21B6">visible ONLY in the Livy log, never</text>
+    <text x="52" y="526" font-size="9.3" fill="#5B21B6">in job/stage/task REST data.</text>
+    <text x="52" y="548" font-size="9" fill="#6D28D9" font-weight="600">Three separate log streams:</text>
+    <text x="52" y="564" font-size="8.7" fill="#5B21B6">• Livy — submission, lifecycle, queuing</text>
+    <text x="52" y="578" font-size="8.7" fill="#5B21B6">• Prelaunch — warmup, pool allocation</text>
+    <text x="52" y="592" font-size="8.7" fill="#5B21B6">• Driver — stdout/stderr, stack traces</text>
+    <text x="52" y="612" font-size="8.5" fill="#7C3AAD" font-style="italic">Skill also detects stuck/zombie Livy</text>
+    <text x="52" y="624" font-size="8.5" fill="#7C3AAD" font-style="italic">sessions burning capacity idly.</text>
+    <rect x="228" y="428" width="70" height="14" rx="7" fill="#EDE9FE"/><text x="263" y="438" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">WARNING</text>
+  </g>
+
+  <!-- REST API surface box -->
+  <g data-node-id="rest-api-surface" role="group" tabindex="0" aria-label="Spark monitoring REST API">
+    <title data-node-tooltip="true">Spark monitoring REST API — Fabric exposes Spark application internals as a REST API that mirrors the OSS Spark History Server contract exactly.</title>
+    <rect x="330" y="418" width="410" height="230" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.8" filter="url(#rd-shadow)"/>
+    <rect x="346" y="428" width="150" height="16" rx="8" fill="#DBEAFE"/><text x="421" y="439" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">STEP 2 · REST API SURFACE</text>
+    <text x="346" y="466" font-size="13" font-weight="700" fill="#1E3A8A">Mirrors the OSS Spark History Server contract</text>
+    <text x="346" y="486" font-size="9.5" fill="#1E40AF">Same endpoints, params, JSON shapes for</text>
+    <text x="346" y="500" font-size="9.5" fill="#1E40AF">jobs, stages, tasks, executors, storage, streaming</text>
+    <rect x="346" y="512" width="378" height="42" rx="6" fill="#DBEAFE"/>
+    <text x="354" y="527" font-size="8" font-family="monospace" fill="#1E3A8A">/v1/workspaces/{wsId}/notebooks|sparkJobDefinitions|</text>
+    <text x="354" y="540" font-size="8" font-family="monospace" fill="#1E3A8A">lakehouses/{itemId}/livySessions/{livyId}/applications/</text>
+    <text x="354" y="549" font-size="8" font-family="monospace" fill="#1E3A8A">{appId}/{attemptId}/{endpoint}</text>
+    <text x="346" y="574" font-size="9" fill="#1E40AF">Auth: in-notebook Fabric REST client, or</text>
+    <text x="346" y="588" font-size="9" fill="#1E40AF">Entra app / service-principal token externally</text>
+    <text x="346" y="608" font-size="8.5" fill="#3B5BA9" font-style="italic">Wrong item-kind segment (notebooks vs</text>
+    <text x="346" y="620" font-size="8.5" fill="#3B5BA9" font-style="italic">sparkJobDefinitions vs lakehouses) 404s.</text>
+    <rect x="700" y="428" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="726" y="438" text-anchor="middle" font-size="8" font-weight="700" fill="#1D4ED8">FACT</text>
+  </g>
+
+  <path d="M 740 470 H 796" stroke="#2563EB" stroke-width="2.2" fill="none" marker-end="url(#rd-arr-blue)"/>
+  <text x="746" y="463" font-size="8.7" fill="#1D4ED8" font-style="italic">Same surface, Fabric-only layer</text>
+
+  <!-- Fabric-only endpoints box -->
+  <g data-node-id="fabric-only-endpoints" role="group" tabindex="0" aria-label="Fabric-only endpoints: advice, resourceUsage, logs">
+    <title data-node-tooltip="true">Fabric-only endpoints: advice, resourceUsage, logs — Beyond the OSS contract, Fabric adds an advisor-findings endpoint, an executor resource-usage endpoint, and a raw driver-log endpoint.</title>
+    <rect x="800" y="418" width="360" height="230" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.8" filter="url(#rd-shadow)"/>
+    <rect x="816" y="428" width="180" height="16" rx="8" fill="#DBEAFE"/><text x="906" y="439" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">STEP 3 · FABRIC-ONLY ENDPOINTS</text>
+    <text x="816" y="466" font-size="13" font-weight="700" fill="#1E3A8A">No open-source equivalent</text>
+    <text x="816" y="488" font-size="9.3" font-family="monospace" fill="#1D4ED8" font-weight="700">advice</text>
+    <text x="816" y="500" font-size="8.7" fill="#1E40AF">Spark Advisor Info/Warning/Error findings</text>
+    <text x="816" y="512" font-size="8.7" fill="#1E40AF">as structured JSON, filterable by stage/job/executor</text>
+    <text x="816" y="530" font-size="9.3" font-family="monospace" fill="#1D4ED8" font-weight="700">resourceUsage</text>
+    <text x="816" y="542" font-size="8.7" fill="#1E40AF">Executor CPU/memory over time — the Resources</text>
+    <text x="816" y="554" font-size="8.7" fill="#1E40AF">tab's chart as thresholdable numbers</text>
+    <text x="816" y="572" font-size="9.3" font-family="monospace" fill="#1D4ED8" font-weight="700">logs?type=driver</text>
+    <text x="816" y="584" font-size="8.7" fill="#1E40AF">Raw driver stdout/stderr text, fetchable</text>
+    <text x="816" y="596" font-size="8.7" fill="#1E40AF">without opening the Fabric portal</text>
+    <rect x="1046" y="428" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="1072" y="438" text-anchor="middle" font-size="8" font-weight="700" fill="#1D4ED8">FACT</text>
+  </g>
+
+  <!-- ============================================================= -->
+  <!-- ROW 3: EVENT LOG PULL                                          -->
+  <!-- ============================================================= -->
+  <path d="M 535 648 V 674" stroke="#2563EB" stroke-width="2.2" fill="none" marker-end="url(#rd-arr-blue)"/>
+  <text x="549" y="666" font-size="9.5" fill="#1D4ED8" font-style="italic">The same REST surface also serves the raw event log</text>
+
+  <g data-node-id="event-log-pull" role="group" tabindex="0" aria-label="Pull the raw event log for post-hoc analysis">
+    <title data-node-tooltip="true">Pull the raw event log for post-hoc analysis — Pulling the raw event log via REST is the direct route for post-hoc analysis of one specific past run, surfacing detail the portal UI does not expose.</title>
+    <rect x="330" y="676" width="590" height="118" rx="10" fill="#EFF6FF" stroke="#93C5FD" stroke-width="1.8" filter="url(#rd-shadow)"/>
+    <rect x="346" y="686" width="220" height="16" rx="8" fill="#DBEAFE"/><text x="456" y="697" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">STEP 4 · PULL THE RAW EVENT LOG</text>
+    <text x="346" y="722" font-size="13" font-weight="700" fill="#1E3A8A">Post-hoc analysis of one specific past run, on demand — no advance setup needed</text>
+    <text x="346" y="744" font-size="9.5" fill="#1E40AF">Same raw SparkListener JSON-lines stream the Spark UI renders from. Surfaces detail the</text>
+    <text x="346" y="760" font-size="9.5" fill="#1E40AF">portal UI never exposes: exact per-stage skew ratios, spill attribution, a true critical-path</text>
+    <text x="346" y="776" font-size="9.5" fill="#1E40AF">ranking of stages, and the application's real effective configuration as ground truth.</text>
+    <rect x="838" y="686" width="52" height="14" rx="7" fill="#DBEAFE"/><text x="864" y="696" text-anchor="middle" font-size="8" font-weight="700" fill="#1D4ED8">FACT</text>
+  </g>
+
+  <!-- Diagnostic emitter branch off event-log-pull -->
+  <path d="M 920 735 H 970 Q 990 735 990 755 V 780" stroke="#7C3AAD" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#rd-arr-purple)"/>
+  <text x="1002" y="765" font-size="8.7" fill="#6D28D9" font-style="italic">On-demand pull vs</text>
+  <text x="1002" y="777" font-size="8.7" fill="#6D28D9" font-style="italic">the continuous push</text>
+
+  <!-- URL pitfalls warning -->
+  <path d="M 400 794 V 820" stroke="#B45309" stroke-width="2.2" stroke-dasharray="6 4" fill="none" marker-end="url(#rd-arr-amber)"/>
+  <text x="414" y="812" font-size="9.5" fill="#92400E" font-style="italic">Malformed requests fail five documented ways</text>
+
+  <!-- ============================================================= -->
+  <!-- ROW 4: DIAGNOSTIC EMITTER (right branch lane) + URL PITFALLS (left warning) -->
+  <!-- ============================================================= -->
+  <g data-node-id="url-pitfalls" role="group" tabindex="0" aria-label="Five common event-log fetch failures">
+    <title data-node-tooltip="true">Five common event-log fetch failures — Fetching a Spark event log via REST fails for five common, well-defined reasons, most often a missing attemptId segment.</title>
+    <rect x="330" y="822" width="430" height="182" rx="10" fill="#FFFBEB" stroke="#FCD34D" stroke-width="1.8" filter="url(#rd-shadow)"/>
+    <rect x="346" y="832" width="200" height="16" rx="8" fill="#FEF3C7"/><text x="446" y="843" text-anchor="middle" font-size="8.5" font-weight="700" fill="#92400E">WARNING · FIVE FETCH FAILURES</text>
+    <text x="346" y="868" font-size="12.5" font-weight="700" fill="#78350F">In order of frequency</text>
+    <text x="346" y="888" font-size="9" fill="#92400E">1. Missing /{attemptId}/ path segment (usually 1, or 2 after retry) → 400/404</text>
+    <text x="346" y="904" font-size="9" fill="#92400E">2. Wrong item-kind segment — SJD app under /notebooks/ 404s</text>
+    <text x="346" y="920" font-size="9" fill="#92400E">3. Pasting the portal Monitoring-hub URL directly — not a valid endpoint</text>
+    <text x="346" y="936" font-size="9" fill="#92400E">4. Copy artifacts: stray quotes, trailing slash, fragment, query string</text>
+    <text x="346" y="952" font-size="9" fill="#92400E">5. Querying an application that hasn't finished — event logs finalize only on completion</text>
+    <text x="346" y="976" font-size="8.5" fill="#78350F" font-style="italic">The toolkit's URL normalizer accepts 6 real-world pasted shapes and</text>
+    <text x="346" y="990" font-size="8.5" fill="#78350F" font-style="italic">repairs all five causes before calling the endpoint.</text>
+    <rect x="710" y="832" width="70" height="14" rx="7" fill="#FEF3C7"/><text x="745" y="842" text-anchor="middle" font-size="8" font-weight="700" fill="#92400E">WARNING</text>
+  </g>
+
+  <g data-node-id="diagnostic-emitter" role="group" tabindex="0" aria-label="Alternative: the continuously-pushed diagnostic emitter">
+    <title data-node-tooltip="true">Alternative: the continuously-pushed diagnostic emitter — The diagnostic emitter streams logs and metrics continuously to Log Analytics, Storage, or Event Hubs as an alternative to pulling the event log on demand.</title>
+    <rect x="800" y="782" width="360" height="120" rx="10" fill="#FAF5FF" stroke="#C4B5FD" stroke-width="1.8" filter="url(#rd-shadow)"/>
+    <rect x="816" y="792" width="200" height="16" rx="8" fill="#EDE9FE"/><text x="916" y="803" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6D28D9">BRANCH · CONTINUOUS PUSH</text>
+    <text x="816" y="828" font-size="12.5" font-weight="700" fill="#4C1D95">The push alternative to pulling on demand</text>
+    <text x="816" y="848" font-size="9" fill="#5B21B6">Streams driver/executor logs + metrics continuously to</text>
+    <text x="816" y="862" font-size="9" fill="#5B21B6">Log Analytics, Azure Storage, or Event Hubs. Configured as</text>
+    <text x="816" y="876" font-size="9" fill="#5B21B6">Environment Spark properties — session-start scope only.</text>
+    <text x="816" y="892" font-size="8.5" fill="#6D28D9" font-style="italic">Same raw event stream, but pushed continuously instead of pulled after the fact.</text>
+    <rect x="1046" y="792" width="52" height="14" rx="7" fill="#EDE9FE"/><text x="1072" y="802" text-anchor="middle" font-size="8" font-weight="700" fill="#6D28D9">FACT</text>
+  </g>
+
+  <path d="M 980 902 V 928" stroke="#7C3AAD" stroke-width="2.2" stroke-dasharray="6 4" fill="none" marker-end="url(#rd-arr-purple)"/>
+  <text x="994" y="920" font-size="8.7" fill="#6D28D9" font-style="italic">Configuring the push has its own failure modes</text>
+
+  <g data-node-id="emitter-gotchas" role="group" tabindex="0" aria-label="Four documented emitter gotchas">
+    <title data-node-tooltip="true">Four documented emitter gotchas — Configuring the Log Analytics diagnostic emitter has four specific, documented gotchas that silently produce an emitter collecting nothing.</title>
+    <rect x="800" y="930" width="360" height="180" rx="10" fill="#FFFBEB" stroke="#FCD34D" stroke-width="1.8" filter="url(#rd-shadow)"/>
+    <rect x="816" y="940" width="190" height="16" rx="8" fill="#FEF3C7"/><text x="911" y="951" text-anchor="middle" font-size="8.5" font-weight="700" fill="#92400E">WARNING · FOUR GOTCHAS</text>
+    <text x="816" y="976" font-size="12" font-weight="700" fill="#78350F">Silently collects nothing, no error shown</text>
+    <text x="816" y="996" font-size="8.7" fill="#92400E">1. skipStarterPools must = true, or a starter</text>
+    <text x="816" y="1008" font-size="8.7" fill="#92400E">   pool never engages the emitter (most common)</text>
+    <text x="816" y="1024" font-size="8.7" fill="#92400E">2. Category-name list differs by destination —</text>
+    <text x="816" y="1036" font-size="8.7" fill="#92400E">   copying one example into the other collects nothing</text>
+    <text x="816" y="1052" font-size="8.7" fill="#92400E">3. Secret = Log Analytics workspace primary key,</text>
+    <text x="816" y="1064" font-size="8.7" fill="#92400E">   not an Entra token or connection string</text>
+    <text x="816" y="1080" font-size="8.7" fill="#92400E">4. Job submitters need Key Vault read access to the</text>
+    <text x="816" y="1092" font-size="8.7" fill="#92400E">   secret, or the emitter fails to initialize per session</text>
+    <rect x="1046" y="940" width="70" height="14" rx="7" fill="#FEF3C7"/><text x="1081" y="950" text-anchor="middle" font-size="8" font-weight="700" fill="#92400E">WARNING</text>
+  </g>
+
+  <!-- ============================================================= -->
+  <!-- ROW 5: PARSE / DIAGNOSE (starts clear of emitter-gotchas which ends y=1110) -->
+  <!-- ============================================================= -->
+  <path d="M 530 1006 V 1032" stroke="#2563EB" stroke-width="2.2" fill="none" marker-end="url(#rd-arr-blue)"/>
+  <text x="544" y="1024" font-size="9.5" fill="#1D4ED8" font-style="italic">A successful pull is parsed in one pass</text>
+  <path d="M 990 1110 V 1140 H 700" stroke="#7C3AAD" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#rd-arr-purple)"/>
+  <text x="710" y="1132" font-size="8.7" fill="#6D28D9" font-style="italic">Emitter branch also feeds the ranked report below</text>
+  <path d="M 175 648 V 1150 H 328" stroke="#7C3AAD" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#rd-arr-purple)"/>
+  <text x="187" y="900" font-size="8.7" fill="#6D28D9" font-style="italic" transform="rotate(-90 187 900)" text-anchor="middle">Bootstrap causes are ranked alongside job-layer causes</text>
+
+  <g data-node-id="parse-diagnose" role="group" tabindex="0" aria-label="Parse the event log into ranked findings">
+    <title data-node-tooltip="true">Parse the event log into ranked findings — A single pass over the parsed event log ranks stages by their real wall-clock contribution and reports skew ratio and spill volume for each.</title>
+    <rect x="330" y="1152" width="590" height="220" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.8" filter="url(#rd-shadow)"/>
+    <rect x="346" y="1162" width="220" height="16" rx="8" fill="#D1FAE5"/><text x="456" y="1173" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">STEP 5 · PARSE INTO RANKED FINDINGS</text>
+    <text x="346" y="1200" font-size="13" font-weight="700" fill="#064E3B">Stage-ranking by real wall-clock share (the "critical path")</text>
+    <text x="346" y="1220" font-size="9.5" fill="#065F46">One pass over the parsed event log reports each stage's % share of total duration,</text>
+    <text x="346" y="1236" font-size="9.5" fill="#065F46">alongside its skew ratio and spill volume — not task count or stage id order.</text>
+    <text x="346" y="1256" font-size="9.5" fill="#065F46">Effective config (AQE, shuffle partitions, NEE/ANSI flags) is recovered directly</text>
+    <text x="346" y="1272" font-size="9.5" fill="#065F46">from the event log's own environment-update event — ground truth, not assumption.</text>
+
+    <rect x="346" y="1284" width="558" height="76" rx="8" fill="#D1FAE5"/>
+    <text x="358" y="1300" font-size="9.5" font-weight="700" fill="#047857">Worked example — a real executed run with a deliberately skewed join</text>
+    <text x="358" y="1316" font-size="8.8" fill="#065F46">70% of a 1.2M-row table's rows on one key vs a 500-row table. Detector measured</text>
+    <text x="358" y="1330" font-size="8.8" fill="#065F46">a genuine <tspan font-weight="700">3.8x skew ratio</tspan> (max 1733ms vs median 457ms, 16 tasks) — exceeding its</text>
+    <text x="358" y="1344" font-size="8.8" fill="#065F46">own 3.0x threshold → critical finding. Recovered shuffle-partition count (16) matched.</text>
+    <rect x="838" y="1162" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="864" y="1172" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <!-- ============================================================= -->
+  <!-- ROW 6: SHUFFLE HEURISTIC WARNING (own full-width row, no overlap) -->
+  <!-- ============================================================= -->
+  <path d="M 625 1372 V 1398" stroke="#B45309" stroke-width="2.2" stroke-dasharray="6 4" fill="none" marker-end="url(#rd-arr-amber)"/>
+  <text x="639" y="1390" font-size="9.5" fill="#92400E" font-style="italic">One companion metric is estimated, not measured</text>
+
+  <g data-node-id="shuffle-heuristic-warning" role="group" tabindex="0" aria-label="Shuffle-size estimate is a proxy, not a measurement">
+    <title data-node-tooltip="true">Shuffle-size estimate is a proxy, not a measurement — A companion shuffle-partition-count heuristic is explicitly labeled a starting-point proxy, not a measurement, and must be validated against real Shuffle Write metrics.</title>
+    <rect x="330" y="1400" width="590" height="96" rx="10" fill="#FFFBEB" stroke="#FCD34D" stroke-width="1.8" filter="url(#rd-shadow)"/>
+    <rect x="346" y="1410" width="230" height="16" rx="8" fill="#FEF3C7"/><text x="461" y="1421" text-anchor="middle" font-size="8.5" font-weight="700" fill="#92400E">WARNING · ESTIMATE, NOT MEASUREMENT</text>
+    <text x="346" y="1448" font-size="12" font-weight="700" fill="#78350F">A companion shuffle-partition heuristic is a proxy, not a measurement</text>
+    <text x="346" y="1468" font-size="9" fill="#92400E">max(input bytes / 128MB, 2× executor vCores) — a groupBy that aggregates away most rows shuffles far</text>
+    <text x="346" y="1484" font-size="9" fill="#92400E">less than input size suggests; a row-exploding join shuffles more. Validate against the real Shuffle Write metric.</text>
+    <rect x="838" y="1410" width="66" height="14" rx="7" fill="#FEF3C7"/><text x="871" y="1420" text-anchor="middle" font-size="8" font-weight="700" fill="#92400E">WARNING</text>
+  </g>
+
+  <!-- ============================================================= -->
+  <!-- ROW 7: REMEDIATION TABLE                                       -->
+  <!-- ============================================================= -->
+  <path d="M 625 1496 V 1522" stroke="#059669" stroke-width="2.2" fill="none" marker-end="url(#rd-arr-green)"/>
+  <text x="639" y="1514" font-size="9.5" fill="#047857" font-style="italic">Each ranked finding maps to a named fix</text>
+
+  <g data-node-id="remediation-table" role="group" tabindex="0" aria-label="Physical-plan-to-remediation mapping">
+    <title data-node-tooltip="true">Physical-plan-to-remediation mapping — Five recurring Fabric Spark slowness signatures each map to a specific plan/log fingerprint and a specific remedy.</title>
+    <rect x="330" y="1524" width="590" height="270" rx="10" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.8" filter="url(#rd-shadow)"/>
+    <rect x="346" y="1534" width="230" height="16" rx="8" fill="#D1FAE5"/><text x="461" y="1545" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">STEP 6 · FINGERPRINT → REMEDY</text>
+    <text x="346" y="1572" font-size="13" font-weight="700" fill="#064E3B">Five recurring slowness signatures, each with a named fix</text>
+
+    <g font-size="9">
+      <text x="346" y="1596" fill="#065F46" font-weight="700">Zero data skipping</text>
+      <text x="346" y="1610" fill="#047857">FileScan reads = table's total file count → set dataSkippingStatsColumns + cluster on filter col</text>
+
+      <text x="346" y="1632" fill="#065F46" font-weight="700">NEE fallback</text>
+      <text x="346" y="1646" fill="#047857">Alternating VeloxColumnarToRow/RowToVeloxColumnar in driver stderr → replace the causing UDF</text>
+
+      <text x="346" y="1668" fill="#065F46" font-weight="700">Severe skew</text>
+      <text x="346" y="1682" fill="#047857">Large median-vs-max task-duration gap in Stages tab → AQE skew join or explicit key salting</text>
+
+      <text x="346" y="1704" fill="#065F46" font-weight="700">SortMergeJoin spill</text>
+      <text x="346" y="1718" fill="#047857">Large Spill (Memory)/(Disk) metrics → lower AQE advisory partition size or force broadcast join</text>
+
+      <text x="346" y="1740" fill="#065F46" font-weight="700">Small-file task explosion</text>
+      <text x="346" y="1754" fill="#047857">Tens of thousands of sub-150ms tasks in Jobs tab → OPTIMIZE to consolidate V-Ordered files</text>
+    </g>
+    <rect x="838" y="1534" width="66" height="14" rx="7" fill="#D1FAE5"/><text x="871" y="1544" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">PATTERN</text>
+    <text x="346" y="1778" font-size="8.5" fill="#065F46" font-style="italic">Applying a generic tweak instead of the fingerprint-matched remedy can miss the actual cause.</text>
+  </g>
+
+  <!-- ============================================================= -->
+  <!-- ROW 8: FINAL REPORT — convergence node                         -->
+  <!-- ============================================================= -->
+  <path d="M 625 1794 V 1824" stroke="#059669" stroke-width="2.4" fill="none" marker-end="url(#rd-arr-green)"/>
+  <path d="M 1046 947 Q 1170 1050 1170 1400 Q 1170 1750 920 1826" stroke="#7C3AAD" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#rd-arr-purple)"/>
+  <path d="M 60 533 Q 20 750 20 1400 Q 20 1750 328 1846" stroke="#7C3AAD" stroke-width="2" stroke-dasharray="6 4" fill="none" marker-end="url(#rd-arr-purple)"/>
+  <path d="M 980 533 Q 1120 900 1120 1400 Q 1120 1750 920 1846" stroke="#2563EB" stroke-width="2" stroke-dasharray="2 5" fill="none" marker-end="url(#rd-arr-blue)"/>
+
+  <text x="1180" y="1400" font-size="8.7" fill="#6D28D9" font-style="italic" transform="rotate(90 1180 1400)" text-anchor="middle">Emitter path also feeds the same ranked report</text>
+  <text x="10" y="1400" font-size="8.7" fill="#6D28D9" font-style="italic" transform="rotate(-90 10 1400)" text-anchor="middle">Bootstrap causes ranked alongside job-layer causes</text>
+  <text x="1132" y="1400" font-size="8.7" fill="#1D4ED8" font-style="italic" transform="rotate(90 1132 1400)" text-anchor="middle">Advisor findings and resource usage feed the report</text>
+
+  <g data-node-id="diagnostic-report" role="group" tabindex="0" aria-label="Severity-ranked diagnostic report">
+    <title data-node-tooltip="true">Severity-ranked diagnostic report — The automated pipeline's output is a severity-ranked diagnostic report, not raw logs a human still has to interpret.</title>
+    <rect x="330" y="1826" width="590" height="106" rx="12" fill="#F0FDF4" stroke="#059669" stroke-width="2.2" filter="url(#rd-shadow)"/>
+    <rect x="346" y="1836" width="220" height="16" rx="8" fill="#D1FAE5"/><text x="456" y="1847" text-anchor="middle" font-size="8.5" font-weight="700" fill="#047857">RESULT · SEVERITY-RANKED REPORT</text>
+    <text x="346" y="1866" font-size="13" font-weight="700" fill="#064E3B">A ranked report to act on — not raw logs to interpret</text>
+    <text x="346" y="1886" font-size="9" fill="#065F46">Read-only: identifies stuck/zombie Livy sessions, ranks findings by severity, attaches the fix.</text>
+    <rect x="838" y="1836" width="52" height="14" rx="7" fill="#D1FAE5"/><text x="864" y="1846" text-anchor="middle" font-size="8" font-weight="700" fill="#047857">FACT</text>
+  </g>
+
+  <text x="1160" y="1962" text-anchor="end" font-size="8.5" fill="#4B7C6F">Fabric Atlas — Original Diagram, August 2026. Sourced from Fabric Spark REST/monitoring internals, the Fabric Spark Operations Skill blog, and first-party Spark toolkit notebooks.</text>
+</svg>

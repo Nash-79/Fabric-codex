@@ -1,0 +1,343 @@
+{
+  "id": "spark-cluster-architecture-1-1-rule",
+  "title": "Fabric Spark cluster architecture and the driver-to-executor 1:1 rule",
+  "purpose": "Shows the driver's internal coordination stack (SparkContext, DAGScheduler, TaskScheduler, Catalyst optimizer) running on a dedicated head node, the fixed 1:1 node-to-executor ratio on worker nodes and its single-node pool exception, how a Fabric capacity SKU's vCore budget mechanically converts into a fixed count of executor slots, and why that fixed topology is the actual unit of capacity planning rather than a soft compute ceiling.",
+  "accessibleSummary": "A Fabric Spark pool is one head node running the driver's SparkContext, DAGScheduler, TaskScheduler, and Catalyst optimizer alongside Livy, YARN Resource Manager, and ZooKeeper, plus a set of worker nodes that each run exactly one Executor JVM under Fabric's fixed 1:1 node-to-executor ratio. A single-node pool is the one documented exception, where driver and executor split one node's resources roughly in half instead. A capacity SKU sets a Spark vCore budget; a chosen node size sets vCores per node; because the ratio is fixed at 1:1, that arithmetic directly determines the maximum number of executor slots, which is the real concurrency ceiling for a session, not the raw vCore count. Two failure modes follow directly from this topology: a single shared cluster funnels all job coordination through one unscalable driver process, which bottlenecks under high job volume, and collecting a large result onto that same driver node with .collect() or .toPandas() is the number-one cause of driver out-of-memory errors.",
+  "longDescription": "This diagram grounds Fabric Spark capacity planning in the cluster's fixed physical topology rather than treating Spark vCores as an abstract pool of compute. Zone 1 shows the pool split into one head node, which hosts the driver process (SparkContext, DAGScheduler, TaskScheduler, Catalyst optimizer) plus Livy, the YARN Resource Manager, and ZooKeeper, and a set of worker nodes that each host exactly one Executor JVM under Fabric's documented 1:1 node-to-executor ratio, with a callout for the single-node pool exception where driver and executor share one node's resources. Zone 2 walks the arithmetic chain from a capacity SKU's Spark vCore budget through node size to node count to executor-slot count, showing that because the ratio is fixed at 1:1, that chain of division is a hard ceiling, not a soft target. Zone 3 shows the direct consequences: a single driver process that cannot be scaled out becomes a coordination bottleneck under concurrent job load, driver-side result collection is the leading cause of driver OOM because the driver has no distributed memory pool behind it, and effective parallelism for any session is capped at its executor count regardless of how many jobs are queued.",
+  "type": "architecture",
+  "topicSlug": "spark",
+  "capabilityIds": ["spark"],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-cluster-architecture-1-1-rule.svg",
+  "nodes": [
+    {
+      "id": "driver-node",
+      "label": "Driver (head node)",
+      "summary": "The dedicated head node running SparkContext, DAGScheduler, TaskScheduler, and the Catalyst optimizer, plus Livy, YARN Resource Manager, and ZooKeeper.",
+      "detail": "A Fabric Spark pool instance consists of one head node plus workers. The head node hosts Livy (the session REST layer), the YARN Resource Manager, ZooKeeper, and the Spark driver process itself. Inside the driver process, SparkContext is the entry point that registers the application with the cluster manager and owns the session; the DAGScheduler cuts each submitted job into stages at every shuffle boundary (a wide transformation), so a job with no wide transformations runs as a single stage; the TaskScheduler then creates one task per output partition per stage and schedules those tasks onto executor cores as cores free up; and the Catalyst optimizer parses, analyzes, rule-optimizes, and physically plans every query before any task is shipped to an executor. Fabric notebooks run this driver inside the Spark pool itself, architecturally closer to Spark's cluster deployment mode than client mode, with the notebook UI acting as a thin client attached to a live remote session.",
+      "whyItMatters": "Every one of these coordination components is a single, non-distributed process running on one node. Nothing about adding more executor nodes changes the driver's own capacity to plan queries, track task state, or accept job submissions — it is the one part of the topology that does not scale out, which is why driver-side failure modes (bottlenecking, OOM) are architecturally distinct from executor-side ones.",
+      "classification": "fact",
+      "layers": ["compute", "orchestration"],
+      "evidence": [
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "A Fabric Spark pool instance consists of one head node plus workers: the head node hosts Livy, the YARN Resource Manager, ZooKeeper, and the Spark driver; every node runs a Node Agent and YARN Node Manager, and each worker runs the Spark Executor service."
+        },
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "Spark's job/stage/task hierarchy is strictly nested: one job per action; the DAGScheduler cuts a job into stages at every shuffle boundary; the TaskScheduler creates one task per output partition per stage, scheduling tasks onto executor cores as cores free up. Deployment mode is defined by where the driver runs; Fabric notebooks run the driver inside the Spark pool itself, architecturally closer to cluster mode."
+        },
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "EXPLAIN EXTENDED prints the four stages of Catalyst's compilation in order — parsed logical plan, analyzed plan, optimized logical plan, and physical plan — showing the optimizer's pipeline is directly observable."
+        }
+      ],
+      "tags": ["driver", "SparkContext", "DAGScheduler", "TaskScheduler", "Catalyst", "Livy", "YARN", "ZooKeeper"],
+      "drill": {
+        "inputs": ["Submitted job (an action: write, collect, count)", "Query text or DataFrame lineage", "Cluster manager registration request"],
+        "processing": [
+          "SparkContext registers the application and owns the session",
+          "Catalyst parses, analyzes, and rule-optimizes the query into a physical plan",
+          "DAGScheduler cuts the job into stages at each shuffle boundary",
+          "TaskScheduler creates one task per output partition per stage and assigns tasks to executor cores"
+        ],
+        "outputs": ["Scheduled tasks dispatched to executor JVMs", "Stage completion signals", "Job result assembled from executor outputs"],
+        "example": "A notebook cell calls df.groupBy(\"region\").sum(\"sales\").write.format(\"delta\").save(...). Catalyst plans the aggregation and write; because groupBy is a wide transformation, the DAGScheduler splits the job into a pre-shuffle stage and a post-shuffle stage; the TaskScheduler then assigns one task per partition in each stage to whichever executor cores are free.",
+        "controls": ["spark.driver.memory / spark.driver.cores (session-start scope)", "Deployment mode (Fabric notebooks run driver-in-pool)", "spark.task.maxFailures for per-task retry before stage recompute"],
+        "failureModes": [
+          "A single shared cluster funnels all job submission and coordination through this one driver node, which bottlenecks under high job volume and can cause initialization failures when many jobs start together.",
+          "Calling df.collect() or df.toPandas() on a large result pulls it onto this node's heap — the leading cause of driver out-of-memory errors."
+        ]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open spark" }
+    },
+    {
+      "id": "executor-nodes",
+      "label": "Executors (worker nodes, 1:1)",
+      "summary": "Fabric fixes the node-to-executor ratio at 1:1 — every worker node hosts exactly one Executor JVM, so choosing node size is choosing executor shape.",
+      "detail": "Fabric fixes the node-to-executor ratio at 1:1: one node is dedicated to the driver and each remaining node in the pool hosts exactly one executor. Every node, driver or worker, runs a Node Agent and YARN Node Manager; each worker additionally runs the Spark Executor service. Because the ratio is fixed, Fabric Spark pools have no per-node executor-packing decision of the kind classic YARN guidance addresses — there is no choice to run two smaller executors on one large node. Choosing a node size at pool creation is therefore directly choosing the executor's core and memory shape, not just the node's. With dynamic allocation enabled (the default), Fabric grows and shrinks the number of worker nodes — and therefore the number of executors — between the pool's configured minimum and maximum node counts based on task backlog, but this changes executor count, never the 1:1 ratio itself.",
+      "whyItMatters": "This is the fact that turns 'how big should my pool be' into simple arithmetic: node size sets what one executor looks like, and node count (minus the one driver node) sets how many of those executors exist. There is no hidden multiplier or packing decision to reason about, which makes the ratio the direct unit for capacity planning rather than an approximation.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "Fabric fixes the node-to-executor ratio at 1:1 — one node is dedicated to the driver and each remaining node hosts exactly one executor — except in single-node pools, where the driver and executor split the node's resources in half."
+        },
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Fabric Spark pools bind one executor to one node, so choosing a node size is choosing the executor shape; there is no per-node executor packing decision of the kind classic YARN guidance addresses, and one node in the pool is always reserved for the driver."
+        }
+      ],
+      "tags": ["executor", "1:1 ratio", "dynamic allocation", "node size", "YARN Node Manager"],
+      "drill": {
+        "inputs": ["Tasks scheduled by the driver's TaskScheduler", "Node size selection made at pool creation", "Dynamic allocation scale signals (task backlog / idle timeout)"],
+        "processing": [
+          "One Executor JVM starts per worker node at session/pool startup",
+          "Executor runs assigned tasks across its allotted cores",
+          "BlockManager serves cached RDD blocks and shuffle blocks to peers",
+          "Dynamic allocation adds or removes whole worker nodes (and their one executor each) as load changes"
+        ],
+        "outputs": ["Task results returned to the driver", "Cached partitions held in executor memory", "Shuffle output files served to downstream reduce tasks"],
+        "example": "A Large custom pool node (16 vCores / 128 GB) is chosen at pool creation. Every worker node that joins the pool — whether there are 2 or 20 of them under autoscale — runs exactly one 16-core, 128 GB executor; there is no configuration path to run two 8-core executors on that same node instead.",
+        "controls": ["Node size (Small through XX-Large) chosen at pool creation", "spark.dynamicAllocation.enabled and min/max node counts", "spark.executor.cores / spark.executor.memory (session-start scope, bounded by node size)"],
+        "failureModes": [
+          "Running many jobs on one shared cluster caps effective parallelism at the cluster's executor count — a four-executor cluster behaves like four available execution slots regardless of how many jobs are queued."
+        ]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open spark" }
+    },
+    {
+      "id": "single-node-exception",
+      "label": "Single-node pool exception",
+      "summary": "The one documented exception to the 1:1 rule: a single-node pool splits that node's resources roughly in half between driver and executor.",
+      "detail": "Fabric documents exactly one exception to the fixed 1:1 node-to-executor ratio: single-node pools, where the driver and executor share the pool's one node, splitting its resources in half rather than the driver occupying a node of its own. This is described as a setup with restorable high availability aimed at small workloads, not a scaled-down version of the standard multi-node topology.",
+      "whyItMatters": "Because driver and executor now compete for the same node's cores and memory instead of having dedicated resources each, a single-node pool changes the failure profile: driver-side work (query planning, result collection) and executor-side work (task execution) now contend for the same ceiling. This makes single-node pools a deliberate trade for cost and simplicity on small, low-concurrency workloads, not a smaller version of a production multi-node pool.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-compute-pools",
+          "note": "Fabric fixes the node-to-executor ratio at 1:1... except in single-node pools, where the driver and executor split the node's resources in half (a setup with restorable HA aimed at small workloads)."
+        }
+      ],
+      "tags": ["single-node pool", "exception", "restorable HA"],
+      "drill": {
+        "inputs": ["A pool explicitly configured with one node"],
+        "processing": [
+          "Driver process and Executor JVM co-locate on the same physical/virtual node",
+          "Node's cores and memory are split roughly in half between the two roles",
+          "Restorable HA keeps the session recoverable despite the shared node"
+        ],
+        "outputs": ["A working Spark session with roughly half a node's resources available to task execution"],
+        "example": "A developer spins up a single-node Small pool (4 vCores / 32 GB) for ad hoc exploration; the driver and the one executor each effectively get about 2 vCores and 16 GB rather than the driver getting a dedicated node and the executor getting the full 4 vCores / 32 GB it would on a multi-node pool.",
+        "controls": ["Pool node count set to 1 at creation"],
+        "failureModes": [
+          "Applying multi-node capacity-planning arithmetic (node count minus one for the driver) to a single-node pool undercounts available executor resources, since here the driver's share comes out of the same node rather than a separate one."
+        ]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open spark" }
+    },
+    {
+      "id": "capacity-math",
+      "label": "SKU → vCores → nodes → executor slots",
+      "summary": "A capacity SKU's Spark vCore budget, divided by chosen node size, mechanically determines the maximum executor-slot count because the driver-to-executor ratio is fixed at 1:1.",
+      "detail": "Fabric capacity SKUs map to Spark vCores at two vCores per capacity unit — F2 gives 4, F8 gives 16, F64 gives 128, F256 gives 512 — and each SKU caps starter pool size accordingly (for example F64 defaults to 10 nodes with a maximum of 16). Custom pool node sizes are memory-optimized at a fixed 8 GB of RAM per vCore across all five documented sizes: Small (4 vCore/32 GB), Medium (8/64), Large (16/128), X-Large (32/256), and XX-Large (64/512), with the two largest sizes restricted to non-trial SKUs. Dividing the SKU's vCore budget by the chosen node size gives the maximum node count the pool can reach; because the node-to-executor ratio is fixed at 1:1 and one node is always reserved for the driver, that node count minus one is the maximum number of executor slots available to a session.",
+      "whyItMatters": "This chain is the reason Spark vCore counts are not a soft compute ceiling to be reasoned about abstractly — they resolve, through a fixed ratio, into a concrete, countable number of executor slots. Capacity planning for a Spark workload is really planning that slot count: picking a SKU and node size is picking how many executors a session can ever have, which is a very different question from 'how many vCores do I have.'",
+      "classification": "fact",
+      "layers": ["compute", "governance"],
+      "evidence": [
+        {
+          "sourceKey": "spark-auto-config-utility",
+          "note": "Fabric capacity SKUs map to Spark vCores at two vCores per capacity unit — F2 gives 4, F8 gives 16, F64 gives 128, F256 gives 512 — and each SKU caps starter pool size: F2 and F4 permit a single node, F64 defaults to 10 nodes with a maximum of 16, F512 and above default to 10 with maxima of 128 to 200 nodes."
+        },
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Fabric Spark pools are memory-optimized at a fixed 8 GB of RAM per vCore across all five documented node sizes (Small 4 vCore/32 GB through XXLarge 64 vCore/512 GB), citing Microsoft Learn's 'Apache Spark compute for Data Engineering and Data Science' page as source for the node-size table and the 1 Capacity Unit = 2 vCores conversion."
+        },
+        {
+          "sourceKey": "fabric-configure-starter-pools",
+          "note": "Custom pool node sizes range from Small (4 vCores, 32 GB) through Medium (8/64), Large (16/128), X-Large (32/256) to XX-Large (64 vCores, 512 GB); the two largest sizes are restricted to non-trial Fabric SKUs, and changing node size after creation requires restarting active sessions."
+        }
+      ],
+      "tags": ["capacity SKU", "vCores", "node size", "capacity planning"],
+      "drill": {
+        "inputs": ["Fabric capacity SKU (e.g. F64)", "Chosen custom pool node size", "Pool min/max node configuration"],
+        "processing": [
+          "SKU converts to a Spark vCore budget at 2 vCores per capacity unit",
+          "vCore budget divided by chosen node size's vCore count gives maximum node count",
+          "One node is subtracted for the driver (except single-node pools)",
+          "Remaining node count equals the maximum executor-slot count under the fixed 1:1 ratio"
+        ],
+        "outputs": ["A concrete maximum executor count for the pool", "The resulting per-executor core and memory shape"],
+        "example": "An F64 capacity gives 128 Spark vCores. Choosing Large nodes (16 vCores each) allows up to 128 ÷ 16 = 8 nodes. One node is reserved for the driver, leaving a maximum of 7 Large executors (7 × 16 = 112 cores, 7 × 128 GB = 896 GB total executor memory) for that session.",
+        "controls": ["Fabric capacity SKU selection", "Custom pool node size", "Pool minimum/maximum node count (autoscale bounds)"],
+        "failureModes": [
+          "Sizing a workload by raw vCore count alone (ignoring the driver's reserved node and the 1:1 ratio) overestimates the executor slots actually available, especially on small SKUs where losing one node to the driver is a large fraction of the total."
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open spark capability" }
+    },
+    {
+      "id": "driver-bottleneck",
+      "label": "Single driver becomes a coordination bottleneck",
+      "summary": "A single shared cluster funnels all job submission and coordination through one driver, which bottlenecks under high job volume regardless of executor count.",
+      "detail": "A single shared cluster funnels job submission and coordination through one driver node, which becomes a bottleneck under high job volume and can cause initialization failures when many jobs start together. This follows directly from the topology: the driver is the one component in the whole pool that has no 1:1-style scale-out counterpart — there is exactly one of it no matter how many worker nodes and executors the pool has.",
+      "whyItMatters": "Teams sizing a Spark pool often reason only about executor-side capacity (nodes, vCores, memory) and miss that the driver itself has a separate, unscalable ceiling on concurrent job coordination. Isolating high-job-volume workloads onto separate pools or sessions addresses this; adding more executor nodes to the same pool does not.",
+      "classification": "warning",
+      "layers": ["compute", "orchestration"],
+      "evidence": [
+        {
+          "sourceKey": "milescole-spark-cluster-configuration",
+          "note": "A single shared cluster funnels job submission and coordination through one driver node, which becomes a bottleneck under high job volume and can cause initialization failures when many jobs start together."
+        }
+      ],
+      "tags": ["driver bottleneck", "antipattern", "job concurrency"],
+      "drill": {
+        "inputs": ["Many concurrent job submissions against one shared Spark pool/session"],
+        "processing": [
+          "Every job's coordination (planning, scheduling, status tracking) routes through the same single driver process",
+          "Driver CPU and memory contention grows with concurrent job count, not executor count",
+          "Simultaneous session/job initialization can overload the driver's startup path"
+        ],
+        "outputs": ["Delayed job starts", "Slower per-job coordination", "Occasional initialization failures under burst load"],
+        "example": "A team schedules a dozen notebook jobs to kick off at the top of every hour against one shared high-concurrency pool. Even though the pool has plenty of idle executor capacity, the jobs queue and intermittently fail to initialize because the single driver is overwhelmed processing that many simultaneous submissions.",
+        "controls": ["Splitting high-job-volume workloads across separate pools or sessions", "Staggering scheduled job start times", "Using dedicated pools per team/workload instead of one shared cluster"],
+        "failureModes": [
+          "Assuming more executor nodes relieves driver-side coordination pressure — it does not, since the driver is a single unscalable process."
+        ]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open spark" }
+    },
+    {
+      "id": "driver-oom",
+      "label": "Driver OOM from collecting large results",
+      "summary": "Calling .collect() or .toPandas() on a large DataFrame pulls the full result onto the single driver node's heap — the number-one cause of driver out-of-memory errors.",
+      "detail": "Calling df.toPandas() or summing values from df.collect() on the driver for a large DataFrame is identified as the number-one cause of driver out-of-memory errors. The recommended pattern is aggregating on executors (for example df.agg(F.sum(...)).collect()) and only ever collecting a small, deliberately bounded result such as df.limit(1000).toPandas().",
+      "whyItMatters": "This is a direct, mechanical consequence of the driver/executor topology: the driver has no distributed memory pool behind it the way executors do. An operation that would be trivially safe if spread across N executors' memory can OOM the instant it lands entirely on the driver's single heap, because that single node was never sized to hold whole-dataset results.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-coding-standards",
+          "note": "Calling df.toPandas() or summing values from df.collect() on the driver for a large DataFrame is identified as the number-one cause of driver out-of-memory errors; the recommended pattern is aggregating on executors and only ever collecting a small, deliberately bounded result."
+        }
+      ],
+      "tags": ["driver OOM", "collect", "toPandas", "antipattern"],
+      "drill": {
+        "inputs": ["A DataFrame with a large row count or wide result set", "A call to .collect() or .toPandas()"],
+        "processing": [
+          "Spark gathers the full result set from all executors back to the driver process",
+          "The entire result materializes in the driver's single JVM/Python heap at once",
+          "No further distribution across executors is available at this point in the plan"
+        ],
+        "outputs": ["Either a successful (but memory-heavy) driver-side result, or a driver OutOfMemoryError that kills the session"],
+        "example": "A notebook cell runs sales_df.toPandas() on a DataFrame with 200 million rows to build a chart. The DataFrame comfortably fits across the pool's executors during transformation, but the driver node — sized like a single worker node, not the whole cluster — runs out of heap trying to materialize the whole thing at once and the session dies.",
+        "controls": ["Aggregate with df.agg(...).collect() instead of collecting raw rows", "Bound collected results explicitly with df.limit(n).toPandas()", "Increase spark.driver.memory only as a last resort, not a substitute for bounding the result"],
+        "failureModes": [
+          "Treating spark.driver.memory as freely scalable the way executor memory is, rather than recognizing the driver is one fixed node reserved outside the executor pool."
+        ]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open spark" }
+    },
+    {
+      "id": "effective-parallelism",
+      "label": "Executor count is the real concurrency ceiling",
+      "summary": "Running many jobs on one shared cluster caps effective parallelism at the cluster's executor count, regardless of how many jobs are queued.",
+      "detail": "Running many jobs on a single shared cluster caps effective parallelism at the cluster's executor count, so a four-worker cluster behaves like four available execution slots regardless of how many jobs are queued. Because the driver-to-executor ratio is fixed at 1:1, the executor-slot count derived in the capacity-math chain is not an approximation of concurrency — it is the concurrency ceiling.",
+      "whyItMatters": "This reframes 'how much Spark capacity do I need' as 'how many concurrent executor slots does my busiest hour need,' a concrete, countable planning question rather than an abstract compute budget, and it explains why queued jobs on a fully-utilized pool wait rather than run in parallel no matter how many are submitted.",
+      "classification": "fact",
+      "layers": ["compute", "governance"],
+      "evidence": [
+        {
+          "sourceKey": "milescole-spark-cluster-configuration",
+          "note": "Running many jobs on a single shared high-concurrency cluster caps effective parallelism at the cluster's executor count, so a four-worker cluster behaves like four available execution slots regardless of how many jobs are queued."
+        }
+      ],
+      "tags": ["effective parallelism", "capacity planning", "executor count"],
+      "drill": {
+        "inputs": ["A pool with a fixed or autoscaled executor count", "A queue of concurrently submitted jobs"],
+        "processing": [
+          "Each job's tasks are scheduled onto whichever executor cores are currently free",
+          "Once every executor's cores are occupied, additional jobs' tasks queue rather than run",
+          "Executor count (from Zone 2's arithmetic) sets the hard limit on simultaneously running task slots"
+        ],
+        "outputs": ["Jobs run in parallel up to the executor/core ceiling; the rest wait in queue"],
+        "example": "A pool sized to 7 Large executors (112 total cores) receives 20 concurrent job submissions. Only as many tasks as there are free cores run at once; the rest queue behind them, so throughput is bounded by the 112-core ceiling however many jobs are technically 'submitted.'",
+        "controls": ["Pool node count / autoscale maximum", "Node size (executor core count)", "Splitting workloads across multiple pools to raise the effective ceiling"],
+        "failureModes": [
+          "Assuming submitting more jobs increases throughput once the executor/core ceiling is already saturated — it only lengthens the queue."
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open spark capability" }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "driver-node",
+      "to": "executor-nodes",
+      "label": "DAGScheduler/TaskScheduler schedule tasks onto",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e2",
+      "from": "executor-nodes",
+      "to": "single-node-exception",
+      "label": "collapses to (single-node pool only)",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e3",
+      "from": "executor-nodes",
+      "to": "capacity-math",
+      "label": "node size sets executor shape",
+      "layer": "governance",
+      "kind": "flow"
+    },
+    {
+      "id": "e4",
+      "from": "capacity-math",
+      "to": "effective-parallelism",
+      "label": "fixed 1:1 ratio sets the slot count",
+      "layer": "governance",
+      "kind": "flow"
+    },
+    {
+      "id": "e5",
+      "from": "driver-node",
+      "to": "driver-bottleneck",
+      "label": "one process, no scale-out",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e6",
+      "from": "driver-node",
+      "to": "driver-oom",
+      "label": "collect()/toPandas() lands on this heap",
+      "layer": "compute",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "driver-node",
+      "title": "1. The driver — one head node, one process",
+      "explanation": "A Fabric Spark pool has exactly one head node. It runs Livy, the YARN Resource Manager, and ZooKeeper, plus the Spark driver process itself, whose SparkContext, DAGScheduler, TaskScheduler, and Catalyst optimizer coordinate every job, plan every query, and split every job into stages and tasks — all as a single, non-distributed process."
+    },
+    {
+      "nodeId": "executor-nodes",
+      "title": "2. Executors — a fixed 1:1 ratio on every other node",
+      "explanation": "Every remaining node in the pool hosts exactly one Executor JVM. Fabric fixes this node-to-executor ratio at 1:1, with no per-node packing decision, so choosing a node size at pool creation directly chooses each executor's core and memory shape."
+    },
+    {
+      "nodeId": "single-node-exception",
+      "title": "3. The one exception: single-node pools",
+      "explanation": "When a pool has only one node, the driver and executor split that node's resources roughly in half instead of the driver getting a dedicated node — a deliberate small-workload trade-off, not a scaled-down version of the standard topology."
+    },
+    {
+      "nodeId": "capacity-math",
+      "title": "4. From capacity SKU to executor-slot count",
+      "explanation": "A capacity SKU sets a Spark vCore budget (2 vCores per capacity unit). Dividing that budget by the chosen node size gives a maximum node count; subtracting one node for the driver gives the maximum executor-slot count, because the ratio is fixed at 1:1."
+    },
+    {
+      "nodeId": "effective-parallelism",
+      "title": "5. Executor count is the real concurrency ceiling",
+      "explanation": "Because the ratio is fixed, that executor-slot count is not an estimate — it is the actual number of concurrent execution slots a session has, however many jobs are queued behind it."
+    },
+    {
+      "nodeId": "driver-bottleneck",
+      "title": "6. Failure mode: the driver never scales out",
+      "explanation": "Every job's coordination funnels through the same single driver process. Under high job volume this becomes a bottleneck and can cause initialization failures, no matter how many executor nodes the pool has."
+    },
+    {
+      "nodeId": "driver-oom",
+      "title": "7. Failure mode: driver memory is not executor memory",
+      "explanation": "Collecting a large result with .collect() or .toPandas() pulls the whole thing onto the driver's single heap — the number-one cause of driver out-of-memory errors, because the driver has no distributed memory pool the way executors do."
+    }
+  ]
+}

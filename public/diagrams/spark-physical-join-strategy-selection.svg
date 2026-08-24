@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1700" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="spark-physical-join-strategy-selection-title spark-physical-join-strategy-selection-desc" data-diagram-id="spark-physical-join-strategy-selection">
+  <title id="spark-physical-join-strategy-selection-title">Spark Physical Join Strategy Selection: Broadcast, Shuffle Hash, Sort Merge, and Broadcast Nested Loop</title>
+  <desc id="spark-physical-join-strategy-selection-desc">A decision tree for how Spark's Catalyst optimizer picks a physical join strategy: whether the join condition is an equi-join, whether one side is small enough to broadcast under spark.sql.autoBroadcastJoinThreshold, and the fallback to Sort Merge Join with Adaptive Query Execution skew handling, versus Broadcast Nested Loop Join or Cartesian Product for non-equi joins with no usable join key.</desc>
+
+  <defs>
+    <linearGradient id="pjs-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#7C2D92"/>
+      <stop offset="0.5" stop-color="#9333EA"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+
+    <filter id="pjs-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#581C87" flood-opacity="0.10"/>
+    </filter>
+
+    <marker id="pjs-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AED"/>
+    </marker>
+    <marker id="pjs-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#15803D"/>
+    </marker>
+    <marker id="pjs-arr-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2563EB"/>
+    </marker>
+    <marker id="pjs-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
+    </marker>
+    <marker id="pjs-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
+    </marker>
+
+    <linearGradient id="i22b11d-a" x1="11.111" x2="15.576" y1="2" y2="30.067" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#EBEBEB"/></linearGradient>
+    <linearGradient id="i22b11d-c" x1="9.691" x2="19.427" y1="8.5" y2="20.784" gradientUnits="userSpaceOnUse"><stop stop-color="#4BA446"/><stop offset="1" stop-color="#3F7D35"/></linearGradient>
+    <linearGradient id="i22b11d-f" x1="12.104" x2="16.851" y1="2" y2="29.972" gradientUnits="userSpaceOnUse"><stop stop-color="#BBB"/><stop offset="1" stop-color="#888"/></linearGradient>
+    <radialGradient id="i22b11d-b" cx="0" cy="0" r="1" gradientTransform="matrix(11.61113 22.16669 -17.08352 8.94852 12.028 9.292)" gradientUnits="userSpaceOnUse"><stop offset=".177" stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></radialGradient>
+  </defs>
+
+  <rect width="1200" height="1700" fill="#FAF5FF"/>
+
+  <!-- Hero header -->
+  <rect width="1200" height="92" fill="url(#pjs-head)"/>
+  <g data-official-icon="microsoft" data-icon-name="notebook_item_32">
+    <g transform="translate(1112,26) scale(1.15)">
+      <path fill="url(#i22b11d-a)" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#i22b11d-b)" fill-opacity=".2" d="M5 5.5A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5z"/>
+      <path fill="url(#i22b11d-c)" d="M17.494 8.521a.5.5 0 0 1 .335.623l-2.7 9a.5.5 0 1 1-.957-.287l2.7-9a.5.5 0 0 1 .622-.336"/>
+      <path fill="url(#i22b11d-c)" d="M18.797 10.446a.5.5 0 0 1 .707 0l2.63 2.63a.6.6 0 0 1 0 .848l-2.63 2.63a.5.5 0 0 1-.707-.708l2.346-2.346-2.346-2.347a.5.5 0 0 1 0-.707"/>
+      <path fill="url(#i22b11d-c)" d="M12.496 10.446a.5.5 0 1 1 .707.707L10.857 13.5l2.346 2.346a.5.5 0 0 1-.707.707l-2.63-2.629a.6.6 0 0 1 0-.848z"/>
+      <path fill="url(#i22b11d-f)" fill-rule="evenodd" d="M5 26.5v-21A3.5 3.5 0 0 1 8.5 2h15A3.5 3.5 0 0 1 27 5.5v21a3.5 3.5 0 0 1-3.5 3.5h-15A3.5 3.5 0 0 1 5 26.5M8.5 3h15A2.5 2.5 0 0 1 26 5.5V20a3 3 0 0 1-3 3H8.5A3.5 3.5 0 0 0 6 24.05V5.5A2.5 2.5 0 0 1 8.5 3M26 25.646v.854a2.5 2.5 0 0 1-2.5 2.5h-15a2.5 2.5 0 0 1 0-5H23a4 4 0 0 0 3-1.354V23a3 3 0 0 1-3 3H8a.5.5 0 0 0 0 1h15a4 4 0 0 0 3-1.354" clip-rule="evenodd"/>
+    </g>
+  </g>
+  <text x="1094" y="70" text-anchor="end" font-size="10" fill="#EDE9FE">Spark Notebook</text>
+  <text x="40" y="40" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Spark Physical Join Strategy Selection</text>
+  <text x="40" y="66" font-size="12" fill="#EDE9FE">Join Condition ➔ Size vs autoBroadcastJoinThreshold ➔ Broadcast Hash · Shuffle Hash · Sort Merge · Broadcast Nested Loop</text>
+
+  <!-- Legend -->
+  <g transform="translate(40,106)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D5FF"/>
+    <circle cx="20" cy="15" r="5" fill="#7C3AED"/><text x="32" y="19" fill="#4C1D95" font-weight="600">Fact (sourced Spark config default)</text>
+    <circle cx="230" cy="15" r="5" fill="#15803D"/><text x="242" y="19" fill="#14532D" font-weight="600">Pattern (recommended heuristic)</text>
+    <circle cx="470" cy="15" r="5" fill="#2563EB"/><text x="482" y="19" fill="#1E3A8A" font-weight="600">Inference (Fabric Atlas interpretation)</text>
+    <circle cx="750" cy="15" r="5" fill="#DC2626"/><text x="762" y="19" fill="#7F1D1D" font-weight="600">Warning / failure mode</text>
+    <text x="1100" y="19" text-anchor="end" fill="#8A7A99">Fabric Atlas Original</text>
+  </g>
+
+  <!-- ================= ROOT: join condition question ================= -->
+  <g data-node-id="join-condition-question" role="group" tabindex="0" aria-label="Does the join condition have an equality predicate on the join keys?">
+    <title data-node-tooltip="true">Does the join condition have an equality predicate on the join keys? — The root question Catalyst's planner asks before any size or memory heuristic is even considered.</title>
+    <rect x="40" y="152" width="1120" height="130" rx="14" fill="#FFFFFF" stroke="#D8B4FE" stroke-width="1.4" filter="url(#pjs-shadow)"/>
+    <rect x="56" y="162" width="176" height="18" rx="9" fill="#F3E8FF"/><text x="144" y="175" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6B21A8">DECISION ROOT</text>
+    <text x="56" y="204" font-size="14" font-weight="700" fill="#4C1D95">1 · Does the join condition have an equality predicate on the join keys (an equi-join)?</text>
+    <text x="56" y="226" font-size="9.5" fill="#5B21B6">A join with no <tspan font-family="monospace" font-size="8.5">col_a = col_b</tspan> predicate — a pure Cartesian product, or an inequality/range condition like BETWEEN or &lt; — cannot be</text>
+    <text x="56" y="242" font-size="9.5" fill="#5B21B6">hashed or sort-merged, because those strategies require partitioning both sides on matching key values.</text>
+    <text x="56" y="262" font-size="9.5" fill="#5B21B6">Casting a join key to a different type on one side also defeats equi-join detection at the statistics/CBO layer, even</text>
+    <text x="56" y="278" font-size="9.5" fill="#5B21B6">when the predicate still reads as <tspan font-family="monospace" font-size="8.5">=</tspan>.</text>
+    <rect x="1080" y="162" width="52" height="16" rx="8" fill="#F3E8FF"/><text x="1106" y="174" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6B21A8">FACT</text>
+  </g>
+
+  <!-- Branch arrows from root -->
+  <path d="M 300 282 V 318 H 300" stroke="#DC2626" stroke-width="2.4" fill="none" marker-end="url(#pjs-arr-red)"/>
+  <rect x="222" y="286" width="156" height="20" rx="10" fill="#FEE2E2" stroke="#FCA5A5"/>
+  <text x="300" y="300" text-anchor="middle" font-size="10" font-weight="700" fill="#B91C1C">No equi-join key</text>
+
+  <path d="M 900 282 V 318 H 900" stroke="#7C3AED" stroke-width="2.4" fill="none" marker-end="url(#pjs-arr-purple)"/>
+  <rect x="800" y="286" width="200" height="20" rx="10" fill="#F3E8FF" stroke="#D8B4FE"/>
+  <text x="900" y="300" text-anchor="middle" font-size="10" font-weight="700" fill="#6B21A8">Equi-join (col_a = col_b)</text>
+
+  <!-- ================= LEFT LANE: non-equi -> nested loop / cartesian ================= -->
+  <rect x="60" y="338" width="480" height="330" rx="14" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.4"/>
+  <rect x="76" y="348" width="270" height="20" rx="10" fill="#FEE2E2"/>
+  <text x="86" y="362" font-size="10.5" font-weight="700" fill="#991B1B" letter-spacing="0.5px">NON-EQUI PATH: NO USABLE JOIN KEY</text>
+
+  <g data-node-id="broadcast-nested-loop-join" role="group" tabindex="0" aria-label="Broadcast Nested Loop Join or Cartesian Product">
+    <title data-node-tooltip="true">Broadcast Nested Loop Join / Cartesian Product — the fallback strategy when Spark has no hashable equi-join predicate.</title>
+    <rect x="76" y="378" width="448" height="270" rx="10" fill="#FFFFFF" stroke="#FCA5A5" stroke-width="1.6" filter="url(#pjs-shadow)"/>
+    <rect x="88" y="388" width="200" height="16" rx="8" fill="#FEE2E2"/><text x="188" y="399" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B91C1C">O(n × m) COMPARISON</text>
+    <text x="88" y="426" font-size="13" font-weight="700" fill="#7F1D1D">2 · Broadcast Nested Loop Join (or Cartesian Product)</text>
+    <text x="88" y="448" font-size="9.5" fill="#991B1B">• One side is broadcast to every executor; every row on that side is compared against</text>
+    <text x="88" y="463" font-size="9.5" fill="#991B1B">  every row on the other side</text>
+    <text x="88" y="482" font-size="9.5" fill="#991B1B">• No usable equi-join key means neither hash partitioning nor sort-merge</text>
+    <text x="88" y="497" font-size="9.5" fill="#991B1B">  co-partitioning applies</text>
+    <text x="88" y="516" font-size="9.5" fill="#991B1B">• A physical plan showing <tspan font-family="monospace" font-size="8.5">CartesianProduct</tspan> or <tspan font-family="monospace" font-size="8.5">BroadcastNestedLoopJoin</tspan> is a</text>
+    <text x="88" y="531" font-size="9.5" fill="#991B1B">  documented red flag for a missing equi-join predicate</text>
+    <text x="88" y="550" font-size="9.5" fill="#991B1B">• Common trigger: an as-of / point-in-time join matching each row to the most</text>
+    <text x="88" y="565" font-size="9.5" fill="#991B1B">  recent row on or before its own date via an inequality condition</text>
+    <text x="88" y="588" font-size="9" font-style="italic" fill="#B91C1C">Worked trap: matching each position row to the latest valuation row on or before its</text>
+    <text x="88" y="601" font-size="9" font-style="italic" fill="#B91C1C">date is a documented inequality-join pattern that produces this plan instead of a</text>
+    <text x="88" y="614" font-size="9" font-style="italic" fill="#B91C1C">standard equi-join.</text>
+    <text x="88" y="633" font-size="8.5" font-weight="700" fill="#991B1B">Fix: rewrite with an equi-join predicate where possible (e.g. bucket the range, or</text>
+    <text x="88" y="646" font-size="8.5" font-weight="700" fill="#991B1B">add a matching key column) so Catalyst can hash or sort-merge instead.</text>
+    <rect x="396" y="388" width="66" height="14" rx="7" fill="#FEE2E2"/><text x="429" y="398" text-anchor="middle" font-size="8.5" font-weight="700" fill="#B91C1C">FACT</text>
+  </g>
+
+  <!-- ================= RIGHT LANE: equi-join -> size question ================= -->
+  <rect x="620" y="338" width="540" height="330" rx="14" fill="#F5F3FF" stroke="#D8B4FE" stroke-width="1.4"/>
+  <rect x="636" y="348" width="270" height="20" rx="10" fill="#F3E8FF"/>
+  <text x="646" y="362" font-size="10.5" font-weight="700" fill="#6B21A8" letter-spacing="0.5px">EQUI-JOIN PATH: SIZE VS. MEMORY</text>
+
+  <g data-node-id="broadcast-threshold-question" role="group" tabindex="0" aria-label="Is one side's estimated size below the broadcast threshold?">
+    <title data-node-tooltip="true">Is one side's estimated size below spark.sql.autoBroadcastJoinThreshold? — Determines whether Spark broadcasts one side or must shuffle both.</title>
+    <rect x="636" y="378" width="508" height="270" rx="10" fill="#FFFFFF" stroke="#D8B4FE" stroke-width="1.6" filter="url(#pjs-shadow)"/>
+    <rect x="648" y="388" width="230" height="16" rx="8" fill="#F3E8FF"/><text x="763" y="399" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6B21A8">SIZE THRESHOLD CHECK</text>
+    <text x="648" y="426" font-size="13" font-weight="700" fill="#4C1D95">3 · Is one side's estimated size under the broadcast threshold?</text>
+    <text x="648" y="448" font-size="9.5" fill="#5B21B6">• <tspan font-family="monospace" font-size="8.5">spark.sql.autoBroadcastJoinThreshold</tspan> defaults to 10,485,760 bytes (10 MB)</text>
+    <text x="648" y="467" font-size="9.5" fill="#5B21B6">• Below that estimated size, Spark broadcasts that side to every executor instead of</text>
+    <text x="648" y="482" font-size="9.5" fill="#5B21B6">  shuffling both sides</text>
+    <text x="648" y="501" font-size="9.5" fill="#5B21B6">• Practitioner heuristic: size the threshold 1.5x above the measured smaller side,</text>
+    <text x="648" y="516" font-size="9.5" fill="#5B21B6">  floored at the 10 MB default, capped near 512 MB — broadcasting still costs every</text>
+    <text x="648" y="531" font-size="9.5" fill="#5B21B6">  executor that memory, and the driver must collect + broadcast the data first</text>
+    <text x="648" y="550" font-size="9.5" fill="#5B21B6">• AQE can also convert a shuffle join to a broadcast join at runtime once</text>
+    <text x="648" y="565" font-size="9.5" fill="#5B21B6">  post-shuffle statistics reveal a side is small — but only for a clean,</text>
+    <text x="648" y="580" font-size="9.5" fill="#5B21B6">  statistics-visible equi-join</text>
+    <text x="648" y="606" font-size="8.5" font-weight="700" fill="#4C1D95">A broadcast build that exceeds spark.sql.broadcastTimeout (default 300s)</text>
+    <text x="648" y="620" font-size="8.5" font-weight="700" fill="#4C1D95">aborts the query — AQE cannot rescue it</text>
+    <rect x="1096" y="388" width="66" height="14" rx="7" fill="#F3E8FF"/><text x="1129" y="398" text-anchor="middle" font-size="8.5" font-weight="700" fill="#6B21A8">FACT</text>
+  </g>
+
+  <!-- Branch arrows from broadcast threshold question -->
+  <path d="M 760 648 V 692" stroke="#15803D" stroke-width="2.4" fill="none" marker-end="url(#pjs-arr-green)"/>
+  <rect x="680" y="662" width="160" height="20" rx="10" fill="#DCFCE7" stroke="#86EFAC"/>
+  <text x="760" y="676" text-anchor="middle" font-size="10" font-weight="700" fill="#166534">Yes — under threshold</text>
+
+  <path d="M 1040 648 V 692 H 1040" stroke="#2563EB" stroke-width="2.4" fill="none" marker-end="url(#pjs-arr-blue)"/>
+  <rect x="946" y="662" width="188" height="20" rx="10" fill="#DBEAFE" stroke="#93C5FD"/>
+  <text x="1040" y="676" text-anchor="middle" font-size="10" font-weight="700" fill="#1E3A8A">No — both sides too large</text>
+
+  <!-- ================= BROADCAST HASH JOIN (converged from Yes branch) ================= -->
+  <g data-node-id="broadcast-hash-join" role="group" tabindex="0" aria-label="Broadcast Hash Join">
+    <title data-node-tooltip="true">Broadcast Hash Join — the cheapest strategy: no shuffle of the large side, a local hash probe on every executor.</title>
+    <rect x="636" y="712" width="248" height="280" rx="10" fill="#FFFFFF" stroke="#86EFAC" stroke-width="1.6" filter="url(#pjs-shadow)"/>
+    <rect x="648" y="722" width="150" height="16" rx="8" fill="#DCFCE7"/><text x="723" y="733" text-anchor="middle" font-size="8.5" font-weight="700" fill="#166534">CHEAPEST STRATEGY</text>
+    <text x="648" y="760" font-size="13" font-weight="700" fill="#14532D">4 · Broadcast Hash Join</text>
+    <text x="648" y="782" font-size="9.5" fill="#166534">• Small side is collected to the</text>
+    <text x="648" y="797" font-size="9.5" fill="#166534">  driver and broadcast whole to</text>
+    <text x="648" y="812" font-size="9.5" fill="#166534">  every executor</text>
+    <text x="648" y="831" font-size="9.5" fill="#166534">• Large side is never shuffled —</text>
+    <text x="648" y="846" font-size="9.5" fill="#166534">  each executor builds a local</text>
+    <text x="648" y="861" font-size="9.5" fill="#166534">  hash table from the small side</text>
+    <text x="648" y="876" font-size="9.5" fill="#166534">  and probes it row by row</text>
+    <text x="648" y="895" font-size="9.5" fill="#166534">• Not usable for a full outer join</text>
+    <text x="648" y="910" font-size="9.5" fill="#166534">  with the outer side chosen for</text>
+    <text x="648" y="925" font-size="9.5" fill="#166534">  broadcast, or when it exceeds</text>
+    <text x="648" y="940" font-size="9.5" fill="#166534">  the threshold</text>
+    <text x="648" y="959" font-size="9.5" fill="#166534">• Query aborts if the broadcast</text>
+    <text x="648" y="974" font-size="9.5" fill="#166534">  build exceeds broadcastTimeout</text>
+    <rect x="812" y="722" width="60" height="14" rx="7" fill="#DCFCE7"/><text x="842" y="732" text-anchor="middle" font-size="8.5" font-weight="700" fill="#166534">FACT</text>
+  </g>
+
+  <!-- ================= SHUFFLE HASH vs SORT MERGE (converged from No branch) ================= -->
+  <g data-node-id="shuffle-vs-sort-merge-question" role="group" tabindex="0" aria-label="Both sides too large to broadcast: shuffle hash join or sort merge join?">
+    <title data-node-tooltip="true">Both sides too large to broadcast — Spark shuffles both sides on the join key; it defaults to Sort Merge Join over Shuffle Hash Join.</title>
+    <rect x="908" y="712" width="252" height="336" rx="10" fill="#FFFFFF" stroke="#93C5FD" stroke-width="1.6" filter="url(#pjs-shadow)"/>
+    <rect x="920" y="722" width="180" height="16" rx="8" fill="#DBEAFE"/><text x="1010" y="733" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">SHUFFLE BOTH SIDES</text>
+    <text x="920" y="760" font-size="12.5" font-weight="700" fill="#1E3A8A">5 · Shuffle Hash vs.</text>
+    <text x="920" y="777" font-size="12.5" font-weight="700" fill="#1E3A8A">Sort Merge</text>
+    <text x="920" y="799" font-size="9.5" fill="#1E40AF">• Both sides are repartitioned</text>
+    <text x="920" y="814" font-size="9.5" fill="#1E40AF">  (shuffled) by the join key so</text>
+    <text x="920" y="829" font-size="9.5" fill="#1E40AF">  matching keys land on the</text>
+    <text x="920" y="844" font-size="9.5" fill="#1E40AF">  same executor</text>
+    <text x="920" y="863" font-size="9.5" fill="#1E40AF">• Shuffle Hash Join builds an</text>
+    <text x="920" y="878" font-size="9.5" fill="#1E40AF">  in-memory hash table per</text>
+    <text x="920" y="893" font-size="9.5" fill="#1E40AF">  partition; needs the partition</text>
+    <text x="920" y="908" font-size="9.5" fill="#1E40AF">  to fit executor memory</text>
+    <text x="920" y="927" font-size="9.5" fill="#1E40AF">• Sort Merge Join sorts both</text>
+    <text x="920" y="942" font-size="9.5" fill="#1E40AF">  sides and merges — no full</text>
+    <text x="920" y="957" font-size="9.5" fill="#1E40AF">  hash table required, Spark's</text>
+    <text x="920" y="972" font-size="9.5" fill="#1E40AF">  more memory-safe default</text>
+    <text x="920" y="983" font-size="8" fill="#2563EB">Fabric Atlas inference: exact selection</text>
+    <text x="920" y="994" font-size="8" fill="#2563EB">threshold not pinned by a sourced Fabric</text>
+    <text x="920" y="1005" font-size="8" fill="#2563EB">claim — drawn from documented Spark</text>
+    <text x="920" y="1016" font-size="8" fill="#2563EB">planner behavior; AQE skew-splitting</text>
+    <text x="920" y="1027" font-size="8" fill="#2563EB">targets both SortMergeJoin/ShuffledHashJoin.</text>
+    <rect x="1136" y="722" width="20" height="14" rx="7" fill="#DBEAFE"/><text x="1146" y="732" text-anchor="middle" font-size="7" font-weight="700" fill="#1D4ED8">i</text>
+  </g>
+
+  <path d="M 760 1060 V 1092" stroke="#15803D" stroke-width="2.2" fill="none" marker-end="url(#pjs-arr-green)"/>
+  <path d="M 1034 1060 V 1092 H 1034" stroke="#2563EB" stroke-width="2.2" fill="none" marker-end="url(#pjs-arr-blue)"/>
+  <text x="760" y="1080" text-anchor="middle" font-size="9.5" font-weight="700" fill="#166534">selected</text>
+  <text x="1034" y="1080" text-anchor="middle" font-size="9.5" font-weight="700" fill="#1E3A8A">default fallback</text>
+
+  <!-- ================= SORT MERGE JOIN (default fallback, with AQE skew handling) ================= -->
+  <g data-node-id="sort-merge-join" role="group" tabindex="0" aria-label="Sort Merge Join with AQE skew handling">
+    <title data-node-tooltip="true">Sort Merge Join — Spark's default for large equi-joins; Adaptive Query Execution can split skewed partitions at runtime.</title>
+    <rect x="700" y="1102" width="460" height="330" rx="10" fill="#FFFFFF" stroke="#93C5FD" stroke-width="1.6" filter="url(#pjs-shadow)"/>
+    <rect x="712" y="1112" width="220" height="16" rx="8" fill="#DBEAFE"/><text x="822" y="1123" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">DEFAULT FOR LARGE EQUI-JOINS</text>
+    <text x="712" y="1150" font-size="13" font-weight="700" fill="#1E3A8A">6 · Sort Merge Join, with AQE Skew-Join Handling</text>
+    <text x="712" y="1172" font-size="9.5" fill="#1E40AF">• Both sides are shuffled and sorted by join key, then merged in a single streaming pass</text>
+    <text x="712" y="1187" font-size="9.5" fill="#1E40AF">  — no full hash table held in memory</text>
+    <text x="712" y="1206" font-size="9.5" fill="#1E40AF">• AQE skew-join handling (default on) splits a skewed shuffle partition into evenly sized</text>
+    <text x="712" y="1221" font-size="9.5" fill="#1E40AF">  sub-partitions and replicates the matching side, so one hot key doesn't stall the stage</text>
+    <text x="712" y="1240" font-size="9.5" fill="#1E40AF">• A partition is treated as skewed once it exceeds both 5.0x the median partition size</text>
+    <text x="712" y="1255" font-size="9.5" fill="#1E40AF">  AND 256 MB</text>
+    <text x="712" y="1274" font-size="9.5" fill="#1E40AF">• AQE's skew logic is coded specifically for join operators (Sort Merge / Shuffle Hash)</text>
+    <text x="712" y="1289" font-size="9.5" fill="#1E40AF">  — it does not help a skewed GROUP BY</text>
+    <text x="712" y="1308" font-size="9.5" fill="#1E40AF">• Visible in the Spark UI as large Spill (Memory)/Spill (Disk) metrics when partitions</text>
+    <text x="712" y="1323" font-size="9.5" fill="#1E40AF">  still don't fit — remedy: lower the AQE advisory partition size or force a broadcast</text>
+    <text x="712" y="1338" font-size="9.5" fill="#1E40AF">  join under a size threshold</text>
+    <text x="712" y="1364" font-size="8.5" font-style="italic" fill="#1E40AF">Worked example: a 70%-skewed 1.2M-row table joined to a 500-row table showed a</text>
+    <text x="712" y="1378" font-size="8.5" font-style="italic" fill="#1E40AF">measured 3.8x task-duration-skew ratio on the affected stage — AQE skew-join</text>
+    <text x="712" y="1392" font-size="8.5" font-style="italic" fill="#1E40AF">splitting is the documented first fix.</text>
+    <text x="712" y="1414" font-size="8.5" fill="#1E40AF">Diagnosis: a COST-mode EXPLAIN surfaces the row-count/size statistics behind why</text>
+    <text x="712" y="1428" font-size="8.5" fill="#1E40AF">the optimizer chose the strategy it did.</text>
+    <rect x="1090" y="1112" width="60" height="14" rx="7" fill="#DBEAFE"/><text x="1120" y="1122" text-anchor="middle" font-size="8.5" font-weight="700" fill="#1D4ED8">FACT</text>
+  </g>
+
+  <!-- ================= WARNING STRIP: cast-defeats-equi-join + broadcast timeout ================= -->
+  <g data-node-id="join-strategy-traps" role="group" tabindex="0" aria-label="Traps: cast defeats equi-join detection, and broadcast timeout aborts the query">
+    <title data-node-tooltip="true">Traps: casting a join key defeats equi-join detection, and a broadcast build exceeding spark.sql.broadcastTimeout aborts the query regardless of AQE.</title>
+    <rect x="40" y="1480" width="1120" height="180" rx="14" fill="#FFF7ED" stroke="#FDBA74" stroke-width="1.6" filter="url(#pjs-shadow)"/>
+    <rect x="56" y="1490" width="150" height="18" rx="9" fill="#FFEDD5"/><text x="131" y="1503" text-anchor="middle" font-size="8.5" font-weight="700" fill="#C2410C">TWO DOCUMENTED TRAPS</text>
+    <text x="56" y="1532" font-size="13" font-weight="700" fill="#9A3412">7 · Casting a join key silently forces the slow path; a slow broadcast build aborts the query</text>
+    <text x="56" y="1554" font-size="9.5" fill="#9A3412">• <tspan font-weight="700">Cast trap:</tspan> casting a join key on one side (e.g. to match a mismatched type) defeats equi-join detection and the column</text>
+    <text x="56" y="1569" font-size="9.5" fill="#9A3412">  statistics join planning relies on — normalize the type once upstream (bronze → silver) so the join stays a native,</text>
+    <text x="56" y="1584" font-size="9.5" fill="#9A3412">  statistics-visible equi-join that AQE can convert to broadcast at runtime.</text>
+    <text x="56" y="1606" font-size="9.5" fill="#9A3412">• <tspan font-weight="700">Timeout trap:</tspan> a broadcast build that exceeds spark.sql.broadcastTimeout (default 300s) aborts the entire query — this is</text>
+    <text x="56" y="1621" font-size="9.5" fill="#9A3412">  one of AQE's four documented hard limits, and no amount of adaptive re-planning rescues it.</text>
+    <text x="56" y="1640" font-size="9.5" fill="#9A3412">• <tspan font-weight="700">Diagnosis:</tspan> COST-mode EXPLAIN surfaces the row-count/size statistics attached to plan nodes, which is the mode that</text>
+    <text x="56" y="1655" font-size="9.5" fill="#9A3412">  explains why the optimizer chose a given join strategy in the first place.</text>
+    <rect x="1080" y="1490" width="52" height="16" rx="8" fill="#FFEDD5"/><text x="1106" y="1502" text-anchor="middle" font-size="8.5" font-weight="700" fill="#C2410C">WARNING</text>
+  </g>
+
+  <!-- Connectors into the warning strip -->
+  <path d="M 300 732 V 1480" stroke="#DC2626" stroke-width="1.6" fill="none" stroke-dasharray="4 4" marker-end="url(#pjs-arr-red)"/>
+  <path d="M 763 1432 V 1480" stroke="#D97706" stroke-width="1.6" fill="none" stroke-dasharray="4 4" marker-end="url(#pjs-arr-amber)"/>
+
+  <text x="1140" y="1672" text-anchor="end" font-size="9.5" fill="#8A7A99">Fabric Atlas — Original Diagram, August 2026. Grounded in Fabric Spark toolkit-source harvest claims on join planning, AQE, and Spark configuration defaults.</text>
+</svg>

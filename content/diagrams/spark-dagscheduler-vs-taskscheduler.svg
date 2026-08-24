@@ -1,0 +1,208 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 980" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="dts-title dts-desc" data-diagram-id="spark-dagscheduler-vs-taskscheduler">
+  <title id="dts-title">DAGScheduler vs TaskScheduler: Spark's two-level scheduler</title>
+  <desc id="dts-desc">Contrasts Apache Spark's DAGScheduler, which cuts a job into stages at shuffle boundaries, against the TaskScheduler, which places individual tasks onto executor cores using a locality ladder and owns task-level retries; shows how a lost-executor shuffle failure escalates from task-level to stage-level recomputation.</desc>
+
+  <defs>
+    <linearGradient id="dts-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#1E1B4B"/>
+      <stop offset="0.5" stop-color="#3730A3"/>
+      <stop offset="1" stop-color="#065F46"/>
+    </linearGradient>
+
+    <linearGradient id="dts-dag-col" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EEF2FF"/>
+      <stop offset="1" stop-color="#E0E7FF"/>
+    </linearGradient>
+    <linearGradient id="dts-task-col" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ECFDF5"/>
+      <stop offset="1" stop-color="#D1FAE5"/>
+    </linearGradient>
+
+    <filter id="dts-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#1E1B4B" flood-opacity="0.10"/>
+    </filter>
+
+    <marker id="dts-arr-indigo" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#4338CA"/>
+    </marker>
+    <marker id="dts-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="dts-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
+    </marker>
+    <marker id="dts-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#D97706"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="980" fill="#F8FAFC"/>
+
+  <!-- Header -->
+  <rect width="1200" height="88" fill="url(#dts-head)"/>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">DAGScheduler vs TaskScheduler — Spark's Two-Level Scheduler</text>
+  <text x="40" y="64" font-size="12" fill="#E0E7FF">Stage-level planning cuts at shuffle boundaries · Task-level placement owns locality and retries · One lost executor can cascade a stage</text>
+
+  <!-- Legend -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E2E8F0"/>
+    <circle cx="20" cy="15" r="5" fill="#4338CA"/><text x="32" y="19" fill="#312E81" font-weight="600">DAGScheduler (stage-level)</text>
+    <circle cx="220" cy="15" r="5" fill="#059669"/><text x="232" y="19" fill="#065F46" font-weight="600">TaskScheduler (task-level)</text>
+    <circle cx="430" cy="15" r="5" fill="#DC2626"/><text x="442" y="19" fill="#991B1B" font-weight="600">Stage recomputation (expensive)</text>
+    <circle cx="660" cy="15" r="5" fill="#D97706"/><text x="672" y="19" fill="#92400E" font-weight="600">Task-level retry (cheap)</text>
+    <rect x="850" y="7" width="46" height="15" rx="7.5" fill="#DCFCE7"/><text x="873" y="18" text-anchor="middle" font-size="8.5" font-weight="700" fill="#166534">FACT</text>
+    <text x="1100" y="19" text-anchor="end" fill="#64748B">Fabric Atlas Original</text>
+  </g>
+
+  <!-- ============================== ROW 1: Job submission (shared) ============================== -->
+  <g data-node-id="job-submission" role="group" tabindex="0" aria-label="Action submits a job">
+    <title data-node-tooltip="true">Action submits a job — One Spark job is created per action and ends when that action's result is produced.</title>
+    <rect x="300" y="150" width="600" height="66" rx="12" fill="#FFFFFF" stroke="#94A3B8" stroke-width="1.5" filter="url(#dts-shadow)"/>
+    <rect x="316" y="160" width="110" height="16" rx="8" fill="#F1F5F9"/><text x="371" y="171" text-anchor="middle" font-size="8.5" font-weight="700" fill="#334155">SHARED CONTEXT</text>
+    <rect x="820" y="160" width="46" height="15" rx="7.5" fill="#DCFCE7"/><text x="843" y="171" text-anchor="middle" font-size="8.5" font-weight="700" fill="#166534">FACT</text>
+    <text x="316" y="196" font-size="14" font-weight="700" fill="#0F172A">Action submits a job</text>
+    <text x="316" y="211" font-size="10" fill="#334155">One job per action (write / collect / count) — ends when the action's result is produced</text>
+  </g>
+
+  <!-- Connector: job -> dag scheduler -->
+  <path d="M 600 216 L 600 248" fill="none" stroke="#4338CA" stroke-width="2" marker-end="url(#dts-arr-indigo)"/>
+  <text x="608" y="238" font-size="9.5" fill="#4338CA" font-weight="600">logical plan handed to DAGScheduler</text>
+
+  <!-- ============================== TWO-COLUMN ZONE ============================== -->
+  <!-- Column headers -->
+  <rect x="40" y="256" width="540" height="26" rx="8" fill="#C7D2FE"/>
+  <text x="310" y="274" text-anchor="middle" font-size="12" font-weight="700" fill="#1E1B4B" letter-spacing="0.5px">DAGScheduler — STAGE LEVEL</text>
+  <rect x="620" y="256" width="540" height="26" rx="8" fill="#A7F3D0"/>
+  <text x="890" y="274" text-anchor="middle" font-size="12" font-weight="700" fill="#064E3B" letter-spacing="0.5px">TaskScheduler — TASK LEVEL</text>
+
+  <!-- Column backgrounds -->
+  <rect x="40" y="292" width="540" height="150" rx="14" fill="url(#dts-dag-col)" stroke="#A5B4FC" stroke-width="1.2"/>
+  <rect x="620" y="292" width="540" height="150" rx="14" fill="url(#dts-task-col)" stroke="#6EE7B7" stroke-width="1.2"/>
+
+  <!-- Node: dag-scheduler -->
+  <g data-node-id="dag-scheduler" role="group" tabindex="0" aria-label="DAGScheduler stage-level scheduling">
+    <title data-node-tooltip="true">DAGScheduler — stage-level — Cuts the job's logical plan into a DAG of stages, placing a cut at every shuffle boundary.</title>
+    <rect x="56" y="308" width="508" height="120" rx="10" fill="#FFFFFF" stroke="#6366F1" stroke-width="1.6" filter="url(#dts-shadow)"/>
+    <rect x="70" y="318" width="46" height="15" rx="7.5" fill="#DCFCE7"/><text x="93" y="329" text-anchor="middle" font-size="8.5" font-weight="700" fill="#166534">FACT</text>
+    <text x="126" y="330" font-size="13.5" font-weight="700" fill="#1E1B4B">Cuts the job into stages</text>
+    <text x="70" y="350" font-size="10" fill="#3730A3">• Walks the job's plan; inserts a boundary at every wide</text>
+    <text x="80" y="363" font-size="10" fill="#3730A3">  transformation (shuffle) — join, groupBy, repartition</text>
+    <text x="70" y="381" font-size="10" fill="#3730A3">• No wide transformations → the job stays a single stage</text>
+    <text x="70" y="399" font-size="10" fill="#3730A3">• Orders resulting stages into a DAG; a stage only starts</text>
+    <text x="80" y="412" font-size="10" fill="#3730A3">  once every stage it depends on has finished</text>
+  </g>
+
+  <!-- Node: task-scheduler -->
+  <g data-node-id="task-scheduler" role="group" tabindex="0" aria-label="TaskScheduler task-level scheduling">
+    <title data-node-tooltip="true">TaskScheduler — task-level — Creates one task per output partition per stage and places tasks onto executor cores using a four-level locality ladder.</title>
+    <rect x="636" y="308" width="508" height="120" rx="10" fill="#FFFFFF" stroke="#059669" stroke-width="1.6" filter="url(#dts-shadow)"/>
+    <rect x="650" y="318" width="46" height="15" rx="7.5" fill="#DCFCE7"/><text x="673" y="329" text-anchor="middle" font-size="8.5" font-weight="700" fill="#166534">FACT</text>
+    <text x="706" y="330" font-size="13.5" font-weight="700" fill="#064E3B">Places tasks on executors</text>
+    <text x="650" y="350" font-size="10" fill="#065F46">• One task per output partition per stage; scheduled onto</text>
+    <text x="660" y="363" font-size="10" fill="#065F46">  executor cores as cores free up (not all at once)</text>
+    <text x="650" y="381" font-size="10" fill="#065F46">• Locality ladder: PROCESS_LOCAL → NODE_LOCAL →</text>
+    <text x="660" y="394" font-size="10" fill="#065F46">  RACK_LOCAL → ANY (remote fetch; every first OneLake read)</text>
+    <text x="650" y="412" font-size="10" fill="#065F46">• Waits a configurable delay before dropping a level</text>
+  </g>
+
+  <!-- Connector: dag -> handoff -> task -->
+  <path d="M 564 368 L 600 368 L 600 368 L 636 368" fill="none" stroke="#64748B" stroke-width="0" />
+  <g data-node-id="stage-handoff" role="group" tabindex="0" aria-label="Stage ready to run, handed to TaskScheduler">
+    <title data-node-tooltip="true">Stage ready to run — A stage with satisfied dependencies is handed from the DAGScheduler down to the TaskScheduler.</title>
+    <rect x="546" y="343" width="108" height="50" rx="10" fill="#FFFFFF" stroke="#64748B" stroke-width="1.4" filter="url(#dts-shadow)"/>
+    <text x="600" y="363" text-anchor="middle" font-size="9.5" font-weight="700" fill="#334155">Stage ready</text>
+    <text x="600" y="377" text-anchor="middle" font-size="8.5" fill="#475569">handed to</text>
+    <text x="600" y="388" text-anchor="middle" font-size="8.5" fill="#475569">TaskScheduler</text>
+  </g>
+  <path d="M 564 368 L 546 368" fill="none" stroke="#4338CA" stroke-width="2" marker-end="url(#dts-arr-indigo)"/>
+  <path d="M 654 368 L 636 368" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#dts-arr-green)"/>
+  <text x="600" y="336" text-anchor="middle" font-size="8.5" fill="#475569" font-weight="600">task set submitted</text>
+
+  <!-- ============================== ROW: fault handling headers ============================== -->
+  <rect x="40" y="466" width="540" height="24" rx="8" fill="#FECACA"/>
+  <text x="310" y="482" text-anchor="middle" font-size="11.5" font-weight="700" fill="#7F1D1D">STAGE-LEVEL FAULT HANDLING (EXPENSIVE)</text>
+  <rect x="620" y="466" width="540" height="24" rx="8" fill="#FDE68A"/>
+  <text x="890" y="482" text-anchor="middle" font-size="11.5" font-weight="700" fill="#78350F">TASK-LEVEL FAULT HANDLING (CHEAP)</text>
+
+  <!-- Node: stage-fault-handling (left, under DAGScheduler column — note swapped left/right vs headers above for narrative flow) -->
+  <g data-node-id="stage-fault-handling" role="group" tabindex="0" aria-label="Stage-level fault handling: FetchFailedException triggers stage recomputation">
+    <title data-node-tooltip="true">Stage-level fault handling — A FetchFailedException marks the whole owning stage for recomputation, re-running its map tasks before the consumer stage resumes.</title>
+    <rect x="56" y="498" width="508" height="150" rx="10" fill="#FFFFFF" stroke="#DC2626" stroke-width="1.6" filter="url(#dts-shadow)"/>
+    <rect x="70" y="508" width="46" height="15" rx="7.5" fill="#DCFCE7"/><text x="93" y="519" text-anchor="middle" font-size="8.5" font-weight="700" fill="#166534">FACT</text>
+    <text x="126" y="520" font-size="13.5" font-weight="700" fill="#7F1D1D">FetchFailedException → recompute stage</text>
+    <text x="70" y="541" font-size="10" fill="#7F1D1D">• Symptom of a stale shuffle-block location — typically the</text>
+    <text x="80" y="554" font-size="10" fill="#7F1D1D">  executor that held it is gone</text>
+    <text x="70" y="571" font-size="10" fill="#7F1D1D">• Not a retryable single-task error: the block itself no</text>
+    <text x="80" y="584" font-size="10" fill="#7F1D1D">  longer exists anywhere to retry a fetch against</text>
+    <text x="70" y="601" font-size="10" fill="#7F1D1D">• DAGScheduler marks the owning ShuffleMapStage for full</text>
+    <text x="80" y="614" font-size="10" fill="#7F1D1D">  recomputation, re-runs its map tasks, then resumes the</text>
+    <text x="80" y="627" font-size="10" fill="#7F1D1D">  consumer stage</text>
+    <text x="70" y="643" font-size="9.5" font-style="italic" fill="#991B1B">One lost executor can cascade into a full stage re-run.</text>
+  </g>
+
+  <!-- Node: task-fault-handling (right, under TaskScheduler column) -->
+  <g data-node-id="task-fault-handling" role="group" tabindex="0" aria-label="Task-level fault handling: single task retry and speculative execution">
+    <title data-node-tooltip="true">Task-level fault handling — A failed task retries in place up to spark.task.maxFailures without recomputing its stage; stragglers get a speculative duplicate.</title>
+    <rect x="636" y="498" width="508" height="150" rx="10" fill="#FFFFFF" stroke="#D97706" stroke-width="1.6" filter="url(#dts-shadow)"/>
+    <rect x="650" y="508" width="46" height="15" rx="7.5" fill="#DCFCE7"/><text x="673" y="519" text-anchor="middle" font-size="8.5" font-weight="700" fill="#166534">FACT</text>
+    <text x="706" y="520" font-size="13.5" font-weight="700" fill="#78350F">Single task retries in place</text>
+    <text x="650" y="541" font-size="10" fill="#78350F">• Failed task re-run in place, up to spark.task.maxFailures</text>
+    <text x="660" y="554" font-size="10" fill="#78350F">  (default 4) — the rest of the stage is untouched</text>
+    <text x="650" y="571" font-size="10" fill="#78350F">• An executor that fails tasks repeatedly can be</text>
+    <text x="660" y="584" font-size="10" fill="#78350F">  blacklisted from receiving further tasks</text>
+    <text x="650" y="601" font-size="10" fill="#78350F">• Speculative execution launches a duplicate copy of a</text>
+    <text x="660" y="614" font-size="10" fill="#78350F">  straggling task on another executor instead of waiting</text>
+    <text x="650" y="631" font-size="10" fill="#78350F">• Fabric Runtime 2.0: speculation multiplier 1.5→3, quantile</text>
+    <text x="660" y="644" font-size="10" fill="#78350F">  0.75→0.9 (more conservative default)</text>
+  </g>
+
+  <!-- Connectors: task-scheduler down to both fault paths -->
+  <path d="M 890 428 L 890 460 L 890 498" fill="none" stroke="#D97706" stroke-width="2" marker-end="url(#dts-arr-amber)"/>
+  <text x="898" y="452" font-size="9" fill="#92400E" font-weight="600">task fails or straggles</text>
+
+  <path d="M 890 428 C 890 460, 310 460, 310 498" fill="none" stroke="#DC2626" stroke-width="2" marker-end="url(#dts-arr-red)"/>
+  <text x="520" y="454" font-size="9" fill="#991B1B" font-weight="600">shuffle read hits FetchFailedException</text>
+
+  <!-- Feedback: task-fault-handling loops back to TaskScheduler (cheap loop, stays right) -->
+  <path d="M 1144 573 C 1180 573, 1180 368, 1144 368" fill="none" stroke="#D97706" stroke-width="2" stroke-dasharray="5,4" marker-end="url(#dts-arr-amber)"/>
+  <text x="1152" y="470" font-size="8.5" fill="#92400E" font-weight="600" transform="rotate(90,1152,470)">retried task re-queued in place</text>
+
+  <!-- Feedback: stage-fault-handling loops back to DAGScheduler (expensive loop, wide arc on far left) -->
+  <path d="M 56 573 C 8 573, 8 368, 56 368" fill="none" stroke="#DC2626" stroke-width="2.4" stroke-dasharray="6,4" marker-end="url(#dts-arr-red)"/>
+  <text x="26" y="470" font-size="8.5" fill="#991B1B" font-weight="700" transform="rotate(-90,26,470)">owning stage marked for recomputation</text>
+
+  <!-- Connectors: fault-handling boxes down to runtime note -->
+  <path d="M 310 648 L 310 672" fill="none" stroke="#DC2626" stroke-width="1.6" marker-end="url(#dts-arr-red)"/>
+  <path d="M 890 648 L 890 672" fill="none" stroke="#D97706" stroke-width="1.6" marker-end="url(#dts-arr-amber)"/>
+
+  <!-- ============================== Callout / runtime note ============================== -->
+  <g data-node-id="runtime-note" role="group" tabindex="0" aria-label="Reading the Spark UI: cheap retry versus expensive stage recompute">
+    <title data-node-tooltip="true">Reading the signal — Task-level retries and stage recomputation look similar in passing but differ by an order of magnitude in cost; the Spark UI Stages tab shows a recomputed stage as a new attempt of the same stage id.</title>
+    <rect x="56" y="672" width="1088" height="70" rx="10" fill="#FFFBEB" stroke="#FBBF24" stroke-width="1.4" filter="url(#dts-shadow)"/>
+    <text x="76" y="696" font-size="12" font-weight="700" fill="#78350F">Reading the signal in the Spark UI</text>
+    <text x="76" y="716" font-size="10" fill="#78350F">A single retried task shows as one attempt on one task row — negligible cost. A recomputed stage shows as a new</text>
+    <text x="76" y="731" font-size="10" fill="#78350F">attempt of the same stage id with all its map tasks re-run — the far more expensive outcome of a lost executor.</text>
+  </g>
+
+  <!-- ============================== Worked example strip ============================== -->
+  <rect x="40" y="764" width="1120" height="150" rx="12" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="1.2"/>
+  <text x="60" y="788" font-size="12" font-weight="700" fill="#1E293B">Worked example — one lost executor, two different outcomes</text>
+
+  <rect x="60" y="802" width="530" height="96" rx="8" fill="#FFFFFF" stroke="#94A3B8"/>
+  <text x="76" y="822" font-size="10.5" font-weight="700" fill="#334155">Executor stays alive, one task fails</text>
+  <text x="76" y="840" font-size="9.5" fill="#475569">A task in stage 1 throws a transient exception. TaskScheduler</text>
+  <text x="76" y="854" font-size="9.5" fill="#475569">retries it in place on the same executor. Attempt 2 succeeds.</text>
+  <text x="76" y="868" font-size="9.5" fill="#475569">Cost: one task's worth of re-execution. DAGScheduler never</text>
+  <text x="76" y="882" font-size="9.5" fill="#475569">sees this — stage 1 completes normally.</text>
+
+  <rect x="610" y="802" width="530" height="96" rx="8" fill="#FFFFFF" stroke="#DC2626"/>
+  <text x="626" y="822" font-size="10.5" font-weight="700" fill="#7F1D1D">Executor is lost entirely</text>
+  <text x="626" y="840" font-size="9.5" fill="#991B1B">The executor holding stage 0's shuffle output for a partition</text>
+  <text x="626" y="854" font-size="9.5" fill="#991B1B">is preempted. Stage 1's fetch throws FetchFailedException.</text>
+  <text x="626" y="868" font-size="9.5" fill="#991B1B">DAGScheduler recomputes all of stage 0's map tasks before</text>
+  <text x="626" y="882" font-size="9.5" fill="#991B1B">stage 1 can resume. Cost: an entire stage re-run.</text>
+
+  <!-- Footer -->
+  <text x="40" y="944" font-size="9.5" fill="#94A3B8">Grounded in the Fabric Spark internals engine-core reference and the Efficient Scaledown / Remote Shuffle Manager deep dive.</text>
+  <text x="1160" y="944" text-anchor="end" font-size="9.5" fill="#94A3B8">Fabric Atlas — original diagram</text>
+</svg>

@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="nvw-title nvw-desc" data-diagram-id="spark-narrow-vs-wide-transformations">
+  <title id="nvw-title">Narrow vs. wide transformations: what actually cuts a Spark stage</title>
+  <desc id="nvw-desc">A decision diagram showing that Spark classifies every transformation as narrow (map, filter, select — one input partition per output, fused for free, no stage cut) or wide (groupBy, join, repartition — needs records from many partitions, forces a shuffle exchange). The DAGScheduler cuts a new stage at every shuffle boundary and nowhere else, which also determines where Adaptive Query Execution can re-optimize and where executor loss forces a stage recompute.</desc>
+
+  <defs>
+    <linearGradient id="nvw-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#4A2170"/>
+      <stop offset="0.5" stop-color="#7C3AAD"/>
+      <stop offset="1" stop-color="#9333EA"/>
+    </linearGradient>
+    <linearGradient id="nvw-narrow" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ECFDF5"/>
+      <stop offset="1" stop-color="#D1FAE5"/>
+    </linearGradient>
+    <linearGradient id="nvw-wide" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FEF2F2"/>
+      <stop offset="1" stop-color="#FEE2E2"/>
+    </linearGradient>
+    <filter id="nvw-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#4A2170" flood-opacity="0.12"/>
+    </filter>
+    <marker id="nvw-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="nvw-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#DC2626"/>
+    </marker>
+    <marker id="nvw-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
+    </marker>
+    <marker id="nvw-arr-slate" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#475569"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1200" height="900" fill="#0F1222"/>
+  <rect x="0" y="0" width="1200" height="900" fill="url(#nvw-head)" opacity="0.04"/>
+
+  <!-- Header -->
+  <rect x="0" y="0" width="1200" height="64" fill="url(#nvw-head)"/>
+  <text x="30" y="30" fill="#FFFFFF" font-size="20" font-weight="700">Narrow vs. Wide Transformations</text>
+  <text x="30" y="50" fill="#E9D5FF" font-size="12.5">What actually cuts a Spark stage — and why it matters for AQE and executor loss</text>
+  <text x="1170" y="40" fill="#E9D5FF" font-size="12" text-anchor="end">Apache Spark · Microsoft Fabric</text>
+
+  <!-- ============ NODE: dag ============ -->
+  <g data-node-id="dag" tabindex="0" aria-label="Job DAG: one job per action, built as a directed acyclic graph of transformations">
+    <rect x="470" y="86" width="260" height="56" rx="10" fill="#1E2440" stroke="#7C3AAD" stroke-width="1.6" filter="url(#nvw-shadow)"/>
+    <text x="600" y="108" text-anchor="middle" fill="#FFFFFF" font-size="14.5" font-weight="700">Job DAG</text>
+    <text x="600" y="126" text-anchor="middle" fill="#C4B5FD" font-size="11.5">One job per action; a lazy chain of transformations</text>
+  </g>
+
+  <path d="M600 142 L600 172" fill="none" stroke="#7C3AAD" stroke-width="2" marker-end="url(#nvw-arr-purple)"/>
+  <text x="612" y="162" fill="#C4B5FD" font-size="11">walk DAG, classify each operator</text>
+
+  <!-- ============ NODE: classify (decision diamond) ============ -->
+  <g data-node-id="classify" tabindex="0" aria-label="Decision: does this transformation's output partition depend on exactly one input partition, or on records from many partitions?">
+    <polygon points="600,176 730,236 600,296 470,236" fill="#241B3A" stroke="#F59E0B" stroke-width="2" filter="url(#nvw-shadow)"/>
+    <text x="600" y="222" text-anchor="middle" fill="#FDE68A" font-size="13" font-weight="700">1 input partition</text>
+    <text x="600" y="238" text-anchor="middle" fill="#FDE68A" font-size="13" font-weight="700">-&gt; 1 output partition?</text>
+    <text x="600" y="256" text-anchor="middle" fill="#FCD34D" font-size="10.5">Spark classifies every transformation</text>
+  </g>
+
+  <!-- Branch edges -->
+  <path d="M470 236 L260 236" fill="none" stroke="#059669" stroke-width="2.4" marker-end="url(#nvw-arr-green)"/>
+  <rect x="300" y="216" width="112" height="20" rx="4" fill="#052E1F" stroke="#059669" stroke-width="1"/>
+  <text x="356" y="230" text-anchor="middle" fill="#6EE7B7" font-size="11" font-weight="600">YES — narrow</text>
+
+  <path d="M730 236 L940 236" fill="none" stroke="#DC2626" stroke-width="2.4" marker-end="url(#nvw-arr-red)"/>
+  <rect x="788" y="216" width="112" height="20" rx="4" fill="#3B0A0A" stroke="#DC2626" stroke-width="1"/>
+  <text x="844" y="230" text-anchor="middle" fill="#FCA5A5" font-size="11" font-weight="600">NO — wide</text>
+
+  <!-- ============ LANE HEADERS ============ -->
+  <rect x="40" y="330" width="440" height="26" rx="6" fill="#052E1F" stroke="#059669" stroke-width="1"/>
+  <text x="260" y="348" text-anchor="middle" fill="#6EE7B7" font-size="13" font-weight="700">NARROW — free, in-memory, no shuffle</text>
+
+  <rect x="720" y="330" width="440" height="26" rx="6" fill="#3B0A0A" stroke="#DC2626" stroke-width="1"/>
+  <text x="940" y="348" text-anchor="middle" fill="#FCA5A5" font-size="13" font-weight="700">WIDE — requires a shuffle, cuts a stage</text>
+
+  <!-- ============ NODE: narrow-ops ============ -->
+  <g data-node-id="narrow-ops" tabindex="0" aria-label="Narrow transformations: map, filter, select, union — each output partition depends on exactly one input partition, fused for free with Whole-Stage Code Generation">
+    <rect x="40" y="372" width="440" height="150" rx="12" fill="url(#nvw-narrow)" stroke="#059669" stroke-width="2" filter="url(#nvw-shadow)"/>
+    <text x="60" y="400" fill="#065F46" font-size="15" font-weight="700">map · filter · select · union</text>
+    <line x1="60" y1="410" x2="460" y2="410" stroke="#059669" stroke-width="1" opacity="0.4"/>
+    <text x="60" y="430" fill="#065F46" font-size="11.5">Each output partition = its matching input partition</text>
+    <text x="60" y="448" fill="#065F46" font-size="11.5">No records cross the network — nothing to shuffle</text>
+    <text x="60" y="466" fill="#065F46" font-size="11.5">Chained operators fuse into ONE pipelined stage</text>
+    <text x="60" y="484" fill="#065F46" font-size="11.5">Whole-Stage Code Generation compiles the chain into</text>
+    <text x="60" y="500" fill="#065F46" font-size="11.5">a single fused Java loop (marked *(1) in physical plans)</text>
+    <rect x="60" y="506" width="380" height="1" fill="#059669" opacity="0.3"/>
+    <text x="60" y="518" fill="#047857" font-size="10.5" font-style="italic">Cost: essentially free — chain as many as you like</text>
+  </g>
+
+  <!-- ============ NODE: wide-ops ============ -->
+  <g data-node-id="wide-ops" tabindex="0" aria-label="Wide transformations: groupBy, join, distinct, repartition — output partitions can depend on records from many input partitions, requiring a shuffle across the network">
+    <rect x="720" y="372" width="440" height="150" rx="12" fill="url(#nvw-wide)" stroke="#DC2626" stroke-width="2" filter="url(#nvw-shadow)"/>
+    <text x="740" y="400" fill="#7F1D1D" font-size="15" font-weight="700">groupBy · join · distinct · repartition</text>
+    <line x1="740" y1="410" x2="1140" y2="410" stroke="#DC2626" stroke-width="1" opacity="0.4"/>
+    <text x="740" y="430" fill="#7F1D1D" font-size="11.5">Output partition needs records from MANY input</text>
+    <text x="740" y="448" fill="#7F1D1D" font-size="11.5">partitions, currently scattered across executors</text>
+    <text x="740" y="466" fill="#7F1D1D" font-size="11.5">Spark inserts a shuffle-exchange operator to</text>
+    <text x="740" y="484" fill="#7F1D1D" font-size="11.5">redistribute records by key before the op can run</text>
+    <text x="740" y="500" fill="#7F1D1D" font-size="11.5">Every wide op is a full network + disk barrier</text>
+    <rect x="740" y="506" width="380" height="1" fill="#DC2626" opacity="0.3"/>
+    <text x="740" y="518" fill="#991B1B" font-size="10.5" font-style="italic">Cost: real — each one adds a stage and a shuffle</text>
+  </g>
+
+  <!-- narrow -> task scheduler -->
+  <path d="M260 522 L260 570 Q260 590 300 590 L520 590" fill="none" stroke="#059669" stroke-width="2" marker-end="url(#nvw-arr-green)"/>
+  <text x="270" y="580" fill="#6EE7B7" font-size="10.5">fused into current stage — no cut</text>
+
+  <!-- wide -> stage boundary -->
+  <path d="M940 522 L940 556" fill="none" stroke="#DC2626" stroke-width="2.4" marker-end="url(#nvw-arr-red)"/>
+  <text x="952" y="545" fill="#FCA5A5" font-size="11">shuffle exchange inserted</text>
+
+  <!-- ============ NODE: stage-boundary ============ -->
+  <g data-node-id="stage-boundary" tabindex="0" aria-label="Shuffle exchange equals stage boundary: the DAGScheduler cuts a new stage at every shuffle boundary and nowhere else">
+    <rect x="740" y="560" width="400" height="86" rx="10" fill="#2A1414" stroke="#F59E0B" stroke-width="2.4" filter="url(#nvw-shadow)"/>
+    <text x="940" y="586" text-anchor="middle" fill="#FDE68A" font-size="14.5" font-weight="700">Shuffle exchange = stage boundary</text>
+    <text x="940" y="606" text-anchor="middle" fill="#FCD34D" font-size="11.5">DAGScheduler cuts a new stage HERE, and only here</text>
+    <text x="940" y="624" text-anchor="middle" fill="#FCD34D" font-size="11.5">Narrow-only job = always exactly one stage</text>
+  </g>
+
+  <!-- boundary -> task scheduler -->
+  <path d="M780 646 Q780 690 700 690 L900 690" fill="none" stroke="#F59E0B" stroke-width="2" marker-end="url(#nvw-arr-slate)"/>
+  <text x="700" y="678" fill="#FCD34D" font-size="10.5">next stage's tasks scheduled after shuffle completes</text>
+
+  <!-- ============ NODE: task-per-partition ============ -->
+  <g data-node-id="task-per-partition" tabindex="0" aria-label="TaskScheduler creates one task per output partition per stage and schedules onto free executor cores using a data-locality ladder">
+    <rect x="380" y="670" width="440" height="80" rx="10" fill="#1E2440" stroke="#7C3AAD" stroke-width="1.6" filter="url(#nvw-shadow)"/>
+    <text x="600" y="694" text-anchor="middle" fill="#FFFFFF" font-size="13.5" font-weight="700">TaskScheduler: one task per output partition</text>
+    <text x="600" y="712" text-anchor="middle" fill="#C4B5FD" font-size="11">Placed via locality ladder: PROCESS_LOCAL &gt; NODE_LOCAL &gt;</text>
+    <text x="600" y="728" text-anchor="middle" fill="#C4B5FD" font-size="11">RACK_LOCAL &gt; ANY (scoped per stage, run on free cores)</text>
+  </g>
+
+  <!-- ============ NODE: aqe-reopt (callout, left of boundary) ============ -->
+  <path d="M740 585 L560 610" fill="none" stroke="#7C3AAD" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#nvw-arr-purple)"/>
+  <text x="640" y="600" fill="#C4B5FD" font-size="10.5">runtime stats available only here</text>
+  <g data-node-id="aqe-reopt" tabindex="0" aria-label="Adaptive Query Execution can only re-optimize at a shuffle exchange stage barrier; a narrow-only pipeline never triggers it">
+    <rect x="30" y="590" width="300" height="110" rx="10" fill="#241B3A" stroke="#7C3AAD" stroke-width="1.8" filter="url(#nvw-shadow)"/>
+    <text x="50" y="614" fill="#E9D5FF" font-size="13" font-weight="700">AQE can re-optimize — but only here</text>
+    <line x1="50" y1="622" x2="310" y2="622" stroke="#7C3AAD" opacity="0.4"/>
+    <text x="50" y="640" fill="#C4B5FD" font-size="11">Skew split, sort-merge → broadcast join</text>
+    <text x="50" y="656" fill="#C4B5FD" font-size="11">rewrite — all triggered from real stats</text>
+    <text x="50" y="672" fill="#C4B5FD" font-size="11">gathered AT a shuffle-exchange barrier</text>
+    <text x="50" y="692" fill="#FCA5A5" font-size="10.5" font-style="italic">A narrow-only pipeline never reaches this loop</text>
+  </g>
+
+  <!-- ============ NODE: executor-pin-risk (callout, right of boundary) ============ -->
+  <path d="M1140 600 L1150 590" fill="none" stroke="#DC2626" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#nvw-arr-red)"/>
+  <g data-node-id="executor-pin-risk" tabindex="0" aria-label="A stage boundary pins the executor holding shuffle output until the downstream stage finishes reading it, and losing that executor forces a full stage recompute">
+    <rect x="900" y="770" width="270" height="110" rx="10" fill="#2A1414" stroke="#DC2626" stroke-width="1.8" filter="url(#nvw-shadow)"/>
+    <text x="920" y="794" fill="#FEE2E2" font-size="13" font-weight="700">The boundary pins executors</text>
+    <line x1="920" y1="802" x2="1150" y2="802" stroke="#DC2626" opacity="0.4"/>
+    <text x="920" y="820" fill="#FCA5A5" font-size="11">Shuffle output sits on executor-local</text>
+    <text x="920" y="836" fill="#FCA5A5" font-size="11">disk; executor can't be released until</text>
+    <text x="920" y="852" fill="#FCA5A5" font-size="11">the next stage finishes reading it</text>
+    <text x="920" y="870" fill="#FDE68A" font-size="10.5" font-style="italic">Lost anyway? FetchFailedException recomputes the WHOLE stage</text>
+  </g>
+  <path d="M940 646 L1010 770" fill="none" stroke="#DC2626" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#nvw-arr-red)"/>
+  <text x="960" y="720" fill="#FCA5A5" font-size="10.5">shuffle output held on local disk</text>
+
+  <!-- ============ Legend ============ -->
+  <g aria-hidden="true">
+    <rect x="40" y="770" width="820" height="110" rx="10" fill="#151A30" stroke="#334155" stroke-width="1"/>
+    <text x="60" y="794" fill="#E2E8F0" font-size="12.5" font-weight="700">Legend</text>
+    <circle cx="70" cy="812" r="6" fill="#D1FAE5" stroke="#059669" stroke-width="1.5"/>
+    <text x="86" y="817" fill="#CBD5E1" font-size="11">Narrow path (fused, no shuffle, no new stage)</text>
+    <circle cx="70" cy="834" r="6" fill="#FEE2E2" stroke="#DC2626" stroke-width="1.5"/>
+    <text x="86" y="839" fill="#CBD5E1" font-size="11">Wide path (shuffle exchange, cuts a stage)</text>
+    <circle cx="70" cy="856" r="6" fill="#241B3A" stroke="#F59E0B" stroke-width="1.5"/>
+    <text x="86" y="861" fill="#CBD5E1" font-size="11">Decision / stage boundary</text>
+
+    <rect x="430" y="806" width="18" height="4" fill="#7C3AAD"/>
+    <text x="456" y="811" fill="#CBD5E1" font-size="11">Flow edge (unconditional)</text>
+    <rect x="430" y="828" width="18" height="4" fill="#7C3AAD" stroke-dasharray="3,2"/>
+    <text x="456" y="833" fill="#CBD5E1" font-size="11">Consequence callout (fires at the boundary)</text>
+    <text x="430" y="856" fill="#94A3B8" font-size="10.5">Source: Fabric Spark Toolkit engine-core internals reference;</text>
+    <text x="430" y="870" fill="#94A3B8" font-size="10.5">Microsoft Fabric blog, Efficient Scaledown (Preview)</text>
+  </g>
+
+</svg>

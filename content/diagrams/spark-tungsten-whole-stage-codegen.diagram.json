@@ -1,0 +1,412 @@
+{
+  "id": "spark-tungsten-whole-stage-codegen",
+  "title": "Tungsten whole-stage code generation vs. the Volcano iterator model",
+  "purpose": "Show how Spark's Tungsten engine fuses a chain of narrow operators (filter, project, hash-aggregate) into one generated Java function instead of the classic Volcano/iterator model where each operator is a separate object calling next() on the one below it, and why that fusion removes the per-row virtual-dispatch and boxing cost of the iterator chain.",
+  "accessibleSummary": "Top lane: the Volcano iterator model, where ScanOperator, FilterOperator, ProjectOperator, and AggregateOperator are separate Java objects chained by next() calls, each hop boxing a new row object. Middle: Spark's Janino compiler performs whole-stage code generation, collapsing that operator chain into one generated Java source string compiled at runtime. Bottom lane: the fused stage — a single while loop operating on off-heap UnsafeRow values, with filter/project/aggregate logic inlined and intermediate values kept in local variables rather than written to memory at each operator boundary, with call-outs on UnsafeRow, register residency, and the absence of virtual dispatch. Bottom row: where fusion breaks (shuffle exchanges, row-at-a-time Python UDFs) and how to verify it (EXPLAIN CODEGEN, the *(n) prefix convention).",
+  "longDescription": "This diagram grounds Spark's Tungsten whole-stage code generation feature by contrasting it directly with the classical Volcano (iterator) execution model it replaces for narrow-operator pipelines. In the Volcano model, each relational operator — scan, filter, project, aggregate — is compiled as its own object exposing a next() method; producing one output row means walking the whole operator chain, with every hop a virtual method call and every hop's result a freshly boxed JVM row object. Tungsten's whole-stage code generation instead asks Catalyst's code generator to look at a stage's fusible operator chain and emit one Java source function — compiled at runtime by the embedded Janino compiler — that reads a row once and runs the filter predicate, the projection expression, and the aggregate update inline in a single while loop body. There is no next() chain left at runtime: the generated code is flat, and intermediate values such as a projected column or a partial hash-aggregate key live in local variables (register-resident) rather than being written out to a boxed row and re-read by the next operator object. Rows themselves are Tungsten's UnsafeRow: a raw, word-aligned, off-heap binary layout that already avoids JVM object headers, pointer chasing, and GC pressure, which is what makes the values cheap enough to keep resident across the fused loop body in the first place. Fusion is not universal: a shuffle exchange always ends a stage because data has to leave the process, and a row-at-a-time Python UDF is opaque to Catalyst (the optimizer cannot see inside a Python closure), so it also falls outside the fused loop and surfaces as BatchEvalPython in the physical plan. Fusion is directly verifiable rather than assumed: EXPLAIN CODEGEN prints the actual generated Java source next to the physical plan, and in any EXPLAIN output a leading *(n) prefix on an operator (e.g. *(1) HashAggregate) marks it as part of a fused whole-stage-codegen stage — an operator with no such prefix fell outside fusion.",
+  "type": "internals",
+  "topicSlug": "spark",
+  "capabilityIds": ["spark"],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-tungsten-whole-stage-codegen.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "volcano-lane",
+      "label": "Volcano / iterator model",
+      "summary": "The classical execution model: each operator is a separate object, chained by virtual next() calls.",
+      "detail": "In the Volcano (iterator) model, a physical plan compiles to a tree of operator objects, each implementing a next() method that pulls one row from the operator below it, transforms it, and returns its own row object. Producing one output row from a filter->project->aggregate pipeline means three separate method calls up the chain, each one a virtual dispatch the JVM cannot statically resolve or inline away because the concrete operator type varies by query.",
+      "whyItMatters": "This is the baseline the diagram exists to contrast against: understanding what whole-stage codegen replaces is what makes the fused loop's savings legible, rather than an unexplained implementation detail.",
+      "classification": "inference",
+      "layers": ["compute"],
+      "evidence": [],
+      "tags": ["Tungsten", "VolcanoModel", "WholeStageCodeGen"],
+      "drill": {
+        "inputs": ["A physical plan of chained operator objects (scan, filter, project, aggregate)"],
+        "processing": [
+          "The consuming operator calls next() on its child operator",
+          "The call propagates down to the source, then unwinds back up, one row at a time",
+          "Each operator boxes its own output row object before returning it to its caller"
+        ],
+        "outputs": ["One row per next() call, surfaced to the operator above"],
+        "example": "A three-operator pipeline (filter -> project -> aggregate) producing one output row costs three virtual next() calls and three intermediate boxed row allocations, repeated for every row Spark evaluates in that pipeline.",
+        "controls": ["This is the fallback model when whole-stage codegen cannot fuse a stage — there is no explicit switch to choose it deliberately"],
+        "failureModes": [
+          "The JIT cannot inline a next() call whose concrete target type varies by query plan, so the per-row call overhead is paid on every row, not amortized away",
+          "Each hop's boxed row allocation adds GC pressure proportional to row count times operator-chain depth"
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "volcano-scan",
+      "label": "ScanOperator.next()",
+      "summary": "Reads one row from the data source and returns it as a JVM object.",
+      "detail": "The leaf of the iterator chain. Each call to next() reads or deserializes one row and returns it as a standard JVM object to whichever operator is pulling from it.",
+      "whyItMatters": "This is where the per-row cost starts accruing in the iterator model — every row above this point pays for an object allocation here before any filtering or projection logic even runs.",
+      "classification": "inference",
+      "layers": ["compute"],
+      "evidence": [],
+      "tags": ["VolcanoModel"],
+      "drill": {
+        "inputs": ["Raw source data (a file split, a shuffle read, etc.)"],
+        "processing": ["Deserialize or read one row", "Return it as a boxed JVM row object"],
+        "outputs": ["One row object, pulled by the operator above via next()"],
+        "example": "Reading a Delta Parquet row group one row at a time in the iterator model, each row materializing as its own object before FilterOperator ever inspects it.",
+        "controls": ["N/A — this is baseline iterator-model behavior, not a tunable"],
+        "failureModes": ["Every row pays an allocation here even when the filter above will immediately discard most of them"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "volcano-filter",
+      "label": "FilterOperator.next()",
+      "summary": "Calls next() on the scan operator, evaluates the predicate, and returns its own boxed row.",
+      "detail": "FilterOperator is its own object with its own next() implementation. Each call first calls child.next() to pull a row from ScanOperator, evaluates the filter predicate against it, and — if the row passes — allocates and returns a new row object of its own.",
+      "whyItMatters": "This is the first of the two extra virtual-dispatch hops (filter, project) that whole-stage codegen eliminates by inlining the same predicate logic directly into a fused loop body instead of a separate object call.",
+      "classification": "inference",
+      "layers": ["compute"],
+      "evidence": [],
+      "tags": ["VolcanoModel"],
+      "drill": {
+        "inputs": ["One row object per next() call, pulled from ScanOperator"],
+        "processing": ["Call child.next()", "Evaluate the filter predicate", "Box and return a new row object if the row passes"],
+        "outputs": ["A filtered row object, pulled by ProjectOperator above"],
+        "example": "amount > 100 evaluated per row inside FilterOperator.next(), with a fresh row object allocated for every row that passes.",
+        "controls": ["N/A — baseline iterator-model behavior"],
+        "failureModes": ["The virtual call to child.next() cannot be inlined because the concrete child type is plan-dependent"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "volcano-project",
+      "label": "ProjectOperator.next()",
+      "summary": "Calls next() on the filter operator, computes output expressions, and returns its own boxed row.",
+      "detail": "ProjectOperator repeats the same pattern one layer up: pull a row via child.next(), compute the projected column expressions against it, and box a new row object carrying the projected columns.",
+      "whyItMatters": "This is the second extra hop whole-stage codegen removes — in the fused loop, the projected value is computed once and kept as a local variable rather than round-tripping through another boxed row object.",
+      "classification": "inference",
+      "layers": ["compute"],
+      "evidence": [],
+      "tags": ["VolcanoModel"],
+      "drill": {
+        "inputs": ["One filtered row object per next() call, pulled from FilterOperator"],
+        "processing": ["Call child.next()", "Evaluate projection expressions", "Box and return a new row object"],
+        "outputs": ["A projected row object, pulled by AggregateOperator above"],
+        "example": "Computing amount * tax_rate per row inside ProjectOperator.next(), boxing the result into another row object before AggregateOperator ever sees it.",
+        "controls": ["N/A — baseline iterator-model behavior"],
+        "failureModes": ["Each projected value is written into a new heap object instead of staying in a register, adding both allocation and a memory round-trip per row"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "volcano-aggregate",
+      "label": "AggregateOperator.next()",
+      "summary": "Loops, calling next() on the project operator once per source row, to build up the aggregate result.",
+      "detail": "AggregateOperator is the top of the chain for this pipeline. To produce its output it must pull every row from ProjectOperator in a loop, calling child.next() once per source row and updating its running aggregate state each time — meaning the full three-hop virtual-call chain is paid once per source row, not once per output row.",
+      "whyItMatters": "This is the node that makes the true cost of the iterator model visible: an aggregate over a large narrow pipeline pays the entire virtual-dispatch chain length times the source row count, which is exactly the multiplication whole-stage codegen collapses into a single inlined loop.",
+      "classification": "inference",
+      "layers": ["compute"],
+      "evidence": [],
+      "tags": ["VolcanoModel"],
+      "drill": {
+        "inputs": ["One projected row object per next() call, pulled from ProjectOperator"],
+        "processing": ["Loop: call child.next()", "Update running aggregate state (e.g. hash-aggregate buckets)", "Repeat until the child returns no more rows"],
+        "outputs": ["Final or partial aggregate result rows"],
+        "example": "SUM(amount) over a filtered, projected pipeline pays one full scan->filter->project next() chain per source row before AggregateOperator can update its running total.",
+        "controls": ["N/A — baseline iterator-model behavior"],
+        "failureModes": ["Chain depth multiplies with source row count, so deeper pipelines (more chained narrow operators) scale the per-row virtual-call cost linearly with pipeline length"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "janino-compile",
+      "label": "Janino compiler — whole-stage code generation",
+      "summary": "Collapses the fusible operator chain into one generated Java function, compiled at runtime by Janino.",
+      "detail": "Whole-Stage Code Generation uses Spark's Janino compiler to collapse an entire pipeline of narrow operators into a single fused Java while-loop, keeping intermediate values in CPU registers rather than writing them to memory between operator boundaries and eliminating the per-row virtual-dispatch cost of the older Volcano iterator model; fused stages are marked in physical plans with a leading asterisk, e.g. *(1) HashAggregate.",
+      "whyItMatters": "This is the actual mechanism — a compile step, not an interpreter optimization — so the resulting speed-up comes from generating and JIT-compiling real Java bytecode for that specific plan shape, not from a generic fast-path in an interpreter loop.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "Whole-Stage Code Generation uses Spark's Janino compiler to collapse an entire pipeline of narrow operators into a single fused Java while-loop, keeping intermediate values in CPU registers rather than writing them to memory between operator boundaries and eliminating the per-row virtual-dispatch cost of the older Volcano iterator model; fused stages are marked with a leading asterisk, e.g. *(1) HashAggregate."
+        }
+      ],
+      "tags": ["Tungsten", "WholeStageCodeGen", "Janino"],
+      "drill": {
+        "inputs": ["The physical plan for a fusible chain of narrow operators (filter, project, aggregate)"],
+        "processing": [
+          "Catalyst's code generator walks the fusible operator chain",
+          "It emits one Java source function representing the whole chain as inlined logic",
+          "The Janino compiler compiles that generated source at runtime",
+          "The compiled function replaces the separate operator objects for execution"
+        ],
+        "outputs": ["One compiled Java function executed per stage instead of an operator-object chain"],
+        "example": "filter(amount > 100).select(amount * tax_rate).groupBy().sum() compiles to a single generated HashAggregate function rather than three chained operator objects.",
+        "controls": ["spark.sql.codegen.wholeStage (on by default)", "df.explain(\"codegen\") to inspect the generated source"],
+        "failureModes": ["An operator that cannot be fused (e.g. a shuffle exchange or an opaque UDF) forces Catalyst to emit a stage boundary instead, falling back to the iterator model for that portion of the plan"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "fused-lane",
+      "label": "Tungsten fused stage",
+      "summary": "Filter, project, and aggregate compiled into a single generated while loop, marked *(n) in the physical plan.",
+      "detail": "The result of whole-stage codegen: instead of three operator objects, the pipeline is one generated function containing a single while loop. Fusion is visible in EXPLAIN output as a leading asterisk and stage number on the fused operators, e.g. *(1) HashAggregate.",
+      "whyItMatters": "This is the concrete, verifiable output of the compilation step — not an abstract claim, but a specific marker practitioners can look for in their own EXPLAIN output to confirm fusion actually happened for their query.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "Fused stages are marked in physical plans with a leading asterisk, e.g. *(1) HashAggregate."
+        }
+      ],
+      "tags": ["Tungsten", "WholeStageCodeGen"],
+      "drill": {
+        "inputs": ["The compiled Java function from the Janino compile step"],
+        "processing": [
+          "Execute the single while loop per task",
+          "Read each row once as UnsafeRow",
+          "Run filter, project, and aggregate logic inline against register-resident local variables"
+        ],
+        "outputs": ["Aggregate results (or filtered/projected rows) produced with one pass per row and no operator-object call chain"],
+        "example": "*(1) HashAggregate in EXPLAIN output marks a fused stage covering the scan, filter, project, and aggregate for that portion of the plan.",
+        "controls": ["Read the *(n) prefix in EXPLAIN output to confirm which stage number an operator fused into"],
+        "failureModes": ["A missing *(n) prefix on an operator in EXPLAIN output means that operator fell outside whole-stage code generation entirely"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "fused-function",
+      "label": "Generated Java function (fused while loop)",
+      "summary": "One while loop with filter, project, and aggregate logic inlined — no operator-to-operator method calls.",
+      "detail": "The generated function reads each row once as UnsafeRow, evaluates the filter predicate inline, computes the projection inline into a local variable, and updates the aggregate inline — all inside one loop body with no next() chain and no intermediate boxed row objects.",
+      "whyItMatters": "This is the direct visual payoff of the diagram: the same three operations from the Volcano lane (filter, project, aggregate) collapsed into inlined statements inside one loop, which is exactly what removes the per-row virtual-dispatch and boxing cost shown in the top lane.",
+      "classification": "inference",
+      "layers": ["compute"],
+      "evidence": [],
+      "tags": ["Tungsten", "WholeStageCodeGen", "Janino"],
+      "drill": {
+        "inputs": ["UnsafeRow values from the upstream scan"],
+        "processing": [
+          "Loop over input rows",
+          "Evaluate the filter predicate inline",
+          "Compute the projection inline into a local variable",
+          "Update the hash-aggregate inline using that local variable"
+        ],
+        "outputs": ["Aggregate state or emitted rows, produced with a single pass per row"],
+        "example": "The generated loop body shown in this diagram is an illustrative rendering of the pattern Janino compiles for a filter->project->aggregate chain, not a literal excerpt of Spark's generated source.",
+        "controls": ["df.explain(\"codegen\") to see the actual generated source for a real query"],
+        "failureModes": ["If the generated function becomes too large (deeply nested expressions, very wide schemas), Spark can fall back to interpreted evaluation for that expression rather than generating code for it"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "unsaferow-note",
+      "label": "UnsafeRow (off-heap)",
+      "summary": "Rows are a raw off-heap binary byte array, avoiding per-object headers, pointer chasing, and GC pauses.",
+      "detail": "Tungsten stores rows as UnsafeRow, a raw word-aligned binary byte array held outside the standard JVM heap, eliminating per-object Java header overhead, pointer chasing, and garbage collection; sort and hash-aggregation operations work directly on 8-byte binary prefixes packed into contiguous cache lines so CPUs can prefetch them sequentially into L1/L2 cache with near-zero cache-miss penalties.",
+      "whyItMatters": "This is the memory-layout precondition that makes register-resident values and inlined logic cheap in the first place — without UnsafeRow's off-heap layout, the fused loop would still be paying JVM object overhead per row even with the virtual calls removed.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "Tungsten stores rows as UnsafeRow, a raw word-aligned binary byte array held outside the standard JVM heap, eliminating per-object Java header overhead, pointer chasing, and garbage collection; sort and hash-aggregation operations work directly on 8-byte binary prefixes packed into contiguous cache lines so CPUs can prefetch them sequentially into L1/L2 cache with near-zero cache-miss penalties."
+        }
+      ],
+      "tags": ["Tungsten", "UnsafeRow", "MemoryLayout"],
+      "drill": {
+        "inputs": ["A logical row of typed columns"],
+        "processing": [
+          "Encode the row as a raw, word-aligned binary byte array",
+          "Store it outside the JVM heap",
+          "Pack sort/hash-aggregation keys into 8-byte binary prefixes in contiguous cache lines"
+        ],
+        "outputs": ["An UnsafeRow value consumable directly by generated code without deserializing into a JVM object graph"],
+        "example": "A hash-aggregate operating on UnsafeRow reads 8-byte binary prefixes straight from contiguous cache lines, letting the CPU prefetch sequentially into L1/L2 cache rather than chasing object pointers scattered across the heap.",
+        "controls": ["This is Tungsten's default row representation for DataFrame/Dataset workloads — not a user-facing toggle"],
+        "failureModes": ["Working with UnsafeRow bypasses normal JVM object semantics, so custom code that reaches into row internals (rather than the DataFrame API) can misinterpret the raw binary layout"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "register-note",
+      "label": "Register-resident values",
+      "summary": "Intermediate results live in local variables inside one function instead of being written to memory per operator.",
+      "detail": "Because the fused function is a single generated method, a value computed by the 'project' step (e.g. an expression result) can be held in a local variable — and, if the JIT chooses to, a CPU register — for immediate reuse by the 'aggregate' step in the same loop iteration, rather than being written into a boxed row object that a separate operator object would then have to read back out.",
+      "whyItMatters": "This is the direct cause of the per-row cost reduction: keeping intermediate values in CPU registers rather than writing them to memory between operator boundaries eliminates the boxing/unboxing and memory round-trips that the Volcano lane's operator-to-operator handoffs required.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "Whole-Stage Code Generation collapses an entire pipeline of narrow operators into a single fused Java while-loop, keeping intermediate values in CPU registers rather than writing them to memory between operator boundaries."
+        }
+      ],
+      "tags": ["Tungsten", "WholeStageCodeGen"],
+      "drill": {
+        "inputs": ["An intermediate value computed by an inlined operator step (e.g. a projected expression)"],
+        "processing": ["Hold the value in a local variable within the generated function", "Reuse it directly in the next inlined step in the same loop iteration"],
+        "outputs": ["The final row or aggregate update, computed without an intermediate boxed row object"],
+        "example": "A projected tax-adjusted amount computed once and fed directly into the hash-aggregate update in the same loop iteration, never written out as its own row object.",
+        "controls": ["Not directly tunable — a consequence of how Catalyst's code generator structures the fused function"],
+        "failureModes": ["Very wide or deeply nested expressions can outgrow what the JIT will keep register-resident, reducing the practical benefit for extremely complex single-stage expressions"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "no-virtual-dispatch-note",
+      "label": "No virtual dispatch",
+      "summary": "Filter, project, and aggregate logic is inlined text in one loop body, removing the per-row method-call chain.",
+      "detail": "Because the generated function contains the filter, project, and aggregate logic as literal inlined code rather than calls to separate operator objects, there is no next() chain left to pay virtual-dispatch cost on at runtime — the JIT compiles one concrete method body instead of resolving a chain of polymorphic calls per row.",
+      "whyItMatters": "This is the specific mechanism named in the grounding claim for why whole-stage codegen is faster: eliminating the per-row virtual-dispatch cost of the older Volcano iterator model, stated directly rather than left as an implied consequence.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "Whole-Stage Code Generation... eliminat[es] the per-row virtual-dispatch cost of the older Volcano iterator model."
+        }
+      ],
+      "tags": ["Tungsten", "WholeStageCodeGen", "VolcanoModel"],
+      "drill": {
+        "inputs": ["The separate filter/project/aggregate operator logic that would otherwise be three polymorphic next() calls"],
+        "processing": ["Inline each operator's logic directly into the generated function's loop body", "Compile the result as one concrete, non-polymorphic method"],
+        "outputs": ["A single compiled method with zero operator-to-operator virtual calls for the fused portion of the plan"],
+        "example": "The same filter(amount > 100).select(...).sum() pipeline that cost 3 virtual next() calls per row in the Volcano lane costs 0 in the fused function — the logic is inlined text, not object calls.",
+        "controls": ["df.explain(\"codegen\") to confirm no operator-object dispatch remains in the generated source"],
+        "failureModes": ["Only applies to the fused portion of the plan; any operator excluded from fusion still pays the iterator-model cost for that segment"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "fusion-boundary",
+      "label": "Where fusion breaks",
+      "summary": "Shuffle exchanges and row-at-a-time Python UDFs both end a whole-stage-codegen stage.",
+      "detail": "A row-at-a-time Python UDF is opaque to Catalyst (the optimizer cannot see inside it), forces per-row JVM-to-Python serialization, and breaks whole-stage code generation. Shuffle exchanges independently end a stage because data physically leaves the executor process, which is not something a single in-process generated function can span.",
+      "whyItMatters": "Whole-stage codegen is not a blanket property of a query — a pipeline with an opaque UDF or a shuffle boundary partially reverts to the slower iterator-model cost this diagram exists to explain, so knowing where fusion stops is as operationally important as knowing that it happens at all.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-coding-standards",
+          "note": "A row-at-a-time Python UDF is opaque to Catalyst (the optimizer cannot see inside it), forces per-row JVM-to-Python serialization, and breaks whole-stage code generation; the recommended replacement is built-in Spark SQL functions, which stay Catalyst-visible and codegen-fused."
+        }
+      ],
+      "tags": ["Tungsten", "WholeStageCodeGen", "UDF", "Shuffle"],
+      "drill": {
+        "inputs": ["A physical plan containing a shuffle exchange and/or a row-at-a-time Python UDF"],
+        "processing": [
+          "Catalyst identifies the shuffle exchange as a hard stage boundary (data must leave the process)",
+          "Catalyst identifies the Python UDF as opaque and excludes it from the fused function",
+          "The plan splits into separate numbered stages around these boundaries"
+        ],
+        "outputs": ["Multiple codegen stages instead of one, each numbered and independently marked with *(n)"],
+        "example": "A pipeline with filter().withColumn(python_udf(col)).groupBy().sum() fuses the filter and the groupBy/sum separately, with the UDF surfacing as BatchEvalPython between them, outside any *(n) fused stage.",
+        "controls": ["Replace row-at-a-time Python UDFs with built-in Spark SQL functions to stay Catalyst-visible and codegen-fused", "A SQL UDF (Runtime 2.0 only) as a catalog-resident alternative when shared custom logic is genuinely required"],
+        "failureModes": ["Silently falling back to BatchEvalPython for a UDF that could have been written as a built-in expression, losing fusion without any error or warning"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "verify-codegen",
+      "label": "Verifying fusion",
+      "summary": "EXPLAIN CODEGEN prints the generated code; a missing *(n) prefix means an operator fell outside fusion.",
+      "detail": "Spark's EXPLAIN offers five modes: default prints the physical plan alone, EXTENDED prints all four plans, FORMATTED prints a physical plan outline plus per-node detail blocks, COST prints the logical plan annotated with node statistics where available, and CODEGEN prints the generated code alongside the physical plan. Missing *(n) codegen prefixes on operators in any of these outputs mean those operators fell outside whole-stage code generation.",
+      "whyItMatters": "This turns the whole diagram from an abstract mechanism into something a practitioner can check on their own query — fusion is not something to assume happened, it is something EXPLAIN output proves or disproves per operator.",
+      "classification": "fact",
+      "layers": ["compute", "observability"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "Spark's EXPLAIN offers five modes... CODEGEN prints the generated code alongside the physical plan."
+        },
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "COST mode explains why the optimizer chose a given join strategy, FORMATTED is the mode to learn plan reading on, and CODEGEN is how whole-stage fusion is verified."
+        },
+        {
+          "sourceKey": "fabric-coding-standards",
+          "note": "Missing *(n) codegen prefixes mean operators fell outside whole-stage code generation, alongside other physical-plan red flags such as PushedFilters:[] and BatchEvalPython."
+        }
+      ],
+      "tags": ["QueryPlan", "Troubleshooting", "CodeGen"],
+      "drill": {
+        "inputs": ["A DataFrame or SQL query plan to inspect"],
+        "processing": [
+          "Call df.explain(\"codegen\") to print the generated Java source alongside the physical plan",
+          "Read the physical plan for leading *(n) prefixes on each operator",
+          "Cross-check against other physical-plan red flags (PushedFilters:[], PartitionFilters:[], BatchEvalPython)"
+        ],
+        "outputs": ["A confirmed list of which operators fused into which numbered stage, and which did not fuse at all"],
+        "example": "*(1) HashAggregate in physical-plan output confirms that operator fused into stage 1; a bare HashAggregate with no asterisk, or a BatchEvalPython node, confirms it did not.",
+        "controls": ["df.explain(\"codegen\")", "df.explain(\"formatted\") to learn plan reading", "df.explain(\"cost\") to see why a join strategy was chosen"],
+        "failureModes": ["Assuming a query is fully fused without checking EXPLAIN output — a single unfused operator (e.g. an opaque UDF) can silently reintroduce the iterator-model cost for that segment of the plan"]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Open Spark capability" }
+    }
+  ],
+  "edges": [
+    { "id": "e-scan-filter", "from": "volcano-scan", "to": "volcano-filter", "label": "next() — one virtual call, boxes a new row", "layer": "compute", "kind": "flow" },
+    { "id": "e-filter-project", "from": "volcano-filter", "to": "volcano-project", "label": "next() — one virtual call, boxes a new row", "layer": "compute", "kind": "flow" },
+    { "id": "e-project-aggregate", "from": "volcano-project", "to": "volcano-aggregate", "label": "next() — one virtual call, boxes a new row", "layer": "compute", "kind": "flow" },
+    { "id": "e-volcano-to-janino", "from": "volcano-lane", "to": "janino-compile", "label": "Catalyst hands the fusible operator chain to the code generator", "layer": "compute", "kind": "flow" },
+    { "id": "e-janino-to-fused", "from": "janino-compile", "to": "fused-lane", "label": "Janino compiles the generated source into one executable function", "layer": "compute", "kind": "flow" },
+    { "id": "e-fused-to-function", "from": "fused-lane", "to": "fused-function", "label": "the fused stage executes as this single while loop", "layer": "compute", "kind": "flow" },
+    { "id": "e-function-to-unsaferow", "from": "fused-function", "to": "unsaferow-note", "label": "rows enter the loop as off-heap UnsafeRow, not boxed JVM objects", "layer": "compute", "kind": "flow" },
+    { "id": "e-function-to-register", "from": "fused-function", "to": "register-note", "label": "projected/aggregated values stay in local variables across steps", "layer": "compute", "kind": "flow" },
+    { "id": "e-function-to-novdispatch", "from": "fused-function", "to": "no-virtual-dispatch-note", "label": "filter/project/aggregate logic is inlined, not called", "layer": "compute", "kind": "flow" },
+    { "id": "e-fused-to-boundary", "from": "fused-lane", "to": "fusion-boundary", "label": "fusion stops at a shuffle exchange or an opaque Python UDF", "layer": "compute", "kind": "flow" },
+    { "id": "e-boundary-to-verify", "from": "fusion-boundary", "to": "verify-codegen", "label": "confirm the split with EXPLAIN CODEGEN and the *(n) prefix convention", "layer": "observability", "kind": "flow" }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "volcano-lane",
+      "title": "Start with the model being replaced",
+      "explanation": "Before seeing what Tungsten does, see what it replaces: a chain of separate operator objects, each pulling from the one below it through a next() call."
+    },
+    {
+      "nodeId": "volcano-scan",
+      "title": "Each hop is a real method call",
+      "explanation": "ScanOperator, FilterOperator, ProjectOperator, and AggregateOperator are each their own Java object. Producing one output row means three virtual next() calls up this chain, each boxing a new row object."
+    },
+    {
+      "nodeId": "volcano-aggregate",
+      "title": "The cost multiplies with source rows",
+      "explanation": "AggregateOperator must pull every source row through the full chain via a loop of next() calls — the three-hop virtual-dispatch cost is paid once per source row, not once per output row."
+    },
+    {
+      "nodeId": "janino-compile",
+      "title": "Catalyst compiles the chain away",
+      "explanation": "Whole-stage code generation collapses the fusible operator chain into one generated Java function, compiled at runtime by the embedded Janino compiler — there is no operator-object chain left to walk."
+    },
+    {
+      "nodeId": "fused-function",
+      "title": "One loop, one pass, inlined logic",
+      "explanation": "The generated function reads each row once and runs the filter predicate, the projection, and the aggregate update inline in a single while loop body — the same three operations from the top lane, now as inlined statements, not object calls."
+    },
+    {
+      "nodeId": "unsaferow-note",
+      "title": "Rows are already cheap before fusion helps",
+      "explanation": "UnsafeRow's off-heap binary layout avoids JVM object headers, pointer chasing, and GC pressure — the precondition that makes register-resident values in the fused loop actually cheap."
+    },
+    {
+      "nodeId": "no-virtual-dispatch-note",
+      "title": "The virtual-dispatch cost is gone, not just hidden",
+      "explanation": "Because filter/project/aggregate logic is inlined text in one compiled method, there is no polymorphic next() chain left to pay dispatch cost on — this is the direct mechanism the grounding claim names for the speed-up."
+    },
+    {
+      "nodeId": "fusion-boundary",
+      "title": "Fusion is not universal",
+      "explanation": "A shuffle exchange or a row-at-a-time Python UDF opaque to Catalyst both break whole-stage code generation — those portions of the plan revert to the iterator-model cost shown in the top lane."
+    },
+    {
+      "nodeId": "verify-codegen",
+      "title": "Prove it, don't assume it",
+      "explanation": "EXPLAIN CODEGEN prints the actual generated source, and the leading *(n) prefix convention in any EXPLAIN output tells you exactly which operators fused and which didn't."
+    }
+  ]
+}

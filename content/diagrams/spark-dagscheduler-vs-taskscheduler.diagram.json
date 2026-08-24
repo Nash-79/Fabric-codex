@@ -1,0 +1,478 @@
+{
+  "id": "spark-dagscheduler-vs-taskscheduler",
+  "title": "DAGScheduler vs TaskScheduler: Spark's two-level scheduler",
+  "purpose": "Contrasts the two schedulers inside every Fabric Spark job: the DAGScheduler, which cuts a job into stages at shuffle boundaries, against the TaskScheduler, which places individual tasks onto executor cores and owns task-level retries and locality.",
+  "accessibleSummary": "A job created by one action flows into the DAGScheduler, which walks the logical plan and cuts it into stages at every shuffle (wide-transformation) boundary — a job with no wide transformations is a single stage. Each stage is handed to the TaskScheduler, which creates one task per output partition and places tasks onto executor cores using a four-level locality ladder (PROCESS_LOCAL, NODE_LOCAL, RACK_LOCAL, ANY), waiting a configurable delay before dropping to a looser level. Two fault-handling paths branch off at different scopes: TaskScheduler-level handling retries a single failed task in place up to spark.task.maxFailures without recomputing its stage, blacklists a repeatedly-failing executor, and can launch a speculative duplicate of a straggling task. DAGScheduler-level handling responds to a FetchFailedException — a stale shuffle-block location, typically a lost executor — by marking the entire owning stage for recomputation and re-running its map tasks before the consumer stage resumes, so one lost executor can cascade into a full stage re-run rather than a single task retry. A callout notes Fabric Runtime 2.0's speculation default changes.",
+  "longDescription": "Apache Spark's scheduler is two layers, not one, and the layer boundary is exactly where its recovery behavior changes shape. The DAGScheduler operates on the whole job: it takes the logical plan produced by an action (write, collect, count) and cuts it into a directed acyclic graph of stages, placing a cut at every shuffle boundary — every wide transformation that requires repartitioning data across the cluster. A job with no wide transformations therefore never leaves stage 0. Once a stage is ready to run, the DAGScheduler hands it to the TaskScheduler, which operates one level down: it creates one task per output partition in that stage and schedules those tasks onto executor cores as cores free up, using a four-level data-locality preference ladder that trades placement quality for wait time. The two schedulers also own separate failure domains. A task-level failure (an exception inside one task) is TaskScheduler business — it retries the same task in place, up to a configurable limit, without touching the rest of the stage, and can preemptively duplicate a slow task via speculative execution. A shuffle-block failure (the data a task needs to fetch no longer exists, usually because the executor that held it is gone) is DAGScheduler business — it cannot be fixed by retrying the one task that failed to fetch the block, because the block itself is gone, so the DAGScheduler marks the entire producing stage for recomputation and reruns its map tasks before letting the consumer stage proceed. Understanding which scheduler owns a given Spark UI symptom is the fastest way to tell a cheap, local retry from an expensive, cluster-wide stage re-run.",
+  "type": "internals",
+  "topicSlug": "spark",
+  "capabilityIds": [
+    "spark"
+  ],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "content/diagrams/spark-dagscheduler-vs-taskscheduler.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "job-submission",
+      "label": "Action submits a job",
+      "summary": "One Spark job is created per action and ends when that action's result is produced.",
+      "detail": "Every action — write, collect, count, and similar — creates exactly one Spark job. The job/stage/task hierarchy is strictly nested underneath it: the job is cut into stages by the DAGScheduler, and each stage is cut into tasks by the TaskScheduler. The job completes only when the action's result has actually been produced, which is why a single wide DataFrame lineage referenced by three actions creates three separate jobs, each re-walking that lineage independently unless the result was cached or persisted.",
+      "whyItMatters": "Reading the Spark UI's Jobs tab correctly starts here: one row per action, not per line of code. A notebook cell with several transformations but a single .write() at the end produces one job, and everything upstream is stages and tasks inside it.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "One job is created per action (write, collect, count) and ends when that action's result is produced."
+        }
+      ],
+      "tags": [
+        "job",
+        "action",
+        "Spark UI"
+      ],
+      "drill": {
+        "inputs": [
+          "A DataFrame/SQL lineage ending in an action call"
+        ],
+        "processing": [
+          "Spark's driver evaluates the action and materializes the logical plan behind it",
+          "A new job id is registered and the plan is handed to the DAGScheduler for stage cutting"
+        ],
+        "outputs": [
+          "One job, tracked as a single row in the Spark UI Jobs tab, handed to the DAGScheduler"
+        ],
+        "example": "A notebook cell reads bronze, filters, joins to a dimension table, and calls .write() once at the end: exactly one job appears in the Jobs tab, even though the cell has several transformation lines before the write.",
+        "controls": [
+          "Caching/persisting a DataFrame reused across multiple actions avoids re-walking its lineage in each new job"
+        ],
+        "failureModes": [
+          "A DataFrame referenced by three downstream actions with no caching re-executes its full upstream lineage three times, one job each — mistaken for a single expensive job when it is actually three"
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "dag-scheduler",
+      "label": "DAGScheduler — stage-level",
+      "summary": "Cuts the job's logical plan into a DAG of stages, placing a cut at every shuffle boundary.",
+      "detail": "The DAGScheduler walks the job's plan and inserts a stage boundary at every wide transformation — any operation (a join, groupBy, or repartition) that requires shuffling data across the cluster rather than transforming each partition independently. A job built entirely from narrow transformations (map, filter, select) therefore never needs a second stage: it stays a single stage end to end. The output of the DAGScheduler is a directed acyclic graph of stages in dependency order, each one handed to the TaskScheduler only once its upstream stages have produced their shuffle output.",
+      "whyItMatters": "Stage count in the Spark UI is a direct read of how many shuffle boundaries a job crossed. Collapsing avoidable wide transformations (e.g. a repartition that isn't needed before the next narrow step) removes whole stages, not just tasks.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "The DAGScheduler cuts a job into stages at every shuffle boundary (a wide transformation); a job with no wide transformations is a single stage."
+        }
+      ],
+      "tags": [
+        "DAGScheduler",
+        "stage",
+        "shuffle boundary",
+        "wide transformation"
+      ],
+      "drill": {
+        "inputs": [
+          "The job's logical/physical plan from the driver"
+        ],
+        "processing": [
+          "Walk the plan graph looking for wide transformations (join, groupBy, repartition, distinct, and similar)",
+          "Insert a stage boundary at each one, since a wide transformation requires data to be shuffled across the cluster before the next step can run",
+          "Order the resulting stages into a DAG so a stage only starts once every stage it depends on has finished writing its shuffle output"
+        ],
+        "outputs": [
+          "An ordered DAG of stages, each handed to the TaskScheduler when its dependencies are satisfied"
+        ],
+        "example": "A job that reads a table, filters rows, joins to a dimension table, and aggregates has two stages: stage 0 (read + filter, narrow) writes shuffle output for the join, and stage 1 (join + aggregate) reads that shuffle output and produces the final result.",
+        "controls": [
+          "Fewer wide transformations in the plan means fewer stage boundaries",
+          "Broadcast joins avoid a shuffle boundary entirely for the joined side that fits in memory"
+        ],
+        "failureModes": [
+          "Chaining unnecessary repartition/coalesce calls between narrow steps adds shuffle boundaries — and therefore stages — that do no useful work"
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "stage-handoff",
+      "label": "Stage ready to run",
+      "summary": "A stage with satisfied dependencies is handed from the DAGScheduler down to the TaskScheduler.",
+      "detail": "Once a stage's upstream dependencies have written their shuffle output, the DAGScheduler submits that stage as a set of tasks — one per output partition — to the TaskScheduler for actual placement and execution on executors. This handoff is the boundary between the two scheduler layers: everything above it is job/stage-level planning, everything below it is task-level placement.",
+      "whyItMatters": "This is the seam where a stage becomes tasks. It is also the seam where a stage-level failure (handled above it) is architecturally different from a task-level failure (handled below it).",
+      "classification": "inference",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [],
+      "tags": [
+        "stage handoff",
+        "scheduler boundary"
+      ],
+      "drill": {
+        "inputs": [
+          "A stage whose upstream dependency stages have completed"
+        ],
+        "processing": [
+          "DAGScheduler submits the stage's task set to the TaskScheduler",
+          "TaskScheduler takes ownership of placement, retries, and locality for that task set"
+        ],
+        "outputs": [
+          "A stage's tasks queued for placement onto executor cores"
+        ],
+        "example": "Stage 1 (the join + aggregate stage) cannot begin its tasks until stage 0 has finished writing its shuffle map output; once it has, the DAGScheduler submits stage 1's task set to the TaskScheduler.",
+        "controls": [
+          "No user-facing configuration; this is the internal scheduler contract"
+        ],
+        "failureModes": [
+          "None directly — failures at this seam surface as either task-level or stage-level fault handling downstream"
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "task-scheduler",
+      "label": "TaskScheduler — task-level",
+      "summary": "Creates one task per output partition per stage and schedules tasks onto executor cores as cores free up.",
+      "detail": "The TaskScheduler operates one level below the DAGScheduler: for a given stage it creates exactly one task per output partition, then schedules those tasks onto executor cores opportunistically as cores become available, rather than assigning every task up front. Placement is guided by a four-level data-locality preference ladder — PROCESS_LOCAL (data already resident in the same JVM's memory, such as from .cache()), NODE_LOCAL (data on the same node's local disk, such as an earlier stage's local shuffle output), RACK_LOCAL (another node in the same rack or availability zone), and ANY (a remote fetch, the baseline for every initial OneLake table scan over ABFS) — with the scheduler waiting a configurable delay at each tighter level before dropping to a looser one, trading placement quality against wait time.",
+      "whyItMatters": "Locality level directly explains task duration variance in the Spark UI: two tasks doing identical work can differ by several times in wall-clock time purely because one landed PROCESS_LOCAL and the other fell through to ANY.",
+      "classification": "fact",
+      "layers": [
+        "compute"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "The TaskScheduler creates one task per output partition per stage, scheduling tasks onto executor cores as cores free up."
+        },
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "The TaskScheduler places each task according to a four-level data-locality preference ladder (PROCESS_LOCAL, NODE_LOCAL, RACK_LOCAL, ANY), waiting a configurable delay before dropping to a looser level."
+        }
+      ],
+      "tags": [
+        "TaskScheduler",
+        "task",
+        "data locality",
+        "executor"
+      ],
+      "drill": {
+        "inputs": [
+          "A stage's task set from the DAGScheduler, one task per output partition"
+        ],
+        "processing": [
+          "For each task, evaluate the locality preference ladder from tightest to loosest: PROCESS_LOCAL, NODE_LOCAL, RACK_LOCAL, ANY",
+          "Wait a configurable delay at the current level for a matching executor core to free up before dropping to the next looser level",
+          "Assign the task to an available executor core once a level is accepted"
+        ],
+        "outputs": [
+          "Tasks running on executor cores, reporting completion back to the TaskScheduler"
+        ],
+        "example": "A cached DataFrame's task lands PROCESS_LOCAL on the executor already holding it in memory; a fresh OneLake table scan over ABFS has no prior placement to prefer and starts at ANY, the baseline remote-fetch level for every first read.",
+        "controls": [
+          "spark.locality.wait (and per-level variants) tune how long the scheduler waits at a tighter locality level before relaxing it",
+          "Caching hot data with .cache() creates PROCESS_LOCAL opportunities that would otherwise not exist"
+        ],
+        "failureModes": [
+          "A cluster too small or too busy to offer a NODE_LOCAL or RACK_LOCAL slot within the wait window forces tasks to ANY, inflating shuffle read time even though the data was technically nearby"
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "task-fault-handling",
+      "label": "Task-level fault handling",
+      "summary": "A failed task retries in place up to spark.task.maxFailures without recomputing its stage; stragglers get a speculative duplicate.",
+      "detail": "TaskScheduler-level fault handling is scoped to the individual task and is architecturally distinct from DAGScheduler-level stage recomputation. A task that fails is retried in place — re-run on an executor — up to spark.task.maxFailures (default 4) without recomputing the rest of its stage. An executor that fails tasks repeatedly can be blacklisted so the scheduler stops sending it new work. Separately, speculative execution addresses slow-but-not-failed tasks: rather than waiting out a straggler, the scheduler launches a duplicate copy of that task on another executor and takes whichever copy finishes first.",
+      "whyItMatters": "This is the cheap failure path: a single retried task costs at most one task's worth of re-execution, not a stage's worth. Recognizing a task-level retry versus a stage recompute in the Spark UI tells you whether a job's slowdown is a minor blip or a much larger cascading cost.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "TaskScheduler-level fault handling is scoped to the individual task and distinct from DAGScheduler-level stage recomputation: a failed task is retried in place up to spark.task.maxFailures (default 4) without recomputing its stage, an executor that fails tasks repeatedly can be blacklisted, and speculative execution launches a duplicate copy of a straggling task on another executor rather than waiting it out."
+        },
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "Fabric Runtime 2.0's Spark 4.x changes spark.speculation.multiplier from 1.5 to 3 with its quantile moving from 0.75 to 0.9."
+        }
+      ],
+      "tags": [
+        "task retry",
+        "speculative execution",
+        "spark.task.maxFailures",
+        "blacklisting"
+      ],
+      "drill": {
+        "inputs": [
+          "A task that throws an exception, or a task running far slower than its peers in the same stage"
+        ],
+        "processing": [
+          "On task failure: re-run the same task in place, counting attempts against spark.task.maxFailures (default 4)",
+          "If one executor accumulates repeated task failures, blacklist it from receiving further tasks in that stage",
+          "On a detected straggler (governed by spark.speculation.multiplier and its quantile threshold): launch a duplicate copy of that task on a different executor and accept whichever finishes first"
+        ],
+        "outputs": [
+          "A completed task result, from either the original or a retried/speculative attempt, with the rest of the stage untouched"
+        ],
+        "example": "A single task briefly loses its executor connection mid-write and is retried in place on the same or another executor; the other 199 tasks in that stage are unaffected and the stage completes with one visible retry in the Spark UI.",
+        "controls": [
+          "spark.task.maxFailures caps retry attempts before the whole stage (and job) is failed",
+          "spark.speculation.multiplier / spark.speculation.quantile tune how aggressively stragglers are duplicated — Fabric Runtime 2.0's Spark 4.x moves the multiplier from 1.5 to 3 and the quantile from 0.75 to 0.9, a more conservative default that speculates less eagerly"
+        ],
+        "failureModes": [
+          "A task that exhausts spark.task.maxFailures fails its whole stage, escalating from a cheap task-level retry into a job failure",
+          "Overly aggressive speculation on a genuinely busy (not stuck) cluster wastes executor capacity duplicating tasks that were always going to finish"
+        ],
+        "metrics": [
+          {
+            "label": "Default task retry limit",
+            "value": "spark.task.maxFailures = 4",
+            "sourceKey": "spark-internals-engine-core"
+          },
+          {
+            "label": "Fabric Runtime 2.0 speculation multiplier",
+            "value": "1.5 → 3",
+            "sourceKey": "spark-internals-engine-core"
+          }
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "stage-fault-handling",
+      "label": "Stage-level fault handling",
+      "summary": "A FetchFailedException marks the whole owning stage for recomputation, re-running its map tasks before the consumer stage resumes.",
+      "detail": "A FetchFailedException is a symptom of a stale shuffle-block location — typically because the executor that held it is gone — and is not a retryable single-task error, because retrying the one task that failed to fetch the block cannot fix a block that no longer exists anywhere. Spark's DAGScheduler instead responds by marking the entire owning ShuffleMapStage as needing recomputation and re-running the map tasks that produced the lost output, before resuming the consumer stage that depends on it. This is why a single lost executor can cascade into a full stage re-run rather than a single task retry.",
+      "whyItMatters": "This is the expensive failure path and the one most often misdiagnosed: a job that looks like it 'restarted a stage for no reason' in the Spark UI is almost always a lost executor's shuffle output being recomputed, not a bug in the job logic.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "observability"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "efficient-scaledown",
+          "note": "A FetchFailedException is a symptom of a stale shuffle-block location, not a retryable single-task error: Spark's scheduler marks the entire owning ShuffleMapStage as needing recomputation and re-runs the map tasks that produced the lost output before resuming the consumer stage."
+        }
+      ],
+      "tags": [
+        "FetchFailedException",
+        "ShuffleMapStage",
+        "stage recomputation",
+        "lost executor"
+      ],
+      "drill": {
+        "inputs": [
+          "A consumer-stage task's shuffle read failing with FetchFailedException because the producing executor is gone"
+        ],
+        "processing": [
+          "DAGScheduler recognizes the failure as a lost shuffle block, not a transient task error",
+          "Mark the owning ShuffleMapStage (the stage that produced the missing block) as needing full recomputation",
+          "Re-run that stage's map tasks to regenerate the lost shuffle output",
+          "Resume the consumer stage's fetch once the shuffle output is regenerated"
+        ],
+        "outputs": [
+          "A recomputed shuffle output and a resumed consumer stage — at the cost of re-running an entire prior stage"
+        ],
+        "example": "An executor is preempted mid-job after producing shuffle output for stage 0; when stage 1's tasks try to fetch that output they get FetchFailedException, and the DAGScheduler recomputes all of stage 0's map tasks before stage 1 can proceed.",
+        "controls": [
+          "The Fabric executor decommission lifecycle drains and migrates shuffle blocks before removal specifically to avoid triggering this cascade",
+          "External/remote shuffle storage removes the dependency on any single executor still being alive to serve its shuffle blocks"
+        ],
+        "failureModes": [
+          "Aggressive autoscale-in that removes executors without migrating their shuffle blocks first turns routine scale-down into repeated stage recomputation",
+          "Multiple concurrent executor losses can cascade into several ShuffleMapStage recomputations in the same job, compounding wall-clock cost"
+        ]
+      },
+      "drillTarget": {
+        "kind": "diagram",
+        "slug": "spark-executor-decommission-lifecycle",
+        "label": "Spark executor decommission lifecycle"
+      }
+    },
+    {
+      "id": "runtime-note",
+      "label": "Reading the signal in the Spark UI",
+      "summary": "A single retried task is a cheap, near-invisible attempt; a recomputed stage is a new attempt of the whole stage id.",
+      "detail": "Both outcomes surface in the Spark UI, but at very different scopes. A task-level retry shows up as one extra attempt on a single task row inside an otherwise-normal stage — easy to miss and usually harmless. A DAGScheduler-driven stage recomputation shows up as a new attempt of the same stage id, with every one of that stage's map tasks re-run. Recognizing the difference is the fastest way to tell whether a job's slowdown is a minor, self-healing blip or a cluster event (typically a lost executor) worth investigating.",
+      "whyItMatters": "Operators who only look at overall job duration miss this distinction; looking at the Stages tab's attempt column tells you immediately which scheduler intervened and how expensive the intervention was.",
+      "classification": "pattern",
+      "layers": [
+        "observability"
+      ],
+      "evidence": [],
+      "tags": [
+        "Spark UI",
+        "diagnosis",
+        "stage attempt"
+      ],
+      "drill": {
+        "inputs": [
+          "A job that ran slower than expected, or completed with visible retries"
+        ],
+        "processing": [
+          "Open the Spark UI Stages tab and check the attempt count for each stage",
+          "A stage at attempt 1 with a task-level retry visible only in that task's detail view indicates cheap, local recovery",
+          "A stage at attempt 2+ indicates the DAGScheduler recomputed it entirely, almost always following a lost executor's FetchFailedException"
+        ],
+        "outputs": [
+          "A correct diagnosis: isolated task retry versus cluster-wide stage recomputation"
+        ],
+        "example": "A job's Stages tab shows stage 3 at 'Attempt 2 of 2' with 200/200 tasks re-run — a clear signal to check executor logs around the time of the first attempt for a preemption or OOM kill, not to suspect the job's own transformation logic.",
+        "controls": [
+          "No configuration; this is a read of scheduler behavior already exposed in the standard Spark UI"
+        ],
+        "failureModes": [
+          "Treating a recomputed stage as a data-correctness bug in the job rather than an infrastructure event wastes debugging time on the wrong layer"
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-job-dag",
+      "from": "job-submission",
+      "to": "dag-scheduler",
+      "label": "logical plan handed to DAGScheduler",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-dag-handoff",
+      "from": "dag-scheduler",
+      "to": "stage-handoff",
+      "label": "stage's dependencies satisfied",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-handoff-task",
+      "from": "stage-handoff",
+      "to": "task-scheduler",
+      "label": "task set submitted",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-task-fault",
+      "from": "task-scheduler",
+      "to": "task-fault-handling",
+      "label": "single task fails or straggles",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-task-fetchfail",
+      "from": "task-scheduler",
+      "to": "stage-fault-handling",
+      "label": "shuffle read hits FetchFailedException",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-fault-back-dag",
+      "from": "stage-fault-handling",
+      "to": "dag-scheduler",
+      "label": "owning stage marked for recomputation",
+      "layer": "compute",
+      "kind": "feedback"
+    },
+    {
+      "id": "e-task-retry-loop",
+      "from": "task-fault-handling",
+      "to": "task-scheduler",
+      "label": "retried task re-queued in place",
+      "layer": "compute",
+      "kind": "feedback"
+    },
+    {
+      "id": "e-task-to-note",
+      "from": "task-fault-handling",
+      "to": "runtime-note",
+      "label": "visible as a single task attempt",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-stage-to-note",
+      "from": "stage-fault-handling",
+      "to": "runtime-note",
+      "label": "visible as a new stage attempt",
+      "layer": "observability",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "job-submission",
+      "title": "One action, one job",
+      "explanation": "An action (write, collect, count) creates exactly one Spark job, which the DAGScheduler and TaskScheduler will jointly break down."
+    },
+    {
+      "nodeId": "dag-scheduler",
+      "title": "DAGScheduler cuts stages at shuffle boundaries",
+      "explanation": "The DAGScheduler operates on the whole job, inserting a stage boundary at every wide transformation. No wide transformations means no boundaries — a single stage."
+    },
+    {
+      "nodeId": "stage-handoff",
+      "title": "A stage becomes a task set",
+      "explanation": "Once a stage's dependencies are satisfied, it is handed down as a set of tasks — the seam between stage-level and task-level scheduling."
+    },
+    {
+      "nodeId": "task-scheduler",
+      "title": "TaskScheduler places tasks by locality",
+      "explanation": "One task per output partition, placed onto executor cores via a four-level locality ladder that trades placement quality for wait time."
+    },
+    {
+      "nodeId": "task-fault-handling",
+      "title": "Task-level failures stay local",
+      "explanation": "A failed task retries in place up to spark.task.maxFailures; a straggler gets a speculative duplicate. The rest of the stage is untouched."
+    },
+    {
+      "nodeId": "stage-fault-handling",
+      "title": "Shuffle-block loss escalates to the DAGScheduler",
+      "explanation": "A FetchFailedException cannot be fixed by retrying one task — the block is gone. The DAGScheduler recomputes the entire owning stage instead, which is why one lost executor can be far more expensive than one failed task."
+    },
+    {
+      "nodeId": "runtime-note",
+      "title": "Tell them apart in the Spark UI",
+      "explanation": "A task-level retry is one extra attempt on a single task row; a stage recomputation is a new attempt of the whole stage id with every map task re-run — check the Stages tab's attempt count to know which one happened."
+    }
+  ]
+}

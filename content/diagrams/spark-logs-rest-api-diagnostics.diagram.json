@@ -1,0 +1,697 @@
+{
+  "id": "spark-logs-rest-api-diagnostics",
+  "title": "Automated Spark diagnostics: pulling logs and metrics through Fabric's REST API instead of clicking through the Spark UI",
+  "purpose": "Shows how an automated diagnostic tool resolves a Fabric Spark application's identifiers, pulls its event log and monitoring data through the Fabric Spark REST API (which mirrors the OSS Spark History Server contract and adds Fabric-only endpoints), and parses that raw data into a severity-ranked report — skew ratio, spill volume, critical-path ranking, effective configuration — instead of a human tab-hopping through five overlapping Spark UI surfaces by hand.",
+  "accessibleSummary": "A flow diagram contrasting manual Spark UI troubleshooting with an automated REST-API-driven diagnostic pipeline. The automated path resolves workspace and item identifiers, calls Fabric's Spark monitoring REST API (which mirrors the open-source Spark History Server contract and adds Fabric-only endpoints for advisor findings, executor resource usage, and raw driver logs), pulls the raw event log for one past application, and parses it into a severity-ranked report covering skew ratio, spill volume, a true critical-path ranking of stages, and the application's actual effective configuration recovered as ground truth. A parallel branch covers the Livy log, which is the only place a whole class of session-bootstrap failures ever appears, and a comparison branch covers the continuously-pushed diagnostic emitter as an alternative to on-demand REST pulls. Warning nodes cover the five common URL-construction failures when fetching an event log by REST and the four documented gotchas configuring the diagnostic emitter for Log Analytics.",
+  "longDescription": "This diagram traces the automated-diagnostics path for a slow or failed Fabric Spark application, as distinct from a human manually opening the Monitoring hub, clicking into Application detail, and reading the Jobs/Resources/Logs/Diagnostics tabs one at a time. An automated tool — illustrated by Fabric's preview Spark Operations Skill — starts from a plain-English description of the problem, resolves it to concrete workspace, item, Livy session, application, and attempt identifiers, then queries Fabric's Spark monitoring REST API. That API mirrors the open-source Spark History Server API contract exactly for jobs/stages/tasks/executors/storage/streaming, and Fabric layers Fabric-only endpoints on top: an advice endpoint returning the Spark Advisor's structured findings, a resourceUsage endpoint returning executor CPU/memory time series, and a logs endpoint returning raw driver stdout/stderr text. In parallel, the Application detail Logs tab exposes three separate log streams — Livy, Prelaunch, and Driver — because a whole class of failures (capacity 430s, library conflicts, unpublished Environments, session timeouts) happens at the Livy bootstrap layer before any Spark job exists and never appears in the Spark UI's job/stage/task tabs at all. For deep post-hoc analysis, the raw per-application event log itself can be pulled via REST and parsed directly: this surfaces exact per-stage skew ratios and spill attribution computed from every task-end event, a true critical-path ranking of stages by wall-clock share, and the application's actual effective Spark configuration recovered from the event log's own environment-update event as ground truth against what was intended. A worked example traces a real executed run where this approach measured a genuine 3.8x skew ratio on a deliberately skewed join. A comparison node covers the alternative: a continuously-pushed diagnostic emitter streaming logs and metrics to Log Analytics, Storage, or Event Hubs, configured as session-start Spark properties rather than pulled after the fact. Two warning nodes cover real documented failure surfaces: the five most common causes of a failed REST event-log fetch, and the four gotchas that silently defeat the Log Analytics diagnostic emitter.",
+  "type": "flow",
+  "topicSlug": "spark",
+  "capabilityIds": ["spark"],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-logs-rest-api-diagnostics.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "manual-baseline",
+      "label": "Manual path: five overlapping UI surfaces",
+      "summary": "Without automation, troubleshooting is spread across five overlapping Spark UI surfaces that look like one.",
+      "detail": "Fabric Spark troubleshooting is spread across five overlapping surfaces that look like one system: in-cell live progress scoped to the running cell; the in-cell Spark Advisor panel; the Recent runs / Monitoring hub list; the tabbed Application detail view (Jobs, Resources, Logs, Data, Item snapshots, Diagnostics); and the full Spark History Server for completed runs. A human has to know which of the five holds the answer to a given question and navigate there by hand.",
+      "whyItMatters": "This is the baseline the automated REST pipeline replaces: instead of a person clicking through five surfaces in sequence guessing which one has the answer, a script calls one API surface directly and gets structured data back.",
+      "classification": "fact",
+      "layers": ["observability", "compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-config-capacity",
+          "note": "Fabric Spark troubleshooting is spread across five overlapping surfaces that look like one: in-cell live progress, the in-cell Spark Advisor panel, Recent runs/Monitoring hub, the tabbed Application detail view, and the Spark History Server."
+        }
+      ],
+      "tags": ["spark-ui", "monitoring-hub", "manual-troubleshooting"],
+      "drill": {
+        "inputs": ["A slow or failed Spark application", "A human troubleshooter"],
+        "processing": [
+          "Open Monitoring hub and find the right application by name and time",
+          "Open Application detail and pick a tab: Jobs, Resources, Logs, Data, Diagnostics",
+          "Open the full Spark History Server for completed-run detail",
+          "Repeat across tabs to assemble one coherent picture"
+        ],
+        "outputs": ["A manually assembled, non-reproducible diagnosis"],
+        "example": "A user unsure whether a job is slow because of skew or spill has to open the Stages tab for skew and the aggregated metrics view for spill separately, then mentally combine them.",
+        "controls": ["None — this is the default, unautomated path"],
+        "failureModes": [
+          "Under time pressure a troubleshooter checks only one or two of the five surfaces and misses the one holding the actual cause.",
+          "Nothing here is queryable or reproducible across incidents; every diagnosis starts from zero."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open spark"
+      }
+    },
+    {
+      "id": "identify",
+      "label": "Resolve identifiers from a description",
+      "summary": "An automated diagnostic tool resolves workspace and item identifiers from a plain-English description before calling any API.",
+      "detail": "The Fabric Spark Operations Skill is a preview, read-only, AI-assisted diagnostic tool that resolves workspace and item identifiers from a plain-English description and queries Fabric's Spark monitoring APIs to produce a severity-ranked diagnostic report. This resolution step is what makes the REST pipeline usable from a description like \"the nightly ETL notebook failed again\" rather than requiring the exact workspace/item/application GUIDs up front.",
+      "whyItMatters": "Every downstream REST call needs a workspaceId, itemId, livyId, applicationId, and attemptId — resolving those automatically from a description is the difference between a tool a human can actually invoke and one that requires already knowing the answer.",
+      "classification": "fact",
+      "layers": ["orchestration", "observability"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-blog-spark-failure-diagnosis",
+          "note": "The Fabric Spark Operations Skill is a preview, read-only, AI-assisted diagnostic tool that resolves workspace and item identifiers from a plain-English description and queries Fabric's Spark monitoring APIs to produce a severity-ranked diagnostic report."
+        },
+        {
+          "sourceKey": "fabric-blog-spark-failure-diagnosis",
+          "note": "The skill supports scenarios including workspace-wide Spark health review, root-cause analysis of a failed notebook run, tracing a pipeline failure down to its underlying Spark session, run-history pattern analysis, Livy session triage, and diagnosing lakehouse table maintenance/load failures."
+        }
+      ],
+      "tags": ["spark-operations-skill", "identifier-resolution", "ai-diagnostics"],
+      "drill": {
+        "inputs": ["A plain-English problem description", "Tenant/workspace access"],
+        "processing": [
+          "Match the description to a workspace and item",
+          "Resolve the item's recent Livy sessions and application ids",
+          "Select the specific application and attempt to diagnose"
+        ],
+        "outputs": ["Concrete workspaceId, itemId, livyId, applicationId, attemptId"],
+        "example": "\"The nightly ETL notebook failed again\" resolves to a specific workspace, notebook item, Livy session, and application/attempt pair without the user supplying any GUID.",
+        "controls": ["Scenario selection: health review, root-cause analysis, pipeline-failure tracing, run-history pattern analysis, Livy session triage, table maintenance diagnosis"],
+        "failureModes": [
+          "An ambiguous description spanning multiple similarly-named items can resolve to the wrong application."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "rest-api-surface",
+      "label": "Spark monitoring REST API",
+      "summary": "Fabric exposes Spark application internals as a REST API that mirrors the OSS Spark History Server contract exactly.",
+      "detail": "Fabric exposes Spark application internals as a REST API that mirrors the OSS Spark History Server API contract exactly — same endpoints, parameters, and JSON shapes for jobs, stages, tasks, executors, storage and streaming — under the path pattern /v1/workspaces/{workspaceId}/notebooks|sparkJobDefinitions|lakehouses/{itemId}/livySessions/{livyId}/applications/{appId}/{attemptId}/{endpoint}. It is authenticated with a pre-authenticated Fabric REST client from inside a notebook or an Entra app/service-principal token from outside.",
+      "whyItMatters": "Mirroring the OSS contract means any tool or script already written against the open-source Spark History Server API works against Fabric with only the base path changed — no bespoke client needed for the standard job/stage/task/executor data.",
+      "classification": "fact",
+      "layers": ["observability", "orchestration"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-config-capacity",
+          "note": "Fabric exposes Spark application internals as a REST API that mirrors the OSS Spark History Server API contract exactly (same endpoints, parameters, and JSON shapes for jobs, stages, tasks, executors, storage and streaming) under the path pattern /v1/workspaces/{workspaceId}/notebooks|sparkJobDefinitions|lakehouses/{itemId}/livySessions/{livyId}/applications/{appId}/{attemptId}/{endpoint}, authenticated with a pre-authenticated Fabric REST client from inside a notebook or an Entra app/SPN token from outside."
+        }
+      ],
+      "tags": ["rest-api", "spark-history-server", "livy"],
+      "drill": {
+        "inputs": ["Resolved workspaceId/itemId/livyId/applicationId/attemptId", "An auth token (in-notebook client or Entra app/SPN)"],
+        "processing": [
+          "Build the endpoint path for the target item kind (notebooks | sparkJobDefinitions | lakehouses)",
+          "Call the jobs/stages/tasks/executors/storage/streaming endpoints",
+          "Receive the same JSON shapes the OSS Spark History Server API returns"
+        ],
+        "outputs": ["Structured job/stage/task/executor JSON, identical in shape to open-source Spark"],
+        "example": "A script written against the open-source Spark History Server REST API needs only its base URL swapped to the Fabric path pattern to work unmodified against a Fabric Spark application.",
+        "controls": ["Item-kind path segment must match what launched the app (notebooks vs sparkJobDefinitions vs lakehouses)", "Entra app/SPN token for out-of-notebook automation"],
+        "failureModes": [
+          "Using the wrong item-kind path segment 404s even with otherwise-correct ids."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "fabric-only-endpoints",
+      "label": "Fabric-only endpoints: advice, resourceUsage, logs",
+      "summary": "Beyond the OSS contract, Fabric adds an advisor-findings endpoint, an executor resource-usage endpoint, and a raw driver-log endpoint.",
+      "detail": "Beyond mirroring the OSS Spark History Server contract, Fabric adds endpoints with no open-source equivalent: advice returns the Spark Advisor's Info/Warning/Error findings as structured JSON filterable by stageId, jobId, jobGroupId, or executorId; resourceUsage returns executor CPU/memory utilization over time filterable by jobGroup, the same data behind the Resources tab's chart but as thresholdable numbers; and a logs endpoint with type=driver returns raw driver stdout/stderr text fetchable without opening the Fabric portal.",
+      "whyItMatters": "These three endpoints are what actually make automated diagnostics possible rather than just automated data retrieval — advice gives structured findings a script can branch on, resourceUsage gives thresholdable numbers instead of a chart a human has to eyeball, and logs gives raw text a script can grep without portal access.",
+      "classification": "fact",
+      "layers": ["observability"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-config-capacity",
+          "note": "Beyond mirroring the OSS Spark History Server contract, Fabric adds endpoints with no open-source equivalent: advice returns the Spark Advisor's Info/Warning/Error findings as structured JSON filterable by stageId, jobId, jobGroupId, or executorId; resourceUsage returns executor CPU/memory utilization over time filterable by jobGroup; and a logs endpoint with type=driver returns raw driver stdout/stderr text fetchable without opening the Fabric portal."
+        }
+      ],
+      "tags": ["spark-advisor", "resource-usage", "driver-logs"],
+      "drill": {
+        "inputs": ["A resolved application/attempt", "Optional filters: stageId, jobId, jobGroupId, executorId"],
+        "processing": [
+          "Call advice for structured Info/Warning/Error advisor findings",
+          "Call resourceUsage for executor CPU/memory time series by jobGroup",
+          "Call logs?type=driver for raw stdout/stderr text"
+        ],
+        "outputs": ["Structured advisor findings, thresholdable resource numbers, greppable raw log text"],
+        "example": "A script polls resourceUsage and flags any executor whose memory utilization crosses 90% without a human ever opening the Resources tab chart.",
+        "controls": ["stageId / jobId / jobGroupId / executorId filters on advice and resourceUsage", "type=driver on the logs endpoint"],
+        "failureModes": [
+          "Treating advice findings as exhaustive rather than the Spark Advisor's own coverage, which does not catch every performance issue."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "event-log-pull",
+      "label": "Pull the raw event log for post-hoc analysis",
+      "summary": "Pulling the raw event log via REST is the direct route for post-hoc analysis of one specific past run, surfacing detail the portal UI does not expose.",
+      "detail": "Pulling a Fabric Spark application's raw event log via REST (rather than relying on the continuously-pushed diagnostic emitter) is the direct route for post-hoc analysis of one specific past run, whether or not an emitter was configured in advance. It also surfaces detail the portal UI does not expose, including exact per-stage skew ratios computed from every individual task-end event, spill attribution broken down by task or executor, a true critical-path ranking of stages by wall-time share, and the application's actual effective Spark configuration (SparkListenerEnvironmentUpdate) as ground truth against what was intended to be set.",
+      "whyItMatters": "This is the step that turns a REST call into a diagnosis: the raw event log is the same SparkListener JSON-lines stream the Spark UI itself renders from, so parsing it directly gives a script everything the UI shows plus detail the UI's own tabs never surface.",
+      "classification": "fact",
+      "layers": ["observability", "data"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-config-capacity",
+          "note": "Pulling a Fabric Spark application's raw event log via REST is the direct route for post-hoc analysis of one specific past run; it surfaces exact per-stage skew ratios, spill attribution by task or executor, a true critical-path ranking of stages, and the application's actual effective Spark configuration as ground truth."
+        }
+      ],
+      "tags": ["event-log", "spark-listener", "post-hoc-analysis"],
+      "drill": {
+        "inputs": ["A completed application's resolved id/attempt", "The event-log REST endpoint"],
+        "processing": [
+          "Fetch the raw SparkListener JSON-lines event stream via REST",
+          "Parse it independently of the diagnostic emitter or the portal UI"
+        ],
+        "outputs": ["The complete raw event stream for one specific past run"],
+        "example": "An analyst pulls the event log for a run that finished six hours ago with no emitter configured in advance, and still gets full task-level detail.",
+        "controls": ["Works regardless of whether the diagnostic emitter was configured"],
+        "failureModes": [
+          "Querying an application that has not yet finished returns nothing useful, since event logs only finalize on completion."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "url-pitfalls",
+      "label": "Five common event-log fetch failures",
+      "summary": "Fetching a Spark event log via REST fails for five common, well-defined reasons, most often a missing attemptId segment.",
+      "detail": "Fetching a Fabric Spark event log via REST has five common failure causes, in order of frequency: omitting the required /{attemptId}/ path segment (normally 1, or 2 after a retry), which returns an unhelpful 400/404; using the wrong item-kind path segment (a Spark Job Definition's application under /notebooks/ 404s, since the segment must match the item type that launched the app); pasting the portal Monitoring-hub URL directly, which contains the right ids but is not itself a valid API endpoint; copy artifacts such as stray quotes, a trailing slash, a URL fragment, or an accidentally-included query string; and querying an application that has not yet finished, since event logs only finalize on completion.",
+      "whyItMatters": "These are the actual, documented reasons an automated pull silently fails or 404s — an automation script's URL-normalization step exists specifically to defend against these five cases rather than being a generic robustness nicety.",
+      "classification": "warning",
+      "layers": ["observability"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-config-capacity",
+          "note": "Fetching a Fabric Spark event log via REST has five common failure causes, in order of frequency: missing attemptId segment; wrong item-kind path segment; pasting the portal Monitoring-hub URL directly; copy artifacts (stray quotes, trailing slash, fragment, query string); and querying an application that has not yet finished."
+        },
+        {
+          "sourceKey": "nb-eventlog-analysis",
+          "note": "The notebook's Fabric-application-URL parser accepts at least six different real-world shapes of the same underlying reference (full REST URL, URL missing the attemptId segment, a relative path lacking a host, a URL wrapped in quotes with a trailing query string and fragment, a Spark Job Definition variant, and a bare portal Monitoring-hub link) and normalizes all of them before calling the REST endpoint."
+        }
+      ],
+      "tags": ["troubleshooting", "url-parsing", "rest-errors"],
+      "drill": {
+        "inputs": ["A URL or id string pasted or copied by a user or upstream automation"],
+        "processing": [
+          "Detect and repair a missing attemptId segment",
+          "Detect and correct the wrong item-kind path segment",
+          "Reject or convert a pasted portal Monitoring-hub URL",
+          "Strip copy artifacts: quotes, trailing slash, fragment, stray query string",
+          "Check application completion status before fetching"
+        ],
+        "outputs": ["A valid, normalized event-log REST URL, or an explicit unfinished-application error"],
+        "example": "A user pastes the Monitoring-hub browser URL for a run; the tool's normalizer extracts the same ids and rebuilds the correct REST path rather than calling the pasted URL directly.",
+        "controls": ["URL/id normalization logic ahead of every event-log REST call"],
+        "failureModes": [
+          "Calling the REST endpoint with a pasted portal URL directly returns an unhelpful 400/404 with no indication of which of the five causes applied."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "parse-diagnose",
+      "label": "Parse the event log into ranked findings",
+      "summary": "A single pass over the parsed event log ranks stages by their real wall-clock contribution and reports skew ratio and spill volume for each.",
+      "detail": "A stage-ranking algorithm sorts a Spark application's stages by each stage's percentage share of total application wall-clock duration (the 'critical path'), reporting per-stage skew ratio and spill volume alongside that share in a single pass over the parsed event log — so the stage most worth investigating is identified by actual measured time contribution rather than by task count, stage id order, or shuffle bytes alone. Configuration values material to diagnosis (whether AQE was enabled, the shuffle partition count, and NEE/ANSI flags) are recovered directly from the event log's own environment-update event rather than assumed from the analyst's current session.",
+      "whyItMatters": "This is the actual automated-diagnosis step: turning a raw JSON-lines event stream into a ranked, quantified answer to \"which stage is actually the bottleneck, and is it skew, spill, or something else\" without a human reading task tables by hand.",
+      "classification": "fact",
+      "layers": ["observability", "compute"],
+      "evidence": [
+        {
+          "sourceKey": "nb-eventlog-analysis",
+          "note": "The stage-ranking algorithm sorts stages by percentage share of total application wall-clock duration (the critical path), reporting per-stage skew ratio and spill volume alongside that share in a single pass over the parsed event log."
+        },
+        {
+          "sourceKey": "nb-eventlog-analysis",
+          "note": "Spark configuration values material to diagnosis (whether AQE was enabled, the shuffle partition count, and NEE/ANSI flags) can be recovered directly from the event log's own environment-update event; a real executed run confirmed the recovered shuffle-partition-count value (16) matched the value the job was actually configured with."
+        },
+        {
+          "sourceKey": "nb-eventlog-analysis",
+          "note": "A real saved execution ran a deliberately skewed join (70% of a 1.2M-row left table's rows mapped to one join key against a 500-row right table); the event-log-derived skew detector measured a genuine 3.8x task-duration skew ratio (max task 1733ms versus median 457ms across 16 tasks), exceeding the notebook's own 3.0x flagging threshold and producing a critical-severity finding."
+        }
+      ],
+      "tags": ["skew-detection", "spill-detection", "critical-path", "event-log-parsing"],
+      "drill": {
+        "inputs": ["The raw parsed event log", "SparkListener task-end and environment-update events"],
+        "processing": [
+          "Compute each stage's percentage share of total wall-clock duration",
+          "Compute per-stage skew ratio (max task duration / median task duration)",
+          "Compute per-stage spill volume from aggregated task metrics",
+          "Recover effective configuration (AQE, shuffle partitions, NEE/ANSI flags) from the environment-update event"
+        ],
+        "outputs": ["A stage list ranked by real wall-clock contribution, each tagged with skew ratio, spill volume, and effective config"],
+        "example": "On a real executed run with a deliberately skewed join (70% of a 1.2M-row table's rows on one key against a 500-row table), the detector measured a 3.8x skew ratio — max task 1733ms versus median 457ms across 16 tasks — exceeding its own 3.0x threshold and flagging the stage critical.",
+        "controls": ["Skew-ratio flagging threshold (3.0x in this implementation)", "Single pass over the event log rather than repeated re-scans"],
+        "failureModes": [
+          "A shuffle-size estimate used elsewhere in the same toolkit is explicitly labeled a proxy on total input bytes, not a measurement of actual shuffle write bytes — a groupBy that aggregates away most rows shuffles far less than its input size suggests."
+        ],
+        "metrics": [
+          { "label": "Measured skew ratio on the proof run", "value": "3.8x", "sourceKey": "nb-eventlog-analysis" },
+          { "label": "Max task duration on the skewed stage", "value": "1733 ms", "sourceKey": "nb-eventlog-analysis" },
+          { "label": "Median task duration on the skewed stage", "value": "457 ms", "sourceKey": "nb-eventlog-analysis" },
+          { "label": "Recovered shuffle partition count, confirmed correct", "value": "16", "sourceKey": "nb-eventlog-analysis" }
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "shuffle-heuristic-warning",
+      "label": "Shuffle-size estimate is a proxy, not a measurement",
+      "summary": "A companion shuffle-partition-count heuristic is explicitly labeled a starting-point proxy, not a measurement, and must be validated against real Shuffle Write metrics.",
+      "detail": "A shuffle-partition-count heuristic computes the larger of two independently derived values: a size-based estimate (total input bytes divided by a target partition size, defaulting to 128 MB) and a parallelism floor of twice the total executor vCore count. The toolkit's own stated limitations describe its shuffle-size estimate as a proxy based on total input bytes rather than a measurement of actual shuffle write bytes — a groupBy that aggregates away most input rows shuffles far less than its input size suggests, while a row-exploding join shuffles more — and it recommends correcting the heuristic against the Spark UI's real Shuffle Write metric after a job has actually run once, rather than trusting the proxy indefinitely.",
+      "whyItMatters": "Automated diagnostics is not infallible: this is the toolkit's own documented boundary between what it measures directly from the event log (skew ratio, actual spill) and what it only estimates (shuffle partition sizing) — treating the two the same way would misdirect a fix.",
+      "classification": "warning",
+      "layers": ["observability", "compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-auto-config-utility",
+          "note": "The shuffle-partition-count heuristic computes the larger of a size-based estimate (input bytes / 128MB target) and a parallelism floor of twice total executor vCores, explicitly labeled a HEURISTIC starting point to validate against the Spark UI's actual Shuffle Write metric, not a measurement."
+        },
+        {
+          "sourceKey": "spark-auto-config-utility",
+          "note": "The shuffle-size estimate is a proxy based on total input bytes rather than a measurement of actual shuffle write bytes: a groupBy that aggregates away most input rows shuffles far less than its input size suggests, while a row-exploding join shuffles more."
+        }
+      ],
+      "tags": ["heuristic", "shuffle-partitions", "known-limitation"],
+      "drill": {
+        "inputs": ["Total input bytes for the stage", "Total executor vCore count"],
+        "processing": [
+          "Compute size-based estimate: input bytes / 128 MB target partition size",
+          "Compute parallelism floor: 2x total executor vCores",
+          "Take the larger of the two as the recommended shuffle partition count"
+        ],
+        "outputs": ["A starting-point shuffle partition recommendation flagged as a heuristic, not ground truth"],
+        "example": "A row-exploding join is recommended fewer shuffle partitions than it actually needs, because the heuristic under-estimates its true shuffle volume from input bytes alone.",
+        "controls": ["Validate the recommendation against the Spark UI's actual Shuffle Write metric after one real run"],
+        "failureModes": [
+          "Trusting the proxy indefinitely instead of correcting it against a measured Shuffle Write value locks in a wrong partition count."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "remediation-table",
+      "label": "Physical-plan-to-remediation mapping",
+      "summary": "Five recurring Fabric Spark slowness signatures each map to a specific plan/log fingerprint and a specific remedy.",
+      "detail": "A physical-plan-to-remediation diagnostic table covers five recurring Fabric Spark slowness signatures: zero data skipping shows as file-read count equal to the table's total file count in the SQL tab's FileScan node (remedy: set dataSkippingStatsColumns and cluster on the filter column); Native Execution Engine fallback shows as alternating VeloxColumnarToRow/RowToVeloxColumnar operators in driver stderr around Gluten (remedy: replace the causing UDF or unsupported expression with a built-in function); severe skew shows as a large gap between median and max task duration in the Stages tab (remedy: AQE skew join or explicit key salting); SortMergeJoin spill shows as large Spill (Memory)/Spill (Disk) aggregated-metrics values (remedy: lower the AQE advisory partition size or force a broadcast join under a size threshold); and small-file task explosion shows as tens of thousands of sub-150ms tasks in the Jobs tab (remedy: OPTIMIZE to consolidate into larger V-Ordered files).",
+      "whyItMatters": "This is what turns a ranked-and-quantified finding into an actionable fix: each of the automated pipeline's outputs (a skew ratio, a spill number, a fallback pattern in driver logs) maps to one specific, named remedy rather than leaving the practitioner to guess.",
+      "classification": "pattern",
+      "layers": ["compute", "observability"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-delta-modeling",
+          "note": "A physical-plan-to-remediation diagnostic table covers five recurring Fabric Spark slowness signatures — zero data skipping, Native Execution Engine fallback, severe skew, SortMergeJoin spill, and small-file task explosion — each with a specific plan/log fingerprint and a specific remedy."
+        }
+      ],
+      "tags": ["remediation", "diagnostic-table", "skew", "spill"],
+      "drill": {
+        "inputs": ["A ranked finding: skew ratio, spill volume, fallback signature, or file-read pattern"],
+        "processing": [
+          "Match the finding's fingerprint against the five documented signatures",
+          "Return the paired, specific remedy rather than a generic tuning suggestion"
+        ],
+        "outputs": ["A named remedy: dataSkippingStatsColumns + clustering, UDF replacement, AQE skew join or salting, lower advisory partition size or broadcast join, OPTIMIZE compaction"],
+        "example": "A stage flagged with large Spill (Memory)/Spill (Disk) aggregated-metrics values maps directly to lowering the AQE advisory partition size or forcing a broadcast join under a size threshold, rather than a generic 'add more memory' suggestion.",
+        "controls": ["dataSkippingStatsColumns", "AQE skew join / explicit key salting", "AQE advisory partition size / broadcast join threshold", "OPTIMIZE / V-Order compaction"],
+        "failureModes": [
+          "Applying a generic performance tweak instead of the fingerprint-matched remedy can miss the actual cause entirely."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "livy-log",
+      "label": "Livy log: the only view into bootstrap failures",
+      "summary": "A whole class of Fabric Spark failures happens before any Spark job exists and is visible only in the Livy log, never the Spark UI's job/stage/task tabs.",
+      "detail": "A whole class of Fabric Spark failures happens at the Livy bootstrap layer before any actual Spark job exists — capacity 430s, library resolution conflicts, unpublished Environments, and session timeouts — and these appear only in the Livy log, never in the Spark UI's job/stage/task tabs. The Application detail Logs tab exposes three separate log streams that answer different failure questions: the Livy log (session submission, lifecycle, queuing), a Prelaunch log (node warmup, container bootstrap, pool allocation — the log that reveals pool allocation failures or wheel dependency conflicts when a job fails before any task runs), and the Driver log (stdout/stderr, print output, stack traces).",
+      "whyItMatters": "An automated pipeline that only parses the event log or calls the job/stage/task REST endpoints is structurally blind to this entire failure class — a session that never starts has no event log and no jobs to rank, so diagnosing it requires deliberately routing to the Livy and Prelaunch logs instead.",
+      "classification": "warning",
+      "layers": ["observability", "orchestration"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-config-capacity",
+          "note": "A whole class of Fabric Spark failures happens at the Livy bootstrap layer before any actual Spark job exists — capacity 430s, library resolution conflicts, unpublished Environments, and session timeouts — and these appear only in the Livy log, never in the Spark UI's job/stage/task tabs."
+        },
+        {
+          "sourceKey": "spark-internals-config-capacity",
+          "note": "The Application detail Logs tab exposes three separate log streams: the Livy log (session submission, lifecycle, queuing), a Prelaunch log (node warmup, container bootstrap, pool allocation), and the Driver log (stdout/stderr, print output, stack traces)."
+        },
+        {
+          "sourceKey": "fabric-blog-spark-failure-diagnosis",
+          "note": "The skill can detect stuck, zombie, or otherwise unhealthy Livy sessions that are consuming cluster capacity without being productive."
+        }
+      ],
+      "tags": ["livy", "bootstrap-failures", "prelaunch-log"],
+      "drill": {
+        "inputs": ["A session that never started or took an unusually long time to start"],
+        "processing": [
+          "Check the Livy log first for capacity 430s, library conflicts, unpublished Environments, session timeouts",
+          "Check the Prelaunch log for node warmup, container bootstrap, or pool allocation failures",
+          "Only proceed to the Driver log / event log once a job is confirmed to have actually started"
+        ],
+        "outputs": ["A bootstrap-layer root cause, or confirmation the session did start and diagnosis should move to the event log"],
+        "example": "A session stuck for ten minutes with no jobs listed is diagnosed from the Livy log, which shows a capacity admission 430, rather than from an empty Jobs tab that has nothing to show.",
+        "controls": ["Route bootstrap-symptom diagnosis to Livy/Prelaunch logs specifically, not the Jobs tab"],
+        "failureModes": [
+          "An automated tool that only queries job/stage/task REST endpoints returns empty results for a session that never started, with no indication the real problem is upstream."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "diagnostic-emitter",
+      "label": "Alternative: the continuously-pushed diagnostic emitter",
+      "summary": "The diagnostic emitter streams logs and metrics continuously to Log Analytics, Storage, or Event Hubs as an alternative to pulling the event log on demand.",
+      "detail": "The Fabric diagnostic emitter (streaming Spark driver/executor logs and metrics continuously to Azure Log Analytics, Azure Storage, or Event Hubs) is configured as Spark properties on a Fabric Environment, which makes it session-start scope rather than settable from a running notebook. It is distinct from the per-application event log, which is the same underlying raw event stream but pulled on demand via REST for one specific past application rather than pushed continuously.",
+      "whyItMatters": "This is the fork in the automated-diagnostics design space: push (emitter, configured in advance, continuous, needs no REST pull) versus pull (event log via REST, works after the fact with no advance setup, but only for applications that already ran).",
+      "classification": "fact",
+      "layers": ["observability", "governance"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-config-capacity",
+          "note": "The Fabric diagnostic emitter (streaming Spark driver/executor logs and metrics continuously to Azure Log Analytics, Azure Storage, or Event Hubs) is configured as Spark properties on a Fabric Environment, session-start scope rather than settable from a running notebook. It is distinct from the per-application event log, which is the same underlying raw event stream but pulled on demand via REST."
+        }
+      ],
+      "tags": ["diagnostic-emitter", "log-analytics", "push-vs-pull"],
+      "drill": {
+        "inputs": ["A Fabric Environment configured with emitter Spark properties before session start"],
+        "processing": [
+          "Stream driver/executor logs and metrics continuously during the session",
+          "Land the stream in Log Analytics, Azure Storage, or Event Hubs"
+        ],
+        "outputs": ["A continuous, queryable log/metric stream independent of any post-hoc REST pull"],
+        "example": "A team that wants alerting on every Spark session tenant-wide configures the emitter once on a shared Environment rather than pulling event logs application-by-application after the fact.",
+        "controls": ["Emitter Spark properties set on the Fabric Environment", "Destination choice: Log Analytics, Storage, or Event Hubs"],
+        "failureModes": [
+          "Configured only after a problematic session already ran, so it captures nothing for that specific run — the on-demand event-log REST pull is the only route for that past application."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "emitter-gotchas",
+      "label": "Four documented emitter gotchas",
+      "summary": "Configuring the Log Analytics diagnostic emitter has four specific, documented gotchas that silently produce an emitter collecting nothing.",
+      "detail": "Configuring the Fabric diagnostic emitter for Log Analytics has four documented gotchas: the property spark.fabric.pools.skipStarterPools must be set to true or a starter pool silently never engages the emitter at all (the single most common failure, since everything else looks correctly configured); the emitter category-name list differs by destination (Log,EventLog,Metrics for Log Analytics versus DriverLog,ExecutorLog,EventLog,Metrics for Storage/Event Hubs, so copying one example into the other destination collects nothing useful); the required secret is the Log Analytics workspace's primary key from the Agents blade, not an Entra token or connection string; and users submitting Spark jobs need read access to the Key Vault secret when using the Key Vault-backed secret route, or the emitter fails to initialize per session.",
+      "whyItMatters": "These are the concrete reasons a team believes the emitter is configured and collecting data when it silently is not — the single most common cause (starter pools skipping the emitter entirely) has no error message, so an automated setup check that verifies the four gotchas is the only reliable way to confirm the emitter is actually working.",
+      "classification": "warning",
+      "layers": ["observability", "governance", "security"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-config-capacity",
+          "note": "Configuring the Fabric diagnostic emitter for Log Analytics has four documented gotchas: spark.fabric.pools.skipStarterPools must be true or a starter pool silently never engages the emitter; the emitter category-name list differs by destination; the required secret is the Log Analytics workspace's primary key, not an Entra token; and Spark job submitters need read access to the Key Vault secret when using the Key Vault-backed route."
+        }
+      ],
+      "tags": ["diagnostic-emitter", "log-analytics", "known-limitation"],
+      "drill": {
+        "inputs": ["A Fabric Environment with emitter properties set"],
+        "processing": [
+          "Confirm spark.fabric.pools.skipStarterPools=true if using a starter pool",
+          "Match the category-name list to the actual destination (Log Analytics vs Storage/Event Hubs)",
+          "Confirm the secret is the Log Analytics workspace primary key, not an Entra token or connection string",
+          "Confirm Spark job submitters have read access to the backing Key Vault secret"
+        ],
+        "outputs": ["A verified-working emitter, or an identified specific misconfiguration"],
+        "example": "A team on a starter pool configures the emitter exactly per the Storage-destination example, sees no errors, and gets zero data — because skipStarterPools was never set to true.",
+        "controls": ["spark.fabric.pools.skipStarterPools", "Destination-matched category-name list", "Key Vault read access for job submitters"],
+        "failureModes": [
+          "The most common failure produces no error at all — everything looks correctly configured while the emitter silently collects nothing."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    },
+    {
+      "id": "diagnostic-report",
+      "label": "Severity-ranked diagnostic report",
+      "summary": "The automated pipeline's output is a severity-ranked diagnostic report, not raw logs a human still has to interpret.",
+      "detail": "The Fabric Spark Operations Skill is a preview, read-only, AI-assisted diagnostic tool that resolves workspace and item identifiers from a plain-English description and queries Fabric's Spark monitoring APIs to produce a severity-ranked diagnostic report. It can detect stuck, zombie, or otherwise unhealthy Livy sessions that are consuming cluster capacity without being productive, and for deeper analysis it can copy Spark event logs to OneLake and launch a local Spark History Server container, giving full Spark UI features without needing Fabric portal access.",
+      "whyItMatters": "This is the end state the whole pipeline exists to reach: instead of a person assembling a diagnosis from five UI surfaces, the automated pipeline hands back a ranked report a human can act on directly, with a fallback route to full Spark UI fidelity when the structured findings alone are not enough.",
+      "classification": "fact",
+      "layers": ["observability"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-blog-spark-failure-diagnosis",
+          "note": "The Fabric Spark Operations Skill is a preview, read-only, AI-assisted diagnostic tool that resolves workspace and item identifiers from a plain-English description and queries Fabric's Spark monitoring APIs to produce a severity-ranked diagnostic report."
+        },
+        {
+          "sourceKey": "fabric-blog-spark-failure-diagnosis",
+          "note": "The skill can detect stuck, zombie, or otherwise unhealthy Livy sessions that are consuming cluster capacity without being productive."
+        },
+        {
+          "sourceKey": "fabric-blog-spark-failure-diagnosis",
+          "note": "For deeper analysis the skill can copy Spark event logs to OneLake and launch a local Spark History Server container, giving full Spark UI features (DAG visualization, SQL query plans, task-level metrics) without needing Fabric portal access."
+        }
+      ],
+      "tags": ["diagnostic-report", "spark-operations-skill", "severity-ranking"],
+      "drill": {
+        "inputs": ["Parsed event log findings", "Advisor findings, resource-usage numbers, Livy/Prelaunch/Driver log analysis"],
+        "processing": [
+          "Rank all findings by severity",
+          "Attach the fingerprint-matched remedy from the remediation table where applicable",
+          "Offer a copy-to-OneLake + local History Server fallback for full Spark UI fidelity"
+        ],
+        "outputs": ["A severity-ranked report a practitioner can act on directly"],
+        "example": "A workspace-wide Spark health review returns a ranked list where a stuck Livy session consuming capacity outranks a moderate 1.5x skew finding on a completed job.",
+        "controls": ["Read-only: the skill diagnoses but does not modify sessions or configuration"],
+        "failureModes": [
+          "Being read-only, the tool identifies but cannot itself remediate — every ranked finding still requires a human or a separate automation to act on it."
+        ]
+      },
+      "drillTarget": {
+        "kind": "capability",
+        "slug": "spark",
+        "label": "Spark capability"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-manual-vs-identify",
+      "from": "manual-baseline",
+      "to": "identify",
+      "label": "Automation replaces UI tab-hopping with an identifier resolution step",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-identify-rest",
+      "from": "identify",
+      "to": "rest-api-surface",
+      "label": "Resolved ids drive the REST endpoint path",
+      "layer": "orchestration",
+      "kind": "flow"
+    },
+    {
+      "id": "e-rest-fabriconly",
+      "from": "rest-api-surface",
+      "to": "fabric-only-endpoints",
+      "label": "Same API surface, Fabric-only endpoints layered on top",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-rest-eventlog",
+      "from": "rest-api-surface",
+      "to": "event-log-pull",
+      "label": "The same REST surface also serves the raw event log",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-eventlog-pitfalls",
+      "from": "event-log-pull",
+      "to": "url-pitfalls",
+      "label": "Malformed requests fail for five documented reasons",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-eventlog-parse",
+      "from": "event-log-pull",
+      "to": "parse-diagnose",
+      "label": "A successful pull is parsed in one pass",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-parse-shufflewarn",
+      "from": "parse-diagnose",
+      "to": "shuffle-heuristic-warning",
+      "label": "One companion metric is an estimate, not a measurement",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-parse-remediation",
+      "from": "parse-diagnose",
+      "to": "remediation-table",
+      "label": "Each ranked finding maps to a named fix",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-identify-livy",
+      "from": "identify",
+      "to": "livy-log",
+      "label": "A session that never started routes here instead",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "e-eventlog-emitter",
+      "from": "event-log-pull",
+      "to": "diagnostic-emitter",
+      "label": "On-demand pull vs the continuously-pushed alternative",
+      "layer": "observability",
+      "kind": "branch"
+    },
+    {
+      "id": "e-emitter-gotchas",
+      "from": "diagnostic-emitter",
+      "to": "emitter-gotchas",
+      "label": "Configuring the push path has its own four failure modes",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-remediation-report",
+      "from": "remediation-table",
+      "to": "diagnostic-report",
+      "label": "Fingerprint-matched fixes feed the final report",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-fabriconly-report",
+      "from": "fabric-only-endpoints",
+      "to": "diagnostic-report",
+      "label": "Advisor findings and resource usage feed the same report",
+      "layer": "observability",
+      "kind": "flow"
+    },
+    {
+      "id": "e-livy-report",
+      "from": "livy-log",
+      "to": "diagnostic-report",
+      "label": "Bootstrap-layer causes are ranked alongside job-layer causes",
+      "layer": "observability",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "manual-baseline",
+      "title": "1. The manual baseline",
+      "explanation": "Without automation, a person has to know which of five overlapping Spark UI surfaces holds the answer and navigate there by hand, reassembling a diagnosis from scratch every time."
+    },
+    {
+      "nodeId": "identify",
+      "title": "2. Resolve identifiers automatically",
+      "explanation": "An automated tool starts from a plain-English description, not a GUID, and resolves the workspace, item, Livy session, application, and attempt it needs before calling any API."
+    },
+    {
+      "nodeId": "rest-api-surface",
+      "title": "3. Call the Spark monitoring REST API",
+      "explanation": "Fabric's Spark REST API mirrors the open-source Spark History Server contract exactly for jobs, stages, tasks, executors, storage, and streaming."
+    },
+    {
+      "nodeId": "fabric-only-endpoints",
+      "title": "4. Fabric-only endpoints add structured diagnosis",
+      "explanation": "advice, resourceUsage, and logs go beyond the OSS contract, returning structured advisor findings, thresholdable resource numbers, and raw driver log text."
+    },
+    {
+      "nodeId": "event-log-pull",
+      "title": "5. Pull the raw event log for deep analysis",
+      "explanation": "Pulling the raw event log via REST surfaces detail the portal UI never shows: exact skew ratios, spill attribution, a true critical-path ranking, and the application's real effective configuration."
+    },
+    {
+      "nodeId": "url-pitfalls",
+      "title": "6. Five ways the pull silently fails",
+      "explanation": "A missing attemptId segment, the wrong item-kind path, a pasted portal URL, copy artifacts, or an unfinished application each break the fetch in a specific, documented way."
+    },
+    {
+      "nodeId": "parse-diagnose",
+      "title": "7. Parse the log into ranked findings",
+      "explanation": "One pass over the parsed event log ranks stages by real wall-clock share and reports skew ratio and spill volume for each — proved on a real run that measured a genuine 3.8x skew ratio."
+    },
+    {
+      "nodeId": "shuffle-heuristic-warning",
+      "title": "8. Know which numbers are measured and which are estimated",
+      "explanation": "A companion shuffle-partition-count heuristic is explicitly a starting-point proxy on input bytes, not a measurement of actual shuffle write bytes, and must be validated against the Spark UI."
+    },
+    {
+      "nodeId": "remediation-table",
+      "title": "9. Map each finding to a named fix",
+      "explanation": "Five recurring slowness signatures — zero data skipping, NEE fallback, severe skew, sort-merge spill, small-file explosion — each map to one specific remedy."
+    },
+    {
+      "nodeId": "livy-log",
+      "title": "10. Route bootstrap failures to the Livy log instead",
+      "explanation": "A session that never started has no event log and no jobs to rank; a whole class of failures is visible only in the Livy and Prelaunch logs."
+    },
+    {
+      "nodeId": "diagnostic-emitter",
+      "title": "11. The push alternative to pulling on demand",
+      "explanation": "A continuously-pushed diagnostic emitter to Log Analytics, Storage, or Event Hubs is the alternative to pulling the event log after the fact — configured in advance as Environment properties."
+    },
+    {
+      "nodeId": "emitter-gotchas",
+      "title": "12. Four ways the emitter silently collects nothing",
+      "explanation": "A starter pool that skips the emitter, a mismatched category-name list, the wrong secret type, or missing Key Vault read access each defeat the emitter with no error message."
+    },
+    {
+      "nodeId": "diagnostic-report",
+      "title": "13. A severity-ranked report, not raw logs",
+      "explanation": "The pipeline's output is a ranked report a practitioner can act on directly, with a copy-to-OneLake local History Server fallback when full Spark UI fidelity is still needed."
+    }
+  ]
+}

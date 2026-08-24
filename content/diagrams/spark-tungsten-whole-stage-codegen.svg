@@ -1,0 +1,176 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="stwc-title stwc-desc" data-diagram-id="spark-tungsten-whole-stage-codegen">
+  <title id="stwc-title">Tungsten whole-stage code generation vs. the Volcano iterator model</title>
+  <desc id="stwc-desc">How Spark's Tungsten engine fuses a chain of operators — filter, project, hash-aggregate — into one generated Java function operating on UnsafeRow in a CPU register, instead of each operator calling next() on the one below it through a virtual-dispatch iterator chain; shows the Janino compiler step, the EXPLAIN CODEGEN verification path, and where fusion breaks.</desc>
+
+  <defs>
+    <linearGradient id="stwc-head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3B1A5C"/>
+      <stop offset="0.5" stop-color="#5B2A86"/>
+      <stop offset="1" stop-color="#7C3AAD"/>
+    </linearGradient>
+    <filter id="stwc-shadow" x="-4%" y="-6%" width="108%" height="116%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#3B1A5C" flood-opacity="0.10"/>
+    </filter>
+    <marker id="stwc-arr-red" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B91C1C"/>
+    </marker>
+    <marker id="stwc-arr-green" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#047857"/>
+    </marker>
+    <marker id="stwc-arr-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#7C3AAD"/>
+    </marker>
+    <marker id="stwc-arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B45309"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="900" fill="#FAF5FF"/>
+
+  <!-- Hero header -->
+  <rect width="1200" height="88" fill="url(#stwc-head)"/>
+  <text x="40" y="38" font-size="20" font-weight="700" fill="#FFFFFF" letter-spacing="-0.3px">Tungsten — Whole-Stage Code Generation</text>
+  <text x="40" y="64" font-size="12" fill="#E9D8FD">Fusing filter ➔ project ➔ aggregate into one generated Java loop instead of a chain of virtual next() calls</text>
+  <text x="1160" y="38" font-size="10.5" text-anchor="end" fill="#E9D8FD">Fabric Atlas Original</text>
+  <text x="1160" y="60" font-size="10.5" text-anchor="end" fill="#D8B4FE">Grounded in Spark internals toolkit + EXPLAIN reference</text>
+
+  <!-- Legend bar -->
+  <g transform="translate(40,102)" font-size="10.5">
+    <rect width="1120" height="30" rx="8" fill="#FFFFFF" stroke="#E9D8FD"/>
+    <circle cx="20" cy="15" r="5" fill="#B91C1C"/><text x="32" y="19" fill="#7F1D1D" font-weight="600">Volcano / iterator model (per-row virtual calls)</text>
+    <circle cx="330" cy="15" r="5" fill="#047857"/><text x="342" y="19" fill="#065F46" font-weight="600">Tungsten whole-stage codegen (fused, register-resident)</text>
+    <circle cx="700" cy="15" r="5" fill="#7C3AAD"/><text x="712" y="19" fill="#4C1D95" font-weight="600">Compilation step</text>
+    <circle cx="880" cy="15" r="5" fill="#B45309"/><text x="892" y="19" fill="#7C2D12" font-weight="600">Fusion boundary / verification</text>
+  </g>
+
+  <!-- ================= LANE 1: VOLCANO ITERATOR MODEL ================= -->
+  <g data-node-id="volcano-lane" tabindex="0" aria-label="Volcano iterator model: each operator is a separate object that calls next() on the operator below it, one virtual dispatch per row per operator boundary">
+    <rect x="40" y="150" width="1120" height="190" rx="12" fill="#FEF2F2" stroke="#FCA5A5" stroke-width="1.5"/>
+    <text x="60" y="176" font-size="13.5" font-weight="700" fill="#7F1D1D">Volcano / iterator model — one row, three virtual-dispatch hops</text>
+    <text x="60" y="194" font-size="10.5" fill="#991B1B">Each operator is its own Java object. A row travels up the chain by repeated next() calls that the JIT cannot inline away.</text>
+
+    <!-- operator boxes -->
+    <g data-node-id="volcano-scan" tabindex="0" aria-label="Scan operator: reads one row and returns it as a Java object">
+      <rect x="80" y="215" width="180" height="100" rx="10" fill="#FFFFFF" stroke="#DC2626" stroke-width="1.5" filter="url(#stwc-shadow)"/>
+      <text x="170" y="240" font-size="12" font-weight="700" fill="#7F1D1D" text-anchor="middle">ScanOperator</text>
+      <text x="170" y="258" font-size="10" fill="#991B1B" text-anchor="middle">.next()</text>
+      <text x="170" y="278" font-size="9.5" fill="#7F1D1D" text-anchor="middle">returns one</text>
+      <text x="170" y="292" font-size="9.5" fill="#7F1D1D" text-anchor="middle">JVM row object</text>
+    </g>
+
+    <g data-node-id="volcano-filter" tabindex="0" aria-label="Filter operator: calls next() on the scan operator below it, evaluates the predicate, then returns its own row object">
+      <rect x="330" y="215" width="180" height="100" rx="10" fill="#FFFFFF" stroke="#DC2626" stroke-width="1.5" filter="url(#stwc-shadow)"/>
+      <text x="420" y="240" font-size="12" font-weight="700" fill="#7F1D1D" text-anchor="middle">FilterOperator</text>
+      <text x="420" y="258" font-size="10" fill="#991B1B" text-anchor="middle">.next() -&gt; calls child.next()</text>
+      <text x="420" y="278" font-size="9.5" fill="#7F1D1D" text-anchor="middle">evaluates predicate,</text>
+      <text x="420" y="292" font-size="9.5" fill="#7F1D1D" text-anchor="middle">boxes a new row object</text>
+    </g>
+
+    <g data-node-id="volcano-project" tabindex="0" aria-label="Project operator: calls next() on the filter operator below it, computes expressions, then returns its own row object">
+      <rect x="580" y="215" width="180" height="100" rx="10" fill="#FFFFFF" stroke="#DC2626" stroke-width="1.5" filter="url(#stwc-shadow)"/>
+      <text x="670" y="240" font-size="12" font-weight="700" fill="#7F1D1D" text-anchor="middle">ProjectOperator</text>
+      <text x="670" y="258" font-size="10" fill="#991B1B" text-anchor="middle">.next() -&gt; calls child.next()</text>
+      <text x="670" y="278" font-size="9.5" fill="#7F1D1D" text-anchor="middle">computes columns,</text>
+      <text x="670" y="292" font-size="9.5" fill="#7F1D1D" text-anchor="middle">boxes another row object</text>
+    </g>
+
+    <g data-node-id="volcano-aggregate" tabindex="0" aria-label="Aggregate operator: calls next() on the project operator below it in a loop, one virtual call per source row">
+      <rect x="830" y="215" width="180" height="100" rx="10" fill="#FFFFFF" stroke="#DC2626" stroke-width="1.5" filter="url(#stwc-shadow)"/>
+      <text x="920" y="240" font-size="12" font-weight="700" fill="#7F1D1D" text-anchor="middle">AggregateOperator</text>
+      <text x="920" y="258" font-size="10" fill="#991B1B" text-anchor="middle">.next() loop -&gt; child.next()</text>
+      <text x="920" y="278" font-size="9.5" fill="#7F1D1D" text-anchor="middle">per source row: one</text>
+      <text x="920" y="292" font-size="9.5" fill="#7F1D1D" text-anchor="middle">virtual call each hop</text>
+    </g>
+
+    <path d="M260 265 L330 265" stroke="#B91C1C" stroke-width="2" marker-end="url(#stwc-arr-red)"/>
+    <path d="M510 265 L580 265" stroke="#B91C1C" stroke-width="2" marker-end="url(#stwc-arr-red)"/>
+    <path d="M760 265 L830 265" stroke="#B91C1C" stroke-width="2" marker-end="url(#stwc-arr-red)"/>
+    <text x="295" y="255" font-size="9" fill="#7F1D1D" text-anchor="middle">next()</text>
+    <text x="545" y="255" font-size="9" fill="#7F1D1D" text-anchor="middle">next()</text>
+    <text x="795" y="255" font-size="9" fill="#7F1D1D" text-anchor="middle">next()</text>
+
+    <rect x="80" y="323" width="930" height="14" rx="4" fill="#FEE2E2" stroke="#FCA5A5"/>
+    <text x="545" y="333" font-size="9.5" fill="#7F1D1D" text-anchor="middle">Cost: 3 virtual-dispatch calls + 3 boxed row allocations, repeated for every single row in the batch</text>
+  </g>
+
+  <!-- ================= COMPILATION ARROW ================= -->
+  <g data-node-id="janino-compile" tabindex="0" aria-label="Janino compiler: Tungsten's whole-stage code generation collapses the physical plan for filter, project, and aggregate into one generated Java function, compiled at runtime by the embedded Janino compiler">
+    <rect x="380" y="365" width="440" height="66" rx="12" fill="#F3E8FF" stroke="#7C3AAD" stroke-width="1.5" filter="url(#stwc-shadow)"/>
+    <text x="600" y="390" font-size="12.5" font-weight="700" fill="#4C1D95" text-anchor="middle">Whole-Stage Code Generation (Janino compiler)</text>
+    <text x="600" y="408" font-size="10" fill="#5B21B6" text-anchor="middle">collapses the physical plan for this stage into one Java source string,</text>
+    <text x="600" y="422" font-size="10" fill="#5B21B6" text-anchor="middle">compiled at runtime — no interpreted operator tree left to walk</text>
+    <path d="M600 350 L600 365" stroke="#7C3AAD" stroke-width="2.5" marker-end="url(#stwc-arr-purple)"/>
+    <path d="M600 431 L600 448" stroke="#7C3AAD" stroke-width="2.5" marker-end="url(#stwc-arr-purple)"/>
+  </g>
+
+  <!-- ================= LANE 2: TUNGSTEN FUSED STAGE ================= -->
+  <g data-node-id="fused-lane" tabindex="0" aria-label="Tungsten fused stage: filter, project, and aggregate compiled into a single generated Java while loop, marked with a leading asterisk such as star(1) HashAggregate in the physical plan">
+    <rect x="40" y="450" width="1120" height="230" rx="12" fill="#ECFDF5" stroke="#6EE7B7" stroke-width="1.5"/>
+    <text x="60" y="476" font-size="13.5" font-weight="700" fill="#065F46">Tungsten whole-stage codegen — one generated function, one row, one pass</text>
+    <text x="60" y="494" font-size="10.5" fill="#047857">Marked in the physical plan with a leading asterisk, e.g. *(1) HashAggregate.</text>
+
+    <g data-node-id="fused-function" tabindex="0" aria-label="Generated Java function: a single fused while loop with no operator-to-operator method calls, holding intermediate values in CPU registers or local variables rather than heap-allocated row objects">
+      <rect x="80" y="514" width="1000" height="150" rx="10" fill="#FFFFFF" stroke="#059669" stroke-width="1.5" filter="url(#stwc-shadow)"/>
+      <text x="100" y="536" font-size="11.5" font-weight="700" fill="#065F46" font-family="Consolas, monospace">while (input.hasNext()) {</text>
+      <text x="120" y="556" font-size="11" fill="#065F46" font-family="Consolas, monospace">UnsafeRow row = input.next();      // one off-heap binary row, no boxing</text>
+      <text x="120" y="576" font-size="11" fill="#065F46" font-family="Consolas, monospace">if (filterPredicate(row)) {        // filter inlined — no FilterOperator object</text>
+      <text x="140" y="596" font-size="11" fill="#065F46" font-family="Consolas, monospace">long projected = computeExpr(row); // project inlined — value stays in a register</text>
+      <text x="140" y="616" font-size="11" fill="#065F46" font-family="Consolas, monospace">hashAgg.update(projected);         // aggregate inlined — same generated function</text>
+      <text x="120" y="636" font-size="11" fill="#065F46" font-family="Consolas, monospace">}</text>
+      <text x="100" y="654" font-size="11.5" font-weight="700" fill="#065F46" font-family="Consolas, monospace">}</text>
+    </g>
+
+    <rect x="80" y="672" width="1000" height="0" fill="none"/>
+    <g font-size="9.5" fill="#047857">
+      <text x="90" y="676" text-anchor="start"></text>
+    </g>
+  </g>
+
+  <!-- annotation callouts pointing at the fused function -->
+  <g data-node-id="unsaferow-note" tabindex="0" aria-label="UnsafeRow: rows are a raw off-heap binary byte array, avoiding per-object Java headers, pointer chasing, and garbage collection pauses">
+    <rect x="80" y="695" width="330" height="80" rx="10" fill="#FFFFFF" stroke="#059669" stroke-width="1.2" filter="url(#stwc-shadow)"/>
+    <text x="98" y="716" font-size="11.5" font-weight="700" fill="#065F46">UnsafeRow (off-heap)</text>
+    <text x="98" y="733" font-size="9.5" fill="#047857">Raw, word-aligned binary byte array held</text>
+    <text x="98" y="747" font-size="9.5" fill="#047857">outside the JVM heap — no per-object header,</text>
+    <text x="98" y="761" font-size="9.5" fill="#047857">no pointer chasing, no GC pressure.</text>
+  </g>
+
+  <g data-node-id="register-note" tabindex="0" aria-label="Register-resident values: intermediate results stay in CPU registers or local variables inside the single generated function instead of being written to memory at each operator boundary">
+    <rect x="435" y="695" width="330" height="80" rx="10" fill="#FFFFFF" stroke="#059669" stroke-width="1.2" filter="url(#stwc-shadow)"/>
+    <text x="453" y="716" font-size="11.5" font-weight="700" fill="#065F46">Register-resident values</text>
+    <text x="453" y="733" font-size="9.5" fill="#047857">Intermediate results (projected, hash keys)</text>
+    <text x="453" y="747" font-size="9.5" fill="#047857">live in local variables inside one function —</text>
+    <text x="453" y="761" font-size="9.5" fill="#047857">never written to memory between operators.</text>
+  </g>
+
+  <g data-node-id="no-virtual-dispatch-note" tabindex="0" aria-label="No virtual dispatch: filter, project, and aggregate logic is inlined directly in the loop body, eliminating the per-row method-call overhead of the separate operator objects in the iterator model">
+    <rect x="790" y="695" width="330" height="80" rx="10" fill="#FFFFFF" stroke="#059669" stroke-width="1.2" filter="url(#stwc-shadow)"/>
+    <text x="808" y="716" font-size="11.5" font-weight="700" fill="#065F46">No virtual dispatch</text>
+    <text x="808" y="733" font-size="9.5" fill="#047857">Filter, project, and aggregate logic is</text>
+    <text x="808" y="747" font-size="9.5" fill="#047857">inlined text in one loop body — the per-row</text>
+    <text x="808" y="761" font-size="9.5" fill="#047857">next() call chain no longer exists to pay for.</text>
+  </g>
+
+  <path d="M245 695 L245 664" stroke="#059669" stroke-width="1.5" marker-end="url(#stwc-arr-green)"/>
+  <path d="M600 695 L600 664" stroke="#059669" stroke-width="1.5" marker-end="url(#stwc-arr-green)"/>
+  <path d="M955 695 L955 664" stroke="#059669" stroke-width="1.5" marker-end="url(#stwc-arr-green)"/>
+
+  <!-- ================= BOTTOM ROW: fusion boundaries + verification ================= -->
+  <g data-node-id="fusion-boundary" tabindex="0" aria-label="Fusion boundary: a shuffle exchange or a row-at-a-time Python UDF that Catalyst cannot see inside breaks whole-stage codegen, splitting the plan into a separate numbered stage">
+    <rect x="40" y="795" width="545" height="90" rx="12" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.5" filter="url(#stwc-shadow)"/>
+    <text x="60" y="818" font-size="12.5" font-weight="700" fill="#7C2D12">Where fusion breaks</text>
+    <text x="60" y="836" font-size="10" fill="#92400E">Shuffle exchanges always end a codegen stage (data crosses the network).</text>
+    <text x="60" y="852" font-size="10" fill="#92400E">A row-at-a-time Python UDF is opaque to Catalyst and is excluded too —</text>
+    <text x="60" y="868" font-size="10" fill="#92400E">it shows as BatchEvalPython, falling back outside the fused loop.</text>
+  </g>
+
+  <g data-node-id="verify-codegen" tabindex="0" aria-label="Verifying fusion: EXPLAIN CODEGEN prints the generated code alongside the physical plan, and a missing leading asterisk n prefix on an operator in the physical plan means it fell outside whole-stage code generation">
+    <rect x="615" y="795" width="545" height="90" rx="12" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5" filter="url(#stwc-shadow)"/>
+    <text x="635" y="818" font-size="12.5" font-weight="700" fill="#1E3A8A">Verifying fusion</text>
+    <text x="635" y="836" font-size="10" fill="#1E40AF">df.explain("codegen") prints the generated Java source next</text>
+    <text x="635" y="852" font-size="10" fill="#1E40AF">to the physical plan. In any EXPLAIN output, a missing leading</text>
+    <text x="635" y="868" font-size="10" fill="#1E40AF">*(n) prefix on an operator means it sits outside a fused stage.</text>
+  </g>
+
+  <path d="M585 840 L615 840" stroke="#B45309" stroke-width="1.5" stroke-dasharray="4 3" marker-end="url(#stwc-arr-amber)"/>
+</svg>

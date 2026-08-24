@@ -1,0 +1,280 @@
+{
+  "id": "spark-narrow-vs-wide-transformations",
+  "title": "Narrow vs. wide transformations: what actually cuts a Spark stage",
+  "purpose": "Contrasts narrow transformations (map, filter, select) that stay in-memory per-partition and cost nothing extra, against wide transformations (groupBy, join, repartition) that force a shuffle across the network — and shows exactly why the DAGScheduler cuts a new stage only at that shuffle boundary.",
+  "accessibleSummary": "Narrow transformations like map, filter, and select operate on each partition independently and chain for free inside one stage. Wide transformations like groupBy, join, and repartition need data from other partitions, so Spark must shuffle records across the network first. The DAGScheduler cuts a job into a new stage at every shuffle boundary; a job containing only narrow transformations always runs as a single stage.",
+  "longDescription": "A Spark job is a directed acyclic graph (DAG) of transformations ending in an action. Spark's planner walks that DAG and classifies every transformation as narrow (each output partition depends on exactly one input partition — map, filter, select, union) or wide (an output partition can depend on many input partitions — groupBy, join, distinct, repartition, coalesce with a shuffle). Narrow transformations require no data movement between executors, so Spark fuses a whole chain of them into one pipelined stage — Whole-Stage Code Generation even compiles that chain into a single fused loop. A wide transformation cannot be fused this way because it needs records that currently live on other executors, so Spark inserts a shuffle exchange: map tasks write partitioned output to local disk, and only after every map task in the stage finishes does the next stage's reduce tasks begin fetching blocks across the network. This shuffle boundary is exactly where the DAGScheduler cuts a new stage, and it is the only place stages get cut — a job built entirely from narrow transformations is always a single stage. This distinction is the practical lever for diagnosing and designing Spark jobs: the number of wide transformations in a plan predicts the stage count, the shuffle count, and where re-optimization (AQE) and executor-loss recovery (FetchFailedException replay) can and cannot intervene.",
+  "type": "decision",
+  "topicSlug": "spark",
+  "capabilityIds": ["spark"],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-narrow-vs-wide-transformations.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "dag",
+      "label": "Job DAG",
+      "summary": "One job per action, built as a DAG of transformations.",
+      "detail": "Spark builds a directed acyclic graph of transformations lazily; nothing executes until an action (write, collect, count) triggers it. The DAGScheduler then walks that graph once the action fires.",
+      "whyItMatters": "The DAG is the input to the narrow/wide classification decision below — every transformation in it gets classified before any task runs.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "Spark's job/stage/task hierarchy is strictly nested: one job is created per action (write, collect, count) and ends when that action's result is produced."
+        }
+      ],
+      "tags": ["spark", "dag", "scheduler"],
+      "drill": {
+        "inputs": ["A chain of DataFrame/RDD transformations", "A triggering action"],
+        "processing": ["Build the lazy logical plan", "Wait for an action to trigger execution"],
+        "outputs": ["A DAG handed to the DAGScheduler"],
+        "example": "df.filter(...).select(...).groupBy(...).count() builds one lazy DAG; nothing runs until count() (the action) fires.",
+        "controls": ["Number and order of chained transformations"],
+        "failureModes": ["Long transformation chains with no caching re-evaluate the entire DAG from source on every action that reuses it."]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "classify",
+      "label": "Classify each transformation",
+      "summary": "Every transformation is either narrow (one input partition per output partition) or wide (needs data from other partitions).",
+      "detail": "This is the decision point: does producing one output partition require only the corresponding single input partition, or does it require records that currently live in other partitions/executors? map, filter, select, and union answer 'only my own partition'. groupBy, join, distinct, and repartition answer 'records from anywhere'.",
+      "whyItMatters": "This single classification is what determines whether Spark can fuse the operator into the current stage for free, or must insert a shuffle and cut a new stage — it is the fork in the road for every operator in the plan.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "The DAGScheduler cuts a job into stages at every shuffle boundary (a wide transformation), so a job with no wide transformations is a single stage."
+        }
+      ],
+      "tags": ["spark", "narrow", "wide", "classification"],
+      "drill": {
+        "inputs": ["One transformation from the DAG"],
+        "processing": [
+          "Check whether the operator's output partition depends on exactly one input partition (narrow) or potentially many (wide)",
+          "Route narrow operators to pipeline fusion",
+          "Route wide operators to shuffle-exchange insertion"
+        ],
+        "outputs": ["Narrow path", "Wide path"],
+        "example": "In one plan: filter(status='active') is narrow; the following groupBy(customer_id) is wide and starts a new stage immediately after it.",
+        "controls": ["Choice of transformation (map/filter/select vs groupBy/join/repartition)"],
+        "failureModes": ["Assuming repartition() or coalesce(N, shuffle=True) is 'just a config change' — both are wide and insert a real shuffle boundary."]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "narrow-ops",
+      "label": "Narrow: map, filter, select",
+      "summary": "Each output partition depends on exactly one input partition — no network movement.",
+      "detail": "map, filter, select, and union each produce an output partition from only the matching input partition, so no records need to cross executor boundaries. Spark pipelines a whole chain of these into one stage, and Whole-Stage Code Generation compiles that chain into a single fused loop.",
+      "whyItMatters": "Because narrow transformations never touch the network or write shuffle files, chaining more of them is essentially free — the cost model for a plan should focus entirely on its wide transformations, not its narrow ones.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "Whole-Stage Code Generation uses Spark's Janino compiler to collapse an entire pipeline of narrow operators into a single fused Java while-loop, keeping intermediate values in CPU registers rather than writing them to memory between operator boundaries."
+        },
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "A narrow-only pipeline (filter/project/append with no shuffle) never triggers AQE's re-optimization loop at all, since that loop fires only at shuffle-exchange stage barriers."
+        }
+      ],
+      "tags": ["spark", "narrow", "whole-stage-codegen"],
+      "drill": {
+        "inputs": ["Partitioned RDD/DataFrame"],
+        "processing": [
+          "Apply the operator to each partition independently, in place",
+          "Fuse with adjacent narrow operators via Whole-Stage Code Generation",
+          "No data crosses executor boundaries"
+        ],
+        "outputs": ["Same partition count, transformed records, still in one stage"],
+        "example": "Fused stages show a leading asterisk in the physical plan, e.g. *(1) HashAggregate, signalling Catalyst compiled several operators into one generated loop.",
+        "controls": ["spark.sql.codegen.wholeStage (Whole-Stage Code Generation toggle)"],
+        "failureModes": ["Assuming a long narrow chain will show intermediate progress in the Spark UI — a fused stage reports as one opaque unit until it completes."]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "wide-ops",
+      "label": "Wide: groupBy, join, repartition",
+      "summary": "Output partitions can depend on records from many input partitions — records must be shuffled across the network first.",
+      "detail": "groupBy, join, distinct, and repartition each need to bring together records that currently live on different executors (e.g. all rows for a given key), so Spark cannot compute the result from one partition alone. It must redistribute data across the cluster before the operator can run.",
+      "whyItMatters": "Every wide transformation is a real network-and-disk barrier, and it is the only kind of operator that inserts a shuffle exchange and forces a new stage — this is the direct cost driver behind stage count in a Spark plan.",
+      "classification": "fact",
+      "layers": ["compute", "data"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "The DAGScheduler cuts a job into stages at every shuffle boundary (a wide transformation), so a job with no wide transformations is a single stage."
+        },
+        {
+          "sourceKey": "fabric-coding-standards",
+          "note": "Hard-coding a fixed repartition or coalesce(1) partition count on a Delta write is discouraged in favor of letting Adaptive Query Execution size shuffle partitions dynamically."
+        }
+      ],
+      "tags": ["spark", "wide", "shuffle"],
+      "drill": {
+        "inputs": ["Partitioned RDD/DataFrame", "A grouping/join key or explicit partition count"],
+        "processing": [
+          "Recognize the operator needs records from other partitions",
+          "Insert a shuffle exchange operator into the physical plan",
+          "Mark the boundary for the DAGScheduler to cut a new stage"
+        ],
+        "outputs": ["A shuffle-exchange boundary in the physical plan"],
+        "example": "groupBy(customer_id).agg(sum(amount)) must gather every row for each customer_id from wherever it currently sits before it can sum them.",
+        "controls": ["spark.sql.shuffle.partitions", "spark.sql.adaptive.advisoryPartitionSizeInBytes (AQE dynamic sizing)"],
+        "failureModes": ["Chaining several wide operations back-to-back produces a shuffle storm — each one a full network and disk barrier that serializes the job."]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "stage-boundary",
+      "label": "Shuffle exchange = stage boundary",
+      "summary": "The DAGScheduler cuts a new stage at every shuffle boundary, never inside a narrow chain.",
+      "detail": "This is the mechanical consequence of the classification: the DAGScheduler walks the DAG and inserts a stage cut exactly at each shuffle-exchange operator produced by a wide transformation. A job built entirely from narrow transformations therefore always runs as a single stage; every wide transformation adds exactly one stage boundary.",
+      "whyItMatters": "Stage count is not a proxy metric — it is a direct count of the wide transformations in a job's plan, and each stage boundary is where re-optimization can happen and where executor loss forces the most expensive kind of recompute.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "The DAGScheduler cuts a job into stages at every shuffle boundary (a wide transformation), so a job with no wide transformations is a single stage; the TaskScheduler then creates one task per output partition per stage."
+        }
+      ],
+      "tags": ["spark", "stage", "dagscheduler"],
+      "drill": {
+        "inputs": ["The classified DAG (narrow + wide operators)"],
+        "processing": [
+          "Walk the DAG in dependency order",
+          "Cut a new stage at each wide-transformation shuffle boundary",
+          "Leave narrow-only spans inside a single stage"
+        ],
+        "outputs": ["An ordered list of stages, each with a task-per-output-partition schedule"],
+        "example": "A job with filter -> select -> groupBy -> join produces two stage boundaries (one at groupBy, one at join) for three total stages.",
+        "controls": ["Number of wide transformations written into the job"],
+        "failureModes": ["Not realizing an operation you think of as 'just repartitioning data' is a wide transformation that adds a full stage and shuffle."]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "task-per-partition",
+      "label": "TaskScheduler: one task per output partition",
+      "summary": "Within each stage, the TaskScheduler creates one task per output partition and schedules it onto free executor cores.",
+      "detail": "Once stages are cut, the TaskScheduler takes over per-stage: it creates one task per output partition for that stage and places each task onto an executor core as cores free up, using a data-locality preference ladder.",
+      "whyItMatters": "This is the layer below stage-cutting that actually does the work — it explains why a stage with more output partitions (e.g. spark.sql.shuffle.partitions) produces more parallel tasks, and why data locality (not just stage boundaries) affects task placement.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "The TaskScheduler then creates one task per output partition per stage, scheduling tasks onto executor cores as cores free up."
+        },
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "The TaskScheduler places each task according to a four-level data-locality preference ladder: PROCESS_LOCAL, NODE_LOCAL (e.g. an earlier stage's local shuffle output), RACK_LOCAL, and ANY."
+        }
+      ],
+      "tags": ["spark", "taskscheduler", "locality"],
+      "drill": {
+        "inputs": ["A stage boundary and its output partition count"],
+        "processing": [
+          "Create one task per output partition",
+          "Rank each task's placement using PROCESS_LOCAL -> NODE_LOCAL -> RACK_LOCAL -> ANY",
+          "Schedule tasks onto executor cores as they free up"
+        ],
+        "outputs": ["Running tasks distributed across the cluster"],
+        "example": "A reduce stage reading a prior stage's local shuffle output prefers NODE_LOCAL placement over a remote ANY fetch when possible.",
+        "controls": ["spark.sql.shuffle.partitions (sets task count for the next stage)", "locality wait delay"],
+        "failureModes": ["Too few shuffle partitions relative to executor cores leaves most of the cluster idle waiting on a straggler task."]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "aqe-reopt",
+      "label": "AQE can re-optimize at the boundary",
+      "summary": "Adaptive Query Execution re-plans using real statistics — but only at shuffle-exchange stage barriers.",
+      "detail": "Because a stage boundary is where Spark has finally materialized real runtime statistics (actual partition sizes, skew), AQE's re-optimization loop (e.g. converting a sort-merge join to a broadcast join, or splitting a skewed partition) only fires there. A narrow-only pipeline never reaches this loop at all.",
+      "whyItMatters": "This is a direct, sourced limit: teams sometimes expect AQE to fix a slow narrow-only pipeline, but AQE has nothing to re-optimize until a shuffle boundary actually exists.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "A narrow-only pipeline (filter/project/append with no shuffle) never triggers AQE's re-optimization loop at all, since that loop fires only at shuffle-exchange stage barriers."
+        }
+      ],
+      "tags": ["spark", "aqe", "limit"],
+      "drill": {
+        "inputs": ["Runtime shuffle statistics gathered at a stage boundary"],
+        "processing": [
+          "Compare actual partition sizes against planned estimates",
+          "Convert sort-merge join to broadcast join if one side is small enough",
+          "Split skewed partitions into sub-partitions"
+        ],
+        "outputs": ["A revised physical plan for the next stage"],
+        "example": "A join planned as sort-merge is converted to broadcast hash join once AQE observes at the shuffle boundary that one side is smaller than the adaptive broadcast threshold.",
+        "controls": ["spark.sql.adaptive.enabled", "spark.sql.adaptive.skewJoin.enabled"],
+        "failureModes": ["Expecting AQE to speed up a purely narrow (filter/select/append) job — there is no shuffle barrier for it to re-optimize at, so AQE never engages."]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open Spark capability" }
+    },
+    {
+      "id": "executor-pin-risk",
+      "label": "Stage boundary pins executors",
+      "summary": "An executor holding shuffle output can't be released until the next stage finishes reading it — and losing it forces a stage recompute.",
+      "detail": "Shuffle data is written to executor-local disk by default, which prevents that executor from being released (e.g. by autoscale-down) until every downstream stage has finished reading its shuffle blocks. If that executor is lost anyway (crash, spot reclamation, scale-down), Spark raises a FetchFailedException and must re-execute the entire owning stage, not just the lost task.",
+      "whyItMatters": "This is the operational cost of a wide transformation beyond just runtime: it pins compute resources for the whole downstream read window and turns a single lost executor into a full stage re-run, unlike a narrow-only stage where nothing is pinned.",
+      "classification": "warning",
+      "layers": ["compute", "data"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-blog-spark-efficient-scaledown",
+          "note": "By default Spark shuffle data is written to each executor's local disk, which prevents an executor from being released until every downstream stage has finished reading its shuffle blocks."
+        },
+        {
+          "sourceKey": "fabric-blog-spark-efficient-scaledown",
+          "note": "When an executor holding shuffle data is lost to a crash, spot reclamation, or scale-down, Spark raises a FetchFailedException and must re-execute the affected stages, which is a major source of unpredictable job runtime and wasted compute."
+        }
+      ],
+      "tags": ["spark", "shuffle", "executor", "fetchfailedexception"],
+      "drill": {
+        "inputs": ["A completed map stage's local shuffle output"],
+        "processing": [
+          "Hold shuffle blocks on executor-local disk",
+          "Block executor release until every downstream read completes",
+          "On executor loss, raise FetchFailedException and recompute the owning stage's map tasks"
+        ],
+        "outputs": ["Either a completed downstream read and eventual executor release, or a full stage re-run"],
+        "example": "A scale-down event reclaims an executor still holding unread shuffle blocks for a running reduce stage, forcing Spark to re-run the map tasks that produced those blocks.",
+        "controls": ["Fabric Efficient Scaledown's Remote Shuffle Manager and shuffle migration (moves blocks off an executor before decommission)"],
+        "failureModes": ["Aggressive autoscale-down policies colliding with a wide transformation's pinned shuffle-holding executors, causing unpredictable job runtime from repeated stage recomputes."]
+      },
+      "drillTarget": { "kind": "topic", "slug": "spark", "label": "Open Spark capability" }
+    }
+  ],
+  "edges": [
+    { "id": "e-dag-classify", "from": "dag", "to": "classify", "label": "walk DAG, classify each operator", "layer": "compute", "kind": "flow" },
+    { "id": "e-classify-narrow", "from": "classify", "to": "narrow-ops", "label": "1 input partition -> 1 output partition", "layer": "compute", "kind": "branch" },
+    { "id": "e-classify-wide", "from": "classify", "to": "wide-ops", "label": "output needs records from many partitions", "layer": "compute", "kind": "branch" },
+    { "id": "e-narrow-taskperpartition", "from": "narrow-ops", "to": "task-per-partition", "label": "fused into current stage, no new stage cut", "layer": "compute", "kind": "flow" },
+    { "id": "e-wide-boundary", "from": "wide-ops", "to": "stage-boundary", "label": "shuffle exchange inserted", "layer": "data", "kind": "flow" },
+    { "id": "e-boundary-taskperpartition", "from": "stage-boundary", "to": "task-per-partition", "label": "next stage's tasks scheduled after shuffle", "layer": "compute", "kind": "flow" },
+    { "id": "e-boundary-aqe", "from": "stage-boundary", "to": "aqe-reopt", "label": "runtime stats available only here", "layer": "compute", "kind": "flow" },
+    { "id": "e-boundary-pin", "from": "stage-boundary", "to": "executor-pin-risk", "label": "shuffle output held on executor-local disk", "layer": "data", "kind": "flow" }
+  ],
+  "walkthrough": [
+    { "nodeId": "dag", "title": "Start with the lazy DAG", "explanation": "Spark builds one job's DAG per action; every transformation in it is a candidate for classification." },
+    { "nodeId": "classify", "title": "Classify each transformation", "explanation": "Spark checks, per operator, whether one output partition depends on exactly one input partition (narrow) or on records scattered across many partitions (wide)." },
+    { "nodeId": "narrow-ops", "title": "Narrow path: free and fused", "explanation": "map, filter, select, and union chain together inside one stage at zero shuffle cost, and Whole-Stage Code Generation fuses the whole chain into one compiled loop." },
+    { "nodeId": "wide-ops", "title": "Wide path: a real shuffle", "explanation": "groupBy, join, distinct, and repartition need records from other partitions, so Spark must redistribute data across the network before the operator can run." },
+    { "nodeId": "stage-boundary", "title": "The stage cut happens here, and only here", "explanation": "The DAGScheduler inserts a new stage boundary at exactly each shuffle exchange from a wide transformation — a narrow-only job is always a single stage." },
+    { "nodeId": "task-per-partition", "title": "Tasks are scheduled per stage", "explanation": "Within each stage the TaskScheduler creates one task per output partition and places it using a locality preference ladder." },
+    { "nodeId": "aqe-reopt", "title": "AQE gets one chance to intervene: the boundary", "explanation": "Adaptive Query Execution can only re-plan using real statistics gathered at a shuffle boundary — a narrow-only pipeline never triggers it at all." },
+    { "nodeId": "executor-pin-risk", "title": "The boundary also has an operational cost", "explanation": "Shuffle output pins the executor holding it until downstream reads finish, and losing that executor forces a full stage recompute via FetchFailedException." }
+  ]
+}

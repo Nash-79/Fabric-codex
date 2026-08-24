@@ -1,0 +1,234 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1180" font-family="Segoe UI, -apple-system, sans-serif" role="img" aria-labelledby="fdagi-title fdagi-desc" data-diagram-id="fabric-data-agent-query-generation-internals">
+  <title id="fdagi-title">Fabric Data Agent: Query-Generation Internals</title>
+  <desc id="fdagi-desc">An internals diagram. Four configuration surfaces — agent instructions, source instructions, source descriptions, and up to 100 example queries per source — feed an assembled prompt sent to a managed Azure OpenAI Assistant alongside the user's question and fetched schema. The assistant routes to one of four source-specific generators: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models (no example-query support), NL2KQL for Eventhouse KQL databases, or Graph/GQL for ontology sources (three documented failure modes). A warning panel covers the Gold-in-Name-Only modeling antipattern that silently breaks NL2SQL. An accuracy-levers panel shows community benchmarking converging on instructions and data-model quality as the dominant factor, with measured accuracy reaching about 97.2% after fixing benchmark ground truth and tightening instructions. All four generator paths converge on a read-only, identity-scoped, governance-gated, 25-row-by-25-column-capped answer.</desc>
+
+  <!-- Fabric Atlas — ORIGINAL diagram (not a Microsoft asset). Authored 2026-08.
+       Grounded in fabric-data-agent capability claims (171 active claims):
+       four configuration surfaces (agent/source instructions, description, example queries);
+       assembled prompt (question + schema + instructions) to managed Azure OpenAI Assistant;
+       source-specific generators NL2SQL/NL2DAX/NL2KQL/Graph-GQL; Power BI semantic models lack
+       example-query few-shot support; GQL ontology generation has three field-reported failure
+       modes (async rebuild timing, binding names, dbo. prefix); GINO (Gold in Name Only)
+       antipattern silently breaks NL2SQL; community benchmarking shows instructions/modeling as
+       the dominant accuracy lever, ~97.2% measured after fixes; all paths converge on read-only,
+       identity-scoped execution capped at 25x25 rows/cols under four-layer governance precedence.
+       Companion diagrams: fabric-data-agent-architecture.svg (source attach + governance),
+       fabric-data-agent-orchestration.svg (full request lifecycle + failure branches). -->
+  <defs>
+    <marker id="fdagiArr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#4C1D95"/>
+    </marker>
+    <marker id="fdagiArrGreen" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#047857"/>
+    </marker>
+    <marker id="fdagiArrAmber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B45309"/>
+    </marker>
+    <marker id="fdagiArrRed" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#B91C1C"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="1180" fill="#FFFFFF"/>
+
+  <!-- TITLE -->
+  <text x="40" y="38" font-size="21" font-weight="700" fill="#3B2A5A">Fabric Data Agent — query-generation internals</text>
+  <text x="40" y="58" font-size="12" fill="#616161">What grounds the prompt, how the generator differs by source type, and what community benchmarking shows actually moves accuracy</text>
+
+  <!-- LEGEND -->
+  <rect x="700" y="20" width="460" height="46" rx="6" fill="#F8FAFC" stroke="#CBD5E1"/>
+  <circle cx="716" cy="35" r="5" fill="#7C3AED"/>
+  <text x="727" y="39" font-size="9.5" fill="#374151">config / grounding</text>
+  <circle cx="830" cy="35" r="5" fill="#059669"/>
+  <text x="841" y="39" font-size="9.5" fill="#374151">generator</text>
+  <circle cx="920" cy="35" r="5" fill="#2563EB"/>
+  <text x="931" y="39" font-size="9.5" fill="#374151">converged output</text>
+  <circle cx="1040" cy="35" r="5" fill="#B91C1C"/>
+  <text x="1051" y="39" font-size="9.5" fill="#374151">warning</text>
+  <circle cx="716" cy="53" r="5" fill="#B45309"/>
+  <text x="727" y="57" font-size="9.5" fill="#374151">accuracy lever (inference)</text>
+  <line x1="830" y1="53" x2="855" y2="53" stroke="#4C1D95" stroke-width="2" stroke-dasharray="4 3"/>
+  <text x="861" y="57" font-size="9.5" fill="#374151">feedback</text>
+
+  <!-- ═══════════════ ROW 1: CONFIGURATION SURFACES ═══════════════ -->
+  <text x="40" y="88" font-size="11" letter-spacing="1.2" fill="#8A8886">CONFIGURATION SURFACES — what an agent author actually sets</text>
+
+  <g data-node-id="config-surfaces" tabindex="0" role="group" aria-label="Four configuration surfaces">
+    <title data-node-tooltip="true">Four configuration surfaces — agent instructions, source instructions, source descriptions, and example queries together shape agent behavior.</title>
+    <rect x="40" y="96" width="700" height="112" rx="9" fill="#F5F3FF" stroke="#7C3AED" stroke-width="1.5"/>
+    <text x="58" y="118" font-size="13.5" font-weight="700" fill="#4C1D95">Four configuration surfaces</text>
+    <text x="58" y="137" font-size="10" fill="#5B21B6">Agent-level instructions (≤15,000 chars): objective, source priority, terminology, response format</text>
+    <text x="58" y="154" font-size="10" fill="#5B21B6">Data-source-level instructions: applies only after routing — relevant tables, columns, relationships</text>
+    <text x="58" y="171" font-size="10" fill="#5B21B6">Data source description: the routing signal used to pick which of up to 5 sources answers a question</text>
+    <text x="58" y="188" font-size="10" fill="#5B21B6">Templates: agent-level = Objective / Data sources / Terminology / Response guidelines / Common topics</text>
+    <text x="58" y="200" font-size="9" fill="#7C6BAE">source-level = General knowledge / Table descriptions / When asked about</text>
+  </g>
+
+  <g data-node-id="example-queries" tabindex="0" role="group" aria-label="Example queries (few-shot)">
+    <title data-node-tooltip="true">Example queries (few-shot) — top-3 relevant examples looked up automatically per source; Power BI semantic models don't support this mechanism.</title>
+    <rect x="760" y="96" width="400" height="112" rx="9" fill="#F5F3FF" stroke="#7C3AED" stroke-width="1.5"/>
+    <text x="778" y="118" font-size="13.5" font-weight="700" fill="#4C1D95">Example queries (few-shot)</text>
+    <text x="778" y="138" font-size="10" fill="#5B21B6">Up to 100 validated question/query pairs</text>
+    <text x="778" y="154" font-size="10" fill="#5B21B6">per source; only syntactically valid,</text>
+    <text x="778" y="170" font-size="10" fill="#5B21B6">schema-matching examples ever used</text>
+    <rect x="778" y="180" width="364" height="20" rx="4" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="786" y="194" font-size="9.3" font-weight="600" fill="#991B1B">Top-3 auto-selected per question — except Power BI models</text>
+  </g>
+
+  <line x1="390" y1="208" x2="390" y2="234" stroke="#4C1D95" stroke-width="2" marker-end="url(#fdagiArr)"/>
+  <line x1="960" y1="208" x2="700" y2="234" stroke="#4C1D95" stroke-width="2" marker-end="url(#fdagiArr)"/>
+
+  <!-- ═══════════════ ROW 2: PROMPT ASSEMBLY ═══════════════ -->
+  <g data-node-id="prompt-assembly" tabindex="0" role="group" aria-label="Assembled prompt (managed Azure OpenAI Assistant)">
+    <title data-node-tooltip="true">Assembled prompt — question, fetched schema, and creator instructions/examples merge here before the assistant selects a generator.</title>
+    <rect x="180" y="238" width="840" height="70" rx="9" fill="#ECFDF5" stroke="#34D399" stroke-width="1.5"/>
+    <text x="600" y="262" text-anchor="middle" font-size="14" font-weight="700" fill="#047857">Assembled prompt → managed Azure OpenAI Assistant</text>
+    <text x="600" y="282" text-anchor="middle" font-size="10" fill="#065F46">User's question + schema fetched under the caller's own identity + instructions/examples above</text>
+    <text x="600" y="298" text-anchor="middle" font-size="9.5" fill="#0D9488">The assistant then selects which source-specific generation tool to invoke, based on the routed source's type</text>
+  </g>
+
+  <!-- fan-out lines to 4 generators -->
+  <line x1="600" y1="308" x2="230" y2="352" stroke="#059669" stroke-width="2" marker-end="url(#fdagiArrGreen)"/>
+  <line x1="600" y1="308" x2="490" y2="352" stroke="#059669" stroke-width="2" marker-end="url(#fdagiArrGreen)"/>
+  <line x1="600" y1="308" x2="750" y2="352" stroke="#059669" stroke-width="2" marker-end="url(#fdagiArrGreen)"/>
+  <line x1="600" y1="308" x2="1010" y2="352" stroke="#059669" stroke-width="2" marker-end="url(#fdagiArrGreen)"/>
+  <text x="200" y="330" font-size="9" fill="#047857">lakehouse/warehouse</text>
+  <text x="470" y="330" font-size="9" fill="#047857">semantic model</text>
+  <text x="735" y="330" font-size="9" fill="#047857">KQL database</text>
+  <text x="985" y="330" font-size="9" fill="#047857">ontology / Graph</text>
+
+  <!-- ═══════════════ ROW 3: FOUR GENERATORS ═══════════════ -->
+  <text x="40" y="352" font-size="11" letter-spacing="1.2" fill="#8A8886">SOURCE-SPECIFIC GENERATORS — one prompt, four different code paths</text>
+  <rect x="40" y="360" width="1120" height="204" rx="9" fill="#F0FDF4" stroke="#BBF7D0" stroke-width="1.5"/>
+
+  <!-- Generator 1: NL2SQL -->
+  <g data-node-id="gen-nl2sql" tabindex="0" role="group" aria-label="NL2SQL for lakehouse and warehouse">
+    <title data-node-tooltip="true">NL2SQL (lakehouse / warehouse) — generates a read-only SQL statement against the SQL surface of the routed source.</title>
+    <rect x="60" y="378" width="255" height="168" rx="8" fill="#FFFFFF" stroke="#059669" stroke-width="1.5"/>
+    <rect x="60" y="378" width="255" height="30" rx="8" fill="#059669"/>
+    <rect x="60" y="393" width="255" height="15" fill="#059669"/>
+    <text x="187" y="398" text-anchor="middle" font-size="12" font-weight="700" fill="#FFFFFF">NL2SQL</text>
+    <text x="76" y="424" font-size="9.6" fill="#065F46">Lakehouse / warehouse sources</text>
+    <text x="76" y="441" font-size="9.3" fill="#374151">Generates a read-only SELECT</text>
+    <text x="76" y="455" font-size="9.3" fill="#374151">against the SQL-endpoint schema</text>
+    <text x="76" y="469" font-size="9.3" fill="#374151">Few-shot examples supported</text>
+    <rect x="76" y="482" width="223" height="52" rx="5" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="84" y="497" font-size="9" font-weight="600" fill="#991B1B">GINO risk (see warning below):</text>
+    <text x="84" y="510" font-size="9" fill="#7F1D1D">multi-grain facts / bad joins</text>
+    <text x="84" y="523" font-size="9" fill="#7F1D1D">silently produce wrong SQL</text>
+  </g>
+
+  <!-- Generator 2: NL2DAX -->
+  <g data-node-id="gen-nl2dax" tabindex="0" role="group" aria-label="NL2DAX for Power BI semantic models">
+    <title data-node-tooltip="true">NL2DAX (semantic model) — generates DAX against a Power BI semantic model; Read permission suffices, RLS/CLS still applies; no example-query support.</title>
+    <rect x="330" y="378" width="255" height="168" rx="8" fill="#FFFFFF" stroke="#059669" stroke-width="1.5"/>
+    <rect x="330" y="378" width="255" height="30" rx="8" fill="#059669"/>
+    <rect x="330" y="393" width="255" height="15" fill="#059669"/>
+    <text x="457" y="398" text-anchor="middle" font-size="12" font-weight="700" fill="#FFFFFF">NL2DAX</text>
+    <text x="346" y="424" font-size="9.6" fill="#065F46">Power BI semantic model sources</text>
+    <text x="346" y="441" font-size="9.3" fill="#374151">Read permission is enough to run —</text>
+    <text x="346" y="455" font-size="9.3" fill="#374151">Build not required. RLS/CLS applies</text>
+    <text x="346" y="469" font-size="9.3" fill="#374151">at execution, not generation</text>
+    <rect x="346" y="482" width="223" height="52" rx="5" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="354" y="497" font-size="9" font-weight="600" fill="#991B1B">Only source type with NO</text>
+    <text x="354" y="510" font-size="9" fill="#7F1D1D">example-query few-shot support —</text>
+    <text x="354" y="523" font-size="9" fill="#7F1D1D">instructions carry more weight here</text>
+  </g>
+
+  <!-- Generator 3: NL2KQL -->
+  <g data-node-id="gen-nl2kql" tabindex="0" role="group" aria-label="NL2KQL for Eventhouse KQL databases">
+    <title data-node-tooltip="true">NL2KQL (Eventhouse) — generates KQL queried in place with no data movement; can reuse existing KQL UDFs; time-filter guidance for speed.</title>
+    <rect x="600" y="378" width="255" height="168" rx="8" fill="#FFFFFF" stroke="#059669" stroke-width="1.5"/>
+    <rect x="600" y="378" width="255" height="30" rx="8" fill="#059669"/>
+    <rect x="600" y="393" width="255" height="15" fill="#059669"/>
+    <text x="727" y="398" text-anchor="middle" font-size="12" font-weight="700" fill="#FFFFFF">NL2KQL</text>
+    <text x="616" y="424" font-size="9.6" fill="#065F46">Eventhouse KQL database sources</text>
+    <text x="616" y="441" font-size="9.3" fill="#374151">Queried in place — no data movement</text>
+    <text x="616" y="455" font-size="9.3" fill="#374151">Can reuse existing KQL UDFs and</text>
+    <text x="616" y="469" font-size="9.3" fill="#374151">materialized views</text>
+    <rect x="616" y="482" width="223" height="52" rx="5" fill="#FFFBEB" stroke="#FCD34D"/>
+    <text x="624" y="497" font-size="9" font-weight="600" fill="#92400E">Documented guidance:</text>
+    <text x="624" y="510" font-size="9" fill="#78350F">scope to relevant tables, encourage</text>
+    <text x="624" y="523" font-size="9" fill="#78350F">time filters over high-volume data</text>
+  </g>
+
+  <!-- Generator 4: Graph/GQL -->
+  <g data-node-id="gen-graph" tabindex="0" role="group" aria-label="Graph or GQL for ontology sources">
+    <title data-node-tooltip="true">Graph / GQL (ontology) — generates a Microsoft Graph or GQL query; three field-reported failure modes distinct from SQL-based generators.</title>
+    <rect x="870" y="378" width="270" height="168" rx="8" fill="#FFFFFF" stroke="#059669" stroke-width="1.5"/>
+    <rect x="870" y="378" width="270" height="30" rx="8" fill="#059669"/>
+    <rect x="870" y="393" width="270" height="15" fill="#059669"/>
+    <text x="1005" y="398" text-anchor="middle" font-size="12" font-weight="700" fill="#FFFFFF">Graph / GQL</text>
+    <text x="886" y="424" font-size="9.6" fill="#065F46">Ontology / organizational-data sources</text>
+    <text x="886" y="441" font-size="9.3" fill="#374151">Constrained to the ontology's own</text>
+    <text x="886" y="455" font-size="9.3" fill="#374151">published entity types &amp; relationships</text>
+    <rect x="886" y="466" width="238" height="68" rx="5" fill="#FEF2F2" stroke="#FCA5A5"/>
+    <text x="894" y="480" font-size="9" font-weight="600" fill="#991B1B">3 field-reported failure modes:</text>
+    <text x="894" y="493" font-size="8.7" fill="#7F1D1D">• async graph rebuild timing (stale)</text>
+    <text x="894" y="505" font-size="8.7" fill="#7F1D1D">• needs binding names, not display names</text>
+    <text x="894" y="517" font-size="8.7" fill="#7F1D1D">• omits required dbo. prefix on SQL objects</text>
+  </g>
+
+  <!-- lines from generators down to answer-output -->
+  <line x1="187" y1="546" x2="500" y2="600" stroke="#2563EB" stroke-width="1.8" marker-end="url(#fdagiArr)"/>
+  <line x1="457" y1="546" x2="540" y2="600" stroke="#2563EB" stroke-width="1.8" marker-end="url(#fdagiArr)"/>
+  <line x1="727" y1="546" x2="660" y2="600" stroke="#2563EB" stroke-width="1.8" marker-end="url(#fdagiArr)"/>
+  <line x1="1005" y1="546" x2="700" y2="600" stroke="#2563EB" stroke-width="1.8" marker-end="url(#fdagiArr)"/>
+
+  <!-- ═══════════════ ROW 4: ANSWER OUTPUT (convergence) ═══════════════ -->
+  <g data-node-id="answer-output" tabindex="0" role="group" aria-label="Read-only query and governed answer">
+    <title data-node-tooltip="true">All four generators converge here: identity-scoped execution, four-layer governance precedence, and a 25-row-by-25-column response cap.</title>
+    <rect x="180" y="604" width="840" height="76" rx="9" fill="#EFF6FF" stroke="#3B82F6" stroke-width="1.5"/>
+    <text x="600" y="628" text-anchor="middle" font-size="14" font-weight="700" fill="#1D4ED8">Read-only query + governed answer — all four paths converge here</text>
+    <text x="600" y="648" text-anchor="middle" font-size="10" fill="#1E40AF">Executes under the caller's own identity, subject to four-layer governance precedence (tenant → workspace → developer → prompt)</text>
+    <text x="600" y="666" text-anchor="middle" font-size="10" fill="#1E40AF">Response capped at 25 rows × 25 columns, including follow-up turns — full request lifecycle in the companion orchestration diagram</text>
+  </g>
+
+  <!-- feedback edge: GINO -> NL2SQL -->
+  <line x1="187" y1="750" x2="187" y2="546" stroke="#B91C1C" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#fdagiArrRed)"/>
+  <!-- feedback edge: accuracy-levers -> config-surfaces -->
+  <path d="M 1010,916 C 1140,700 1140,150 742,132" fill="none" stroke="#B45309" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#fdagiArrAmber)"/>
+  <text x="1046" y="500" font-size="8.8" fill="#B45309" transform="rotate(-90 1046 500)">instructions are the dominant lever</text>
+
+  <!-- ═══════════════ ROW 5: WARNING — GINO ANTIPATTERN ═══════════════ -->
+  <text x="40" y="712" font-size="11" letter-spacing="1.2" fill="#8A8886">DATA-MODELING WARNING</text>
+  <g data-node-id="gino-antipattern" tabindex="0" role="group" aria-label="Warning: Gold in Name Only antipattern">
+    <title data-node-tooltip="true">Warning — GINO (Gold in Name Only): a superficially relabeled bronze table silently breaks NL2SQL agents.</title>
+    <rect x="40" y="720" width="540" height="130" rx="9" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.5"/>
+    <path d="M 62,748 L 74,726 L 86,748 Z" fill="#DC2626"/>
+    <line x1="74" y1="734" x2="74" y2="741" stroke="#FFFFFF" stroke-width="1.8" stroke-linecap="round"/>
+    <circle cx="74" cy="744.5" r="1" fill="#FFFFFF"/>
+    <text x="98" y="744" font-size="12.5" font-weight="700" fill="#991B1B">Warning: "GINO" — Gold in Name Only</text>
+    <text x="58" y="768" font-size="9.6" fill="#7F1D1D">A "gold" table that is only superficially relabeled bronze —</text>
+    <text x="58" y="783" font-size="9.6" fill="#7F1D1D">multi-grain facts, unnecessary normalization, outer joins —</text>
+    <text x="58" y="798" font-size="9.6" fill="#7F1D1D">silently breaks NL2SQL. A human analyst works around it;</text>
+    <text x="58" y="813" font-size="9.6" fill="#7F1D1D">the agent does not raise an error, it just answers wrong.</text>
+    <text x="58" y="833" font-size="9.6" font-weight="600" fill="#991B1B">Fix: simplify toward Kimball-style star schemas.</text>
+  </g>
+
+  <!-- ═══════════════ ROW 5b: ACCURACY LEVERS PANEL ═══════════════ -->
+  <text x="620" y="712" font-size="11" letter-spacing="1.2" fill="#8A8886">WHAT ACTUALLY MOVES ACCURACY (community-observed, inference)</text>
+  <g data-node-id="accuracy-levers" tabindex="0" role="group" aria-label="What actually moves accuracy — instructions and data-model quality">
+    <title data-node-tooltip="true">Accuracy levers — community benchmarking converges on instructions and data-model quality as the dominant factor, not the underlying model.</title>
+    <rect x="620" y="720" width="540" height="196" rx="9" fill="#FFFBEB" stroke="#F59E0B" stroke-width="1.5"/>
+    <text x="638" y="744" font-size="12.5" font-weight="700" fill="#92400E">Instructions &amp; data-model quality — the dominant lever</text>
+    <text x="638" y="766" font-size="9.6" fill="#78350F">A side-by-side demo: identical source and model, one agent with</text>
+    <text x="638" y="781" font-size="9.6" fill="#78350F">empty instructions, one fully instructed. On complex SCD2/bridge-</text>
+    <text x="638" y="796" font-size="9.6" fill="#78350F">table questions, only the instructed agent answered correctly.</text>
+    <line x1="638" y1="808" x2="1142" y2="808" stroke="#FDE68A"/>
+    <text x="638" y="826" font-size="9.6" fill="#78350F">A 72-question multilingual benchmark initially scored lower — a</text>
+    <text x="638" y="841" font-size="9.6" fill="#78350F">row-level audit found many failures traced to the benchmark's own</text>
+    <text x="638" y="856" font-size="9.6" fill="#78350F">faulty ground truth, not the agent. After fixing the ground truth</text>
+    <text x="638" y="871" font-size="9.6" fill="#78350F">AND tightening agent instructions, measured accuracy rose to:</text>
+    <rect x="638" y="880" width="150" height="28" rx="6" fill="#F59E0B"/>
+    <text x="713" y="899" text-anchor="middle" font-size="14" font-weight="700" fill="#FFFFFF">~97.2%</text>
+    <text x="798" y="899" font-size="9" fill="#78350F">(post-fix benchmark accuracy)</text>
+  </g>
+
+  <!-- ═══════════════ FOOTER: relationship to companion diagrams ═══════════════ -->
+  <rect x="40" y="936" width="1120" height="60" rx="8" fill="#F8FAFC" stroke="#CBD5E1"/>
+  <text x="58" y="958" font-size="10.5" font-weight="700" fill="#374151">This diagram is the internals companion to two Fabric Atlas diagrams:</text>
+  <text x="58" y="976" font-size="9.6" fill="#4B5563">"Fabric Data Agent Architecture" (source attach + governance shape) and "Life of a Fabric Data Agent Request" (full orchestration + failure branches). This one opens up the query-generation step those two treat as a single box.</text>
+
+  <text x="1160" y="1160" text-anchor="end" font-size="9.5" fill="#94A3B8">Fabric Atlas — original diagram, August 2026. Grounded in fabric-data-agent capability claims.</text>
+</svg>

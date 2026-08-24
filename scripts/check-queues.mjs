@@ -115,6 +115,16 @@ function textReport(digest) {
   lines.push(
     `Coverage: ${digest.coverage.articleLessTopics} article-less topic(s), ${digest.coverage.diagramGaps} diagram gap(s), ${digest.claims.pending} pending claim(s)`,
   );
+  if (digest.embeddings.missing) {
+    // Embeddings are generated locally (Ollama) and written via the deployed app's
+    // claim-embeddings hook -- nothing server-side can produce them, so this line is the whole
+    // point: it is the only thing that reminds a human to re-run the backfill after new claims
+    // land (via /ingest-batch, source-drift-analyst, or a direct claim edit).
+    lines.push(
+      `Embeddings: ${digest.embeddings.missing} claim(s) missing embeddings -- run: ` +
+        `node scripts/generate-embeddings.mjs`,
+    );
+  }
   if (digest.feedback.new) {
     lines.push(`Feedback: ${digest.feedback.new} new reader report(s) awaiting triage`);
   }
@@ -147,6 +157,7 @@ async function main() {
     rss: { active: 0, stale: 0, failing: 0 },
     coverage: { articleLessTopics: 0, diagramGaps: 0, storageOverrides: 0, internalsGaps: null },
     claims: { pending: 0 },
+    embeddings: { missing: null },
     feedback: { new: 0 },
     ideas: { pending: 0, approved: 0 },
     deps: { updates: 0, held: 0 },
@@ -181,7 +192,7 @@ async function main() {
   }
 
   try {
-    const [snapshot, topics, items, diagrams, claims] = await Promise.all([
+    const [snapshot, topics, items, diagrams, claims, unembedded] = await Promise.all([
       agentSnapshot(appUrl, agentToken),
       rest(url, key, "topics?select=slug,name,active&active=eq.true"),
       rest(
@@ -191,6 +202,7 @@ async function main() {
       ),
       rest(url, key, "diagrams?select=slug,topic_slug,path,capability_id"),
       rest(url, key, "claims?select=id,status,active&status=eq.pending&active=eq.true"),
+      rest(url, key, "claims?select=id&active=eq.true&embedding=is.null"),
     ]);
     const queue = snapshot.queue ?? [];
     const rss = snapshot.watchers ?? [];
@@ -230,6 +242,7 @@ async function main() {
       storageOverrides: storageOverrides.length,
     };
     digest.claims.pending = claims.length;
+    digest.embeddings.missing = unembedded.length;
     digest.feedback.new = newFeedback.length;
 
     const ideaItems = queue.filter((q) => q.kind === "idea");
@@ -247,6 +260,8 @@ async function main() {
     for (const slug of articleLess.slice(0, 2)) digest.next.push(`/blog ${slug}`);
     for (const slug of diagramGaps.slice(0, 2)) digest.next.push(`/commission-diagrams ${slug}`);
     if (claims.length) digest.next.push("/orchestrate-content");
+    if (unembedded.length)
+      digest.next.push("node scripts/generate-embeddings.mjs # backfill claim embeddings");
     if (newFeedback.length) digest.next.push("/triage-feedback");
     for (const item of approvedIdeas.slice(0, 3)) digest.next.push(commandFor(item));
     if (pendingIdeas.length) digest.next.push("Settings → Article Ideas → review pending ideas");

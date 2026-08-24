@@ -1,0 +1,352 @@
+{
+  "id": "spark-catalyst-four-compilation-phases",
+  "title": "Catalyst's four compilation phases, traced through one query",
+  "purpose": "Trace a single SQL query through Catalyst's four sequential compilation phases — unresolved logical plan, analyzed logical plan, optimized logical plan, and physical plan — showing what actually changes inside the query tree at each step, before Spark selects one physical plan and turns it into an RDD execution graph.",
+  "accessibleSummary": "A worked-example internals diagram. A join query enters Catalyst as an unresolved logical plan, where table and column names are still bare strings with no meaning attached. Catalog resolution turns that into an analyzed logical plan, binding every name to a real typed schema object or raising AnalysisException if a name does not exist. Rule-based rewrites then turn that into an optimized logical plan, pushing filters toward the scan and pruning unused columns. A cost-based planner enumerates candidate physical plans from that optimized tree, costs them against table statistics, and selects one physical plan, which Spark turns into an RDD execution graph — the actual distributed compute that runs on executors. A side panel shows how to observe each phase directly through EXPLAIN EXTENDED, and a warning band covers two real failure points: a misspelled column caught only at phase two, and a predicate that silently fails to push down and is invisible unless the physical plan is actually read.",
+  "longDescription": "This diagram exists to make Catalyst's four-phase compilation pipeline concrete rather than diagrammatic. It follows one representative query — a filtered join between an orders table and a customers table — through each of the four plan representations Spark's EXPLAIN EXTENDED prints in order, showing the literal tree shape at each stage: unresolved relation and attribute references, catalog-bound typed attributes, a rule-rewritten tree with pushdown and pruning applied, and finally a costed physical operator tree. It then shows the one additional step past what EXPLAIN prints — physical-plan selection producing the RDD lineage graph Spark actually schedules and executes across executors. This is deliberately a different diagram from the broader spark-catalyst-query-compilation diagram: that diagram is a compact linear box list spanning compilation through whole-stage codegen and the Native Execution Engine branch; this diagram stays scoped to the four sequential compilation phases themselves and goes one level deeper into each phase's internal mechanics with a worked, traceable example.",
+  "type": "internals",
+  "topicSlug": "spark",
+  "capabilityIds": ["spark"],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-catalyst-four-compilation-phases.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "query-input",
+      "label": "SQL / DataFrame query text",
+      "summary": "The starting point: a query expressed as SQL text or chained DataFrame API calls.",
+      "detail": "Before any compilation begins, Spark has only the query as written — SQL text passed to spark.sql(), or a chain of DataFrame API method calls. Neither form has been checked against a catalog yet; both are parsed by the same front end into the same first-phase tree.",
+      "whyItMatters": "Both entry points converge into identical Catalyst plans, so the phase-by-phase pipeline that follows applies equally whether the query was authored in SQL or in the DataFrame API — a common point of confusion is treating them as two different optimization paths when they are not.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "EXPLAIN compiles and optimizes a query without executing it, confirming compilation is a distinct pipeline stage that runs on the query as submitted, whether SQL or DataFrame."
+        }
+      ],
+      "tags": ["Catalyst", "QueryPlan"],
+      "drill": {
+        "inputs": ["SQL text passed to spark.sql()", "Chained DataFrame API calls"],
+        "processing": ["Tokenize and hand off to the SQL/DataFrame parser"],
+        "outputs": ["Raw query representation ready for parsing"],
+        "example": "SELECT o.order_id, c.name FROM orders o JOIN customers c ON o.cust_id = c.cust_id WHERE o.amount > 100 — or the DataFrame-API equivalent orders.filter(col(\"amount\") > 100).join(customers, \"cust_id\").select(...)",
+        "controls": ["df.explain(\"extended\") to print every phase for this exact query"],
+        "failureModes": ["A DataFrame chain built from Python control flow can silently build a different tree than the SQL author expects; explain() is the way to check, not reading the Python source."]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open Spark capability"
+      }
+    },
+    {
+      "id": "unresolved",
+      "label": "Phase 1 — Unresolved logical plan",
+      "summary": "The parser builds an operator tree; table and column names are still bare, unchecked strings.",
+      "detail": "The SQL or DataFrame parser turns the query into a tree of logical operators — Filter, Join, Project — but every relation and column reference inside that tree is still an unresolved name: a string like 'orders' or 'cust_id' with no binding to an actual table, schema, or type. Catalyst has not yet consulted the catalog, so it cannot know whether 'orders' exists or what type 'amount' is.",
+      "whyItMatters": "This phase is where the tree's shape is fixed by the query's own structure — the join order the author wrote, the filter placement as written — before any correctness or performance information exists yet. A query that will later fail catalog resolution still parses cleanly here, because parsing checks grammar, not meaning.",
+      "classification": "fact",
+      "layers": ["compute", "metadata"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "EXPLAIN EXTENDED prints the four stages of Catalyst's compilation in order, the first being the parsed logical plan with names still unresolved."
+        }
+      ],
+      "tags": ["Catalyst", "QueryPlan", "UnresolvedLogicalPlan"],
+      "drill": {
+        "inputs": ["Parsed query grammar tree"],
+        "processing": [
+          "Build a tree of logical operators (Filter, Join, Project, Aggregate) matching the query's written structure",
+          "Leave every table and column reference as an unresolved name — no catalog lookup performed yet"
+        ],
+        "outputs": ["Unresolved logical plan: an operator tree with placeholder relation/attribute references"],
+        "example": "'orders o JOIN customers c ON o.cust_id = c.cust_id WHERE o.amount > 100' becomes Filter(amount > 100, Join(UnresolvedRelation[orders], UnresolvedRelation[customers], cust_id = cust_id)) — 'orders', 'customers', 'cust_id', and 'amount' are all still bare, unchecked names.",
+          "controls": ["df.explain(\"extended\") — first plan block printed"],
+        "failureModes": [
+          "A grammar-level typo (missing comma, unbalanced parenthesis) fails here as a ParseException, before any table is even looked up."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open Spark capability"
+      }
+    },
+    {
+      "id": "analyzed",
+      "label": "Phase 2 — Analyzed logical plan",
+      "summary": "Catalog resolution binds every relation and column to a real, typed schema object.",
+      "detail": "The Analyzer walks the unresolved tree and resolves every placeholder against the session catalog: 'orders' becomes a bound reference to an actual table with a known schema, and 'amount' becomes a typed attribute (e.g. DecimalType) rather than a string. This is also where implicit type coercions get inserted and where a name that does not exist in the catalog is caught.",
+      "whyItMatters": "This is the phase where a large class of query-authoring mistakes surfaces — misspelled columns, wrong table names, incompatible join-key types — and it happens before any optimization or execution planning, so the cost of catching an error here is cheap relative to discovering it mid-execution.",
+      "classification": "fact",
+      "layers": ["compute", "metadata"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "EXPLAIN EXTENDED's second printed plan is the analyzed plan, with relations and attributes bound to real typed objects."
+        }
+      ],
+      "tags": ["Catalyst", "QueryPlan", "AnalyzedLogicalPlan", "Catalog"],
+      "drill": {
+        "inputs": ["Unresolved logical plan", "Session catalog metadata (table schemas, column types)"],
+        "processing": [
+          "Resolve each UnresolvedRelation to a concrete table with a known schema",
+          "Resolve each unresolved column reference to a typed attribute",
+          "Insert implicit type coercions where operand types differ"
+        ],
+        "outputs": ["Analyzed logical plan: a fully typed, catalog-bound operator tree"],
+        "example": "UnresolvedRelation[orders] resolves to a Delta-backed relation with typed columns order_id: Long, cust_id: Long, amount: Decimal(10,2); the join's cust_id = cust_id resolves to a typed equality between two Long attributes.",
+        "controls": ["Table/lakehouse metadata registered in the catalog Spark is attached to"],
+        "failureModes": [
+          "A misspelled column name (e.g. 'amout') raises AnalysisException here — the query never reaches optimization or execution.",
+          "A join key with mismatched types across the two sides forces an implicit cast that can silently change join selectivity."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open Spark capability"
+      }
+    },
+    {
+      "id": "optimized",
+      "label": "Phase 3 — Optimized logical plan",
+      "summary": "Rule-based rewrites restructure the tree for cheaper execution, without picking any concrete algorithm yet.",
+      "detail": "The rule-based Optimizer applies a fixed set of logical rewrite rules to the analyzed tree — predicate pushdown moves filters as close to the data source as possible, column pruning drops columns the query never references, and constant folding and other algebraic rewrites simplify expressions. None of this chooses a physical execution strategy yet; it only restructures the logical tree into an equivalent, cheaper-to-execute shape.",
+      "whyItMatters": "This is the phase most performance problems trace back to, because pushdown and pruning are pattern-matched rewrites that can silently fail to apply — wrapping a filtered column in a cast or function is enough to defeat pushdown, and the only way to notice is reading PushedFilters in the physical plan that follows.",
+      "classification": "fact",
+      "layers": ["compute", "metadata"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "EXPLAIN EXTENDED's third printed plan is the optimized logical plan, produced by rule-based rewrites after analysis."
+        }
+      ],
+      "tags": ["Catalyst", "QueryPlan", "OptimizedLogicalPlan", "PredicatePushdown", "ColumnPruning"],
+      "drill": {
+        "inputs": ["Analyzed logical plan"],
+        "processing": [
+          "Push filter predicates down toward the scan operator",
+          "Prune columns never referenced downstream",
+          "Fold constants and simplify algebraic expressions",
+          "Apply the fixed built-in rule set — this set is not user-extensible in standard Spark SQL"
+        ],
+        "outputs": ["Optimized logical plan: a rewritten, equivalent logical tree with pushdown and pruning applied"],
+        "example": "Filter(amount > 100, Scan[orders: order_id, cust_id, amount, ship_date, notes]) rewrites to Scan[orders: order_id, cust_id, amount] with the filter pushed into the scan itself and ship_date/notes dropped, since the query's final SELECT never references them.",
+        "controls": ["The rewrite rule set is fixed by the Spark version", "A predicate must reference the raw column directly — wrapping it in a cast or UDF blocks pushdown"],
+        "failureModes": [
+          "Applying a function to a filtered column (e.g. YEAR(order_date) = 2026) defeats predicate pushdown; the physical plan shows PushedFilters: [] and the scan reads every row.",
+          "A UDF anywhere in the predicate is opaque to the optimizer and blocks pushdown through it entirely."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open Spark capability"
+      }
+    },
+    {
+      "id": "physical-candidates",
+      "label": "Physical plan candidates + cost model",
+      "summary": "The optimized logical tree fans out into multiple candidate physical strategies, each costed.",
+      "detail": "For a logical operator like Join, Catalyst generates more than one possible physical strategy — for example a BroadcastHashJoin versus a SortMergeJoin for the same logical join — and costs each candidate using whatever table size and row-count statistics are available. This is a distinct sub-step inside phase four: the optimized logical plan does not map to a single physical plan by itself, it maps to a search space that the cost model prunes down to one choice.",
+      "whyItMatters": "Because the cost decision depends entirely on the statistics Catalyst has available, stale or missing statistics are a common, silent cause of a suboptimal physical plan being selected even though the logical plan itself was already correctly optimized.",
+      "classification": "fact",
+      "layers": ["compute", "metadata"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "COST mode prints the logical plan annotated with node statistics where available, showing the statistics the cost decision is based on."
+        },
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "spark.sql.autoBroadcastJoinThreshold defaults to 10 MB (10485760 bytes) and sets the estimated table size below which Spark broadcasts one side of a join instead of shuffling both sides."
+        }
+      ],
+      "tags": ["Catalyst", "QueryPlan", "CostBasedOptimizer", "JoinStrategy"],
+      "drill": {
+        "inputs": ["Optimized logical plan", "Table/column size and row-count statistics"],
+        "processing": [
+          "Enumerate candidate physical strategies per logical operator (e.g. join algorithm choices)",
+          "Estimate cost for each candidate from available statistics",
+          "Select the lowest-cost candidate per operator"
+        ],
+        "outputs": ["A single selected physical strategy per logical operator"],
+        "example": "For the orders-to-customers join, if customers is estimated under the 10 MB autoBroadcastJoinThreshold, the cost model selects BroadcastHashJoin over SortMergeJoin, avoiding a shuffle of the larger orders table entirely.",
+        "controls": ["spark.sql.autoBroadcastJoinThreshold", "ANALYZE TABLE ... COMPUTE STATISTICS to populate the statistics the cost model reads", "spark.sql.cbo.enabled and spark.sql.cbo.joinReorder.enabled for cost-based join reordering — both off by default"],
+        "failureModes": [
+          "A stale or absent statistic produces a sort-merge join where a broadcast would have been far cheaper.",
+          "Running ANALYZE TABLE with spark.sql.cbo.joinReorder.enabled left at its default of false still improves size/selectivity estimates but produces no join-order change at all — a documented reason teams see no plan change after collecting statistics."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open Spark capability"
+      }
+    },
+    {
+      "id": "physical",
+      "label": "Phase 4 — Selected physical plan",
+      "summary": "One concrete operator tree: real algorithms, real partitioning, ready to execute.",
+      "detail": "The output of phase four is the physical plan Spark actually runs: every logical operator has become a concrete physical operator with a chosen algorithm — BroadcastHashJoin or SortMergeJoin, HashAggregate or SortAggregate — and the tree now reflects real distributed-execution concerns like shuffle boundaries and partitioning, not just logical transformation semantics. This is the plan printed by default (unqualified) EXPLAIN.",
+      "whyItMatters": "The physical plan is the level at which most production troubleshooting actually happens, because it is the first representation that shows real execution mechanics — join strategy, whether pushdown succeeded, whether stages fused — rather than an abstract logical description of what the query means.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "EXPLAIN EXTENDED's fourth and final printed plan is the physical plan; default (unqualified) EXPLAIN prints the physical plan alone."
+        }
+      ],
+      "tags": ["Catalyst", "QueryPlan", "PhysicalPlan"],
+      "drill": {
+        "inputs": ["Selected physical strategy per operator from the cost model"],
+        "processing": [
+          "Assemble the concrete physical operator tree",
+          "Fix shuffle boundaries and partitioning between stages"
+        ],
+        "outputs": ["Physical plan: the concrete operator tree Spark will schedule"],
+        "example": "*(2) BroadcastHashJoin [cust_id], BuildRight +- *(1) Filter (amount > 100) +- *(1) ColumnarToRow +- FileScan parquet orders[order_id,cust_id,amount] PushedFilters:[GreaterThan(amount,100)] — the asterisked stage numbers mark whole-stage code generation fusion.",
+        "controls": ["df.explain() default mode", "df.explain(\"formatted\") for a per-node detail breakdown", "df.explain(\"codegen\") to see the generated code"],
+        "failureModes": [
+          "PushedFilters: [] in this plan is the direct, observable symptom of a phase-3 pushdown failure — the fix belongs in the query, not in configuration."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open Spark capability"
+      }
+    },
+    {
+      "id": "rdd",
+      "label": "RDD execution graph (runtime)",
+      "summary": "The physical plan becomes the RDD lineage Spark actually schedules and runs across executors.",
+      "detail": "Compilation itself ends at the physical plan. Turning that physical plan into an RDD (Resilient Distributed Dataset) execution graph — tasks, stages, and shuffle dependencies scheduled across executors — is where Catalyst's compiled output actually becomes running distributed compute. Adaptive Query Execution can still re-plan parts of this graph mid-run using statistics from stages that have already completed, which the original four compilation phases could not have known in advance.",
+      "whyItMatters": "Treating 'the physical plan' as the finish line misses that AQE keeps revising execution after this point — a plan read via static EXPLAIN can differ from what actually ran, because AQE's runtime re-planning is a separate, later mechanism layered on top of the four static compilation phases.",
+      "classification": "fact",
+      "layers": ["compute", "orchestration"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "Adaptive Query Execution re-plans a query while it runs, using statistics collected from stages that have already completed rather than the pre-execution estimates Catalyst planned with; enabled by default since Apache Spark 3.2.0."
+        },
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "AQE converts a planned sort-merge join into a broadcast hash join at runtime when actual statistics show one side is smaller than the adaptive broadcast threshold — a re-plan the static physical plan could not predict."
+        }
+      ],
+      "tags": ["RDD", "AdaptiveQueryExecution", "Execution"],
+      "drill": {
+        "inputs": ["Selected physical plan"],
+        "processing": [
+          "Compile the physical plan into stages and tasks along shuffle boundaries",
+          "Schedule tasks onto executors",
+          "AQE re-plans remaining stages using completed-stage statistics where enabled"
+        ],
+        "outputs": ["Running distributed computation across executors"],
+        "example": "A sort-merge join statically planned in phase four gets converted to a broadcast hash join at runtime by AQE once the actual (not estimated) size of one shuffle output is observed to be under the adaptive broadcast threshold.",
+        "controls": ["spark.sql.adaptive.enabled (default true since Spark 3.2.0)", "Spark UI SQL/DAG tab to see what actually ran versus what was statically planned"],
+        "failureModes": [
+          "Reading only the static EXPLAIN output and assuming it describes final execution misses any AQE re-plan that happened at runtime."
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "spark",
+        "label": "Open Spark capability"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-input-unresolved",
+      "from": "query-input",
+      "to": "unresolved",
+      "label": "Parser builds an operator tree from the query text",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-unresolved-analyzed",
+      "from": "unresolved",
+      "to": "analyzed",
+      "label": "Analyzer resolves names against the catalog",
+      "layer": "metadata",
+      "kind": "flow"
+    },
+    {
+      "id": "e-analyzed-optimized",
+      "from": "analyzed",
+      "to": "optimized",
+      "label": "Rule-based rewrites: pushdown, pruning, folding",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-optimized-candidates",
+      "from": "optimized",
+      "to": "physical-candidates",
+      "label": "Optimizer generates and costs candidate strategies",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-candidates-physical",
+      "from": "physical-candidates",
+      "to": "physical",
+      "label": "Lowest-cost candidate per operator is selected",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e-physical-rdd",
+      "from": "physical",
+      "to": "rdd",
+      "label": "Physical plan compiles into stages/tasks and runs",
+      "layer": "orchestration",
+      "kind": "flow"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "query-input",
+      "title": "Start: the query as written",
+      "explanation": "SQL text or DataFrame API calls — both converge to the same first-phase tree."
+    },
+    {
+      "nodeId": "unresolved",
+      "title": "Phase 1: Unresolved logical plan",
+      "explanation": "Names are still bare strings; the tree shape matches the query as written, but nothing has been checked against a catalog yet."
+    },
+    {
+      "nodeId": "analyzed",
+      "title": "Phase 2: Analyzed logical plan",
+      "explanation": "Catalog resolution binds every name to a real, typed object — or fails here with AnalysisException."
+    },
+    {
+      "nodeId": "optimized",
+      "title": "Phase 3: Optimized logical plan",
+      "explanation": "Fixed rule-based rewrites push filters toward the scan and prune unused columns — still no concrete algorithm chosen."
+    },
+    {
+      "nodeId": "physical-candidates",
+      "title": "Cost model chooses among physical candidates",
+      "explanation": "Each logical operator can map to more than one physical strategy; statistics determine which one wins."
+    },
+    {
+      "nodeId": "physical",
+      "title": "Phase 4: Selected physical plan",
+      "explanation": "One concrete operator tree — the plan default EXPLAIN prints, and where most production troubleshooting happens."
+    },
+    {
+      "nodeId": "rdd",
+      "title": "Runtime: RDD execution graph",
+      "explanation": "Compilation output becomes running distributed tasks; AQE can still re-plan parts of this after compilation ends."
+    }
+  ]
+}

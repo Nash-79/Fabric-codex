@@ -1,0 +1,421 @@
+{
+  "id": "spark-physical-join-strategy-selection",
+  "title": "Spark Physical Join Strategy Selection: Broadcast, Shuffle Hash, Sort Merge, and Broadcast Nested Loop",
+  "purpose": "Show how Spark's Catalyst optimizer actually picks a physical join strategy at plan time — an equi-join predicate check, then a size check against spark.sql.autoBroadcastJoinThreshold — so a slow join can be diagnosed against the real decision the planner made instead of guessed at.",
+  "accessibleSummary": "A decision tree rooted in whether a join has an equality predicate on its join keys. Without one, Spark falls back to a Broadcast Nested Loop Join or a Cartesian Product, an O(n x m) comparison that is a documented physical-plan red flag and a common trap for inequality/as-of joins. With an equi-join, Spark checks whether one side's estimated size is under spark.sql.autoBroadcastJoinThreshold (10 MB by default): under that size, it broadcasts the small side for a Broadcast Hash Join with no shuffle of the large side; over that size, both sides are shuffled and Spark defaults to Sort Merge Join, where Adaptive Query Execution's skew-join handling can split an overloaded partition at runtime. A warning panel covers two real traps: casting a join key defeats equi-join detection and forces the slow path, and a broadcast build that exceeds spark.sql.broadcastTimeout aborts the query regardless of AQE.",
+  "longDescription": "This is a decision tree over Spark's own physical-plan selection, not a data-flow diagram: the same two DataFrames route to a different physical join operator depending on two questions Catalyst asks in sequence. The root question is whether the join condition contains an equality predicate on the join keys. Every subsequent strategy in this tree — broadcast hash, shuffle hash, and sort merge — depends on being able to partition or hash both sides on matching key values; an inequality condition (a range join, a BETWEEN, an as-of/point-in-time match) or a missing predicate altogether cannot be hashed or sort-merged, so Spark falls back to comparing every row on one side against every row on the other: a Broadcast Nested Loop Join if one side is broadcast, or a full Cartesian Product if neither side is small enough. This is a documented physical-plan red flag, and a common real-world trigger is an as-of valuation join matching each row to the most recent row on or before its own date via an inequality condition. Casting a join key to a different type on one side is a second, subtler way to land in this branch: the cast still reads as an equality predicate in the query text, but it defeats the statistics and equi-join detection the planner relies on, silently forcing the same slow path. On the equi-join side, Spark checks the estimated size of each side against spark.sql.autoBroadcastJoinThreshold (10 MB by default, tunable up to a few hundred MB in practice). Below that threshold, Spark collects and broadcasts the small side whole to every executor, so the large side is never shuffled — Broadcast Hash Join is the cheapest strategy precisely because it avoids a shuffle of the big table, but the driver must collect and broadcast the data first, and a build that exceeds spark.sql.broadcastTimeout (300 seconds by default) aborts the entire query — one of Adaptive Query Execution's four documented hard limits, unrescuable by adaptive re-planning. When neither side qualifies for broadcast, both sides are shuffled and repartitioned by the join key. Spark can execute this as a Shuffle Hash Join (an in-memory hash table built per partition) or a Sort Merge Join (both sides sorted and merged in a single streaming pass); Sort Merge Join is Spark's more memory-safe default for large equi-joins because it never needs a full partition's data resident as a hash table at once. Adaptive Query Execution's skew-join handling (on by default) applies specifically to this branch, splitting a partition that exceeds both 5x the median size and 256 MB into evenly sized sub-partitions so a single hot key does not stall the whole shuffle stage — a real, measured example in the source material showed a 3.8x task-duration skew ratio on an affected stage. A COST-mode EXPLAIN is the diagnostic tool that surfaces the row-count and size statistics behind why the optimizer picked the strategy it did.",
+  "type": "decision",
+  "topicSlug": "spark",
+  "capabilityIds": ["spark"],
+  "revision": "1",
+  "qaStatus": "draft",
+  "staticPath": "/diagrams/spark-physical-join-strategy-selection.svg",
+  "nodes": [
+    {
+      "id": "join-condition-question",
+      "label": "Does the join condition have an equality predicate on the join keys?",
+      "summary": "The root question: an equi-join is required before any hash- or sort-based strategy is even eligible.",
+      "detail": "Catalyst checks whether the join condition contains an equality predicate (col_a = col_b) on columns from each side. A pure Cartesian product, a range/inequality condition (BETWEEN, <, an as-of match), or a join key silently cast to a different type on one side all fail this check — the last one still looks like an equality predicate in the SQL text but defeats the column statistics and equi-join detection the planner relies on to choose a hash- or sort-based strategy.",
+      "whyItMatters": "Every cheaper join strategy Spark has (broadcast hash, shuffle hash, sort merge) depends on partitioning or hashing both sides on matching key values. Without a real equi-join key, none of those strategies are even eligible, and Spark falls back to the most expensive comparison it has.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Spark", "Catalyst", "JoinPlanning", "AQE"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "Physical-plan red flags: CartesianProduct or BroadcastNestedLoopJoin in the plan means no usable equi-join key."
+        },
+        {
+          "sourceKey": "fabric-coding-standards",
+          "note": "Casting a join key on one side defeats equi-join detection and the column statistics join planning relies on; normalizing the type upstream keeps the join a native, statistics-visible equi-join."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "The join condition's predicate expression as written in SQL or the DataFrame API",
+          "Column types on both sides of the join key"
+        ],
+        "processing": [
+          "Catalyst's analyzer checks the predicate for an equality comparison between columns from each side",
+          "If a join key was cast to a different type on one side, the equi-join detection and column statistics used for join planning are silently defeated even though the predicate still reads as '='",
+          "The result of this check gates every downstream physical-strategy decision"
+        ],
+        "outputs": [
+          "A boolean gate: eligible for broadcast/shuffle-hash/sort-merge planning, or routed to the nested-loop fallback"
+        ],
+        "example": "A join on customer_id = customer_id where one side stores customer_id as a string and the other as a long, with an implicit cast inserted on one side, reads as an equi-join in the SQL text but is planned as if it were not — the fix is normalizing the column type once during a bronze-to-silver transformation, not at query time.",
+        "controls": [
+          "Normalize join-key types upstream (e.g. at bronze-to-silver) rather than casting at query time",
+          "Rewrite an inequality condition to include an equi-join predicate where the business logic allows it (e.g. bucketing a range column)"
+        ],
+        "failureModes": [
+          "A silently cast join key routes a query into the expensive nested-loop path with no visible error, only a slow job",
+          "An as-of/point-in-time join written as an inequality condition is a common, easy-to-miss trigger for this same fallback"
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark capability" }
+    },
+    {
+      "id": "broadcast-nested-loop-join",
+      "label": "Broadcast Nested Loop Join / Cartesian Product",
+      "summary": "The fallback strategy when no equi-join key is usable: compare every row on one side against every row on the other.",
+      "detail": "Without a hashable equi-join key, Spark cannot partition either side by matching key values, so it either broadcasts one side and compares every row against every row on the other (Broadcast Nested Loop Join), or — if neither side is small enough to broadcast — computes the full Cartesian product of both sides. A physical plan showing CartesianProduct or BroadcastNestedLoopJoin is a documented signal that the query has no usable equi-join predicate.",
+      "whyItMatters": "This strategy's cost scales with the product of both table sizes, not the sum — an O(n x m) comparison instead of a linear scan. It is the single most expensive join strategy Spark has, and it is frequently triggered by surprise (an inequality join or a defeated equi-join) rather than by deliberate choice.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Spark", "BroadcastNestedLoopJoin", "CartesianProduct", "PhysicalPlan"],
+      "evidence": [
+        {
+          "sourceKey": "nb-nee-fallback-analyzer",
+          "note": "An as-of/point-in-time valuation join via an inequality condition is a deliberately included performance trap expected to produce a BroadcastNestedLoopJoin or range join rather than a standard equi-join strategy."
+        },
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "CartesianProduct or BroadcastNestedLoopJoin in the physical plan means no usable equi-join key."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "Two DataFrames with no equi-join predicate between them (inequality condition, range condition, or a defeated equi-join)"
+        ],
+        "processing": [
+          "If one side is small enough, Spark broadcasts it whole to every executor and compares every row on that side against every row of the other side in a nested loop",
+          "If neither side is small enough, Spark computes the full Cartesian product of both sides before applying the filter"
+        ],
+        "outputs": [
+          "The joined result, at O(n x m) comparison cost regardless of how selective the final filter is"
+        ],
+        "example": "Matching each position row to the most recent valuation row on or before its own date, via an inequality condition (valuation_date <= position_date), is a documented investment-data pattern that lands here instead of producing a standard equi-join plan.",
+        "controls": [
+          "Rewrite the join to include an equi-join predicate where possible (bucket the range, add a matching discrete key)",
+          "Read the physical plan (EXPLAIN) before touching any configuration value — a cast on a join key or a missing equi-join predicate explains more slow jobs than tuning does"
+        ],
+        "failureModes": [
+          "Job runtime scales quadratically with input size with no warning until the job is already running",
+          "A query that looks like a normal equi-join in application code can still land here if a join key was silently cast"
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark capability" }
+    },
+    {
+      "id": "broadcast-threshold-question",
+      "label": "Is one side's estimated size under the broadcast threshold?",
+      "summary": "The size check that decides whether Spark broadcasts one side or must shuffle both.",
+      "detail": "For a confirmed equi-join, Spark compares each side's estimated size against spark.sql.autoBroadcastJoinThreshold, which defaults to 10,485,760 bytes (10 MB). If either side's estimate is under that threshold, Spark broadcasts that side to every executor instead of shuffling both sides across the cluster.",
+      "whyItMatters": "This single configuration value is the highest-leverage lever a practitioner can pull on join performance: broadcasting the small side of a join avoids shuffling the large side entirely, often turning a multi-minute shuffle join into a near-instant local hash probe.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Spark", "autoBroadcastJoinThreshold", "AQE", "JoinPlanning"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "spark.sql.autoBroadcastJoinThreshold defaults to 10485760 bytes (10 MB) and sets the estimated table size below which Spark will broadcast one side of a join to every executor instead of shuffling both sides."
+        },
+        {
+          "sourceKey": "spark-auto-config-utility",
+          "note": "A broadcast-join-threshold heuristic recommends 1.5x headroom above the measured smaller side's size, floored at Spark's own 10 MB default and capped near a stated industry-common 512 MB ceiling, noting that broadcasting still costs every executor that memory allocation and the driver must first collect and broadcast the data."
+        },
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "A broadcast build that exceeds spark.sql.broadcastTimeout (default 300s) aborts the query regardless of AQE — one of AQE's four documented hard limits."
+        }
+      ],
+      "drill": {
+        "inputs": [
+          "Estimated (or, with AQE, runtime-measured) size of each side of a confirmed equi-join"
+        ],
+        "processing": [
+          "Compare each side's estimated size against spark.sql.autoBroadcastJoinThreshold (10 MB default)",
+          "Adaptive Query Execution can also convert a planned shuffle join to a broadcast join at runtime once post-shuffle statistics reveal a side is actually small, but only for a clean, statistics-visible equi-join",
+          "If a side is under threshold, route to Broadcast Hash Join; otherwise route to the shuffle-both-sides branch"
+        ],
+        "outputs": [
+          "A chosen physical join strategy: Broadcast Hash Join, or a shuffle-based strategy (Shuffle Hash / Sort Merge)"
+        ],
+        "example": "A 2 MB dimension table (well under the 10 MB default) joined to a 400 GB fact table: Spark broadcasts the 2 MB side and the 400 GB side is scanned once with no shuffle.",
+        "controls": [
+          "Raise spark.sql.autoBroadcastJoinThreshold when a known-small table is being measured as larger than its real size (e.g. via stale statistics)",
+          "Run ANALYZE TABLE COMPUTE STATISTICS to improve the size estimate feeding this check",
+          "Verify spark.driver.memory headroom before raising the threshold — the driver must collect and broadcast the data"
+        ],
+        "failureModes": [
+          "A broadcast build that exceeds spark.sql.broadcastTimeout (default 300s) aborts the entire query — AQE's adaptive re-planning cannot rescue it",
+          "Raising the threshold too high broadcasts a table that doesn't comfortably fit in every executor's memory, causing executor-level memory pressure across the whole cluster"
+        ],
+        "metrics": [
+          {
+            "label": "autoBroadcastJoinThreshold default",
+            "value": "10 MB (10,485,760 bytes)",
+            "sourceKey": "spark-sql-performance-tuning"
+          },
+          {
+            "label": "broadcastTimeout default",
+            "value": "300 seconds",
+            "sourceKey": "spark-internals-engine-core"
+          }
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark capability" }
+    },
+    {
+      "id": "broadcast-hash-join",
+      "label": "Broadcast Hash Join",
+      "summary": "The cheapest strategy: no shuffle of the large side, a local hash probe on every executor.",
+      "detail": "Spark collects the small side to the driver and broadcasts it whole to every executor. Each executor builds a local hash table from the broadcast side and probes it against its own partition of the large side — the large side is never shuffled across the network.",
+      "whyItMatters": "Avoiding a shuffle of the large side is the single biggest cost saving available for a join, because shuffling is the most expensive operation in a Spark job (network I/O plus disk spill risk). Broadcast Hash Join sidesteps it entirely for the side that stays large.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Spark", "BroadcastHashJoin", "JoinPlanning"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "Below the autoBroadcastJoinThreshold estimated size, Spark broadcasts one side of a join to every executor instead of shuffling both sides."
+        }
+      ],
+      "drill": {
+        "inputs": ["A confirmed equi-join where one side's estimated size is under the broadcast threshold"],
+        "processing": [
+          "The small side is collected to the driver and broadcast whole to every executor",
+          "Each executor builds an in-memory hash table from the broadcast side",
+          "Each executor probes its own local partition of the large side against that hash table — no shuffle of the large side occurs"
+        ],
+        "outputs": ["The joined result, with the large side scanned exactly once per executor and no network shuffle"],
+        "example": "A 2 MB dimension table joined to a 400 GB fact table: Spark broadcasts the 2 MB side to every executor; the 400 GB side is read and probed locally with zero shuffle traffic.",
+        "controls": [
+          "Size the broadcast threshold to comfortably cover known-small dimension tables",
+          "Verify spark.driver.memory headroom before relying on a large broadcast, since the driver collects the data first"
+        ],
+        "failureModes": [
+          "A broadcast build that exceeds spark.sql.broadcastTimeout (default 300s) aborts the query",
+          "Broadcasting a table that is larger than it appears (stale statistics) causes memory pressure across every executor simultaneously, not just one"
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark capability" }
+    },
+    {
+      "id": "shuffle-vs-sort-merge-question",
+      "label": "Both sides too large to broadcast: Shuffle Hash Join or Sort Merge Join?",
+      "summary": "When neither side qualifies for broadcast, Spark shuffles both sides and chooses between two hash/sort-based strategies.",
+      "detail": "Once both sides exceed the broadcast threshold, Spark must shuffle both sides by the join key so matching keys land on the same executor. It can then execute a Shuffle Hash Join (an in-memory hash table built per partition) or a Sort Merge Join (both sides sorted and streamed together). This specific choice mechanic is drawn from documented general Apache Spark planner behavior rather than a sourced Fabric-specific configuration value: the adjacent grounded fact is that Adaptive Query Execution's skew-split logic is coded specifically for join operators named as SortMergeJoin and ShuffledHashJoin, which confirms both strategies exist and are AQE-aware, without the underlying source pinning the exact selection threshold between them.",
+      "whyItMatters": "Sort Merge Join is Spark's practical default here because it never needs a full partition of one side resident as an in-memory hash table at once — it is more memory-safe for large partitions than Shuffle Hash Join, which can spill or fail if a partition's hash table doesn't fit in executor memory.",
+      "classification": "inference",
+      "layers": ["compute"],
+      "tags": ["Spark", "ShuffleHashJoin", "SortMergeJoin", "AQE"],
+      "evidence": [],
+      "drill": {
+        "inputs": ["A confirmed equi-join where both sides' estimated sizes exceed the broadcast threshold"],
+        "processing": [
+          "Both sides are shuffled (repartitioned) by the join key so matching keys land on the same executor",
+          "Shuffle Hash Join builds an in-memory hash table per partition from one side and probes the other side against it",
+          "Sort Merge Join instead sorts both sides by key and merges them in a single streaming pass with no full hash table held in memory"
+        ],
+        "outputs": ["A joined result, produced by whichever of the two shuffle-based strategies the planner selected"],
+        "example": "Two multi-hundred-GB fact tables joined on a shared key: neither side is broadcast-eligible, so both are shuffled by key; Spark's default plan for this shape is Sort Merge Join rather than Shuffle Hash Join.",
+        "controls": [
+          "Increase shuffle partition count (spark.sql.shuffle.partitions, or let AQE coalesce it) so partitions on either strategy fit executor memory comfortably",
+          "Prefer rewriting a group-by-then-self-join pattern into a single ROW_NUMBER() window function where applicable, which needs one shuffle instead of two"
+        ],
+        "failureModes": [
+          "A partition that doesn't fit in executor memory forces spill to disk, visible in the Spark UI as Spill (Memory)/Spill (Disk) metrics",
+          "Data skew concentrates most rows into one partition regardless of which shuffle-based strategy is chosen"
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark capability" }
+    },
+    {
+      "id": "sort-merge-join",
+      "label": "Sort Merge Join, with AQE Skew-Join Handling",
+      "summary": "Spark's default for large equi-joins: sort both sides by key and merge, with Adaptive Query Execution splitting skewed partitions at runtime.",
+      "detail": "Both sides of the join are shuffled and sorted by the join key, then merged in a single streaming pass — no full hash table is held in memory for either side, which is why this is the more memory-safe default for large equi-joins. Adaptive Query Execution's skew-join handling, on by default, splits a shuffle partition that exceeds both 5.0x the median partition size and 256 MB into evenly sized sub-partitions and replicates the matching side so each split still finds its rows.",
+      "whyItMatters": "Sort Merge Join is where the majority of large-scale Fabric Spark joins actually execute in production, and its interaction with AQE skew handling is the difference between a job that finishes in minutes and one stalled for hours behind a single hot key.",
+      "classification": "fact",
+      "layers": ["compute"],
+      "tags": ["Spark", "SortMergeJoin", "AdaptiveQueryExecution", "SkewJoin"],
+      "evidence": [
+        {
+          "sourceKey": "spark-sql-performance-tuning",
+          "note": "AQE skew join handling (spark.sql.adaptive.skewJoin.enabled, default true) splits skewed shuffle partitions in a sort-merge join into roughly evenly sized sub-partitions and replicates the matching side; a partition is treated as skewed when it exceeds both 5.0x the median (skewedPartitionFactor) and 256 MB (skewedPartitionThresholdInBytes)."
+        },
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "AQE's skew-split logic is coded specifically for join operators (SortMergeJoin/ShuffledHashJoin) and aggregations have no probe side to replicate, requiring manual key salting instead."
+        },
+        {
+          "sourceKey": "fabric-spark-toolkit-internals",
+          "note": "SortMergeJoin spill shows as large Spill (Memory)/Spill (Disk) aggregated-metrics values; remedy: lower the AQE advisory partition size or force a broadcast join under a size threshold."
+        }
+      ],
+      "drill": {
+        "inputs": ["Both sides of a large equi-join, already shuffled and sorted by join key"],
+        "processing": [
+          "Both sides are merged in a single streaming pass, matching sorted keys as they're encountered",
+          "AQE's skew-join handling monitors post-shuffle partition sizes; a partition exceeding both 5.0x the median size and 256 MB is treated as skewed",
+          "A skewed partition is split into evenly sized sub-partitions, with the matching side replicated so each split still finds its rows"
+        ],
+        "outputs": ["The joined result, streamed from the merge pass, with skewed partitions handled without a full job restart"],
+        "example": "A real measured run joining a 70%-skewed 1.2M-row left table (most rows mapping to a single join key) against a 500-row right table showed a genuine 3.8x task-duration skew ratio (max task 1733ms vs. median 457ms across 16 tasks) on the affected stage — AQE skew-join splitting, confirming AQE is enabled, salting the key, or checking whether the hot key is NULL are the documented remediations.",
+        "controls": [
+          "Confirm spark.sql.adaptive.skewJoin.enabled is on (default true)",
+          "Lower spark.sql.adaptive.advisoryPartitionSizeInBytes when spill metrics show partitions still too large after skew splitting",
+          "Consider forcing a broadcast join under a size threshold instead, if one side can be made small enough"
+        ],
+        "failureModes": [
+          "AQE's skew-split logic only applies to join operators — a skewed GROUP BY aggregation is unaffected and needs manual key salting instead",
+          "Large Spill (Memory)/Spill (Disk) values in the Spark UI mean partitions still don't fit even after skew splitting"
+        ],
+        "metrics": [
+          {
+            "label": "Skew threshold: partition factor",
+            "value": "5.0x the median partition size",
+            "sourceKey": "spark-sql-performance-tuning"
+          },
+          {
+            "label": "Skew threshold: absolute size",
+            "value": "256 MB",
+            "sourceKey": "spark-sql-performance-tuning"
+          }
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark capability" }
+    },
+    {
+      "id": "join-strategy-traps",
+      "label": "Traps: a cast defeats equi-join detection; a slow broadcast build aborts the query",
+      "summary": "Two documented ways a join silently lands on the expensive path, plus how to diagnose which strategy actually ran.",
+      "detail": "Casting a join key on one side to match a mismatched type defeats equi-join detection and the column statistics join planning relies on — the fix is normalizing the type once upstream so the join stays a native, statistics-visible equi-join. Separately, a broadcast build that exceeds spark.sql.broadcastTimeout (default 300s) aborts the entire query — one of AQE's four documented hard limits, unrescuable by adaptive re-planning. A COST-mode EXPLAIN is the diagnostic mode that surfaces the row-count and size statistics behind why the optimizer picked the strategy it did.",
+      "whyItMatters": "Both traps produce the same symptom — an unexpectedly slow join with no obvious error — so knowing to check the physical plan (not just tune configuration values) is the fastest path to the real cause.",
+      "classification": "warning",
+      "layers": ["compute"],
+      "tags": ["Spark", "AntiPattern", "JoinPlanning", "Diagnostics"],
+      "evidence": [
+        {
+          "sourceKey": "fabric-coding-standards",
+          "note": "Casting a join key on one side defeats equi-join detection and column statistics used for join planning; normalizing the column's type once during bronze-to-silver keeps the join a native, statistics-visible equi-join that AQE can convert to a broadcast join at runtime."
+        },
+        {
+          "sourceKey": "spark-internals-engine-core",
+          "note": "A broadcast build that exceeds spark.sql.broadcastTimeout (default 300s) aborts the query regardless of AQE, one of AQE's four documented hard limits."
+        },
+        {
+          "sourceKey": "spark-sql-explain-plans",
+          "note": "COST mode surfaces the row-count and size statistics attached to plan nodes, making it the mode that explains why the optimizer chose a given join strategy."
+        }
+      ],
+      "drill": {
+        "inputs": ["A join query whose runtime is worse than expected for its data volume"],
+        "processing": [
+          "Check whether a join key was cast on either side, which defeats equi-join detection even when the predicate still reads as '='",
+          "Check the physical plan (EXPLAIN, COST mode) for CartesianProduct, BroadcastNestedLoopJoin, or an unexpectedly large Spill metric",
+          "Check driver/executor logs for a broadcastTimeout abort if a broadcast was expected but the query failed outright"
+        ],
+        "outputs": ["A confirmed root cause: cast-defeated equi-join, a genuine non-equi condition, a timed-out broadcast, or a skewed shuffle"],
+        "example": "A join expected to broadcast a small dimension table instead ran a full shuffle because the dimension table's key column had drifted to a different type upstream; COST-mode EXPLAIN showed the cast node and the missing broadcast hint in the plan.",
+        "controls": [
+          "Normalize join-key types once upstream, not at query time",
+          "Read the physical plan before touching any Spark configuration value",
+          "Verify spark.driver.memory headroom before raising the broadcast threshold"
+        ],
+        "failureModes": [
+          "A cast-defeated equi-join silently routes to Broadcast Nested Loop Join or a full shuffle sort-merge with no error, only slow runtime",
+          "A broadcast build exceeding spark.sql.broadcastTimeout fails the whole query outright rather than degrading gracefully"
+        ]
+      },
+      "drillTarget": { "kind": "capability", "slug": "spark", "label": "Spark capability" }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-root-to-nested-loop",
+      "from": "join-condition-question",
+      "to": "broadcast-nested-loop-join",
+      "label": "No equi-join key",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-root-to-broadcast-threshold",
+      "from": "join-condition-question",
+      "to": "broadcast-threshold-question",
+      "label": "Equi-join (col_a = col_b)",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-threshold-to-broadcast-hash",
+      "from": "broadcast-threshold-question",
+      "to": "broadcast-hash-join",
+      "label": "Yes — under threshold",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-threshold-to-shuffle-question",
+      "from": "broadcast-threshold-question",
+      "to": "shuffle-vs-sort-merge-question",
+      "label": "No — both sides too large",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-shuffle-question-to-sort-merge",
+      "from": "shuffle-vs-sort-merge-question",
+      "to": "sort-merge-join",
+      "label": "Default fallback for large partitions",
+      "layer": "compute",
+      "kind": "branch"
+    },
+    {
+      "id": "e-nested-loop-to-traps",
+      "from": "broadcast-nested-loop-join",
+      "to": "join-strategy-traps",
+      "label": "Common trigger: cast or inequality condition",
+      "layer": "compute",
+      "kind": "feedback"
+    },
+    {
+      "id": "e-broadcast-threshold-to-traps",
+      "from": "broadcast-threshold-question",
+      "to": "join-strategy-traps",
+      "label": "Broadcast build can time out",
+      "layer": "compute",
+      "kind": "feedback"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "join-condition-question",
+      "title": "Start: does the join have an equality predicate?",
+      "explanation": "Every downstream strategy depends on being able to hash or sort-merge both sides on matching key values. Check the join condition for a real equality predicate first — including checking for a silently cast join key, which still reads as '=' but defeats the planner's equi-join detection."
+    },
+    {
+      "nodeId": "broadcast-nested-loop-join",
+      "title": "No equi-join key: nested loop or Cartesian product",
+      "explanation": "Without a hashable key, Spark compares every row on one side against every row on the other — an O(n x m) cost. This is where inequality/as-of joins and cast-defeated equi-joins both land."
+    },
+    {
+      "nodeId": "broadcast-threshold-question",
+      "title": "Equi-join confirmed: check the size threshold",
+      "explanation": "Spark compares each side's estimated size against spark.sql.autoBroadcastJoinThreshold (10 MB default). This single check decides whether the large side gets shuffled at all."
+    },
+    {
+      "nodeId": "broadcast-hash-join",
+      "title": "Under threshold: Broadcast Hash Join",
+      "explanation": "The small side is broadcast to every executor; the large side is never shuffled. This is the cheapest strategy Spark has, when it applies."
+    },
+    {
+      "nodeId": "shuffle-vs-sort-merge-question",
+      "title": "Over threshold: both sides shuffle",
+      "explanation": "When neither side is small enough to broadcast, both sides are repartitioned by the join key. Spark then chooses between an in-memory hash table (Shuffle Hash Join) and a sort-and-merge pass (Sort Merge Join)."
+    },
+    {
+      "nodeId": "sort-merge-join",
+      "title": "The default: Sort Merge Join, with AQE skew handling",
+      "explanation": "Sort Merge Join is Spark's practical default for large equi-joins because it never holds a full hash table in memory. Adaptive Query Execution's skew-join handling can split an overloaded partition at runtime — but only for join operators, not aggregations."
+    },
+    {
+      "nodeId": "join-strategy-traps",
+      "title": "Two traps that explain an unexpectedly slow join",
+      "explanation": "A cast on a join key silently defeats equi-join detection, and a broadcast build that exceeds spark.sql.broadcastTimeout fails the query outright. A COST-mode EXPLAIN is the fastest way to confirm which strategy actually ran."
+    }
+  ]
+}

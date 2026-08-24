@@ -741,15 +741,28 @@ export const listRoadmapItems = createServerFn({ method: "GET" }).handler(async 
     const sb = await admin();
     // roadmap_items isn't in the generated Database type yet (regenerate after applying the
     // migration); `as any` here matches the same escape hatch used for search_atlas below.
-    const { data, error } = await (sb as any)
-      .from("roadmap_items")
-      .select(
-        "id,guid,release_item_id,title,feature_name,link,status,release_type,release_status,target_release,release_date,product_id,product_name,feature_description,blog_title,blog_url,last_modified,active,categories,description_html,pub_date,capability_id",
-      )
-      .eq("active", true)
-      .order("pub_date", { ascending: false });
-    if (error) throw new Error(error.message);
-    return (data ?? []) as RoadmapItem[];
+    //
+    // PostgREST caps a single response at 1000 rows by default. There are 1000+ active roadmap
+    // items, so an unpaged select here silently truncated: /roadmap dropped real items out of its
+    // status buckets, and the homepage's count tile showed exactly "1000" -- a suspiciously round
+    // number that was in fact the page cap, not the real count of 1,082. Page explicitly so every
+    // caller (the homepage tile, /roadmap, the admin RoadmapPanel) gets the true full set.
+    const all: RoadmapItem[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await (sb as any)
+        .from("roadmap_items")
+        .select(
+          "id,guid,release_item_id,title,feature_name,link,status,release_type,release_status,target_release,release_date,product_id,product_name,feature_description,blog_title,blog_url,last_modified,active,categories,description_html,pub_date,capability_id",
+        )
+        .eq("active", true)
+        .order("pub_date", { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      all.push(...((data ?? []) as RoadmapItem[]));
+      if (!data || data.length < PAGE) break;
+    }
+    return all;
   } catch {
     return [] as RoadmapItem[];
   }

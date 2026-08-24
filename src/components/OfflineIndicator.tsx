@@ -26,6 +26,9 @@ export function OfflineIndicator() {
     <div
       role="status"
       aria-live="polite"
+      // Same iOS safe-area fix as SiteHeader: without this, the banner sits under the status
+      // bar/notch in portrait.
+      style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       className="fixed inset-x-0 top-0 z-[60] flex items-center justify-center gap-2 border-b border-amber-400/30 bg-amber-500/15 px-3 py-1.5 text-xs text-amber-200 backdrop-blur"
     >
       <WifiOff className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />

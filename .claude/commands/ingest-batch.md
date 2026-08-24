@@ -51,6 +51,13 @@ APP="$FABRIC_ATLAS_APP_URL"; AGENT_H="Authorization: Bearer $FABRIC_ATLAS_AGENT_
 6. Finish with a summary table: source, tier, claims extracted, assets, and the `queue_items.id` it
    came from — plus the next steps for the human: **Settings → Publish** each
    `content/sources/<slug>.json` (Source + claims), then **Settings → Queue** to complete those
-   items, then **Settings → Claims → "Verify all"** to verify. Remind that new
+   items, then **Settings → Claims → "Verify all"** to verify, then
+   **`node scripts/generate-embeddings.mjs`** to embed the newly-published claims. Remind that new
    `content/sources/*.json` files should be committed to git (the Supabase queue is user intent, not
    knowledge — it is never committed).
+
+   The embedding step has to come last and has to be run by the human, not you: it needs claims to
+   already exist in Supabase (i.e. after Publish, not before), and it needs a local Ollama instance
+   plus `FABRIC_ATLAS_AGENT_READ_TOKEN` in `.env.local` — neither of which this skill has. Every
+   session's `check-queues.mjs` digest also reports an `Embeddings: N claim(s) missing embeddings`
+   line whenever this step is skipped, so it surfaces again even if this run's summary is missed.

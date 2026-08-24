@@ -1,0 +1,758 @@
+{
+  "id": "fabric-data-agent-query-generation-internals",
+  "title": "Fabric Data Agent: Query-Generation Internals — Grounding, Per-Source Generators, and the Accuracy Levers",
+  "purpose": "Show what happens between source selection and a generated query: which configuration surfaces ground the prompt, how the source-specific generator differs by data-source type, and which documented factors actually move answer accuracy.",
+  "accessibleSummary": "An internals diagram. Four configuration surfaces — agent-level instructions, data-source-level instructions, data source descriptions, and up to 100 example queries per source — feed an assembled prompt sent to a managed Azure OpenAI Assistant alongside the user's question and the fetched schema. The assistant then routes to one of four source-specific generators: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for Eventhouse KQL databases, or a Microsoft Graph/GQL query for ontology sources — each with its own quirks, most notably that Power BI semantic models do not support the example-query few-shot mechanism at all, and GQL generation against an ontology has three field-reported failure modes unrelated to SQL-based agents. A grounded accuracy-levers panel shows that community write-ups converge on instructions and data-model quality as the dominant lever, illustrated by a documented SCD2/bridge-table failure that disappeared once instructions were completed, the 'GINO' (Gold in Name Only) modeling antipattern that silently breaks NL2SQL agents, and a benchmark whose measured accuracy rose to about 97.2% after fixing both the benchmark's own ground truth and the agent's instructions. The output is a read-only, source-native query whose result is still subject to the 25×25 cap and governance precedence covered in the companion orchestration diagram.",
+  "longDescription": "This diagram picks up exactly where the companion 'Life of a Fabric Data Agent Request' orchestration diagram leaves the query-generation step as a single box, and opens it up. It traces the four configuration surfaces a data-agent author actually sets — agent-level instructions (tenant-wide priorities and terminology, up to 15,000 characters), data-source-level instructions (scoped guidance that only applies once a source is already selected), data-source descriptions (the routing signal), and per-source example queries (a few-shot mechanism, up to 100 per source) — and shows how they combine with the user's question and the schema fetched under the caller's own identity into one assembled prompt for a managed Azure OpenAI Assistant. That assistant then hands off to a source-specific generator, and the diagram makes the differences between those four generators explicit rather than treating them as interchangeable: NL2SQL and NL2KQL both accept the example-query few-shot mechanism, NL2DAX for Power BI semantic models does not support it at all, and GQL generation against a Fabric IQ ontology carries three documented failure modes specific to graph structure. A closing panel names the factors community benchmarking converges on as the actual levers over answer accuracy — complete instructions and clean data modeling — rather than the underlying model.",
+  "type": "internals",
+  "topicSlug": "fabric-data-agent",
+  "capabilityIds": [
+    "fabric-data-agent"
+  ],
+  "revision": "3",
+  "qaStatus": "draft",
+  "staticPath": "content/diagrams/fabric-data-agent-query-generation-internals.svg",
+  "layoutHint": "wide",
+  "nodes": [
+    {
+      "id": "config-surfaces",
+      "label": "Four configuration surfaces",
+      "summary": "Agent instructions, source instructions, source descriptions, and example queries — the four levers an author actually sets.",
+      "detail": "A Fabric data agent exposes four distinct configuration surfaces that together shape its behavior: agent-level instructions, data-source-level instructions, data source descriptions, and data-source example queries. Agent-level instructions operate above any single source and set overall objective, source priority order, key terminology, and response formatting, accepting up to 15,000 characters. Data-source-level instructions apply only once the agent has already routed a question to that specific source, holding source-specific guidance on relevant tables, columns, relationships, and query logic. A source description is a separate, high-level summary the agent uses as a routing signal. Example queries pair sample questions with validated SQL or KQL as a few-shot mechanism, up to 100 per attached source.",
+      "whyItMatters": "These four surfaces are the only inputs an author directly controls. Getting them right or leaving them thin is, per the accuracy-levers panel later in this diagram, the single biggest documented factor in whether the agent answers correctly.",
+      "classification": "fact",
+      "layers": [
+        "governance",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-data-agent-configuration",
+          "note": "A Fabric data agent exposes four distinct configuration surfaces that together shape its behavior: agent-level instructions, data-source-level instructions, data source descriptions, and data-source example queries."
+        },
+        {
+          "sourceKey": "fabric-data-agent-configuration",
+          "note": "Agent-level instructions operate above any single data source and are meant to state the agent's overall objective, set a priority order across attached data sources, define key terminology/acronyms, and specify response-formatting expectations."
+        },
+        {
+          "sourceKey": "fabric-data-agent-create",
+          "note": "Agent-level instructions accept up to 15,000 characters of plain-English guidance and can direct the agent to prefer specific sources for specific question types or define domain-specific terminology the model otherwise misinterprets."
+        },
+        {
+          "sourceKey": "fabric-data-agent-configuration",
+          "note": "Data-source-level instructions apply only once the agent has already routed a question to a specific source, and are meant to hold source-specific guidance such as relevant tables, columns, relationships, and query logic needed for common or complex questions."
+        },
+        {
+          "sourceKey": "fabric-data-agent-configuration",
+          "note": "A data source description is a separate, high-level summary of what a given attached source contains and what kinds of questions it can answer, and the agent uses this description as one of its inputs when deciding which source is relevant to a given user question."
+        }
+      ],
+      "tags": [
+        "configuration",
+        "instructions",
+        "authoring"
+      ],
+      "drill": {
+        "inputs": [
+          "Agent author's domain knowledge",
+          "Attached source schemas and business terminology",
+          "Prior support/diagnostics feedback on wrong answers"
+        ],
+        "processing": [
+          "Author writes agent-level instructions: objective, source priority order, glossary of acronyms, response-format rules",
+          "Author writes per-source instructions: which tables/columns/relationships matter, source-specific query logic",
+          "Author writes a one-line description per source so the router can match it to likely questions",
+          "Author (optionally) supplies up to 100 example question/query pairs per source, syntax- and schema-validated"
+        ],
+        "outputs": [
+          "A grounded, source-scoped configuration the runtime reads at query time — never bundled into one flat prompt blob"
+        ],
+        "example": "An agent over a sales lakehouse sets agent-level instructions defining 'active customer' once, then per-source instructions on the lakehouse pointing at the correct fact/dimension join keys, plus three example queries showing how to compute trailing-12-month revenue correctly.",
+        "controls": [
+          "Recommended agent-level template: Objective, Data sources, Key terminology, Response guidelines, Handling common topics",
+          "Recommended source-level template: General knowledge, Table descriptions, When asked about",
+          "Git integration to version-control instructions and example queries",
+          "Deployment pipelines to promote a tuned configuration dev → prod"
+        ],
+        "failureModes": [
+          "Leaving instructions default/empty and expecting the model to infer business meaning from column names alone",
+          "Writing agent-level guidance that duplicates or contradicts source-level guidance"
+        ],
+        "metrics": []
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "fabric-data-agent",
+        "label": "Fabric Data Agent"
+      }
+    },
+    {
+      "id": "example-queries",
+      "label": "Example queries (few-shot)",
+      "summary": "Top-3 relevant examples are looked up per source and passed into generation — except Power BI semantic models, which don't support this at all.",
+      "detail": "Example queries function as few-shot learning: creators pair sample questions with validated SQL or KQL, and the agent matches new questions against these to steer generation toward business-specific logic. When a data source is selected, its tool automatically looks up the most relevant example queries and passes the top three into the query-generation step. Only syntactically valid, schema-matching examples are ever used. Power BI semantic models do not support this example-query mechanism at all.",
+      "whyItMatters": "This is the sharpest per-source-type asymmetry in the whole pipeline: two of the four generator paths get a documented accuracy lever that one of them structurally cannot use, which is a real design constraint, not an oversight to route around.",
+      "classification": "fact",
+      "layers": [
+        "metadata",
+        "orchestration"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-data-agent-create",
+          "note": "Example queries function as few-shot learning: creators pair sample questions with validated SQL or KQL, and the agent matches new questions against these to steer generation toward business-specific logic; only syntactically valid, schema-matching examples are ever used, and Power BI semantic models don't support this example-query mechanism."
+        },
+        {
+          "sourceKey": "fabric-data-agent-configuration",
+          "note": "Data source example queries are a few-shot mechanism: when a data source is selected for a question, its tool automatically looks up the most relevant example queries and passes the top three into the query-generation step."
+        }
+      ],
+      "tags": [
+        "few-shot",
+        "example-queries"
+      ],
+      "drill": {
+        "inputs": [
+          "Selected data source",
+          "The user's current question"
+        ],
+        "processing": [
+          "Source's example-query tool ranks stored examples by relevance to the current question",
+          "Top three are selected",
+          "Selected examples are passed alongside schema into the assembled prompt"
+        ],
+        "outputs": [
+          "Up to three validated question/query pairs steering the generator toward business-specific phrasing"
+        ],
+        "example": "A warehouse source has 40 stored example queries; for a question about quarterly churn, the three examples closest to 'churn' and 'quarter' phrasing are surfaced to the generator, not the full 40.",
+        "controls": [
+          "Up to 100 example queries per attached source",
+          "Only syntactically valid, schema-matching examples are ever stored/used"
+        ],
+        "failureModes": [
+          "Assuming a Power BI semantic model source benefits from example queries the same way a lakehouse does — it structurally does not"
+        ],
+        "metrics": [
+          {
+            "label": "Example queries per source",
+            "value": "up to 100",
+            "sourceKey": "ultimateinfoguide-data-agent-tutorial"
+          }
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "fabric-data-agent",
+        "label": "Fabric Data Agent"
+      }
+    },
+    {
+      "id": "prompt-assembly",
+      "label": "Assembled prompt",
+      "summary": "Question, fetched schema, and creator instructions/examples are assembled into one prompt before a generator is chosen.",
+      "detail": "The prompt sent to the underlying Azure OpenAI Assistant is assembled from three inputs: the user's natural-language question, the fetched schema metadata, and any creator-supplied instructions or example queries, before the assistant selects a query-generation tool.",
+      "whyItMatters": "This is the single point where all grounding — question, schema, and every configuration surface — converges before the model decides how to answer. Weak input anywhere upstream degrades everything downstream of this node.",
+      "classification": "fact",
+      "layers": [
+        "orchestration",
+        "governance"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-data-agent-create",
+          "note": "The prompt sent to the underlying Azure OpenAI Assistant is assembled from three inputs: the user's natural-language question, the fetched schema metadata, and any creator-supplied instructions or example queries, before the assistant selects a query-generation tool."
+        },
+        {
+          "sourceKey": "fabric-data-agent-create",
+          "note": "When answering a question, the agent first fetches the target data source's schema using the requesting user's own credentials, guaranteeing schema visibility is scoped to what that user can already see."
+        }
+      ],
+      "tags": [
+        "prompt",
+        "grounding",
+        "azure-openai"
+      ],
+      "drill": {
+        "inputs": [
+          "User's natural-language question",
+          "Schema metadata fetched under the caller's identity",
+          "Agent-level and source-level instructions",
+          "Top-3 example queries (where supported)"
+        ],
+        "processing": [
+          "Three input categories merged into one prompt",
+          "Prompt handed to a Microsoft-managed Azure OpenAI Assistant",
+          "Assistant selects which source-specific generation tool to invoke"
+        ],
+        "outputs": [
+          "One assembled, source-scoped prompt ready for source-specific query generation"
+        ],
+        "example": "For a KQL-database question, the assembled prompt contains the question, the relevant table/column schema the caller can see, and any source-level instructions about time-filtering conventions for that Eventhouse.",
+        "controls": [
+          "What goes into instructions and example queries is fully author-controlled; schema and question are not"
+        ],
+        "failureModes": [
+          "Schema fetch scoped to the caller means two different users asking the identical question can get differently-grounded prompts if their visible schema differs (e.g. column-level security)"
+        ],
+        "metrics": []
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "fabric-data-agent",
+        "label": "Fabric Data Agent"
+      }
+    },
+    {
+      "id": "gen-nl2sql",
+      "label": "NL2SQL (lakehouse / warehouse)",
+      "summary": "Generates read-only SQL against lakehouse and warehouse sources.",
+      "detail": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases, or a Microsoft Graph query for organizational data. NL2SQL is the path used for lakehouse and warehouse sources.",
+      "whyItMatters": "SQL generation quality is directly downstream of how clean the underlying gold-layer modeling is — a superficially-relabeled bronze table (see the GINO antipattern node) breaks this generator silently rather than loudly.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "data"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases, or a Microsoft Graph query for organizational data."
+        }
+      ],
+      "tags": [
+        "nl2sql",
+        "lakehouse",
+        "warehouse"
+      ],
+      "drill": {
+        "inputs": [
+          "Assembled prompt",
+          "Lakehouse/warehouse SQL-endpoint schema",
+          "Top-3 example SQL queries (if configured)"
+        ],
+        "processing": [
+          "Generator drafts a read-only SELECT statement against the source's SQL surface",
+          "Statement is scoped to tables/columns the schema fetch exposed"
+        ],
+        "outputs": [
+          "A read-only SQL query, never a write statement"
+        ],
+        "example": "'What were total sales by region last quarter?' against a warehouse source generates a SELECT with a GROUP BY region and a date filter matching the prior quarter.",
+        "controls": [
+          "Table descriptions and column-level guidance in source-level instructions",
+          "Example SQL queries as few-shot grounding"
+        ],
+        "failureModes": [
+          "Multi-grain fact tables or unnecessary normalization (the GINO antipattern) silently produce wrong joins/aggregations that a human analyst would catch but the generator does not"
+        ],
+        "metrics": []
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "fabric-data-agent",
+        "label": "Fabric Data Agent"
+      }
+    },
+    {
+      "id": "gen-nl2dax",
+      "label": "NL2DAX (semantic model)",
+      "summary": "Generates DAX against Power BI semantic models; Read permission is enough, but no example-query few-shot is available.",
+      "detail": "NL2DAX is the generator path used for Power BI semantic model sources. Only Read permission on the model is required for the agent to retrieve schema and run queries — Build permission is not needed — though Row-Level and Column-Level Security still apply. This is also the one source type where the example-query few-shot mechanism is unsupported.",
+      "whyItMatters": "Semantic models are the only source type in this diagram both permission-relaxed (Read-only suffices) and few-shot-deprived (no example queries), a distinctive combination worth designing an agent's instructions around.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "security"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases, or a Microsoft Graph query for organizational data."
+        },
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "For Power BI semantic model sources, only Read permission on the model is required for the agent to retrieve schema and run queries; Build permission is not needed, though Row-Level and Column-Level Security still apply."
+        },
+        {
+          "sourceKey": "fabric-data-agent-create",
+          "note": "Example queries function as few-shot learning: creators pair sample questions with validated SQL or KQL, and the agent matches new questions against these to steer generation toward business-specific logic; only syntactically valid, schema-matching examples are ever used, and Power BI semantic models don't support this example-query mechanism."
+        }
+      ],
+      "tags": [
+        "nl2dax",
+        "semantic-model",
+        "power-bi"
+      ],
+      "drill": {
+        "inputs": [
+          "Assembled prompt",
+          "Semantic model schema (tables, measures, relationships) visible under Read permission",
+          "No example-query few-shot — unsupported for this source type"
+        ],
+        "processing": [
+          "Generator drafts a DAX query against the model's measures and columns",
+          "RLS/CLS on the model is evaluated as part of execution, not generation"
+        ],
+        "outputs": [
+          "A DAX query scoped to what the model's certified measures expose"
+        ],
+        "example": "'What's our year-over-year revenue growth?' resolves to a DAX query calling the model's existing YoY-growth measure rather than reconstructing the calculation from raw columns.",
+        "controls": [
+          "Agent- and source-level instructions are the only few-shot-equivalent lever available for this source type, since example queries don't apply",
+          "Endorsed/certified measures narrow what the generator needs to reconstruct"
+        ],
+        "failureModes": [
+          "Because there's no example-query mechanism here, ambiguous or undocumented measure names are more likely to be misused than on SQL-based sources"
+        ],
+        "metrics": []
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "fabric-data-agent",
+        "label": "Fabric Data Agent"
+      }
+    },
+    {
+      "id": "gen-nl2kql",
+      "label": "NL2KQL (Eventhouse)",
+      "summary": "Generates KQL against Eventhouse KQL databases, queried in place with no data movement.",
+      "detail": "NL2KQL is the generator path used for KQL databases. Eventhouse KQL databases are queried in place by the agent with no data movement, and NL2KQL can use existing KQL user-defined functions; configurators are advised to scope to the most relevant tables and encourage time filters to keep responses fast over high-volume event data.",
+      "whyItMatters": "This is the one generator with an explicit performance-shaping recommendation baked into its own documentation — time-filter guidance — because the underlying data volume (streaming event data) is structurally larger than a typical lakehouse table scan.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "data",
+        "orchestration"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases, or a Microsoft Graph query for organizational data."
+        },
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "Eventhouse KQL databases are queried in place by the agent with no data movement, and NL2KQL can use existing KQL user-defined functions; configurators are advised to scope to the most relevant tables and encourage time filters to keep responses fast over high-volume event data."
+        }
+      ],
+      "tags": [
+        "nl2kql",
+        "eventhouse",
+        "kql"
+      ],
+      "drill": {
+        "inputs": [
+          "Assembled prompt",
+          "KQL database schema and existing user-defined functions",
+          "Top-3 example KQL queries (if configured)"
+        ],
+        "processing": [
+          "Generator drafts a KQL query, optionally reusing existing KQL UDFs and materialized views",
+          "Query executes directly against the Eventhouse, no copy or staging step"
+        ],
+        "outputs": [
+          "A read-only KQL query scoped to the most relevant tables"
+        ],
+        "example": "'How many device errors in the last hour?' generates a KQL query with a `where Timestamp > ago(1h)` filter, matching the documented advice to encourage time filters over high-volume event tables.",
+        "controls": [
+          "Source-level instructions can point the generator at existing KQL UDFs instead of hand-writing logic",
+          "Scoping instructions to the most relevant tables keeps generated queries fast over high-volume data"
+        ],
+        "failureModes": [
+          "A question with no natural time bound can generate a KQL query that scans a much larger window of event data than intended"
+        ],
+        "metrics": []
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "fabric-data-agent",
+        "label": "Fabric Data Agent"
+      }
+    },
+    {
+      "id": "gen-graph",
+      "label": "Graph / GQL (ontology)",
+      "summary": "Generates a Microsoft Graph or GQL query for ontology sources — three documented failure modes distinct from SQL-based generators.",
+      "detail": "After identifying the relevant data source, the agent can also route a question to a Microsoft Graph query for organizational data or a graph-backed ontology. A field report on building a data agent against a graph-backed ontology found practical failure modes distinct from SQL-based agents: asynchronous graph rebuild timing, the need to use binding property names rather than display names in generated GQL, and a hidden requirement to prefix SQL objects with `dbo.` that the agent otherwise omits.",
+      "whyItMatters": "This is the least SQL-like generator in the set, and its documented failure modes don't transfer from anything learned tuning the other three — it needs its own configuration playbook.",
+      "classification": "fact",
+      "layers": [
+        "compute",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "After identifying the relevant data source, the agent routes the question to a source-specific generator: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models, NL2KQL for KQL databases, or a Microsoft Graph query for organizational data."
+        },
+        {
+          "sourceKey": "fabricdataagent-community-hub",
+          "note": "One field report on building a Fabric Data Agent against a graph-backed ontology (GQL) found practical failure modes distinct from SQL-based agents: asynchronous graph rebuild timing, the need to use binding property names rather than display names in generated GQL, and a hidden requirement to prefix SQL objects with dbo. that the agent otherwise omits."
+        }
+      ],
+      "tags": [
+        "gql",
+        "graph",
+        "ontology",
+        "fabric-iq"
+      ],
+      "drill": {
+        "inputs": [
+          "Assembled prompt",
+          "Ontology entity/relationship schema (Fabric IQ)",
+          "Instance graph state, which may lag an upstream data change"
+        ],
+        "processing": [
+          "Generator drafts a GQL query against the ontology's published entity types and relationships",
+          "Query is constrained to what the ontology has explicitly modeled, not raw source schema"
+        ],
+        "outputs": [
+          "A structured graph query answer, grounded in the shared ontology's definitions"
+        ],
+        "example": "A field report describes generated GQL failing until property references were switched from human-readable display names to the ontology's internal binding property names.",
+        "controls": [
+          "Awareness that the instance graph rebuilds asynchronously, so a very recent source change may not yet be reflected",
+          "Explicit binding-name usage in source/agent instructions for ontology sources"
+        ],
+        "failureModes": [
+          "Asynchronous graph rebuild timing means a question can be answered against a stale instance graph",
+          "Using display names instead of binding property names in generated GQL",
+          "Omitting a required `dbo.` prefix on underlying SQL objects that the agent doesn't add automatically"
+        ],
+        "metrics": []
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "fabric-iq",
+        "label": "Fabric IQ"
+      }
+    },
+    {
+      "id": "accuracy-levers",
+      "label": "What actually moves accuracy",
+      "summary": "Community benchmarking converges: instructions and data-model quality are the dominant lever, not the underlying model.",
+      "detail": "Multiple independent community write-ups converge on the same conclusion: agent instructions and data-model documentation are the biggest lever for answer accuracy, with one side-by-side demo showing a minimally-instructed agent silently returning wrong answers on complex SCD2/bridge-table queries while an identically-sourced agent with full instructions answered correctly. A separate community-built, Spider2-inspired 72-question multilingual benchmark initially showed weaker accuracy, but a row-level audit found many failures traced to faulty ground truth, ambiguous phrasing, and inconsistent casing in the benchmark itself; after fixing the benchmark and tightening agent instructions, measured accuracy rose to about 97.2%.",
+      "whyItMatters": "This reframes 'the agent got it wrong' as usually a configuration and modeling problem, not a model-capability problem — the fix is almost always upstream in this diagram (instructions, schema quality), not in generator internals.",
+      "classification": "inference",
+      "layers": [
+        "governance",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabricdataagent-community-hub",
+          "note": "Multiple independent community write-ups converge on the same conclusion: agent instructions and data-model documentation are the biggest lever for answer accuracy, with one side-by-side demo showing a minimally-instructed agent silently returning wrong answers on complex SCD2/bridge-table queries while an identically-sourced agent with full instructions answered correctly."
+        },
+        {
+          "sourceKey": "fabricdataagent-community-hub",
+          "note": "A community-built, Spider2-inspired 72-question multilingual benchmark evaluated with the Fabric evaluate_data_agent SDK function initially showed weaker accuracy, but a row-level audit found many failures traced back to faulty ground truth, ambiguous phrasing, and inconsistent casing in the benchmark itself rather than agent mistakes; after fixing the benchmark and tightening agent instructions, measured accuracy rose to about 97.2%, with remaining errors attributed to complex multi-step prompts and ambiguous schema references."
+        }
+      ],
+      "tags": [
+        "accuracy",
+        "benchmarking",
+        "community"
+      ],
+      "drill": {
+        "inputs": [
+          "Baseline agent with minimal or default instructions",
+          "A community-authored ground-truth benchmark",
+          "Complex query patterns (SCD2, bridge tables, multi-step questions)"
+        ],
+        "processing": [
+          "Compare minimally-instructed vs fully-instructed agent on the same source and question set",
+          "Audit benchmark failures row-by-row to separate agent errors from ground-truth errors",
+          "Fix benchmark ground truth and tighten agent instructions",
+          "Re-measure"
+        ],
+        "outputs": [
+          "A measured accuracy improvement attributable mostly to instructions and modeling quality, not model swaps"
+        ],
+        "example": "A side-by-side demo: the same underlying source and model, one agent with empty instructions and one with completed instructions, diverged sharply on SCD2/bridge-table questions — only the instructed agent answered correctly.",
+        "controls": [
+          "Completing all four configuration surfaces before blaming generator accuracy",
+          "Fixing gold-layer modeling quality (avoiding the GINO antipattern) before tuning instructions further"
+        ],
+        "failureModes": [
+          "Treating a wrong answer as a model-capability limitation when it traces back to thin instructions or messy modeling",
+          "Trusting a benchmark's own ground truth without auditing it, as the Spider2-inspired benchmark's own creators had to do"
+        ],
+        "metrics": [
+          {
+            "label": "Benchmark accuracy after fixes",
+            "value": "~97.2%",
+            "sourceKey": "fabricdataagent-community-hub"
+          }
+        ]
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "fabric-data-agent",
+        "label": "Fabric Data Agent"
+      }
+    },
+    {
+      "id": "gino-antipattern",
+      "label": "Warning: \"GINO\" — Gold in Name Only",
+      "summary": "A gold layer that's only superficially relabeled bronze silently breaks NL2SQL agents.",
+      "detail": "A community article coined the term 'GINO' (Gold in Name Only) for a data-modeling antipattern where a bronze-quality dataset is superficially relabeled as a Gold layer while still containing multi-grain fact tables, unnecessarily normalized structures, and outer joins. The author argues this antipattern, which a human analyst can work around, silently breaks NL2SQL agents, and proposes simplifying toward Kimball-style star schemas as the fix.",
+      "whyItMatters": "This is the concrete, sourced mechanism behind the general 'data modeling matters for accuracy' claim — it names the exact antipattern and the exact generator it damages (NL2SQL), and gives a specific fix.",
+      "classification": "warning",
+      "layers": [
+        "data",
+        "metadata"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabricdataagent-community-hub",
+          "note": "A community article coined the term 'GINO' (Gold in Name Only) for a data-modeling antipattern where a bronze-quality dataset is superficially relabeled as a Gold layer while still containing multi-grain fact tables, unnecessarily normalized structures, and outer joins; the author argues this antipattern that a human analyst can work around silently breaks NL2SQL agents, and proposes simplifying toward Kimball-style star schemas as the fix."
+        }
+      ],
+      "tags": [
+        "antipattern",
+        "data-modeling",
+        "warning"
+      ],
+      "drill": {
+        "inputs": [
+          "A 'gold' layer table that is really bronze-quality: multi-grain facts, unnecessary normalization, outer joins"
+        ],
+        "processing": [
+          "NL2SQL generator infers joins and aggregation grain from schema alone",
+          "Ambiguous grain or normalization leads to a plausible-looking but wrong query",
+          "No error is raised — the query executes and returns a confidently wrong answer"
+        ],
+        "outputs": [
+          "A silently incorrect SQL query and answer, indistinguishable from a correct one without independent verification"
+        ],
+        "example": "A fact table mixing order-line grain and order-header grain in one table produces a NL2SQL-generated SUM that double-counts header-level fields when joined naively, with no error surfaced.",
+        "controls": [
+          "Simplify toward Kimball-style star schemas before exposing a table to a data agent",
+          "Table descriptions and source-level instructions can partially compensate, but do not fix the underlying grain ambiguity"
+        ],
+        "failureModes": [
+          "Relabeling bronze tables as 'gold' without actually remodeling them",
+          "Trusting a data agent's SQL output on a table a human analyst already has to work around manually"
+        ],
+        "metrics": []
+      },
+      "drillTarget": {
+        "kind": "topic",
+        "slug": "fabric-data-agent",
+        "label": "Fabric Data Agent"
+      }
+    },
+    {
+      "id": "answer-output",
+      "label": "Read-only query + governed answer",
+      "summary": "Every generator hands back a read-only, source-native query; the result is still capped and governance-gated downstream.",
+      "detail": "The agent enforces read-only, least-privilege access by executing under the requesting user's own credentials and permissions, so each query only reaches data that user is already authorized to view. Agent responses are capped at a maximum of 25 rows and 25 columns. Agent behavior is governed by a four-layer precedence model — tenant policy, workspace governance, developer instructions, end-user prompt — evaluated before the answer is returned.",
+      "whyItMatters": "Regardless of which of the four generators produced the query, execution and answer shaping converge on the same identity-scoped, capped, governance-gated path — the generator choice only changes how the query was written, not what it's allowed to return.",
+      "classification": "fact",
+      "layers": [
+        "security",
+        "governance"
+      ],
+      "evidence": [
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "The agent enforces read-only, least-privilege access by executing under the requesting user's own credentials and permissions, so each query only reaches data that user is already authorized to view."
+        },
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "Agent responses are capped at a maximum of 25 rows and 25 columns, and because prior chat turns can influence later answers, a request like asking for all rows for a year will still be limited to 25 rows even in follow-up questions within the same session."
+        },
+        {
+          "sourceKey": "fabric-data-agent-concept",
+          "note": "Agent behavior is governed by a four-layer precedence model, from highest to lowest: tenant-wide organizational policy, workspace/role-based governance settings, developer-supplied instructions and example queries, and finally end-user prompts; higher layers always override lower ones."
+        }
+      ],
+      "tags": [
+        "execution",
+        "governance",
+        "output-cap"
+      ],
+      "drill": {
+        "inputs": [
+          "A generated read-only query from any of the four source-specific generators"
+        ],
+        "processing": [
+          "Query executes under the caller's own identity and permissions",
+          "Four-layer governance precedence is applied",
+          "Result truncated to 25 rows × 25 columns"
+        ],
+        "outputs": [
+          "A capped, permission-scoped, query-transparent answer — see the companion orchestration diagram for the full request lifecycle including failure branches"
+        ],
+        "example": "Two users asking the same question against the same semantic model can get different results if their Row-Level Security assignments differ, even though the generated DAX query is identical.",
+        "controls": [
+          "This node deliberately does not re-derive the full orchestration/failure-branch detail already covered in the companion diagram"
+        ],
+        "failureModes": [
+          "Assuming a generator-specific optimization (e.g. KQL time filters) removes the need for the 25×25 cap downstream — it does not"
+        ],
+        "metrics": [
+          {
+            "label": "Response cap",
+            "value": "25 rows × 25 columns",
+            "sourceKey": "fabric-data-agent-concept"
+          }
+        ]
+      },
+      "drillTarget": {
+        "kind": "diagram",
+        "slug": "fabric-data-agent-orchestration",
+        "label": "Life of a Fabric Data Agent Request"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "from": "config-surfaces",
+      "to": "prompt-assembly",
+      "label": "agent + source instructions, description",
+      "layer": "governance",
+      "kind": "flow"
+    },
+    {
+      "id": "e2",
+      "from": "example-queries",
+      "to": "prompt-assembly",
+      "label": "top-3 relevant examples (where supported)",
+      "layer": "metadata",
+      "kind": "flow"
+    },
+    {
+      "id": "e3",
+      "from": "prompt-assembly",
+      "to": "gen-nl2sql",
+      "label": "source type: lakehouse/warehouse",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "e4",
+      "from": "prompt-assembly",
+      "to": "gen-nl2dax",
+      "label": "source type: semantic model",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "e5",
+      "from": "prompt-assembly",
+      "to": "gen-nl2kql",
+      "label": "source type: KQL database",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "e6",
+      "from": "prompt-assembly",
+      "to": "gen-graph",
+      "label": "source type: ontology / Graph",
+      "layer": "orchestration",
+      "kind": "branch"
+    },
+    {
+      "id": "e7",
+      "from": "gen-nl2sql",
+      "to": "answer-output",
+      "label": "read-only SQL",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e8",
+      "from": "gen-nl2dax",
+      "to": "answer-output",
+      "label": "read-only DAX",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e9",
+      "from": "gen-nl2kql",
+      "to": "answer-output",
+      "label": "read-only KQL",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e10",
+      "from": "gen-graph",
+      "to": "answer-output",
+      "label": "read-only GQL/Graph query",
+      "layer": "compute",
+      "kind": "flow"
+    },
+    {
+      "id": "e11",
+      "from": "gino-antipattern",
+      "to": "gen-nl2sql",
+      "label": "silently breaks generated SQL",
+      "layer": "data",
+      "kind": "feedback"
+    },
+    {
+      "id": "e12",
+      "from": "accuracy-levers",
+      "to": "config-surfaces",
+      "label": "instructions are the dominant lever",
+      "layer": "governance",
+      "kind": "feedback"
+    }
+  ],
+  "walkthrough": [
+    {
+      "nodeId": "config-surfaces",
+      "title": "Start with what an author controls",
+      "explanation": "Four configuration surfaces — not one big prompt field — are the only author-controlled grounding inputs."
+    },
+    {
+      "nodeId": "example-queries",
+      "title": "Few-shot examples, with one exception",
+      "explanation": "Up to three relevant example queries are pulled in automatically per source — except Power BI semantic models, which don't support this mechanism at all."
+    },
+    {
+      "nodeId": "prompt-assembly",
+      "title": "Everything converges into one prompt",
+      "explanation": "Question, schema (fetched under the caller's identity), and every configuration surface merge here before a generator is picked."
+    },
+    {
+      "nodeId": "gen-nl2sql",
+      "title": "Lakehouse/warehouse: NL2SQL",
+      "explanation": "SQL generation quality depends directly on gold-layer modeling quality — see the GINO warning below."
+    },
+    {
+      "nodeId": "gen-nl2dax",
+      "title": "Semantic model: NL2DAX",
+      "explanation": "Read permission is enough to run, but this is the one path with no example-query few-shot support."
+    },
+    {
+      "nodeId": "gen-nl2kql",
+      "title": "Eventhouse: NL2KQL",
+      "explanation": "Queried in place with no data movement; documented guidance pushes toward time-filtered queries for speed."
+    },
+    {
+      "nodeId": "gen-graph",
+      "title": "Ontology: Graph/GQL",
+      "explanation": "The least SQL-like path, with three field-reported failure modes unique to graph structure."
+    },
+    {
+      "nodeId": "gino-antipattern",
+      "title": "Warning: Gold in Name Only",
+      "explanation": "A superficially relabeled bronze table silently breaks NL2SQL — a human analyst notices; the agent does not."
+    },
+    {
+      "nodeId": "accuracy-levers",
+      "title": "What community benchmarking actually shows",
+      "explanation": "Instructions and modeling quality — not the underlying model — are the dominant, repeatedly-observed lever on accuracy."
+    },
+    {
+      "nodeId": "answer-output",
+      "title": "All four paths converge on the same guardrails",
+      "explanation": "Whichever generator produced the query, execution is identity-scoped, governance-gated, and capped at 25×25 — detailed further in the companion orchestration diagram."
+    }
+  ]
+}
