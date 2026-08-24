@@ -78,7 +78,7 @@ export function SiteHeader() {
       // `viewport-fit=cover` (__root.tsx) lets the app draw under the iOS status bar/notch/Dynamic
       // Island. Without this inset, the header's content — including the mobile menu trigger — sat
       // partly underneath it in portrait, unreachable, and only became tappable once rotating to
-      // landscape moved the notch out of the way. `pt-[env(...)]` is a no-op on any device without
+      // landscape moved the notch out of the way. The inline safe-area padding is a no-op on any device without
       // a safe-area inset (env() resolves to its 0 fallback), so this is safe everywhere.
       style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       className={`sticky top-0 z-30 border-b border-border bg-background/85 backdrop-blur-sm supports-[backdrop-filter]:bg-background/70 transition-transform duration-300 ${
