@@ -2121,3 +2121,24 @@ export const saveOpenRouterPolicy = createServerFn({ method: "POST" })
     return { ok: true as const, policy, setting: updated };
   });
 
+/**
+ * Write locally-computed claim embeddings (WP3.1 / defect D4).
+ *
+ * Admin-authenticated counterpart to `scripts/generate-embeddings.mjs`: the laptop computes
+ * vectors with a local Ollama model, this writes them with the service-role client. See
+ * `@/lib/claim-embeddings.server` for why the script cannot write to Supabase directly.
+ */
+export const writeClaimEmbeddings = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { model: string; items: { claimId: string; embedding: number[] }[] }) => d)
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const { writeClaimEmbeddingsCore } = await import("@/lib/claim-embeddings.server");
+    const sb = await adminClient();
+    const result = await writeClaimEmbeddingsCore(sb, data.model, data.items ?? []);
+    await recordAudit(context.userId, "claims.embeddings_written", "global", data.model, {
+      written: result.written,
+      missing: result.missing.length,
+    });
+    return { ok: true as const, ...result };
+  });

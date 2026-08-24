@@ -41,6 +41,7 @@ import { Route as Char91DotmcpChar93InvokeToolToolRouteImport } from './routes/[
 import { Route as DotlovableOauthConsentRouteImport } from './routes/[.]lovable.oauth.consent'
 import { Route as ApiPublicHooksSeedContentRouteImport } from './routes/api/public/hooks/seed-content'
 import { Route as ApiPublicHooksPollFeedsRouteImport } from './routes/api/public/hooks/poll-feeds'
+import { Route as ApiPublicHooksClaimEmbeddingsRouteImport } from './routes/api/public/hooks/claim-embeddings'
 import { Route as ApiPublicHealthAtlasRouteImport } from './routes/api/public/health/atlas'
 import { Route as ApiPublicDevLogsRouteImport } from './routes/api/public/dev/logs'
 
@@ -207,6 +208,12 @@ const ApiPublicHooksPollFeedsRoute = ApiPublicHooksPollFeedsRouteImport.update({
   path: '/api/public/hooks/poll-feeds',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiPublicHooksClaimEmbeddingsRoute =
+  ApiPublicHooksClaimEmbeddingsRouteImport.update({
+    id: '/api/public/hooks/claim-embeddings',
+    path: '/api/public/hooks/claim-embeddings',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicHealthAtlasRoute = ApiPublicHealthAtlasRouteImport.update({
   id: '/api/public/health/atlas',
   path: '/api/public/health/atlas',
@@ -250,6 +257,7 @@ export interface FileRoutesByFullPath {
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
+  '/api/public/hooks/claim-embeddings': typeof ApiPublicHooksClaimEmbeddingsRoute
   '/api/public/hooks/poll-feeds': typeof ApiPublicHooksPollFeedsRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
 }
@@ -285,6 +293,7 @@ export interface FileRoutesByTo {
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
+  '/api/public/hooks/claim-embeddings': typeof ApiPublicHooksClaimEmbeddingsRoute
   '/api/public/hooks/poll-feeds': typeof ApiPublicHooksPollFeedsRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
 }
@@ -322,6 +331,7 @@ export interface FileRoutesById {
   '/blogs/$kind/$slug': typeof BlogsKindSlugRoute
   '/api/public/dev/logs': typeof ApiPublicDevLogsRoute
   '/api/public/health/atlas': typeof ApiPublicHealthAtlasRoute
+  '/api/public/hooks/claim-embeddings': typeof ApiPublicHooksClaimEmbeddingsRoute
   '/api/public/hooks/poll-feeds': typeof ApiPublicHooksPollFeedsRoute
   '/api/public/hooks/seed-content': typeof ApiPublicHooksSeedContentRoute
 }
@@ -359,6 +369,7 @@ export interface FileRouteTypes {
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
+    | '/api/public/hooks/claim-embeddings'
     | '/api/public/hooks/poll-feeds'
     | '/api/public/hooks/seed-content'
   fileRoutesByTo: FileRoutesByTo
@@ -394,6 +405,7 @@ export interface FileRouteTypes {
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
+    | '/api/public/hooks/claim-embeddings'
     | '/api/public/hooks/poll-feeds'
     | '/api/public/hooks/seed-content'
   id:
@@ -430,6 +442,7 @@ export interface FileRouteTypes {
     | '/blogs/$kind/$slug'
     | '/api/public/dev/logs'
     | '/api/public/health/atlas'
+    | '/api/public/hooks/claim-embeddings'
     | '/api/public/hooks/poll-feeds'
     | '/api/public/hooks/seed-content'
   fileRoutesById: FileRoutesById
@@ -464,6 +477,7 @@ export interface RootRouteChildren {
   BlogsKindSlugRoute: typeof BlogsKindSlugRoute
   ApiPublicDevLogsRoute: typeof ApiPublicDevLogsRoute
   ApiPublicHealthAtlasRoute: typeof ApiPublicHealthAtlasRoute
+  ApiPublicHooksClaimEmbeddingsRoute: typeof ApiPublicHooksClaimEmbeddingsRoute
   ApiPublicHooksPollFeedsRoute: typeof ApiPublicHooksPollFeedsRoute
   ApiPublicHooksSeedContentRoute: typeof ApiPublicHooksSeedContentRoute
 }
@@ -694,6 +708,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicHooksPollFeedsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/hooks/claim-embeddings': {
+      id: '/api/public/hooks/claim-embeddings'
+      path: '/api/public/hooks/claim-embeddings'
+      fullPath: '/api/public/hooks/claim-embeddings'
+      preLoaderRoute: typeof ApiPublicHooksClaimEmbeddingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/health/atlas': {
       id: '/api/public/health/atlas'
       path: '/api/public/health/atlas'
@@ -767,6 +788,7 @@ const rootRouteChildren: RootRouteChildren = {
   BlogsKindSlugRoute: BlogsKindSlugRoute,
   ApiPublicDevLogsRoute: ApiPublicDevLogsRoute,
   ApiPublicHealthAtlasRoute: ApiPublicHealthAtlasRoute,
+  ApiPublicHooksClaimEmbeddingsRoute: ApiPublicHooksClaimEmbeddingsRoute,
   ApiPublicHooksPollFeedsRoute: ApiPublicHooksPollFeedsRoute,
   ApiPublicHooksSeedContentRoute: ApiPublicHooksSeedContentRoute,
 }

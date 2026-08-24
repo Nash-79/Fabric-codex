@@ -1,11 +1,7 @@
 import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
-import {
-  parseAndAutofixHtmlDoc,
-  extractHtmlSections,
-  validateHtmlDoc,
-} from "./html-doc-parser";
+import { parseAndAutofixHtmlDoc, extractHtmlSections, validateHtmlDoc } from "./html-doc-parser";
 
 describe("html-doc-parser", () => {
   it("extracts title, summary, SVGs, sections, and capabilities from raw HTML", () => {
@@ -95,7 +91,9 @@ describe("html-doc-parser", () => {
     const toolkitDir = path.resolve(process.cwd(), "public/toolkit-source");
     if (!fs.existsSync(toolkitDir)) return;
 
-    const files = fs.readdirSync(toolkitDir).filter((f) => f.endsWith(".html") && f !== "index.html");
+    const files = fs
+      .readdirSync(toolkitDir)
+      .filter((f) => f.endsWith(".html") && f !== "index.html");
     expect(files.length).toBeGreaterThanOrEqual(4);
 
     for (const file of files) {

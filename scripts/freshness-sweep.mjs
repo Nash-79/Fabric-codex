@@ -49,7 +49,8 @@ export function analyzeFreshnessAndGaps(rootDir = process.cwd()) {
     const targetUrl = `https://learn.microsoft.com/en-us/fabric/`;
 
     const queueLine = `[ ] ${query} — ${targetUrl} <!-- gap:${item.slug}:${item.subheading} -->`;
-    const alreadyQueued = existingQueue.includes(item.slug) && existingQueue.includes(item.subheading);
+    const alreadyQueued =
+      existingQueue.includes(item.slug) && existingQueue.includes(item.subheading);
 
     candidateDrafts.push({
       slug: item.slug,
@@ -96,10 +97,17 @@ function main() {
 
   if (writeToQueue && unqueued.length > 0) {
     const queuePath = join(process.cwd(), QUEUE_FILE);
-    const existing = existsSync(queuePath) ? readFileSync(queuePath, "utf8") : "# Ingestion Queue\n";
+    const existing = existsSync(queuePath)
+      ? readFileSync(queuePath, "utf8")
+      : "# Ingestion Queue\n";
     const linesToAdd = unqueued.map((u) => u.queueLine).join("\n");
-    writeFileSync(queuePath, `${existing.trim()}\n\n## Automated Gap-Closing Drafts\n${linesToAdd}\n`);
-    console.log(`\nWrote ${unqueued.length} candidate drafts to ${QUEUE_FILE} (human review pending).`);
+    writeFileSync(
+      queuePath,
+      `${existing.trim()}\n\n## Automated Gap-Closing Drafts\n${linesToAdd}\n`,
+    );
+    console.log(
+      `\nWrote ${unqueued.length} candidate drafts to ${QUEUE_FILE} (human review pending).`,
+    );
   }
 }
 

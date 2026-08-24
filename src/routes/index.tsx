@@ -396,9 +396,12 @@ function Landing() {
                 <Sparkles className="h-4 w-4" />
                 First-Party Deep Dives &amp; Engine Internals
               </div>
-              <h2 className="mt-1 text-2xl font-bold tracking-tight">Reference Documentation &amp; Whitepapers</h2>
+              <h2 className="mt-1 text-2xl font-bold tracking-tight">
+                Reference Documentation &amp; Whitepapers
+              </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Self-contained, production-grade technical whitepapers covering Apache Spark execution internals, Remote Shuffle Manager, Runtime 2.0, and Polaris.
+                Self-contained, production-grade technical whitepapers covering Apache Spark
+                execution internals, Remote Shuffle Manager, Runtime 2.0, and Polaris.
               </p>
             </div>
             <Link

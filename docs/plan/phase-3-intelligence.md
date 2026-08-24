@@ -156,10 +156,10 @@ appear in Settings → Logs; watcher scheduling verified stable across a restart
 
 ## Phase 3 exit criteria
 
-- [ ] pgvector live with HNSW indexes; embeddings generated **locally**, model name recorded
-- [ ] Hybrid RRF retrieval replaces `ILIKE`; limit raised well above 18
+- [~] pgvector live with HNSW indexes (migration applied); embeddings **not yet generated** — backfill blocked on a service-role key, see README
+- [x] Hybrid RRF retrieval replaces `ILIKE`; limit raised well above 18 — `match_claims_hybrid` live and verified returning ranked hits; advisor context 18 → 48 claims
 - [ ] Advisor A/B shows improved cited-claim recall **and** still refuses when the KB is silent
 - [ ] `search_atlas` tsvector indexing verified (no seq scan)
-- [ ] ⌘K palette wired; facets and cursor pagination working
+- [x] Cmd-K palette wired; facets and cursor pagination working — pagination verified against the live DB: 89/89 items over 4 pages, 0 dupes, 0 gaps (was 40 of 89 reachable)
 - [ ] Freshness/gap automation drafting into the queue, human gate intact
 - [ ] Watcher scheduling on EWMA + deterministic jitter

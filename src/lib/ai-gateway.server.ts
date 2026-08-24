@@ -178,5 +178,3 @@ export async function resolveActiveAiProvider(options?: {
 
   return null;
 }
-
-

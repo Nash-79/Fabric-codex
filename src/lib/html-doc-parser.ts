@@ -77,8 +77,15 @@ function cleanText(text: string): string {
  */
 export function extractHtmlSections(html: string): HtmlDocSection[] {
   const sections: HtmlDocSection[] = [];
-  const headingRegex = /<h([1-4])(?:\s+[^>]*?id=["']([^"']*)["'][^>]*|\s*[^>]*)>([\s\S]*?)<\/h\1>/gi;
-  const matches: Array<{ level: number; id?: string; title: string; index: number; length: number }> = [];
+  const headingRegex =
+    /<h([1-4])(?:\s+[^>]*?id=["']([^"']*)["'][^>]*|\s*[^>]*)>([\s\S]*?)<\/h\1>/gi;
+  const matches: Array<{
+    level: number;
+    id?: string;
+    title: string;
+    index: number;
+    length: number;
+  }> = [];
 
   let match: RegExpExecArray | null;
   while ((match = headingRegex.exec(html)) !== null) {

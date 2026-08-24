@@ -391,12 +391,14 @@ export function ApiKeysPanel() {
                                   variant="outline"
                                   className="text-amber-300 border-amber-500/30 bg-amber-500/10 text-[10px] gap-1"
                                 >
-                                  <ShieldAlert className="h-3 w-3" /> Pay-As-You-Go with Free Fallbacks
+                                  <ShieldAlert className="h-3 w-3" /> Pay-As-You-Go with Free
+                                  Fallbacks
                                 </Badge>
                               )}
                             </div>
                             <p className="text-[11px] text-muted-foreground">
-                              Configure preferred models, free-tier enforcement, and automatic fallback chains to prevent cost runs.
+                              Configure preferred models, free-tier enforcement, and automatic
+                              fallback chains to prevent cost runs.
                             </p>
                           </div>
 
@@ -426,7 +428,8 @@ export function ApiKeysPanel() {
                             </div>
                             <p className="text-[11px] text-muted-foreground">
                               Strictly restricts all AI inferences exclusively to verified{" "}
-                              <code className="text-teal-400">:free</code> OpenRouter models with a 100% $0 spend guarantee. Rejects any paid model invocation.
+                              <code className="text-teal-400">:free</code> OpenRouter models with a
+                              100% $0 spend guarantee. Rejects any paid model invocation.
                             </p>
                           </div>
                           <Switch
@@ -487,9 +490,7 @@ export function ApiKeysPanel() {
                                 >
                                   <div className="flex items-center justify-between w-full font-medium">
                                     <span
-                                      className={
-                                        isSelected ? "text-teal-300 font-semibold" : ""
-                                      }
+                                      className={isSelected ? "text-teal-300 font-semibold" : ""}
                                     >
                                       {m.label}
                                     </span>

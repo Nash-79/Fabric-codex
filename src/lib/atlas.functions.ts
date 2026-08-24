@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 import { bundledContent } from "@/lib/bundled-content";
+import { buildContentPage, encodeContentCursor, parseContentCursor } from "@/lib/content-cursor";
 
 // Public reads use the anon/publishable key (RLS allows public SELECT on KB tables).
 // This avoids needing the service-role key at runtime.
@@ -265,6 +266,79 @@ export const listContentItems = createServerFn({ method: "GET" })
             ? bundledContent.lessons()
             : [...bundledContent.blogs(), ...bundledContent.designs(), ...bundledContent.lessons()];
     return data.limit && data.limit > 0 ? bundled.slice(0, data.limit) : bundled;
+  });
+
+/**
+ * Cursor-paginated variant of `listContentItems` (WP3.2).
+ *
+ * `listContentItems` returns an unbounded array and every caller truncates it client-side, so
+ * anything past the cut is silently invisible. This returns one page plus a `nextCursor`, letting
+ * the library browse the whole corpus.
+ *
+ * The cursor is keyset-based on the same `(updated_at DESC, id DESC)` ordering the list already
+ * uses -- not an offset -- so pages stay stable and cheap as the corpus grows. `id` is the
+ * tiebreaker because `updated_at` is not unique (a publish run stamps many rows the same second),
+ * and without it rows on a timestamp boundary would repeat or be skipped between pages.
+ */
+export const listContentItemsPage = createServerFn({ method: "GET" })
+  .validator(
+    (d: {
+      kind?: "article" | "design" | "lesson";
+      topicSlug?: string;
+      capabilityId?: string;
+      limit?: number;
+      cursor?: string | null;
+    }) => d,
+  )
+  .handler(async ({ data }) => {
+    const pageSize = Math.min(Math.max(data.limit ?? 24, 1), 100);
+    const cursor = parseContentCursor(data.cursor);
+    try {
+      const sb = await admin();
+      let q = sb
+        .from("content_items")
+        .select(
+          "id,kind,slug,title,summary,scenario,topic_slug,capability_id,depth_levels,tags,updated_at,presentation_profile,lesson_meta",
+        )
+        .eq("status", "published")
+        .eq("active", true)
+        .order("updated_at", { ascending: false })
+        .order("id", { ascending: false })
+        // Fetch one extra row to detect "is there another page" without a second count query.
+        .limit(pageSize + 1);
+      if (data.kind) q = q.eq("kind", data.kind);
+      if (data.topicSlug) q = q.eq("topic_slug", data.topicSlug);
+      if (data.capabilityId) q = q.eq("capability_id", data.capabilityId);
+      if (cursor) {
+        // Keyset predicate for a descending compound sort: strictly older, or same instant with a
+        // smaller id. PostgREST has no row-value comparison, so it is spelled as an `or` filter.
+        q = q.or(
+          `updated_at.lt.${cursor.updatedAt},and(updated_at.eq.${cursor.updatedAt},id.lt.${cursor.id})`,
+        );
+      }
+      const { data: rows, error } = await q;
+      if (error) throw new Error(error.message);
+      if (rows) return buildContentPage(rows, pageSize);
+    } catch {
+      // Fall through to bundled content, per kind.
+    }
+    const bundled =
+      data.kind === "article"
+        ? bundledContent.blogs()
+        : data.kind === "design"
+          ? bundledContent.designs()
+          : data.kind === "lesson"
+            ? bundledContent.lessons()
+            : [...bundledContent.blogs(), ...bundledContent.designs(), ...bundledContent.lessons()];
+    // The bundled fallback has no stable cursor field, so page it positionally instead.
+    const start = cursor?.offset ?? 0;
+    const slice = bundled.slice(start, start + pageSize + 1);
+    const items = slice.slice(0, pageSize);
+    return {
+      items,
+      nextCursor:
+        slice.length > pageSize ? encodeContentCursor({ offset: start + pageSize }) : null,
+    };
   });
 
 export const getContentCounts = createServerFn({ method: "GET" }).handler(async () => {
@@ -566,7 +640,10 @@ export const getRegistryCoverage = createServerFn({ method: "GET" }).handler(
         return acc;
       }, {});
       const topicCaps = bundledContent.topics().flatMap((t: any) =>
-        (t.capability_ids ?? []).map((cid: string) => ({ capability_id: cid, topic_slug: t.slug })),
+        (t.capability_ids ?? []).map((cid: string) => ({
+          capability_id: cid,
+          topic_slug: t.slug,
+        })),
       );
       const capTopics = new Map<string, Set<string>>();
       for (const tc of topicCaps) {

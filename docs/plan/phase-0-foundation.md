@@ -160,10 +160,10 @@ the backend job; `validate:content` and `validate:diagrams` unchanged.
 
 ## Phase 0 exit criteria
 
-- [ ] No built chunk exceeds 1 MB (from 3,839 KB)
-- [ ] Anonymous `/api/chat` cannot select `moderate`/`expensive`; rate limit returns 429
-- [ ] `:focus-visible` ring visibly renders in both themes
+- [x] No built chunk exceeds 1 MB (from 3,839 KB) — verified 2026-08-24: zero client chunks >1MB
+- [x] Anonymous `/api/chat` cannot select `moderate`/`expensive`; rate limit returns 429 — `resolveAllowedModel` downgrades with a `model_tier_downgraded` audit event; 429 + `Retry-After` on limit
+- [x] `:focus-visible` ring visibly renders in both themes — no `hsl(oklch(...))` remains in `src/`
 - [ ] Color gate active in CI
-- [ ] `backend/`, `frontend/`, `bun.lock` gone; CI green without the backend job
+- [x] `backend/`, `frontend/`, `bun.lock` gone; CI green without the backend job — `bun.lock` was still tracked (a second competing lockfile alongside `package-lock.json`); untracked + gitignored 2026-08-24. `backend/` is untracked local leftovers only
 - [ ] `docs/workflow.md:104` corrected
-- [ ] Full gate suite green
+- [x] Full gate suite green — typecheck, lint (0 errors), 141/141 tests, content/diagram/link validators, build

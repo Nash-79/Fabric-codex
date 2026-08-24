@@ -88,4 +88,3 @@ describe("API Key secret masking", () => {
     expect(maskSecret("   ")).toBe("");
   });
 });
-
