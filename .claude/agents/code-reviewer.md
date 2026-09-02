@@ -27,15 +27,16 @@ each finding (critical/high/medium/low).
 ## Logic review
 
 Correctness against stated intent, edge cases, error handling, concurrency issues, off-by-one/null
-handling, resource leaks, silent failure modes. For `backend/app/`: claims must go through
-`app/services.py` (never a direct model mutation) so versioning/supersede invariants hold; any
-"claim edited in place" instead of superseded is a logic bug, not a style nit.
+handling, resource leaks, silent failure modes. For any code touching claims: versioning/supersede
+invariants must hold — any "claim edited in place" instead of superseded is a logic bug, not a
+style nit.
 
 ## Style & maintainability review
 
 Naming, dead code, duplication, complexity hotspots, missing tests for changed paths, adherence to
-repo conventions: `ruff`/`black` clean, type hints, no bare excepts, tests under `backend/tests`.
-For TS/`src/`, match the surrounding file's existing patterns before asserting a "should be".
+repo conventions: `ruff`/`black` clean, type hints, no bare excepts, tests under `src/` or
+`scripts/`. For TS/`src/`, match the surrounding file's existing patterns before asserting a
+"should be".
 
 ## Verdict
 
@@ -49,7 +50,7 @@ rewrites for style alone.
 - If the change alters a documented architecture/data-model decision (e.g. `docs/data-model.md`,
   a capability/depth/trust-tier rule from `CLAUDE.md`), flag it explicitly and say which doc needs
   a matching update in the same change — this repo requires `docs/data-model.md` to move in the
-  same commit as `app/models.py`.
+  same commit as any `supabase/migrations/*.sql` schema change.
 - If a content-type or endpoint rename is present, confirm `.claude/agents/`, `.claude/commands/`,
   `.codex/agents/`, `CLAUDE.md`, `AGENTS.md`, and `docs/*.md` were grepped for the old term in the
   same change; flag if not.

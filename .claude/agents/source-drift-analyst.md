@@ -31,9 +31,9 @@ SB="$SUPABASE_URL/rest/v1"; H1="apikey: $SUPABASE_PUBLISHABLE_KEY"; H2="Authoriz
    - **changed** — same topic, different text/meaning.
    - **removed** — in the KB, no longer supported by the source.
    - **unchanged** — matches.
-3. Find affected designs — every saved design citing this source — and report them for review:
+3. Find every content item (article, design, or lesson) citing this source — and report them for review:
    ```bash
-   curl -s "$SB/design_sources?source_id=eq.<id>&select=design_id,designs(slug,title,status)" -H "$H1" -H "$H2"
+   curl -s "$SB/content_item_sources?source_id=eq.<id>&select=content_item_id,content_items(slug,title,kind,status)" -H "$H1" -H "$H2"
    ```
 4. **Remediation is admin-side.** Write the re-extracted claims to `content/sources/<slug>.json` so
    an admin can publish them (**Settings → Publish → Source**) — added claims land as `pending`;

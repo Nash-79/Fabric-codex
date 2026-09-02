@@ -65,9 +65,8 @@ cards instead of plain paragraphs, so you can see at a glance how many steps the
 where you are in them.
 
 If you like, you can click the circle on a step to check it off as done; it turns into a
-checkmark. This is remembered only on your own browser, not on your account — it resets if
-you clear site data or switch devices — so treat it as a personal progress marker rather than
-something anyone else can see.
+checkmark. For anonymous visitors, progress is remembered in your browser only. Signed-in
+users get server-side progress sync — your progress follows you across devices.
 
 A walkthrough is often followed by a **Checkpoint** callout describing what you should see if
 you followed the steps correctly, so you can confirm you're on track before moving on.
@@ -103,8 +102,7 @@ Every lesson states its level, an estimated time to work through it, and what yo
 to do afterward (its objectives, and sometimes prerequisites) — shown at the top of the
 lesson, and again as a short summary on its card on the **Learn** page. A **Mark complete**
 button on the lesson lets you check it off; completed lessons then show a checkmark on their
-Learn page card too. Like step completion, this is remembered on your own browser only — a
-personal tracker, not something synced to your account or visible to anyone else.
+Learn page card too. For anonymous visitors, progress is remembered in your browser only. Signed-in users get server-side progress sync — your progress follows you across devices.
 
 ## Reporting an issue
 

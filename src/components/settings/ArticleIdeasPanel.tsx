@@ -91,6 +91,301 @@ function localAuthorCommand(item: { id: string; target_slug?: string | null }, n
   return `/blog ${item.target_slug ?? "<slug>"} --idea ${item.id}`;
 }
 
+type IdeaRowProps = {
+  item: any;
+  expanded: Set<string>;
+  toggleExpanded: (id: string) => void;
+  mutateStatus: any;
+  amendIdea: any;
+  openAmend: (item: any) => void;
+  onDone: () => void;
+};
+
+function IdeaRow({
+  item,
+  expanded,
+  toggleExpanded,
+  mutateStatus,
+  amendIdea,
+  openAmend,
+  onDone,
+}: IdeaRowProps) {
+  const notes = parseNotes(item.notes);
+  const isOpen = expanded.has(item.id);
+
+  const [jsonEditing, setJsonEditing] = useState(false);
+  const [jsonText, setJsonText] = useState("");
+  const [jsonError, setJsonError] = useState<string | null>(null);
+
+  const canAmend = ["queued", "claimed", "failed"].includes(item.status);
+
+  const updateFnBound = useServerFn(updateArticleIdea);
+
+  const saveJsonMutation = useMutation({
+    mutationFn: (input: { itemId: string; patch: Record<string, unknown> }) =>
+      updateFnBound({ data: input }),
+    onSuccess: () => {
+      toast.success("Idea brief amended.");
+      setJsonEditing(false);
+      setJsonError(null);
+      onDone();
+    },
+    onError: (err: unknown) => setJsonError((err as Error).message),
+  });
+
+  const handleOpenJson = () => {
+    setJsonText(
+      typeof item.notes === "string"
+        ? (() => {
+            try {
+              return JSON.stringify(JSON.parse(item.notes), null, 2);
+            } catch {
+              return item.notes;
+            }
+          })()
+        : JSON.stringify(item.notes ?? {}, null, 2),
+    );
+    setJsonError(null);
+    setJsonEditing(true);
+  };
+
+  const handleSaveJson = () => {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(jsonText);
+    } catch {
+      setJsonError("Invalid JSON — fix the syntax before saving.");
+      return;
+    }
+    const patch: Record<string, unknown> = {};
+    const amendableKeys = [
+      "title",
+      "target_slug",
+      "angle",
+      "rationale",
+      "target_length_hint",
+      "diagram_guidance",
+      "capability_level",
+    ] as const;
+    for (const key of amendableKeys) {
+      if (key in parsed) patch[key] = parsed[key];
+    }
+    // title and target_slug live on the queue_items row, not in notes —
+    // pass them through as top-level patch fields just like the Amend form does.
+    saveJsonMutation.mutate({ itemId: item.id, patch });
+  };
+
+  return (
+    <>
+      <TableRow key={item.id} className="border-border hover:bg-accent">
+        <TableCell>
+          <button
+            type="button"
+            onClick={() => toggleExpanded(item.id)}
+            className="text-left text-teal-200 hover:underline"
+          >
+            {item.title}
+          </button>
+          <div className="text-xs text-muted-foreground">{item.target_slug}</div>
+        </TableCell>
+        <TableCell>
+          <Badge className="border-border bg-accent text-foreground">
+            {CONTENT_KIND_LABEL[notes.target_content_kind ?? ""] ?? "—"}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <Badge className="border-border bg-accent text-foreground">
+            {SIGNAL_LABEL[notes.signal_type ?? ""] ?? notes.signal_type ?? "—"}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <Badge
+            className={`rounded-sm border text-[11px] ${PRIORITY_CLASS[notes.priority ?? ""] ?? PRIORITY_CLASS.low}`}
+          >
+            {notes.priority ?? "—"}
+          </Badge>
+        </TableCell>
+        <TableCell>{statusBadge(item.status)}</TableCell>
+        <TableCell>
+          {item.status === "ingested" && (
+            <p className="mb-1 text-right text-xs text-muted-foreground">
+              Article has been authored — no further actions available.
+            </p>
+          )}
+          <div className="flex flex-wrap justify-end gap-1">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-border bg-card text-foreground"
+              disabled={mutateStatus.isPending || item.status !== "queued"}
+              onClick={() => mutateStatus.mutate({ itemId: item.id, action: "claim" })}
+            >
+              approve
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-border bg-card text-foreground"
+              disabled={amendIdea.isPending || !canAmend}
+              onClick={() => openAmend(item)}
+            >
+              amend
+            </Button>
+            {canAmend && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 border-border bg-card text-foreground"
+                disabled={saveJsonMutation.isPending}
+                onClick={jsonEditing ? () => setJsonEditing(false) : handleOpenJson}
+              >
+                {jsonEditing ? "cancel JSON" : "edit JSON"}
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-border bg-card text-foreground"
+              disabled={
+                mutateStatus.isPending || !["queued", "claimed"].includes(item.status)
+              }
+              onClick={() => mutateStatus.mutate({ itemId: item.id, action: "complete" })}
+            >
+              mark written
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-border bg-card text-foreground"
+              disabled={
+                mutateStatus.isPending || !["queued", "failed"].includes(item.status)
+              }
+              onClick={() => mutateStatus.mutate({ itemId: item.id, action: "dismiss" })}
+            >
+              dismiss
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-border bg-card text-foreground"
+              disabled={mutateStatus.isPending || item.status !== "dismissed"}
+              onClick={() => mutateStatus.mutate({ itemId: item.id, action: "requeue" })}
+            >
+              revive
+            </Button>
+          </div>
+          {jsonEditing && (
+            <div className="mt-2 space-y-1">
+              <Textarea
+                value={jsonText}
+                onChange={(e) => {
+                  setJsonText(e.target.value);
+                  setJsonError(null);
+                }}
+                rows={8}
+                className="w-full border-border bg-card font-mono text-xs text-foreground"
+              />
+              {jsonError && (
+                <p className="text-xs text-destructive">{jsonError}</p>
+              )}
+              <Button
+                size="sm"
+                onClick={handleSaveJson}
+                disabled={saveJsonMutation.isPending}
+              >
+                {saveJsonMutation.isPending ? "Saving…" : "Save JSON"}
+              </Button>
+            </div>
+          )}
+        </TableCell>
+      </TableRow>
+      {isOpen && (
+        <TableRow key={`${item.id}-detail`} className="border-border">
+          <TableCell colSpan={6} className="bg-card/50 text-xs">
+            <div className="space-y-1 py-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="font-semibold text-foreground">Author locally: </span>
+                <code className="rounded bg-background px-1.5 py-0.5 text-teal-600 dark:text-teal-300">
+                  {localAuthorCommand(item, notes)}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-6 border-border bg-card px-2 text-[11px] text-foreground"
+                  onClick={() => {
+                    const cmd = localAuthorCommand(item, notes);
+                    navigator.clipboard
+                      ?.writeText(cmd)
+                      .then(() => toast.success("Command copied."))
+                      .catch(() => toast.error("Copy failed — select the text manually."));
+                  }}
+                >
+                  copy
+                </Button>
+                <span className="text-muted-foreground">
+                  idea id: <span className="font-mono text-foreground">{item.id}</span>
+                </span>
+              </div>
+              {notes.angle && (
+                <div>
+                  <span className="font-semibold text-foreground">Angle: </span>
+                  <span className="text-muted-foreground">{notes.angle}</span>
+                </div>
+              )}
+              {notes.rationale && (
+                <div>
+                  <span className="font-semibold text-foreground">Rationale: </span>
+                  <span className="text-muted-foreground">{notes.rationale}</span>
+                </div>
+              )}
+              {notes.target_length_hint && (
+                <div>
+                  <span className="font-semibold text-foreground">Length: </span>
+                  <span className="text-muted-foreground">
+                    {notes.target_length_hint}
+                    {notes.must_include_example ? " · worked example required" : ""}
+                  </span>
+                </div>
+              )}
+              {notes.target_content_kind === "lesson" && notes.capability_level && (
+                <div>
+                  <span className="font-semibold text-foreground">Level: </span>
+                  <span className="text-muted-foreground">{notes.capability_level}</span>
+                </div>
+              )}
+              {notes.target_content_kind === "article" &&
+                (notes.diagram_guidance || !!notes.suggested_diagrams?.length) && (
+                  <div>
+                    <span className="font-semibold text-foreground">Diagram guidance: </span>
+                    <span className="text-muted-foreground">
+                      {notes.diagram_guidance || notes.suggested_diagrams?.join("; ")}
+                    </span>
+                  </div>
+                )}
+              {!!notes.supporting_capability_ids?.length && (
+                <div>
+                  <span className="font-semibold text-foreground">Capabilities: </span>
+                  <span className="text-muted-foreground">
+                    {notes.supporting_capability_ids.join(", ")}
+                  </span>
+                </div>
+              )}
+              {!!notes.supporting_roadmap_ids?.length && (
+                <div>
+                  <span className="font-semibold text-foreground">Roadmap refs: </span>
+                  <span className="text-muted-foreground">
+                    {notes.supporting_roadmap_ids.join(", ")}
+                  </span>
+                </div>
+              )}
+            </div>
+          </TableCell>
+        </TableRow>
+      )}
+    </>
+  );
+}
+
 export function ArticleIdeasPanel({
   data,
   onDone,
@@ -346,199 +641,18 @@ export function ArticleIdeasPanel({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visible.map((item: any) => {
-              const notes = parseNotes(item.notes);
-              const isOpen = expanded.has(item.id);
-              return (
-                <>
-                  <TableRow key={item.id} className="border-border hover:bg-accent">
-                    <TableCell>
-                      <button
-                        type="button"
-                        onClick={() => toggleExpanded(item.id)}
-                        className="text-left text-teal-200 hover:underline"
-                      >
-                        {item.title}
-                      </button>
-                      <div className="text-xs text-muted-foreground">{item.target_slug}</div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className="border-border bg-accent text-foreground">
-                        {CONTENT_KIND_LABEL[notes.target_content_kind ?? ""] ?? "—"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className="border-border bg-accent text-foreground">
-                        {SIGNAL_LABEL[notes.signal_type ?? ""] ?? notes.signal_type ?? "—"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        className={`rounded-sm border text-[11px] ${PRIORITY_CLASS[notes.priority ?? ""] ?? PRIORITY_CLASS.low}`}
-                      >
-                        {notes.priority ?? "—"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{statusBadge(item.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap justify-end gap-1">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 border-border bg-card text-foreground"
-                          disabled={mutateStatus.isPending || item.status !== "queued"}
-                          onClick={() => mutateStatus.mutate({ itemId: item.id, action: "claim" })}
-                        >
-                          approve
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 border-border bg-card text-foreground"
-                          // Amend the brief any time before the article is authored: queued,
-                          // claimed (approved), or failed (a /blog run that errored).
-                          disabled={
-                            amendIdea.isPending ||
-                            !["queued", "claimed", "failed"].includes(item.status)
-                          }
-                          onClick={() => openAmend(item)}
-                        >
-                          amend
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 border-border bg-card text-foreground"
-                          disabled={
-                            mutateStatus.isPending || !["queued", "claimed"].includes(item.status)
-                          }
-                          onClick={() =>
-                            mutateStatus.mutate({ itemId: item.id, action: "complete" })
-                          }
-                        >
-                          mark written
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 border-border bg-card text-foreground"
-                          disabled={
-                            mutateStatus.isPending || !["queued", "failed"].includes(item.status)
-                          }
-                          onClick={() =>
-                            mutateStatus.mutate({ itemId: item.id, action: "dismiss" })
-                          }
-                        >
-                          dismiss
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="h-8 border-border bg-card text-foreground"
-                          // Revive a dismissed idea back into the active queue so it can be
-                          // amended and re-approved ("we can claim again").
-                          disabled={mutateStatus.isPending || item.status !== "dismissed"}
-                          onClick={() =>
-                            mutateStatus.mutate({ itemId: item.id, action: "requeue" })
-                          }
-                        >
-                          revive
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                  {isOpen && (
-                    <TableRow key={`${item.id}-detail`} className="border-border">
-                      <TableCell colSpan={6} className="bg-card/50 text-xs">
-                        <div className="space-y-1 py-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold text-foreground">Author locally: </span>
-                            <code className="rounded bg-background px-1.5 py-0.5 text-teal-600 dark:text-teal-300">
-                              {localAuthorCommand(item, notes)}
-                            </code>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-6 border-border bg-card px-2 text-[11px] text-foreground"
-                              onClick={() => {
-                                const cmd = localAuthorCommand(item, notes);
-                                navigator.clipboard
-                                  ?.writeText(cmd)
-                                  .then(() => toast.success("Command copied."))
-                                  .catch(() =>
-                                    toast.error("Copy failed — select the text manually."),
-                                  );
-                              }}
-                            >
-                              copy
-                            </Button>
-                            <span className="text-muted-foreground">
-                              idea id: <span className="font-mono text-foreground">{item.id}</span>
-                            </span>
-                          </div>
-                          {notes.angle && (
-                            <div>
-                              <span className="font-semibold text-foreground">Angle: </span>
-                              <span className="text-muted-foreground">{notes.angle}</span>
-                            </div>
-                          )}
-                          {notes.rationale && (
-                            <div>
-                              <span className="font-semibold text-foreground">Rationale: </span>
-                              <span className="text-muted-foreground">{notes.rationale}</span>
-                            </div>
-                          )}
-                          {notes.target_length_hint && (
-                            <div>
-                              <span className="font-semibold text-foreground">Length: </span>
-                              <span className="text-muted-foreground">
-                                {notes.target_length_hint}
-                                {notes.must_include_example ? " · worked example required" : ""}
-                              </span>
-                            </div>
-                          )}
-                          {notes.target_content_kind === "lesson" && notes.capability_level && (
-                            <div>
-                              <span className="font-semibold text-foreground">Level: </span>
-                              <span className="text-muted-foreground">
-                                {notes.capability_level}
-                              </span>
-                            </div>
-                          )}
-                          {notes.target_content_kind === "article" &&
-                            (notes.diagram_guidance || !!notes.suggested_diagrams?.length) && (
-                              <div>
-                                <span className="font-semibold text-foreground">
-                                  Diagram guidance:{" "}
-                                </span>
-                                <span className="text-muted-foreground">
-                                  {notes.diagram_guidance || notes.suggested_diagrams?.join("; ")}
-                                </span>
-                              </div>
-                            )}
-                          {!!notes.supporting_capability_ids?.length && (
-                            <div>
-                              <span className="font-semibold text-foreground">Capabilities: </span>
-                              <span className="text-muted-foreground">
-                                {notes.supporting_capability_ids.join(", ")}
-                              </span>
-                            </div>
-                          )}
-                          {!!notes.supporting_roadmap_ids?.length && (
-                            <div>
-                              <span className="font-semibold text-foreground">Roadmap refs: </span>
-                              <span className="text-muted-foreground">
-                                {notes.supporting_roadmap_ids.join(", ")}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </>
-              );
-            })}
+            {visible.map((item: any) => (
+              <IdeaRow
+                key={item.id}
+                item={item}
+                expanded={expanded}
+                toggleExpanded={toggleExpanded}
+                mutateStatus={mutateStatus}
+                amendIdea={amendIdea}
+                openAmend={openAmend}
+                onDone={onDone}
+              />
+            ))}
           </TableBody>
         </Table>
       )}

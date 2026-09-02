@@ -38,5 +38,5 @@ For each **due** commission:
 
 Then commit the new `content/diagrams/*` files and the updated `content/diagrams/assets.json`. To
 make the diagrams live and flip the coverage table from **gap/commissioned** to **covered**, the
-admin registers the new assets (in-app content bootstrap / `scripts/import_content.py`) and marks
-the fulfilled commission items done in **Settings → Diagrams / Queue**.
+admin registers the new assets via **Settings → Publish → Diagram(s) / assets.json** in the
+Lovable app and marks the fulfilled commission items done in **Settings → Diagrams / Queue**.

@@ -91,8 +91,8 @@ before/after).
      `direct-lake-query-path.svg`. For an SVG infographic prefer a canvas around 1000–1200px wide
      so labels are legible; keep text in a system sans stack and ensure contrast on the dark page.
 4. Register it by appending an entry to the git-tracked manifest `content/diagrams/assets.json`
-   (you have no Supabase write access — the manifest is replayed into Supabase at publish time by
-   the in-app **bootstrap** / `scripts/import_content.py`). Append an object:
+   (you have no Supabase write access — the manifest is replayed into Supabase at publish time via
+   **Settings → Publish → Diagram(s) / assets.json** in the Lovable app). Append an object:
    ```json
    {
      "kind": "generated",

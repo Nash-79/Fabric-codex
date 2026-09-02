@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, notFound } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import {
@@ -9,6 +9,10 @@ import {
 } from "@/lib/perf-tracker";
 
 export const Route = createFileRoute("/dev/perf")({
+  // Dev-only tooling: not routable in production.
+  beforeLoad: () => {
+    if (import.meta.env.PROD) throw notFound();
+  },
   head: () => ({ meta: [{ title: "Performance diagnostics — Fabric Atlas" }] }),
   component: PerfPage,
 });

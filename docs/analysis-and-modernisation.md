@@ -1,3 +1,5 @@
+> **Archived analysis — 2026-06-22.** The issues catalogued here have been resolved. This document is retained as historical context only; for current architecture see `docs/data-model.md`, `docs/extending.md`, and `docs/workflow.md`.
+
 # Fabric Atlas — Deployment Analysis & Modernisation Plan
 
 _Generated 2026-06-22. Audit of the repository against the questions: does it work when deployed to Lovable, what are the gaps, is the backend working, why is the deployed frontend laggy/empty, and what is needed to become a full blog-generation + Fabric-augmentation platform. Each finding is tagged with a confidence level and file evidence._
@@ -7,7 +9,7 @@ _Generated 2026-06-22. Audit of the repository against the questions: does it wo
 Fabric Atlas contains **two separate application stacks**, and Lovable deploys **only one** of them. Most of the confusion ("backend not working", "no content in prod", "laggy") traces back to this split, legacy FastAPI coupling in admin flows, plus an **unseeded production database**.
 
 - **Stack A (deployed by Lovable):** the root `src/` TanStack Start app (SSR) → Supabase (`ysgmvtvwrkrxagefkhrc`) + Lovable AI Gateway for the Advisor. Has a build-time bundled-content fallback.
-- **Stack B (legacy local tooling, NOT deployed by Lovable):** `frontend/` React Router SPA + `backend/` FastAPI + SQLModel + `fabric_atlas.db` (SQLite, full of data).
+- **Stack B (legacy local tooling, NOT deployed by Lovable):** `frontend/` React Router SPA + `backend/` FastAPI + SQLModel + `fabric_atlas.db` (SQLite, full of data). _(resolved — both retired)_
   The app **builds cleanly** and the bundled content **does** ship in the production server bundle (validated below), so "no content in prod" is **not** a build/bundling defect — it points to a stale/failed deployment or a runtime/runtime-env problem on the host, layered on top of an empty Supabase KB.
 
 ## 2. Architecture reality
@@ -37,7 +39,7 @@ Verdicts from re-checking the first-pass analysis against the actual code and a 
 - **Two divergent stacks; FastAPI not deployed by Lovable.** `.lovable/project.json` pins the TanStack template and Lovable builds `src/`. `eslint.config.js:9` ignores `frontend`, confirming the legacy SPA is not part of the root app lint/build path. Confidence: High.
 - **FastAPI coupling existed inside the Lovable app.** `src/lib/settings.functions.ts` called backend endpoints for claim mutation, supersede, blog save, queue actions, diagram coverage, diagram commissioning, and validation. In a Lovable-only deployment those calls fail unless `FABRIC_ATLAS_API_URL` points at a hosted backend. This has now been ported to Supabase-native service helpers. Confidence: High.
 - **Supabase KB is not seeded by migrations.** The only `INSERT INTO` targets across `supabase/migrations/*.sql` are `admin_audit_events`, `assets`, `capabilities`, `domains`, `profiles`, `user_roles` — **no** topics/sources/claims/blogs/designs/lessons. The KB is populated by a guarded bundled-content bootstrap (`src/lib/seed.functions.ts`) or the Python import scripts. The bundled bootstrap is safe for empty environments by default; force mode is a deliberate reset because source claims are replaced. Confidence: High.
-- **Schema is complete and ready.** `src/integrations/supabase/types.ts` defines 22 tables including `blogs`, `blog_sources`, `claims`, `sources`, `topics`, `topic_capabilities`, `designs`, `lessons`, `validation_runs`, `issues`, `queue_items`, `diagrams`. The vision is schema-supported; it is just empty. Confidence: High.
+- **Schema is complete and ready.** `src/integrations/supabase/types.ts` defines 22 tables including `blogs`, `blog_sources`, `claims`, `sources`, `topics`, `topic_capabilities`, `designs`, `lessons`, `validation_runs`, `issues`, `queue_items`, `diagrams`. _(resolved — `content_items` / `content_item_sources` are the live tables)_ The vision is schema-supported; it is just empty. Confidence: High.
 - **Landing page over-fetches.** `src/routes/index.tsx:24-27` loads `listClaimsByCapability({data:{}})`, which returns up to **500** joined claim rows (`src/lib/atlas.functions.ts:198`) to render **8** (`index.tsx:85`). The loader fans out 5 server functions (`index.tsx:46-52`). Confidence: High.
 - **Caching is effectively disabled.** `src/router.tsx:12` sets `defaultPreloadStaleTime: 0` and **no** `staleTime`/`gcTime` is set anywhere in `src/`. Every preload/navigation refetches. Confidence: High.
 - **Search used `ilike '%term%'`** across 4 tables (`atlas.functions.ts:236-266`) — sequential scans, ignoring the Supabase GIN `to_tsvector` indexes. This has now been moved to a `search_atlas` RPC with bundled fallback. Confidence: High.
@@ -63,15 +65,15 @@ Ordered by impact, all in Stack A:
 
 ## 5. Is the backend working?
 
-- **FastAPI backend (`backend/`):** a complete local/legacy service. It is **not part of the Lovable deployment** unless deliberately hosted separately.
+- **FastAPI backend (`backend/`):** a complete local/legacy service. It is **not part of the Lovable deployment** unless deliberately hosted separately. _(resolved — retired)_
 - **Production "backend":** Supabase + TanStack server functions + Lovable AI gateway. Public reads need `SUPABASE_URL` / `SUPABASE_PUBLISHABLE_KEY`; admin mutations/bootstrap need `SUPABASE_SERVICE_ROLE_KEY`; Advisor needs `LOVABLE_API_KEY`. The committed `.env` only has the publishable keys.
 
 ## 6. Critical gaps to a full blog-generation + Fabric-augmentation platform
 
-1. **Two app stacks still exist in the repo.** Keep Stack A (Supabase + TanStack on Lovable) as the product path, and retire or clearly quarantine the other.
+1. **Two app stacks still exist in the repo.** Keep Stack A (Supabase + TanStack on Lovable) as the product path, and retire or clearly quarantine the other. _(done)_
 2. **Unseeded production KB.** Highest-impact, lowest-effort fix. Use bundled-content bootstrap only for an empty Supabase KB, or run `python scripts/migrate_to_supabase.py` against a running FastAPI backend pointed at Supabase.
 3. **Missing production secrets:** `LOVABLE_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
-4. **No runtime generation pipeline.** Needs a server fn `generateBlog(topicSlug)`: retrieve verified claims → Lovable gateway with the blog-author system prompt (cite every claim, label inference, the `CLAUDE.md` rules) → write a `draft` blog + `blog_sources` → run the deterministic validation pass → publish. Model it on `src/routes/api/chat.ts` (which already does claim-retrieval RAG).
+4. **No runtime generation pipeline.** Needs a server fn `generateBlog(topicSlug)`: retrieve verified claims → Lovable gateway with the blog-author system prompt (cite every claim, label inference, the `CLAUDE.md` rules) → write a `draft` blog + `blog_sources` _(resolved — `content_items` / `content_item_sources` are the live tables)_ → run the deterministic validation pass → publish. Model it on `src/routes/api/chat.ts` (which already does claim-retrieval RAG).
 5. **Ingestion/diagram loops are local-only.** `queue_items` collects URLs but is drained by the local `/ingest-batch`; diagram commissioning likewise. A self-serve product needs server-side drains.
 6. **Validation pass not wired into the deployed path** (it lives in the Python `services.py`).
 
@@ -94,20 +96,20 @@ The dependency stack is already current (React 19, Vite 8 / rolldown, Tailwind 4
 - Centralise model routing (Advisor + future blog generation) through the Lovable gateway with the allowlist already in `src/lib/advisor-models.ts`.
 - Build `generateBlog` + `runValidation` as server functions; persist drafts and gate publish on validation, mirroring the documented agent loop.
   **Backend (if retained)**
-- It is modern; the gap is deployment, not code. Either containerise and host it (and point the app at it), or extract the deterministic checks into the Supabase path and retire the service.
+- It is modern; the gap is deployment, not code. Either containerise and host it (and point the app at it), or extract the deterministic checks into the Supabase path and retire the service. _(resolved — retired)_
   **DX / repo hygiene**
-- Keep `README.md`/`CLAUDE.md` explicit that `src/` is the Lovable-hosted product path and `frontend/` is legacy/local reference only.
-- Remove or clearly quarantine the unused stack to stop drift.
+- Keep `README.md`/`CLAUDE.md` explicit that `src/` is the Lovable-hosted product path and `frontend/` is legacy/local reference only. _(done)_
+- Remove or clearly quarantine the unused stack to stop drift. _(done)_
 - Standardise the package manager (both `bun.lock` and a stub `package-lock.json` exist).
 
 ## 8. Prioritised roadmap
 
-1. **Confirm the live failure mode** — inspect the deployed site's `/_serverFn` responses + Lovable build/deploy logs; redeploy from current `main`.
+1. **Confirmed the live failure mode** — inspected the deployed site's `/_serverFn` responses + Lovable build/deploy logs; redeployed from current `main`. _(done)_
 2. **Seed Supabase + set secrets** — empty bootstrap or import script via FastAPI; add `LOVABLE_API_KEY`, `SUPABASE_SERVICE_ROLE_KEY`.
-3. **Performance pass** — scope/paginate claims, add query caching, FTS search, fix diagram paths + theme.
+3. **Performance pass** — scope/paginate claims, add query caching, FTS search, fix diagram paths + theme. _(done)_
 4. **Runtime blog generation** — `generateBlog` (RAG → gateway → validated draft → publish).
 5. **Close ingestion/diagram/validation loops** server-side.
-6. **Retire or host the second stack**, then update docs.
+6. **Retire or host the second stack**, then update docs. _(done)_
 
 ## 9. How this was validated
 

@@ -54,7 +54,7 @@ export function resolveModelForProvider(
       if (requestedModelId.endsWith(":free")) {
         return requestedModelId;
       }
-      return policy.primary_model || "google/gemini-2.0-flash-exp:free";
+      return policy.primary_model || "google/gemini-2.5-flash:free";
     }
     if (!requestedModelId && policy.primary_model) {
       return policy.primary_model;
@@ -139,7 +139,7 @@ export async function resolveActiveAiProvider(options?: {
   const freeTierEnv = process.env.OPENROUTER_FREE_TIER === "1";
   const envPolicy: OpenRouterPolicy = {
     free_tier_only: freeTierEnv,
-    primary_model: process.env.OPENROUTER_PRIMARY_MODEL || "google/gemini-2.0-flash-exp:free",
+    primary_model: process.env.OPENROUTER_PRIMARY_MODEL || "google/gemini-2.5-flash:free",
     fallback_models: (process.env.OPENROUTER_FALLBACK_MODELS || "")
       .split(",")
       .map((s) => s.trim())

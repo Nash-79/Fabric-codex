@@ -44,9 +44,7 @@ needs to live in code instead.
 - Any Supabase write is still a human/service-role-key action taken in Lovable Settings
   → Publish, per every other agent in this repo. A LangGraph node may _draft_ files under
   `content/`; it must not attempt to reach Supabase with a service-role key.
-- Keep `requirements.txt` scoped to this directory — the main FastAPI backend
-  (`backend/requirements.txt`) has no LangGraph dependency and should not gain one just
-  because this reference scaffold exists.
+- Keep `requirements.txt` scoped to this directory — it has no connection to the main app dependencies.
 
 ## Running the demo
 

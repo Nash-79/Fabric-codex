@@ -12,16 +12,15 @@ touch Supabase.
 
 ## Capabilities and output shapes
 
-- **CHANGE IMPACT** — given a diff/PR: affected modules, downstream consumers (trace Python
-  imports, TS imports, and SQL/Supabase table references), risk rating with reasons. For a
-  `backend/app/models.py` change, always call out `docs/data-model.md` drift explicitly (this
+- **CHANGE IMPACT** — given a diff/PR: affected modules, downstream consumers (trace TS imports
+  and SQL/Supabase table references), risk rating with reasons. For a change touching
+  `supabase/migrations/*.sql`, always call out `docs/data-model.md` drift explicitly (this
   repo requires the doc to move in the same commit).
-- **SCHEMA-CHANGE BLAST RADIUS** — for a change touching `supabase/migrations/*` or
-  `backend/app/models.py`: which routers (`app/routers.py`), services (`app/services.py`),
-  agents (`.claude/agents/*.md` Supabase REST queries), and content contracts
-  (`content/*.json` shapes) reference the changed table/column. Flag anything that would break
-  the versioning invariant (one active row per claim_key/source_key/blog_key) or referential
-  integrity `migration-validator` checks.
+- **SCHEMA-CHANGE BLAST RADIUS** — for a change touching `supabase/migrations/*.sql`: which
+  server functions (`src/lib/*.server.ts`), agents (`.claude/agents/*.md` Supabase REST queries),
+  and content contracts (`content/*.json` shapes) reference the changed table/column. Flag
+  anything that would break the versioning invariant (one active row per
+  claim_key/source_key/blog_key) or referential integrity `migration-validator` checks.
 - **LINEAGE** — trace data/code lineage across the repo (SQL/REST references, content pipeline
   steps, `content/queue.md` → ingestion → publish paths). Output a Mermaid flow diagram.
 - **HOTSPOTS** — churn × complexity via `git log` + file metrics; ranked list with a one-line

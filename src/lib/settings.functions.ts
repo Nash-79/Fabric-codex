@@ -1681,8 +1681,8 @@ export type OpenRouterModelOption = {
 
 export const RECOMMENDED_OPENROUTER_MODELS: OpenRouterModelOption[] = [
   {
-    id: "google/gemini-2.0-flash-exp:free",
-    label: "Gemini 2.0 Flash (Free)",
+    id: "google/gemini-2.5-flash:free",
+    label: "Gemini 2.5 Flash (Free)",
     isFree: true,
     hint: "Ultra-fast multimodal reasoning, $0 cost",
     recommended: true,
@@ -1715,15 +1715,15 @@ export const RECOMMENDED_OPENROUTER_MODELS: OpenRouterModelOption[] = [
     hint: "Compact low-latency assistant, $0 cost",
   },
   {
-    id: "anthropic/claude-3.7-sonnet",
-    label: "Claude 3.7 Sonnet",
+    id: "anthropic/claude-sonnet-4",
+    label: "Claude Sonnet 4",
     isFree: false,
     hint: "Industry standard for hybrid reasoning & deep architecture",
     recommended: true,
   },
   {
-    id: "anthropic/claude-3.5-haiku",
-    label: "Claude 3.5 Haiku",
+    id: "anthropic/claude-haiku-4",
+    label: "Claude Haiku 4",
     isFree: false,
     hint: "Fast, highly cost-effective Claude intelligence",
   },
@@ -1751,7 +1751,7 @@ export type OpenRouterPolicy = {
 
 export const DEFAULT_OPENROUTER_POLICY: OpenRouterPolicy = {
   free_tier_only: false,
-  primary_model: "google/gemini-2.0-flash-exp:free",
+  primary_model: "google/gemini-2.5-flash:free",
   fallback_models: [
     "meta-llama/llama-3.3-70b-instruct:free",
     "deepseek/deepseek-r1:free",
@@ -2079,7 +2079,7 @@ export const saveOpenRouterPolicy = createServerFn({ method: "POST" })
     // Guardrail validation: If free_tier_only is enabled, enforce free models to guarantee zero spend
     if (policy.free_tier_only) {
       if (!policy.primary_model.endsWith(":free")) {
-        policy.primary_model = "google/gemini-2.0-flash-exp:free";
+        policy.primary_model = "google/gemini-2.5-flash:free";
       }
       policy.fallback_models = (policy.fallback_models || []).filter((m) => m.endsWith(":free"));
       if (policy.fallback_models.length === 0) {
