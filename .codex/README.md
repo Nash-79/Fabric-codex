@@ -8,7 +8,7 @@ loaded from the repo, so install them once.
 
 Copy (or symlink) the prompt files into your Codex prompts directory, then restart Codex.
 
-**Windows (PowerShell), from the repo root `C:\repos\Fabric-Atlas`:**
+**Windows (PowerShell), from the repo root `C:\repos\Fabric-codex`:**
 
 ```powershell
 New-Item -ItemType Directory -Force "$HOME\.codex\prompts" | Out-Null

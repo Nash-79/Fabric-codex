@@ -61,7 +61,7 @@ Do this *before* the app switches off the Lovable OAuth wrapper, or sign-in brea
 All 55 migrations are committed, so this is reproducible:
 
 ```bash
-cd /c/repos/Fabric-Atlas
+cd /c/repos/Fabric-codex
 supabase link --project-ref <YOUR_NEW_PROJECT_REF>
 supabase db push
 ```
