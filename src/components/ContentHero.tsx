@@ -89,8 +89,6 @@ export function ContentHero({
           </>
         )}
         <span>{readingTime(item.body_md ?? "")} min read</span>
-        <span>·</span>
-        <span>{citationCount} sources</span>
         {citationCount > 0 && (
           <>
             <span>·</span>
@@ -125,13 +123,6 @@ export function ContentHero({
             borderColor: "var(--surface-card-border)",
           }}
         >
-          <span>
-            Depth{" "}
-            <strong className="font-medium text-foreground">
-              {item.depth_levels?.length ? `L${item.depth_levels.join(" · L")}` : "L1 · L5"}
-            </strong>
-          </span>
-          <span aria-hidden="true">·</span>
           {Boolean(item.depth_levels?.length) && (
             <>
               <span>
