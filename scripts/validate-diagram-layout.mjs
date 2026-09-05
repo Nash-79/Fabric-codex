@@ -101,10 +101,28 @@ try {
       ),
     );
     socket.addEventListener("message", (event) => {
-      const message = JSON.parse(event.data);
+      // Anything thrown in here lands in an event listener, where it becomes an unhandled
+      // exception that kills the process instead of failing the check -- so every path must
+      // resolve or reject rather than assume a response shape.
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        clearTimeout(timer);
+        socket.close();
+        rejectResult(new Error("Browser sent a malformed CDP response."));
+        return;
+      }
       if (message.id !== 1) return;
       clearTimeout(timer);
       socket.close();
+      // CDP protocol-level failure (e.g. the target went away): there is no `result` at all.
+      if (message.error) {
+        rejectResult(
+          new Error(`Browser evaluation failed: ${message.error.message ?? "unknown CDP error"}`),
+        );
+        return;
+      }
       if (message.result?.exceptionDetails) {
         // exceptionDetails.text is usually the bare word "Uncaught"; the actual message lives on
         // the nested exception description. Preferring it keeps a browser-side failure debuggable.
@@ -112,7 +130,15 @@ try {
         rejectResult(
           new Error(details.exception?.description ?? details.text ?? "Browser evaluation failed."),
         );
-      } else resolveResult(message.result.result.value);
+        return;
+      }
+      // Runtime.evaluate nests the value as result.result.value. A missing nesting means the
+      // response was not the shape we asked for -- report it rather than throwing on undefined.
+      if (message.result?.result === undefined) {
+        rejectResult(new Error("Browser returned no evaluation result."));
+        return;
+      }
+      resolveResult(message.result.result.value);
     });
     socket.addEventListener("error", () => rejectResult(new Error("Browser connection failed.")));
   });
