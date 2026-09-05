@@ -86,7 +86,7 @@ export function InteractiveDiagram({
 
   return (
     <div className={cn("flex h-full flex-col", className)}>
-      <div className="grid h-full gap-4 sm:hidden">
+      <div className="grid h-full gap-4 md:hidden">
         <AuthoredSvg
           markup={effectiveMarkup}
           definition={effectiveDefinition}
@@ -116,7 +116,7 @@ export function InteractiveDiagram({
           resolves against -- without it the SVG renders at its own natural/viewBox size and the
           grid row collapses to that, leaving the rest of this component's allotted space empty
           (the bug behind the diagram rendering tiny with dead space below/beside it). */}
-      <div className="hidden h-full gap-6 sm:grid sm:grid-cols-[1fr_22rem]">
+      <div className="hidden h-full gap-6 md:grid md:grid-cols-[1fr_22rem]">
         <AuthoredSvg
           markup={effectiveMarkup}
           definition={effectiveDefinition}
