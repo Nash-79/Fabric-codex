@@ -264,6 +264,23 @@ psql "<OLD_CONNECTION_STRING>" -c "select count(*) from auth.users;"
 
 </details>
 
+## 6b. Carried-over secrets — one item outstanding at cutover
+
+`system_settings` was copied with the rest of the data, so the new project holds the
+`openrouter_api_key` value **as it was at copy time**. That key has since been revoked and
+replaced, and the replacement was saved in the *old* Lovable app — i.e. to the old database.
+
+**The new project therefore holds a dead key.** Nothing is broken today (nothing runs against the
+new project yet), but the advisor and article-ideas paths would fail once deployed.
+
+**Fix at cutover, not before:** once the Cloudflare deployment is up, sign in and re-enter the key
+once via **Settings → API Keys**. That writes through the normal admin path — no temporary grants,
+no manual SQL, and the secret never passes through a terminal or chat transcript.
+
+Do not re-open anon `SELECT` on `system_settings` to copy it across; both projects are now
+correctly locked down, and one UI field at cutover is cheaper than re-opening and re-reverting.
+
+
 ## 7. Storage objects
 
 The two buckets hold uploaded diagrams and sources. Either re-upload from `content/` (the git
