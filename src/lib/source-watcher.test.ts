@@ -69,6 +69,42 @@ describe("source watcher parsing", () => {
     );
   });
 
+  // The guard runs on Cloudflare Workers, where node:dns does not exist -- so it must decide
+  // from the URL alone. These cover the literal forms it can still reject.
+  it.each([
+    "http://10.0.0.1/",
+    "http://192.168.1.1/",
+    "http://172.16.0.1/",
+    "http://169.254.169.254/latest/meta-data/",
+    "http://0.0.0.0/",
+    "http://[::1]/",
+    "http://[::ffff:127.0.0.1]/",
+    "http://[fd00::1]/",
+  ])("rejects the private literal %s", async (u) => {
+    await expect(assertSafeUrl(u)).rejects.toThrow("Private network destinations");
+  });
+
+  it.each([
+    "http://localhost/",
+    "http://foo.local/",
+    "http://bar.internal/",
+    "http://metadata.google.internal/",
+  ])("rejects the local hostname %s", async (u) => {
+    await expect(assertSafeUrl(u)).rejects.toThrow("Local network destinations");
+  });
+
+  it("rejects credentialed and non-HTTP URLs", async () => {
+    await expect(assertSafeUrl("http://user:pw@example.com/")).rejects.toThrow(
+      "credential-free HTTP(S)",
+    );
+    await expect(assertSafeUrl("file:///etc/passwd")).rejects.toThrow("credential-free HTTP(S)");
+  });
+
+  it("allows ordinary public URLs", async () => {
+    await expect(assertSafeUrl("https://example.com/feed.xml")).resolves.toBeInstanceOf(URL);
+    await expect(assertSafeUrl("https://8.8.8.8/")).resolves.toBeInstanceOf(URL);
+  });
+
   it("classifies challenge pages without including their body", async () => {
     vi.stubGlobal(
       "fetch",

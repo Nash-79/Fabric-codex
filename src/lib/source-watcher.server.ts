@@ -1,6 +1,4 @@
 import { createHash } from "node:crypto";
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
 import { parseWebFeed } from "./feed-parse";
 
 type SupabaseAdmin = any;
@@ -89,7 +87,20 @@ function privateIp(address: string): boolean {
     address.startsWith("fd")
   )
     return true;
-  const p = address.split(".").map(Number);
+  // IPv4-mapped IPv6 (::ffff:127.0.0.1) -- an IPv4 loopback smuggled through IPv6 notation.
+  // `new URL()` normalises the dotted-quad tail to hex (::ffff:7f00:1), so accept both forms.
+  const mappedDotted = /^::ffff:(\d{1,3}(?:\.\d{1,3}){3})$/i.exec(address);
+  const mappedHex = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(address);
+  const candidate = mappedDotted
+    ? mappedDotted[1]
+    : mappedHex
+      ? (() => {
+          const hi = parseInt(mappedHex[1], 16);
+          const lo = parseInt(mappedHex[2], 16);
+          return `${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`;
+        })()
+      : address;
+  const p = candidate.split(".").map(Number);
   return (
     p.length === 4 &&
     (p[0] === 10 ||
@@ -101,6 +112,28 @@ function privateIp(address: string): boolean {
   );
 }
 
+// Literal-address detection without `node:net`. Workers does not implement `isIP`, and this
+// only needs to recognise the two forms a URL hostname can carry: dotted-quad IPv4, and a
+// bracketed IPv6 literal (which `URL` exposes with the brackets already stripped).
+function ipLiteral(hostname: string): string | null {
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(hostname)) {
+    return hostname.split(".").every((o) => Number(o) <= 255) ? hostname : null;
+  }
+  // `new URL("http://[::1]/").hostname` === "[::1]" in some runtimes, "::1" in others.
+  const unbracketed =
+    hostname.startsWith("[") && hostname.endsWith("]") ? hostname.slice(1, -1) : hostname;
+  return unbracketed.includes(":") ? unbracketed.toLowerCase() : null;
+}
+
+// SSRF guard. This runs on Cloudflare Workers, where `node:dns` is NOT implemented, so it
+// deliberately does not resolve hostnames -- an unavailable resolver must never become an
+// implicit allow. Instead it rejects on the two things it can decide locally: literal addresses
+// in private/loopback/link-local ranges, and hostnames that name the local network.
+//
+// A hostname that RESOLVES to a private address is not caught here. That residual DNS-rebinding
+// surface is accepted because Workers cannot see resolution at all; Cloudflare's own egress does
+// not route to the deployment's private network, which is the property this guard was protecting
+// when it ran on Node.
 export async function assertSafeUrl(value: string): Promise<URL> {
   let url: URL;
   try {
@@ -110,13 +143,17 @@ export async function assertSafeUrl(value: string): Promise<URL> {
   }
   if (!["http:", "https:"].includes(url.protocol) || url.username || url.password)
     throw new WatcherFailure("invalid_content", "Only credential-free HTTP(S) URLs are supported.");
-  if (url.hostname === "localhost" || url.hostname.endsWith(".local"))
+  const host = url.hostname.toLowerCase();
+  if (
+    host === "localhost" ||
+    host.endsWith(".local") ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".internal") ||
+    host === "metadata.google.internal"
+  )
     throw new WatcherFailure("invalid_content", "Local network destinations are not allowed.");
-  const addresses = isIP(url.hostname)
-    ? [{ address: url.hostname }]
-    : await lookup(url.hostname, { all: true }).catch(() => []);
-  if (!addresses.length) throw new WatcherFailure("http", "Host could not be resolved.");
-  if (addresses.some((a) => privateIp(a.address)))
+  const literal = ipLiteral(url.hostname);
+  if (literal && privateIp(literal))
     throw new WatcherFailure("invalid_content", "Private network destinations are not allowed.");
   return url;
 }
