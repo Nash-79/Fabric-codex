@@ -144,7 +144,37 @@ union all select 'capabilities', count(*) from capabilities;"
 Expect **3052 / 1164 / 850 / 169 / 21**. Paste the output back and the invariant checks in step 8
 confirm the rest.
 
-## 5b. STATUS — what actually moved (2026-09-05)
+## 5b. STATUS — COMPLETE (2026-09-05)
+
+**Phase 1 is finished.** All 29 readable tables reconcile against the source (16,279 rows). The
+old project is untouched and remains a rollback. Remaining work is Phase 2 (Cloudflare), not here.
+
+Final state:
+
+- **Data:** every table matches source counts. `learning_paths` (5) and `path_items` (23) are
+  *higher* on the new project — new seed content from `20260823170000_seed_learning_paths.sql`
+  that the old project never had. Not a discrepancy.
+- **Auth:** one user, created via the admin API with the **original UUID preserved**
+  (`2d32a631-…`), so no FK remapping was needed anywhere. `user_roles` holds `admin`; a trigger
+  auto-creates that row, so the copy reports a duplicate-key "failure" that is actually correct.
+- **Keys:** both now on the modern `sb_publishable_` / `sb_secret_` system; legacy JWT keys
+  disabled. `client.server.ts` makes no assumption about key format, so no code change was needed.
+- **Grants:** `sql/lovable-revert-grants.sql` has been run. The admin tables on the old project are
+  401 again and `system_settings` is no longer anon-readable.
+
+Two things caught only by reconciling *after* the copy, worth repeating on any future migration:
+
+1. **The source keeps changing while you read it.** `admin_audit_events` gained two rows mid-copy —
+   they turned out to be `settings.api_key_saved` events from the old app being used during the
+   migration. Always re-diff at the end rather than trusting the first pass.
+2. **That drift can invalidate an earlier table.** Those events revealed `system_settings` had been
+   copied *before* the key was updated, so the new project held a stale value. Re-synced.
+
+---
+
+## 5c. How the copy was actually done (2026-09-05)
+
+
 
 The copy was run over the REST API rather than `pg_dump`: the Lovable project is **not in your
 Supabase account** (it belongs to Lovable's org), so there is no DB password for it and the
@@ -189,7 +219,28 @@ on the new project (step 3, still outstanding).
 reads. But note `system_settings` holds `openrouter_api_key`, currently readable by the public anon
 key while the grant stands: rotate that key once the revert is done.
 
-## 6. Auth users
+## 6. Auth users — DONE
+
+**What worked (better than either option below):** the admin API accepts an explicit `id`, so the
+single user was recreated with the **same UUID** as the old project. That means no id remapping
+across the ten tables that FK to `auth.users` — every reference simply resolved.
+
+```
+POST /auth/v1/admin/users     (service-role key)
+  { "id": "<original uuid>", "email": "<address>", "email_confirm": true }
+```
+
+Creating the user through the dashboard instead assigns a **random** UUID and forces a remap of
+`user_id` / `submitted_by` / `created_by` / `actor_id` / `updated_by` / `approved_by` across
+`profiles`, `user_roles`, `user_progress`, `favorites`, `system_settings`, `rss_subscriptions`,
+`source_watchers`, `source_watcher_items`, `queue_items` and `admin_audit_events`. Preserving the
+id avoids all of it.
+
+Note Google auth was **not** required for this — it is still needed for sign-in at cutover
+(Authentication → Providers → Google), but it does not gate the data migration.
+
+<details>
+<summary>Original guidance (kept for reference)</summary>
 
 Check the count first — this decides the approach:
 
@@ -210,6 +261,8 @@ psql "<OLD_CONNECTION_STRING>" -c "select count(*) from auth.users;"
   ```
 
 **Sign in and confirm `/settings` still gates on admin before deleting anything.**
+
+</details>
 
 ## 7. Storage objects
 
