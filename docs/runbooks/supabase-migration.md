@@ -18,11 +18,26 @@ supabase --version     # have: 2.67.1 (2.116.0 available; either is fine)
 psql --version         # NOT installed yet — see below
 ```
 
-`psql` and `pg_dump` ship with PostgreSQL client tools:
+`psql` and `pg_dump` ship with PostgreSQL client tools. **Already installed** at
+`%LOCALAPPDATA%\pgclient\pgsqlin` (psql/pg_dump 17.11) — verified working.
+
+The documented `winget install PostgreSQL.PostgreSQL.17` route **does not work unelevated**: the
+EDB installer needs admin rights to write to `Program Files` and prompts for a superuser password,
+so it exits 1 with no log. We only need the client binaries, not a server, so the portable zip was
+used instead — no admin, nothing added to PATH, nothing registered:
 
 ```powershell
-winget install PostgreSQL.PostgreSQL.17
-# then reopen the shell so psql/pg_dump are on PATH
+# already done; recorded so it is reproducible
+Invoke-WebRequest "https://get.enterprisedb.com/postgresql/postgresql-17.11-3-windows-x64-binaries.zip" `
+  -OutFile "$env:TEMP\pg17.zip" -UseBasicParsing
+Expand-Archive "$env:TEMP\pg17.zip" -DestinationPath "$env:LOCALAPPDATA\pgclient" -Force
+```
+
+Because it is not on PATH, call the binaries by full path in the steps below, or add them for the
+session:
+
+```powershell
+$env:PATH = "$env:LOCALAPPDATA\pgclient\pgsqlin;$env:PATH"
 ```
 
 ## 1. Create the project (Supabase dashboard)
