@@ -44,9 +44,18 @@
   //     (305 _ssr modules for 103 diagrams -- the SVG plus its .diagram.json sidecar).
   //     29 MiB free therefore allows roughly 320 more diagrams. Roughly 25 MiB of the bundle is
   //     fixed framework/dependency code independent of content.
-  //   If that ceiling is ever approached, diagrams can be served as static assets instead of
-  //   bundled (they are already mirrored to public/diagrams/ and hash-registered in
-  //   content/diagrams/assets.json), which moves them off the Worker limit entirely.
+  //   If that ceiling is ever approached, serve diagrams as STATIC ASSETS instead of bundling
+  //   them (already mirrored to public/diagrams/ and hash-registered in
+  //   content/diagrams/assets.json). That moves them off the Worker size limit, keeps them on
+  //   Cloudflare's edge, and preserves the static_hash integrity check.
+  //
+  //   Do NOT move them into Supabase Storage. They are already lazy-loaded -- catalog.ts uses
+  //   import.meta.glob WITHOUT `eager`, so each diagram is its own code-split chunk and a page
+  //   loads only what it renders. The 9 MiB is deploy-time shelf space, not runtime payload.
+  //   Fetching from Supabase would instead add a Worker->Frankfurt round trip on the critical
+  //   render path, spend the 50-subrequest-per-invocation budget, make diagrams independently
+  //   fail-able, and drop the hash guarantee on the bytes actually rendered. Supabase's storage
+  //   quota is not the constraint here; Worker bundle size is.
 
   // Bindings added in later Phase 2 steps, once each is provisioned:
   //   "ai": { "binding": "AI" }                        -- Workers AI (Phase 3)
