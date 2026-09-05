@@ -12,7 +12,6 @@ export function MobileTocDrawer({ headings }: { headings: TocEntry[] }) {
         <button
           type="button"
           aria-label="Open table of contents"
-          className="no-print fixed bottom-4 right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-lg shadow-black/30 transition hover:border-teal-500/50 md:hidden"
           className="no-print fixed bottom-4 right-4 z-40 inline-flex h-12 items-center gap-2 rounded-full border border-border bg-card px-4 text-sm font-medium text-foreground shadow-lg shadow-black/30 transition hover:border-teal-500/50 lg:hidden"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0)" }}
         >
