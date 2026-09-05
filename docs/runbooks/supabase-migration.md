@@ -18,11 +18,26 @@ supabase --version     # have: 2.67.1 (2.116.0 available; either is fine)
 psql --version         # NOT installed yet — see below
 ```
 
-`psql` and `pg_dump` ship with PostgreSQL client tools:
+`psql` and `pg_dump` ship with PostgreSQL client tools. **Already installed** at
+`%LOCALAPPDATA%\pgclient\pgsqlin` (psql/pg_dump 17.11) — verified working.
+
+The documented `winget install PostgreSQL.PostgreSQL.17` route **does not work unelevated**: the
+EDB installer needs admin rights to write to `Program Files` and prompts for a superuser password,
+so it exits 1 with no log. We only need the client binaries, not a server, so the portable zip was
+used instead — no admin, nothing added to PATH, nothing registered:
 
 ```powershell
-winget install PostgreSQL.PostgreSQL.17
-# then reopen the shell so psql/pg_dump are on PATH
+# already done; recorded so it is reproducible
+Invoke-WebRequest "https://get.enterprisedb.com/postgresql/postgresql-17.11-3-windows-x64-binaries.zip" `
+  -OutFile "$env:TEMP\pg17.zip" -UseBasicParsing
+Expand-Archive "$env:TEMP\pg17.zip" -DestinationPath "$env:LOCALAPPDATA\pgclient" -Force
+```
+
+Because it is not on PATH, call the binaries by full path in the steps below, or add them for the
+session:
+
+```powershell
+$env:PATH = "$env:LOCALAPPDATA\pgclient\pgsqlin;$env:PATH"
 ```
 
 ## 1. Create the project (Supabase dashboard)
@@ -77,30 +92,57 @@ Expect `vector`, and two buckets (diagram uploads + source uploads).
 
 ## 5. Copy the data
 
-Dump data only from the old project — the schema already exists from step 4:
+**You run these** — the passwords stay on your machine. Get both connection strings from each
+project's dashboard: Database → Connection string → **URI**, and substitute the real password for
+`[YOUR-PASSWORD]`. Use the **Session pooler** (port 5432) string, not the transaction pooler —
+`pg_dump` needs a session connection.
 
-```bash
-pg_dump "<OLD_CONNECTION_STRING>" \
-  --data-only --no-owner --no-privileges \
-  --schema=public \
-  --exclude-table-data='storage.*' \
-  -f fabric-data.sql
+- **OLD** (Lovable, read-only source): project ref `ysgmvtvwrkrxagefkhrc`
+- **NEW** (yours, the target): project ref `ltetbjjordljsntbesnc`
 
-psql "<NEW_CONNECTION_STRING>" -v ON_ERROR_STOP=1 -f fabric-data.sql
+```powershell
+# psql/pg_dump are not on PATH by design — add them for this session only
+$env:PATH = "$env:LOCALAPPDATA\pgclient\pgsqlin;$env:PATH"
+
+$OLD = "<paste OLD connection URI>"
+$NEW = "<paste NEW connection URI>"
 ```
 
-If FK ordering causes trouble, add `--disable-triggers` to the `pg_dump` call.
+**Clear the seeded capabilities first.** Three migrations
+(`20260616120000_unify_backend_columns.sql`, `20260616133043_*.sql`,
+`20260726220000_add_materialized_lake_views_capability.sql`) seed `public.capabilities`, so the new
+project already holds 21 rows. A data-only restore would hit primary-key conflicts on exactly that
+table. The dump carries the authoritative rows, so empty it first:
 
-Verify against the baseline table above:
+```powershell
+psql $NEW -v ON_ERROR_STOP=1 -c "truncate table public.capabilities cascade;"
+```
 
-```bash
-psql "<NEW_CONNECTION_STRING>" -c "
-select 'claims' t, count(*) from claims
+Then dump and restore. `--disable-triggers` keeps FK ordering from mattering, and needs the
+`--superuser=postgres` hint on Supabase:
+
+```powershell
+pg_dump $OLD --data-only --no-owner --no-privileges --schema=public `
+  --disable-triggers --superuser=postgres -f fabric-data.sql
+
+psql $NEW -v ON_ERROR_STOP=1 -f fabric-data.sql
+```
+
+If the restore stops on an error, nothing is half-applied per-statement but the run is partial —
+re-truncate the affected tables and re-run rather than restoring twice on top of itself.
+
+Verify against the baseline table at the top of this runbook:
+
+```powershell
+psql $NEW -c "select 'claims' t, count(*) from claims
 union all select 'roadmap_items', count(*) from roadmap_items
 union all select 'content_items', count(*) from content_items
 union all select 'sources', count(*) from sources
 union all select 'capabilities', count(*) from capabilities;"
 ```
+
+Expect **3052 / 1164 / 850 / 169 / 21**. Paste the output back and the invariant checks in step 8
+confirm the rest.
 
 ## 6. Auth users
 
