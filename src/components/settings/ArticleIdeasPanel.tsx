@@ -246,9 +246,7 @@ function IdeaRow({
               size="sm"
               variant="outline"
               className="h-8 border-border bg-card text-foreground"
-              disabled={
-                mutateStatus.isPending || !["queued", "claimed"].includes(item.status)
-              }
+              disabled={mutateStatus.isPending || !["queued", "claimed"].includes(item.status)}
               onClick={() => mutateStatus.mutate({ itemId: item.id, action: "complete" })}
             >
               mark written
@@ -257,9 +255,7 @@ function IdeaRow({
               size="sm"
               variant="outline"
               className="h-8 border-border bg-card text-foreground"
-              disabled={
-                mutateStatus.isPending || !["queued", "failed"].includes(item.status)
-              }
+              disabled={mutateStatus.isPending || !["queued", "failed"].includes(item.status)}
               onClick={() => mutateStatus.mutate({ itemId: item.id, action: "dismiss" })}
             >
               dismiss
@@ -285,14 +281,8 @@ function IdeaRow({
                 rows={8}
                 className="w-full border-border bg-card font-mono text-xs text-foreground"
               />
-              {jsonError && (
-                <p className="text-xs text-destructive">{jsonError}</p>
-              )}
-              <Button
-                size="sm"
-                onClick={handleSaveJson}
-                disabled={saveJsonMutation.isPending}
-              >
+              {jsonError && <p className="text-xs text-destructive">{jsonError}</p>}
+              <Button size="sm" onClick={handleSaveJson} disabled={saveJsonMutation.isPending}>
                 {saveJsonMutation.isPending ? "Saving…" : "Save JSON"}
               </Button>
             </div>

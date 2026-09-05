@@ -142,6 +142,9 @@ export const Route = createFileRoute("/")({
     ],
   }),
   loader: ({ context }) =>
+    // All seven feed useSuspenseQueries below, so keep them awaited in parallel. The real
+    // wins are (a) the paginated contentItemsQO (limit: 40) that used to fetch every row,
+    // and (b) defaultPreload:"intent" on the router prefetching on hover.
     Promise.all([
       context.queryClient.ensureQueryData(topicsQO),
       context.queryClient.ensureQueryData(sourcesQO),
