@@ -91,6 +91,12 @@ export function ContentHero({
         <span>{readingTime(item.body_md ?? "")} min read</span>
         <span>·</span>
         <span>{citationCount} sources</span>
+        {citationCount > 0 && (
+          <>
+            <span>·</span>
+            <span>{citationCount} sources</span>
+          </>
+        )}
         {diagramCount > 0 && (
           <>
             <span>·</span>
@@ -126,6 +132,17 @@ export function ContentHero({
             </strong>
           </span>
           <span aria-hidden="true">·</span>
+          {Boolean(item.depth_levels?.length) && (
+            <>
+              <span>
+                Depth{" "}
+                <strong className="font-medium text-foreground">
+                  {`L${item.depth_levels!.join(" · L")}`}
+                </strong>
+              </span>
+              <span aria-hidden="true">·</span>
+            </>
+          )}
           <span>{FORMAT_LABEL[item.kind] ?? "Source-grounded content"}</span>
           <details className="group ml-auto">
             <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-md px-1.5 py-1 hover:text-foreground [&::-webkit-details-marker]:hidden">
