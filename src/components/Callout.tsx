@@ -6,23 +6,47 @@ import type { ReactElement, ReactNode } from "react";
 // the same claim-grounding conventions and deserve the same treatment.
 
 const calloutStyles: Record<string, { cls: string; label: string }> = {
-  NOTE: { cls: "border-teal-500/30 bg-teal-500/10 text-teal-100", label: "Note" },
-  TIP: { cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-100", label: "Tip" },
-  WARNING: { cls: "border-amber-500/30 bg-amber-500/10 text-amber-100", label: "Warning" },
-  IMPORTANT: { cls: "border-indigo-500/30 bg-indigo-500/10 text-indigo-100", label: "Important" },
+  NOTE: {
+    cls: "border-teal-500/30 bg-teal-500/10 text-teal-900 dark:text-teal-100",
+    label: "Note",
+  },
+  TIP: {
+    cls: "border-emerald-500/30 bg-emerald-500/10 text-emerald-900 dark:text-emerald-100",
+    label: "Tip",
+  },
+  WARNING: {
+    cls: "border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100",
+    label: "Warning",
+  },
+  IMPORTANT: {
+    cls: "border-indigo-500/30 bg-indigo-500/10 text-indigo-900 dark:text-indigo-100",
+    label: "Important",
+  },
   INFERENCE: {
-    cls: "border-violet-500/30 bg-violet-500/10 text-violet-100",
+    cls: "border-violet-500/30 bg-violet-500/10 text-violet-900 dark:text-violet-100",
     label: "Inference (not a sourced fact)",
   },
   // Phase 4 teaching primitives (Editorial Experience Revamp) — same generic card path as above.
-  CHECKPOINT: { cls: "border-sky-500/30 bg-sky-500/10 text-sky-100", label: "Checkpoint" },
+  CHECKPOINT: {
+    cls: "border-sky-500/30 bg-sky-500/10 text-sky-900 dark:text-sky-100",
+    label: "Checkpoint",
+  },
   PREREQUISITE: {
-    cls: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-100",
+    cls: "border-fuchsia-500/30 bg-fuchsia-500/10 text-fuchsia-900 dark:text-fuchsia-100",
     label: "Before you start",
   },
-  RESULT: { cls: "border-lime-500/30 bg-lime-500/10 text-lime-100", label: "Expected result" },
-  TAKEAWAY: { cls: "border-orange-500/30 bg-orange-500/10 text-orange-100", label: "Key takeaway" },
-  DEFINITION: { cls: "border-zinc-500/30 bg-zinc-500/10 text-zinc-100", label: "Definition" },
+  RESULT: {
+    cls: "border-lime-500/30 bg-lime-500/10 text-lime-950 dark:text-lime-100",
+    label: "Expected result",
+  },
+  TAKEAWAY: {
+    cls: "border-orange-500/30 bg-orange-500/10 text-orange-950 dark:text-orange-100",
+    label: "Key takeaway",
+  },
+  DEFINITION: {
+    cls: "border-zinc-500/30 bg-zinc-500/10 text-zinc-900 dark:text-zinc-100",
+    label: "Definition",
+  },
 };
 
 export function Callout({ children }: { children: ReactNode }) {
@@ -51,7 +75,7 @@ export function Callout({ children }: { children: ReactNode }) {
   // <details> so the content stays in the DOM/print output even collapsed (no JS-only hiding).
   if (kind === "TRY-IT") {
     return (
-      <details className="not-prose my-5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm leading-relaxed text-cyan-100 [&_p]:m-0">
+      <details className="not-prose my-5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm leading-relaxed text-cyan-900 dark:text-cyan-100 [&_p]:m-0">
         <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide">
           Try it — reveal solution
         </summary>
