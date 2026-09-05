@@ -7,7 +7,8 @@ import {
 
 describe("createOpenRouterProvider", () => {
   it("initializes an OpenAI-compatible provider with OpenRouter baseURL and headers", () => {
-    const testKey = "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";
+    // Fake key: shape-only, never a live credential. Real keys live in Worker secrets.
+    const testKey = "sk-or-v1-" + "0".repeat(64);
     const provider = createOpenRouterProvider(testKey);
     expect(provider).toBeDefined();
     expect(typeof provider).toBe("function");
@@ -75,7 +76,7 @@ describe("API Key secret masking", () => {
   }
 
   it("masks OpenRouter keys with sk-or-v1- prefix and reveals last 4 chars", () => {
-    const key = "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";
+    const key = "sk-or-v1-" + "a".repeat(60) + "ea96";
     expect(maskSecret(key)).toBe("sk-or-v1-••••••••ea96");
   });
 
