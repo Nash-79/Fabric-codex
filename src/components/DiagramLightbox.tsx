@@ -29,11 +29,11 @@ import type { AuthoredDiagram } from "@/diagrams/types";
 // re-run the reflow after decode.
 const ratioCache = new Map<string, number>();
 
-// Mirrors the exact breakpoint InteractiveDiagram's own layout switches on (Tailwind `sm:`,
-// 640px) -- the side-by-side split kicks in there, so the sizing math here must switch at the
+// Mirrors the exact breakpoint InteractiveDiagram's own layout switches on (Tailwind `md:`,
+// 768px) -- the side-by-side split kicks in there, so the sizing math here must switch at the
 // same point or the two disagree about how much width the sidebar needs.
-const SIDE_BY_SIDE_QUERY = "(min-width: 640px)";
-// InteractiveDiagram's sm: grid is `grid-cols-[1fr_22rem] gap-6` -- keep these two in sync with
+const SIDE_BY_SIDE_QUERY = "(min-width: 768px)";
+// InteractiveDiagram's md: grid is `grid-cols-[1fr_22rem] gap-6` -- keep these two in sync with
 // that literal if it ever changes.
 const SIDEBAR_REM = 22;
 const GAP_REM = 1.5;
@@ -185,7 +185,7 @@ export function DiagramLightbox({
               markup={svgMarkup}
               definition={definition}
               citations={citations}
-              className="h-auto w-full sm:h-full"
+              className="h-auto w-full md:h-full"
             />
           ) : inView ? (
             <img
@@ -442,7 +442,7 @@ function LightboxViewer({
                 // renders at (approximately) the SVG's own aspect ratio, with the sidebar getting
                 // genuinely extra width rather than carved out of the diagram's.
                 <div
-                  className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] sm:max-h-[calc(88dvh-2rem)] sm:max-w-[min(94vw,84rem)]"
+                  className="max-h-[calc(100dvh-2rem)] max-w-[calc(100vw-2rem)] md:max-h-[calc(88dvh-2rem)] md:max-w-[min(94vw,84rem)]"
                   style={{
                     aspectRatio: effectiveRatio,
                     width: "100%",
