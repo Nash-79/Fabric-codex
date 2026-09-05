@@ -144,6 +144,51 @@ union all select 'capabilities', count(*) from capabilities;"
 Expect **3052 / 1164 / 850 / 169 / 21**. Paste the output back and the invariant checks in step 8
 confirm the rest.
 
+## 5b. STATUS — what actually moved (2026-09-05)
+
+The copy was run over the REST API rather than `pg_dump`: the Lovable project is **not in your
+Supabase account** (it belongs to Lovable's org), so there is no DB password for it and the
+`pg_dump` route in step 5 is not available. Read via the old project's still-valid anon key
+(after running `sql/lovable-export-grants.sql`), written via the new project's service-role key.
+
+**Copied and verified — every count matches the baseline:**
+
+| Table | Rows | Table | Rows |
+|---|---|---|---|
+| `claims` | 3052 | `content_item_sources` | 5996 |
+| `content_items` | 850 | `diagram_nodes` | 785 |
+| `sources` | 169 | `diagrams` | 103 |
+| `roadmap_items` | 1164 | `topic_capabilities` | 104 |
+| `seed_runs` | 1670 | `topics` | 43 |
+| `capabilities` | 21 | `help_docs` | 8 |
+| `roadmap_sync_state` | 1 | | |
+
+`search_atlas('direct lake')` returns correctly ranked results on the new project, so the tsvector
+indexes rebuilt on insert. Note the RPC signature is `search_atlas(term, max_results)` — not `q`.
+
+Three issues hit and solved, worth knowing if this is ever re-run:
+
+- **`content_items` self-references** via `supersedes_id` (the version chain). A flat insert fails
+  with FK 23503; the 850 rows must be topologically sorted so parents insert first.
+- **`diagram_nodes.search_vector` is a generated column** — writing it fails with 428C9. Strip it.
+- **Large `body_md` blobs** time out at 1000-row pages (57014); use 100.
+
+**Still blocked — 10 tables, 2308 rows.** All fail FK on `auth.users`, which is empty on the new
+project. There is exactly one user (Google OAuth, no password hash to migrate), so per step 6 the
+answer is re-invite, not a hash dump:
+
+`queue_items` (1154), `admin_audit_events` (905), `source_watcher_items` (211), `user_progress`
+(25), `source_watchers` (7), `rss_subscriptions` (2), `favorites` (2), `system_settings` (2),
+`profiles` (1), `user_roles` (1).
+
+**Sequence:** sign into the new project with Google → that creates the `auth.users` row → then copy
+these ten, remapping the old user id (`2d32a631-…`) to the new one. Requires Google auth configured
+on the new project (step 3, still outstanding).
+
+**Do not run `sql/lovable-revert-grants.sql` until those ten are across** — it would re-block the
+reads. But note `system_settings` holds `openrouter_api_key`, currently readable by the public anon
+key while the grant stands: rotate that key once the revert is done.
+
 ## 6. Auth users
 
 Check the count first — this decides the approach:
