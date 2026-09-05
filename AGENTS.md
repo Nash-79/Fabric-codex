@@ -11,6 +11,34 @@ sources become versioned, source-graded **claims** (each tagged to a **capabilit
 **depth level**); claims feed **cited** architecture generation, **tiered learning**, and a
 **validation pass**. The **capability registry is the architectural spine** — build around it.
 
+## Coordination — read before writing any code
+
+This repo is worked by **two coding agents in parallel** (Claude Code and Gemini). Before you
+start anything:
+
+1. `git fetch --all --prune`
+2. Read `.agent-locks.md` — files claimed there belong to another agent. Pick other work.
+3. `gh pr list --state open --json headRefName,files` — an open PR touching a file is a lock.
+4. **Push your own claim to `.agent-locks.md` BEFORE writing code**, not with the PR.
+
+Hard rules:
+
+- **One task, one branch, one concern.** Never mix a behaviour change with a deletion or a
+  reformat — that makes a PR unreviewable and hides regressions.
+- **Only touch files you claimed.** Need another file? Finish, merge, then claim it separately.
+- **When you change a line, delete the version you replaced.** Never leave both. This repo has
+  already shipped a broken tree from exactly that mistake: an old and a new version of the same
+  line side by side, no conflict markers, TypeScript unable to compile.
+- **Delete on evidence, not impression.** Grep for consumers before removing anything, and say
+  what you found in the PR body.
+- `npm run typecheck && npm test && npm run lint` must pass before you open a PR.
+- Claude owns these — do not edit: `src/lib/ai-gateway.server.ts`, `vite.config.ts`,
+  `wrangler.jsonc`, `supabase/**`, `.github/**`.
+
+This project is a **source-grounding platform**: the UI must never invent metadata. A component
+that displays a fabricated fallback value where real data is missing is a correctness bug, not a
+cosmetic one — omit the element instead.
+
 ## Working agreements
 
 - Run `pytest` in `backend/` after changing Python; do not commit failing tests.
