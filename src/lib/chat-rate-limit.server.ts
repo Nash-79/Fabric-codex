@@ -36,6 +36,53 @@ export function checkRateLimit(key: string): { allowed: boolean; retryAfterMs?: 
   return { allowed: true };
 }
 
+/**
+ * Durable, cross-isolate rate limit.
+ *
+ * checkRateLimit above is per-isolate. On Workers that means the effective cap is
+ * (limit x live isolates), which is no cap at all -- and the provider chain now puts a FINITE
+ * free allowance at the top (10k Workers AI neurons/day), which one abusive client could drain
+ * for everybody. This consumes a shared counter instead, incremented atomically in Postgres so
+ * two isolates cannot both read "one slot left" and both proceed.
+ *
+ * Fails OPEN on a database error. A rate limiter that takes the whole chat endpoint down when
+ * Postgres hiccups is worse than one that briefly over-admits; the in-process bucket is still
+ * checked first, so an outage degrades to the old behaviour rather than to nothing.
+ */
+export async function checkDurableRateLimit(
+  key: string,
+): Promise<{ allowed: boolean; retryAfterMs?: number; degraded?: boolean }> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.rpc("consume_chat_rate_limit", {
+      p_bucket_key: key,
+      p_window_seconds: Math.floor(WINDOW_MS / 1000),
+      p_max_requests: MAX_REQUESTS_PER_WINDOW,
+    });
+    if (error) return { allowed: true, degraded: true };
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return { allowed: true, degraded: true };
+    const allowed = Boolean((row as { allowed?: boolean }).allowed);
+    const retryAfterSeconds = Number((row as { retry_after_seconds?: number }).retry_after_seconds);
+    return {
+      allowed,
+      retryAfterMs: allowed ? undefined : Math.max(0, retryAfterSeconds) * 1000,
+    };
+  } catch {
+    return { allowed: true, degraded: true };
+  }
+}
+
+/** Opportunistic cleanup so expired buckets do not accumulate; failure is not worth surfacing. */
+export async function pruneRateLimits(): Promise<void> {
+  try {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    await supabaseAdmin.rpc("prune_chat_rate_limits", { p_older_than_seconds: 3600 });
+  } catch {
+    // Best effort only.
+  }
+}
+
 export function requestKeyFromHeaders(headers: Headers, userId: string | null): string {
   if (userId) return `user:${userId}`;
   // CF-Connecting-IP is set by Cloudflare's edge and cannot be spoofed by the client past it;
@@ -45,7 +92,20 @@ export function requestKeyFromHeaders(headers: Headers, userId: string | null): 
     headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     headers.get("x-real-ip") ??
     "unknown";
-  return `ip:${ip}`;
+  // The durable limiter persists this key, so store a hash rather than the address itself: the
+  // counter only needs to distinguish clients, never to identify them.
+  return `ip:${hashIp(ip)}`;
+}
+
+// FNV-1a. Not a security hash -- it only has to be stable, fast, and non-reversible enough that
+// the stored key is not a plaintext IP. Web Crypto's digest is async and this sits on the hot path.
+function hashIp(ip: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < ip.length; i += 1) {
+    h ^= ip.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
 }
 
 export function validateMessagePayload(

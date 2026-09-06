@@ -246,7 +246,11 @@ if (online) {
   // impersonating a browser to defeat a challenge. Some publishers (notably the Khoros-hosted
   // community.fabric.microsoft.com) challenge all datacenter/non-browser traffic; that is a
   // gate on the checker, not evidence the link is dead, and is reported as such.
-  const UA = "FabricAtlasLinkCheck/1.0 (+https://fabric-atlas.lovable.app/)";
+  const appUrl = (process.env.FABRIC_ATLAS_APP_URL || "https://fabric-codex.workers.dev").replace(
+    /\/+$/,
+    "",
+  );
+  const UA = `FabricAtlasLinkCheck/1.0 (+${appUrl}/)`;
   const CHALLENGE = new Set([401, 403, 429]);
   let index = 0;
   let challenged = 0;

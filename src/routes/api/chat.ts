@@ -1,12 +1,17 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { convertToModelMessages, streamText, type UIMessage } from "ai";
 import { resolveActiveAiProvider, resolveModelForProvider } from "@/lib/ai-gateway.server";
-import { DEFAULT_ADVISOR_MODEL } from "@/lib/advisor-models";
+import {
+  AUTO_MODEL_ID,
+  DEFAULT_ADVISOR_MODEL,
+  NO_CHAIN_FALLBACK_MODEL,
+} from "@/lib/advisor-models";
 import type { AdvisorMessage } from "@/lib/advisor-types";
 import { trySoftAuth } from "@/lib/soft-auth.server";
 import type { Json } from "@/integrations/supabase/types";
 import {
   checkRateLimit,
+  checkDurableRateLimit,
   requestKeyFromHeaders,
   resolveAllowedModel,
   validateMessagePayload,
@@ -52,7 +57,11 @@ export const Route = createFileRoute("/api/chat")({
 
         const auth = await trySoftAuth(request);
         const rateLimitKey = requestKeyFromHeaders(request.headers, auth?.userId ?? null);
-        const rateLimit = checkRateLimit(rateLimitKey);
+        // Two layers on purpose. The in-process bucket is free and catches a hot isolate
+        // immediately; the durable one is the actual cap, because per-isolate state cannot bound
+        // a finite shared budget (Workers AI's free daily neurons) across many live isolates.
+        let rateLimit: { allowed: boolean; retryAfterMs?: number } = checkRateLimit(rateLimitKey);
+        if (rateLimit.allowed) rateLimit = await checkDurableRateLimit(rateLimitKey);
         if (!rateLimit.allowed) {
           await recordChatRejection("rate_limited", { key: rateLimitKey });
           return new Response("Too many requests — please slow down.", {
@@ -112,7 +121,24 @@ Rules (non-negotiable):
 CONTEXT (retrieved from the Fabric Atlas knowledge base):
 ${contextBlock}`;
 
-        const model = activeAi.provider(modelId);
+        // "Auto" means: follow the chain the admin ordered in Settings, first entry that works.
+        // A pinned id keeps the caller's choice. This is where a withdrawn model stops being a
+        // failed request -- the chain simply advances past it.
+        let servedModelId = modelId;
+        let model = activeAi.provider(modelId);
+        if (allowedModelId === AUTO_MODEL_ID) {
+          const { resolveProviderChain } = await import("@/lib/ai-gateway.server");
+          const configured = await resolveProviderChain().catch(() => null);
+          const first = configured?.chain[0];
+          if (first && configured) {
+            servedModelId = first.model_id;
+            model = configured.providerFor(first)(first.model_id);
+          } else {
+            // No chain configured yet: fall back to the provider default rather than failing.
+            servedModelId = resolveModelForProvider(NO_CHAIN_FALLBACK_MODEL, activeAi);
+            model = activeAi.provider(servedModelId);
+          }
+        }
 
         const result = streamText({
           model,
@@ -126,7 +152,7 @@ ${contextBlock}`;
             if (part.type === "start") {
               return {
                 createdAt: Date.now(),
-                model: modelId,
+                model: servedModelId,
                 retrievalStatus: retrieval.claims.length ? "retrieved" : "empty",
                 contextSummary: retrieval.summary,
                 sources: retrieval.uiSources,

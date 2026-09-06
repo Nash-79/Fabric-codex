@@ -1,3 +1,4 @@
+import { crawlerUserAgent } from "./app-url";
 import { createHash } from "node:crypto";
 import { parseWebFeed } from "./feed-parse";
 
@@ -348,7 +349,7 @@ async function fetchText(
         headers: {
           accept:
             "application/rss+xml,application/atom+xml,application/feed+json,application/xml,text/xml,text/html;q=0.9,*/*;q=0.1",
-          "user-agent": "FabricAtlasWatcher/1.0 (+https://fabric-atlas.lovable.app/)",
+          "user-agent": crawlerUserAgent("FabricAtlasWatcher"),
           ...headers,
         },
       });

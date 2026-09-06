@@ -29,7 +29,13 @@ const QUEUE_PATH = "content/queue.md";
 const TIMEOUT_MS = 15_000;
 const MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const FIRST_POLL_CAP = 25;
-const USER_AGENT = "FabricAtlasWatcher/1.0 (local; +https://fabric-atlas.lovable.app/)";
+// Honest identification: a publisher seeing this must be able to visit the URL to find out who
+// is polling them and ask to be excluded. An address that no longer resolves is worse than none.
+const APP_URL = (process.env.FABRIC_ATLAS_APP_URL || "https://fabric-codex.workers.dev").replace(
+  /\/+$/,
+  "",
+);
+const USER_AGENT = `FabricAtlasWatcher/1.0 (local; +${APP_URL}/)`;
 const ASSET_EXT =
   /\.(?:avif|bmp|css|csv|docx?|eot|gif|ico|jpe?g|js|json|mp[34]|pdf|png|pptx?|svg|tar|tiff?|ttf|webm|webp|woff2?|xlsx?|zip)$/i;
 

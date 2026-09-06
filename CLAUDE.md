@@ -67,9 +67,13 @@ Authoring flow (git is the source of truth). The `localhost:8000` FastAPI backen
 agents read Supabase keylessly (anon key) and write only to git — publishing itself requires the
 sealed service-role key, so it is always a human step in the Lovable app's Settings → Publish tab:
 
-Run `node scripts/check-queues.mjs --brief` at session start or before orchestration. It reads the
-public `queue_public` and `rss_status_public` views, prints queue/feed/content gaps, and continues
-quietly if local env vars, the public views, or the external planning file are missing.
+Run `node scripts/check-queues.mjs --brief` at session start or before orchestration. It reads a
+sanitized snapshot from the **token-protected** `GET /api/public/hooks/poll-feeds` endpoint
+(`FABRIC_ATLAS_APP_URL` + `FABRIC_ATLAS_AGENT_READ_TOKEN`), prints queue/feed/content gaps, and
+continues quietly when those are unset — it will not treat unreachable private state as an empty
+queue. The `queue_public` / `rss_status_public` views are **no longer anon-readable**: migration
+`20260711200000_remove_public_agent_table_reads.sql` deliberately revoked that, so a bare anon key
+now gets 401 rather than a silently empty result.
 
 When a watcher shows **blocked** in Settings → Watchers (some publishers, e.g. the Khoros-hosted
 `community.fabric.microsoft.com`, challenge all datacenter traffic), run
@@ -260,7 +264,7 @@ reads it, with content/queue.md as the offline fallback.
 
 **Diagram commission queue (Settings → Diagrams).** Admins can commission more diagrams per topic
 at chosen intervals from the Settings UI. This reuses the queue lifecycle exposed locally through
-`queue_public`, with `kind='diagram'`, `target_slug`, and `scheduled_at` (a future timestamp hides
+the token-protected agent snapshot endpoint, with `kind='diagram'`, `target_slug`, and `scheduled_at` (a future timestamp hides
 the item until it is due). The server only schedules — `/commission-diagrams` drains the due queue with the
 **diagram-author**, which authors an original SVG, mirrors it to `public/diagrams/`, and registers
 it as a generated asset (flipping the topic from _gap_ to _covered_ in the coverage table).

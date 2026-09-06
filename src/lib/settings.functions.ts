@@ -1,3 +1,4 @@
+import { appUrl } from "./app-url";
 import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
@@ -1906,7 +1907,7 @@ export const testAiProviderKey = createServerFn({ method: "POST" })
         const res = await fetch("https://openrouter.ai/api/v1/auth/key", {
           headers: {
             Authorization: `Bearer ${key}`,
-            "HTTP-Referer": "https://fabric-atlas.dev",
+            "HTTP-Referer": appUrl(),
             "X-Title": "Fabric Atlas Key Validator",
           },
           signal: AbortSignal.timeout(10000),
