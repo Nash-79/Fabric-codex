@@ -41,6 +41,7 @@ import { MigrationStatusPanel } from "@/components/settings/MigrationStatusPanel
 import { FeedbackPanel } from "@/components/settings/FeedbackPanel";
 import { ArticleIdeasPanel } from "@/components/settings/ArticleIdeasPanel";
 import { ApiKeysPanel } from "@/components/settings/ApiKeysPanel";
+import { ProviderChainPanel } from "@/components/settings/ProviderChainPanel";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   head: () => ({ meta: [{ title: "Settings — Fabric Atlas" }] }),
@@ -226,8 +227,9 @@ function SettingsPage() {
           <TabsContent value="roadmap" className="mt-0">
             <RoadmapPanel />
           </TabsContent>
-          <TabsContent value="api-keys" className="mt-0">
+          <TabsContent value="api-keys" className="mt-0 space-y-6">
             <ApiKeysPanel />
+            <ProviderChainPanel />
           </TabsContent>
           <TabsContent value="logs" className="mt-0">
             <LogsPanel
