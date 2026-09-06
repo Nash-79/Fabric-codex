@@ -251,7 +251,7 @@ function Landing() {
               <div className="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                 <MetricLink to="/topics" icon={Network} label="Topics" value={childTopics.length} />
                 <MetricLink
-                  to="/blogs"
+                  to="/knowledge"
                   icon={BookOpen}
                   label="Articles"
                   value={contentCounts.articles}

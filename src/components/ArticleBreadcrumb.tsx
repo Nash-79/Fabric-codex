@@ -69,17 +69,19 @@ export function ArticleBreadcrumb({
   if (from === "learn") {
     return (
       <Link
-        to="/learn"
+        to="/knowledge"
+        search={{ kind: "lesson" }}
         className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="h-3.5 w-3.5" />
-        Back to Learn
+        Back to Lessons
       </Link>
     );
   }
   return (
     <Link
-      to="/blogs"
+      to="/knowledge"
+      search={{ kind: "article" }}
       className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
     >
       <ChevronLeft className="h-3.5 w-3.5" />

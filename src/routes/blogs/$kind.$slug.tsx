@@ -85,7 +85,7 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
     <div className="min-h-screen bg-background p-10 text-foreground">
       <SiteHeader />
       <p className="mt-6">Content not found.</p>
-      <Link to="/blogs" className="mt-3 inline-block underline">
+      <Link to="/knowledge" search={{ kind: "article" }} className="mt-3 inline-block underline">
         Back to blogs
       </Link>
     </div>

@@ -20,22 +20,18 @@ type NavLink = { to: string; label: string; hint?: string; exact?: boolean };
 
 const PRIMARY: ReadonlyArray<NavLink> = [
   { to: "/", label: "Home", exact: true },
+  { to: "/knowledge", label: "Knowledge", hint: "Articles, architectures and lessons" },
   { to: "/topics", label: "Topics", hint: "Browse Fabric by topic" },
 ];
 
+// Articles, architectures and lessons are one surface now (/knowledge); they were three views of
+// content_items differing only by `kind`. What remains here is genuinely distinct: the capability
+// spine, the source library, reference docs, and the roadmap.
 const KNOWLEDGE: ReadonlyArray<NavLink> = [
   { to: "/registry", label: "Capability Registry", hint: "The spine — coverage per capability" },
   { to: "/sources", label: "Sources", hint: "Graded, cited source library" },
-  { to: "/learn", label: "Learn", hint: "Tiered lessons (Beginner→Expert)" },
-  { to: "/blogs", label: "Blogs", hint: "Cited articles, architectures, and lessons" },
   { to: "/docs", label: "Reference Docs", hint: "Engine internals & technical whitepapers" },
   { to: "/roadmap", label: "Roadmap", hint: "What's coming to Microsoft Fabric" },
-];
-
-// Advisor lives in the right-cluster CTA button (and the mobile sheet) — not duplicated here.
-const BUILD: ReadonlyArray<NavLink> = [
-  { to: "/search", label: "Search", hint: "Search across the knowledge base" },
-  { to: "/author", label: "Author", hint: "How authoring works" },
 ];
 
 export function SiteHeader() {
@@ -103,7 +99,6 @@ export function SiteHeader() {
             <NavItem key={n.to} link={n} />
           ))}
           <NavGroup label="Knowledge" links={KNOWLEDGE} />
-          <NavGroup label="Build" links={BUILD} />
         </nav>
 
         {/* Right cluster */}
@@ -206,7 +201,6 @@ export function SiteHeader() {
                   ]}
                 />
                 <MobileGroup label="Knowledge" links={KNOWLEDGE} />
-                <MobileGroup label="Build" links={BUILD} />
                 <div className="mt-4 border-t border-border pt-3 space-y-1 px-2">
                   <MobileLink to="/help" label="Help" />
                   {signedIn && <MobileLink to="/favorites" label="Favorites" />}

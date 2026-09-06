@@ -15,6 +15,7 @@ import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as RegistryRouteImport } from './routes/registry'
 import { Route as McpRouteImport } from './routes/mcp'
 import { Route as LearnRouteImport } from './routes/learn'
+import { Route as KnowledgeRouteImport } from './routes/knowledge'
 import { Route as HelpRouteImport } from './routes/help'
 import { Route as DesignsRouteImport } from './routes/designs'
 import { Route as AuthorRouteImport } from './routes/author'
@@ -73,6 +74,11 @@ const McpRoute = McpRouteImport.update({
 const LearnRoute = LearnRouteImport.update({
   id: '/learn',
   path: '/learn',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const KnowledgeRoute = KnowledgeRouteImport.update({
+  id: '/knowledge',
+  path: '/knowledge',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HelpRoute = HelpRouteImport.update({
@@ -232,6 +238,7 @@ export interface FileRoutesByFullPath {
   '/author': typeof AuthorRoute
   '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
+  '/knowledge': typeof KnowledgeRoute
   '/learn': typeof LearnRoute
   '/mcp': typeof McpRoute
   '/registry': typeof RegistryRouteWithChildren
@@ -268,6 +275,7 @@ export interface FileRoutesByTo {
   '/author': typeof AuthorRoute
   '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
+  '/knowledge': typeof KnowledgeRoute
   '/learn': typeof LearnRoute
   '/mcp': typeof McpRoute
   '/registry': typeof RegistryRouteWithChildren
@@ -306,6 +314,7 @@ export interface FileRoutesById {
   '/author': typeof AuthorRoute
   '/designs': typeof DesignsRoute
   '/help': typeof HelpRoute
+  '/knowledge': typeof KnowledgeRoute
   '/learn': typeof LearnRoute
   '/mcp': typeof McpRoute
   '/registry': typeof RegistryRouteWithChildren
@@ -344,6 +353,7 @@ export interface FileRouteTypes {
     | '/author'
     | '/designs'
     | '/help'
+    | '/knowledge'
     | '/learn'
     | '/mcp'
     | '/registry'
@@ -380,6 +390,7 @@ export interface FileRouteTypes {
     | '/author'
     | '/designs'
     | '/help'
+    | '/knowledge'
     | '/learn'
     | '/mcp'
     | '/registry'
@@ -417,6 +428,7 @@ export interface FileRouteTypes {
     | '/author'
     | '/designs'
     | '/help'
+    | '/knowledge'
     | '/learn'
     | '/mcp'
     | '/registry'
@@ -455,6 +467,7 @@ export interface RootRouteChildren {
   AuthorRoute: typeof AuthorRoute
   DesignsRoute: typeof DesignsRoute
   HelpRoute: typeof HelpRoute
+  KnowledgeRoute: typeof KnowledgeRoute
   LearnRoute: typeof LearnRoute
   McpRoute: typeof McpRoute
   RegistryRoute: typeof RegistryRouteWithChildren
@@ -524,6 +537,13 @@ declare module '@tanstack/react-router' {
       path: '/learn'
       fullPath: '/learn'
       preLoaderRoute: typeof LearnRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/knowledge': {
+      id: '/knowledge'
+      path: '/knowledge'
+      fullPath: '/knowledge'
+      preLoaderRoute: typeof KnowledgeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/help': {
@@ -765,6 +785,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthorRoute: AuthorRoute,
   DesignsRoute: DesignsRoute,
   HelpRoute: HelpRoute,
+  KnowledgeRoute: KnowledgeRoute,
   LearnRoute: LearnRoute,
   McpRoute: McpRoute,
   RegistryRoute: RegistryRouteWithChildren,
