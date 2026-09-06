@@ -90,9 +90,30 @@ Then in a browser: sign in with Google. The provider is enabled on the Supabase 
 `auth.users` row already exists with the original UUID, so your `admin` role carries over and
 `/settings` should open.
 
-**If Google sign-in fails**, the redirect URL is the usual cause. Supabase dashboard →
-Authentication → URL Configuration → add the `workers.dev` origin to **Redirect URLs**, and set
-**Site URL** to the same.
+**Google sign-in will redirect to `localhost:3000` until you do this.** Supabase's Site URL is
+still at its factory default, and Supabase falls back to it whenever the requested `redirectTo` is
+not in the allow-list. Dashboard → Authentication → **URL Configuration**:
+
+| Field | Value |
+|---|---|
+| Site URL | `https://fabric-codex.<subdomain>.workers.dev` |
+| Redirect URLs | `https://fabric-codex.<subdomain>.workers.dev/**` |
+
+The `/**` wildcard is required, not decorative: the app redirects to `/topics` and to arbitrary
+`next=` paths, so a bare origin matches none of them.
+
+This also fixes **email sign-up**, which fails for the same reason — the confirmation link is built
+from Site URL, so it points at `localhost:3000` too.
+
+In Google Cloud Console → your OAuth client → **Authorised redirect URIs**, confirm:
+
+```
+https://ltetbjjordljsntbesnc.supabase.co/auth/v1/callback
+```
+
+That is Supabase's own callback, not the app's: Google redirects to Supabase, and Supabase then
+redirects to your Site URL. It is the same value wherever the app is hosted, so if Google sign-in
+worked before the migration it is already there.
 
 ## 4. Finish configuration in the app
 
