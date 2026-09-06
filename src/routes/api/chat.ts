@@ -7,6 +7,7 @@ import { trySoftAuth } from "@/lib/soft-auth.server";
 import type { Json } from "@/integrations/supabase/types";
 import {
   checkRateLimit,
+  checkDurableRateLimit,
   requestKeyFromHeaders,
   resolveAllowedModel,
   validateMessagePayload,
@@ -52,7 +53,11 @@ export const Route = createFileRoute("/api/chat")({
 
         const auth = await trySoftAuth(request);
         const rateLimitKey = requestKeyFromHeaders(request.headers, auth?.userId ?? null);
-        const rateLimit = checkRateLimit(rateLimitKey);
+        // Two layers on purpose. The in-process bucket is free and catches a hot isolate
+        // immediately; the durable one is the actual cap, because per-isolate state cannot bound
+        // a finite shared budget (Workers AI's free daily neurons) across many live isolates.
+        let rateLimit: { allowed: boolean; retryAfterMs?: number } = checkRateLimit(rateLimitKey);
+        if (rateLimit.allowed) rateLimit = await checkDurableRateLimit(rateLimitKey);
         if (!rateLimit.allowed) {
           await recordChatRejection("rate_limited", { key: rateLimitKey });
           return new Response("Too many requests — please slow down.", {
