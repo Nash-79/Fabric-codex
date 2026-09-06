@@ -8,15 +8,24 @@ fi
 # Delete local branches that are already merged into HEAD, except the
 # current branch and default branch names.
 current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
+remote_name="$(git config --get "branch.$current_branch.remote" 2>/dev/null || echo '')"
 
-if git remote get-url origin >/dev/null 2>&1; then
-  git fetch --prune --quiet origin >/dev/null 2>&1 || true
+if [ -z "$remote_name" ]; then
+  if git remote get-url origin >/dev/null 2>&1; then
+    remote_name="origin"
+  else
+    remote_name="$(git remote | head -n 1)"
+  fi
 fi
 
-default_branch="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+if [ -n "$remote_name" ]; then
+  git fetch --prune --quiet "$remote_name" >/dev/null 2>&1 || true
+fi
 
-if [ -z "$default_branch" ]; then
-  default_branch="$(git remote show -n origin 2>/dev/null | sed -n 's/^[[:space:]]*HEAD branch: //p' | head -n 1)"
+default_branch="$(git symbolic-ref --quiet --short "refs/remotes/$remote_name/HEAD" 2>/dev/null | sed "s#^$remote_name/##")"
+
+if [ -z "$default_branch" ] && [ -n "$remote_name" ]; then
+  default_branch="$(git remote show -n "$remote_name" 2>/dev/null | sed -n 's/^[[:space:]]*HEAD branch: //p' | head -n 1)"
 fi
 
 git for-each-ref refs/heads --merged HEAD --format='%(refname:short)' | while IFS= read -r branch; do
