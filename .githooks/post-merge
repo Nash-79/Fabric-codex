@@ -48,9 +48,13 @@ git for-each-ref refs/heads --merged HEAD --format='%(refname:short)' | while IF
   esac
 
   upstream_ref="$(git rev-parse --symbolic-full-name --verify "$branch@{upstream}" 2>/dev/null || echo '')"
-  if [ -n "$upstream_ref" ] && git show-ref --verify --quiet "$upstream_ref"; then
-    continue
-  fi
+  case "$upstream_ref" in
+    refs/remotes/*)
+      if git show-ref --verify --quiet "$upstream_ref"; then
+        continue
+      fi
+      ;;
+  esac
 
   git branch -d "$branch"
 done
