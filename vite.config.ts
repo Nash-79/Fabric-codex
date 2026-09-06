@@ -1,18 +1,32 @@
-// @lovable.dev/vite-tanstack-config already includes the following — do NOT add them manually
-// or the app will break with duplicate plugins:
-//   - tanstackStart, viteReact, tailwindcss, tsConfigPaths, nitro (build-only using cloudflare as a default target),
-//     componentTagger (dev-only), VITE_* env injection, @ path alias, React/TanStack dedupe,
-//     error logger plugins, and sandbox detection (port/host/strictPort).
-// You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
-import { defineConfig } from "@lovable.dev/vite-tanstack-config";
-import { mcpPlugin } from "@lovable.dev/mcp-js/stacks/tanstack/vite";
+import { defineConfig } from "vite";
+import { tanstackStart } from "@tanstack/react-start/plugin/vite";
+import { nitro } from "nitro/vite";
+import viteReact from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
+import tsConfigPaths from "vite-tsconfig-paths";
 import { VitePWA } from "vite-plugin-pwa";
+import { loadEnv } from "vite";
+import { fileURLToPath } from "node:url";
 
-// @lovable.dev/mcp-js 0.20.0 compares Windows-resolved child paths with a
-// forward-slash project root during its containment check. The generated MCP
-// routes are committed already, so disabling only that code-generating plugin
-// on Windows restores local dev/build without removing the MCP routes.
-const mcpPlugins = process.platform === "win32" ? [] : [mcpPlugin()];
+// Hand-rolled replacement for @lovable.dev/vite-tanstack-config.
+//
+// That package composed the plugins below and is the last hard Lovable build dependency. It is
+// replicated rather than approximated -- plugin ORDER matters (tailwind before tanstackStart
+// before nitro before react), and so do the dedupe list and the import.meta.env define pass.
+// Everything here was read off the package's own dist/index.js so behaviour matches:
+//
+//   plugins:      tailwindcss -> tsConfigPaths -> tanstackStart -> nitro (build only) -> viteReact
+//   resolve:      "@" -> ./src, and a dedupe list that keeps React/TanStack single-instance
+//   optimizeDeps: React entrypoints pre-bundled
+//   css:          lightningcss transformer
+//   define:       every VITE_* var inlined as import.meta.env.X
+//   server:       host "::", port 8080
+//
+// Deliberately NOT carried over: the Lovable sandbox branches (dev-server bridge, HMR gate,
+// asset proxy, build diagnostics, the dist/ output override). Those only activated inside
+// Lovable's own environment. Nitro's default output (.output/) is what wrangler.jsonc expects.
+
+const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 // App-shell service worker. Registration is owned solely by src/lib/register-sw.ts
 // (injectRegister: null), which refuses to register in dev/preview/iframe contexts.
@@ -20,9 +34,13 @@ const pwaPlugin = VitePWA({
   registerType: "autoUpdate",
   injectRegister: null,
   filename: "sw.js",
-  // Multi-environment (client + nitro server) build: pin the plugin to the
-  // client output, otherwise it globs `dist/` and precaches server bundles too.
-  outDir: "dist/client",
+  // Multi-environment (client + nitro server) build: pin the plugin to the client output,
+  // otherwise it globs the whole build dir and precaches server bundles too.
+  //
+  // This is `.output/public`, NOT `dist/client`. `dist/` was the Lovable sandbox's output
+  // override; outside that sandbox nitro emits to `.output/`, so a `dist/client` target wrote
+  // sw.js somewhere the deployed Worker never serves -- a silently missing service worker.
+  outDir: ".output/public",
   devOptions: { enabled: false },
   // public/manifest.webmanifest is hand-maintained — don't emit a second one.
   manifest: false,
@@ -102,13 +120,55 @@ const pwaPlugin = VitePWA({
   },
 });
 
-export default defineConfig({
-  tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
-    server: { entry: "server" },
-  },
-  vite: {
-    plugins: [...mcpPlugins, ...(process.env.NODE_ENV === "production" ? [pwaPlugin] : [])],
-  },
+export default defineConfig(({ mode, command }) => {
+  // Inline VITE_* at build time. TanStack Start reads these in code that runs on both sides,
+  // and the Worker has no import.meta.env of its own, so they must be baked in.
+  const env = loadEnv(mode, process.cwd(), "VITE_");
+  const define = Object.fromEntries(
+    Object.entries(env).map(([key, value]) => [`import.meta.env.${key}`, JSON.stringify(value)]),
+  );
+
+  return {
+    define,
+    css: { transformer: "lightningcss" },
+    resolve: {
+      alias: { "@": `${projectRoot}src` },
+      // Two copies of React (or of the query client) break hooks and cache identity at runtime.
+      dedupe: [
+        "react",
+        "react-dom",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+        "@tanstack/react-query",
+        "@tanstack/query-core",
+      ],
+    },
+    optimizeDeps: {
+      include: [
+        "react",
+        "react-dom",
+        "react-dom/client",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+      ],
+    },
+    server: { host: "::", port: 8080 },
+    plugins: [
+      tailwindcss(),
+      tsConfigPaths({ projects: ["./tsconfig.json"] }),
+      tanstackStart({
+        // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
+        server: { entry: "server" },
+        // Keep server-only modules out of the client graph, and fail the build rather than warn.
+        importProtection: {
+          behavior: "error",
+          client: { files: ["**/server/**"], specifiers: ["server-only"] },
+        },
+      }),
+      // Nitro is a build-time concern only; running it in `serve` breaks the dev server.
+      ...(command === "build" ? [nitro({ preset: "cloudflare-module" })] : []),
+      viteReact(),
+      ...(mode === "production" ? [pwaPlugin] : []),
+    ],
+  };
 });
