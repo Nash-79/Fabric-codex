@@ -303,3 +303,67 @@ export async function resolveActiveAiProvider(options?: {
 
   return null;
 }
+
+/**
+ * Load the admin-ordered chain and the credentials each entry needs.
+ *
+ * Returns the chain plus a factory, so callers hand entries to runWithChain without knowing how
+ * any provider is constructed. Entries whose provider has no credentials configured are dropped
+ * here rather than failing mid-request.
+ */
+export async function resolveProviderChain(): Promise<{
+  chain: ChainEntry[];
+  allowPaid: boolean;
+  providerFor: (entry: ChainEntry) => ReturnType<typeof createOpenAICompatible>;
+} | null> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data } = await supabaseAdmin
+    .from("system_settings")
+    .select("key, value")
+    .in("key", [
+      "provider_chain",
+      "openrouter_api_key",
+      "lovable_api_key",
+      "cloudflare_account_id",
+      "cloudflare_api_token",
+    ]);
+  const rows = (data ?? []) as { key: string; value: string | null }[];
+  const val = (k: string) => rows.find((r) => r.key === k)?.value?.trim() || null;
+
+  let policy: ProviderChainPolicy = { ...DEFAULT_CHAIN_POLICY };
+  const raw = val("provider_chain");
+  if (raw) {
+    try {
+      policy = { ...DEFAULT_CHAIN_POLICY, ...(JSON.parse(raw) as ProviderChainPolicy) };
+    } catch {
+      // Unparseable policy behaves as unconfigured rather than crashing every AI request.
+    }
+  }
+  if (!policy.chain?.length) return null;
+
+  const openRouterKey = val("openrouter_api_key") ?? process.env.OPENROUTER_API_KEY?.trim() ?? null;
+  const lovableKey = val("lovable_api_key") ?? process.env.LOVABLE_API_KEY?.trim() ?? null;
+  const cfAccount =
+    val("cloudflare_account_id") ?? process.env.CLOUDFLARE_ACCOUNT_ID?.trim() ?? null;
+  const cfToken = val("cloudflare_api_token") ?? process.env.CLOUDFLARE_API_TOKEN?.trim() ?? null;
+
+  const usable = (e: ChainEntry) =>
+    e.provider === "openrouter"
+      ? Boolean(openRouterKey)
+      : e.provider === "lovable"
+        ? Boolean(lovableKey)
+        : Boolean(cfAccount && cfToken);
+
+  const chain = policy.chain.filter(usable);
+  if (!chain.length) return null;
+
+  return {
+    chain,
+    allowPaid: policy.allow_paid,
+    providerFor: (entry) => {
+      if (entry.provider === "openrouter") return createOpenRouterProvider(openRouterKey!);
+      if (entry.provider === "lovable") return createLovableAiGatewayProvider(lovableKey!);
+      return createWorkersAiProvider(cfAccount!, cfToken!, policy.ai_gateway_id);
+    },
+  };
+}
