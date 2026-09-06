@@ -54,14 +54,7 @@ export async function checkDurableRateLimit(
 ): Promise<{ allowed: boolean; retryAfterMs?: number; degraded?: boolean }> {
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // Cast: src/integrations/supabase/types.ts is generated from the LIVE schema, so these two
-    // RPCs only appear there once 20260906120000_durable_chat_rate_limit.sql is applied and
-    // `npm run gen:types` is re-run. Until then the generated union does not include them.
-    const rpc = supabaseAdmin.rpc as unknown as (
-      fn: string,
-      args: Record<string, unknown>,
-    ) => Promise<{ data: unknown; error: { message: string } | null }>;
-    const { data, error } = await rpc("consume_chat_rate_limit", {
+    const { data, error } = await supabaseAdmin.rpc("consume_chat_rate_limit", {
       p_bucket_key: key,
       p_window_seconds: Math.floor(WINDOW_MS / 1000),
       p_max_requests: MAX_REQUESTS_PER_WINDOW,
@@ -84,11 +77,7 @@ export async function checkDurableRateLimit(
 export async function pruneRateLimits(): Promise<void> {
   try {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const rpc = supabaseAdmin.rpc as unknown as (
-      fn: string,
-      args: Record<string, unknown>,
-    ) => Promise<unknown>;
-    await rpc("prune_chat_rate_limits", { p_older_than_seconds: 3600 });
+    await supabaseAdmin.rpc("prune_chat_rate_limits", { p_older_than_seconds: 3600 });
   } catch {
     // Best effort only.
   }
