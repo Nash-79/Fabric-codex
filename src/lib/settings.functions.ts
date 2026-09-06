@@ -2122,6 +2122,151 @@ export const saveOpenRouterPolicy = createServerFn({ method: "POST" })
   });
 
 /**
+ * Fetch the live model catalogue for the Settings picker.
+ *
+ * This is the whole point of the redesign: the admin selects from what each provider ACTUALLY
+ * offers right now, rather than from ids compiled into the app months earlier. OpenRouter's free
+ * tier rotates -- on 2026-09-06 all four ":free" ids the codebase shipped had been withdrawn --
+ * so a list generated at deploy time is the only kind that stays correct.
+ *
+ * Cached in system_settings so opening the panel does not hit both providers every time; the
+ * admin can force a refresh.
+ */
+export const refreshModelCatalogue = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((d: { force?: boolean } | undefined) => d ?? {})
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const sb = await adminClient();
+    const CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+    const { data: rowsRaw } = await sb
+      .from("system_settings")
+      .select("key, value")
+      .in("key", ["model_catalogue", "cloudflare_account_id", "cloudflare_api_token"]);
+    const rows = (rowsRaw ?? []) as { key: string; value: string | null }[];
+
+    const cachedRaw = rows.find((r) => r.key === "model_catalogue")?.value;
+    if (!data.force && cachedRaw) {
+      try {
+        const cached = JSON.parse(cachedRaw) as { fetched_at?: string };
+        const age = Date.now() - new Date(cached.fetched_at ?? 0).getTime();
+        if (age < CACHE_TTL_MS) return { ok: true as const, catalogue: cached, cached: true };
+      } catch {
+        // Unparseable cache: fall through and refetch.
+      }
+    }
+
+    const { buildCatalogue } = await import("./model-catalogue.server");
+    const catalogue = await buildCatalogue({
+      cloudflareAccountId: rows.find((r) => r.key === "cloudflare_account_id")?.value ?? null,
+      cloudflareApiToken: rows.find((r) => r.key === "cloudflare_api_token")?.value ?? null,
+    });
+
+    await sb.from("system_settings").upsert(
+      {
+        key: "model_catalogue",
+        value: JSON.stringify(catalogue),
+        description: "Cached live model catalogue (OpenRouter + Workers AI)",
+        is_secret: false,
+        updated_at: new Date().toISOString(),
+        updated_by: context.userId,
+      },
+      { onConflict: "key" },
+    );
+
+    // A provider outage is worth an audit trail: it explains a shrunken picker later.
+    if (Object.keys(catalogue.errors).length) {
+      await recordAudit(
+        context.userId,
+        "settings.catalogue_refresh_partial",
+        "system_settings",
+        "model_catalogue",
+        catalogue.errors,
+      );
+    }
+
+    return { ok: true as const, catalogue, cached: false };
+  });
+
+/**
+ * Persist the provider chain the admin ordered in Settings.
+ *
+ * Replaces saveOpenRouterPolicy's guardrail block, which enforced zero spend by REWRITING the
+ * admin's selections back to hardcoded ":free" ids -- all of which have since been withdrawn from
+ * OpenRouter's catalogue. Enabling free-tier-only therefore replaced a working configuration with
+ * models that no longer exist.
+ *
+ * The zero-spend guarantee is kept, but enforced by filtering rather than substituting: when
+ * allow_paid is off, paid entries are dropped and the admin is told which. Nothing is invented.
+ */
+export const saveProviderChain = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator(
+    (d: {
+      policy: {
+        chain: { provider: "workers-ai" | "openrouter" | "lovable"; model_id: string }[];
+        allow_paid: boolean;
+        ai_gateway_id?: string | null;
+      };
+      /** Ids known to cost money, from the catalogue the admin was looking at. */
+      paidModelIds?: string[];
+    }) => d,
+  )
+  .handler(async ({ context, data }) => {
+    await requireAdmin(context);
+    const paid = new Set(data.paidModelIds ?? []);
+    const requested = data.policy.chain.filter((e) => e.model_id.trim());
+
+    // Free-first: drop paid entries rather than substituting something else for them.
+    const dropped = data.policy.allow_paid
+      ? []
+      : requested.filter((e) => paid.has(`${e.provider}:${e.model_id}`));
+    const chain = data.policy.allow_paid
+      ? requested
+      : requested.filter((e) => !paid.has(`${e.provider}:${e.model_id}`));
+
+    const policy = {
+      chain,
+      allow_paid: data.policy.allow_paid,
+      ai_gateway_id: data.policy.ai_gateway_id?.trim() || null,
+    };
+
+    const sb = await adminClient();
+    const { data: updated, error } = await sb
+      .from("system_settings")
+      .upsert(
+        {
+          key: "provider_chain",
+          value: JSON.stringify(policy),
+          description: "Ordered AI provider chain (Workers AI / OpenRouter) with failover",
+          is_secret: false,
+          updated_at: new Date().toISOString(),
+          updated_by: context.userId,
+        },
+        { onConflict: "key" },
+      )
+      .select("key, updated_at")
+      .single();
+    if (error) throw new Error(error.message);
+
+    await recordAudit(
+      context.userId,
+      "settings.provider_chain_saved",
+      "system_settings",
+      "provider_chain",
+      { chain_length: chain.length, allow_paid: policy.allow_paid, dropped_paid: dropped.length },
+    );
+
+    return {
+      ok: true as const,
+      policy,
+      setting: updated,
+      droppedPaid: dropped.map((e) => `${e.provider}/${e.model_id}`),
+    };
+  });
+
+/**
  * Write locally-computed claim embeddings (WP3.1 / defect D4).
  *
  * Admin-authenticated counterpart to `scripts/generate-embeddings.mjs`: the laptop computes
