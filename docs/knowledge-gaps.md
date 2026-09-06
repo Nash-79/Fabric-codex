@@ -1,6 +1,6 @@
-# Knowledge gaps — how Fabric Atlas tracks what it doesn't know
+# Knowledge gaps — how Fabric Codex tracks what it doesn't know
 
-Fabric Atlas admits ignorance in prose rather than inventing depth. This doc defines the model
+Fabric Codex admits ignorance in prose rather than inventing depth. This doc defines the model
 that keeps those admissions honest. It deliberately contains **no counts and no gap lists** —
 those are generated, never committed, so they cannot drift.
 

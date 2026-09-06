@@ -1,4 +1,4 @@
-# Fabric Atlas — Claude Code project memory
+# Fabric Codex — Claude Code project memory
 
 A governed, source-grounded knowledge and architecture platform for Microsoft Fabric.
 It ingests **approved** sources into a versioned, source-graded knowledge base of atomic
@@ -155,7 +155,7 @@ admin UI.
   Generated diagrams may include official Microsoft architecture icons under Microsoft's
   diagram/documentation terms, provided they are obtained from an official collection, used
   unchanged with an adjacent product label, and tracked as required by
-  `docs/official-icon-policy.md`. Never use a Microsoft icon as the Fabric Atlas brand or to
+  `docs/official-icon-policy.md`. Never use a Microsoft icon as the Fabric Codex brand or to
   represent a non-Microsoft product; unofficial and unlicensed logos remain prohibited.
 
 ## Running the app

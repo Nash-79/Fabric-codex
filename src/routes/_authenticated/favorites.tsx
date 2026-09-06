@@ -8,7 +8,7 @@ type FavoriteItemType =
   "blog" | "article" | "design" | "lesson" | "topic" | "capability" | "source" | "claim";
 
 export const Route = createFileRoute("/_authenticated/favorites")({
-  head: () => ({ meta: [{ title: "Favorites — Fabric Atlas" }] }),
+  head: () => ({ meta: [{ title: "Favorites — Fabric Codex" }] }),
   component: FavoritesPage,
 });
 

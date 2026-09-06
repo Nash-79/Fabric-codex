@@ -1,11 +1,11 @@
 ---
-name: fabric-atlas-diagram-reviewer
-description: Audit Fabric Atlas SVG diagrams and semantic sidecars for spatial layout, text overlaps, multi-device responsiveness, text budget, tone, color contrast, official icons, and infographic presentation.
+name: fabric-codex-diagram-reviewer
+description: Audit Fabric Codex SVG diagrams and semantic sidecars for spatial layout, text overlaps, multi-device responsiveness, text budget, tone, color contrast, official icons, and infographic presentation.
 ---
 
-# Fabric Atlas Diagram Reviewer Skill
+# Fabric Codex Diagram Reviewer Skill
 
-Use this skill whenever asked to review, audit, quality-check, or validate the visual design, multi-device responsiveness, or layout of any Fabric Atlas diagram.
+Use this skill whenever asked to review, audit, quality-check, or validate the visual design, multi-device responsiveness, or layout of any Fabric Codex diagram.
 
 ## Review Workflow
 

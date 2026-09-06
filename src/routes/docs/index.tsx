@@ -18,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 export const Route = createFileRoute("/docs/")({
   head: () => ({
     meta: [
-      { title: "Reference Docs — Fabric Atlas" },
+      { title: "Reference Docs — Fabric Codex" },
       {
         name: "description",
         content:

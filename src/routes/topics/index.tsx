@@ -10,7 +10,7 @@ const topicsQO = queryOptions({ queryKey: ["topics"], queryFn: () => listTopics(
 export const Route = createFileRoute("/topics/")({
   head: () => ({
     meta: [
-      { title: "Topics — Fabric Atlas" },
+      { title: "Topics — Fabric Codex" },
       {
         name: "description",
         content: "Browse Microsoft Fabric topics organised by capability and depth.",

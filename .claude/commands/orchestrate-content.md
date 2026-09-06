@@ -3,7 +3,7 @@ description: Master content orchestration across queue, RSS state, pending claim
 argument-hint: [optional topic/capability/focus]
 ---
 
-Orchestrate Fabric Atlas content work: $ARGUMENTS
+Orchestrate Fabric Codex content work: $ARGUMENTS
 
 Use the **content-orchestrator** subagent with the optional focus in `$ARGUMENTS`.
 

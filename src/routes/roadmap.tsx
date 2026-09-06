@@ -8,13 +8,13 @@ import { listRoadmapItems, type RoadmapItem } from "@/lib/atlas.functions";
 export const Route = createFileRoute("/roadmap")({
   head: () => ({
     meta: [
-      { title: "Roadmap — Fabric Atlas" },
+      { title: "Roadmap — Fabric Codex" },
       {
         name: "description",
         content:
           "What's coming to Microsoft Fabric, synced from the Fabric GPS community mirror with source details preserved.",
       },
-      { property: "og:title", content: "Roadmap — Fabric Atlas" },
+      { property: "og:title", content: "Roadmap — Fabric Codex" },
       {
         property: "og:description",
         content:

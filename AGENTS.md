@@ -1,4 +1,4 @@
-# AGENTS.md — Fabric Atlas
+# AGENTS.md — Fabric Codex
 
 Instructions for any coding agent (Codex, and compatible tools) working in this repo.
 Claude Code reads `CLAUDE.md`; this file is the equivalent for Codex and is committed so the
@@ -97,7 +97,7 @@ in the same run.
   `/prompts:fa-diagram`. Diagrams are vector diagram-as-code, not raster art. Official Microsoft
   architecture icons are allowed under their published diagram/documentation terms when sourced,
   labelled, and used unchanged according to `docs/official-icon-policy.md`; they must never become
-  the Fabric Atlas brand or represent a non-Microsoft product. Unofficial and unlicensed logos are
+  the Fabric Codex brand or represent a non-Microsoft product. Unofficial and unlicensed logos are
   prohibited.
 - Generated diagrams use the rich authored SVG contract: the original script-free SVG is the
   primary article, print, and no-JavaScript artifact, with keyboard-focusable regions and

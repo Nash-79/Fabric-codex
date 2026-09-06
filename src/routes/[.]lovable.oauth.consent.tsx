@@ -94,13 +94,13 @@ function Consent() {
     <main className="flex min-h-screen items-center justify-center bg-background px-6 py-16 text-foreground">
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-2xl">
         <div className="mb-6 flex items-center gap-2 text-sm font-semibold">
-          <FabricMark className="h-6 w-6" /> Fabric Atlas
+          <FabricMark className="h-6 w-6" /> Fabric Codex
         </div>
         <h1 className="text-xl font-semibold tracking-tight">
-          Connect {clientName} to Fabric Atlas
+          Connect {clientName} to Fabric Codex
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          This lets {clientName} call Fabric Atlas MCP tools while you are signed in. It does not
+          This lets {clientName} call Fabric Codex MCP tools while you are signed in. It does not
           bypass this app's row-level policies.
         </p>
         {scopes.length > 0 && (

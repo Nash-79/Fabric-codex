@@ -19,12 +19,12 @@ export const Route = createFileRoute("/docs/$slug")({
       meta: [
         {
           title: doc
-            ? `${doc.title} — Reference Docs — Fabric Atlas`
-            : "Reference Docs — Fabric Atlas",
+            ? `${doc.title} — Reference Docs — Fabric Codex`
+            : "Reference Docs — Fabric Codex",
         },
         {
           name: "description",
-          content: doc?.summary ?? "Fabric Atlas Technical Reference Document",
+          content: doc?.summary ?? "Fabric Codex Technical Reference Document",
         },
       ],
     };

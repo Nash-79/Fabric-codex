@@ -87,7 +87,7 @@ export function SiteHeader() {
           className="flex min-w-0 items-center gap-2 font-semibold tracking-tight text-foreground shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
         >
           <FabricMark className="h-6 w-6 shrink-0" />
-          <span className="truncate">Fabric Atlas</span>
+          <span className="truncate">Fabric Codex</span>
           <span className="hidden text-xs font-normal text-muted-foreground xl:inline">
             for Microsoft Fabric
           </span>
@@ -178,11 +178,11 @@ export function SiteHeader() {
               side="right"
               className="w-[86vw] max-w-sm overflow-y-auto p-0 [&>button.absolute]:hidden"
             >
-              <SheetTitle className="sr-only">Fabric Atlas navigation</SheetTitle>
+              <SheetTitle className="sr-only">Fabric Codex navigation</SheetTitle>
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <div className="flex items-center gap-2 text-sm font-semibold">
                   <FabricMark className="h-5 w-5" />
-                  Fabric Atlas
+                  Fabric Codex
                 </div>
                 <button
                   type="button"

@@ -1,6 +1,6 @@
 # Official Microsoft icon policy
 
-Fabric Atlas diagrams may use official Microsoft Fabric, Azure, Microsoft Entra, Microsoft 365,
+Fabric Codex diagrams may use official Microsoft Fabric, Azure, Microsoft Entra, Microsoft 365,
 and Power Platform architecture icons when Microsoft publishes the icon for diagram or
 documentation use.
 
@@ -37,7 +37,7 @@ icons general-purpose open-source artwork and does not transfer Microsoft's rema
 
 ## Prohibited use
 
-- Do not use a Microsoft product icon as the Fabric Atlas logo, favicon, application identity,
+- Do not use a Microsoft product icon as the Fabric Codex logo, favicon, application identity,
   endorsement badge, or representation of a non-Microsoft service.
 - Do not use official icons in promotional branding or marketing artwork outside the permitted
   architecture, training, slide, and documentation contexts.

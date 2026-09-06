@@ -39,11 +39,11 @@ export const Route = createFileRoute("/advisor")({
   }),
   head: () => ({
     meta: [
-      { title: "Advisor — Fabric Atlas" },
+      { title: "Advisor — Fabric Codex" },
       {
         name: "description",
         content:
-          "Grounded chat over the Fabric Atlas knowledge base. Every answer cites approved sources.",
+          "Grounded chat over the Fabric Codex knowledge base. Every answer cites approved sources.",
       },
     ],
   }),
@@ -474,7 +474,7 @@ function AdvisorPage() {
         >
           <section
             className="flex min-w-0 flex-col h-full max-h-full overflow-hidden bg-background"
-            aria-label="Fabric Atlas Advisor chat"
+            aria-label="Fabric Codex Advisor chat"
           >
             {/* Compact toolbar */}
             <div className="border-b border-border bg-background/95 backdrop-blur shrink-0">
@@ -493,7 +493,7 @@ function AdvisorPage() {
                   )}
                   <FabricMark className="h-5 w-5 shrink-0" />
                   <h1 className="truncate text-sm font-semibold tracking-tight text-foreground md:text-base">
-                    Ask Fabric Atlas
+                    Ask Fabric Codex
                   </h1>
                   {isLoading && (
                     <Shimmer className="hidden text-xs text-muted-foreground sm:inline-block">
@@ -564,7 +564,7 @@ function AdvisorPage() {
                   <div className="flex flex-col items-center gap-3 text-center">
                     <FabricMark className="h-12 w-12" />
                     <h2 className="text-xl font-semibold tracking-tight text-foreground md:text-2xl">
-                      Ask Fabric Atlas
+                      Ask Fabric Codex
                     </h2>
                     <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
                       Grounded answers over verified claims, blogs, designs, lessons, sources,

@@ -12,11 +12,14 @@ import getArticleTool from "./tools/get-article";
 const projectRef = import.meta.env.VITE_SUPABASE_PROJECT_ID ?? "project-ref-unset";
 
 export default defineMcp({
+  // Deliberately still "fabric-atlas-mcp" after the Fabric Codex rename: this is the identifier
+  // MCP clients bind to, so changing it silently breaks every existing connection. The display
+  // title carries the new name; the machine name is stable by design.
   name: "fabric-atlas-mcp",
-  title: "Fabric Atlas MCP",
+  title: "Fabric Codex MCP",
   version: "0.1.0",
   instructions:
-    "Read-only tools for the Fabric Atlas — a source-grounded knowledge base of Microsoft Fabric capabilities, cited claims, articles, designs, and lessons. Use `list_capabilities` and `list_topics` to explore the registry spine, `get_claims` to pull source-cited facts (filter by capability, depth, or trust tier), `search_atlas` for full-text lookups, and `get_article` for full content bodies.",
+    "Read-only tools for the Fabric Codex — a source-grounded knowledge base of Microsoft Fabric capabilities, cited claims, articles, designs, and lessons. Use `list_capabilities` and `list_topics` to explore the registry spine, `get_claims` to pull source-cited facts (filter by capability, depth, or trust tier), `search_atlas` for full-text lookups, and `get_article` for full content bodies.",
   auth: auth.oauth.issuer({
     issuer: `https://${projectRef}.supabase.co/auth/v1`,
     acceptedAudiences: "authenticated",

@@ -79,7 +79,7 @@ function commandFor(item) {
 
 function textReport(digest) {
   const lines = [];
-  lines.push("Fabric Atlas queue digest");
+  lines.push("Fabric Codex queue digest");
   if (digest.plan.exists) {
     lines.push(`Plan: ${digest.plan.path}`);
   } else if (!brief && digest.plan.path) {

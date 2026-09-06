@@ -128,13 +128,13 @@ export const Route = createFileRoute("/")({
   }),
   head: () => ({
     meta: [
-      { title: "Fabric Atlas — Interactive Microsoft Fabric knowledge atlas" },
+      { title: "Fabric Codex — Interactive Microsoft Fabric knowledge atlas" },
       {
         name: "description",
         content:
           "Explore Microsoft Fabric capabilities through cited claims, source-backed articles, diagrams, and a grounded Advisor.",
       },
-      { property: "og:title", content: "Fabric Atlas" },
+      { property: "og:title", content: "Fabric Codex" },
       {
         property: "og:description",
         content: "Interactive Microsoft Fabric atlas with cited claims and grounded architecture.",
@@ -247,7 +247,7 @@ function Landing() {
                 Interactive atlas
               </div>
               <h1 className="mt-4 text-4xl font-semibold leading-tight tracking-tight md:text-5xl">
-                Fabric Atlas
+                Fabric Codex
               </h1>
               <p className="mt-4 text-base leading-relaxed text-muted-foreground">
                 Browse Microsoft Fabric by capability, inspect cited claims, open source-backed
@@ -375,7 +375,7 @@ function Landing() {
         <section className="mx-auto max-w-7xl px-6 py-8">
           <div className="mb-4">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">
-              What Fabric Atlas offers
+              What Fabric Codex offers
             </div>
             <h2 className="mt-1 text-lg font-semibold">Jump straight to what you need</h2>
           </div>

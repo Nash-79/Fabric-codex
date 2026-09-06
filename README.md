@@ -1,4 +1,4 @@
-# Fabric Atlas
+# Fabric Codex
 
 A source-grounded knowledge platform for Microsoft Fabric.
 

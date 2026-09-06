@@ -1908,7 +1908,7 @@ export const testAiProviderKey = createServerFn({ method: "POST" })
           headers: {
             Authorization: `Bearer ${key}`,
             "HTTP-Referer": appUrl(),
-            "X-Title": "Fabric Atlas Key Validator",
+            "X-Title": "Fabric Codex Key Validator",
           },
           signal: AbortSignal.timeout(10000),
         });

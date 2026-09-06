@@ -144,7 +144,7 @@ async function main() {
   const force = process.argv.includes("--force");
   const dryRun = process.argv.includes("--dry-run");
 
-  console.log("=== Fabric Atlas: Semantic Embedding Generator ===");
+  console.log("=== Fabric Codex: Semantic Embedding Generator ===");
   const ollama = await checkOllama();
   console.log(
     `Local Ollama status: ${ollama.available ? `ONLINE (${ollama.models.join(", ")})` : "OFFLINE"}`,

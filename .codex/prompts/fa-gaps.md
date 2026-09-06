@@ -1,5 +1,5 @@
 ---
-description: Fabric Atlas — generate the internals gap inventory from the files, then rank and route it.
+description: Fabric Codex — generate the internals gap inventory from the files, then rank and route it.
 argument-hint: [FOCUS=<topic>]
 ---
 

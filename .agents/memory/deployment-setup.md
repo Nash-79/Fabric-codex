@@ -1,6 +1,6 @@
 ---
 name: Production deployment setup
-description: How Fabric Atlas is wired for Lovable deployment through the root TanStack Start app.
+description: How Fabric Codex is wired for Lovable deployment through the root TanStack Start app.
 ---
 
 # Production deployment setup

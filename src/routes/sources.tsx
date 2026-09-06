@@ -12,10 +12,10 @@ const sourcesQO = queryOptions({ queryKey: ["sources"], queryFn: () => listSourc
 export const Route = createFileRoute("/sources")({
   head: () => ({
     meta: [
-      { title: "Sources — Fabric Atlas" },
+      { title: "Sources — Fabric Codex" },
       {
         name: "description",
-        content: "Approved sources backing every claim in the Fabric Atlas, scored by trust tier.",
+        content: "Approved sources backing every claim in the Fabric Codex, scored by trust tier.",
       },
     ],
   }),
@@ -97,7 +97,7 @@ function SourcesPage() {
                   className="text-sm font-semibold text-foreground hover:text-teal-600 dark:hover:text-teal-300"
                   title={
                     s.url?.startsWith("/")
-                      ? "Opens the original document, hosted in Fabric Atlas"
+                      ? "Opens the original document, hosted in Fabric Codex"
                       : undefined
                   }
                 >

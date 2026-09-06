@@ -222,7 +222,7 @@ function addFooter(pdf: jsPDF, page: number, total: number, title: string) {
   pdf.setTextColor(120);
   pdf.setFont("helvetica", "normal");
   const short = title.length > 80 ? `${title.slice(0, 77)}…` : title;
-  pdf.text(`Fabric Atlas · ${short}`, MARGIN, A4_H - 6);
+  pdf.text(`Fabric Codex · ${short}`, MARGIN, A4_H - 6);
   pdf.text(`Page ${page} / ${total}`, A4_W - MARGIN, A4_H - 6, { align: "right" });
 }
 
