@@ -210,7 +210,7 @@ export function BlogsPanel({
             onClick={() => save.mutate()}
             disabled={save.isPending || !(active?.cited_source_ids ?? []).length}
           >
-            Create draft version
+            Create draft version Create draft version Publish new version
           </Button>
         </DialogContent>
       </Dialog>

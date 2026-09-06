@@ -76,6 +76,8 @@ metered API. You read sources, extract claims, generate designs, reason about va
 author original diagrams, then POST **structured results** to the backend and write git-tracked
 files under `content/`. The server (`LLM_MODE=local`, the default) makes no LLM calls. Publish with
 `python scripts/import_content.py`.
+files under `content/`. The server makes no LLM calls. Publish via
+**Settings → Publish → "Publish all"** in the web app (or `node scripts/seed-supabase.mjs` for direct bootstrapping).
 
 Run `node scripts/check-queues.mjs --brief` before local orchestration/ingestion work so the session
 is aware of open queue items, stale feeds, diagram gaps, and commissioned work. The script must
