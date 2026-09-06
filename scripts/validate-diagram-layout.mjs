@@ -70,17 +70,32 @@ for(const diagram of window.diagrams){
 }
 return [...new Set(failures)];})()`;
 
+// Chrome startup is the flakiest part of this check. 80 x 100ms was 8s, which is comfortable on a
+// warm laptop and marginal on a cold CI runner -- it produced intermittent red builds unrelated to
+// any diagram. 45s, and a report of why the last attempt failed rather than a bare timeout.
+const BROWSER_CONNECT_TIMEOUT_MS = 45_000;
+
 async function pageTarget() {
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  const deadline = Date.now() + BROWSER_CONNECT_TIMEOUT_MS;
+  let lastError = "no response from the DevTools endpoint";
+  while (Date.now() < deadline) {
+    // NOTE: deliberately not treating child exit as failure. Chrome commonly re-execs into a
+    // background process and the launcher we spawned exits 0 immediately, so a non-null exitCode
+    // says nothing about whether the browser is up. The DevTools endpoint below is the real signal.
     try {
       const response = await fetch(`http://127.0.0.1:${port}/json/list`);
       const targets = await response.json();
       const target = targets.find((item) => item.type === "page");
       if (target) return target;
-    } catch {}
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 100));
+      lastError = `DevTools listed ${targets.length} target(s), none of type "page"`;
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
   }
-  throw new Error("Timed out connecting to the headless browser.");
+  throw new Error(
+    `Timed out after ${BROWSER_CONNECT_TIMEOUT_MS / 1000}s connecting to the headless browser on port ${port}. Last attempt: ${lastError}`,
+  );
 }
 
 try {
