@@ -136,7 +136,14 @@ export function DiagramLightbox({
     layoutHint === "full-bleed"
       ? "sm:w-screen sm:max-w-none sm:relative sm:left-1/2 sm:right-1/2 sm:-mx-[50vw]"
       : layoutHint === "wide"
-        ? "sm:w-[min(64rem,100%)] sm:max-w-none sm:-mx-[calc((min(64rem,100%)-48rem)/2)]"
+        ? // The breakout margin must be clamped at 0, and only applied once the reading column is
+          // actually at its 48rem cap (ReaderShell's max-w-3xl), which happens at lg.
+          //
+          // Previously this was `sm:` with a hardcoded 48rem. Below lg the column is NARROWER than
+          // 48rem, so (width - 48rem)/2 went negative -- and a negative negative-margin ADDS width.
+          // At 768px it forced a 768px figure into a 720px column; at 640px, into 592px. That is
+          // the horizontal page scroll on 21 of 103 diagrams.
+          "lg:w-[min(64rem,100%)] lg:max-w-none lg:-mx-[max(0px,calc((min(64rem,100%)-48rem)/2))]"
         : "";
 
   return (
