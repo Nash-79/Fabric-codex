@@ -14,6 +14,7 @@ import appCss from "../styles.css?url";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { useProgressSync } from "@/lib/use-progress-sync";
 import { ContentVersionWatcher } from "@/components/ContentVersionWatcher";
+import { SiteFooter } from "@/components/SiteFooter";
 import { CommandPalette } from "@/components/CommandPalette";
 
 // iOS launch (splash) image link entries. iOS Safari picks the matching file
@@ -332,6 +333,9 @@ function RootComponent() {
       <OfflineIndicator />
       <CommandPalette />
       <Outlet />
+      {/* Global so no page can forget it -- there was no footer anywhere before, and every page
+          simply stopped at the end of its content. */}
+      <SiteFooter />
       <Toaster />
     </QueryClientProvider>
   );
