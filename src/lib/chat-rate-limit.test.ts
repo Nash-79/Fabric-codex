@@ -1,5 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { checkDurableRateLimit, requestKeyFromHeaders } from "./chat-rate-limit.server";
+import {
+  checkDurableRateLimit,
+  requestKeyFromHeaders,
+  resolveAllowedModel,
+} from "./chat-rate-limit.server";
+import { AUTO_MODEL_ID, DEFAULT_ADVISOR_MODEL } from "./advisor-models";
 
 const rpc = vi.fn();
 vi.mock("@/integrations/supabase/client.server", () => ({
@@ -90,5 +95,30 @@ describe("checkDurableRateLimit", () => {
       "consume_chat_rate_limit",
       expect.objectContaining({ p_bucket_key: "ip:xyz", p_window_seconds: 60 }),
     );
+  });
+});
+
+describe("Auto routing", () => {
+  it("is the default, so a fresh client is not pinned to an id that can rot", () => {
+    expect(DEFAULT_ADVISOR_MODEL).toBe(AUTO_MODEL_ID);
+  });
+
+  it("survives the tier gate for anonymous users", () => {
+    // Auto must reach the chain even unauthenticated -- if the gate downgraded it to a pinned
+    // model, the whole point (never depend on a hardcoded id) would be lost for most visitors.
+    expect(resolveAllowedModel(AUTO_MODEL_ID, DEFAULT_ADVISOR_MODEL, false, false)).toBe(
+      AUTO_MODEL_ID,
+    );
+  });
+
+  it("still honours an explicit pin for an approved user", () => {
+    expect(
+      resolveAllowedModel("google/gemini-3-flash-preview", DEFAULT_ADVISOR_MODEL, true, true),
+    ).toBe("google/gemini-3-flash-preview");
+  });
+
+  it("downgrades an over-tier request to the default rather than serving it", () => {
+    const resolved = resolveAllowedModel("openai/gpt-5-mini", DEFAULT_ADVISOR_MODEL, false, false);
+    expect(resolved).not.toBe("openai/gpt-5-mini");
   });
 });
