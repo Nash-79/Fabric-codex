@@ -24,7 +24,12 @@ fi
 
 default_branch=""
 if [ -n "$remote_name" ]; then
-  default_branch="$(git symbolic-ref --quiet --short "refs/remotes/$remote_name/HEAD" 2>/dev/null | sed "s#^$remote_name/##")"
+  remote_head_ref="$(git symbolic-ref --quiet --short "refs/remotes/$remote_name/HEAD" 2>/dev/null || echo '')"
+  case "$remote_head_ref" in
+    "$remote_name"/*)
+      default_branch="${remote_head_ref#"$remote_name/"}"
+      ;;
+  esac
 fi
 
 if [ -z "$default_branch" ] && [ -n "$remote_name" ]; then
