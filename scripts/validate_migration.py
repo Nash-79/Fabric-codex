@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assert the Fabric Atlas knowledge-base invariants against a running (Supabase) server.
+"""Assert the Fabric Codex knowledge-base invariants against a running (Supabase) server.
 
 This is the automatic migration / ingest checker. Run it:
   - after scripts/migrate_to_supabase.py (post-migration health gate),

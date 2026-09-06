@@ -21,7 +21,7 @@ Availability probes (all optional, key-gated):
   OPENAI_API_KEY    -> GET https://api.openai.com/v1/models
   GEMINI_API_KEY    -> GET https://generativelanguage.googleapis.com/v1beta/models
 
-Fabric Atlas is Claude-only in production (Claude Code + Codex agents; no LangGraph
+Fabric Codex is Claude-only in production (Claude Code + Codex agents; no LangGraph
 orchestrator serves the app). This script's OpenAI/Google candidates and the Copilot
 chatmode pass exist for optional cross-editor use (`langgraph/`, `.github/chatmodes/`)
 and never touch anything the app itself serves.
@@ -56,7 +56,7 @@ def probe_available():
                 {
                     "Authorization": f"Bearer {primary_key}",
                     "HTTP-Referer": "https://fabric-atlas.dev",
-                    "X-Title": "Fabric Atlas",
+                    "X-Title": "Fabric Codex",
                 },
             )
             avail["openrouter"] = {m["id"] for m in data.get("data", [])}

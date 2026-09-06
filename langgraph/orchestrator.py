@@ -1,7 +1,7 @@
 """
-orchestrator.py — optional LangGraph reference orchestrator for Fabric Atlas.
+orchestrator.py — optional LangGraph reference orchestrator for Fabric Codex.
 
-NOT wired into the app, any script, or CI. Fabric Atlas's default workflow is the
+NOT wired into the app, any script, or CI. Fabric Codex's default workflow is the
 Claude Code / Codex subagent roster in .claude/agents/ and .codex/agents/, driven from
 the IDE (see ../CLAUDE.md, ../AGENTS.md). This module is scaffolding for a *future*
 automated, outside-the-IDE pipeline (e.g. a scheduled content run) that would need a
@@ -12,7 +12,7 @@ It intentionally mirrors the shape of content-orchestrator.md's planning role (s
 state -> route work -> human gate) but as a real StateGraph instead of a prompt. Node
 bodies here are stubs: wire them to the same Supabase REST reads the Claude Code agents
 already document (see e.g. content-orchestrator.md's "Data access" section) before this
-is runnable against a real Fabric Atlas KB.
+is runnable against a real Fabric Codex KB.
 
 Diagram generation: if a future node in this graph authors diagrams, it must follow
 ../.claude/agents/diagram-author.md's contract (SVG + mandatory sidecar, evidence

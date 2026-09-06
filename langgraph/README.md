@@ -1,7 +1,7 @@
 # LangGraph orchestrator (optional, unwired)
 
 This directory is reference infrastructure for a **future**, outside-the-IDE automation
-pipeline. It is not required for, and does not replace, Fabric Atlas's actual default
+pipeline. It is not required for, and does not replace, Fabric Codex's actual default
 workflow: a human driving the Claude Code / Codex subagents in `.claude/agents/` and
 `.codex/agents/` from the IDE, on their own subscription (see the root `CLAUDE.md` /
 `AGENTS.md` "Build-time authoring vs run-time serving" section). Nothing in `backend/`,
@@ -31,7 +31,7 @@ needs to live in code instead.
      checkpointer, so human-in-the-loop review is enforced, not silently skipped.
 
   Every node body is a **stub** — it records what it would do and moves on. Before this
-  is runnable against a real Fabric Atlas KB, wire each node to the same Supabase reads
+  is runnable against a real Fabric Codex KB, wire each node to the same Supabase reads
   the matching Claude Code agent already documents (e.g. `solution_architect_node` should
   do the grounded-claims read `.claude/agents/solution-architect.md` describes, then write
   `content/designs/<slug>.json` the same way).

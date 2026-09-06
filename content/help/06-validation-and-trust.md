@@ -1,6 +1,6 @@
 # Validation and trust
 
-Fabric Atlas's core promise: **no fabricated content**. This page explains the machinery
+Fabric Codex's core promise: **no fabricated content**. This page explains the machinery
 behind that promise.
 
 ## Citations

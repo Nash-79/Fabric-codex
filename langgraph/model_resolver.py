@@ -126,7 +126,7 @@ class OpenRouterRotatingChatModel:
                 base_url=self.base_url,
                 default_headers={
                     "HTTP-Referer": "https://fabric-atlas.dev",
-                    "X-Title": "Fabric Atlas",
+                    "X-Title": "Fabric Codex",
                 },
             )
         return self._instances[api_key]
@@ -265,7 +265,7 @@ def _make(provider: str, model: str):
                     base_url=os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
                     default_headers={
                         "HTTP-Referer": "https://fabric-atlas.dev",
-                        "X-Title": "Fabric Atlas",
+                        "X-Title": "Fabric Codex",
                     },
                 )
             except ImportError:
@@ -276,7 +276,7 @@ def _make(provider: str, model: str):
                     provider="openrouter",
                     default_headers={
                         "HTTP-Referer": "https://fabric-atlas.dev",
-                        "X-Title": "Fabric Atlas",
+                        "X-Title": "Fabric Codex",
                     },
                 )
         return OpenRouterRotatingChatModel(model=model, keys=keys)

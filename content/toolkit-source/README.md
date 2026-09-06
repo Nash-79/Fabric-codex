@@ -22,7 +22,7 @@ Copied from the original toolkit, minus:
 Original work — verified during ingestion planning: only 6 `learn.microsoft.com` URLs exist across
 the whole corpus, all inside formal "References & Further Reading" sections (citation, not
 reproduction). No LICENSE file accompanies the original; the author has confirmed authorship and
-released it for ingestion into Fabric Atlas.
+released it for ingestion into Fabric Codex.
 
 ## Known staleness / handling notes (carried from ingestion planning)
 

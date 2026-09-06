@@ -6,7 +6,7 @@ you write code.
 
 ## Context
 
-Fabric Atlas is a **source-grounded** Microsoft Fabric knowledge platform: every factual claim
+Fabric Codex is a **source-grounded** Microsoft Fabric knowledge platform: every factual claim
 cites a source. That constrains UI decisions — **the interface must never invent data.** Where a
 value is missing, omit the element rather than substituting a plausible-looking default. Task 6
 below is a correctness bug for exactly this reason, not a cosmetic one.

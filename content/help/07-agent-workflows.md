@@ -1,6 +1,6 @@
 # Agent workflows
 
-Fabric Atlas is local-first. Claude Code and Codex run in the IDE, read approved sources, and
+Fabric Codex is local-first. Claude Code and Codex run in the IDE, read approved sources, and
 write structured results to `content/`. The server stores and validates those results; it does
 not invent claims.
 
