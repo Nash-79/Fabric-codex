@@ -88,7 +88,7 @@ git config hooks.pruneMergedBranches true
 ```
 
 When enabled, the post-merge hook prunes merged local branches whose upstream remote branch no
-longer exists (plus merged local-only branches).
+longer exists, and also prunes merged local-only branches (including branches never pushed).
 
 Running against the deployed Worker locally:
 
