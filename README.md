@@ -81,6 +81,12 @@ cp .env.example .env      # add your Supabase URL + publishable key
 npm run dev               # http://localhost:8080
 ```
 
+Optional local git cleanup after merges:
+
+```bash
+git config hooks.pruneMergedBranches true
+```
+
 Running against the deployed Worker locally:
 
 ```bash

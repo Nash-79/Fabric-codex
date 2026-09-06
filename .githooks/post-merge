@@ -1,9 +1,18 @@
 #!/bin/sh
 
+# Opt-in guard: only prune when explicitly enabled by the developer.
+if [ "$(git config --bool --get hooks.pruneMergedBranches)" != "true" ]; then
+  exit 0
+fi
+
 # Delete local branches that are already merged into HEAD, except the
-# current branch and common default branch names.
+# current branch and default branch names.
 current_branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '')"
 default_branch="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null | sed 's#^origin/##')"
+
+if [ -z "$default_branch" ]; then
+  default_branch="$(git remote show -n origin 2>/dev/null | sed -n 's/^[[:space:]]*HEAD branch: //p' | head -n 1)"
+fi
 
 git for-each-ref refs/heads --merged HEAD --format='%(refname:short)' | while IFS= read -r branch; do
   [ -z "$branch" ] && continue
