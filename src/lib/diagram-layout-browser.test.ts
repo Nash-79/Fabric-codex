@@ -14,6 +14,14 @@ describe("isTransientDiagramBrowserError", () => {
     ).toBe(true);
   });
 
+  it("recognizes abrupt target shutdowns during browser startup", () => {
+    expect(
+      isTransientDiagramBrowserError(
+        new Error("Browser target closed before evaluation completed."),
+      ),
+    ).toBe(true);
+  });
+
   it("ignores unrelated browser errors", () => {
     expect(
       isTransientDiagramBrowserError(new Error("Browser returned no evaluation result.")),
@@ -25,9 +33,7 @@ describe("retryDiagramBrowserEvaluation", () => {
   it("retries transient browser evaluation errors and returns the later success", async () => {
     const run = vi
       .fn<() => Promise<string>>()
-      .mockRejectedValueOnce(
-        new Error("Browser evaluation failed: Execution context was destroyed."),
-      )
+      .mockRejectedValueOnce(new Error("Browser target closed before evaluation completed."))
       .mockResolvedValueOnce("ok");
 
     await expect(retryDiagramBrowserEvaluation(run, { attempts: 2, delayMs: 0 })).resolves.toBe(

@@ -168,6 +168,9 @@ try {
       socket.addEventListener("error", () =>
         settle(rejectResult, new Error("Browser connection failed.")),
       );
+      socket.addEventListener("close", () =>
+        settle(rejectResult, new Error("Browser target closed before evaluation completed.")),
+      );
     });
   });
   if (failures.length) {

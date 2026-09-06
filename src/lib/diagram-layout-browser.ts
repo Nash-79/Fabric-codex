@@ -2,6 +2,7 @@ const TRANSIENT_DIAGRAM_BROWSER_ERRORS = [
   "Execution context was destroyed",
   "Cannot find context with specified id",
   "Inspected target navigated or closed",
+  "Browser target closed before evaluation completed",
 ];
 
 export function isTransientDiagramBrowserError(error: unknown): boolean {
