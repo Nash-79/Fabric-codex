@@ -1,3 +1,4 @@
+import { crawlerUserAgent } from "./app-url";
 import { parseWebFeed } from "./feed-parse";
 
 type SupabaseAdmin = any;
@@ -407,7 +408,7 @@ export async function pollFabricRoadmapCore(sb: SupabaseAdmin): Promise<RoadmapP
         headers: {
           accept: "application/json",
           "accept-language": "en-US,en;q=0.9",
-          "user-agent": "FabricAtlasBot/1.0 (+https://fabric-atlas.lovable.app/)",
+          "user-agent": crawlerUserAgent("FabricAtlasBot"),
         },
         redirect: "follow",
       });

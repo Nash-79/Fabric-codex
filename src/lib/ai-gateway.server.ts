@@ -1,3 +1,4 @@
+import { appUrl } from "./app-url";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 
 export function createLovableAiGatewayProvider(lovableApiKey: string) {
@@ -28,7 +29,7 @@ export function createOpenRouterProvider(
     baseURL: "https://openrouter.ai/api/v1",
     headers: {
       Authorization: `Bearer ${openRouterApiKey.trim()}`,
-      "HTTP-Referer": "https://fabric-atlas.dev",
+      "HTTP-Referer": appUrl(),
       "X-Title": "Fabric Atlas",
     },
     supportsStructuredOutputs: true,

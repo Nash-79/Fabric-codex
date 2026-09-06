@@ -44,7 +44,9 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "nomic-embed-text";
 
 // The deployed app writes the vectors; see postEmbeddings() below for why. Defaults to the
 // production deployment so only the secret has to be configured locally.
-const APP_URL = process.env.FABRIC_ATLAS_APP_URL || "https://fabric-atlas.lovable.app";
+// Default follows the Cloudflare Worker name; set FABRIC_ATLAS_APP_URL to override (a custom
+// domain, or a preview deployment). The old default pointed at the retired Lovable host.
+const APP_URL = process.env.FABRIC_ATLAS_APP_URL || "https://fabric-codex.workers.dev";
 const AGENT_TOKEN = process.env.FABRIC_ATLAS_AGENT_READ_TOKEN || "";
 
 /**
