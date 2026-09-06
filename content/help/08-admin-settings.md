@@ -143,6 +143,30 @@ planning. Canonical Microsoft blog links found during the poll are queued as sou
 auto-claimed, but their extracted claims still go through normal human verification like any
 other source.
 
+## API Keys
+
+Two panels. The first stores provider credentials (OpenRouter, and optionally a Cloudflare
+account id + API token so the model picker can list Workers AI models). Keys are stored in the
+database rather than as deployment environment variables, so rotating one does not need a
+redeploy.
+
+The second is the **AI provider chain** — the ordered list of models the Advisor and article-idea
+generation walk through. Three things worth understanding:
+
+- **Nothing is hardcoded.** "Refresh models" fetches what each provider actually offers right
+  now. Model ids compiled into an application go stale silently: every zero-cost id this platform
+  once shipped had been withdrawn by the provider before anyone noticed, and the failure only
+  surfaced when a request failed.
+- **Order is respected exactly.** The first entry that answers serves the request. The chain
+  advances on rate limits, outages, and withdrawn models — but stops immediately on a genuine
+  error, which retrying would only hide.
+- **Free-first.** Zero-cost models are listed by default. Paid ones need an explicit opt-in and
+  appear cheapest-first, so the chain has a reliable floor for when the free tier rotates again.
+
+An entry whose model has left the catalogue is badged **unavailable**, which surfaces a withdrawal
+before it becomes a failed request. Until a chain is configured, AI features fall back to whichever
+single provider has a key.
+
 ## Logs
 
 A combined, filterable activity stream: admin actions (user approvals, role changes, topic
