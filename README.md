@@ -87,6 +87,9 @@ Optional local git cleanup after merges:
 git config hooks.pruneMergedBranches true
 ```
 
+When enabled, the post-merge hook prunes merged local branches whose upstream remote branch no
+longer exists (plus merged local-only branches).
+
 Running against the deployed Worker locally:
 
 ```bash
