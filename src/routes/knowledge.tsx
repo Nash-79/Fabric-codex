@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { SiteHeader } from "@/components/SiteHeader";
 import { listContentItems, listTopics } from "@/lib/atlas.functions";
-import { readingTime } from "@/lib/reading-time";
 
 /**
  * The Knowledge Hub: one surface over content_items.
@@ -189,8 +188,6 @@ function KnowledgeHubPage() {
                 )}
                 <div className="mt-auto flex flex-wrap items-center gap-2 pt-3 text-xs text-muted-foreground">
                   {topicName(item.topic_slug) && <span>{topicName(item.topic_slug)}</span>}
-                  {topicName(item.topic_slug) && <span aria-hidden="true">·</span>}
-                  <span>~{readingTime(item.summary ?? "")} min read</span>
                 </div>
               </Link>
             </li>

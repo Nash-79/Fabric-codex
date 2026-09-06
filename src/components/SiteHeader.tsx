@@ -20,14 +20,14 @@ type NavLink = { to: string; label: string; hint?: string; exact?: boolean };
 
 const PRIMARY: ReadonlyArray<NavLink> = [
   { to: "/", label: "Home", exact: true },
+  { to: "/learn", label: "Learn", hint: "Guided role tracks and curriculum" },
   { to: "/knowledge", label: "Knowledge", hint: "Articles, architectures and lessons" },
   { to: "/topics", label: "Topics", hint: "Browse Fabric by topic" },
 ];
 
-// Articles, architectures and lessons are one surface now (/knowledge); they were three views of
-// content_items differing only by `kind`. What remains here is genuinely distinct: the capability
-// spine, the source library, reference docs, and the roadmap.
-const KNOWLEDGE: ReadonlyArray<NavLink> = [
+// Reference surfaces that sit alongside the curriculum and knowledge hub:
+// the capability spine, the source library, reference docs, and the roadmap.
+const EXPLORE: ReadonlyArray<NavLink> = [
   { to: "/registry", label: "Capability Registry", hint: "The spine — coverage per capability" },
   { to: "/sources", label: "Sources", hint: "Graded, cited source library" },
   { to: "/docs", label: "Reference Docs", hint: "Engine internals & technical whitepapers" },
@@ -98,7 +98,7 @@ export function SiteHeader() {
           {PRIMARY.map((n) => (
             <NavItem key={n.to} link={n} />
           ))}
-          <NavGroup label="Knowledge" links={KNOWLEDGE} />
+          <NavGroup label="Explore" links={EXPLORE} />
         </nav>
 
         {/* Right cluster */}
@@ -200,7 +200,7 @@ export function SiteHeader() {
                     { to: "/advisor", label: "Advisor", hint: "Ask a source-grounded question" },
                   ]}
                 />
-                <MobileGroup label="Knowledge" links={KNOWLEDGE} />
+                <MobileGroup label="Explore" links={EXPLORE} />
                 <div className="mt-4 border-t border-border pt-3 space-y-1 px-2">
                   <MobileLink to="/help" label="Help" />
                   {signedIn && <MobileLink to="/favorites" label="Favorites" />}
