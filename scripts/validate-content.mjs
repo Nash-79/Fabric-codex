@@ -203,7 +203,7 @@ for (const dir of ["content/articles", "content/designs", "content/lessons"])
     const h1Count = [...bodyForHeadingChecks.matchAll(/^# .+$/gm)].length;
     const sourceLegendCount = [...item.body_md.matchAll(/^##\s+Source Legend\s*$/gim)].length;
     // Promoted from warning to failure once the false-positive fence-blindness bug was fixed
-    // (WP2.1, docs/plan/phase-2-content.md) and the baseline confirmed clean at 0 — this must
+    // (WP2.1, docs/archive/plan/phase-2-content.md) and the baseline confirmed clean at 0 — this must
     // not silently regress.
     if (h1Count > 1)
       failures.push(

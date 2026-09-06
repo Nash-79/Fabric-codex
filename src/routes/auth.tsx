@@ -14,10 +14,10 @@ export const Route = createFileRoute("/auth")({
   }),
   head: () => ({
     meta: [
-      { title: "Sign in — Fabric Atlas" },
+      { title: "Sign in — Fabric Codex" },
       {
         name: "description",
-        content: "Sign in to Fabric Atlas to save patterns and tailor your view.",
+        content: "Sign in to Fabric Codex to save patterns and tailor your view.",
       },
     ],
   }),
@@ -62,7 +62,7 @@ function AuthPage() {
           },
         });
         if (error) throw error;
-        toast.success("Account created. Welcome to Fabric Atlas.");
+        toast.success("Account created. Welcome to Fabric Codex.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -105,7 +105,7 @@ function AuthPage() {
         to="/"
         className="absolute left-6 top-6 inline-flex items-center gap-2 text-sm font-semibold"
       >
-        <FabricMark className="h-6 w-6" /> Fabric Atlas
+        <FabricMark className="h-6 w-6" /> Fabric Codex
       </Link>
       <div className="w-full max-w-md rounded-2xl border border-border bg-card p-8 shadow-2xl">
         <h1 className="text-2xl font-semibold tracking-tight">

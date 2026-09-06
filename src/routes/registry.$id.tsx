@@ -13,7 +13,7 @@ import { FavoriteButton } from "@/components/FavoriteButton";
 
 export const Route = createFileRoute("/registry/$id")({
   head: ({ params }) => ({
-    meta: [{ title: `${params.id} — Capability Registry — Fabric Atlas` }],
+    meta: [{ title: `${params.id} — Capability Registry — Fabric Codex` }],
   }),
   component: CapabilityDetailPage,
 });

@@ -1,4 +1,4 @@
-# Fabric Atlas — Claude Code project memory
+# Fabric Codex — Claude Code project memory
 
 A governed, source-grounded knowledge and architecture platform for Microsoft Fabric.
 It ingests **approved** sources into a versioned, source-graded knowledge base of atomic
@@ -25,47 +25,37 @@ capability; coverage gaps are visible per capability and depth. Build around it.
 ## Repo layout
 
 ```
-backend/            Local/legacy FastAPI + SQLModel mapping onto the unified Supabase schema
-                    (plural tables, uuid PKs). Useful for authoring/import workflows; not the
-                    Lovable production host.
-  app/models.py     maps to capabilities/topics/topic_capabilities/sources/claims/claimevents/
-                    blogs/blog_sources/designs/design_sources/validation_runs/issues/
-                    queue_items/assets. Versioning = slug + supersedes_id chains.
-  app/services.py   ingestion, versioning/supersede, generation, validation, drift,
-                    queue, topics, blogs
-  app/routers.py    REST API
-  app/search.py     Postgres per-table GIN tsvector search (LIKE fallback on SQLite test DB)
-  app/llm.py        Anthropic wrapper + structured-output helpers (graceful w/o key)
-supabase/migrations/  the canonical KB schema (Lovable-owned) + the backend-unify migration
-src/                Lovable-hosted TanStack Start app — reads Supabase directly and exposes
-                    production server functions/API routes.
-frontend/           Legacy React + Vite SPA retained for reference/local comparison only; do
-                    not treat it as the production deployment path.
-.claude/agents/     Subagents (curator, architect, validator, drift, learning, coverage,
-                    diagram, advisor, blog-author, content-orchestrator, docs-author)
-.claude/commands/   Slash commands that drive the agents
-content/            Git-tracked authored content: sources/, diagrams/, designs/, lessons/,
-                    blogs/, help/, topics.json (seed tree), queue.md (offline queue)
-docs/data-model.md  How claim versioning and supersede work — read before touching models
-docs/extending.md   Extension points: content, capabilities, theme tokens, views, agents
-docs/knowledge-gaps.md  The gap-tracking model: truth/ledger/view layers, the two markers,
-                    what CI fails vs warns on — the inventory itself is `node scripts/gaps.mjs`
-docs/dependencies.md  Credits, the watched-dependency freshness check, and the local
-                    test-then-commit upgrade gate (no Dependabot/Renovate)
+src/                TanStack Start app — SSR reader, advisor, admin. Deployed to Cloudflare
+                    Workers (fabric-codex). Reads Supabase directly; server functions own the
+                    admin writes.
+supabase/migrations/  The canonical KB schema. Replayable from scratch.
+content/            Git-tracked authored content: sources/, diagrams/, articles/, designs/,
+                    lessons/, help/, topics.json (seed tree), queue.md (offline queue)
+scripts/            Validators, queue digest, watcher polling, diagram hash regeneration
+.claude/agents/     16 subagents (curator, architect, validator, drift, learning, coverage,
+                    diagram-author, advisor, blog-author, content-orchestrator, docs-author,
+                    code-reviewer, dev-intelligence, diagram-reviewer, feedback-triage,
+                    migration-validator)
+.claude/commands/   16 slash commands that drive them
+.codex/ .gemini/    The same contracts for other agent runtimes
+langgraph/          Unwired reference scaffold. Nothing in src/, package.json or CI calls it.
+docs/               Start at docs/README.md. architecture.md is the system overview;
+                    data-model.md before touching versioning; deployment.md for infra;
+                    archive/ holds completed plans (not current).
 ```
+
+> `backend/` (FastAPI) and `frontend/` (legacy SPA) were removed after the Cloudflare migration.
+> Docs referring to them are archived under `docs/archive/`.
 
 ## Build-time authoring vs run-time serving (the operating model)
 
 LLM work happens on your **laptop**, done by the Claude Code / Codex agents on your subscription —
 **not** by the server, and **not** via the metered API. The server stores and serves pre-built
-content and runs only deterministic checks. Set `LLM_MODE` in `backend/.env`:
-
-- `local` (default) — agents extract/generate/diagram and POST structured data. Server needs no key.
-- `api` — server calls the Anthropic API on the fly via `llm.py` (original v0.1 behaviour).
+content and runs only deterministic checks.
 
 Authoring flow (git is the source of truth). The `localhost:8000` FastAPI backend is retired;
 agents read Supabase keylessly (anon key) and write only to git — publishing itself requires the
-sealed service-role key, so it is always a human step in the Lovable app's Settings → Publish tab:
+sealed service-role key, so it is always a human step in the app's Settings → Publish tab:
 
 Run `node scripts/check-queues.mjs --brief` at session start or before orchestration. It reads a
 sanitized snapshot from the **token-protected** `GET /api/public/hooks/poll-feeds` endpoint
@@ -112,9 +102,9 @@ The one deliberate exception to "server only runs deterministic checks": an admi
 **Auto-generate** (all signals) or **Generate from prompt** (admin-supplied topic/direction, still
 grounding-checked) button fuses the Fabric roadmap (`roadmap_items`), coverage gaps (same scoring
 `coverage-auditor` uses), the editorial backlog (`queue_items`, `content_feedback`), and stale
-articles into candidate ideas via the **Lovable AI Gateway** (`src/lib/ai-gateway.server.ts`,
-`LOVABLE_API_KEY` — the same bundled-credit gateway `/advisor/chat` uses), never the metered
-Anthropic API. Each idea targets either an **article** (`/blog`/`/publish-topic` pipeline — no
+articles into candidate ideas via the **admin-ordered provider chain**
+(`src/lib/ai-gateway.server.ts` — Workers AI and/or OpenRouter, configured in Settings → API Keys),
+never a hardcoded model id. Both the advisor and idea generation share one failover walker. Each idea targets either an **article** (`/blog`/`/publish-topic` pipeline — no
 length cap, mandatory diagrams+worked example) or a **lesson** (`/lesson` pipeline — hard
 <400-word cap, capability+level, no diagrams), and carries a length hint and, for articles, content
 guidance for blog-author's own diagram pair (never a diagram count/kind override). Ideas are stored
@@ -165,40 +155,29 @@ admin UI.
   Generated diagrams may include official Microsoft architecture icons under Microsoft's
   diagram/documentation terms, provided they are obtained from an official collection, used
   unchanged with an adjacent product label, and tracked as required by
-  `docs/official-icon-policy.md`. Never use a Microsoft icon as the Fabric Atlas brand or to
+  `docs/official-icon-policy.md`. Never use a Microsoft icon as the Fabric Codex brand or to
   represent a non-Microsoft product; unofficial and unlicensed logos remain prohibited.
 
-## Running the backend
+## Running the app
 
 ```bash
-cd backend
-python -m venv .venv && . .venv/Scripts/activate   # Windows; use bin/activate on *nix
-pip install -r requirements.txt
-cp .env.example .env        # set DATABASE_URL to your Supabase Postgres URL
-uvicorn app.main:app --reload
-# docs at http://localhost:8000/docs
+npm install
+cp .env.example .env      # Supabase URL + publishable key
+npm run dev               # http://localhost:8080
+npm run preview:worker    # wrangler dev -- the real Workers runtime
 ```
 
-**Postgres (Supabase) is the store.** The canonical schema is the Supabase migration
-`supabase/migrations/*_fabric_atlas_kb.sql` (apply with `supabase db push` or run the SQL);
-set `DATABASE_URL` to the Supabase pooler URL with the `+psycopg` driver when running the local
-FastAPI tooling. In Lovable production, `src/` uses TanStack server functions plus the Supabase
-service role for admin mutations and validation. SQLite is retired (the only remaining use is the
-in-memory test DB). Full-text search uses Supabase/Postgres `tsvector` indexes through the
-`search_atlas` RPC.
+**Supabase (Postgres) is the store.** The canonical schema is `supabase/migrations/`, replayable
+from scratch. Apply changes with `supabase db push`, then `npm run gen:types` -- types are
+generated from the LIVE schema, so a new RPC is only typed once its migration is applied.
+Full-text search goes through the `search_atlas` RPC over `tsvector` GIN indexes.
 
-**Local migration / re-import (re-runnable):**
+Deployment, secrets and the Supabase URL configuration OAuth needs: `docs/deployment.md`.
 
-```bash
-python scripts/migrate_to_supabase.py --base http://localhost:8000   # replay content/ + rebuild search
-python scripts/replay_verified_status.py                            # ONCE: restore curation status from old SQLite
-python scripts/validate_migration.py                                # assert KB invariants (also runs at end of /ingest-batch)
-```
-
-**Advisor chat:** `POST /advisor/chat` is key-optional. With `LLM_MODE=api` + a key it
-returns a server-generated, cited answer. In local mode or without a key it returns a clear
-fallback plus the scoped claim context, citation legend, and advisor system prompt; use the
-`/advise` skill or a client-side generator to produce the answer from that returned context.
+**Advisor chat:** `POST /api/chat` streams a cited answer grounded only in KB claims. Model
+selection defaults to **Auto**, which follows the admin-ordered provider chain from
+Settings -> API Keys rather than any hardcoded id -- see `docs/architecture.md` for why that
+matters.
 
 ## Core domain rules (enforce these in code and in every agent)
 
@@ -301,10 +280,10 @@ heading text below is a hard, exact-match convention, not a schema field:
 
 ## Conventions
 
-- Python: type hints, `ruff`/`black` clean, no bare excepts. Tests in `backend/tests`.
+- TypeScript: `npm run typecheck` and `npm run lint` clean. Tests in `src/**/*.test.ts`.
 - Agents read the KB directly from Supabase with the anon key (public RLS) and write only
   content/\*.json + content/diagrams/\* to git — never direct DB writes. Publishing happens in
-  the Lovable app (Settings → Publish), whose server functions own the versioning and
+  the deployed app (Settings → Publish), whose server functions own the versioning and
   validation invariants.
 - When you change `models.py`, update `docs/data-model.md` in the same commit.
 - When a content-type or endpoint rename lands (e.g. blog→article), grep

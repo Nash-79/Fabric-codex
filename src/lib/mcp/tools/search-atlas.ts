@@ -4,9 +4,9 @@ import { searchAll } from "@/lib/atlas.functions";
 
 export default defineTool({
   name: "search_atlas",
-  title: "Search Fabric Atlas",
+  title: "Search Fabric Codex",
   description:
-    "Full-text search across Fabric Atlas topics, claims, sources, articles, designs, and lessons.",
+    "Full-text search across Fabric Codex topics, claims, sources, articles, designs, and lessons.",
   inputSchema: {
     q: z.string().min(1).describe("Search query."),
   },

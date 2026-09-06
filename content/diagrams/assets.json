@@ -7,7 +7,7 @@
     "topic_slug": "medallion-lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "38ee6a32ff9c18a126315daf09c91faf1966545a740625675b553fd9f0a15861",
+    "static_hash": "a531ba4ddb6ef933fa2331961ff317fbec62c461a6ece9266b5f0c6eb455b2e3",
     "accessible_summary": "An original architecture diagram for serving interactive Power BI reports from a Fabric lakehouse. Curated gold Delta tables in a lakehouse persist one physical copy on OneLake. A Direct Lake on OneLake semantic model binds to those tables by a framing operation and lazily loads only the columns a query touches into capacity memory. Power BI report visuals live-connect to that model and issue DAX queries. All of it draws capacity units from a single Fabric F-SKU capacity, whose size sets the per-model memory bound. A warning band flags that exceeding that memory bound causes cold reads from OneLake, and that OneSecurity on the source lakehouse can force a DirectQuery fallback.",
     "supported_layers": [
       "data",
@@ -23,7 +23,7 @@
     "topic_slug": "medallion-lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "95b839f14ccd1cadc644daabab21ef37914512dd16317c0e5ceee8052f1ecf53",
+    "static_hash": "e8390d93aa31e3760fdc7a46a70ccf2f881ce3780fd4e7b012546b2a3ad5c590",
     "accessible_summary": "An original decision diagram for serving Power BI from a Fabric lakehouse. The first branch chooses a storage mode: Import copies and refreshes data on a schedule; DirectQuery forwards every visual to the source live; Direct Lake reads Delta columns straight from OneLake, pairing import-like speed with DirectQuery-like freshness and no copy — the recommended default. A second branch sizes the capacity for a Direct Lake model: whether the model's resident column footprint fits under the chosen SKU's memory bound, and whether broad free-license report viewing forces F64 or larger regardless of load. A closing panel lists implementation guardrails: keep tables V-Ordered with ~1 GB files and low-cardinality partitions, prefer append/merge over overwrite, keep vacuum retention longer than the framing cadence, and confirm Block Public Internet Access is off before rollout.",
     "supported_layers": [
       "data",
@@ -39,7 +39,7 @@
     "topic_slug": "capacity",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "750cb112dcb0ffa39a5c60bbec61d272adfae8f54a86806eeeaaed026ddab23d",
+    "static_hash": "987729ec87c879b9f276f3dc3bf2c264a9f634bc3e3dd855e5570e869fe33572",
     "accessible_summary": "A flow diagram: an operation is submitted and classified as interactive or background, then allowed to burst above its SKU's steady-state CU rate so it finishes quickly. The bursted cost is smoothed by spreading it across future 30-second timepoints — 5 to 64 minutes for interactive operations, 24 hours for background ones. If accumulated future usage stays under 10 minutes, nothing is throttled. Beyond that, usage escalates through three progressively worse stages: delayed interactive operations, then rejected interactive operations, then rejected background operations too, with carryforward CUs draining only when idle capacity exists at later timepoints. A warning node covers Autoscale Billing for Spark bypassing bursting and smoothing entirely, and a second warning covers Block Public Internet Access breaking Direct Lake regardless of throttling state.",
     "supported_layers": [
       "compute",
@@ -54,7 +54,7 @@
     "topic_slug": "capacity",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "27af959c8b042a49c2a445da45e226937c4bef228103dcd47e2e7946af374761",
+    "static_hash": "dc1ccd1c3483994d44d38485f1b72636c339e7c89338f32031799a6f13488528",
     "accessible_summary": "A decision tree that starts by asking which workload is driving contention on a capacity. A bursty, unpredictable Spark workload branches toward enabling Autoscale Billing for Spark, which moves that workload to pay-as-you-go and out of the shared CU pool. A workload that's merely CU-hungry but predictable branches toward evaluating a SKU increase, checked against the Spark vCore and Direct Lake memory ceilings that scale with SKU size, and the F64 licensing threshold. A workload that is fine on CUs but needs isolation from another workload's throttling risk branches toward splitting across capacities, since throttling is enforced per capacity, not per tenant. A warning node covers the trap of assuming Autoscale Billing still gets bursting and smoothing protection.",
     "supported_layers": [
       "data",
@@ -71,7 +71,7 @@
     "topic_slug": "data-factory",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "b934f820e34c7861c4f91e14e08e8f20614c16fcd2adfa240e3002b9fbe7d257",
+    "static_hash": "eb94e9f50e9be1f69c844dc6ff5b2452b6504c5fc7aad68784c58054bf85084f",
     "accessible_summary": "An architecture diagram in two connected parts. On the trigger side, three paths — on-demand, schedule, and storage event — all start a pipeline run; the event path is shown feeding through Fabric's eventstream and Data Activator plumbing rather than a bespoke trigger system. The pipeline run then executes a Copy activity, whose three independent parallelism levers (control-flow fan-out, Intelligent Throughput Optimization, and thread-level parallelism) are shown as sub-steps. A parallel branch shows Copy job and Mirroring as separate, lighter-weight data-movement primitives that bypass the pipeline entirely for simpler cases, including the GA pattern where a Data Activator rule invokes a Copy job directly with no pipeline in between. A warning node flags that tuning ITO or parallelism cannot exceed the true bottleneck of source, destination, or network throughput, and another flags the private-link incompatibility with Warehouse and Eventhouse Copy destinations.",
     "supported_layers": [
       "orchestration",
@@ -89,7 +89,7 @@
     "topic_slug": "direct-lake",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "a65417a3bb9ab6e42c3b490054ddce326ecee60cad96f6dded1b6fdcddb3c5dd",
+    "static_hash": "3262febbda2f1faa03ed1c646c0a579bb8d065800453280bf8ca8e7b81193f4a",
     "accessible_summary": "A flow diagram starting from a report visual issuing a query. The query reaches the semantic model, which checks whether any requested column is already resident in memory from a prior query; if not, it loads that column lazily and directly from the OneLake Delta table, anchored to the most recent framing operation. For Direct Lake on SQL models specifically, three documented conditions — querying a SQL-endpoint view, row-level security on the SQL endpoint, or exceeding capacity guardrails — branch the query into DirectQuery fallback against the SQL analytics endpoint instead, trading the framing snapshot for live data at typically slower performance. Direct Lake on OneLake never takes this fallback branch at all. A warning node flags the specific, sourced trap of basing a Direct Lake on SQL table on a SQL view, which forces every query against it into fallback permanently.",
     "supported_layers": [
       "data",
@@ -105,7 +105,7 @@
     "topic_slug": "fabric-overview",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "54ffe690c56ecd22969fff35d196ee02b1f0e917b418ad5811818743e487cb1b",
+    "static_hash": "c44e70185f53b97facceafd8d152bd5c816c13c86f627830ef39cfec4310ad20",
     "accessible_summary": "An architecture diagram with two connected layers. On top, role-oriented workloads — Power BI, Data Factory, Data Engineering, Data Warehouse, Real-Time Intelligence, and others — each contribute their own item types but all write to and read from the same shared platform layer below: OneLake for storage, Copilot for embedded AI, and Purview for governance. Underneath that, the tenancy hierarchy is shown as a containment structure: a tenant holds domains, domains group workspaces, and workspaces draw compute from a capacity while holding the items each workload creates. A warning node flags that Fabric is SaaS, not a resource you provision piece by piece — there is no separate infrastructure layer to configure. A second warning covers the private-link tenant-wide toggle that disables specific Power BI and gateway functionality as a real operational trade-off.",
     "supported_layers": [
       "governance",
@@ -122,7 +122,7 @@
     "topic_slug": "governance",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "b7d8fecc991f6ff91c957c037a43212a1db7e33252f59d48e3dbb5d30ce57543",
+    "static_hash": "e966d5c5823ef1f26833f40fd7488cf14b4278ba6f0ce6dfd32cd435d461e286",
     "accessible_summary": "Four nested scopes: tenant administrators establish defaults and delegation, domain administrators govern business groupings, workspace roles control collaboration, and item or data controls protect individual assets.",
     "supported_layers": [
       "governance",
@@ -138,7 +138,7 @@
     "topic_slug": "lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "cfaaa0be234203c489788db7ee655774d79c17316888c9e853d0276f56036e0b",
+    "static_hash": "34ff1bab0006156277751845fff0c0f6566dd3e03dde44d1d1b9efb81193a984",
     "accessible_summary": "Ingestion branches to Files or managed Delta Tables. Spark transforms and commits Delta. Eligible tables synchronize to a read-only SQL analytics endpoint. Warehouse is the writable T-SQL-first alternative.",
     "supported_layers": [
       "data",
@@ -155,7 +155,7 @@
     "topic_slug": "lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "351f05352422b82d89dd82bd430c32d10ae7a143164431f2b986d437ab0bc96f",
+    "static_hash": "0e1557f5e04e23116823fc82536fbd4f4d49216c09cd764070aa1a44702eb63e",
     "accessible_summary": "A decision tree starting from a table's dominant workload pattern. Read-heavy tables branch to V-Order; write-heavy streaming/ingestion tables branch to Optimized Write; tables with frequent row-level updates or deletes branch to deletion vectors; all tables converge on a periodic compaction question, which branches into Auto Compaction for tables under 1 GB and scheduled OPTIMIZE plus Auto Compaction for larger tables. A warning node covers the trap of enabling deletion vectors without periodic OPTIMIZE, which measurably degrades read performance.",
     "supported_layers": [
       "data",
@@ -170,7 +170,7 @@
     "topic_slug": "onelake",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "eac55ad2bd0a82f95d9583762d253891705537d8d2fba7b42afaa644fe277d78",
+    "static_hash": "bdee6b20ec21acc4b180a657cffb55c131ce687f13b105fce497bbed3a0e5c32",
     "accessible_summary": "An architecture diagram starting from the one-per-tenant OneLake namespace, which contains workspaces and items whose tabular data lands as open Delta Parquet files. From there, two branches: item data can be read directly by multiple compute engines (Spark, T-SQL, Analysis Services) with no per-engine copy, or it can be extended virtually through OneLake shortcuts that reference data inside or outside the tenant without moving it. Shortcuts split into internal shortcuts, which pass through the calling user's own identity, and external or delegated shortcuts, which authorize through a bound connection identity and compute access as the intersection of what that identity and the end user are each permitted to see. A layered OneLake security model (control plane, data plane, hierarchical roles) governs every read regardless of path, and a warning node calls out the antipattern of standing up separate physical lakes per team instead of using workspaces and shortcuts.",
     "supported_layers": [
       "data",
@@ -188,7 +188,7 @@
     "topic_slug": "rti",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "4a9bf1736b8450abc02a8eb8638748efbe91525376bc2f9a321821e01e8dacba",
+    "static_hash": "4e4cbe50eef4b58c99d5ba62d434cceea13415b36883a02a8826a3f59e3e6d4a",
     "accessible_summary": "A flow diagram starting at external event sources feeding into Eventstream, which applies stream-processing operators before routing to two destinations: Eventhouse KQL databases for durable, queryable storage, and Activator, which watches for threshold, pattern, or KQL-defined conditions and fires actions like notifications, pipeline runs, or Copy job execution. Eventhouse data mirrors into OneLake in Delta format for other engines to query, and Real-Time hub sits alongside as the organization-wide catalog surfacing all of this as discoverable streams. A security node covers Workspace Outbound Access Protection, which blocks cross-workspace event consumption by default unless explicitly allowed, and a warning node covers the adaptive-batching delay between Eventhouse and its OneLake mirror.",
     "supported_layers": [
       "data",
@@ -208,7 +208,7 @@
     "topic_slug": "semantic-model",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "3af49e5a1b2b072c95081b875e11daa67082da9b6c891e75560472bb01f872a5",
+    "static_hash": "4d0f40d1355f2383687dfa6bbad6fbd78e6c98c81955b836d319adcb30b9fa99",
     "accessible_summary": "An architecture diagram with a semantic model at the center connecting to source data through four storage paths: Import, which copies data into an in-memory VertiPaq cache on a refresh schedule; DirectQuery, which forwards every query live to the source; Direct Lake, which reads Delta tables in OneLake directly with no copy and forks into an OneLake flavor and a SQL flavor; and Composite, which mixes any of the other three per table in one model. A warning node covers the Direct Lake on SQL fallback trap, where basing a model table on a SQL view forces every query into slower DirectQuery.",
     "supported_layers": [
       "metadata",
@@ -225,7 +225,7 @@
     "topic_slug": "sql-database",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "a3e63f20f0d24c42f3e8e65911ff2a9f9a1e91f40d612e0e595c9c8ace6d785c",
+    "static_hash": "843b04dfd53a4c2500f1dd801c2adea468a441f6835a0ba1706a0eb60e0489bf",
     "accessible_summary": "An architecture diagram starting at an application's transactional writes into SQL database's OLTP engine, which automatically and continuously replicates into OneLake as Delta Parquet. A companion SQL analytics endpoint reads that replicated copy read-only, isolated from the transactional workload. From the analytics endpoint, three consumption paths branch off: cross-database federated T-SQL queries joining other Fabric items, a GraphQL API auto-generated over the database, and downstream Spark/Power BI/notebook consumption of the same OneLake Delta data. A separate branch shows the OLTP engine also serving AI/vector search workloads directly and Rayfin application backends provisioning a SQL database as part of a code-first deployment. A warning node covers the replication lag between a write and its visibility on the analytics endpoint.",
     "supported_layers": [
       "compute",
@@ -242,7 +242,7 @@
     "topic_slug": "warehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "2357da65fd332b820452087e20dbe095d8da3c27336c171d0c1299f3ec4845cf",
+    "static_hash": "dc28e7f04148ee93238452718514e05bf27a2d5a75ebce5e217ee3f4b4139f61",
     "accessible_summary": "An architecture diagram starting from a T-SQL client connection into the warehouse's SQL surface, which splits query and ingestion traffic into two isolated compute pools before handing work to the distributed Polaris engine as a task DAG. The Polaris engine reads through a two-tier in-memory and SSD cache before falling back to OneLake, where warehouse data is physically stored as V-Ordered Delta Parquet, automatically published for every other Fabric engine to read. A branch shows eligible query fragments optionally routed to GPU-accelerated execution for large performance gains. A warning node covers the non-scalable single-node execution semantics like TOP and global sort that force query work off the distributed path.",
     "supported_layers": [
       "compute",
@@ -258,7 +258,7 @@
     "topic_slug": "eventhouse-kql",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "3105cfd762c23144775f8618e009f11eeac86a1928b1213128065c16b6e9abce",
+    "static_hash": "29b0ba946e5355af06d027ce3730cd7c480e8090e2fbe281756ab1f9af2fc4d2",
     "accessible_summary": "Streams enter KQL databases inside Eventhouse. Premium cache serves a hot window while standard storage retains history. Optional OneLake availability writes Delta for other Fabric engines.",
     "supported_layers": [
       "data",
@@ -277,7 +277,7 @@
     "topic_slug": "mirroring",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "b66234d03b3c846f071f2914ecba9cc604ab3ac96a380a28504fd8386803b4f5",
+    "static_hash": "dfe2bbc2b3b0b5fb05489327531124d43fadd4bb88f77800a86dfa552d0abf16",
     "accessible_summary": "A supported source supplies a baseline and ongoing changes. Managed mirroring merges them into Delta in OneLake. SQL, Direct Lake, Spark, and other consumers query the replica.",
     "supported_layers": [
       "data",
@@ -293,7 +293,7 @@
     "topic_slug": "power-bi",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "dfde938dd747bbbe2557fda43a836c1d0ddcd263f76c1404b5199ed16ed19481",
+    "static_hash": "ebf82622939e98854b29f47ed655dd6673fd055a4ec2f4a7dd4253266b2d2198",
     "accessible_summary": "Data reaches a semantic model through Import, DirectQuery, or Direct Lake. The shared model defines semantics and security. Reports and apps distribute governed analytics.",
     "supported_layers": [
       "data",
@@ -312,7 +312,7 @@
     "topic_slug": "polaris",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "150adb336ed0483b5dac70cb276d5bf044d28cd187b643449bc072edd4a4696f",
+    "static_hash": "18ee6d3d3a4ec50bad5b6431e98a499f257ec0bf399ec4cb83c9923e6fe58f3f",
     "accessible_summary": "SQL enters a front end and two-phase optimizer. DQP turns the plan into a task DAG. Finite-state orchestration and a global scheduler place work on stateless compute. Tasks operate over data cells whose durable state remains in remote storage.",
     "supported_layers": [
       "compute",
@@ -330,7 +330,7 @@
     "topic_slug": "dataflow-gen2",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "ce4b0389894534a2ca41409657a274ac0c7b52c81300b8e1e7a968cc9a6e543c",
+    "static_hash": "e751c87bb547d835fb65b04adf47eb002f0e065b474d8615c6f638fadfd4a159",
     "accessible_summary": "Source connectors feed Power Query transformations. Dataflow Gen2 uses managed Fabric SQL staging for scale-out processing, writes one or more destinations, and can run as a pipeline activity with monitoring.",
     "supported_layers": [
       "data",
@@ -350,7 +350,7 @@
     "topic_slug": "spark",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "19b166d122dcd977e0a7632cfb54aded343708e4b12997f2ae137c9437e16852",
+    "static_hash": "514932fbdf50345b574e73b5e8279181d69229f6a3c96c1fa196c10b816f695f",
     "accessible_summary": "Notebooks and Spark job definitions request managed Spark sessions. Capacity and pool configuration determine startup and resources. A driver schedules executor work with autoscale. Native execution can accelerate supported operators. Write optimization, V-Order, and compaction shape Delta files on OneLake.",
     "supported_layers": [
       "orchestration",
@@ -367,7 +367,7 @@
     "topic_slug": "onelake",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "194964d98c39575d990a5e2b0507353f90d3f8cf241353785295f75f45db90ee",
+    "static_hash": "76aecd4d0bac0b0f37303ea5d54319815d14f3c7d449f4068b8ad6b08bec08d4",
     "accessible_summary": "An internals diagram that starts at a shortcut read request and branches on shortcut type: internal shortcuts pass the calling user's own identity through to the target, while external ADLS/S3 shortcuts and delegated shortcuts route through a bound connection or configured identity instead. A warning node flags that DirectLake-over-SQL and T-SQL delegated identity mode silently use the item owner's identity rather than the end user's. Delegated-shortcut access is computed as an intersection of the delegated identity's own grant and the end user's OneLake security grant. A second branch covers delete semantics: deleting the shortcut object itself leaves the target untouched, while deleting through the shortcut path writes through to the target if the caller has write permission there. A security-role node explains that OneLake security roles only constrain Viewers and Read-permission holders — workspace Admins, Members, and Contributors bypass OneLake security entirely, a second documented trap. The diagram ends at documented operating limits on shortcut counts and chaining.",
     "supported_layers": [
       "data",
@@ -383,7 +383,7 @@
     "topic_slug": "data-factory",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "7b1ec4cb5f648e260e40e0c003fc4bd1bb12b7d0b6549aaf2ec51c438128d274",
+    "static_hash": "88fb0d3783c89bd7c8faa8d9070f8fceec89509c32b9011745a6d91f146a0654",
     "accessible_summary": "A decision tree that starts by asking what the ingestion scenario needs: raw high-volume movement with controllable parallelism routes to Pipeline Copy Activity; low-code shaping with joins and cleansing before landing routes to Dataflow Gen2; complex procedural logic such as API pagination, streaming, or nested-data handling routes to a Notebook Activity. Each tool node carries its own strength, authoring surface, and orchestration role, plus a watch-out. A second decision, nested under Copy Activity, chooses among Copy job, Copy activity, and Mirroring depending on whether the need is simplified scheduled movement, fully customizable high-throughput movement, or near-real-time database replication. A warning node flags the antipattern of tuning throughput settings without first identifying whether the source, destination, or network is the actual bottleneck.",
     "supported_layers": [
       "orchestration",
@@ -399,7 +399,7 @@
     "topic_slug": "fabric-overview",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "7573ebb0b4744f6dc3070462e0a810f4ce3e4f85a27fdc49a7b0519be19cc4a1",
+    "static_hash": "48dd179b17d4b7288f3455c88c97ada1f2f118af486b94114e30a129e351134c",
     "accessible_summary": "A decision tree that starts by asking what kind of workload a job is: streaming events, batch/ELT ingestion and transformation, or interactive analytics and reporting. Streaming routes to Eventhouse via Real-Time Intelligence. Batch/ELT branches again on engine preference into Data Factory pipelines, Spark notebooks in Data Engineering, or SQL-first Warehouse/SQL Database. Interactive analytics routes to Power BI. All branches converge on OneLake, because every workload persists its tabular data as Delta Parquet there regardless of which engine wrote it, so the choice is about engine fit and skills, not data lock-in. A warning node flags picking a workload by team habit instead of the job's actual shape.",
     "supported_layers": [
       "orchestration",
@@ -415,7 +415,7 @@
     "topic_slug": "eventhouse-kql",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "e561deb9bb9ea6627212217d5e142de4e3d4e284c43321f085c84d1eccdc6ee7",
+    "static_hash": "34947d895952a2267cb338c78440747c30c8073aee23c41f37d997be47e96a86",
     "accessible_summary": "An internals diagram tracing one ingested record through Eventhouse storage. Records land first in the premium-tier hot cache governed by the caching policy, and remain queryable there for fast, low-latency access. In parallel, the full retention window is held in a separate, independently billed standard-tier store governed by the retention policy. If OneLake availability is enabled, an adaptive-batching decision delays the OneLake write until enough data accumulates for optimally sized Parquet files, trading latency for file-size efficiency. A warning node covers the DDL operations blocked while OneLake availability is active. A second warning node describes the three-stage capacity throttling ladder — proactive, reactive, and extreme-reactive — that fires when query and ingestion demand exceeds available capacity.",
     "supported_layers": [
       "data",
@@ -432,7 +432,7 @@
     "topic_slug": "direct-lake",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "11e489c7ed21a1e9adc8afd4595a2bc0c4ca24b0cb7536541ecd2f82474679cd",
+    "static_hash": "004cb57d53bab8350b7370e277cbd0c18ed9898cbc26626d7c284cfb272d7695",
     "accessible_summary": "An internals diagram starting at a query hitting a Direct Lake model in one of four residency states: cold, semiwarm, warm, or hot, with latency improving at each step. A cold query triggers transcoding, remapping Parquet row-group dictionaries into a single global VertiPaq dictionary — a process whose cost is set by the table's row-group count, mapped one-to-one onto VertiPaq column segments. A framing node shows how a metadata-only refresh resets which Delta commit the model reads from and can evict segments; a companion node lists the three eviction triggers. A decision node forks by storage flavor: Direct Lake on SQL can fall back to DirectQuery under three documented triggers, while Direct Lake on OneLake never falls back at all. Two warning nodes cover the Overwrite-defeats-incremental-framing trap and the SQL-view-forces-fallback trap.",
     "supported_layers": [
       "compute",
@@ -449,7 +449,7 @@
     "topic_slug": "dataflow-gen2",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "33900aaf128b34a08442e30df2a4d59e7334a47c9a7378f3abfb688abc338237",
+    "static_hash": "94ca584f1effa9d49bc87cea956d41fb7f12721c5c1b1474ea92d413cf0887c4",
     "accessible_summary": "A branching decision asks whether work is low-code shaping, primarily data movement, or code-intensive engineering. The branches select Dataflow Gen2, Pipeline Copy, or Notebook and SQL tools. The Dataflow path shows managed staging and destination writes, with a warning not to depend on internal staging items.",
     "supported_layers": [
       "orchestration",
@@ -467,7 +467,7 @@
     "topic_slug": "mirroring",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "a7fdfba3d92e069c074be15079667095c4673caada689d666af7ee1c5a02070c",
+    "static_hash": "15f01642e6d97eb01d2b2aea6000e9c03947f27c9fea1c0946aae454bc27190d",
     "accessible_summary": "A decision branches to Mirroring for managed continuous replicas, Dataflow Gen2 for low-code shaping, and Data Factory Pipeline for controlled movement and orchestration. Freshness, source support, history, and composition are reviewed before implementation.",
     "supported_layers": [
       "orchestration",
@@ -486,7 +486,7 @@
     "topic_slug": "governance",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "e0ae45fe0624734b2576fd245027199fa0d3b703d06ce04d47e655962c5eaa61",
+    "static_hash": "cdcb16d03ce165f25e8a92a92e2d94accf2817f7bda8c04f4672c3af92061635",
     "accessible_summary": "Purview policy and label resolution. Access request; Delegated domain setting; Workspace and item scope; Data security supported?; Resolve sensitivity label; Enforce effective state; Export and unlabeled risk.",
     "supported_layers": [
       "security",
@@ -502,7 +502,7 @@
     "topic_slug": "power-bi",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "d56fbb995b16f789c7efecda785281b062c22250aced95a201c18010c8b1eecb",
+    "static_hash": "38e567c5583842a2204de41d468246146bd540dd2915d5b6a94be072a6c09cd6",
     "accessible_summary": "A decision tree. The root question asks what a table needs: a full copy loaded into memory routes to Import; always-current source-of-truth queries route to DirectQuery; and OneLake Delta data with no refresh routes to Direct Lake. Direct Lake then branches again into Direct Lake on OneLake, the default for most models, versus Direct Lake on SQL, needed only for SQL-endpoint security under delegated identity or when DirectQuery fallback is required. A warning node describes a real trap: basing a Direct Lake on SQL table on a SQL view forces every query against it into DirectQuery fallback without changing the model's displayed mode.",
     "supported_layers": [
       "compute",
@@ -518,7 +518,7 @@
     "topic_slug": "semantic-model",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "305841aebf634eb4ffaf6bf29524554c0f81890767d583cc36ec6c196be3eb1c",
+    "static_hash": "59effc47ba19053c552d265101b8b48aa166f228525fec8ff50d9c75a1afdb5e",
     "accessible_summary": "A decision tree: for each table in a composite model, ask whether it must stay live and large (route to Direct Lake), needs full DAX/transformation freedom on a small volume (route to Import), or must keep the source authoritative (route to DirectQuery). A second question picks dynamic or static row-level security depending on whether filtering must vary per viewer. A third node names the five capacity-footprint levers the routing decisions move, and a warning branch covers the out-of-memory risk of refreshing an Import table whose size approaches half the capacity's memory, with the XMLA/enhanced-refresh mitigation.",
     "supported_layers": [
       "compute",
@@ -534,7 +534,7 @@
     "topic_slug": "polaris",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "bc674ea622799a20590e816e3fef8886291a8c81af0f7c48f5194640141e3c51",
+    "static_hash": "48d2779a7d1fab4aeb91f616df0eda565da682a4da45990b3caf85665af5b487",
     "accessible_summary": "An internals diagram with four decision points chained together. First, the two-phase Cascades optimizer decides per join whether to fuse it into the current task or insert a blocking data-move enforcer, based on whether inputs are already hash-aligned. Second, the resulting task DAG joins a global workload graph, where the scheduler picks FIFO under load or best-fit placement when idle capacity exists. Third, task placement is cache-affinitized to nodes, and a warning node describes the three different cache outcomes when the topology scales out, scales in, or a node fails. Fourth, a hierarchical state machine governs each task's execution, retrying transient failures at task granularity and escalating to the parent query only when a task cannot recover.",
     "supported_layers": [
       "compute",
@@ -550,7 +550,7 @@
     "topic_slug": "rti",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "b95348043b81c263507856b23b9d28e3c9125b2beb7d88f0027fcc80daba8c2d",
+    "static_hash": "95c74151ff82fb142f43ebd7dc362c585e2954e0932885a12cb39afa1caf40ed",
     "accessible_summary": "A decision/internals diagram. An Eventstream receives an event and routes it to two paths simultaneously, not exclusively. The hot path sends the event to Activator, which evaluates threshold, pattern, or KQL-defined conditions and fires an action (notification, pipeline, Copy job, Power Automate) within seconds, with no polling schedule. The cold path writes the event into an Eventhouse KQL database, where it becomes durable, queryable, and available to notebooks, Power BI, and Fabric data agents, at the cost of ingestion and indexing latency the hot path does not pay. A warning node covers Eventhouse's three-stage capacity throttling ladder, and a worked example traces one vehicle-offline event through both paths.",
     "supported_layers": [
       "data",
@@ -567,7 +567,7 @@
     "topic_slug": "sql-database",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "878e2c9f212dcd45851bf935631faa48509666d6439df2ba36b5ca08dcaf732d",
+    "static_hash": "ab8456bb0c38546091f6e84815ae6f5ef28c713d7d93f8c0458f7c5d51d9cc69",
     "accessible_summary": "An internals diagram. A client authenticates via Entra ID (the only supported method) and writes to the primary compute node of the Hyperscale-architected transactional engine, which is durable and strongly consistent immediately. Independently, Fabric continuously replicates that data into OneLake, converting it to Delta Parquet, which powers a read-only SQL analytics endpoint with eventual, near-real-time consistency. The analytics endpoint can federate across other Fabric items using three-part naming with no data movement. A warning node calls out the resulting consistency gap: a query against the analytics endpoint immediately after a write can return stale data, and it must not be relied on for read-your-writes correctness.",
     "supported_layers": [
       "security",
@@ -584,7 +584,7 @@
     "topic_slug": "spark",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "08649468481c9a8fe2a51fdc8d37ec62f6c97939f21367bf9d1d2fea5248f575",
+    "static_hash": "c8e42d90416e2946256d6bd36f260d10100e5889b1f58eccb7a4ea2efa907994",
     "accessible_summary": "Fabric Spark autoscale internals. Spark job demand; Minimum executor reserve; Tasks exceed capacity?; Scale toward maximum; Idle executors detected?; Decommission safely; Shuffle blocks pin workers.",
     "supported_layers": [
       "compute",
@@ -599,7 +599,7 @@
     "topic_slug": "warehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "e1e5a2c628149c27e0b379a85c624c0cf223cc1637b4d02a5c54081c12ea9c39",
+    "static_hash": "05b203c8a8aa74ad52ac62a7ad1adc51b5d29cf05bbb1f7817624ba095a84b10",
     "accessible_summary": "Warehouse query tuning decision. Query workload; Data scanned is excessive?; Optimize layout and SQL; Concurrency contention?; Repeated result pattern?; Measure, then revisit.",
     "supported_layers": [
       "compute",
@@ -616,7 +616,7 @@
     "topic_slug": "fabric-data-agent",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "b0c462a0da1b72ef98266198d1c1ccffcaebf48a27064c7b59672b78d5d1d883",
+    "static_hash": "ed9ec4079ad40f8227b7ae12c479229844853ade00033b6c75b8218e10544b10",
     "accessible_summary": "An architecture diagram: a user's natural-language question enters a data agent configured with up to five attached data sources (lakehouse, warehouse, semantic model, KQL database) plus agent- and source-level instructions and example queries. The agent picks a source and routes generation to NL2SQL, NL2DAX, or NL2KQL depending on source type. The query executes under the user's own credentials, then passes through a four-layer governance precedence gate — tenant policy, workspace governance, developer instructions, user prompt — that can restrict or block the answer. The result is capped at 25 rows/25 columns and reaches the user through Fabric chat, Copilot, Azure AI Foundry, or a multi-agent application. A second warning node covers the region-mismatch failure where agent and source capacities sit in different geographies.",
     "supported_layers": [
       "orchestration",
@@ -634,7 +634,7 @@
     "topic_slug": "fabric-data-agent",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "78842da11430103ea3dca4b5c14da41dd0f27a1bf5e0556a965407f9138b8b8a",
+    "static_hash": "7e604bed66136b713b3d7c8079001c28bb4bbdeda957b434f2c5aa411aeee914",
     "accessible_summary": "A top-down flow diagram. A user question enters the agent, which selects a relevant data source using the source's description, schema, and example queries. The agent then fetches that source's schema under the requesting user's own credentials, assembles a prompt for a managed Azure OpenAI Assistant, and generates a read-only query in the source's native language (SQL, DAX, or KQL). The query executes under the user's identity so results never exceed what that user could already see, and Purview DLP policies apply on top. A successful path returns an answer capped at 25 rows and 25 columns; three failure branches short-circuit the flow: cross-region capacity mismatch, unsupported unstructured content, and a DLP block.",
     "supported_layers": [
       "orchestration",
@@ -651,7 +651,7 @@
     "topic_slug": "fabric-iq",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "9410ec698690cbc43832da2234729d62d81c507775a7f4aeaa4699f60c14c042",
+    "static_hash": "7742b2c0d47f23a791a832165b5ce6f15e2c625eac24a800270c9d78d6af41f5",
     "accessible_summary": "An architecture diagram: OneLake data (lakehouse tables, Eventhouse streams) is already modeled once by an existing Power BI semantic model. Fabric IQ's ontology item aligns itself from that semantic model rather than redefining business terms, then adds entity types, typed relationships, and a data-binding layer that maps physical columns to business concepts. That bound model is materialized into a queryable instance graph, built on the separate Graph in Microsoft Fabric item, which a tenant admin must enable before graph features work. NL2Ontology sits in front of the graph, translating natural-language business questions into structured queries constrained to the ontology's own published definitions. Two consumers sit downstream: a Fabric data agent answering ad hoc questions, and an operations agent polling the graph every 5 minutes for anomalies. A warning node covers the antipattern this layer exists to prevent — skipping the shared ontology and letting every AI system re-translate raw schema into business meaning by hand — and a second warning covers upstream data changes not auto-reflecting in the graph without an explicit refresh.",
     "supported_layers": [
       "data",
@@ -669,7 +669,7 @@
     "topic_slug": "fabric-iq",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "68c3d8e51468e15878631212a578fdf5b65cbf549d1ed11f135eefed05cf090d",
+    "static_hash": "fb69fd5ded5cf4d535764d924c163a13cd158954df0dc9a10e6c91cf21e31f22",
     "accessible_summary": "A flow diagram with two parallel branches from the same starting question. The left branch queries a raw star schema directly: an NL2SQL model must infer table joins, business meaning, and filter definitions purely from column names and a prompt, with no published, shared definition to check against. The right branch queries through a Fabric IQ ontology: NL2Ontology constrains its generated query to the ontology's own published entity types, relationships, and rules. Both branches converge on a comparison node showing that the raw path can silently diverge in its answer depending on which developer built the prompt, while the ontology path is structurally forced to agree with every other consumer of the same ontology. A warning node covers the concrete failure mode: two teams' raw-schema agents answering 'how many active customers' differently with no way to reconcile the discrepancy.",
     "supported_layers": [
       "orchestration",
@@ -686,7 +686,7 @@
     "topic_slug": "graphql-api",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "2abf3170b8904c4f25124d83569a117a6523eeff512e0d1267dcfd7058ff7dd1",
+    "static_hash": "b22b63bbea8e614b7ec35df29652359309389774a9b7395e6f307896dda1062f",
     "accessible_summary": "An architecture diagram: connected data sources — Warehouse, SQL database, Lakehouse via its SQL analytics endpoint, Azure SQL Database, and Fabric mirrored databases — feed a portal-driven setup workflow where tables, views, and relationships are selected and modeled. Fabric auto-generates a GraphQL schema, resolvers, and a live endpoint from that configuration, with no custom backend code and no separate deployment step. The endpoint is queried by human application developers through an interactive portal editor and by AI agents through the Model Context Protocol. A built-in performance monitoring dashboard observes usage. A warning node covers schema evolution: Fabric favors additive, non-breaking changes over versioned v1/v2/v3 endpoints, and getting this wrong by treating GraphQL like a versioned REST API defeats the model's main advantage.",
     "supported_layers": [
       "data",
@@ -704,7 +704,7 @@
     "topic_slug": "graphql-api",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "55b5f5681bd5a331aa5bfa3f63292b05b58e993748b51c2733f60dfa5070f598",
+    "static_hash": "2aa0c1d0a163b466569fd7306162061d71e6365aad69e002d1c78d95e85604b5",
     "accessible_summary": "Life of a Fabric GraphQL request. GraphQL client request; Identity and permission gate; Parse and validate schema; Resolve source operation; Typed JSON response; Mutation and agent branches; Schema and workload risks.",
     "supported_layers": [
       "orchestration",
@@ -723,7 +723,7 @@
     "topic_slug": "multi-stack-integration",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "103c1693aa280f60a82118436d5e2ccde6c86e42c3498d7489204041d651d62a",
+    "static_hash": "68aae85e4aa75f5e660d894e85a1ddb6a85f2d59d4bf963cb0253a101f18c2a6",
     "accessible_summary": "Multi-stack integration architecture. External data estates; Virtualize with shortcut; Replicate with mirroring; Copy with Data Factory; Governed OneLake hub; Serve BI, APIs and engineering.",
     "supported_layers": [
       "data",
@@ -742,7 +742,7 @@
     "topic_slug": "multi-stack-integration",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "c3632bea5d9fa2a6f331e827d31160d7c8d73db770cc0836749d7fc34c56c58e",
+    "static_hash": "4716d3d9c838fc9723eca7af6f46cc9e3e35687320f670ffe4e645c4b96fa5bd",
     "accessible_summary": "A decision tree that starts by asking whether the source data should stay owned and governed where it lives. If yes, and the source is a supported OneLake-compatible or cloud store, a shortcut references it with no copy. If the requirement is a continuously current operational replica, Mirroring is evaluated next, but Block Public Internet Access disables most of its connectors, which routes to Data Factory pipelines instead. If the need is controlled batch movement, transformation, or an unsupported source, a Data Factory pipeline with Copy activity or Copy job handles it. A warning node covers the Block Public Internet Access trap, and a second warning covers treating Mirroring as a change-event or disaster-recovery store.",
     "supported_layers": [
       "data",
@@ -761,7 +761,7 @@
     "topic_slug": "semantic-layer-strategy",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "60f51c1a3793e82a859d427d08eb96b5c14018755f1d43959bf5b6b1c4a034de",
+    "static_hash": "e3b99e8e73471de0b57ebd32577f276cf1f5d43ea73bbd7b43873e20af5b3c4c",
     "accessible_summary": "An architecture diagram in three lanes. OneLake data stores (lakehouse and warehouse Delta tables) feed a semantic model built in Direct Lake mode. The model layer adds endorsed measures, row-level security, and framing control. A Fabric IQ ontology sits alongside the model, mapping business concepts onto it without moving data. From there, four consumption surfaces read the same governed layer: Power BI reports, Analyze in Excel, Copilot, and a Fabric data agent. A warning node calls out the Direct Lake framing lag as a freshness limit every consumer inherits.",
     "supported_layers": [
       "data",
@@ -779,7 +779,7 @@
     "topic_slug": "semantic-layer-strategy",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "916afcc1744ad8607065e15e638c45fc132c40a965e274233818eb760e06a4ba",
+    "static_hash": "6674f156845639e314db9c7ffc584cc4561e784b2695b5cd61c285d2874478fc",
     "accessible_summary": "A decision tree that starts by asking whether a table's data lives in OneLake Delta and should avoid a refresh copy. If yes, it asks whether the SQL-endpoint security model or delegated identity is required, branching to Direct Lake on SQL or Direct Lake on OneLake. If the table needs full DAX transformation freedom on a small dataset, it branches to Import. If the source must remain query-time authoritative, it branches to DirectQuery, which can be composed with Direct Lake tables in the same composite model. A warning node covers the documented DirectQuery-fallback triggers for Direct Lake on SQL, including the SQL-view trap, and a sizing node covers the capacity memory ceiling that bounds any single model regardless of mode.",
     "supported_layers": [
       "data",
@@ -795,7 +795,7 @@
     "topic_slug": "dw-migration",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "68438a7815d3c894efeae9fdecbd849a2d21a518b9c9ecfe8f251c4071bb3383",
+    "static_hash": "832778b684021814f6b6a693da7e1a2fc9401cf2ea25db4169451f89d48b1475",
     "accessible_summary": "An architecture flow starting at the legacy source warehouse and Copy activity landing its extracts into OneLake. From there the flow branches: SQL-first workloads move directly into Fabric Warehouse tables, while Spark-heavy or semi-structured workloads land first in a lakehouse for transformation before becoming warehouse-ready. Both paths converge on Warehouse tables stored as Delta in OneLake, cached transparently by the query engine, and served through a certified semantic model to Power BI reports. A feedback edge shows validation queries comparing source and target row counts before cutover, and a warning node covers keeping duplicated extracts alive after migration instead of consolidating on OneLake.",
     "supported_layers": [
       "data",
@@ -812,7 +812,7 @@
     "topic_slug": "dw-migration",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "8f06d627da425140245fc8e68cf30cb97a57f85436ced08d39b3fa15bb4f6318",
+    "static_hash": "9377c2deac6f2cc2f96b676136c58489e31150ca19a962ebabcfa5d4ad6373eb",
     "accessible_summary": "A decision tree that asks first whether the workload needs OLTP-style transactional writes; if so it routes to SQL database. If the workload is read-mostly analytical reporting already curated by Spark, it routes to the lakehouse SQL analytics endpoint, which is read-only. If the workload needs a full writable T-SQL surface with multi-table transactions, it routes to Fabric Warehouse, the default migration target. A separate branch covers using Mirroring as a transitional bridge to keep the legacy source live and queryable in OneLake during a phased cutover rather than a hard cutover. A warning node covers the trap of sending write-heavy workloads to the read-only SQL analytics endpoint.",
     "supported_layers": [
       "data",
@@ -828,7 +828,7 @@
     "topic_slug": "streaming-analytics-pattern",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "21ab92cb7e94163a87286ba26a4c32995d75dc894aa7f1246360c0b493b3fc15",
+    "static_hash": "951dbc6edb5d922cd7c1781bd390ca827f428df8fadf98045c085acccf8697ba",
     "accessible_summary": "An architecture flow starting at event sources feeding into Eventstream, which routes and shapes events with built-in stream-processing operators. From there the flow splits: the hot path lands events in an Eventhouse KQL database for indexed, low-latency query and native anomaly detection, feeding Activator rules that fire alerts and automated actions, and Real-Time Dashboards for live monitoring. The cold path uses OneLake availability to write the same KQL table data into Delta format with adaptive batching, making it queryable by lakehouse, warehouse, Spark, and Power BI Direct Lake without any copy. A warning node covers the DDL operations blocked while OneLake availability is enabled, and a feedback edge shows Activator triggering Fabric jobs that write back into the lakehouse cold path.",
     "supported_layers": [
       "data",
@@ -845,7 +845,7 @@
     "topic_slug": "streaming-analytics-pattern",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "e042bbb0570857e36b2b5ffa0d88376e220ca7e95c358d7ea9cce73cefeb8664",
+    "static_hash": "f103724c595cd0f5c0755e22e1a423bf3aa4927be6272049f4c82f771865dceb",
     "accessible_summary": "A decision tree that starts by asking what latency the workload actually needs. Sub-second alerting or live dashboards route to the Eventhouse hot path. Daily-freshness historical reporting or cross-domain joins route to the cold path via OneLake availability, and a workload needing both routes to both simultaneously since they're the same underlying table. A warning node covers the common mistake of keeping a hot event path running for a workload that only ever needed daily freshness, incurring streaming operational cost for no latency benefit a lakehouse or warehouse pipeline couldn't have delivered more cheaply.",
     "supported_layers": [
       "data",
@@ -861,7 +861,7 @@
     "topic_slug": "data-mesh-domains",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "028b03cdf82d8b700b0d675337d5d5f3845b6b5b86875bc9accf49dea73e89bc",
+    "static_hash": "e7bb7fd82c2ddd1d734d5c412a4adf4203d4a98008638eb9ce8674261d73d743",
     "accessible_summary": "An architecture diagram: business domains (Finance, Sales, HR) each own a Fabric domain grouping their workspaces and one per-domain capacity. Producer workspaces write gold Delta tables into the single tenant-wide OneLake and certify them as published products in the OneLake Catalog. Consuming domains create read-only OneLake shortcuts into certified products rather than copying data. Tenant-wide governance, powered by built-in Purview, applies labels, DLP, and auditing across every domain regardless of which one reads the data. A warning node flags the anti-pattern of standing up a separate physical lake per domain, and a second warning flags that OneLake security roles do not constrain workspace Admins or Members.",
     "supported_layers": [
       "governance",
@@ -879,7 +879,7 @@
     "topic_slug": "data-mesh-domains",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "929ffbf27d8890b9a3fd9cff454266df5d4b75fe9ecf91e5976d48d83996ab2d",
+    "static_hash": "c64e352e64ac2910887e0e7bac2ffb5a9402de2630b1b49007e8f381c692bd74",
     "accessible_summary": "A decision tree with a root question about team autonomy and ownership pressure. If one central team can own all data products, the tree recommends a centralized lakehouse. If multiple business areas need to own their own data products, it branches into a domain-owned model, then asks whether tenant governance is mature enough to delegate; if not, it warns against delegating before standards exist. It then asks whether capacity should be split per domain, and finally shows cross-domain consumption resolving through OneLake shortcuts rather than data copies.",
     "supported_layers": [
       "governance",
@@ -896,7 +896,7 @@
     "topic_slug": "medallion-lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "23b18d574e67a536a827392e402e6229ed7bd1ba819ec9b1ef94d80743c4db8b",
+    "static_hash": "02805d712a79cbe4ead45cc9fc78e7e4e6ef139e89f9222f06edc0be3efbe44c",
     "accessible_summary": "An internals diagram: source systems land via pipeline copy, Dataflow Gen2, or a shortcut into a bronze Delta table in the lakehouse's managed Tables area. Spark reads bronze and writes a cleansed, conformed silver Delta table, then Spark aggregates silver into business-ready gold Delta tables shaped for consumption. Gold is exposed two ways: the auto-provisioned SQL analytics endpoint for read-only T-SQL, and Direct Lake for Power BI semantic models that read the Delta files directly with no import. A warning node flags that endpoint-level SQL permissions do not apply to the same data read through Spark or OneLake directly, so securing gold requires both the write and read paths.",
     "supported_layers": [
       "data",
@@ -914,7 +914,7 @@
     "topic_slug": "medallion-lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "24dcdda3cae59804194b23c022e08cc978bb7c7a27b72cc68208a358fac0193e",
+    "static_hash": "0da55458b38c6c2026c596d9078ace88bcb521d80b576fb6623aa2c09d0226d6",
     "accessible_summary": "A decision tree. The first question asks whether the source data already lives in a governed location elsewhere in OneLake or an external store: if so, a zero-copy shortcut replaces ingestion entirely. If not, a second question asks whether the load is bulk/recurring at scale or needs low-code shaping before landing: bulk and recurring routes to a Data Factory pipeline Copy activity, low-code shaping routes to Dataflow Gen2. Both land in bronze, where Spark takes over for silver and gold transformation, since that stage always needs code-first, arbitrarily complex logic. A final branch applies the V-Order file-layout rule: bronze and silver are write-heavy so V-Order should stay off, while gold is read-heavy and V-Order should be turned on. A warning node flags that leaving V-Order on for write-dominated zones pays a real write-time cost for no read benefit.",
     "supported_layers": [
       "data",
@@ -930,7 +930,7 @@
     "topic_slug": "lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "2ab566e291371708e89873880df8e929369dd0d6874511a248953e038d1b2367",
+    "static_hash": "fbf6320f498a09772436062d10d5574c37d7986499a15cd292832d430b8457d5",
     "accessible_summary": "An internals diagram: a write stages new immutable Parquet objects, then races to atomically create the next-numbered JSON commit file in the table's _delta_log folder — only one writer can win a given commit number, so a losing writer detects the collision and retries. Every ten commits, the log is folded into a Parquet checkpoint so metadata reads stay fast as history grows. A reader pins to the newest fully-committed log record at query start and reconstructs its snapshot from that checkpoint plus a few trailing commits, so concurrent writers never produce a dirty read. A warning node covers what happens when two writers race for the same commit number.",
     "supported_layers": [
       "data",
@@ -946,7 +946,7 @@
     "topic_slug": "lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "1a1067b66528ab3ba0acd2935b62989600c6960e7921ee5aefb960c28f9ba3b9",
+    "static_hash": "00f6f9670f4622484f0ca1b28025890ead85f7343d724366ebeb3646e7fd6031",
     "accessible_summary": "Delta write optimization decision. Observe the table symptom; Read layout is inefficient?; Too many small output files?; Update-heavy workload?; Existing files fragmented?; Check engine compatibility; Measure and maintain.",
     "supported_layers": [
       "data",
@@ -964,7 +964,7 @@
     "topic_slug": "spark",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "dffcd18bbef05950d17ae75b17c2877106725d32aa53bc26ba36297ef44257d6",
+    "static_hash": "f8d6aca5c69c02fd0c9b1c10108674dd9e5afe58066a16492331dcfc423cf2b1",
     "accessible_summary": "Fabric Spark session architecture. Notebook or job definition; Capacity vCore envelope; Starter or custom pool; Driver and executors; Native and JVM execution; OneLake Delta I/O; Session lifecycle risk.",
     "supported_layers": [
       "orchestration",
@@ -982,7 +982,7 @@
     "topic_slug": "spark",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "516a7c177ddaef7d1f77c6a8c3a1c0e08787f3dcc95d2c73454cf5e6f271ac2c",
+    "static_hash": "b3b599f33f42b9dd7b6373a272e74d630886ab0cfc6b822c03c06a0850e49865",
     "accessible_summary": "Spark job execution internals. Driver builds the plan; Stages schedule tasks; Native operator route; JVM fallback route; Inspect fallback and failures.",
     "supported_layers": [
       "compute",
@@ -998,7 +998,7 @@
     "topic_slug": "spark",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "b532d6ebbe274b3a1e114cdc383a5e16dc74a4247e63d1c454b5d4f7d44bab83",
+    "static_hash": "fdc9a2f815997a35c8a51ec932f76e61bc1fd9cffb78230d6cbaf6c2c957f705",
     "accessible_summary": "A top-down internals flow with eight steps. A Spark SQL cell submits its query text to the same Spark session as any PySpark or Scala cell in the notebook. Catalyst parses and optimizes it into a physical plan, which Adaptive Query Execution can re-plan mid-run using runtime statistics. Each operator in that plan is then routed either to the Native Execution Engine's vectorized C++ path or, for unsupported operators, back to the standard JVM path, with the split visible per-operator in the Spark UI. Both paths read and write Delta tables in OneLake through the same Delta transaction log. A warning node calls out that native execution is not always bit-for-bit identical to JVM Spark for certain numeric operations.",
     "supported_layers": [
       "compute",
@@ -1013,7 +1013,7 @@
     "topic_slug": "spark",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "5173387967b2894b76c0641a82f430eead7dbd977eee7ebe000964b3938eb37e",
+    "static_hash": "26f69d5d6c7168a96094441cd6d230ba905cdbb8fe34b00c30a0fc36b8a0f319",
     "accessible_summary": "A decision tree with one root question. If the workload must write and needs Spark-native transformation, it routes to Spark SQL in a notebook. If it only needs to query lakehouse Delta tables read-only via T-SQL, it routes to the lakehouse SQL analytics endpoint. If it needs full governed T-SQL with multi-table transactions, it routes to Warehouse T-SQL. If the data is high-volume time-series or log/telemetry data, it routes to KQL against an Eventhouse. A warning node flags the trap of trying to write through the SQL analytics endpoint, which is read-only.",
     "supported_layers": [
       "compute",
@@ -1028,7 +1028,7 @@
     "topic_slug": "materialized-lake-views-dbt-warehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "d97f919821ba87b6e348ff50e005bea0f9f5de561328adaf45a675d5ce26677e",
+    "static_hash": "efdf19870bcca8ca8b7b2e686595ca85a0b13acc2940bcd7c3013b3061f7890e",
     "accessible_summary": "An architecture flow with seven steps. A dbt project's profiles.yml declares Fabric as its target via the dbt-fabric adapter, which authenticates with Microsoft Entra ID — interactively for development, via service principal for automation. The adapter translates dbt's usual ALTER/MERGE/TRUNCATE-style operations into CREATE TABLE AS SELECT plus DROP/CREATE sequences because Fabric's T-SQL surface doesn't support the same commands SQL Server does. Running debug, seed, run, and test against the jaffle_shop sample project validates the connection end to end. Production scheduling is handled outside dbt itself, by pairing dbt with Apache Airflow inside Fabric Data Factory. A warning node flags that this is a third-party adapter, not a native Fabric feature, so its translation gaps are the adapter's problem to work around, not Fabric's to fix.",
     "supported_layers": [
       "orchestration",
@@ -1062,7 +1062,7 @@
     "topic_slug": "fabric-iq",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "8a08b6a63f4d85ec597b1c0131e81b1fd29acd4e6393dbb6b3e2cb4820318f2d",
+    "static_hash": "37dc93efc44bb71be4446c691d8783210638ccecec7827bbe882da3a88243606",
     "accessible_summary": "An architecture flow: a modeler declares entity types, properties, and relationships as a logical vocabulary layer. A data-binding layer maps that vocabulary onto real OneLake sources — lakehouse tables, eventhouse streams, and semantic models — carrying schema-evolution rules, quality checks, and provenance. The bindings materialize into a queryable instance graph, a dependent Fabric item built on Graph in Microsoft Fabric that requires a tenant setting to be enabled. NL2Ontology translates natural-language questions into structured queries constrained to the published ontology's definitions, and the ontology layer routes execution to whichever backend actually holds the data. Data agents, Power BI, and apps all consume the same materialized graph. A warning node flags that upstream data changes are not automatically reflected — the graph needs an explicit refresh.",
     "supported_layers": [
       "data",
@@ -1080,7 +1080,7 @@
     "topic_slug": "fabric-iq",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "6c248b1229358f5e38cd0f0c5f6dba8f1400036a26b8d1e0e19e185dbe479e9c",
+    "static_hash": "477b38174907e74e9cb5f880a6a38d05332abd63dda688fb870e4e83d879ce88",
     "accessible_summary": "A contrast diagram with two paths from the same natural-language question. The raw-schema path has the agent's source-specific generator (NL2SQL, NL2DAX, or NL2KQL) translate directly against lakehouse, warehouse, or semantic model schema, relying on developer-authored instructions and example queries to disambiguate business terms — a lever community practitioners repeatedly identify as the biggest driver of answer accuracy, and one that degrades as schema and business vocabulary drift apart. The ontology-grounded path has NL2Ontology translate the same question against a published ontology's entity types and relationships first, then federated query routing pushes the resulting structured query down to whichever backend holds the data. Both paths converge on the same governed, read-only execution and layered precedence controls a Fabric data agent always enforces.",
     "supported_layers": [
       "compute",
@@ -1097,7 +1097,7 @@
     "topic_slug": "medallion-lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "83a8a6393aa6708bbc9a3352905e2caa0b868a7991445a4222b466da829c81ef",
+    "static_hash": "33def8936f42aeda477d4750e218633e42b2888df46ce4699e01f28c6bd407d0",
     "accessible_summary": "An architecture diagram with three ingestion paths on the left — file Copy, database Mirroring, and API pulls — all landing in one lakehouse that holds both bronze and silver schemas. A dbt project, orchestrated by Airflow inside Data Factory, reads silver and builds a star schema in a Fabric Warehouse as gold. Power BI reads gold through Direct Lake with no refresh. Two side rails run underneath: a SQL database control plane recording every run, and an Eventhouse capturing high-volume operational telemetry. A warning node calls out the blast-radius cost of merging bronze and silver into one lakehouse.",
     "supported_layers": [
       "data",
@@ -1115,7 +1115,7 @@
     "topic_slug": "medallion-lakehouse",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "63ccdcf6fcf5aa14793fa03a7dc48fe57c4f4fb0cd74a187a51b0cf472c7496c",
+    "static_hash": "6b430443d0a3ca55566df24075aacaa53868046b2f8ef710f48661ce93a2bc66",
     "accessible_summary": "A flow diagram tracing dbt model lineage. Two staging views, stg_positions and stg_returns, read silver Delta sources in the lakehouse. Three dimension models — dim_date, dim_portfolio, dim_benchmark — and one SCD Type 2 dimension, dim_instrument, build from those staging views. Four incremental fact models — fact_positions, fact_returns_daily, fact_risk_measures, fact_transactions — join the staging views to the dimensions. All four facts converge on the wh_gold star schema, which Direct Lake serves to Power BI. A warning node calls out the one dimension using SCD Type 2 history against three that overwrite in place, and the adapter limitation that makes dbt's incremental MERGE work on Fabric Warehouse at all.",
     "supported_layers": [
       "data",
@@ -1130,7 +1130,7 @@
     "topic_slug": "data-factory",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "200f909172f75c122c03ca90543fb67beac16ca59092b428b5cc9cd9bbfe7c2d",
+    "static_hash": "8a7afb597cff14e437427dba9f2e94e78a9b64fdac8dc782537dfd9f037e19a8",
     "accessible_summary": "Event-driven Fabric orchestration. Operational event sources; Eventstream routing; Activator condition; Governed Copy job; Telemetry, dedupe and replay.",
     "supported_layers": [
       "data",
@@ -1147,7 +1147,7 @@
     "topic_slug": "data-factory",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "e1e43ac91679d36564efb785530f3eab83bd97340d4457620e02589a04840f7d",
+    "static_hash": "5e7a1c8a0e11583d6bbd65011d7618096191e6b514630f247744c20a50b70d2c",
     "accessible_summary": "Multi-cloud data architecture. Cloud source systems; Virtualize, mirror, or copy; Governed OneLake products; Serve and operate across clouds.",
     "supported_layers": [
       "data",
@@ -1166,7 +1166,7 @@
     "topic_slug": "architecture-strategy",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "23a483d87123fb626ae5311755dfae0c42f864b8f2cc86ca72c58434c8468f56",
+    "static_hash": "dedf79ffb024714c61540e57f0490e7a9c11fb57bb3215fd15f387c940dbf033",
     "accessible_summary": "An eight-node architecture graph. A business and domain boundary node feeds Fabric workload selection. Workload selection feeds OneLake placement, which is the single logical copy of data. From OneLake, three paths branch: cross-cloud shortcuts, the governance and security boundary, and capacity allocation. Governance and capacity both feed into an operate-and-measure node, which feeds back into workload selection to close the loop. A separate warning node, reachable directly from workload selection if OneLake placement is skipped, shows the duplicated-physical-lake anti-pattern.",
     "supported_layers": [
       "orchestration",
@@ -1186,7 +1186,7 @@
     "topic_slug": "architecture-strategy",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "0954ceedd778c7a3243db8223188944b4ca7686934cb6fab916e77b2d5570070",
+    "static_hash": "f04ba138fb030a081e23d2236cff61ec8f9249b69996aff8043fecded606b966",
     "accessible_summary": "A decision tree with three questions. The first asks whether anything has yet reached a real consumer. If not, the recommended path is one bounded data product delivered end to end; the alternative, building the platform and its frameworks first, is flagged as the warning branch because it produces no outcome to validate against. The second question asks whether a second workload is genuinely required by a consumer or is being added speculatively. The third asks whether a domain needs its own capacity, which turns on whether its workloads are actually contending for compute rather than on org-chart boundaries.",
     "supported_layers": [
       "governance",
@@ -1202,7 +1202,7 @@
     "topic_slug": "data-modelling",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "a09f039403d2dbd20920457199ce73b41b8a217498a9f410b891cf8d85fae56a",
+    "static_hash": "3750bb1e7bbd6dfe4d38ff7fdaaee70fc81103d1c983413e596cda64e9297973",
     "accessible_summary": "A branching architecture diagram with nine nodes. It starts at a conceptual business model, moves to a logical model decision point that splits into dimensional (star/snowflake) and data-vault modelling techniques, then both feed a physical-layer choice between a Fabric Lakehouse and a Fabric Warehouse. Both physical options converge on a semantic model, which can run in Direct Lake mode for near-real-time queries without a separate import refresh. A ninth node, marked as a warning, calls out mixed-grain fact tables and Direct Lake fallback to DirectQuery as the two concrete failure modes that break this chain in production.",
     "supported_layers": [
       "governance",
@@ -1220,7 +1220,7 @@
     "topic_slug": "data-modelling",
     "interaction_version": "4",
     "qa_status": "draft",
-    "static_hash": "b884a0e05a24393b4f8cc0837867b839b474573963a30de3c8e28909cdf8c433",
+    "static_hash": "0c4e2f030d616218a3efd6669c969b5852bd2717bb17fc5f6ef84e573adf43d0",
     "accessible_summary": "A three-gate decision tree. Gate 1 asks what the model must optimise for: BI query simplicity branches to a dimensional star schema, auditable history across many volatile sources branches to data vault. Gate 2 asks which engine owns writes: Spark and multi-format engineering branches to a Lakehouse over managed Delta tables, T-SQL with multi-table transactions branches to a Warehouse. Gate 3 asks how the semantic model should read the conformed table, decided per table: Direct Lake for large fresh facts, Import for compact fully-modellable tables, DirectQuery or composite for source-authoritative or exception tables. A warning node reached only from the Direct Lake branch flags that basing a Direct Lake on SQL table on a SQL view forces every query into DirectQuery fallback, and that fallback traffic lands on the DirectQuery branch anyway.",
     "supported_layers": [
       "data",
@@ -1236,7 +1236,7 @@
     "topic_slug": "silver-layer-modelling",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "67a47280ee848711daad723917cc7a0287b44aa14d79074f5c649c86d0c64a38",
+    "static_hash": "38c745b84da962ecfdb82398b3c89f98ec6e6037c97c210aaa743bb3dcf21cc4",
     "accessible_summary": "A top-down flow diagram: bronze records are standardised, deduplicated by commit time, and checked against quality rules. Passing records merge into silver tables using SCD Type 2 history; failing records branch into a quarantine table and can be replayed back into the merge once fixed. The merged table is periodically compacted and V-Ordered before being published as conformed silver tables.",
     "supported_layers": [
       "data",
@@ -1253,7 +1253,7 @@
     "topic_slug": "silver-layer-modelling",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "f4a6fe34d2c7fee29355f2e3579777b035b26250cdbc5e1d604994e3803dd4ba",
+    "static_hash": "a79a36366326f888e2ff961e43a2046a4fb339558a65d15748a328b8d0faab33",
     "accessible_summary": "A decision and internals diagram covering three silver-layer modelling decisions. First, a schema-evolution question: an incoming bronze column change is additive and merges automatically via Delta mergeSchema, unless a foreign key constraint exists on the target table, which freezes all further schema evolution until removed. Second, a historization question: does any consumer need to reconstruct a row's state as of a past date; a yes routes to SCD Type 2 with an internals cutaway showing the close-old/open-new MERGE mechanics and a warning about non-deterministic latest-row ordering, while a no routes to SCD Type 1 in-place overwrite. Third, a Delta mutation-path question for the SCD Type 2 write itself: whether to use classic copy-on-write MERGE or enable deletion vectors, shown as an internals cutaway of the merge-on-read soft-delete-plus-small-file mechanism with its measured before/after-OPTIMIZE performance trade-off and Delta protocol version increase. A closing node shows the V-Order and OPTIMIZE physical-layout decision that every path still converges on, with its measured write-time cost.",
     "supported_layers": [
       "data",
@@ -1270,7 +1270,7 @@
     "topic_slug": "metadata-driven-architecture",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "eea83b7b0c2135542fb3822fba2de6e065fc1240b85e2b7afdf84f6a275f82ce",
+    "static_hash": "a0752f84ae8d4ed44f9f7e13ebba2aa3be858fde4963a0c0ea7342d2c978b114",
     "accessible_summary": "A metadata contract describing sources and load rules is resolved into per-object configuration, which a single reusable pipeline and set of reusable notebooks execute against Fabric compute. Each run writes state, quality, and lineage telemetry to a run ledger; the ledger both proves what happened and supplies the watermark the next run reads to stay restartable. Two warning nodes call out where this pattern breaks: an over-grown metadata schema that turns into an untyped programming language, and non-idempotent writes that corrupt data on retry.",
     "supported_layers": [
       "metadata",
@@ -1289,7 +1289,7 @@
     "topic_slug": "metadata-driven-architecture",
     "interaction_version": "4",
     "qa_status": "draft",
-    "static_hash": "58a5bf497e93dcd5635e49e8e58cd7939be364ebe87441368814b36b05ba60cc",
+    "static_hash": "11bb6362f1d380bd467a87d6595fe9cabe2cef7e2f6a16ae1a520f38088ef10e",
     "accessible_summary": "The decision starts by asking how many data objects share the same load shape. A single one-off load stays a plain pipeline. Many sources with the same shape justify a metadata-driven framework, but the follow-up question is where the metadata contract lives: alongside the pipeline as simple parameters and a variable library, or in an external governed store when volume and audit requirements grow. Many sources with genuinely different shapes should not be forced into one contract — that path leads to the config-explosion warning this framework is meant to avoid.",
     "supported_layers": [
       "metadata",
@@ -1306,7 +1306,7 @@
     "topic_slug": "event-driven-architecture",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "fcef26c06de6d541e983d70117baec2e0b384a00f107820e278ee0c7f1f6b5f4",
+    "static_hash": "c5157d5f5439723bbd779c25103668ae5c9fca1fdc7e532fddb9dc17e869c726",
     "accessible_summary": "An event source feeds Eventstream, which routes to Real-Time hub and forks two ways: a hot path through Activator that fires an immediate action, and a cold path into Eventhouse and OneLake for durable history and downstream analytics. A replay/dead-letter path feeds back into the router, and two warning nodes call out the idempotency and durability risks of treating the hot path as the system of record.",
     "supported_layers": [
       "data",
@@ -1324,7 +1324,7 @@
     "topic_slug": "event-driven-architecture",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "dca224e6c0afef91121bd5617025270b3bb0627cba8511b1389927d8a64c36d4",
+    "static_hash": "7605b15ea8913c36d2129655c3d14708a5b0bddb75fc8724c3ca4a1cbdad4a0e",
     "accessible_summary": "A root question asks whether the business must react within seconds of an event. If no, the path leads to a scheduled/interval pipeline. If yes, a second question asks whether the event itself is durable state that must be retained, branching to an event-driven pattern with a durable Eventhouse cold path versus a lightweight Activator-only notification pattern. A third question on the durable branch asks whether replay is required, branching to an idempotent replay design versus a simple durable log with no replay contract.",
     "supported_layers": [
       "orchestration",
@@ -1340,7 +1340,7 @@
     "topic_slug": "architecture-implementation",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "08834a18fb99843f637dd1fab06c30124a3864b8aff6e1321b59c8de8f8dfa96",
+    "static_hash": "87480776e7ab5cec10981564d19fe124ae0623e8aae2b00846f29b354a6fabcf",
     "accessible_summary": "A three-stage implementation architecture. An owned source and service boundary scopes a thin delivery slice. Fabric workloads then ingest, transform, and serve that slice over shared OneLake data. Governance, operational evidence, recovery, and acceptance complete the path before the pattern is scaled.",
     "supported_layers": [
       "governance",
@@ -1360,7 +1360,7 @@
     "topic_slug": "architecture-implementation",
     "interaction_version": "4",
     "qa_status": "draft",
-    "static_hash": "c4aa2ef35875ad0dcfbccee54a5cb354a4f4b81e5793a2409dcf6873f85f676c",
+    "static_hash": "c3ebaca9257dc36e9776e0746e5a6ab6ace38e5feb30e2489174ef735a514b48",
     "accessible_summary": "A five-gate decision path read left to right. Gate 1 checks isolated, Git-integrated Dev/Test/Prod workspaces. Gate 2 checks Deployment Pipelines promotion with Variable Library environment binding and a pull-request gate. Gate 3 checks that pipeline retries and idempotent Delta MERGE writes are actually tested. Gate 4 checks vaulted secrets and least-privilege service identities. Gate 5 checks a tested Item Recovery restore and a named support owner before general availability. A failed gate routes back into that same phase for remediation, and a feedback edge shows configuration drift discovered in production re-opening the environments gate.",
     "supported_layers": [
       "governance",
@@ -1379,7 +1379,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "d271c2b61c894c817f48d3999dd801565b544ed6e3755038b27849dbfe840484",
+    "static_hash": "f39ef74b5ab199de0519c27fe3f7b645d623408d970122a9024f3ee55ef18e36",
     "accessible_summary": "Catalyst query compilation. Parsed logical plan; Analyzed logical plan; Optimized logical plan; Physical plan; Whole-stage code generation.",
     "supported_layers": [
       "compute",
@@ -1394,7 +1394,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "27dce8031858a76e5fe07e9b6e0df01a2dda38cff6c8cb9924089c6ed51c668d",
+    "static_hash": "44d95421db1c45864b8d82a41b2a96df6a5df4e3e49d3d090b989196534eb832",
     "accessible_summary": "Spark shuffle internals. Wide transformation forces redistribution; Map task writes data and index files; MapOutputTracker holds block locations; Reduce task fetches blocks; Lost executor triggers stage recompute.",
     "supported_layers": [
       "compute",
@@ -1409,7 +1409,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "ac03442e5af1fc1e922c751bcd7942c52a56ed3ba5683221c44348615ed56c0f",
+    "static_hash": "be33d06b3d6b43b51a065d3681a49380efe69cc82b610e10d952774fb549374b",
     "accessible_summary": "Spark unified memory management. Executor heap layout; Execution memory; Storage memory; The borrowing rule; Spill and the storageFraction trap.",
     "supported_layers": [
       "compute"
@@ -1423,7 +1423,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "b11bcca65b28101d596734e4698d2e6903f0772ac7f1e71a1b0e818af5061a4b",
+    "static_hash": "35d4105aad9c08ea78a04eea5e29f2d6c6da2e778bfb815de939696619e087a2",
     "accessible_summary": "Adaptive Query Execution loop. Static plan from estimates; Execute materializable stages; Collect real statistics; Coalesce partitions; Convert joins to broadcast; Split skewed partitions.",
     "supported_layers": [
       "compute",
@@ -1438,7 +1438,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "d6220633e7b38b719d976ba5d5256ade1d383ddc6ba19733efe7162d7f356960",
+    "static_hash": "b963aefaa4522298a770113cc741d0f0218f0711e7578f4ee5beb25bee9000b9",
     "accessible_summary": "Native Execution Engine architecture. Catalyst physical plan; Gluten plan translation; Velox vectorized execution; JVM Tungsten fallback path; Columnar to row conversion boundary.",
     "supported_layers": [
       "compute"
@@ -1452,7 +1452,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "650b4403d27be8b1dadc43aaadde5dfb56de7d17ad8481cd3224748eacaee00e",
+    "static_hash": "12e3e2e538fb663514e9fd360b569c3a24b9c4e6cc8e327f15d0108a43cb7ae9",
     "accessible_summary": "Native execution fallback tiers. Tier one whole query; Tier two operator; Tier three expression; Tier four data type; How to detect fallback.",
     "supported_layers": [
       "compute",
@@ -1467,7 +1467,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "8045b6c72f419e223075d0ebdf17f15c6f4bd9972441012bcbd9c1d44f1e0cb1",
+    "static_hash": "9ea086f4b8c492048f4e9777dcdcc49362d755d2bfa3da5299de5d610ac6edea",
     "accessible_summary": "Native and JVM execution compared. Shared responsibilities; What only the JVM path does; What the native path changes; Cost of mixing; How they work together in one plan.",
     "supported_layers": [
       "compute"
@@ -1481,7 +1481,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "8dd5e2921966e79c6d967b48dd6e42a4485b6d45c8cd566aed90f7ffd96e9031",
+    "static_hash": "aa404af58cfe8ce83a7e0ebd680ed19737d8f1c75d8f069f402085cb6a55da9d",
     "accessible_summary": "Efficient Scaledown capabilities. The coupling problem; Remote Shuffle Manager; Shuffle Migration; Decision Layer; AQE Shuffle Write; Measured effect and platform constraints.",
     "supported_layers": [
       "compute",
@@ -1496,7 +1496,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "db2da2639584784beb5f10dc37e5c7e882ddc364f2198fe63f745ce54d8c0b2e",
+    "static_hash": "e30e46eed4b0e1a5f1c6f84e92d76fa01a99082e6475995af48470aa742abaf3",
     "accessible_summary": "Executor decommission lifecycle. Scale-down decision; Stop scheduling new tasks; Migrate shuffle blocks; Update block locations; Executor exits safely; What happens without it.",
     "supported_layers": [
       "compute"
@@ -1510,7 +1510,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "b7b57458f6dd545193500277d33592f73051d1efb114a8699d5587192638515e",
+    "static_hash": "a1acde7d7f8e4ebc6bd8b8661c84c1247448341115c0fb32c76908855d38e350",
     "accessible_summary": "Spark performance diagnosis order. Read the physical plan; Check stage metrics for spill and skew; Fix code or table layout; Adjust settings last; The four symptoms and their fingerprints.",
     "supported_layers": [
       "compute",
@@ -1525,7 +1525,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "8d7408da139a293fee295d253a03f2fe2058d5036a365f2a673cf2d9203fd6d3",
+    "static_hash": "56c76fe7dadd317afa571b746c9598ff48976f8cb810c4917c3540e60ad9d61b",
     "accessible_summary": "Fabric Spark configuration layers. Capacity layer; Workspace Spark settings; Environment item; Notebook session configure; Running session conf set; Why a setting does not stick.",
     "supported_layers": [
       "compute",
@@ -1540,7 +1540,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "5779100bdb9f725bcef41b23370cb6590a9c3af738016ca5e6ac29864e102ab1",
+    "static_hash": "063888ab54011220c29fe65f78cde3583a03aa3602c50b82a8a3d6ced7d0e647",
     "accessible_summary": "Fabric runtime migration. Component version changes; Library re-publish requirement; JAR recompilation; ANSI mode default flip; Delta protocol interoperability; Rollback path.",
     "supported_layers": [
       "compute",
@@ -1555,7 +1555,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "a480f9052017a889d7b55f6f4b48708271d808ed84c1f8eb75e7b2cd620c1819",
+    "static_hash": "7c7aef36d8bed113abc2a9238524265db7b7b258949a3735c1bcec92d6073dd4",
     "accessible_summary": "ANSI and native execution trade-off. The collision; Keep ANSI for correctness; Disable ANSI for native speed; Decide per workload class; Record the decision in the Environment.",
     "supported_layers": [
       "compute"
@@ -1569,7 +1569,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "6f62425fb2f451dfa9eebaaed09b0ebf468c6328e910c290164f3a01c1accf38",
+    "static_hash": "d136fe460e9c4572defc4d7bfe85cdf3cc01a8028eb8c0f4fb2dd2b600b70b27",
     "accessible_summary": "Spark and Warehouse engine boundary. Shared OneLake Delta storage; Spark engine characteristics; Polaris engine characteristics; SQL analytics endpoint is read only; Where to put which workload.",
     "supported_layers": [
       "compute",
@@ -1584,7 +1584,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "4967c5f5fa8ee98412353d7f811fd8b23ab274af001c77504acb178c3286a02f",
+    "static_hash": "8b491bb435f30dce4784e69e4d46c9102563c9ab72940fb9435dbfe48fe87511",
     "accessible_summary": "Engine choice between Spark and Python notebooks. Working data size heuristic; Python notebook path; Small Spark session path; Scaled Spark pool path; Overrides that beat size; Maintenance consequence.",
     "supported_layers": [
       "compute",
@@ -1599,7 +1599,7 @@
     "capability_id": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "80634ed03bdd65179201432f06d27a7fe6d205d447ec181a0ebe2f8663f131c6"
+    "static_hash": "5049e428ccd89595e5b61b79dcd28a4942c74e0f38ff1f11835c55fca8304721"
   },
   {
     "kind": "generated",
@@ -1609,7 +1609,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "375b923da8baab694f8a3abbb0920dcec4309a529674cfc9903b6ef343fa42cd"
+    "static_hash": "0eb0643da17cb4b6959a5edd3d140d4784f803df813bfada2aa0610f9c281d36"
   },
   {
     "kind": "generated",
@@ -1619,7 +1619,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "86701eb4fb09f6d682fefbcabc3bac27e99358ddd25dbd90ed21c5254eace8df",
+    "static_hash": "89083bf550be03448e36f9473be2daac6a8a91033138ce9bc271e766214e1ea1",
     "accessible_summary": "A flow diagram contrasting manual Spark UI troubleshooting across five overlapping surfaces with an automated REST-API-driven diagnostic pipeline. The automated path resolves workspace and item identifiers from a plain-English description, calls Fabric's Spark monitoring REST API (which mirrors the open-source Spark History Server contract and adds Fabric-only endpoints for advisor findings, executor resource usage, and raw driver logs), pulls the raw event log for one past application, and parses it into a severity-ranked report covering skew ratio, spill volume, a true critical-path ranking of stages, and the application's actual effective configuration recovered as ground truth, with a worked example measuring a genuine 3.8x skew ratio on a deliberately skewed join. A parallel branch covers the Livy log, the only place a whole class of session-bootstrap failures ever appears, and a comparison branch covers the continuously-pushed diagnostic emitter as an alternative to on-demand REST pulls. Warning nodes cover the five common URL-construction failures fetching an event log by REST, the shuffle-size estimate that is a proxy rather than a measurement, and the four documented gotchas configuring the diagnostic emitter for Log Analytics.",
     "supported_layers": [
       "observability",
@@ -1637,7 +1637,7 @@
     "topic_slug": "fabric-data-agent",
     "interaction_version": "3",
     "qa_status": "draft",
-    "static_hash": "bab552c221fc68a8d2ee2848b8bb4d279cd96f82d033b3ec82688f0db91464e2",
+    "static_hash": "c6041a262f5c60bd0a4cf4943e1c3c6116dcfaf41272ab6487c9bc84c8652798",
     "accessible_summary": "An internals diagram. Four configuration surfaces (agent-level instructions, data-source-level instructions, data source descriptions, and up to 100 example queries per source) feed an assembled prompt sent to a managed Azure OpenAI Assistant alongside the user question and fetched schema. The assistant routes to one of four source-specific generators: NL2SQL for lakehouse/warehouse, NL2DAX for Power BI semantic models (no example-query support), NL2KQL for Eventhouse KQL databases, or Graph/GQL for ontology sources (three documented failure modes). A warning node covers the Gold-in-Name-Only data-modeling antipattern that silently breaks NL2SQL. An accuracy-levers panel shows community benchmarking converging on instructions and data-model quality as the dominant factor, with measured accuracy reaching about 97.2% after fixing benchmark ground truth and tightening instructions. All four generator paths converge on a read-only, identity-scoped, governance-gated, 25-row-by-25-column-capped answer.",
     "supported_layers": [
       "orchestration",
@@ -1656,7 +1656,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "42f81c03f417f40f33173238e09e0462e9c6f02e03db085bc07b42338a660348",
+    "static_hash": "09b043c858acc7bf06f1b7bc95e54202f08c3ff0e51ffbd28f2665c9ba3707c4",
     "accessible_summary": "A Fabric Spark pool is one head node running the driver's SparkContext, DAGScheduler, TaskScheduler, and Catalyst optimizer alongside Livy, YARN Resource Manager, and ZooKeeper, plus worker nodes that each run exactly one Executor JVM under a fixed 1:1 node-to-executor ratio. A single-node pool is the one exception, splitting one node's resources between driver and executor. A capacity SKU's vCore budget divided by node size gives node count; subtracting one node for the driver gives the executor-slot count, which is the real concurrency ceiling. Two failure modes follow: the single driver process bottlenecks under high job volume, and collecting large results onto the driver with collect() or toPandas() is the number-one cause of driver out-of-memory errors.",
     "supported_layers": [
       "compute",
@@ -1672,7 +1672,7 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "a98f746c36cd900966f8269898dea485beeeb973e43d0672eaba79ca06dbe49d",
+    "static_hash": "0edd6e6ee73c014aa12b42657265be59d186d061c8656698015abd7ba84cc591",
     "accessible_summary": "A decision tree rooted in whether a join has an equality predicate on its join keys. Without one, Spark falls back to a Broadcast Nested Loop Join or a Cartesian Product, an O(n x m) comparison that is a documented physical-plan red flag and a common trap for inequality/as-of joins. With an equi-join, Spark checks whether one side's estimated size is under spark.sql.autoBroadcastJoinThreshold (10 MB by default): under that size, it broadcasts the small side for a Broadcast Hash Join with no shuffle of the large side; over that size, both sides are shuffled and Spark defaults to Sort Merge Join, where Adaptive Query Execution's skew-join handling can split an overloaded partition at runtime. A warning panel covers two real traps: casting a join key defeats equi-join detection and forces the slow path, and a broadcast build that exceeds spark.sql.broadcastTimeout aborts the query regardless of AQE.",
     "supported_layers": [
       "compute"
@@ -1696,6 +1696,6 @@
     "topic_slug": "spark",
     "interaction_version": "1",
     "qa_status": "draft",
-    "static_hash": "a44109e0b9bd84c851987e37978736e8a4912e2d6ac01b594a4cc2bc576ceb3f"
+    "static_hash": "d6a74dc5a5e0b74c2ec64b14ad6127266a8aedc3931f61cc340747894c07bc80"
   }
 ]

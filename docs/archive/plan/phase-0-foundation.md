@@ -11,7 +11,7 @@ WP0.4 removes noise every later phase would otherwise wade through.
 
 ## WP0.1 — Kill the 4.16 MB eager diagram bundle
 
-**Problem.** [src/diagrams/catalog.ts](../../src/diagrams/catalog.ts) eagerly globs _both_ sidecars
+**Problem.** [src/diagrams/catalog.ts](../../../src/diagrams/catalog.ts) eagerly globs _both_ sidecars
 and SVGs:
 
 ```ts
@@ -47,7 +47,7 @@ downloads all 95 SVGs (1.90 MB) + all 95 sidecars (2.07 MB) to display one diagr
   `markdownDiagram` — a comment says so and nothing tests it. Extract a shared constant and add a test.
 - SSR: the reader route is SSR'd. `ContentItemArticle` already memoizes figure indices because a
   naive counter produced figure-1 on server / figure-2 on client — **keep that memo**.
-- Print/PDF ([export-pdf.ts](../../src/lib/export-pdf.ts)) walks the article DOM; ensure diagrams
+- Print/PDF ([export-pdf.ts](../../../src/lib/export-pdf.ts)) walks the article DOM; ensure diagrams
   resolve before print or printing loses them.
 
 **Gate.**
@@ -63,7 +63,7 @@ Manual: open an article with a diagram — renders, lightboxes, prints, no CLS.
 
 ## WP0.2 — Rate-limit and tier-gate `/api/chat`
 
-**Problem.** [src/routes/api/chat.ts](../../src/routes/api/chat.ts) has **no auth and no rate
+**Problem.** [src/routes/api/chat.ts](../../../src/routes/api/chat.ts) has **no auth and no rate
 limit**, and takes the model id from the request body:
 
 ```ts
@@ -76,7 +76,7 @@ spend at the highest rate, unauthenticated.
 **Fix.**
 
 1. **Tier gate.** Anonymous callers may only select `tier: "cheap"` models
-   ([advisor-models.ts](../../src/lib/advisor-models.ts) already carries the tier). Authenticated
+   ([advisor-models.ts](../../../src/lib/advisor-models.ts) already carries the tier). Authenticated
    callers get `moderate`; `expensive` needs an approved profile. Silently downgrade rather than
    erroring, so the UI stays simple.
 2. **Rate limit.** Per-IP and per-session token buckets. Keep in-process to start (single Lovable
@@ -100,7 +100,7 @@ signed out → runs on a cheap model; hammer the endpoint → 429.
    the global `:focus-visible` box-shadow **silently does nothing**. Use the oklch properties
    directly. Verify by tabbing through `/`, `/topics`, `/learn`, and an article.
 
-2. **Token drift.** [src/lib/fabric-theme.ts](../../src/lib/fabric-theme.ts) hardcodes dark-only
+2. **Token drift.** [src/lib/fabric-theme.ts](../../../src/lib/fabric-theme.ts) hardcodes dark-only
    classes (`text-teal-300`, `bg-teal-500/10`, `border-teal-400/40`) beside the real token system.
    Replace with semantic tokens. `accentClasses` is the main offender; `tierMeta` is second.
 
@@ -127,12 +127,12 @@ with a baseline file for known exceptions. This is what would have prevented the
 **Remove.**
 
 - `backend/` — retired FastAPI app (18 tracked Python files) **and** `backend/.env`.
-  Also delete the `backend` job from [quality-gate.yml](../../.github/workflows/quality-gate.yml) —
+  Also delete the `backend` job from [quality-gate.yml](../../../.github/workflows/quality-gate.yml) —
   you currently pay CI on every PR to lint a dead app.
 - `frontend/` — 0 tracked files.
 - `bun.lock` (477 KB) — stale; CI uses npm.
 - `getBlog` / `getDesign` / `listBlogs` / `listDesigns` in
-  [atlas.functions.ts](../../src/lib/atlas.functions.ts) — pre-unification duplicates. Grep callers first.
+  [atlas.functions.ts](../../../src/lib/atlas.functions.ts) — pre-unification duplicates. Grep callers first.
 - `*_legacy` tables and compat views — **only after** a repo-wide grep confirms zero reads. The
   unification migration's own comment asks for exactly this follow-up.
 
@@ -144,7 +144,7 @@ confirm with the owner first.
 unrelated project. Default to repo-relative or drop the default.
 
 **Doc drift — scope precisely.** 25 files reference `localhost:8000`, but **23 already say it is
-retired**. Only **[docs/workflow.md:104](../../docs/workflow.md#L104)** is genuinely stale (a live
+retired**. Only **[docs/workflow.md:104](../../../docs/workflow.md#L104)** is genuinely stale (a live
 `import_content.py --base http://localhost:8000` instruction). Fix that one.
 **Do not sweep all 25** — that strips accurate "this is retired" guidance out of agent contracts.
 

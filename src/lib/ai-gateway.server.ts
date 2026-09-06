@@ -30,7 +30,7 @@ export function createOpenRouterProvider(
     headers: {
       Authorization: `Bearer ${openRouterApiKey.trim()}`,
       "HTTP-Referer": appUrl(),
-      "X-Title": "Fabric Atlas",
+      "X-Title": "Fabric Codex",
     },
     supportsStructuredOutputs: true,
   });

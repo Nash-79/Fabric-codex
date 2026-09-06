@@ -1,107 +1,145 @@
-# Fabric Atlas
+# Fabric Codex
 
-A governed, source-grounded knowledge and architecture platform for Microsoft Fabric.
+A source-grounded knowledge platform for Microsoft Fabric.
 
-Approved sources become **versioned, source-graded claims**, each tagged to a Fabric
-**capability** and a **depth level**. Those claims feed **cited** solution architectures and
-**tiered learning**, and every output is run through a **validation pass**. The
-**capability registry is the spine** the whole system hangs on.
+Approved sources become **versioned, trust-graded claims**, each tagged to a Fabric **capability**
+and a **depth level**. Those claims feed cited articles, solution architectures and tiered lessons —
+and every generated output is validated against the claims it cites.
 
-## What's here
+**The capability registry is the spine.** Ingestion tags claims to capabilities, the reader is a
+view over them, retrieval is scoped by them, and coverage gaps are visible per capability and
+depth. Everything else hangs off that.
 
-```
-CLAUDE.md            Project memory for Claude Code (domain rules, scope discipline)
-AGENTS.md            The same, for Codex / other agents (committed, repo-shared)
-.claude/agents/      Eight focused subagents (curator, architect, validator, drift, learning,
-                     coverage, diagram-author, fabric-advisor)
-.claude/commands/    Slash commands: /ingest /ingest-batch /design /validate /drift /lesson
-                     /diagram /advise
-.codex/prompts/      The same intents as Codex prompts (+ .codex/README.md install note)
-backend/             Local/legacy FastAPI + SQLModel authoring/import service
-src/                 Lovable-hosted TanStack Start production app
-supabase/            Lovable/Supabase schema migrations and generated types
-content/             Git-tracked authored knowledge: sources/ diagrams/ designs/ lessons/
-scripts/             import_content.py — publish authored content to a running local/legacy server
-                     migrate_to_supabase.py / replay_verified_status.py / validate_migration.py
-docs/workflow.md     Author-locally / publish-to-server model + VS Code extension setup
-docs/data-model.md   How versioning, supersede, drift, tags, assets, and validation work
-docs/extending.md    Every extension point: content, capabilities, theme, views, agents
-frontend/            Legacy local SPA retained for reference; not hosted by Lovable
-```
+**Live:** https://fabric-codex.nmepani.workers.dev
 
-## Two ways to run the LLM work
+---
 
-- **Local (default, no API cost):** the Claude Code / Codex **VS Code extensions** do extraction,
-  generation, validation reasoning, and diagrams on your subscription, write files under
-  `content/`, and POST structured data. The server holds no key (`LLM_MODE=local`). See
-  `docs/workflow.md`.
-- **API (optional):** set `LLM_MODE=api` and `ANTHROPIC_API_KEY` to have the server generate on the
-  fly via `llm.py`.
+## The rules that shape everything
 
-## Quick start
+1. **Every factual claim cites a source.** No source, no claim.
+2. **Claims are versioned, never edited in place.** A change creates a new version whose
+   `supersedes_id` points back; the old one is marked superseded.
+3. **Trust tiers**, best to worst: T1 Microsoft Learn · T2 Fabric product blog · T3 Microsoft
+   GitHub samples · T4 MVP/community · T5 vendor · T6 unknown.
+4. **Depth levels:** L1 conceptual · L2 practitioner · L3 architect · L4 performance · L5 internals.
+5. **Inference is labelled as inference.** Generated prose distinguishes verified fact from
+   reasoning.
+6. **Never invent product limits, quotas, or roadmap claims.**
 
-```bash
-# 1) backend
-cd backend && python -m venv .venv && . .venv/Scripts/activate
-pip install -r requirements.txt && cp .env.example .env   # add ANTHROPIC_API_KEY
-uvicorn app.main:app --reload                              # http://localhost:8000/docs
+These are enforced in code and in every agent prompt. See [CLAUDE.md](CLAUDE.md) for the full
+contract.
 
-# 2) Claude Code — open the repo; subagents and commands are auto-discovered
-#    e.g.  /ingest https://learn.microsoft.com/fabric/fundamentals/direct-lake-develop tier=1
-#          /design Governed self-service BI over 5TB finance data, 800 concurrent users
-#          /validate <design-id>
+---
 
-# 3) Codex — copy prompts once (see .codex/README.md), then /prompts:fa-ingest etc.
-```
-
-## The loop
+## How it fits together
 
 ```
-approved source ──▶ knowledge-curator ──▶ pending claims (capability + depth + tier + citation)
-                                              │  human verifies in the Registry
-                                              ▼
-scenario ──▶ solution-architect ──▶ cited architecture ──▶ validation-reviewer ──▶ issues + confidence
-                                              ▲                                        │
-            source changes ──▶ source-drift-analyst ──────────────────────────────────┘
-                                   (supersede claims, flag affected designs)
-
-same claims ──▶ learning-author ──▶ Beginner / Intermediate / Expert lessons (grounded, cited)
+Approved source
+      │  knowledge-curator (local agent, your IDE subscription)
+      ▼
+content/sources/<slug>.json ── cited, paraphrased claims
+      │  git commit + push
+      ▼
+Settings → Publish  ── human-gated, service-role write
+      ▼
+Supabase (Postgres + pgvector + RLS)
+      │
+      ▼
+Cloudflare Worker ── SSR reader, advisor, admin
 ```
 
-## Lovable App
+**LLM work happens on your laptop, not the server.** Local agents extract claims and author
+content; the deployed app stores, serves and runs deterministic checks. The one deliberate
+exception is admin-triggered article-idea generation, which routes through the configured provider
+chain.
 
-The production app is the root TanStack Start app in `src/`, built and hosted by Lovable using
-`.lovable/project.json` and `vite.config.ts`.
+Full detail: **[docs/architecture.md](docs/architecture.md)**.
+
+---
+
+## Repository layout
+
+| Path | What it is |
+|---|---|
+| `src/` | TanStack Start app — SSR reader, advisor, admin. Deployed to Cloudflare Workers. |
+| `supabase/migrations/` | The canonical schema. 56 migrations, replayable from scratch. |
+| `content/` | Git-tracked authored knowledge: `sources/` `diagrams/` `articles/` `lessons/` `help/` |
+| `scripts/` | Validators, the queue digest, watcher polling, hash regeneration. |
+| `.claude/agents/` | 16 focused subagents (curator, architect, validator, diagram-author, …). |
+| `.claude/commands/` | 16 slash commands that drive them. |
+| `.codex/` `.gemini/` | The same contracts for other agent runtimes. |
+| `docs/` | Architecture, data model, workflow, runbooks. Start at [docs/](docs/). |
+| `langgraph/` | Unwired reference scaffold for a possible headless pipeline. Nothing calls it. |
+
+---
+
+## Quickstart
 
 ```bash
 npm install
-npm run dev
-npm run build
+cp .env.example .env      # add your Supabase URL + publishable key
+npm run dev               # http://localhost:8080
 ```
 
-Set runtime environment variables in Lovable: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`,
-`SUPABASE_SERVICE_ROLE_KEY` for admin seeding/functions, `LOVABLE_API_KEY` for Advisor, and a
-random `FABRIC_ATLAS_AGENT_READ_TOKEN` for the read-only local-agent snapshot. Local authoring
-machines set the same token plus `FABRIC_ATLAS_APP_URL` (the deployed app origin). Never prefix
-the agent token with `VITE_` or commit it.
+Running against the deployed Worker locally:
 
-The legacy `frontend/` SPA can still be useful as a local reference for prior UI behavior, but it is
-not the hosted application path.
+```bash
+npm run build
+npm run preview:worker    # wrangler dev, exercises the real Workers runtime
+```
 
-The UI should follow the **Microsoft Fabric design language** — Fluent neutrals plus the
-Fabric brand ramp, light theme by default with a dark toggle.
+### The checks CI runs
 
-Tabs: **Overview** (the overarching Microsoft Fabric view — platform story, original
-architecture diagram, platform-level claims, jump-offs into every capability),
-**Registry** (coverage grid, tag filters, claim browser, Verify button, version history),
-**Sources** (tier-graded sources; referenced images shown as attributed links, generated diagrams
-rendered inline from `/content/...`), **Designs** (cited markdown, validation runs, confidence,
-one-click deterministic validation), **Learn** (lessons authored from verified claims), and
-**Author** (the agent-driven authoring loop, step by step).
+```bash
+npm run typecheck              # tsc --noEmit
+npm test                       # vitest
+npm run lint                   # eslint + prettier
+npm run validate:content       # internals-gap tracking, citation shape
+npm run validate:diagrams      # sidecars, registered hashes, mirrors
+npm run validate:diagram-layout  # headless render at 390/768/1280px
+npm run verify:schema          # KB invariants against Supabase
+```
 
-## Design stance
+`validate:diagrams` checks a **registered SHA-256 per SVG**. Editing a diagram means editing both
+`content/diagrams/<slug>.svg` and its `public/diagrams/` mirror, then running
+`node scripts/update-static-hashes.mjs`. See [docs/extending.md](docs/extending.md).
 
-This is deliberately a **single-model + retrieval** system, not a 40-agent mesh. Each "agent" is
-a focused prompt over capability-scoped retrieval. Add complexity only when a concrete need
-forces it. See `CLAUDE.md` for the full rationale and guardrails (including copyright rules:
-paraphrase, quotes < 15 words, never reproduce source structure).
+---
+
+## Deployment
+
+Cloudflare Workers, auto-deployed from `main` via Workers Builds. Supabase (Postgres + pgvector)
+holds data and auth.
+
+Step-by-step, including secrets and the Supabase URL configuration that OAuth needs:
+**[docs/deployment.md](docs/deployment.md)**.
+
+---
+
+## Documentation
+
+| Doc | Read it when |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | You want the system shape and why it is that shape |
+| [docs/data-model.md](docs/data-model.md) | Before touching claim or content versioning |
+| [docs/workflow.md](docs/workflow.md) | Authoring content with the agent pipeline |
+| [docs/extending.md](docs/extending.md) | Adding capabilities, diagrams, views, agents |
+| [docs/deployment.md](docs/deployment.md) | Deploying, or changing infrastructure |
+| [docs/knowledge-gaps.md](docs/knowledge-gaps.md) | Understanding coverage gaps and how they're tracked |
+| [docs/dependencies.md](docs/dependencies.md) | Upgrading anything |
+| [docs/official-icon-policy.md](docs/official-icon-policy.md) | Using Microsoft icons in a diagram |
+| [docs/runbooks/](docs/runbooks/) | Operational procedures |
+| [docs/archive/](docs/archive/) | Completed plans, kept for context |
+
+---
+
+## Copyright
+
+Sources are paraphrased in full. Any unavoidable quote stays under 15 words, one per source,
+attributed. Article paragraphs, tables and structure are never reproduced — the knowledge base
+stores links, metadata, extracted claims and original summaries.
+
+Diagrams are original work. Microsoft's official architecture icons may appear under Microsoft's
+diagram terms when obtained from an official collection, used unchanged with an adjacent product
+label, and tracked per [docs/official-icon-policy.md](docs/official-icon-policy.md). Not affiliated
+with Microsoft.

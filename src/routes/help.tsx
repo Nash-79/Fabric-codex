@@ -8,7 +8,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 const helpQO = queryOptions({ queryKey: ["help"], queryFn: () => listHelp() });
 
 export const Route = createFileRoute("/help")({
-  head: () => ({ meta: [{ title: "Help — Fabric Atlas" }] }),
+  head: () => ({ meta: [{ title: "Help — Fabric Codex" }] }),
   loader: ({ context }) => context.queryClient.ensureQueryData(helpQO),
   errorComponent: ({ error, reset }) => (
     <div className="min-h-screen bg-background p-10 text-foreground">

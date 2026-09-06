@@ -3,7 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { mergeLocalProgress, upsertMyProgress, type ProgressRow } from "@/lib/atlas.functions";
 import { useAuthSession } from "@/lib/use-auth-session";
 
-// The sync layer behind D3 (docs/plan/phase-1-curriculum.md WP1.2). Public reading is unchanged —
+// The sync layer behind D3 (docs/archive/plan/phase-1-curriculum.md WP1.2). Public reading is unchanged —
 // anonymous progress stays entirely in the existing fa:lesson-done / fa:read:{kind}:{slug} /
 // fa:steps:{kind}:{slug} localStorage keys (use-lesson-progress.ts, use-reading-progress.ts,
 // use-step-progress.ts are untouched). This module adds three things on top, active only once

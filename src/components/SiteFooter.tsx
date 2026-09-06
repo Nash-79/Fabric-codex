@@ -16,7 +16,7 @@ export function SiteFooter() {
           <div className="max-w-sm">
             <div className="flex items-center gap-2">
               <FabricMark className="h-5 w-5" />
-              <span className="text-sm font-semibold">Fabric Atlas</span>
+              <span className="text-sm font-semibold">Fabric Codex</span>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
               A source-grounded knowledge base for Microsoft Fabric. Every factual claim cites an

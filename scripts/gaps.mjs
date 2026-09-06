@@ -88,8 +88,8 @@ function textReport(gaps, drift, markdown) {
   const h = (text) => (markdown ? `## ${text}` : text);
   const lines = [
     markdown
-      ? "# Fabric Atlas — internals gap inventory (generated)"
-      : "Fabric Atlas internals gaps",
+      ? "# Fabric Codex — internals gap inventory (generated)"
+      : "Fabric Codex internals gaps",
   ];
   const sums = totals(gaps);
   lines.push(

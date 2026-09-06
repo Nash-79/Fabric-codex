@@ -227,7 +227,7 @@ export type ArticleIdeaCandidate = z.infer<typeof ideaSchema>;
 
 const ideaArraySchema = z.object({ ideas: z.array(ideaSchema).max(15) });
 
-const SYSTEM_PROMPT = `You are the Fabric Atlas Editorial Radar — you propose article and lesson ideas for a
+const SYSTEM_PROMPT = `You are the Fabric Codex Editorial Radar — you propose article and lesson ideas for a
 governed Microsoft Fabric knowledge platform. You are NOT the author; a separate local agent writes
 the actual content later from verified claims. Your only job is to propose well-justified candidates.
 

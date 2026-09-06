@@ -1,13 +1,13 @@
 # Dependencies
 
-How third-party packages enter Fabric Atlas and how they get upgraded.
+How third-party packages enter Fabric Codex and how they get upgraded.
 
 Per `AGENTS.md`: **ask before adding a new production dependency.** This document
 covers what happens after one is approved.
 
 ## Credits
 
-Fabric Atlas is built on open-source work. Libraries doing substantial work for us,
+Fabric Codex is built on open-source work. Libraries doing substantial work for us,
 credited beyond the license files vendored in `node_modules/`:
 
 | Library                                                   | Author           | License | What it does for us                                                                                                                                                                                                                  |
@@ -98,6 +98,6 @@ dependency is covered by tests its upgrades are gated automatically.
 ### Not covered here
 
 `bun.lock` and `package-lock.json` both exist; standardising on one package manager
-is tracked in [`docs/analysis-and-modernisation.md`](analysis-and-modernisation.md).
+is tracked in [`docs/analysis-and-modernisation.md`](archive/analysis-and-modernisation.md).
 The release-age guard above is enforced by our own check regardless of which manager
 runs the install.

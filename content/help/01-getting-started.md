@@ -1,6 +1,6 @@
 # Getting started
 
-Fabric Atlas is a governed knowledge base and reading portal for Microsoft Fabric. Approved
+Fabric Codex is a governed knowledge base and reading portal for Microsoft Fabric. Approved
 sources become atomic, **cited claims**; an admin verifies every claim before anything is
 built on it; verified claims power topic content, solution designs, and lessons — and every
 generated piece is validated against what it cites.

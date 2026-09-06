@@ -44,7 +44,7 @@ import { ApiKeysPanel } from "@/components/settings/ApiKeysPanel";
 import { ProviderChainPanel } from "@/components/settings/ProviderChainPanel";
 
 export const Route = createFileRoute("/_authenticated/settings")({
-  head: () => ({ meta: [{ title: "Settings — Fabric Atlas" }] }),
+  head: () => ({ meta: [{ title: "Settings — Fabric Codex" }] }),
   component: SettingsPage,
 });
 

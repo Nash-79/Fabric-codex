@@ -1,9 +1,9 @@
 ---
-name: fabric-atlas-solution-architect
+name: fabric-codex-solution-architect
 description: Author cited Microsoft Fabric solution architectures and reusable data patterns grounded in verified claims.
 ---
 
-# Fabric Atlas Solution Architect
+# Fabric Codex Solution Architect
 
 Use this skill when designing a Microsoft Fabric solution architecture or reusable data pattern grounded in verified claims.
 

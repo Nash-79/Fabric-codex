@@ -39,7 +39,7 @@ export function AdvisorComposer({
         if (!msg.text.trim()) return;
         onSubmit();
       }}
-      aria-label="Ask the Fabric Atlas Advisor"
+      aria-label="Ask the Fabric Codex Advisor"
     >
       <PromptInputTextarea
         ref={textareaRef as any}

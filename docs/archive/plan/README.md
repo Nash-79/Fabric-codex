@@ -1,8 +1,8 @@
-# Fabric Atlas → Learning Portal — master plan
+# Fabric Codex → Learning Portal — master plan
 
 **Status:** in progress — WP2.4 outstanding (QA backlog + ~9 new diagrams, re-scoped below); WP3.1 needs its corrective migration applied before D4 closes · **Last reviewed:** 2026-08-24 · **Owner:** @nmepa · **Created:** 2026-08-23
 
-This directory is the plan of record for turning Fabric Atlas from a reference encyclopedia into a
+This directory is the plan of record for turning Fabric Codex from a reference encyclopedia into a
 professional Microsoft Fabric learning portal. This file is the **orchestrator**: it tracks
 progress, ordering, and gates. Each phase has its own file with the executable detail.
 
@@ -20,7 +20,7 @@ progress, ordering, and gates. Each phase has its own file with the executable d
 
 Audited 2026-08-23 against three inputs. The verdict:
 
-> **Fabric Atlas is an excellent source-grounded reference encyclopedia with a learning layer that
+> **Fabric Codex is an excellent source-grounded reference encyclopedia with a learning layer that
 > is barely started.** The knowledge base, citation model, diagram contract, and CI gates are
 > genuinely strong. The learning layer is ~200 lines of UI over 15 content files, with no
 > curriculum, no server-side progress, and no assessment.
@@ -158,7 +158,7 @@ Migrations additionally run `npm run verify:schema` and
 
 ## Non-goals (do not drift into these)
 
-Carried from [CLAUDE.md](../../CLAUDE.md) — they still hold:
+Carried from [CLAUDE.md](../../../CLAUDE.md) — they still hold:
 
 - **No agent mesh.** An agent is retrieval scoped to capabilities plus a focused prompt.
 - **No mega-prompt.** Each agent stays narrow.

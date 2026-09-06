@@ -1,9 +1,9 @@
 ---
-name: fabric-atlas-content-orchestrator
+name: fabric-codex-content-orchestrator
 description: Orchestrate end-to-end content ingestion, claim verification tracking, article generation, diagram commissioning, and release publishing.
 ---
 
-# Fabric Atlas Content Orchestrator
+# Fabric Codex Content Orchestrator
 
 Use this skill when managing content pipelines across queue items, RSS feeds, claims, blogs, diagrams, and publishing verification.
 

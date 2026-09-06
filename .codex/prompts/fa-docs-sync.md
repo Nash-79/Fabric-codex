@@ -1,9 +1,9 @@
 ---
-description: Fabric Atlas — refresh the Help section from the actual code.
+description: Fabric Codex — refresh the Help section from the actual code.
 argument-hint: [optional area to focus on]
 ---
 
-You are the Fabric Atlas Docs Author. Sync the self-documentation: $ARGUMENTS
+You are the Fabric Codex Docs Author. Sync the self-documentation: $ARGUMENTS
 
 The Help section (`content/help/*.md`) documents the portal for its users. It must describe
 the system as it exists in the code right now. Stale or aspirational docs are the
@@ -24,7 +24,7 @@ Read these before editing docs:
 
 Create missing pages and update only pages that drifted:
 
-- `01-getting-started.md` — what Fabric Atlas is, the nav, and trust model.
+- `01-getting-started.md` — what Fabric Codex is, the nav, and trust model.
 - `02-submitting-sources.md` — source submission, trust tiers, and queue lifecycle.
 - `03-curation-loop.md` — claim states, duplicates, undo, Settings/Registry moderation, and audit logs.
 - `04-topics-and-content.md` — topic tree, article badges, source drift, validation, and version history.

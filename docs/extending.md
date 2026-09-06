@@ -1,4 +1,4 @@
-# Extending Fabric Atlas
+# Extending Fabric Codex
 
 This is the map of every extension point. The golden rule first:
 
@@ -10,7 +10,7 @@ And the two non-negotiables: **nothing enters the knowledge base without a sourc
 trust tier, and human approval**, and **all source text is fully paraphrased** (quotes
 under 15 words, one per source, attributed — never copied tables or structure).
 
-Fabric Atlas is a TanStack Start app (`src/`) reading Supabase directly. There is no live FastAPI
+Fabric Codex is a TanStack Start app (`src/`) reading Supabase directly. There is no live FastAPI
 backend or separate `frontend/` SPA — both were retired. Agents do all LLM work locally (your
 subscription, not the metered API) and write only `content/*.json` + `content/diagrams/*` to git;
 an admin publishes into Supabase via **Settings → Publish**, which is always the human step that
@@ -114,7 +114,7 @@ under `:root`/`.dark`, consumed by Tailwind's token classes — components never
 Licensing note: Microsoft's official terms allow Fabric icons inside architecture diagrams,
 training materials, slide decks, and documentation, but not as a third-party app's logo. Follow
 `docs/official-icon-policy.md`: use the official asset unchanged, label it with the product/item
-name, and record provenance. Fabric Atlas's own mark (`FabricMark`) is an original drawn with the
+name, and record provenance. Fabric Codex's own mark (`FabricMark`) is an original drawn with the
 brand palette, not an official icon.
 
 ### Add a new presentation archetype
@@ -158,7 +158,7 @@ pre-existing `[!NOTE]`/`[!TIP]`/`[!WARNING]`/`[!IMPORTANT]`/`[!INFERENCE]`/`[!QU
 
 TanStack Start's file-based routing: add a file under `src/routes/` (e.g. `src/routes/my-view.tsx`)
 exporting a `Route` via `createFileRoute`. Add a link to it from `SiteHeader.tsx`'s nav and, if it
-belongs on the home page's "what Fabric Atlas offers" grid, `src/routes/index.tsx`'s `OFFERINGS`
+belongs on the home page's "what Fabric Codex offers" grid, `src/routes/index.tsx`'s `OFFERINGS`
 array — but check first whether the new view would just duplicate an existing one-click nav
 target (the home page grid was deliberately trimmed from 7 to 4 cards for exactly this reason).
 

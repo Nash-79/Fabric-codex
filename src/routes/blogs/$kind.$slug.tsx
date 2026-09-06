@@ -47,9 +47,9 @@ export const Route = createFileRoute("/blogs/$kind/$slug")({
   }),
   head: ({ loaderData }: { loaderData?: Awaited<ReturnType<typeof getContentItem>> }) => ({
     meta: [
-      { title: loaderData ? `${loaderData.item.title} — Fabric Atlas` : "Content — Fabric Atlas" },
+      { title: loaderData ? `${loaderData.item.title} — Fabric Codex` : "Content — Fabric Codex" },
       { name: "description", content: loaderData?.item.summary ?? "" },
-      { property: "og:title", content: loaderData?.item.title ?? "Fabric Atlas" },
+      { property: "og:title", content: loaderData?.item.title ?? "Fabric Codex" },
       { property: "og:description", content: loaderData?.item.summary ?? "" },
     ],
   }),

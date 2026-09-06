@@ -52,7 +52,7 @@ export const Route = createFileRoute("/search")({
     depth: typeof search.depth === "number" ? search.depth : undefined,
     tier: typeof search.tier === "number" ? search.tier : undefined,
   }),
-  head: () => ({ meta: [{ title: "Search — Fabric Atlas" }] }),
+  head: () => ({ meta: [{ title: "Search — Fabric Codex" }] }),
   component: SearchPage,
 });
 

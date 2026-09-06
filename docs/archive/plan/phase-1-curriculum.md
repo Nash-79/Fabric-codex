@@ -12,7 +12,7 @@ learning sequence, and there is no ordering primitive anywhere in the schema.
 
 ## WP1.1 — Ordering primitive (schema + siblings)
 
-**Problem.** [getContentSiblings](../../src/lib/atlas.functions.ts#L213-L238) orders by:
+**Problem.** [getContentSiblings](../../../src/lib/atlas.functions.ts#L213-L238) orders by:
 
 ```ts
 .order("updated_at", { ascending: false })
@@ -101,9 +101,9 @@ RLS: `using (auth.uid() = user_id)` for select/insert/update — the per-user pa
 
 | Hook                                                             | Key                      |
 | ---------------------------------------------------------------- | ------------------------ |
-| [use-lesson-progress.ts](../../src/lib/use-lesson-progress.ts)   | `fa:lesson-done`         |
-| [use-reading-progress.ts](../../src/lib/use-reading-progress.ts) | `fa:read:{kind}:{slug}`  |
-| [use-step-progress.ts](../../src/lib/use-step-progress.ts)       | `fa:steps:{kind}:{slug}` |
+| [use-lesson-progress.ts](../../../src/lib/use-lesson-progress.ts)   | `fa:lesson-done`         |
+| [use-reading-progress.ts](../../../src/lib/use-reading-progress.ts) | `fa:read:{kind}:{slug}`  |
+| [use-step-progress.ts](../../../src/lib/use-step-progress.ts)       | `fa:steps:{kind}:{slug}` |
 
 On first authenticated load, run a **union + max** merge: a slug completed in _either_ place is
 completed; `percent` takes the max; `completed_at` takes the earliest non-null. Never let the server
@@ -137,9 +137,9 @@ it syncs.
    Delta Optimization → Config Advisor → Table Maintenance Cadence → Query Plan Reading.
 
 **Backfill `lesson_meta`** for all lessons — currently **2 of 15**. The Zod schema
-([content-presentation.ts:61](../../src/lib/content-presentation.ts#L61)) already defines
+([content-presentation.ts:61](../../../src/lib/content-presentation.ts#L61)) already defines
 `objectives`, `prerequisites`, `estimated_minutes`, `completion_outcome`, and
-[LessonReader.tsx:38](../../src/components/readers/LessonReader.tsx#L38) already renders them. This
+[LessonReader.tsx:38](../../../src/components/readers/LessonReader.tsx#L38) already renders them. This
 is filling in a built feature, not building one.
 
 Populate `prerequisites` as **linkable slugs**, not the free text the schema currently allows —
@@ -152,7 +152,7 @@ resolves to a real slug.
 
 ## WP1.4 — Rebuild `/learn`
 
-**Problem.** [learn.tsx](../../src/routes/learn.tsx) (178 lines) fakes progression with slug-suffix
+**Problem.** [learn.tsx](../../../src/routes/learn.tsx) (178 lines) fakes progression with slug-suffix
 string matching:
 
 ```ts
@@ -180,7 +180,7 @@ as plain text, not a link**.
 `KindBadge`, `Badges` all exist and work.
 
 **Keep the tier concept** — Beginner (L1–L2) / Intermediate (L3) / Expert (L4–L5) is a documented
-domain rule in [CLAUDE.md](../../CLAUDE.md). Paths sit _alongside_ tiers as an ordering layer, they
+domain rule in [CLAUDE.md](../../../CLAUDE.md). Paths sit _alongside_ tiers as an ordering layer, they
 do not replace them.
 
 **Gate.** `npm run typecheck && npm run lint && npm test`; manual walk of a full path start→finish

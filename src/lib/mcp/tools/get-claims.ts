@@ -6,7 +6,7 @@ export default defineTool({
   name: "get_claims",
   title: "Get source-cited claims",
   description:
-    "Return source-cited claims from the Fabric Atlas knowledge base, optionally filtered by capability id, depth (1-5), trust tier (1-6), or a free-text query.",
+    "Return source-cited claims from the Fabric Codex knowledge base, optionally filtered by capability id, depth (1-5), trust tier (1-6), or a free-text query.",
   inputSchema: {
     capabilityId: z
       .string()

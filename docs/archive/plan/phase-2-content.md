@@ -14,7 +14,7 @@ This phase is where the portal actually becomes "everything about MS Fabric, bas
 **Problem.** `npm run validate:content` reports **140 warnings**, including **205 stray in-body H1s
 across 42 docs** (one article has 33) and **33 heading-level skips**. The reading-view ToC is derived
 client-side by regex over `##` headings
-([ContentTocSidebar.tsx](../../src/components/ContentTocSidebar.tsx)), so this **directly breaks
+([ContentTocSidebar.tsx](../../../src/components/ContentTocSidebar.tsx)), so this **directly breaks
 navigation** — exactly the "clarity / digestibility" problem.
 
 **Fix.** Demote stray `#` to the correct level and repair skips (`h1 → h3` becomes `h2 → h3`). This
@@ -24,7 +24,7 @@ is largely mechanical and scriptable, but **must not** disturb:
   (`### Architecture & design`, `### How it works internally`, `### Performance characteristics`) —
   these are hard exact-match conventions, not schema fields.
 - The two gap markers `*Coming soon*` and `*Workload-specific.*`, which
-  [scripts/gaps.mjs](../../scripts/gaps.mjs) separates machine-readably.
+  [scripts/gaps.mjs](../../../scripts/gaps.mjs) separates machine-readably.
 - `[Sn]` citation references.
 
 Run `node scripts/gaps.mjs` before and after — the 30/11/0/0 split must be identical.

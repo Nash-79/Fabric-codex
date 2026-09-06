@@ -5,7 +5,7 @@ export default defineTool({
   name: "list_topics",
   title: "List Fabric topics",
   description:
-    "List every topic node in the Fabric Atlas taxonomy (slug, name, parent, capability associations).",
+    "List every topic node in the Fabric Codex taxonomy (slug, name, parent, capability associations).",
   inputSchema: {},
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async () => {

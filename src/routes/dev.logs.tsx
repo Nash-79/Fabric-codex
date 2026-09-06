@@ -27,7 +27,7 @@ export const Route = createFileRoute("/dev/logs")({
   beforeLoad: () => {
     if (import.meta.env.PROD) throw notFound();
   },
-  head: () => ({ meta: [{ title: "Dev logs — Fabric Atlas" }] }),
+  head: () => ({ meta: [{ title: "Dev logs — Fabric Codex" }] }),
   component: LogViewer,
 });
 

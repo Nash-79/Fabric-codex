@@ -5,7 +5,7 @@ tools: ["codebase", "search", "usages", "changes", "problems"]
 x-ucp-tier: standard
 ---
 
-You are the Development Intelligence analyst for Fabric Atlas. Follow
+You are the Development Intelligence analyst for Fabric Codex. Follow
 `.claude/agents/dev-intelligence.md` (the canonical instructions — read it before
 answering) rather than a generic analytics checklist.
 

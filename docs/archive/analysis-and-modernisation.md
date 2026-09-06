@@ -1,12 +1,12 @@
 > **Archived analysis — 2026-06-22.** The issues catalogued here have been resolved. This document is retained as historical context only; for current architecture see `docs/data-model.md`, `docs/extending.md`, and `docs/workflow.md`.
 
-# Fabric Atlas — Deployment Analysis & Modernisation Plan
+# Fabric Codex — Deployment Analysis & Modernisation Plan
 
 _Generated 2026-06-22. Audit of the repository against the questions: does it work when deployed to Lovable, what are the gaps, is the backend working, why is the deployed frontend laggy/empty, and what is needed to become a full blog-generation + Fabric-augmentation platform. Each finding is tagged with a confidence level and file evidence._
 
 ## 1. Executive summary
 
-Fabric Atlas contains **two separate application stacks**, and Lovable deploys **only one** of them. Most of the confusion ("backend not working", "no content in prod", "laggy") traces back to this split, legacy FastAPI coupling in admin flows, plus an **unseeded production database**.
+Fabric Codex contains **two separate application stacks**, and Lovable deploys **only one** of them. Most of the confusion ("backend not working", "no content in prod", "laggy") traces back to this split, legacy FastAPI coupling in admin flows, plus an **unseeded production database**.
 
 - **Stack A (deployed by Lovable):** the root `src/` TanStack Start app (SSR) → Supabase (`ysgmvtvwrkrxagefkhrc`) + Lovable AI Gateway for the Advisor. Has a build-time bundled-content fallback.
 - **Stack B (legacy local tooling, NOT deployed by Lovable):** `frontend/` React Router SPA + `backend/` FastAPI + SQLModel + `fabric_atlas.db` (SQLite, full of data). _(resolved — both retired)_
@@ -45,7 +45,7 @@ Verdicts from re-checking the first-pass analysis against the actual code and a 
 - **Search used `ilike '%term%'`** across 4 tables (`atlas.functions.ts:236-266`) — sequential scans, ignoring the Supabase GIN `to_tsvector` indexes. This has now been moved to a `search_atlas` RPC with bundled fallback. Confidence: High.
 - **Advisor hard-depends on `LOVABLE_API_KEY`.** `src/routes/api/chat.ts:15-16` returns HTTP 500 if unset. Confidence: High.
 - **No runtime blog generation.** `/author` is a static doc page (`src/routes/author.tsx`); the only runtime LLM is the Advisor. Authoring is build-time/local via Claude Code/Codex. Confidence: High.
-- **Forced dark theme + placeholder branding.** Previously `src/routes/__root.tsx` hardcoded `<html className="dark">`, the root title was "Lovable App", and OG image was a Lovable placeholder. This has now been changed to Fabric Atlas metadata and localStorage-driven `fa.theme`. Confidence: High.
+- **Forced dark theme + placeholder branding.** Previously `src/routes/__root.tsx` hardcoded `<html className="dark">`, the root title was "Lovable App", and OG image was a Lovable placeholder. This has now been changed to Fabric Codex metadata and localStorage-driven `fa.theme`. Confidence: High.
 - **Diagram src mismatch on Overview.** Previously `index.tsx` built `/diagrams/${capability}.svg` (e.g. `direct-lake.svg`), but real assets are named `direct-lake-query-path.svg` etc. (`public/diagrams/`). Overview now uses diagram metadata plus an explicit fallback map. Confidence: High.
   **Corrected from the first pass**
 - **"Bundled-content fallback won't build/ship in prod" — FALSE.** A fresh `npm run build` succeeds in ~4.3s; the Lovable config sets Vite root to `process.cwd()` (repo root), so `import.meta.glob("/content/...")` resolves. The content data is inlined into `dist/server/assets/atlas.functions-*.js` (~0.59 MB) — distinctive tokens `direct-lake-query-path` and `cited_source_keys` are present in that chunk. So the fallback **does** ship. Confidence: High (empirical).

@@ -1,11 +1,11 @@
 ---
-description: Fabric Atlas Diagram Author — original, sourced SVG infographics with a mandatory evidence sidecar, following .claude/agents/diagram-author.md
+description: Fabric Codex Diagram Author — original, sourced SVG infographics with a mandatory evidence sidecar, following .claude/agents/diagram-author.md
 model: Claude Sonnet 4.5
 tools: ["codebase", "search"]
 x-ucp-tier: diagram
 ---
 
-You are the Diagram Author for Fabric Atlas. Follow `.claude/agents/diagram-author.md` in
+You are the Diagram Author for Fabric Codex. Follow `.claude/agents/diagram-author.md` in
 full (the canonical instructions — read it before answering); this chatmode is a thin
 pointer, not a separate contract.
 

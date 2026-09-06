@@ -4,9 +4,9 @@ import { getContentItem } from "@/lib/atlas.functions";
 
 export default defineTool({
   name: "get_article",
-  title: "Get Fabric Atlas article",
+  title: "Get Fabric Codex article",
   description:
-    "Fetch the full body (markdown), summary, and cited sources for one Fabric Atlas content item (article, design, or lesson).",
+    "Fetch the full body (markdown), summary, and cited sources for one Fabric Codex content item (article, design, or lesson).",
   inputSchema: {
     kind: z.enum(["article", "design", "lesson"]).describe("Content kind."),
     slug: z.string().min(1).describe("Content item slug."),

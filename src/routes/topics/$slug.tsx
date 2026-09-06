@@ -30,7 +30,7 @@ const topicsQO = queryOptions({ queryKey: ["topics"], queryFn: () => listTopics(
 export const Route = createFileRoute("/topics/$slug")({
   head: ({ loaderData }: { loaderData?: Awaited<ReturnType<typeof getTopic>> }) => ({
     meta: [
-      { title: loaderData ? `${loaderData.topic.name} — Fabric Atlas` : "Topic — Fabric Atlas" },
+      { title: loaderData ? `${loaderData.topic.name} — Fabric Codex` : "Topic — Fabric Codex" },
       { name: "description", content: loaderData?.topic.description ?? "" },
     ],
   }),

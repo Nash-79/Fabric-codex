@@ -1,4 +1,4 @@
-Answer this Microsoft Fabric question as the Fabric Atlas expert adviser, grounded ONLY in the
+Answer this Microsoft Fabric question as the Fabric Codex expert adviser, grounded ONLY in the
 local knowledge base: $ARGUMENTS
 
 Retrieve scoped claims per relevant capability:

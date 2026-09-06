@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish locally-authored content to a Fabric Atlas server.
+"""Publish locally-authored content to a Fabric Codex server.
 
 The agents author content as git-tracked files under content/. This script replays those files
 into a running backend (local or remote) via the REST API — the "publish" step in the

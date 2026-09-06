@@ -5,7 +5,7 @@ export default defineTool({
   name: "list_capabilities",
   title: "List Fabric capabilities",
   description:
-    "List every Microsoft Fabric capability in the Fabric Atlas registry (id, name, description, accent).",
+    "List every Microsoft Fabric capability in the Fabric Codex registry (id, name, description, accent).",
   inputSchema: {},
   annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
   handler: async () => {

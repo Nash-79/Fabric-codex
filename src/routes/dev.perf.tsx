@@ -13,7 +13,7 @@ export const Route = createFileRoute("/dev/perf")({
   beforeLoad: () => {
     if (import.meta.env.PROD) throw notFound();
   },
-  head: () => ({ meta: [{ title: "Performance diagnostics — Fabric Atlas" }] }),
+  head: () => ({ meta: [{ title: "Performance diagnostics — Fabric Codex" }] }),
   component: PerfPage,
 });
 

@@ -1,4 +1,4 @@
-# Codex setup for Fabric Atlas
+# Codex setup for Fabric Codex
 
 Codex reads agent instructions from `AGENTS.md` (at the repo root — already committed, shared by
 the whole team). Custom **prompts**, however, live in your Codex home directory and are _not_

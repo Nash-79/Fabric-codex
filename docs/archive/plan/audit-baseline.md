@@ -84,7 +84,7 @@ Quality of the 15 that exist:
 | Untracked / stale ledger lines             | 0 ✅                                          |
 
 The ToC is derived client-side by regex over `##` headings
-([ContentTocSidebar.tsx](../../src/components/ContentTocSidebar.tsx)), so stray H1s and level skips
+([ContentTocSidebar.tsx](../../../src/components/ContentTocSidebar.tsx)), so stray H1s and level skips
 **directly break navigation**.
 
 ```bash
@@ -100,7 +100,7 @@ Thinnest: `architecture-implementation` 407 · `architecture-strategy` 408 · `d
 
 ## Performance baseline — the top defect
 
-[src/diagrams/catalog.ts](../../src/diagrams/catalog.ts) uses `import.meta.glob(..., { eager: true })`
+[src/diagrams/catalog.ts](../../../src/diagrams/catalog.ts) uses `import.meta.glob(..., { eager: true })`
 for **both** sidecars and SVGs, and is imported by `ContentItemArticle` (a client component on the
 reader route).
 
@@ -136,7 +136,7 @@ grep -rniE "pgvector|extension.*vector|vector\([0-9]+\)|<=>" supabase/migrations
 # → no output
 ```
 
-[advisor-context.server.ts:157-164](../../src/lib/advisor-context.server.ts#L157-L164) matches
+[advisor-context.server.ts:157-164](../../../src/lib/advisor-context.server.ts#L157-L164) matches
 claims with `.or("text.ilike.%word%,…").limit(24)`, deduped to **18 of 1,351 claims (1.3%)**.
 That is the hard ceiling on Advisor answer quality.
 
@@ -190,14 +190,14 @@ Diagram layout validation passed: 95 SVGs at 390px, 768px, 1280px with no text c
 25 references to `localhost:8000` exist across `.claude/`, `.codex/`, and `docs/`. **23 are already
 correctly caveated** ("the `localhost:8000` backend is retired…"). Only **one is genuinely stale**:
 
-- [docs/workflow.md:104](../../docs/workflow.md#L104) — still gives a live
+- [docs/workflow.md:104](../../../docs/workflow.md#L104) — still gives a live
   `python scripts/import_content.py --base http://localhost:8000` instruction.
 
 Do **not** sweep all 25; that would strip accurate "this is retired" guidance from agent contracts.
 
 ## Design system
 
-Real oklch token system in [src/styles.css](../../src/styles.css) (1,009 lines) with full
+Real oklch token system in [src/styles.css](../../../src/styles.css) (1,009 lines) with full
 light/dark parity and sophisticated `--surface-*` compound tokens. Defects beside it:
 
 | Defect                                                                                                                                                                             | Location                                |

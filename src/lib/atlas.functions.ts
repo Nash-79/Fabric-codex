@@ -424,7 +424,7 @@ export type LearningPath = {
   items: LearningPathItem[];
 };
 
-// Powers /learn (WP1.4, docs/plan/phase-1-curriculum.md). Every path's items joined against
+// Powers /learn (WP1.4, docs/archive/plan/phase-1-curriculum.md). Every path's items joined against
 // content_items in one extra query (batched by slug, not N+1) so the page can render titles,
 // summaries, and lesson_meta without a second round-trip per item.
 export const listLearningPaths = createServerFn({ method: "GET" }).handler(async () => {

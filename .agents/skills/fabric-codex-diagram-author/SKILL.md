@@ -1,9 +1,9 @@
 ---
-name: fabric-atlas-diagram-author
+name: fabric-codex-diagram-author
 description: Author original rich SVG infographics with grounded semantic sidecars for Microsoft Fabric architectures.
 ---
 
-# Fabric Atlas Diagram Author
+# Fabric Codex Diagram Author
 
 Use this skill when creating or updating an original SVG architecture infographic and its semantic JSON sidecar.
 

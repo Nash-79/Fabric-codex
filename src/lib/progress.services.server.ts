@@ -2,7 +2,7 @@
 // (atlas.functions.ts), split out so it's unit-testable against a plain object the same way
 // content-siblings.services.server.ts and atlas-publish.services.server.ts are.
 //
-// D3 (docs/plan/phase-1-curriculum.md WP1.2): server-side progress must never let a merge or a
+// D3 (docs/archive/plan/phase-1-curriculum.md WP1.2): server-side progress must never let a merge or a
 // duplicate/out-of-order write erase progress a reader already has, whether that's an existing
 // server row or a device's local completion being merged in for the first time.
 

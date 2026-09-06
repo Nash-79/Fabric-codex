@@ -78,7 +78,7 @@ function main() {
     return;
   }
 
-  console.log("=== Fabric Atlas Freshness & Gap Analysis (WP3.3) ===");
+  console.log("=== Fabric Codex Freshness & Gap Analysis (WP3.3) ===");
   console.log(`Total Internals Placeholders: ${analysis.totalPlaceholders}`);
   console.log(`Candidate Gap-Closing Drafts: ${analysis.candidateDrafts.length}`);
 

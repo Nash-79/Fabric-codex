@@ -1,4 +1,4 @@
-# AGENTS.md — Fabric Atlas
+# AGENTS.md — Fabric Codex
 
 Instructions for any coding agent (Codex, and compatible tools) working in this repo.
 Claude Code reads `CLAUDE.md`; this file is the equivalent for Codex and is committed so the
@@ -41,7 +41,7 @@ cosmetic one — omit the element instead.
 
 ## Working agreements
 
-- Run `pytest` in `backend/` after changing Python; do not commit failing tests.
+- Run `npm run typecheck`, `npm test` and `npm run lint` before opening a PR; do not commit failing checks.
 - Format with `black` and lint with `ruff` before proposing a diff.
 - Ask before adding a new production dependency.
 - Never write to the database directly to mutate claims — go through `app/services.py` so
@@ -97,7 +97,7 @@ in the same run.
   `/prompts:fa-diagram`. Diagrams are vector diagram-as-code, not raster art. Official Microsoft
   architecture icons are allowed under their published diagram/documentation terms when sourced,
   labelled, and used unchanged according to `docs/official-icon-policy.md`; they must never become
-  the Fabric Atlas brand or represent a non-Microsoft product. Unofficial and unlicensed logos are
+  the Fabric Codex brand or represent a non-Microsoft product. Unofficial and unlicensed logos are
   prohibited.
 - Generated diagrams use the rich authored SVG contract: the original script-free SVG is the
   primary article, print, and no-JavaScript artifact, with keyboard-focusable regions and
@@ -141,7 +141,8 @@ Skills for reusable prompts; these still work and map 1:1 to the Claude Code com
 
 ## How to run
 
-See `backend/README.md`. SQLite by default; set `DATABASE_URL` for Postgres + pgvector at scale.
+Supabase (Postgres + pgvector) is the only store; the schema lives in `supabase/migrations/`.
+See `docs/deployment.md`.
 
 ## Optional: model-tier registry, Copilot chatmodes, LangGraph scaffold
 

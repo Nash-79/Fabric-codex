@@ -57,13 +57,13 @@ export const Route = createFileRoute("/registry")({
   }),
   head: () => ({
     meta: [
-      { title: "Capability Registry — Fabric Atlas" },
+      { title: "Capability Registry — Fabric Codex" },
       {
         name: "description",
         content:
-          "The capability registry is the spine of the Fabric Atlas. Browse every tracked Microsoft Fabric capability, its preview/GA maturity, and its live claim, depth, and diagram coverage.",
+          "The capability registry is the spine of the Fabric Codex. Browse every tracked Microsoft Fabric capability, its preview/GA maturity, and its live claim, depth, and diagram coverage.",
       },
-      { property: "og:title", content: "Capability Registry — Fabric Atlas" },
+      { property: "og:title", content: "Capability Registry — Fabric Codex" },
       {
         property: "og:description",
         content: "Every tracked Microsoft Fabric capability and its live coverage.",

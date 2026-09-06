@@ -15,7 +15,7 @@ Learn page.
 
 ## Vendored subset
 
-Only icons used by Fabric Atlas diagrams are kept, not the full 1,659-file collection. Product/
+Only icons used by Fabric Codex diagrams are kept, not the full 1,659-file collection. Product/
 workload icons use the upstream `_color` variant (preserves official multi-tone fill); Fabric item
 icons use the upstream `_item` variant (no separate color variant exists for items upstream).
 

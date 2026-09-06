@@ -2,7 +2,7 @@
 // unit-testable against a Supabase stub the same way atlas-publish.services.server.ts is — takes
 // `sb` as a parameter rather than calling admin() itself.
 //
-// This is the fix for D1 (docs/plan/phase-1-curriculum.md WP1.1): getContentSiblings used to
+// This is the fix for D1 (docs/archive/plan/phase-1-curriculum.md WP1.1): getContentSiblings used to
 // order every kind by `updated_at DESC`, so Prev/Next was recency order and editing an old
 // article silently reordered "next" for every reader. When the item sits in a learning path,
 // order now follows path_items.position instead, which is stable across edits.
