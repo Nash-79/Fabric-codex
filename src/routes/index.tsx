@@ -235,8 +235,13 @@ function Landing() {
           className="border-b border-border bg-card"
           style={{ backgroundImage: "var(--gradient-hero)" }}
         >
-          <div className="mx-auto grid max-w-7xl gap-8 px-6 py-10 lg:grid-cols-[360px_minmax(0,1fr)]">
-            <div>
+          {/* Was `lg:grid-cols-[360px_minmax(0,1fr)]`, which pinned the intro to 360px and left the
+              capability map in a column that then nested ANOTHER `[1fr_280px]` split inside it.
+              At 1280px that left the 21-capability grid 544px -- ~181px per card at xl:grid-cols-3,
+              which is why descriptions arrived as truncated fragments. The hero now spans the full
+              width and the map sits below it with room to breathe. */}
+          <div className="mx-auto max-w-7xl px-6 py-10">
+            <div className="max-w-3xl">
               <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-teal-700/80 dark:text-teal-300/80">
                 <FabricMark className="h-4 w-4" />
                 Interactive atlas
@@ -272,7 +277,7 @@ function Landing() {
               </div>
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="mt-10 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
               <section className="rounded-md border border-border bg-card p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
@@ -288,7 +293,9 @@ function Landing() {
                     Registry
                   </Link>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {/* Column counts now reflect the space actually available (~900px at 1280,
+                    full width below lg) rather than the 544px the old nesting left. */}
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {capabilities.map((capability) => {
                     const active = capability.id === selectedCapability;
                     const capAccent = accent(capability.accent);
@@ -612,7 +619,9 @@ function MetricLink({
         </span>
         <ArrowRight className="h-3.5 w-3.5 opacity-0 transition group-hover:translate-x-0.5 group-hover:opacity-100" />
       </div>
-      <div className="mt-2 text-2xl font-semibold text-foreground">{value}</div>
+      {/* Thousands separators: claims is already 3,052 and climbing, and an unformatted "3052"
+          reads as a version string at a glance. */}
+      <div className="mt-2 text-2xl font-semibold text-foreground">{value.toLocaleString()}</div>
       <div className="mt-0.5 text-[10px] uppercase tracking-wider text-teal-700/70 dark:text-teal-300/70">
         View all
       </div>
