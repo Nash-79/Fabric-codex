@@ -165,3 +165,40 @@ attribution only, and prefer an original generated diagram over a referenced cop
 all four kinds and returned as `{kind, rank, payload}` rows. `content_items` also carries its own
 GIN index (`content_items_search_idx`) over `title || summary || body_md` to back this directly —
 there is no separate `search_doc` mirror table.
+
+## Rate limiting: `chat_rate_limits`
+
+The only table here that is *not* knowledge — it holds ephemeral counters for the anonymous
+`/api/chat` endpoint, and nothing references it from the content model.
+
+It exists because the previous limiter was an in-process `Map`. On Cloudflare Workers that is
+per-isolate: isolates are short-lived and many run concurrently, so the effective cap was
+(configured limit × live isolates), i.e. no cap. That was tolerable against a metered provider
+with its own billing ceiling, but the provider chain now puts a **finite free allowance** at the
+top (10k Workers AI neurons/day) which a single abusive client could drain for everyone.
+
+| Column | Notes |
+|---|---|
+| `bucket_key` (PK) | `user:<uuid>` or `ip:<hash>` — **never a raw IP**. The counter must distinguish clients, not identify them. |
+| `window_start` | Start of the current fixed window; rolled forward inside the atomic function, not on a schedule. |
+| `request_count` | Requests consumed in the current window. |
+
+Two functions, both `security definer` and revoked from `anon`/`authenticated`:
+
+- **`consume_chat_rate_limit(bucket_key, window_seconds, max_requests)`** — does the whole
+  read-modify-write in a single `insert … on conflict do update … returning`, so two concurrent
+  isolates cannot both read "one slot left" and both proceed. Returns
+  `(allowed, request_count, retry_after_seconds)`.
+- **`prune_chat_rate_limits(older_than_seconds)`** — drops rows whose window closed long ago.
+  Called opportunistically, so no scheduled job is needed.
+
+RLS is enabled with **no policies** and grants revoked: the table is service-role only, because
+per-key request counts would leak which users and IPs are active.
+
+The caller (`src/lib/chat-rate-limit.server.ts`) **fails open** on any database error — a limiter
+that takes chat down whenever Postgres hiccups is worse than one that briefly over-admits, and the
+in-process bucket still runs first, so an outage degrades to the old behaviour rather than to none.
+
+> Testing note: exercising `consume_chat_rate_limit` through a `lateral` join over
+> `generate_series` reports `request_count = 1` every time, because the planner evaluates the
+> function once. Call it as separate statements, the way the application does.
