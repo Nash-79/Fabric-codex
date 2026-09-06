@@ -81,6 +81,15 @@ cp .env.example .env      # add your Supabase URL + publishable key
 npm run dev               # http://localhost:8080
 ```
 
+Optional local git cleanup after merges:
+
+```bash
+git config hooks.pruneMergedBranches true
+```
+
+When enabled, the post-merge hook prunes merged local branches that do not have a live tracked
+remote upstream ref after prune, and also prunes merged local-only branches.
+
 Running against the deployed Worker locally:
 
 ```bash
