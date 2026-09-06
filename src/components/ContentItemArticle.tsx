@@ -21,6 +21,7 @@ import type { AuthoredDiagram } from "@/diagrams/types";
 import { AdvisorMermaidBlock } from "@/components/AdvisorMermaidBlock";
 import { TierBadge } from "@/components/Badges";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { Citation } from "@/components/CitationSidebar";
 import { slugifyHeading, textFromNode } from "@/lib/heading-utils";
 import { codeLanguage } from "@/components/CodeBlock";
@@ -262,30 +263,60 @@ function CitationMark({
   );
   if (!citation?.source) return anchor;
   const { source } = citation;
+
+  // Radix HoverCard is pointer-only, so on a touch device the source preview -- title, trust
+  // tier, summary, link -- was simply unreachable. On a source-grounded platform that preview is
+  // the citation's whole point, not a nicety. Touch gets a Popover (tap to open) and pointer
+  // devices keep hover; the card body is identical either way.
+  const card = (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <a
+          href={source.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sm font-medium leading-snug text-foreground hover:text-teal-600 dark:hover:text-teal-300"
+        >
+          {source.title ?? source.url}
+          <ExternalLink className="ml-1 inline h-3 w-3 align-baseline text-muted-foreground" />
+        </a>
+        {source.tier != null && <TierBadge tier={source.tier} />}
+      </div>
+      {source.summary && (
+        <p className="mt-2 line-clamp-4 text-xs leading-relaxed text-muted-foreground">
+          {source.summary}
+        </p>
+      )}
+    </>
+  );
+
+  if (isTouchDevice()) {
+    return (
+      <Popover>
+        <PopoverTrigger asChild>{anchor}</PopoverTrigger>
+        <PopoverContent side="top" className="w-80">
+          {card}
+        </PopoverContent>
+      </Popover>
+    );
+  }
   return (
     <HoverCard openDelay={150} closeDelay={100}>
       <HoverCardTrigger asChild>{anchor}</HoverCardTrigger>
       <HoverCardContent side="top" className="w-80">
-        <div className="flex items-start justify-between gap-2">
-          <a
-            href={source.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium leading-snug text-foreground hover:text-teal-600 dark:hover:text-teal-300"
-          >
-            {source.title ?? source.url}
-            <ExternalLink className="ml-1 inline h-3 w-3 align-baseline text-muted-foreground" />
-          </a>
-          {source.tier != null && <TierBadge tier={source.tier} />}
-        </div>
-        {source.summary && (
-          <p className="mt-2 line-clamp-4 text-xs leading-relaxed text-muted-foreground">
-            {source.summary}
-          </p>
-        )}
+        {card}
       </HoverCardContent>
     </HoverCard>
   );
+}
+
+/**
+ * Coarse pointer with no hover -- i.e. touch. Checked at render rather than cached, because a
+ * 2-in-1 can switch between a trackpad and a finger without reloading the page.
+ */
+function isTouchDevice(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  return window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 }
 
 // Shared markdown body renderer for the unified content detail route (article/design/lesson).
@@ -621,7 +652,7 @@ export function ContentItemArticle({
 
   return (
     <div
-      className="article-body prose dark:prose-invert prose-lg lg:prose-xl mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-h2:mt-16 prose-h2:border-b prose-h2:border-border prose-h2:pb-2 prose-h2:text-2xl prose-h3:mt-10 prose-h3:text-xl prose-p:leading-relaxed prose-a:text-teal-600 dark:prose-a:text-teal-300 prose-strong:text-foreground prose-li:marker:text-teal-500 dark:prose-li:marker:text-teal-400"
+      className="article-body prose dark:prose-invert prose-lg lg:prose-xl mt-8 max-w-none prose-headings:scroll-mt-24 prose-headings:font-semibold prose-headings:tracking-tight prose-p:leading-relaxed prose-a:text-teal-600 dark:prose-a:text-teal-300 prose-strong:text-foreground prose-li:marker:text-teal-500 dark:prose-li:marker:text-teal-400"
       data-archetype={archetype}
       data-density={density}
     >
