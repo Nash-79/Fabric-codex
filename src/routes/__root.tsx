@@ -11,7 +11,6 @@ import { useEffect, type ReactNode } from "react";
 
 import { Toaster } from "@/components/ui/sonner";
 import appCss from "../styles.css?url";
-import { reportLovableError } from "../lib/lovable-error-reporting";
 import { OfflineIndicator } from "@/components/OfflineIndicator";
 import { useProgressSync } from "@/lib/use-progress-sync";
 import { ContentVersionWatcher } from "@/components/ContentVersionWatcher";
@@ -157,9 +156,6 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   console.error(error);
   const router = useRouter();
   const supaMissing = detectSupabaseEnv(error);
-  useEffect(() => {
-    reportLovableError(error, { boundary: "tanstack_root_error_component" });
-  }, [error]);
 
   if (supaMissing) return <SupabaseEnvErrorView missing={supaMissing} />;
 
