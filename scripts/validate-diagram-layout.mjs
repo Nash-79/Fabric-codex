@@ -105,10 +105,12 @@ try {
     return await new Promise((resolveResult, rejectResult) => {
       const socket = new WebSocket(target.webSocketDebuggerUrl);
       let settled = false;
+      let closingExpected = false;
       const settle = (callback, value) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
+        closingExpected = true;
         socket.close();
         callback(value);
       };
@@ -168,9 +170,10 @@ try {
       socket.addEventListener("error", () =>
         settle(rejectResult, new Error("Browser connection failed.")),
       );
-      socket.addEventListener("close", () =>
-        settle(rejectResult, new Error("Browser target closed before evaluation completed.")),
-      );
+      socket.addEventListener("close", () => {
+        if (closingExpected) return;
+        settle(rejectResult, new Error("Browser target closed before evaluation completed."));
+      });
     });
   });
   if (failures.length) {
