@@ -12,7 +12,7 @@ The single biggest quality jump available to the app. Today the Advisor sees **1
 ## WP3.1 — pgvector + local ONNX embeddings + hybrid retrieval
 
 **Problem.** Verified: **no pgvector, no vector columns, no `<=>` operators in any of the 47
-migrations.** [advisor-context.server.ts:157-164](../../src/lib/advisor-context.server.ts#L157-L164)
+migrations.** [advisor-context.server.ts:157-164](../../../src/lib/advisor-context.server.ts#L157-L164)
 does:
 
 ```ts
@@ -84,10 +84,10 @@ confirm it still refuses.
 ## WP3.2 — Search UX
 
 **Wire the ⌘K palette.** `cmdk` is already a dependency and
-[src/components/ui/command.tsx](../../src/components/ui/command.tsx) already exists — **built but
+[src/components/ui/command.tsx](../../../src/components/ui/command.tsx) already exists — **built but
 never wired**. This is assembly, not construction.
 
-**Add to `/search`** ([search.tsx](../../src/routes/search.tsx), 240 lines):
+**Add to `/search`** ([search.tsx](../../../src/routes/search.tsx), 240 lines):
 
 - **Facets**: capability, depth level, source tier, tag, kind. All exist as columns already.
 - **Highlighted snippets** (`ts_headline`) instead of bare titles.
@@ -113,7 +113,7 @@ correctly, deep pagination has no dupes/skips, keyboard-only navigation works.
 ## WP3.3 — Automation expansion
 
 **Extend the Lovable AI Gateway beyond article-ideas.** The infrastructure already exists
-([ai-gateway.server.ts](../../src/lib/ai-gateway.server.ts) — 22 lines, plus 8 models across two
+([ai-gateway.server.ts](../../../src/lib/ai-gateway.server.ts) — 22 lines, plus 8 models across two
 providers) and is **underused**: today it has exactly two consumers, and neither touches the
 reading path.
 
@@ -127,7 +127,7 @@ New consumers, all **draft-only**:
 3. **Structure lint suggestions** — propose heading-hierarchy fixes for anything WP2.1's CI gate
    catches later.
 
-**Reuse the hardening already learned.** [article-ideas.services.server.ts](../../src/lib/article-ideas.services.server.ts)
+**Reuse the hardening already learned.** [article-ideas.services.server.ts](../../../src/lib/article-ideas.services.server.ts)
 encodes real production lessons — a cross-provider fallback chain, and the **strict-schema
 invariant**: with `supportsStructuredOutputs: true`, OpenAI validates in strict `json_schema` mode
 requiring _every_ property in `required`, so `.optional()`, `.default()`, and `.catch()` are all

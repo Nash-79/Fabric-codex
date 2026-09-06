@@ -82,7 +82,7 @@ describe("resolveContentSiblings", () => {
     expect(result.next).toEqual({ slug: "spark-expert", title: "Spark: Expert" });
   });
 
-  // D1 regression test (docs/plan/phase-1-curriculum.md WP1.1 gate): editing an old article's
+  // D1 regression test (docs/archive/plan/phase-1-curriculum.md WP1.1 gate): editing an old article's
   // updated_at must NOT reorder the sequence for an item that's in a path. The old
   // `.order("updated_at", { ascending: false })` behavior only kicks in as a fallback once
   // resolveGoverningPath finds no path — this test proves the path branch never looks at

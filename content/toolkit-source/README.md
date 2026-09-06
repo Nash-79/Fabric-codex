@@ -2,7 +2,7 @@
 
 First-party (user-authored) expert-level Microsoft Fabric / Spark content, staged here so
 `content/sources/*.json` entries can cite a stable, repo-relative path instead of a personal local
-file path. Ingested per [docs/plan/phase-2-content.md](../../docs/plan/phase-2-content.md) WP2.2.
+file path. Ingested per [docs/archive/plan/phase-2-content.md](../../docs/archive/plan/phase-2-content.md) WP2.2.
 
 **Not portal content itself** — these are the raw materials `knowledge-curator` extracts claims
 from. Published articles live in `content/articles/`; this directory is the citable source.

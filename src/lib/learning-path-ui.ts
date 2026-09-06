@@ -1,4 +1,4 @@
-// Pure logic behind /learn's path rendering (WP1.4, docs/plan/phase-1-curriculum.md), split out
+// Pure logic behind /learn's path rendering (WP1.4, docs/archive/plan/phase-1-curriculum.md), split out
 // so the resume/lock semantics are unit-testable without rendering the route.
 
 import type { LearningPathItem } from "@/lib/atlas.functions";

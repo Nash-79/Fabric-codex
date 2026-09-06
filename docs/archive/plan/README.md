@@ -158,7 +158,7 @@ Migrations additionally run `npm run verify:schema` and
 
 ## Non-goals (do not drift into these)
 
-Carried from [CLAUDE.md](../../CLAUDE.md) — they still hold:
+Carried from [CLAUDE.md](../../../CLAUDE.md) — they still hold:
 
 - **No agent mesh.** An agent is retrieval scoped to capabilities plus a focused prompt.
 - **No mega-prompt.** Each agent stays narrow.

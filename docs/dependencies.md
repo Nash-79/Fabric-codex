@@ -98,6 +98,6 @@ dependency is covered by tests its upgrades are gated automatically.
 ### Not covered here
 
 `bun.lock` and `package-lock.json` both exist; standardising on one package manager
-is tracked in [`docs/analysis-and-modernisation.md`](analysis-and-modernisation.md).
+is tracked in [`docs/analysis-and-modernisation.md`](archive/analysis-and-modernisation.md).
 The release-age guard above is enforced by our own check regardless of which manager
 runs the install.
