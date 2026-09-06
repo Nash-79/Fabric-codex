@@ -104,8 +104,16 @@ try {
     const target = await pageTarget();
     return await new Promise((resolveResult, rejectResult) => {
       const socket = new WebSocket(target.webSocketDebuggerUrl);
+      let settled = false;
+      const settle = (callback, value) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        socket.close();
+        callback(value);
+      };
       const timer = setTimeout(
-        () => rejectResult(new Error("Diagram browser audit timed out.")),
+        () => settle(rejectResult, new Error("Diagram browser audit timed out.")),
         120_000,
       );
       socket.addEventListener("open", () =>
@@ -125,17 +133,14 @@ try {
         try {
           message = JSON.parse(event.data);
         } catch {
-          clearTimeout(timer);
-          socket.close();
-          rejectResult(new Error("Browser sent a malformed CDP response."));
+          settle(rejectResult, new Error("Browser sent a malformed CDP response."));
           return;
         }
         if (message.id !== 1) return;
-        clearTimeout(timer);
-        socket.close();
         // CDP protocol-level failure (e.g. the target went away): there is no `result` at all.
         if (message.error) {
-          rejectResult(
+          settle(
+            rejectResult,
             new Error(`Browser evaluation failed: ${message.error.message ?? "unknown CDP error"}`),
           );
           return;
@@ -144,20 +149,25 @@ try {
           // exceptionDetails.text is usually the bare word "Uncaught"; the actual message lives on
           // the nested exception description. Preferring it keeps a browser-side failure debuggable.
           const details = message.result.exceptionDetails;
-          rejectResult(
-            new Error(details.exception?.description ?? details.text ?? "Browser evaluation failed."),
+          settle(
+            rejectResult,
+            new Error(
+              details.exception?.description ?? details.text ?? "Browser evaluation failed.",
+            ),
           );
           return;
         }
         // Runtime.evaluate nests the value as result.result.value. A missing nesting means the
         // response was not the shape we asked for -- report it rather than throwing on undefined.
         if (message.result?.result === undefined) {
-          rejectResult(new Error("Browser returned no evaluation result."));
+          settle(rejectResult, new Error("Browser returned no evaluation result."));
           return;
         }
-        resolveResult(message.result.result.value);
+        settle(resolveResult, message.result.result.value);
       });
-      socket.addEventListener("error", () => rejectResult(new Error("Browser connection failed.")));
+      socket.addEventListener("error", () =>
+        settle(rejectResult, new Error("Browser connection failed.")),
+      );
     });
   });
   if (failures.length) {
