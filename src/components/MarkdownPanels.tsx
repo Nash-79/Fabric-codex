@@ -26,12 +26,19 @@ export const markdownPanels: Components = {
       </code>
     );
   },
+  // Single container. The wrapper owns the border, radius and horizontal scroll; the table itself
+  // owns nothing structural. Previously styles.css ALSO declared display:block + overflow-x +
+  // border + radius on `.article-body :where(table)`, which meant a doubled border and a nested
+  // scroll container -- except `not-prose` here killed those rules entirely, so the zebra and
+  // thead styling they carried never rendered at all.
   table: ({ children }) => (
     <div className="not-prose my-6 overflow-x-auto rounded-lg border border-border">
       <table className="w-full border-collapse text-sm">{children}</table>
     </div>
   ),
   thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
+  // Zebra striping, restored here where it can actually apply.
+  tbody: ({ children }) => <tbody className="[&_tr:nth-child(even)]:bg-muted/30">{children}</tbody>,
   th: ({ children }) => (
     <th className="border-b border-border px-4 py-2 text-left font-semibold text-foreground">
       {children}
