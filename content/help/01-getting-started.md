@@ -11,20 +11,22 @@ generated piece is validated against what it cites.
   published content, and Advisor prompt shortcuts.
 - **Topics** — the reading portal: a topic tree where each topic gathers the articles,
   designs, and lessons written about it. Start here if you want to _learn_ Fabric.
-- **Blogs** (under the **Knowledge** menu) — every article, design, and lesson in one
-  filterable, chronological list (filter by kind or topic), and the detail page for each.
-- **Reference Docs** (under the **Knowledge** menu) — authoritative deep-dive technical
+- **Knowledge Hub** — every article, architecture and lesson in one filterable list. Chips
+  narrow it by kind (Everything / Articles / Architectures / Lessons) and by topic. This replaced
+  three near-identical pages that differed only by a filter; `/blogs`, `/designs` and `/learn`
+  still work and redirect here with the matching chip selected.
+- **Reference Docs** (under the **Explore** menu) — authoritative deep-dive technical
   whitepapers and engine internals reference documentation with interactive traces and SVGs.
-- **Capability Registry** — the spine: every tracked capability with its live claim, depth,
-  and diagram coverage. Read-only — a coverage dashboard, not a moderation tool.
-- **Sources** — every approved source with its trust tier, searchable and filterable by tier.
-- **Learn** — lessons grouped into Beginner, Intermediate, and Expert tiers.
-- **Roadmap** — what's coming to Microsoft Fabric, tracked against the capability registry.
-- **Advisor** — ask a question and get an answer grounded only in verified claims.
-- **Search** (under the **Build** menu) — one search box across topics, content, claims, and
-  sources.
-- **Author** (under the **Build** menu) — how the local, git-tracked authoring workflow works,
-  for contributors.
+- **Capability Registry** (under **Explore**) — the spine: every tracked capability with its live
+  claim, depth, and diagram coverage. Read-only — a coverage dashboard, not a moderation tool.
+- **Sources** (under **Explore**) — every approved source with its trust tier, searchable and
+  filterable by tier.
+- **Roadmap** (under **Explore**) — what's coming to Microsoft Fabric, tracked against the
+  capability registry.
+- **Advisor** — ask a question and get an answer grounded only in verified claims, with the model
+  chosen by the configured provider chain.
+- **Search** — one search box across topics, content, claims, and sources. Also reachable with
+  the ⌘K / Ctrl-K palette from anywhere.
 - **Help** — these pages.
 - **Favorites** and **Settings** — Favorites is for any signed-in user; Settings is
   admin-only (see _Admin settings_).
