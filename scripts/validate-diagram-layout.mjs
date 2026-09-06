@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "no
 import { spawn } from "node:child_process";
 import { basename, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { retryDiagramBrowserEvaluation } from "../src/lib/diagram-layout-browser.ts";
 
 const root = resolve(import.meta.dirname, "..");
 const assets = JSON.parse(readFileSync(join(root, "content/diagrams/assets.json"), "utf8"));
@@ -99,63 +100,81 @@ async function pageTarget() {
 }
 
 try {
-  const target = await pageTarget();
-  const failures = await new Promise((resolveResult, rejectResult) => {
-    const socket = new WebSocket(target.webSocketDebuggerUrl);
-    const timer = setTimeout(
-      () => rejectResult(new Error("Diagram browser audit timed out.")),
-      120_000,
-    );
-    socket.addEventListener("open", () =>
-      socket.send(
-        JSON.stringify({
-          id: 1,
-          method: "Runtime.evaluate",
-          params: { expression: auditExpression, returnByValue: true, awaitPromise: true },
-        }),
-      ),
-    );
-    socket.addEventListener("message", (event) => {
-      // Anything thrown in here lands in an event listener, where it becomes an unhandled
-      // exception that kills the process instead of failing the check -- so every path must
-      // resolve or reject rather than assume a response shape.
-      let message;
-      try {
-        message = JSON.parse(event.data);
-      } catch {
+  const failures = await retryDiagramBrowserEvaluation(async () => {
+    const target = await pageTarget();
+    return await new Promise((resolveResult, rejectResult) => {
+      const socket = new WebSocket(target.webSocketDebuggerUrl);
+      let settled = false;
+      let closingExpected = false;
+      const settle = (callback, value) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
+        closingExpected = true;
         socket.close();
-        rejectResult(new Error("Browser sent a malformed CDP response."));
-        return;
-      }
-      if (message.id !== 1) return;
-      clearTimeout(timer);
-      socket.close();
-      // CDP protocol-level failure (e.g. the target went away): there is no `result` at all.
-      if (message.error) {
-        rejectResult(
-          new Error(`Browser evaluation failed: ${message.error.message ?? "unknown CDP error"}`),
-        );
-        return;
-      }
-      if (message.result?.exceptionDetails) {
-        // exceptionDetails.text is usually the bare word "Uncaught"; the actual message lives on
-        // the nested exception description. Preferring it keeps a browser-side failure debuggable.
-        const details = message.result.exceptionDetails;
-        rejectResult(
-          new Error(details.exception?.description ?? details.text ?? "Browser evaluation failed."),
-        );
-        return;
-      }
-      // Runtime.evaluate nests the value as result.result.value. A missing nesting means the
-      // response was not the shape we asked for -- report it rather than throwing on undefined.
-      if (message.result?.result === undefined) {
-        rejectResult(new Error("Browser returned no evaluation result."));
-        return;
-      }
-      resolveResult(message.result.result.value);
+        callback(value);
+      };
+      const timer = setTimeout(
+        () => settle(rejectResult, new Error("Diagram browser audit timed out.")),
+        120_000,
+      );
+      socket.addEventListener("open", () =>
+        socket.send(
+          JSON.stringify({
+            id: 1,
+            method: "Runtime.evaluate",
+            params: { expression: auditExpression, returnByValue: true, awaitPromise: true },
+          }),
+        ),
+      );
+      socket.addEventListener("message", (event) => {
+        // Anything thrown in here lands in an event listener, where it becomes an unhandled
+        // exception that kills the process instead of failing the check -- so every path must
+        // resolve or reject rather than assume a response shape.
+        let message;
+        try {
+          message = JSON.parse(event.data);
+        } catch {
+          settle(rejectResult, new Error("Browser sent a malformed CDP response."));
+          return;
+        }
+        if (message.id !== 1) return;
+        // CDP protocol-level failure (e.g. the target went away): there is no `result` at all.
+        if (message.error) {
+          settle(
+            rejectResult,
+            new Error(`Browser evaluation failed: ${message.error.message ?? "unknown CDP error"}`),
+          );
+          return;
+        }
+        if (message.result?.exceptionDetails) {
+          // exceptionDetails.text is usually the bare word "Uncaught"; the actual message lives on
+          // the nested exception description. Preferring it keeps a browser-side failure debuggable.
+          const details = message.result.exceptionDetails;
+          settle(
+            rejectResult,
+            new Error(
+              details.exception?.description ?? details.text ?? "Browser evaluation failed.",
+            ),
+          );
+          return;
+        }
+        // Runtime.evaluate nests the value as result.result.value. A missing nesting means the
+        // response was not the shape we asked for -- report it rather than throwing on undefined.
+        if (message.result?.result === undefined) {
+          settle(rejectResult, new Error("Browser returned no evaluation result."));
+          return;
+        }
+        settle(resolveResult, message.result.result.value);
+      });
+      socket.addEventListener("error", () =>
+        settle(rejectResult, new Error("Browser connection failed.")),
+      );
+      socket.addEventListener("close", () => {
+        if (closingExpected) return;
+        settle(rejectResult, new Error("Browser target closed before evaluation completed."));
+      });
     });
-    socket.addEventListener("error", () => rejectResult(new Error("Browser connection failed.")));
   });
   if (failures.length) {
     console.error(
