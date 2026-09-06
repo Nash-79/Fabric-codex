@@ -399,7 +399,19 @@ export async function generateIdeaCandidates(
   // failure (schema mismatch, gateway/provider API error, timeout, etc.) — a single flaky model
   // or provider outage should not zero out an idea-generation run. Each attempt's failure is
   // logged individually so Settings -> Logs shows the full chain, not just the last error.
-  const attemptModelIds = [modelId, ...FALLBACK_MODEL_IDS.filter((id) => id !== modelId)];
+  // Prefer the admin-ordered chain from Settings when one is configured. Before this, generation
+  // walked its own hardcoded FALLBACK_MODEL_IDS ladder that ended in the PAID openai/gpt-5-mini
+  // and never consulted the provider policy -- so a run could quietly spend money even with the
+  // zero-cost guardrail switched on. Sharing one chain is what closes that bypass.
+  const { resolveProviderChain } = await import("./ai-gateway.server");
+  const configuredChain = await resolveProviderChain().catch(() => null);
+  const chainModelIds = configuredChain?.chain.map((e) => e.model_id) ?? [];
+  const providerFor = configuredChain?.providerFor;
+  const chainByModel = new Map(configuredChain?.chain.map((e) => [e.model_id, e]) ?? []);
+
+  const attemptModelIds = chainModelIds.length
+    ? chainModelIds
+    : [modelId, ...FALLBACK_MODEL_IDS.filter((id) => id !== modelId)];
   let object: z.infer<typeof ideaArraySchema> | undefined;
   let usedModelId: string | undefined;
   const attemptErrors: Array<{ model_id: string; message: string }> = [];
@@ -408,8 +420,12 @@ export async function generateIdeaCandidates(
     const attemptModelId = attemptModelIds[i];
     const isLastAttempt = i === attemptModelIds.length - 1;
     try {
+      // Each entry may live on a different provider, so build the client per attempt when the
+      // configured chain is in play.
+      const entry = chainByModel.get(attemptModelId);
+      const client = entry && providerFor ? providerFor(entry) : gateway;
       ({ object } = await generateObject({
-        model: gateway(attemptModelId),
+        model: client(attemptModelId),
         schema: ideaArraySchema,
         system,
         prompt,
